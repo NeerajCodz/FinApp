@@ -5,16 +5,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { ConvexReactClient } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { Text, View } from '@/components/ui';
 import { secureTokenStorage } from '@/lib/auth/session';
+import { resolveConvexUrl } from '@/lib/convex-url';
 
-const convexUrl = Constants.expoConfig?.extra?.convexUrl;
-const convexClient = new ConvexReactClient(
-  typeof convexUrl === 'string' && convexUrl.startsWith('http')
-    ? convexUrl
-    : 'http://127.0.0.1:3212',
-);
+const configuredConvexUrl = Constants.expoConfig?.extra?.convexUrl;
+const platform = Platform.OS === 'android' ? 'android' : Platform.OS === 'web' ? 'web' : 'ios';
+const convexClient = new ConvexReactClient(resolveConvexUrl(configuredConvexUrl, platform));
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
