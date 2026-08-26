@@ -4,6 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "dependencies": {
+    "@convex-dev/auth": "^0.0.95",
     "convex": "^1.45.0",
     "expo": "~57.0.16",
     "expo-constants": "~57.0.14",
