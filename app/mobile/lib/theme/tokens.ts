@@ -19,8 +19,12 @@ export type ThemeTokens = {
   destructive: string;
   destructiveForeground: string;
   border: string;
+  borderSubtle: string;
   input: string;
   ring: string;
+  surfaceRaised: string;
+  surfaceSubtle: string;
+  overlay: string;
   income: string;
   expense: string;
   positive: string;
@@ -39,8 +43,6 @@ export function createTokens(mode: ThemeMode, accent: AccentName = 'blue'): Them
   const foreground = isDark ? '#FFFFFF' : '#000000';
   const accentColor = accentPalette[accent];
   const accentForeground = accent === 'white' ? '#000000' : '#FFFFFF';
-  const inverted = isDark ? '#FFFFFF' : '#000000';
-  const invertedForeground = isDark ? '#000000' : '#FFFFFF';
   return {
     background,
     foreground,
@@ -50,17 +52,21 @@ export function createTokens(mode: ThemeMode, accent: AccentName = 'blue'): Them
     popoverForeground: foreground,
     primary: accentColor,
     primaryForeground: accentForeground,
-    secondary: inverted,
-    secondaryForeground: invertedForeground,
-    muted: background,
-    mutedForeground: foreground,
+    secondary: isDark ? '#FFFFFF14' : '#0000000A',
+    secondaryForeground: foreground,
+    muted: isDark ? '#FFFFFF14' : '#0000000A',
+    mutedForeground: isDark ? '#A3A3A3' : '#525252',
     accent: accentColor,
     accentForeground,
     destructive: accentPalette.red,
     destructiveForeground: '#FFFFFF',
-    border: foreground,
-    input: background,
+    border: isDark ? '#FFFFFF33' : '#00000033',
+    borderSubtle: isDark ? '#FFFFFF1F' : '#0000001F',
+    input: isDark ? '#080808' : '#FAFAFA',
     ring: accentColor,
+    surfaceRaised: isDark ? '#FFFFFF0D' : '#00000005',
+    surfaceSubtle: isDark ? '#FFFFFF08' : '#00000003',
+    overlay: isDark ? '#000000B8' : '#FFFFFFD9',
     income: accentColor,
     expense: accentPalette.red,
     positive: accentColor,

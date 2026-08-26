@@ -5,6 +5,8 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@convex-dev/auth": "^0.0.95",
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@types/react": "~19.2.4",
     "convex": "^1.45.0",
     "expo": "~57.0.16",
@@ -24,6 +26,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",
     "nativewind": "^4.2.6",
+    "phosphor-react-native": "^3.0.6",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-gesture-handler": "~2.32.0",

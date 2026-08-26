@@ -18,19 +18,18 @@ export function MoneyText({
   return (
     <Text
       accessibilityLabel={`${type} ${amount.toString()} ${currency}`}
-      style={{ color: type === 'expense' ? tokens.expense : tokens.income, fontWeight: '700' }}
+      style={{
+        color: type === 'expense' ? tokens.expense : type === 'income' ? tokens.income : tokens.foreground,
+        fontFamily: 'SpaceGrotesk_600SemiBold',
+        fontVariant: ['tabular-nums'],
+      }}
     >
       {formatMinor(amount, currency)}
     </Text>
   );
 }
-export function TransactionRow({
-  title,
-  merchant,
-  amountMinor,
-  currency,
-  type,
-}: {
+
+export function TransactionRow({ title, merchant, amountMinor, currency, type }: {
   title: string;
   merchant?: string;
   amountMinor: bigint;
@@ -39,154 +38,90 @@ export function TransactionRow({
 }) {
   const { tokens } = useTheme();
   return (
-    <Card
+    <View
       accessibilityLabel={`${title}, ${merchant ?? ''}, ${type}, ${formatMinor(signedMinor(amountMinor, type), currency)}`}
-      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, paddingVertical: 13 }}
     >
-      <View>
-        <Typography>{title}</Typography>
-        {merchant && <Text style={{ color: tokens.mutedForeground }}>{merchant}</Text>}
+      <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: type === 'expense' ? `${tokens.expense}22` : `${tokens.income}22`, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: type === 'expense' ? tokens.expense : tokens.income, fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16 }}>
+          {title.slice(0, 1).toUpperCase()}
+        </Text>
+      </View>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Typography style={{ fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14 }}>{title}</Typography>
+        {merchant && <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>{merchant}</Text>}
       </View>
       <MoneyText amountMinor={amountMinor} currency={currency} type={type} />
-    </Card>
+    </View>
   );
 }
-export function AccountCard({
-  name,
-  balanceMinor,
-  currency,
-}: {
-  name: string;
-  balanceMinor: bigint;
-  currency: string;
-}) {
+
+export function AccountCard({ name, balanceMinor, currency }: { name: string; balanceMinor: bigint; currency: string }) {
   const { tokens } = useTheme();
   return (
-    <Card>
-      <Text style={{ color: tokens.mutedForeground }}>{name}</Text>
-      <Typography variant="heading">{formatMinor(balanceMinor, currency)}</Typography>
+    <Card variant="outline" style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>{name}</Text>
+        <Badge variant="neutral">Active</Badge>
+      </View>
+      <Typography variant="heading" style={{ fontVariant: ['tabular-nums'] }}>{formatMinor(balanceMinor, currency)}</Typography>
     </Card>
   );
 }
+
 export function CategoryIcon({ label }: { label: string }) {
   return <Badge>{label.slice(0, 1).toUpperCase()}</Badge>;
 }
-export function CurrencyInput({
-  currency,
-  value,
-  onChangeText,
-}: {
-  currency: string;
-  value: string;
-  onChangeText: (value: string) => void;
-}) {
+
+export function CurrencyInput({ currency, value, onChangeText }: { currency: string; value: string; onChangeText: (value: string) => void }) {
   const { tokens } = useTheme();
   return (
-    <View>
-      <Text style={{ color: tokens.mutedForeground }}>{currency}</Text>
-      <Input
-        accessibilityLabel={`Amount in ${currency}`}
-        keyboardType="decimal-pad"
-        value={value}
-        onChangeText={onChangeText}
-      />
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>{currency}</Text>
+      <Input accessibilityLabel={`Amount in ${currency}`} keyboardType="decimal-pad" value={value} onChangeText={onChangeText} />
     </View>
   );
 }
+
 export function AmountKeypad({ onDigit }: { onDigit: (digit: string) => void }) {
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {'1234567890.'.split('').map((digit) => (
-        <Button key={digit} variant="secondary" onPress={() => onDigit(digit)}>
-          {digit}
-        </Button>
-      ))}
+      {'1234567890.'.split('').map((digit) => <Button key={digit} size="lg" variant="outline" onPress={() => onDigit(digit)}>{digit}</Button>)}
     </View>
   );
 }
+
 export function PeriodSelector({ label = 'This month' }: { label?: string }) {
-  return <Button variant="secondary">{label}</Button>;
+  return <Button variant="outline" size="sm">{label}</Button>;
 }
+
 export function RecurringBadge() {
-  return <Badge>Recurring</Badge>;
+  return <Badge variant="neutral">Recurring</Badge>;
 }
-export function SplitMemberRow({
-  name,
-  amountMinor,
-  currency,
-}: {
-  name: string;
-  amountMinor: bigint;
-  currency: string;
-}) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
-      <Text>{name}</Text>
-      <MoneyText amountMinor={amountMinor} currency={currency} />
-    </View>
-  );
+
+export function SplitMemberRow({ name, amountMinor, currency }: { name: string; amountMinor: bigint; currency: string }) {
+  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9 }}><Text>{name}</Text><MoneyText amountMinor={amountMinor} currency={currency} /></View>;
 }
-export function BalanceRow({
-  name,
-  balanceMinor,
-  currency,
-}: {
-  name: string;
-  balanceMinor: bigint;
-  currency: string;
-}) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
-      <Text>{name}</Text>
-      <MoneyText
-        amountMinor={balanceMinor < 0n ? -balanceMinor : balanceMinor}
-        currency={currency}
-        type={balanceMinor < 0n ? 'expense' : 'income'}
-      />
-    </View>
-  );
+
+export function BalanceRow({ name, balanceMinor, currency }: { name: string; balanceMinor: bigint; currency: string }) {
+  return <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9 }}><Text>{name}</Text><MoneyText amountMinor={balanceMinor < 0n ? -balanceMinor : balanceMinor} currency={currency} type={balanceMinor < 0n ? 'expense' : 'income'} /></View>;
 }
-export function SettlementRow({
-  name,
-  amountMinor,
-  currency,
-}: {
-  name: string;
-  amountMinor: bigint;
-  currency: string;
-}) {
-  return (
-    <BalanceRow name={`Settlement with ${name}`} balanceMinor={amountMinor} currency={currency} />
-  );
+
+export function SettlementRow({ name, amountMinor, currency }: { name: string; amountMinor: bigint; currency: string }) {
+  return <BalanceRow name={`Settlement with ${name}`} balanceMinor={amountMinor} currency={currency} />;
 }
-export function BudgetProgress({
-  spentMinor,
-  limitMinor,
-  currency,
-}: {
-  spentMinor: bigint;
-  limitMinor: bigint;
-  currency: string;
-}) {
+
+export function BudgetProgress({ spentMinor, limitMinor, currency }: { spentMinor: bigint; limitMinor: bigint; currency: string }) {
   const percentage = limitMinor > 0n ? Number((spentMinor * 100n) / limitMinor) : 0;
   return (
-    <Card>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text>Budget</Text>
-        <Text>
-          {formatMinor(spentMinor, currency)} / {formatMinor(limitMinor, currency)}
-        </Text>
-      </View>
+    <Card variant="outline" style={{ gap: 12 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text>Budget</Text><Text>{formatMinor(spentMinor, currency)} / {formatMinor(limitMinor, currency)}</Text></View>
       <Progress value={percentage} />
     </Card>
   );
 }
+
 export function InsightCard({ title, body }: { title: string; body: string }) {
   const { tokens } = useTheme();
-  return (
-    <Card>
-      <Typography variant="heading">{title}</Typography>
-      <Text style={{ color: tokens.mutedForeground }}>{body}</Text>
-    </Card>
-  );
+  return <Card variant="subtle" style={{ gap: 8 }}><Typography variant="heading">{title}</Typography><Text style={{ color: tokens.mutedForeground, lineHeight: 20 }}>{body}</Text></Card>;
 }
