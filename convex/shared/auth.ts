@@ -1,10 +1,10 @@
 type Identity = { subject: string; email?: string; name?: string; image?: string };
 type UserRecord = {
   _id: string;
-  identityId: string;
-  email: string;
-  displayName: string;
-  updatedAt: number;
+  identityId?: string;
+  email?: string;
+  displayName?: string;
+  updatedAt?: number;
 };
 type QueryBuilder = { eq: (field: string, value: unknown) => unknown };
 type UserDatabase = {
