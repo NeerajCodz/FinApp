@@ -26,38 +26,82 @@ export default function SignInScreen() {
       router.replace(result.signingIn ? '/(tabs)' : '/(auth)/verify');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to sign in');
-      toast.error('Sign in failed', { description: cause instanceof Error ? cause.message : 'Unable to sign in' });
+      toast.error('Sign in failed', {
+        description: cause instanceof Error ? cause.message : 'Unable to sign in',
+      });
     }
   }
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: tokens.background }}>
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 20 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}><ArrowLeft size={21} color={tokens.foreground} /></IconButton>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1, backgroundColor: tokens.background }}
+    >
+      <View
+        style={{
+          flex: 1,
+          paddingHorizontal: 24,
+          paddingTop: insets.top + 14,
+          paddingBottom: insets.bottom + 20,
+        }}
+      >
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} color={tokens.foreground} />
+        </IconButton>
         <View style={{ flex: 1, justifyContent: 'center', gap: 26 }}>
           <View style={{ gap: 10 }}>
             <Typography variant="label">Your account</Typography>
             <Typography variant="display">Welcome back.</Typography>
-            <Text style={{ color: tokens.mutedForeground, fontSize: 15, lineHeight: 22 }}>Sign in to pick up exactly where you left off.</Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: 15, lineHeight: 22 }}>
+              Sign in to pick up exactly where you left off.
+            </Text>
           </View>
           <View style={{ gap: 16 }}>
             <View>
               <Label>Email</Label>
-              <Input accessibilityLabel="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+              <Input
+                accessibilityLabel="Email"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
             </View>
             <View>
               <Label>Password</Label>
-              <Input accessibilityLabel="Password" secureTextEntry value={password} onChangeText={setPassword} />
+              <Input
+                accessibilityLabel="Password"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
             </View>
-            {error && <Text accessibilityRole="alert" style={{ color: tokens.destructive, lineHeight: 20 }}>{error}</Text>}
+            {error && (
+              <Text accessibilityRole="alert" style={{ color: tokens.destructive, lineHeight: 20 }}>
+                {error}
+              </Text>
+            )}
           </View>
         </View>
         <View style={{ gap: 11 }}>
           <Button size="lg" disabled={!email || password.length < 8} onPress={() => void submit()}>
-            <Text style={{ color: tokens.primaryForeground, fontFamily: 'PlusJakartaSans_600SemiBold' }}>Sign in</Text>
-            <ArrowRight size={18} color={tokens.primaryForeground} weight="bold" style={{ marginLeft: 8 }} />
+            <Text
+              style={{ color: tokens.primaryForeground, fontFamily: 'PlusJakartaSans_600SemiBold' }}
+            >
+              Sign in
+            </Text>
+            <ArrowRight
+              size={18}
+              color={tokens.primaryForeground}
+              weight="bold"
+              style={{ marginLeft: 8 }}
+            />
           </Button>
-          <Button variant="ghost" onPress={() => router.push('/(auth)/verify')}>Verify email</Button>
-          <Typography variant="caption" style={{ textAlign: 'center', marginTop: 3 }}>Apple and Google sign-in can be enabled with deployment credentials.</Typography>
+          <Button variant="ghost" onPress={() => router.push('/(auth)/verify')}>
+            Verify email
+          </Button>
+          <Typography variant="caption" style={{ textAlign: 'center', marginTop: 3 }}>
+            Apple and Google sign-in can be enabled with deployment credentials.
+          </Typography>
         </View>
       </View>
     </KeyboardAvoidingView>

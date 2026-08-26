@@ -20,7 +20,16 @@ export function BarChart({
         {values.map((value, index) => {
           const active = highlightIndex === index;
           return (
-            <View key={`${index}-${value}`} style={{ flex: 1, height: '100%', justifyContent: 'flex-end', alignItems: 'center', gap: 7 }}>
+            <View
+              key={`${index}-${value}`}
+              style={{
+                flex: 1,
+                height: '100%',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 7,
+              }}
+            >
               <View
                 accessibilityLabel={`${value}`}
                 style={{
@@ -38,7 +47,11 @@ export function BarChart({
       </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {values.map((_, index) => (
-          <Typography key={`label-${index}`} variant="caption" style={{ flex: 1, textAlign: 'center', fontSize: 11 }}>
+          <Typography
+            key={`label-${index}`}
+            variant="caption"
+            style={{ flex: 1, textAlign: 'center', fontSize: 11 }}
+          >
             {labels[index] ?? ''}
           </Typography>
         ))}
@@ -59,11 +72,27 @@ export function InsightBars({
       {items.map((item) => (
         <View key={item.label} style={{ gap: 8 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-            <Text style={{ fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13 }}>{item.label}</Text>
+            <Text style={{ fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13 }}>
+              {item.label}
+            </Text>
             <Text style={{ color: tokens.mutedForeground, fontSize: 13 }}>{item.amount}</Text>
           </View>
-          <View style={{ height: 7, backgroundColor: tokens.muted, borderRadius: 4, overflow: 'hidden' }}>
-            <View style={{ width: `${(item.value / maximum) * 100}%`, height: '100%', backgroundColor: tokens.primary, borderRadius: 4 }} />
+          <View
+            style={{
+              height: 7,
+              backgroundColor: tokens.muted,
+              borderRadius: 4,
+              overflow: 'hidden',
+            }}
+          >
+            <View
+              style={{
+                width: `${(item.value / maximum) * 100}%`,
+                height: '100%',
+                backgroundColor: tokens.primary,
+                borderRadius: 4,
+              }}
+            />
           </View>
         </View>
       ))}

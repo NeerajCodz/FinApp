@@ -32,22 +32,53 @@ export default function TabsLayout() {
           tabBarItemStyle: { minHeight: 52 },
         }}
       >
-        <Tabs.Screen name="index" options={{ title: 'Overview', tabBarIcon: ({ color }) => <House {...iconProps} color={color as string} /> }} />
-        <Tabs.Screen name="activity" options={{ title: 'Activity', tabBarIcon: ({ color }) => <ClockCounterClockwise {...iconProps} color={color as string} /> }} />
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Overview',
+            tabBarIcon: ({ color }) => <House {...iconProps} color={color as string} />,
+          }}
+        />
+        <Tabs.Screen
+          name="activity"
+          options={{
+            title: 'Activity',
+            tabBarIcon: ({ color }) => (
+              <ClockCounterClockwise {...iconProps} color={color as string} />
+            ),
+          }}
+        />
         <Tabs.Screen
           name="add"
           options={{
             title: '',
             tabBarLabel: () => null,
             tabBarButton: () => (
-              <Button accessibilityLabel="Add transaction" size="icon" style={{ alignSelf: 'center', marginTop: -7 }} onPress={() => setOpen(true)}>
+              <Button
+                accessibilityLabel="Add transaction"
+                size="icon"
+                style={{ alignSelf: 'center', marginTop: -7 }}
+                onPress={() => setOpen(true)}
+              >
                 <Plus size={22} weight="bold" color={tokens.primaryForeground} />
               </Button>
             ),
           }}
         />
-        <Tabs.Screen name="groups" options={{ title: 'Groups', tabBarIcon: ({ color }) => <UsersThree {...iconProps} color={color as string} /> }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <UserCircle {...iconProps} color={color as string} /> }} />
+        <Tabs.Screen
+          name="groups"
+          options={{
+            title: 'Groups',
+            tabBarIcon: ({ color }) => <UsersThree {...iconProps} color={color as string} />,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Profile',
+            tabBarIcon: ({ color }) => <UserCircle {...iconProps} color={color as string} />,
+          }}
+        />
       </Tabs>
       <Sheet visible={open} onClose={() => setOpen(false)} title="Add to Finapp">
         {quickAddActions.map((action) => (

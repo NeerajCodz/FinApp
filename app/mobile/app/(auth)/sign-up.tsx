@@ -26,39 +26,86 @@ export default function SignUpScreen() {
       router.replace(result.signingIn ? '/(auth)/onboarding' : '/(auth)/verify');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create account');
-      toast.error('Account creation failed', { description: cause instanceof Error ? cause.message : 'Unable to create account' });
+      toast.error('Account creation failed', {
+        description: cause instanceof Error ? cause.message : 'Unable to create account',
+      });
     }
   }
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: tokens.background }}>
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 20 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}><ArrowLeft size={21} color={tokens.foreground} /></IconButton>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1, backgroundColor: tokens.background }}
+    >
+      <View
+        style={{
+          flex: 1,
+          paddingHorizontal: 24,
+          paddingTop: insets.top + 14,
+          paddingBottom: insets.bottom + 20,
+        }}
+      >
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} color={tokens.foreground} />
+        </IconButton>
         <View style={{ flex: 1, justifyContent: 'center', gap: 26 }}>
           <View style={{ gap: 10 }}>
             <Typography variant="label">Start clean</Typography>
             <Typography variant="display">Build your money view.</Typography>
-            <Text style={{ color: tokens.mutedForeground, fontSize: 15, lineHeight: 22 }}>Create a private ledger that gets clearer with every entry.</Text>
+            <Text style={{ color: tokens.mutedForeground, fontSize: 15, lineHeight: 22 }}>
+              Create a private ledger that gets clearer with every entry.
+            </Text>
           </View>
           <View style={{ gap: 16 }}>
             <View>
               <Label>Email</Label>
-              <Input accessibilityLabel="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+              <Input
+                accessibilityLabel="Email"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
             </View>
             <View>
               <Label>Password</Label>
-              <Input accessibilityLabel="Password" secureTextEntry value={password} onChangeText={setPassword} />
+              <Input
+                accessibilityLabel="Password"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
             </View>
-            {error && <Text accessibilityRole="alert" style={{ color: tokens.destructive, lineHeight: 20 }}>{error}</Text>}
+            {error && (
+              <Text accessibilityRole="alert" style={{ color: tokens.destructive, lineHeight: 20 }}>
+                {error}
+              </Text>
+            )}
           </View>
         </View>
         <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <ShieldCheck size={17} color={tokens.primary} weight="bold" />
             <Typography variant="caption">Private storage. No ads. No selling data.</Typography>
           </View>
           <Button size="lg" disabled={!email || password.length < 8} onPress={() => void submit()}>
-            <Text style={{ color: tokens.primaryForeground, fontFamily: 'PlusJakartaSans_600SemiBold' }}>Create account</Text>
-            <ArrowRight size={18} color={tokens.primaryForeground} weight="bold" style={{ marginLeft: 8 }} />
+            <Text
+              style={{ color: tokens.primaryForeground, fontFamily: 'PlusJakartaSans_600SemiBold' }}
+            >
+              Create account
+            </Text>
+            <ArrowRight
+              size={18}
+              color={tokens.primaryForeground}
+              weight="bold"
+              style={{ marginLeft: 8 }}
+            />
           </Button>
         </View>
       </View>

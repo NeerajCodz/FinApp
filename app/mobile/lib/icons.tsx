@@ -37,7 +37,8 @@ type FinappIconProps = LucideProps & { weight?: 'thin' | 'light' | 'regular' | '
 type IconComponent = React.ComponentType<LucideProps>;
 function withWeight(Icon: IconComponent) {
   return function FinappIcon({ weight = 'regular', strokeWidth, ...props }: FinappIconProps) {
-    const resolvedStrokeWidth = strokeWidth ?? (weight === 'bold' ? 2.4 : weight === 'light' ? 1.5 : 2);
+    const resolvedStrokeWidth =
+      strokeWidth ?? (weight === 'bold' ? 2.4 : weight === 'light' ? 1.5 : 2);
     return <Icon {...props} strokeWidth={resolvedStrokeWidth} />;
   };
 }

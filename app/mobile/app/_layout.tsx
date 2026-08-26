@@ -52,9 +52,22 @@ function ThemedStack() {
           loading: <LoaderCircle size={18} color={tokens.primary} strokeWidth={2.4} />,
         }}
         toastOptions={{
-          titleStyle: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: tokens.foreground },
-          descriptionStyle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, color: tokens.mutedForeground },
-          style: { backgroundColor: tokens.card, borderColor: tokens.borderSubtle, borderWidth: 1, borderRadius: 15 },
+          titleStyle: {
+            fontFamily: 'PlusJakartaSans_600SemiBold',
+            fontSize: 13,
+            color: tokens.foreground,
+          },
+          descriptionStyle: {
+            fontFamily: 'PlusJakartaSans_400Regular',
+            fontSize: 12,
+            color: tokens.mutedForeground,
+          },
+          style: {
+            backgroundColor: tokens.card,
+            borderColor: tokens.borderSubtle,
+            borderWidth: 1,
+            borderRadius: 15,
+          },
         }}
       />
     </>
