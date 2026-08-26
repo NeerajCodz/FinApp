@@ -43,9 +43,7 @@ export function formatMinor(amount: bigint, currency: string, locale = 'en-IN'):
   const whole = absolute / scale;
   const fractionalMinor = absolute % scale;
   const fraction =
-    digits && fractionalMinor !== 0n
-      ? `.${fractionalMinor.toString().padStart(digits, '0')}`
-      : '';
+    digits && fractionalMinor !== 0n ? `.${fractionalMinor.toString().padStart(digits, '0')}` : '';
   const grouped = new Intl.NumberFormat(locale, {
     useGrouping: true,
     maximumFractionDigits: 0,

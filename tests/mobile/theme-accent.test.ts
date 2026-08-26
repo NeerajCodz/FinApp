@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  accentPalette,
-  createTokens,
-  neutralOpacity,
-} from '../../app/mobile/lib/theme/tokens';
+import { accentPalette, createTokens, neutralOpacity } from '../../app/mobile/lib/theme/tokens';
 
 describe('Finapp visual identity', () => {
   it('exposes Volt as the only application accent', () => {

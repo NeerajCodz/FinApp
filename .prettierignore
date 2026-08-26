@@ -3,3 +3,4 @@ node_modules/
 .convex/
 convex/_generated/
 app/mobile/android/
+.agents/
