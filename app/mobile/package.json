@@ -1,0 +1,46 @@
+{
+  "name": "@finapp/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "dependencies": {
+    "convex": "^1.45.0",
+    "expo": "~57.0.16",
+    "expo-constants": "~57.0.14",
+    "expo-dev-client": "~57.0.15",
+    "expo-document-picker": "~57.0.1",
+    "expo-file-system": "~57.0.5",
+    "expo-haptics": "~57.0.1",
+    "expo-image-picker": "~57.0.13",
+    "expo-linking": "~57.0.7",
+    "expo-local-authentication": "~57.0.2",
+    "expo-notifications": "~57.0.14",
+    "expo-router": "~57.0.16",
+    "expo-secure-store": "~57.0.1",
+    "expo-sqlite": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "nativewind": "^4.2.6",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
+    "@types/react": "~19.2.2",
+    "convex-test": "^0.0.56",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.11"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings=0",
+    "expo:doctor": "npx expo-doctor"
+  }
+}

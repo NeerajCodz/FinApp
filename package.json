@@ -1,0 +1,25 @@
+{
+  "name": "finapp",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "app/mobile"
+  ],
+  "scripts": {
+    "dev:mobile": "npm --prefix app/mobile run start",
+    "dev:convex": "npx convex dev",
+    "typecheck": "npm --prefix app/mobile run typecheck",
+    "test": "npm --prefix app/mobile run test",
+    "lint": "npm --prefix app/mobile run lint",
+    "format:check": "prettier --check .",
+    "expo:doctor": "npm --prefix app/mobile run expo:doctor",
+    "validate": "npm run typecheck && npm test && npm run lint && npm run format:check && npm run expo:doctor"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "prettier": "^3.6.2",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.68.0"
+  }
+}
