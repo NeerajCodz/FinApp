@@ -2,10 +2,12 @@ import '../global.css';
 import React from 'react';
 import Constants from 'expo-constants';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { ConvexProvider, ConvexReactClient, useConvexAuth } from 'convex/react';
+import { ConvexReactClient } from 'convex/react';
+import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { Text, View } from '@/components/ui';
+import { secureTokenStorage } from '@/lib/auth/session';
 
 const convexUrl = Constants.expoConfig?.extra?.convexUrl;
 const convexClient = new ConvexReactClient(
@@ -40,7 +42,11 @@ export default function RootLayout() {
       </ThemeProvider>
     </SafeAreaProvider>
   );
-  return <ConvexProvider client={convexClient}>{content}</ConvexProvider>;
+  return (
+    <ConvexAuthProvider client={convexClient} storage={secureTokenStorage}>
+      {content}
+    </ConvexAuthProvider>
+  );
 }
 
 export function ErrorFallback() {
