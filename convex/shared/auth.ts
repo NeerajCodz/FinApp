@@ -18,7 +18,8 @@ type UserDatabase = {
   insert: (table: 'users' | 'userSettings', value: Record<string, unknown>) => Promise<string>;
   get: (id: string) => Promise<UserRecord | null>;
 };
-type AuthContext = { auth: { getUserIdentity: () => Promise<unknown> }; db?: UserDatabase };
+type AuthIdentityContext = { auth: { getUserIdentity: () => Promise<unknown> } };
+type AuthContext = AuthIdentityContext & { db?: UserDatabase };
 
 function asIdentity(value: unknown): Identity | null {
   if (
@@ -37,7 +38,7 @@ function asIdentity(value: unknown): Identity | null {
   };
 }
 
-export async function requireIdentity(ctx: AuthContext): Promise<Identity> {
+export async function requireIdentity(ctx: AuthIdentityContext): Promise<Identity> {
   const identity = asIdentity(await ctx.auth.getUserIdentity());
   if (!identity) throw new Error('AUTH_REQUIRED');
   return identity;

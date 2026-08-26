@@ -24,6 +24,7 @@
     "typescript-eslint": "^8.68.0"
   },
   "dependencies": {
+    "@auth/core": "^0.41.3",
     "@convex-dev/auth": "^0.0.95",
     "convex": "^1.45.0"
   }

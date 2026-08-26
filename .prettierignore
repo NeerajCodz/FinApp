@@ -1,2 +1,3 @@
 app/mobile/dist/
 node_modules/
+.convex/
