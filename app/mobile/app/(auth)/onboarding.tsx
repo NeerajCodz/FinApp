@@ -60,7 +60,7 @@ export default function OnboardingScreen() {
               <Text
                 style={{
                   color: tokens.mutedForeground,
-                  fontFamily: 'PlusJakartaSans_400Regular',
+                  fontFamily: 'SpaceGrotesk_400Regular',
                   textTransform: 'none',
                   letterSpacing: 0,
                 }}
@@ -84,7 +84,7 @@ export default function OnboardingScreen() {
             style={{
               color: tokens.primaryForeground,
               marginLeft: 8,
-              fontFamily: 'PlusJakartaSans_600SemiBold',
+              fontFamily: 'SpaceGrotesk_600SemiBold',
             }}
           >
             {accountName ? 'Create account and continue' : 'Continue'}

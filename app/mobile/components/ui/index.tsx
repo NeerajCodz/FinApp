@@ -13,12 +13,22 @@ import {
 } from 'react-native';
 import { getTouchTargetStyle } from './touch-target';
 import { useTheme } from '@/providers/ThemeProvider';
+import { Check } from '@/lib/icons';
 
 export function Text({ children, style, ...props }: React.ComponentProps<typeof RNText>) {
   const { tokens } = useTheme();
   return (
     <RNText
-      style={[{ color: tokens.foreground, fontFamily: 'PlusJakartaSans_400Regular' }, style]}
+      allowFontScaling
+      style={[
+        {
+          color: tokens.foreground,
+          fontFamily: 'SpaceGrotesk_400Regular',
+          fontSize: 15,
+          lineHeight: 22,
+        },
+        style,
+      ]}
       {...props}
     >
       {children}
@@ -31,42 +41,68 @@ export const Typography = ({
   variant = 'body',
   ...props
 }: React.ComponentProps<typeof RNText> & {
-  variant?: 'display' | 'title' | 'heading' | 'body' | 'caption' | 'label';
+  variant?:
+    | 'hero'
+    | 'display'
+    | 'title'
+    | 'heading'
+    | 'bodyLarge'
+    | 'body'
+    | 'small'
+    | 'caption'
+    | 'label';
 }) => {
   const { tokens } = useTheme();
   return (
     <Text
       style={[
+        variant === 'hero' && {
+          fontFamily: 'SpaceGrotesk_600SemiBold',
+          fontSize: 48,
+          lineHeight: 52,
+          letterSpacing: -2,
+          fontVariant: ['tabular-nums'],
+        },
         variant === 'display' && {
-          fontFamily: 'SpaceGrotesk_700Bold',
-          fontSize: 38,
-          lineHeight: 42,
-          letterSpacing: -1.2,
+          fontFamily: 'SpaceGrotesk_600SemiBold',
+          fontSize: 36,
+          lineHeight: 40,
+          letterSpacing: -1.3,
         },
         variant === 'title' && {
-          fontFamily: 'SpaceGrotesk_700Bold',
+          fontFamily: 'SpaceGrotesk_600SemiBold',
           fontSize: 30,
           lineHeight: 34,
-          letterSpacing: -0.7,
+          letterSpacing: -0.9,
         },
         variant === 'heading' && {
           fontFamily: 'SpaceGrotesk_600SemiBold',
-          fontSize: 19,
+          fontSize: 20,
+          lineHeight: 25,
+          letterSpacing: -0.3,
+        },
+        variant === 'bodyLarge' && {
+          fontFamily: 'SpaceGrotesk_500Medium',
+          fontSize: 17,
           lineHeight: 24,
-          letterSpacing: -0.25,
+        },
+        variant === 'small' && {
+          fontSize: 13,
+          lineHeight: 18,
+          color: tokens.foregroundMuted,
         },
         variant === 'caption' && {
-          fontSize: 12,
-          lineHeight: 17,
-          color: tokens.mutedForeground,
+          fontFamily: 'SpaceGrotesk_500Medium',
+          fontSize: 11,
+          lineHeight: 15,
+          letterSpacing: 0.2,
+          color: tokens.foregroundSubtle,
         },
         variant === 'label' && {
-          fontFamily: 'PlusJakartaSans_600SemiBold',
-          fontSize: 12,
-          lineHeight: 16,
-          letterSpacing: 0.3,
-          textTransform: 'uppercase',
-          color: tokens.mutedForeground,
+          fontFamily: 'SpaceGrotesk_500Medium',
+          fontSize: 13,
+          lineHeight: 18,
+          color: tokens.foregroundMuted,
         },
         props.style,
       ]}
@@ -97,18 +133,18 @@ export function Button({
     primary: { backgroundColor: tokens.primary, color: tokens.primaryForeground },
     secondary: { backgroundColor: tokens.secondary, color: tokens.secondaryForeground },
     outline: { backgroundColor: 'transparent', color: tokens.foreground },
-    ghost: { backgroundColor: 'transparent', color: tokens.foreground },
-    destructive: { backgroundColor: tokens.destructive, color: tokens.destructiveForeground },
+    ghost: { backgroundColor: 'transparent', color: tokens.foregroundMuted },
+    destructive: { backgroundColor: '#FF5C5C1A', color: tokens.destructive },
   } as const;
   const { backgroundColor, color } = colors[variant];
   const compact = size === 'sm';
   const icon = size === 'icon';
   const baseStyle = getTouchTargetStyle({
     minWidth: icon ? 44 : undefined,
-    borderRadius: icon ? 14 : 13,
-    paddingHorizontal: icon ? 0 : compact ? 12 : 17,
-    paddingVertical: icon ? 0 : compact ? 8 : size === 'lg' ? 15 : 12,
-    minHeight: icon ? 44 : size === 'lg' ? 56 : 44,
+    borderRadius: 14,
+    paddingHorizontal: icon ? 0 : compact ? 14 : 18,
+    paddingVertical: icon ? 0 : compact ? 8 : 14,
+    minHeight: icon ? 44 : compact ? 38 : size === 'lg' ? 54 : 48,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -120,22 +156,24 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       style={({ pressed }) => [
         baseStyle,
         pressed && { transform: [{ scale: 0.98 }], opacity: 0.88 },
-        disabled && { opacity: 0.4 },
+        disabled && { opacity: 0.32 },
         typeof style === 'function' ? style({ pressed }) : style,
       ]}
       {...props}
     >
       {typeof children === 'string' ? (
         <Text
+          numberOfLines={1}
           style={{
             color,
-            fontFamily: 'PlusJakartaSans_600SemiBold',
-            fontSize: compact ? 12 : 14,
-            letterSpacing: 0.1,
+            fontFamily: 'SpaceGrotesk_600SemiBold',
+            fontSize: compact ? 13 : 15,
+            lineHeight: compact ? 18 : 20,
           }}
         >
           {children}
@@ -167,12 +205,18 @@ export function Card({
   ...props
 }: ViewProps & { variant?: 'default' | 'subtle' | 'outline' }) {
   const { tokens } = useTheme();
+  const backgroundColor =
+    variant === 'outline'
+      ? 'transparent'
+      : variant === 'subtle'
+        ? tokens.surfaceSubtle
+        : tokens.card;
   return (
     <View
       style={[
         {
-          backgroundColor: variant === 'subtle' ? tokens.surfaceSubtle : tokens.card,
-          borderRadius: 20,
+          backgroundColor,
+          borderRadius: 18,
           padding: 18,
           borderWidth: variant === 'outline' ? 1 : 0,
           borderColor: tokens.borderSubtle,
@@ -186,13 +230,20 @@ export function Card({
   );
 }
 
-export function Input({ style, onFocus, onBlur, ...props }: TextInputProps) {
+export function Input({
+  style,
+  onFocus,
+  onBlur,
+  error = false,
+  ...props
+}: TextInputProps & { error?: boolean }) {
   const { tokens } = useTheme();
   const [focused, setFocused] = useState(false);
   return (
     <TextInput
-      accessibilityRole="none"
-      placeholderTextColor={tokens.mutedForeground}
+      placeholderTextColor={tokens.foregroundDisabled}
+      selectionColor={tokens.primary}
+      cursorColor={tokens.primary}
       onFocus={(event) => {
         setFocused(true);
         onFocus?.(event);
@@ -203,15 +254,16 @@ export function Input({ style, onFocus, onBlur, ...props }: TextInputProps) {
       }}
       style={[
         {
-          minHeight: 52,
+          minHeight: 56,
           borderWidth: 1,
-          borderColor: focused ? tokens.ring : tokens.borderSubtle,
-          borderRadius: 13,
-          paddingHorizontal: 15,
+          borderColor: error ? tokens.destructive : focused ? tokens.ring : tokens.borderSubtle,
+          borderRadius: 14,
+          paddingHorizontal: 16,
           color: tokens.foreground,
-          backgroundColor: tokens.input,
-          fontFamily: 'PlusJakartaSans_400Regular',
-          fontSize: 14,
+          backgroundColor: focused ? tokens.surfaceRaised : tokens.input,
+          fontFamily: 'SpaceGrotesk_400Regular',
+          fontSize: 15,
+          lineHeight: 22,
         },
         style,
       ]}
@@ -236,9 +288,9 @@ export function Badge({
   const { tokens } = useTheme();
   const palette = {
     default: { backgroundColor: tokens.primary, color: tokens.primaryForeground },
-    success: { backgroundColor: `${tokens.income}22`, color: tokens.income },
-    danger: { backgroundColor: `${tokens.expense}22`, color: tokens.expense },
-    neutral: { backgroundColor: tokens.muted, color: tokens.mutedForeground },
+    success: { backgroundColor: '#B7FF4A1A', color: tokens.positive },
+    danger: { backgroundColor: '#FF5C5C1A', color: tokens.destructive },
+    neutral: { backgroundColor: tokens.surfaceRaised, color: tokens.foregroundMuted },
   } as const;
   return (
     <Text
@@ -247,12 +299,13 @@ export function Badge({
         {
           paddingHorizontal: 10,
           paddingVertical: 6,
-          borderRadius: 8,
+          borderRadius: 999,
           overflow: 'hidden',
           backgroundColor: palette[variant].backgroundColor,
           color: palette[variant].color,
           fontSize: 11,
-          fontFamily: 'PlusJakartaSans_600SemiBold',
+          lineHeight: 15,
+          fontFamily: 'SpaceGrotesk_600SemiBold',
           letterSpacing: 0.2,
         },
         props.style,
@@ -280,17 +333,19 @@ export function Avatar({
       style={{
         width: size,
         height: size,
-        borderRadius: size * 0.32,
-        backgroundColor: tokens.primary,
+        borderRadius: size / 2,
+        backgroundColor: tokens.surfaceRaised,
+        borderWidth: 1,
+        borderColor: tokens.borderSubtle,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
       <Text
         style={{
-          color: tokens.primaryForeground,
-          fontFamily: 'SpaceGrotesk_700Bold',
-          fontSize: size * 0.34,
+          color: tokens.foreground,
+          fontFamily: 'SpaceGrotesk_600SemiBold',
+          fontSize: size * 0.32,
         }}
       >
         {initials.slice(0, 2).toUpperCase()}
@@ -325,20 +380,29 @@ export function Separator() {
   );
 }
 
-export function Progress({ value, color }: { value: number; color?: string }) {
+export function Progress({
+  value,
+  color,
+  height = 6,
+}: {
+  value: number;
+  color?: string;
+  height?: number;
+}) {
   const { tokens } = useTheme();
+  const normalized = Math.max(0, Math.min(100, value));
   return (
     <View
       accessibilityRole="progressbar"
-      accessibilityValue={{ min: 0, max: 100, now: value }}
-      style={{ height: 9, borderRadius: 5, backgroundColor: tokens.muted, overflow: 'hidden' }}
+      accessibilityValue={{ min: 0, max: 100, now: normalized }}
+      style={{ height, borderRadius: height / 2, backgroundColor: tokens.borderSubtle, overflow: 'hidden' }}
     >
       <View
         style={{
-          width: `${Math.max(0, Math.min(100, value))}%`,
+          width: `${normalized}%`,
           height: '100%',
-          backgroundColor: color ?? tokens.primary,
-          borderRadius: 5,
+          backgroundColor: color ?? tokens.foreground,
+          borderRadius: height / 2,
         }}
       />
     </View>
@@ -361,18 +425,25 @@ export function Checkbox({
       accessibilityLabel={label}
       accessibilityState={{ checked }}
       onPress={() => onChange(!checked)}
-      style={getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 })}
+      style={({ pressed }) => [
+        getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 }),
+        pressed && { opacity: 0.88 },
+      ]}
     >
       <View
         style={{
           width: 22,
           height: 22,
           borderRadius: 7,
-          borderWidth: 2,
+          borderWidth: 1,
           borderColor: checked ? tokens.primary : tokens.border,
           backgroundColor: checked ? tokens.primary : tokens.background,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
-      />
+      >
+        {checked && <Check size={15} strokeWidth={2.4} color={tokens.background} />}
+      </View>
       <Text>{label}</Text>
     </Pressable>
   );
@@ -439,25 +510,16 @@ export const Switch = ({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        minHeight: 52,
+        minHeight: 56,
       }}
     >
-      <Label
-        style={{
-          marginBottom: 0,
-          color: tokens.foreground,
-          textTransform: 'none',
-          letterSpacing: 0,
-        }}
-      >
-        {label}
-      </Label>
+      <Label style={{ marginBottom: 0, color: tokens.foreground }}>{label}</Label>
       <NativeSwitch
         accessibilityLabel={label}
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: tokens.muted, true: tokens.primary }}
-        thumbColor={tokens.foreground}
+        trackColor={{ false: tokens.border, true: tokens.primary }}
+        thumbColor={value ? tokens.background : tokens.foregroundMuted}
       />
     </View>
   );
@@ -471,20 +533,35 @@ export const Tabs = ({
   tabs: { label: string; value: string }[];
   value: string;
   onChange: (v: string) => void;
-}) => (
-  <View style={{ flexDirection: 'row', gap: 8 }}>
-    {tabs.map((tab) => (
-      <Button
-        key={tab.value}
-        size="sm"
-        variant={tab.value === value ? 'primary' : 'outline'}
-        onPress={() => onChange(tab.value)}
-      >
-        {tab.label}
-      </Button>
-    ))}
-  </View>
-);
+}) => {
+  const { tokens } = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        gap: 4,
+        padding: 4,
+        borderRadius: 12,
+        backgroundColor: tokens.surfaceRaised,
+      }}
+    >
+      {tabs.map((tab) => {
+        const selected = tab.value === value;
+        return (
+          <Button
+            key={tab.value}
+            size="sm"
+            variant={selected ? 'secondary' : 'ghost'}
+            onPress={() => onChange(tab.value)}
+            style={{ flex: 1, borderRadius: 10 }}
+          >
+            {tab.label}
+          </Button>
+        );
+      })}
+    </View>
+  );
+};
 
 export const Select = ({
   label,
@@ -540,26 +617,34 @@ export function Sheet({
         <View
           onStartShouldSetResponder={() => true}
           style={{
-            backgroundColor: tokens.card,
-            borderTopLeftRadius: 26,
-            borderTopRightRadius: 26,
-            padding: 22,
-            gap: 12,
+            backgroundColor: tokens.popover,
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 28,
+            gap: 16,
             borderTopWidth: 1,
             borderColor: tokens.borderSubtle,
+            shadowColor: '#000000',
+            shadowOffset: { width: 0, height: -8 },
+            shadowOpacity: 0.55,
+            shadowRadius: 40,
           }}
         >
           <View
             style={{
-              width: 38,
+              width: 36,
               height: 4,
               borderRadius: 2,
-              backgroundColor: tokens.mutedForeground,
+              backgroundColor: tokens.foregroundDisabled,
               alignSelf: 'center',
               marginBottom: 4,
             }}
           />
-          <Typography variant="heading">{title}</Typography>
+          <Typography variant="heading" style={{ fontSize: 22, lineHeight: 27 }}>
+            {title}
+          </Typography>
           {children}
         </View>
       </Pressable>
@@ -590,7 +675,7 @@ export function Skeleton({
   return (
     <View
       accessibilityLabel="Loading"
-      style={{ width, height, borderRadius: 9, backgroundColor: tokens.muted }}
+      style={{ width, height, borderRadius: 10, backgroundColor: tokens.surfaceRaised }}
     />
   );
 }
@@ -608,26 +693,15 @@ export function Empty({
   return (
     <View
       accessibilityLabel="Empty state"
-      style={{ alignItems: 'center', gap: 10, paddingVertical: 28, paddingHorizontal: 18 }}
+      style={{ alignItems: 'flex-start', gap: 10, paddingVertical: 24 }}
     >
-      <View
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 14,
-          backgroundColor: tokens.muted,
-          marginBottom: 2,
-        }}
-      />
-      <Typography variant="heading" style={{ textAlign: 'center' }}>
-        {title}
-      </Typography>
+      <Typography variant="heading">{title}</Typography>
       {description && (
-        <Text style={{ color: tokens.mutedForeground, textAlign: 'center', lineHeight: 20 }}>
+        <Text style={{ color: tokens.foregroundMuted, lineHeight: 22, maxWidth: 280 }}>
           {description}
         </Text>
       )}
-      {action}
+      {action && <View style={{ marginTop: 6 }}>{action}</View>}
     </View>
   );
 }
@@ -671,7 +745,7 @@ export const Textarea = (props: TextInputProps) => (
     style={[{ minHeight: 100, paddingTop: 14 }, props.style]}
   />
 );
-export const InputOTP = ({
+export function InputOTP({
   value,
   onChangeText,
   length = 6,
@@ -679,15 +753,65 @@ export const InputOTP = ({
   value: string;
   onChangeText: (v: string) => void;
   length?: number;
-}) => (
-  <Input
-    accessibilityLabel="One-time password"
-    keyboardType="number-pad"
-    maxLength={length}
-    value={value}
-    onChangeText={onChangeText}
-  />
-);
+}) {
+  const { tokens } = useTheme();
+  const inputRef = React.useRef<TextInput>(null);
+  const [focused, setFocused] = useState(false);
+  const cells = Array.from({ length }, (_, index) => value[index] ?? '');
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Enter six-digit verification code"
+      onPress={() => inputRef.current?.focus()}
+      style={{ position: 'relative' }}
+    >
+      <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'space-between' }}>
+        {cells.map((character, index) => {
+          const active = focused && index === Math.min(value.length, length - 1);
+          return (
+            <View
+              key={index}
+              style={{
+                width: 48,
+                height: 56,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: active ? tokens.ring : tokens.borderSubtle,
+                backgroundColor: active ? tokens.surfaceRaised : tokens.surfaceSubtle,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: 'SpaceGrotesk_600SemiBold',
+                  fontSize: 22,
+                  lineHeight: 28,
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {character}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      <TextInput
+        ref={inputRef}
+        accessibilityLabel="One-time password"
+        keyboardType="number-pad"
+        textContentType="oneTimeCode"
+        autoComplete="sms-otp"
+        maxLength={length}
+        value={value}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChangeText={(next) => onChangeText(next.replace(/\D/g, '').slice(0, length))}
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
+    </Pressable>
+  );
+}
 export const Accordion = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <Collapsible title={title}>{children}</Collapsible>
 );

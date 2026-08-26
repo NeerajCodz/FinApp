@@ -63,7 +63,7 @@ export default function WelcomeScreen() {
       <View style={{ gap: 10 }}>
         <Button size="lg" onPress={() => router.push('/(auth)/sign-in')}>
           <Text
-            style={{ color: tokens.primaryForeground, fontFamily: 'PlusJakartaSans_600SemiBold' }}
+            style={{ color: tokens.primaryForeground, fontFamily: 'SpaceGrotesk_600SemiBold' }}
           >
             Sign in
           </Text>

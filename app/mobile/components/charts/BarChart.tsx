@@ -72,7 +72,7 @@ export function InsightBars({
       {items.map((item) => (
         <View key={item.label} style={{ gap: 8 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-            <Text style={{ fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13 }}>
+            <Text style={{ fontFamily: 'SpaceGrotesk_500Medium', fontSize: 13 }}>
               {item.label}
             </Text>
             <Text style={{ color: tokens.mutedForeground, fontSize: 13 }}>{item.amount}</Text>

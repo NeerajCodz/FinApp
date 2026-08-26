@@ -53,12 +53,12 @@ function ThemedStack() {
         }}
         toastOptions={{
           titleStyle: {
-            fontFamily: 'PlusJakartaSans_600SemiBold',
+            fontFamily: 'SpaceGrotesk_600SemiBold',
             fontSize: 13,
             color: tokens.foreground,
           },
           descriptionStyle: {
-            fontFamily: 'PlusJakartaSans_400Regular',
+            fontFamily: 'SpaceGrotesk_400Regular',
             fontSize: 12,
             color: tokens.mutedForeground,
           },

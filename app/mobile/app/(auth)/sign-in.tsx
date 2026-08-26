@@ -85,7 +85,7 @@ export default function SignInScreen() {
         <View style={{ gap: 11 }}>
           <Button size="lg" disabled={!email || password.length < 8} onPress={() => void submit()}>
             <Text
-              style={{ color: tokens.primaryForeground, fontFamily: 'PlusJakartaSans_600SemiBold' }}
+              style={{ color: tokens.primaryForeground, fontFamily: 'SpaceGrotesk_600SemiBold' }}
             >
               Sign in
             </Text>

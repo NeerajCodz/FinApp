@@ -119,7 +119,7 @@ export default function HomeScreen() {
               style={{
                 color: tokens.secondaryForeground,
                 marginLeft: 6,
-                fontFamily: 'PlusJakartaSans_600SemiBold',
+                fontFamily: 'SpaceGrotesk_600SemiBold',
                 fontSize: 12,
               }}
             >
@@ -193,7 +193,7 @@ export default function HomeScreen() {
               style={{
                 color: tokens.primaryForeground,
                 marginLeft: 6,
-                fontFamily: 'PlusJakartaSans_600SemiBold',
+                fontFamily: 'SpaceGrotesk_600SemiBold',
                 fontSize: 12,
               }}
             >

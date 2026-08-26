@@ -3,20 +3,20 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, Check } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { accentPalette, type AccentName } from '@/lib/theme/tokens';
-import { Button, Card, IconButton, Text, Typography } from '@/components/ui';
+import { Button, IconButton, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function AppearanceSettingsScreen() {
-  const { appearance, setAppearance, accent, setAccent, tokens } = useTheme();
+  const { appearance, setAppearance, tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
+      style={{ flex: 1, backgroundColor: tokens.background }}
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 12,
-        paddingBottom: 30,
-        gap: 24,
+        paddingBottom: insets.bottom + 32,
+        gap: 32,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -25,75 +25,60 @@ export default function AppearanceSettingsScreen() {
         </IconButton>
         <Typography variant="title">Appearance</Typography>
       </View>
-      <View style={{ gap: 10 }}>
-        <Typography variant="label">Interface</Typography>
-        <Card variant="outline" style={{ gap: 16 }}>
-          <View style={{ gap: 5 }}>
-            <Typography variant="heading">Theme</Typography>
-            <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>
-              Choose how Finapp feels at a glance.
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {(['dark', 'light', 'system'] as const).map((option) => (
+
+      <View style={{ gap: 12 }}>
+        <Typography variant="label">Theme</Typography>
+        <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
+          Finapp starts dark. Volt remains the single product accent in every mode.
+        </Text>
+        <View style={{ gap: 8 }}>
+          {(['dark', 'system', 'light'] as const).map((option) => {
+            const selected = appearance === option;
+            const label = option.charAt(0).toUpperCase() + option.slice(1);
+            return (
               <Button
                 key={option}
-                size="sm"
-                variant={appearance === option ? 'primary' : 'outline'}
+                variant={selected ? 'secondary' : 'outline'}
                 onPress={() => setAppearance(option)}
+                style={{ justifyContent: 'space-between', minHeight: 56 }}
               >
-                {option.charAt(0).toUpperCase() + option.slice(1)}
-              </Button>
-            ))}
-          </View>
-        </Card>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Typography variant="label">Accent</Typography>
-        <Card variant="outline" style={{ gap: 16 }}>
-          <View style={{ gap: 5 }}>
-            <Typography variant="heading">Your signal color</Typography>
-            <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>
-              Used for actions, positive movement, and focus.
-            </Text>
-          </View>
-          <View style={{ gap: 8 }}>
-            {(['blue', 'red', 'white'] as AccentName[]).map((option) => {
-              const selected = accent === option;
-              return (
-                <Button
-                  key={option}
-                  variant={selected ? 'primary' : 'outline'}
-                  onPress={() => setAccent(option)}
-                  style={{ justifyContent: 'space-between' }}
+                <Text
+                  style={{
+                    color: selected ? tokens.background : tokens.foreground,
+                    fontFamily: 'SpaceGrotesk_500Medium',
+                  }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        backgroundColor: accentPalette[option],
-                        borderWidth: option === 'white' ? 1 : 0,
-                        borderColor: tokens.border,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        color: selected ? tokens.primaryForeground : tokens.foreground,
-                        fontFamily: 'PlusJakartaSans_600SemiBold',
-                        fontSize: 13,
-                      }}
-                    >
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </Text>
-                  </View>
-                  {selected && <Check size={17} color={tokens.primaryForeground} weight="bold" />}
-                </Button>
-              );
-            })}
+                  {label}
+                </Text>
+                {selected && <Check size={18} color={tokens.background} />}
+              </Button>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={{ gap: 12 }}>
+        <Typography variant="label">Signature accent</Typography>
+        <View
+          style={{
+            minHeight: 72,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 14,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderColor: tokens.borderSubtle,
+          }}
+        >
+          <View
+            style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: tokens.primary }}
+          />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Typography variant="bodyLarge">Volt</Typography>
+            <Typography variant="caption">#B7FF4A · Finapp identity</Typography>
           </View>
-        </Card>
+          <Check size={18} color={tokens.primary} />
+        </View>
       </View>
     </ScrollView>
   );

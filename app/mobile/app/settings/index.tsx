@@ -101,7 +101,7 @@ export default function SettingsScreen() {
                     <Icon size={19} color={tokens.foreground} weight="regular" />
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={{ fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14 }}>
+                    <Text style={{ fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 14 }}>
                       {item.label}
                     </Text>
                     <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>

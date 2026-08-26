@@ -89,7 +89,7 @@ export default function ActivityScreen() {
             style={{
               color: tokens.primaryForeground,
               marginLeft: 6,
-              fontFamily: 'PlusJakartaSans_600SemiBold',
+              fontFamily: 'SpaceGrotesk_600SemiBold',
               fontSize: 12,
             }}
           >

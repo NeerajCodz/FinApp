@@ -1,18 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { accentPalette, createTokens } from '../../app/mobile/lib/theme/tokens';
+import {
+  accentPalette,
+  createTokens,
+  neutralOpacity,
+} from '../../app/mobile/lib/theme/tokens';
 
-describe('customizable accent palette', () => {
-  it('limits accents to blue, red, and white', () => {
-    expect(Object.keys(accentPalette)).toEqual(['blue', 'red', 'white']);
+describe('Finapp visual identity', () => {
+  it('exposes Volt as the only application accent', () => {
+    expect(Object.keys(accentPalette)).toEqual(['volt']);
+    expect(accentPalette.volt).toBe('#B7FF4A');
   });
 
-  it('applies the selected accent without changing monochrome surfaces', () => {
-    const tokens = createTokens('dark', 'red');
-    expect(tokens.primary).toBe(accentPalette.red);
+  it('builds dark surfaces from white opacity over pure black', () => {
+    const tokens = createTokens('dark');
     expect(tokens.background).toBe('#000000');
     expect(tokens.foreground).toBe('#FFFFFF');
-    expect(tokens.card).toBe('#000000');
-    expect(tokens.surfaceRaised).toBe('#FFFFFF0D');
-    expect(tokens.borderSubtle).toBe('#FFFFFF1F');
+    expect(tokens.primary).toBe(accentPalette.volt);
+    expect(tokens.card).toBe(neutralOpacity.white4);
+    expect(tokens.surfaceRaised).toBe(neutralOpacity.white6);
+    expect(tokens.border).toBe(neutralOpacity.white12);
+    expect(tokens.borderSubtle).toBe(neutralOpacity.white8);
   });
 });

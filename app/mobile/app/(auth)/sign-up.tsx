@@ -96,7 +96,7 @@ export default function SignUpScreen() {
           </View>
           <Button size="lg" disabled={!email || password.length < 8} onPress={() => void submit()}>
             <Text
-              style={{ color: tokens.primaryForeground, fontFamily: 'PlusJakartaSans_600SemiBold' }}
+              style={{ color: tokens.primaryForeground, fontFamily: 'SpaceGrotesk_600SemiBold' }}
             >
               Create account
             </Text>

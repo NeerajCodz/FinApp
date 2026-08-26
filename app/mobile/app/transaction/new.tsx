@@ -88,7 +88,7 @@ export default function NewTransactionScreen() {
           style={{
             color: tokens.primaryForeground,
             marginLeft: 8,
-            fontFamily: 'PlusJakartaSans_600SemiBold',
+            fontFamily: 'SpaceGrotesk_600SemiBold',
           }}
         >
           Save entry

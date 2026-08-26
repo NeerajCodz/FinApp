@@ -13,6 +13,7 @@ describe('integer money', () => {
 
   it('formats bigint minor units at the presentation boundary', () => {
     expect(formatMinor(124050n, 'INR', 'en-IN')).toContain('1,240.50');
+    expect(formatMinor(124000n, 'INR', 'en-IN')).toBe('₹1,240');
   });
 
   it('allocates remainders by supplied participant order', () => {
