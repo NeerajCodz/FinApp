@@ -7,9 +7,8 @@
       "@/*": ["./*"],
       "@convex/*": ["../../convex/*"]
     },
-    "jsx": "react-jsx",
     "noUncheckedIndexedAccess": true,
     "ignoreDeprecations": "6.0"
   },
-  "include": ["**/*.ts", "**/*.tsx", "../../convex/**/*.ts"]
+  "include": ["**/*.ts", "**/*.tsx", "../../convex/**/*.ts", "nativewind-env.d.ts"]
 }
