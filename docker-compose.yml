@@ -43,9 +43,10 @@ services:
       context: .
       dockerfile: infra/docker/mobileexpo.Dockerfile
     working_dir: /workspace/app/mobile
-    command: ['bun', 'x', 'expo', 'start', '--dev-client', '--host', 'lan', '--port', '8081']
+    command: ['bun', 'x', 'expo', 'start', '--dev-client', '--host', 'lan', '--port', '2609']
     ports:
-      - '${FINAPP_EXPO_PORT:-2609}:8081'
+      - '${FINAPP_EXPO_PORT:-2609}:2609'
+      - '${FINAPP_EXPO_COMPAT_PORT:-8081}:2609'
       - '${FINAPP_EXPO_DEVTOOLS_PORT:-2612}:19000'
       - '${FINAPP_EXPO_LAN_PORT:-2613}:19001'
       - '${FINAPP_EXPO_TUNNEL_PORT:-2614}:19002'
@@ -68,7 +69,7 @@ services:
           'CMD',
           'bun',
           '-e',
-          "fetch('http://127.0.0.1:8081/status').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+          "fetch('http://127.0.0.1:2609/status').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
         ]
       interval: 5s
       timeout: 5s

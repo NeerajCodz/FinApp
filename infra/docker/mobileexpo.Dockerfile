@@ -9,4 +9,4 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
-CMD ["bun", "x", "expo", "start", "--dev-client", "--host", "lan", "--port", "8081"]
+CMD ["bun", "x", "expo", "start", "--dev-client", "--host", "lan", "--port", "2609"]
