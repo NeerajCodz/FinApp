@@ -12,5 +12,7 @@ describe('customizable accent palette', () => {
     expect(tokens.background).toBe('#000000');
     expect(tokens.foreground).toBe('#FFFFFF');
     expect(tokens.card).toBe('#000000');
+    expect(tokens.surfaceRaised).toBe('#FFFFFF0D');
+    expect(tokens.borderSubtle).toBe('#FFFFFF1F');
   });
 });
