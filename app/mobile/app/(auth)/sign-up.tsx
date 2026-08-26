@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
-import { ArrowLeft, ArrowRight, ShieldCheck } from '@/lib/icons';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { ArrowLeft, ArrowRight } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from 'sonner-native';
+import { BrandMark } from '@/components/finance';
 import { Button, IconButton, Input, Label, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -15,6 +16,7 @@ export default function SignUpScreen() {
   const { signIn } = useAuthActions();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+
   async function submit() {
     setError('');
     const form = new FormData();
@@ -25,90 +27,107 @@ export default function SignUpScreen() {
       const result = await signIn('password', form);
       router.replace(result.signingIn ? '/(auth)/onboarding' : '/(auth)/verify');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to create account');
-      toast.error('Account creation failed', {
-        description: cause instanceof Error ? cause.message : 'Unable to create account',
-      });
+      const message = cause instanceof Error ? cause.message : 'Unable to create account';
+      setError(message);
+      toast.error('Account creation failed', { description: message });
     }
   }
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, backgroundColor: tokens.background }}
     >
-      <View
-        style={{
-          flex: 1,
-          paddingHorizontal: 24,
-          paddingTop: insets.top + 14,
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 12,
           paddingBottom: insets.bottom + 20,
         }}
       >
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <View style={{ flex: 1, justifyContent: 'center', gap: 26 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+            <ArrowLeft size={21} color={tokens.foreground} />
+          </IconButton>
+          <BrandMark />
+        </View>
+
+        <View style={{ flex: 1, justifyContent: 'center', gap: 28, paddingVertical: 40 }}>
           <View style={{ gap: 10 }}>
-            <Typography variant="label">Start clean</Typography>
-            <Typography variant="display">Build your money view.</Typography>
-            <Text style={{ color: tokens.mutedForeground, fontSize: 15, lineHeight: 22 }}>
-              Create a private ledger that gets clearer with every entry.
+            <Typography variant="title">Start clearly.</Typography>
+            <Typography variant="display">Build a calmer{`\n`}money habit.</Typography>
+            <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
+              One private ledger for spending, accounts, budgets, and shared expenses.
             </Text>
           </View>
-          <View style={{ gap: 16 }}>
+
+          <View style={{ gap: 18 }}>
             <View>
               <Label>Email</Label>
               <Input
                 accessibilityLabel="Email"
                 autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
                 keyboardType="email-address"
+                textContentType="emailAddress"
+                placeholder="you@example.com"
                 value={email}
                 onChangeText={setEmail}
+                returnKeyType="next"
+                error={!!error}
               />
             </View>
             <View>
               <Label>Password</Label>
               <Input
                 accessibilityLabel="Password"
+                autoComplete="new-password"
+                textContentType="newPassword"
                 secureTextEntry
+                placeholder="Create a secure password"
                 value={password}
                 onChangeText={setPassword}
+                returnKeyType="go"
+                onSubmitEditing={submit}
+                error={!!error}
               />
+              <Typography variant="caption" style={{ marginTop: 8 }}>
+                Use at least eight characters.
+              </Typography>
             </View>
-            {error && (
-              <Text accessibilityRole="alert" style={{ color: tokens.destructive, lineHeight: 20 }}>
+            {!!error && (
+              <Typography
+                variant="small"
+                accessibilityLiveRegion="polite"
+                style={{ color: tokens.destructive }}
+              >
                 {error}
-              </Text>
+              </Typography>
             )}
           </View>
         </View>
+
         <View style={{ gap: 12 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              gap: 10,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <ShieldCheck size={17} color={tokens.primary} weight="bold" />
-            <Typography variant="caption">Private storage. No ads. No selling data.</Typography>
-          </View>
-          <Button size="lg" disabled={!email || password.length < 8} onPress={() => void submit()}>
+          <Button size="lg" disabled={!email.trim() || password.length < 8} onPress={submit}>
             <Text
-              style={{ color: tokens.primaryForeground, fontFamily: 'SpaceGrotesk_600SemiBold' }}
+              style={{
+                color: tokens.primaryForeground,
+                fontFamily: 'SpaceGrotesk_600SemiBold',
+                fontSize: 15,
+              }}
             >
               Create account
             </Text>
-            <ArrowRight
-              size={18}
-              color={tokens.primaryForeground}
-              weight="bold"
-              style={{ marginLeft: 8 }}
-            />
+            <ArrowRight size={18} color={tokens.primaryForeground} style={{ marginLeft: 8 }} />
+          </Button>
+          <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-in')}>
+            Already have an account? Sign in
           </Button>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }

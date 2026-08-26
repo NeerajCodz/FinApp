@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, View, type PressableProps } from 'react-native';
-import {
-  Button,
-  Card,
-  Input,
-  Progress,
-  Separator,
-  Text,
-  Typography,
-} from '@/components/ui';
+import { Button, Card, Input, Progress, Separator, Text, Typography } from '@/components/ui';
 import {
   Car,
   CaretRight,
@@ -42,7 +34,9 @@ export function Money({
 }) {
   const amount = signedMinor(amountMinor, type);
   const { tokens } = useTheme();
-  const formatted = hidden ? `${currency === 'INR' ? '₹' : ''}••••••` : formatMinor(amount, currency);
+  const formatted = hidden
+    ? `${currency === 'INR' ? '₹' : ''}••••••`
+    : formatMinor(amount, currency);
   const sizeStyle =
     size === 'hero'
       ? { fontSize: 48, lineHeight: 52, letterSpacing: -2 }
@@ -105,7 +99,10 @@ export function BalanceHero({
       </View>
       <Money amountMinor={amountMinor} currency={currency} size="hero" hidden={hidden} />
       {delta && (
-        <Typography variant="small" style={{ color: tokens.primary, fontFamily: 'SpaceGrotesk_500Medium' }}>
+        <Typography
+          variant="small"
+          style={{ color: tokens.primary, fontFamily: 'SpaceGrotesk_500Medium' }}
+        >
           {delta}
         </Typography>
       )}
@@ -165,7 +162,6 @@ export function TransactionRow({
   type: TransactionType;
   onPress?: PressableProps['onPress'];
 }) {
-  const { tokens } = useTheme();
   const detail = [merchant ?? category, account].filter(Boolean).join(' · ');
   return (
     <Pressable
@@ -211,7 +207,9 @@ export function AccountCard({
   return (
     <Card style={{ width: 148, minHeight: 96, justifyContent: 'space-between', gap: 16 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="small" style={{ color: tokens.foreground }}>{name}</Typography>
+        <Typography variant="small" style={{ color: tokens.foreground }}>
+          {name}
+        </Typography>
         <Landmark size={16} color={tokens.foregroundSubtle} />
       </View>
       <View style={{ gap: 2 }}>
@@ -312,7 +310,14 @@ export function SplitMemberRow({
   currency: string;
 }) {
   return (
-    <View style={{ minHeight: 56, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <View
+      style={{
+        minHeight: 56,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}
+    >
       <Typography variant="bodyLarge">{name}</Typography>
       <Money amountMinor={amountMinor} currency={currency} />
     </View>
@@ -331,7 +336,14 @@ export function BalanceRow({
   const owesYou = balanceMinor >= 0n;
   const absolute = owesYou ? balanceMinor : -balanceMinor;
   return (
-    <View style={{ minHeight: 60, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <View
+      style={{
+        minHeight: 60,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}
+    >
       <View style={{ gap: 2 }}>
         <Typography variant="bodyLarge">{name}</Typography>
         <Typography variant="caption">{owesYou ? 'owes you' : 'you owe'}</Typography>
@@ -372,14 +384,19 @@ export function BudgetProgress({
   const left = over ? spentMinor - limitMinor : limitMinor - spentMinor;
   return (
     <View style={{ gap: 10 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <View
+        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}
+      >
         <View style={{ gap: 2 }}>
           <Typography variant="bodyLarge">{title}</Typography>
           <Typography variant="caption">
             {formatMinor(spentMinor, currency)} of {formatMinor(limitMinor, currency)}
           </Typography>
         </View>
-        <Typography variant="small" style={{ color: over ? tokens.destructive : tokens.foreground }}>
+        <Typography
+          variant="small"
+          style={{ color: over ? tokens.destructive : tokens.foreground }}
+        >
           {over ? `${formatMinor(left, currency)} over` : `${formatMinor(left, currency)} left`}
         </Typography>
       </View>
@@ -418,6 +435,28 @@ export function MetricPair({
       <View style={{ flex: 1 }}>
         <Metric {...right} />
       </View>
+    </View>
+  );
+}
+
+export function BrandMark() {
+  const { tokens } = useTheme();
+  return (
+    <View
+      accessibilityLabel="Finapp"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}
+    >
+      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: tokens.primary }} />
+      <Text
+        style={{
+          fontFamily: 'SpaceGrotesk_600SemiBold',
+          fontSize: 19,
+          lineHeight: 24,
+          letterSpacing: -0.4,
+        }}
+      >
+        finapp
+      </Text>
     </View>
   );
 }
@@ -463,6 +502,35 @@ export function SettingsRow({
     </Pressable>
   );
 }
+export function SettlementEditor({
+  memberName = 'a group member',
+  onSave,
+}: {
+  memberName?: string;
+  onSave: () => void;
+}) {
+  const [amount, setAmount] = useState('');
+  return (
+    <View style={{ gap: 28 }}>
+      <View style={{ gap: 8 }}>
+        <Typography variant="title">
+          Settle with{`\n`}
+          {memberName}.
+        </Typography>
+        <Typography variant="small">Record what changed. The ledger keeps the history.</Typography>
+      </View>
+      <CurrencyInput currency="INR" value={amount} onChangeText={setAmount} />
+      <View>
+        <SettingsRow label="Payment account" value="HDFC" />
+        <Separator />
+        <SettingsRow label="Date" value="Today" />
+      </View>
+      <Button size="lg" disabled={!amount || Number(amount) <= 0} onPress={onSave}>
+        Mark settled
+      </Button>
+    </View>
+  );
+}
 
 export function GroupCard({
   name,
@@ -494,7 +562,9 @@ export function GroupCard({
         transform: [{ scale: pressed ? 0.99 : 1 }],
       })}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <View
+        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}
+      >
         <View style={{ gap: 4 }}>
           <Typography variant="heading">{name}</Typography>
           <Typography variant="caption">{meta}</Typography>

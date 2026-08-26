@@ -5,12 +5,12 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { ConvexReactClient } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Toaster } from 'sonner-native';
 import { Check, Info, LoaderCircle, TriangleAlert, X } from '@/lib/icons';
 import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
-import { Text, View } from '@/components/ui';
+import { View } from '@/components/ui';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 
@@ -32,41 +32,50 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 function ThemedStack() {
   const { tokens } = useTheme();
+  const [reduceMotion, setReduceMotion] = React.useState(false);
+  React.useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
   return (
     <>
       <StatusBar style={tokens.background === '#000000' ? 'light' : 'dark'} />
       <Stack
-        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.background } }}
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: tokens.background },
+          animation: reduceMotion ? 'none' : 'fade_from_bottom',
+          animationDuration: reduceMotion ? 0 : 280,
+        }}
       />
       <Toaster
-        position="top-center"
-        theme={tokens.background === '#000000' ? 'dark' : 'light'}
-        richColors
-        visibleToasts={3}
-        closeButton
+        position="bottom-center"
+        offset={110}
+        visibleToasts={1}
         icons={{
-          success: <Check size={18} color={tokens.income} strokeWidth={2.4} />,
-          error: <X size={18} color={tokens.destructive} strokeWidth={2.4} />,
-          warning: <TriangleAlert size={18} color={tokens.warning} strokeWidth={2.4} />,
-          info: <Info size={18} color={tokens.primary} strokeWidth={2.4} />,
-          loading: <LoaderCircle size={18} color={tokens.primary} strokeWidth={2.4} />,
+          success: <Check size={18} color="#000000" strokeWidth={2.4} />,
+          error: <X size={18} color="#000000" strokeWidth={2.4} />,
+          warning: <TriangleAlert size={18} color="#000000" strokeWidth={2.4} />,
+          info: <Info size={18} color="#000000" strokeWidth={2.4} />,
+          loading: <LoaderCircle size={18} color="#000000" strokeWidth={2.4} />,
         }}
         toastOptions={{
           titleStyle: {
             fontFamily: 'SpaceGrotesk_600SemiBold',
             fontSize: 13,
-            color: tokens.foreground,
+            color: '#000000',
           },
           descriptionStyle: {
             fontFamily: 'SpaceGrotesk_400Regular',
             fontSize: 12,
-            color: tokens.mutedForeground,
+            color: '#000000A3',
           },
           style: {
-            backgroundColor: tokens.card,
-            borderColor: tokens.borderSubtle,
+            backgroundColor: '#FFFFFF',
+            borderColor: '#FFFFFF',
             borderWidth: 1,
-            borderRadius: 15,
+            borderRadius: 14,
           },
         }}
       />
@@ -98,8 +107,28 @@ export default function RootLayout() {
 
 export function ErrorFallback() {
   return (
-    <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
-      <Text>Something went wrong. Please try again.</Text>
+    <View
+      style={{
+        flex: 1,
+        justifyContent: 'center',
+        gap: 10,
+        padding: 20,
+        backgroundColor: '#000000',
+      }}
+    >
+      <RNText
+        style={{
+          color: '#FFFFFF',
+          fontFamily: 'SpaceGrotesk_600SemiBold',
+          fontSize: 24,
+          lineHeight: 29,
+        }}
+      >
+        Finapp stopped here.
+      </RNText>
+      <RNText style={{ color: '#FFFFFFA3', maxWidth: 300 }}>
+        Close and reopen the app. Your saved financial data remains intact.
+      </RNText>
     </View>
   );
 }

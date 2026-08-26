@@ -1,8 +1,9 @@
 import React from 'react';
 import { View } from 'react-native';
-import { ArrowRight, ChartLineUp, ShieldCheck, Wallet } from '@/lib/icons';
+import { ArrowRight } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { BrandMark } from '@/components/finance';
 import { Button, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -14,71 +15,55 @@ export default function WelcomeScreen() {
       style={{
         flex: 1,
         backgroundColor: tokens.background,
-        paddingHorizontal: 24,
-        paddingTop: insets.top + 20,
-        paddingBottom: insets.bottom + 22,
-        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: insets.top + 24,
+        paddingBottom: insets.bottom + 20,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 14,
-            backgroundColor: tokens.foreground,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Wallet size={22} color={tokens.background} weight="bold" />
-        </View>
-        <Typography variant="heading">Finapp</Typography>
-      </View>
+      <BrandMark />
 
-      <View style={{ gap: 26 }}>
+      <View style={{ flex: 1, justifyContent: 'center', gap: 28, paddingBottom: 30 }}>
         <View style={{ gap: 14 }}>
-          <Typography variant="label">Private by default</Typography>
-          <Typography variant="display" style={{ maxWidth: 340 }}>
-            Money clarity, without the noise.
+          <Typography variant="display" style={{ maxWidth: 330 }}>
+            Money,{`\n`}without the mess.
           </Typography>
           <Text
-            style={{ color: tokens.mutedForeground, fontSize: 16, lineHeight: 24, maxWidth: 320 }}
+            style={{ color: tokens.foregroundMuted, fontSize: 17, lineHeight: 25, maxWidth: 300 }}
           >
-            A calm place to see what came in, what went out, and what matters next.
+            Track yours. Split theirs. Know where it went.
           </Text>
         </View>
-        <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            <ChartLineUp size={20} color={tokens.primary} weight="bold" />
-            <Text style={{ color: tokens.mutedForeground }}>One clear view of your money</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            <ShieldCheck size={20} color={tokens.primary} weight="bold" />
-            <Text style={{ color: tokens.mutedForeground }}>Your ledger stays yours</Text>
-          </View>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {['TRACK', 'SPLIT', 'UNDERSTAND'].map((word, index) => (
+            <View key={word} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {index > 0 && (
+                <View style={{ width: 12, height: 1, backgroundColor: tokens.border }} />
+              )}
+              <Typography variant="caption">{word}</Typography>
+            </View>
+          ))}
         </View>
       </View>
 
       <View style={{ gap: 10 }}>
         <Button size="lg" onPress={() => router.push('/(auth)/sign-in')}>
           <Text
-            style={{ color: tokens.primaryForeground, fontFamily: 'SpaceGrotesk_600SemiBold' }}
+            style={{
+              color: tokens.primaryForeground,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 15,
+            }}
           >
             Sign in
           </Text>
-          <ArrowRight
-            size={18}
-            color={tokens.primaryForeground}
-            weight="bold"
-            style={{ marginLeft: 8 }}
-          />
+          <ArrowRight size={18} color={tokens.primaryForeground} style={{ marginLeft: 8 }} />
         </Button>
         <Button size="lg" variant="outline" onPress={() => router.push('/(auth)/sign-up')}>
           Create account
         </Button>
-        <Typography variant="caption" style={{ textAlign: 'center', marginTop: 4 }}>
-          No ads. No noise. Just your numbers.
+        <Typography variant="caption" style={{ textAlign: 'center', marginTop: 6 }}>
+          Private by default. Your ledger stays yours.
         </Typography>
       </View>
     </View>

@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
-import { View } from 'react-native';
-import { ArrowLeft, ArrowRight, Coins, Wallet } from '@/lib/icons';
+import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ArrowLeft, ArrowRight, UsersThree, Wallet } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, IconButton, Input, Label, Select, Text, Typography } from '@/components/ui';
 import { router } from 'expo-router';
+import { BrandMark } from '@/components/finance';
+import {
+  Button,
+  IconButton,
+  Input,
+  Label,
+  Progress,
+  Tabs,
+  Text,
+  Typography,
+} from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 const localeCurrency = Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US')
@@ -11,95 +21,163 @@ const localeCurrency = Intl.NumberFormat().resolvedOptions().locale.startsWith('
   : 'INR';
 
 export default function OnboardingScreen() {
+  const [step, setStep] = useState(0);
   const [currency, setCurrency] = useState(localeCurrency);
   const [accountName, setAccountName] = useState('');
+  const [mode, setMode] = useState('personal');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+
+  const canContinue = step !== 1 || accountName.trim().length > 0;
+  function goBack() {
+    if (step === 0) router.back();
+    else setStep((current) => current - 1);
+  }
+  function goForward() {
+    if (step < 2) setStep((current) => current + 1);
+    else router.replace('/(tabs)');
+  }
+
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: tokens.background,
-        paddingHorizontal: 24,
-        paddingTop: insets.top + 14,
-        paddingBottom: insets.bottom + 20,
-      }}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1, backgroundColor: tokens.background }}
     >
-      <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-        <ArrowLeft size={21} color={tokens.foreground} />
-      </IconButton>
-      <View style={{ flex: 1, justifyContent: 'center', gap: 28 }}>
-        <View style={{ gap: 12 }}>
-          <View
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 16,
-              backgroundColor: tokens.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Coins size={24} color={tokens.primaryForeground} weight="bold" />
-          </View>
-          <Typography variant="display">Make it yours.</Typography>
-          <Text style={{ color: tokens.mutedForeground, fontSize: 15, lineHeight: 22 }}>
-            A couple of choices now keep your ledger effortless later.
-          </Text>
+      <View
+        style={{
+          flex: 1,
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 12,
+          paddingBottom: insets.bottom + 20,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <IconButton label="Go back" variant="ghost" onPress={goBack}>
+            <ArrowLeft size={21} color={tokens.foreground} />
+          </IconButton>
+          <BrandMark />
+          <Typography variant="caption" style={{ marginLeft: 'auto' }}>
+            {step + 1} / 3
+          </Typography>
         </View>
-        <View style={{ gap: 18 }}>
-          <Select
-            label="Default currency"
-            options={['INR', 'USD', 'EUR', 'GBP']}
-            value={currency}
-            onChange={setCurrency}
-          />
-          <View>
-            <Label>
-              First account{' '}
-              <Text
-                style={{
-                  color: tokens.mutedForeground,
-                  fontFamily: 'SpaceGrotesk_400Regular',
-                  textTransform: 'none',
-                  letterSpacing: 0,
-                }}
-              >
-                (optional)
-              </Text>
-            </Label>
-            <Input
-              accessibilityLabel="First account name"
-              placeholder="e.g. Main bank"
-              value={accountName}
-              onChangeText={setAccountName}
-            />
-          </View>
+        <Progress value={((step + 1) / 3) * 100} color={tokens.primary} height={2} />
+
+        <View style={{ flex: 1, justifyContent: 'center', gap: 32, paddingVertical: 40 }}>
+          {step === 0 && (
+            <>
+              <View style={{ gap: 12 }}>
+                <Typography variant="title">Your money,{`\n`}your format.</Typography>
+                <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
+                  Choose the currency Finapp should use for balances and everyday entries.
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {['INR', 'USD', 'EUR', 'GBP'].map((option) => (
+                  <Button
+                    key={option}
+                    variant={currency === option ? 'primary' : 'outline'}
+                    onPress={() => setCurrency(option)}
+                    style={{ flex: 1 }}
+                  >
+                    {option}
+                  </Button>
+                ))}
+              </View>
+            </>
+          )}
+
+          {step === 1 && (
+            <>
+              <View style={{ gap: 12 }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: tokens.surfaceRaised,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Wallet size={21} color={tokens.foreground} />
+                </View>
+                <Typography variant="title">Add your first{`\n`}account.</Typography>
+                <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
+                  A simple name is enough. You can add balances and more accounts later.
+                </Text>
+              </View>
+              <View>
+                <Label>Account name</Label>
+                <Input
+                  accessibilityLabel="Account name"
+                  autoFocus
+                  placeholder="HDFC, Cash, Savings"
+                  value={accountName}
+                  onChangeText={setAccountName}
+                  returnKeyType="done"
+                  onSubmitEditing={goForward}
+                />
+              </View>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <View style={{ gap: 12 }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: tokens.surfaceRaised,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <UsersThree size={21} color={tokens.foreground} />
+                </View>
+                <Typography variant="title">How will you{`\n`}use Finapp?</Typography>
+                <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
+                  Start personal-only or keep shared expenses ready from day one.
+                </Text>
+              </View>
+              <Tabs
+                value={mode}
+                onChange={setMode}
+                tabs={[
+                  { label: 'Personal', value: 'personal' },
+                  { label: 'Personal + groups', value: 'shared' },
+                ]}
+              />
+              <Typography variant="caption">
+                {mode === 'shared'
+                  ? 'Groups and split tools will stay close at hand.'
+                  : 'Shared finance remains available whenever you need it.'}
+              </Typography>
+            </>
+          )}
+        </View>
+
+        <View style={{ gap: 10 }}>
+          <Button size="lg" disabled={!canContinue} onPress={goForward}>
+            <Text
+              style={{
+                color: tokens.primaryForeground,
+                fontFamily: 'SpaceGrotesk_600SemiBold',
+                fontSize: 15,
+              }}
+            >
+              {step === 2 ? 'Enter Finapp' : 'Continue'}
+            </Text>
+            <ArrowRight size={18} color={tokens.primaryForeground} style={{ marginLeft: 8 }} />
+          </Button>
+          {step === 1 && (
+            <Button variant="ghost" onPress={() => setStep(2)}>
+              Skip for now
+            </Button>
+          )}
         </View>
       </View>
-      <View style={{ gap: 10 }}>
-        <Button size="lg" onPress={() => router.replace('/(tabs)')}>
-          <Wallet size={18} color={tokens.primaryForeground} weight="bold" />
-          <Text
-            style={{
-              color: tokens.primaryForeground,
-              marginLeft: 8,
-              fontFamily: 'SpaceGrotesk_600SemiBold',
-            }}
-          >
-            {accountName ? 'Create account and continue' : 'Continue'}
-          </Text>
-          <ArrowRight
-            size={18}
-            color={tokens.primaryForeground}
-            weight="bold"
-            style={{ marginLeft: 8 }}
-          />
-        </Button>
-        <Button variant="ghost" onPress={() => router.replace('/(tabs)')}>
-          Skip for now
-        </Button>
-      </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

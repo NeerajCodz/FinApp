@@ -1,102 +1,92 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowsLeftRight, ArrowUpRight, MagnifyingGlass, Plus } from '@/lib/icons';
+import { MagnifyingGlass, X } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { Button, Card, IconButton, Input, Text, Typography } from '@/components/ui';
+import { DateSection, MetricPair } from '@/components/finance';
+import { Empty, IconButton, Input, Tabs, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function ActivityScreen() {
-  const [filter, setFilter] = useState('All');
+  const [filter, setFilter] = useState('all');
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const filters = ['All', 'Income', 'Spending'];
   return (
     <ScrollView
+      style={{ flex: 1, backgroundColor: tokens.background }}
       contentContainerStyle={{
         paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: 28,
-        gap: 22,
+        paddingTop: insets.top + 16,
+        paddingBottom: insets.bottom + 124,
+        gap: 32,
       }}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ gap: 5 }}>
-          <Typography variant="label">Ledger</Typography>
-          <Typography variant="title">Activity</Typography>
-        </View>
-        <IconButton label="Search activity" variant="outline">
-          <MagnifyingGlass size={20} color={tokens.foreground} />
-        </IconButton>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Input
-          accessibilityLabel="Search activity"
-          placeholder="Search merchant, note, or amount"
-        />
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {filters.map((item) => (
-            <Button
-              key={item}
-              size="sm"
-              variant={filter === item ? 'primary' : 'outline'}
-              onPress={() => setFilter(item)}
-            >
-              {item}
-            </Button>
-          ))}
-        </View>
-      </View>
-      <Card variant="subtle" style={{ gap: 15 }}>
-        <View
-          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-        >
-          <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>This month</Text>
-          <ArrowsLeftRight size={18} color={tokens.mutedForeground} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: 24 }}>
-          <View style={{ gap: 4 }}>
-            <Typography variant="heading">₹0</Typography>
-            <Typography variant="caption">Income</Typography>
-          </View>
-          <View style={{ gap: 4 }}>
-            <Typography variant="heading">₹0</Typography>
-            <Typography variant="caption">Spending</Typography>
-          </View>
-        </View>
-      </Card>
-      <Card variant="outline" style={{ alignItems: 'center', gap: 12, paddingVertical: 28 }}>
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 16,
-            backgroundColor: `${tokens.primary}22`,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <ArrowUpRight size={23} color={tokens.primary} weight="bold" />
-        </View>
-        <Typography variant="heading">No {filter.toLowerCase()} yet</Typography>
-        <Text style={{ color: tokens.mutedForeground, textAlign: 'center', lineHeight: 20 }}>
-          Transactions, group expenses, and settlements will appear here.
-        </Text>
-        <Button size="sm" onPress={() => router.push('/transaction/new' as never)}>
-          <Plus size={15} color={tokens.primaryForeground} weight="bold" />
-          <Text
-            style={{
-              color: tokens.primaryForeground,
-              marginLeft: 6,
-              fontFamily: 'SpaceGrotesk_600SemiBold',
-              fontSize: 12,
+      {searching ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Input
+            accessibilityLabel="Search transactions"
+            autoFocus
+            placeholder="Merchant, category, amount..."
+            value={query}
+            onChangeText={setQuery}
+            style={{ flex: 1 }}
+          />
+          <IconButton
+            label="Close search"
+            variant="ghost"
+            onPress={() => {
+              setQuery('');
+              setSearching(false);
             }}
           >
-            Add expense
-          </Text>
-        </Button>
-      </Card>
+            <X size={20} color={tokens.foreground} />
+          </IconButton>
+        </View>
+      ) : (
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <Typography variant="title">Activity</Typography>
+          <IconButton label="Search activity" variant="ghost" onPress={() => setSearching(true)}>
+            <MagnifyingGlass size={21} color={tokens.foreground} />
+          </IconButton>
+        </View>
+      )}
+
+      <View style={{ gap: 12 }}>
+        <Typography variant="label">This month</Typography>
+        <MetricPair
+          left={{ label: 'Spent', value: '₹0' }}
+          right={{ label: 'Income', value: '₹0' }}
+        />
+      </View>
+
+      <Tabs
+        value={filter}
+        onChange={setFilter}
+        tabs={[
+          { label: 'All', value: 'all' },
+          { label: 'Expenses', value: 'expenses' },
+          { label: 'Income', value: 'income' },
+          { label: 'Splits', value: 'splits' },
+        ]}
+      />
+
+      <DateSection title={query ? 'Search results' : 'Today'}>
+        <Empty
+          title={
+            query ? 'No matching activity.' : `No ${filter === 'all' ? 'activity' : filter} yet.`
+          }
+          description={
+            query
+              ? 'Try a merchant, category, account, or amount.'
+              : 'Transactions, group expenses, and settlements will appear here.'
+          }
+        />
+      </DateSection>
     </ScrollView>
   );
 }

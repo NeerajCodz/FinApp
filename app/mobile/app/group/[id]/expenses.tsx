@@ -1,12 +1,39 @@
 import React from 'react';
-import { View } from 'react-native';
-import { Empty, Typography } from '@/components/ui';
+import { ScrollView, View } from 'react-native';
+import { ArrowLeft } from '@/lib/icons';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button, Empty, IconButton, Typography } from '@/components/ui';
+import { useTheme } from '@/providers/ThemeProvider';
 
 export default function GroupExpensesScreen() {
+  const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1, padding: 16, gap: 16 }}>
-      <Typography variant="title">Expenses</Typography>
-      <Empty title="No expenses" description="Add an expense to split it with the group." />
-    </View>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: tokens.background }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingTop: insets.top + 12,
+        paddingBottom: insets.bottom + 32,
+        gap: 32,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} color={tokens.foreground} />
+        </IconButton>
+        <Typography variant="title">Expenses</Typography>
+      </View>
+      <Empty
+        title="No group expenses."
+        description="Add the first expense and choose who shared it."
+        action={
+          <Button size="sm" onPress={() => router.push('/split/new' as never)}>
+            Add expense
+          </Button>
+        }
+      />
+    </ScrollView>
   );
 }

@@ -1,99 +1,158 @@
 import React, { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { ArrowLeft, Check, NotePencil } from '@/lib/icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from 'sonner-native';
-import { AmountKeypad, CurrencyInput } from '@/components/finance';
-import { Button, Card, IconButton, Input, Select, Text, Typography } from '@/components/ui';
+import { CategoryIcon, CurrencyInput, SettingsRow } from '@/components/finance';
+import { Button, Input, Separator, Sheet, Tabs, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const transactionTypes = ['expense', 'income', 'transfer'] as const;
+const categories = ['Food', 'Transport', 'Shopping', 'Bills', 'Health', 'Entertainment'];
+const accounts = ['HDFC', 'Cash', 'Savings'];
+
+type Picker = 'category' | 'account' | null;
+
 export default function NewTransactionScreen() {
   const { type: queryType } = useLocalSearchParams<{ type?: string }>();
+  const initialType = transactionTypes.includes(queryType as (typeof transactionTypes)[number])
+    ? (queryType as (typeof transactionTypes)[number])
+    : 'expense';
   const [amount, setAmount] = useState('');
-  const [type, setType] = useState(queryType ?? 'expense');
+  const [type, setType] = useState(initialType);
+  const [category, setCategory] = useState('Food');
+  const [account, setAccount] = useState('HDFC');
   const [note, setNote] = useState('');
+  const [picker, setPicker] = useState<Picker>(null);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
-  function save() {
-    toast.success('Entry saved', { description: `${typeLabel} is ready to sync.` });
+
+  async function save() {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    toast.success(`${typeLabel} added`);
     router.back();
   }
+
+  function selectValue(value: string) {
+    void Haptics.selectionAsync();
+    if (picker === 'category') setCategory(value);
+    if (picker === 'account') setAccount(value);
+    setPicker(null);
+  }
+
+  const pickerValues = picker === 'category' ? categories : accounts;
   return (
-    <ScrollView
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 24,
-        gap: 22,
-      }}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1, backgroundColor: tokens.background }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <View style={{ gap: 3 }}>
-          <Typography variant="label">New entry</Typography>
-          <Typography variant="title">Record money</Typography>
-        </View>
-      </View>
-      <Card
-        style={{
-          alignItems: 'center',
-          gap: 11,
-          backgroundColor: tokens.foreground,
-          paddingVertical: 24,
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 12,
+          paddingBottom: insets.bottom + 24,
+          gap: 28,
         }}
       >
-        <Text style={{ color: tokens.background, opacity: 0.6, fontSize: 12 }}>{typeLabel}</Text>
-        <Typography
-          variant="display"
-          style={{ color: tokens.background, fontVariant: ['tabular-nums'] }}
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
-          ₹{amount || '0.00'}
-        </Typography>
-        <Text style={{ color: tokens.background, opacity: 0.6, fontSize: 12 }}>INR</Text>
-      </Card>
-      <View style={{ gap: 14 }}>
-        <Select
-          label="Entry type"
-          options={['expense', 'income', 'transfer']}
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={() => router.back()}
+            style={{ paddingHorizontal: 0 }}
+          >
+            Cancel
+          </Button>
+          <Typography variant="bodyLarge">Add {type}</Typography>
+          <View style={{ width: 52 }} />
+        </View>
+
+        <View style={{ minHeight: 150, alignItems: 'center', justifyContent: 'center' }}>
+          <CurrencyInput currency="INR" value={amount} onChangeText={setAmount} />
+        </View>
+
+        <Tabs
           value={type}
-          onChange={setType}
+          onChange={(value) => setType(value as (typeof transactionTypes)[number])}
+          tabs={transactionTypes.map((value) => ({
+            value,
+            label: value.charAt(0).toUpperCase() + value.slice(1),
+          }))}
         />
-        <CurrencyInput currency="Amount in INR" value={amount} onChangeText={setAmount} />
-        <AmountKeypad onDigit={(digit) => setAmount((current) => `${current}${digit}`)} />
-      </View>
-      <View style={{ gap: 8 }}>
-        <Typography variant="label">Note</Typography>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <NotePencil
-            size={19}
-            color={tokens.mutedForeground}
-            style={{ position: 'absolute', left: 14, zIndex: 1 }}
-          />
+
+        <View>
+          <SettingsRow label="Category" value={category} onPress={() => setPicker('category')} />
+          <Separator />
+          <SettingsRow label="Account" value={account} onPress={() => setPicker('account')} />
+          <Separator />
+          <SettingsRow label="Date" value="Today" />
+        </View>
+
+        <View style={{ gap: 12 }}>
+          <Typography variant="label">Note</Typography>
           <Input
             accessibilityLabel="Transaction note"
             placeholder="What was this for?"
             value={note}
             onChangeText={setNote}
-            style={{ flex: 1, paddingLeft: 44 }}
+            returnKeyType="done"
           />
+          <Button
+            variant="ghost"
+            onPress={() => router.push('/split/new' as never)}
+            style={{ justifyContent: 'flex-start', paddingHorizontal: 0 }}
+          >
+            Split this expense
+          </Button>
         </View>
-      </View>
-      <Button size="lg" disabled={!amount} onPress={save}>
-        <Check size={18} color={tokens.primaryForeground} strokeWidth={2.4} />
-        <Text
-          style={{
-            color: tokens.primaryForeground,
-            marginLeft: 8,
-            fontFamily: 'SpaceGrotesk_600SemiBold',
-          }}
-        >
-          Save entry
-        </Text>
-      </Button>
-    </ScrollView>
+
+        <Button size="lg" disabled={!amount || Number(amount) <= 0} onPress={save}>
+          Save {type}
+        </Button>
+      </ScrollView>
+
+      <Sheet
+        visible={picker !== null}
+        onClose={() => setPicker(null)}
+        title={picker === 'category' ? 'Choose category' : 'Choose account'}
+      >
+        <View>
+          {pickerValues.map((value, index) => {
+            const selected = value === (picker === 'category' ? category : account);
+            return (
+              <React.Fragment key={value}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => selectValue(value)}
+                  style={({ pressed }) => ({
+                    minHeight: 64,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    opacity: pressed ? 0.72 : 1,
+                  })}
+                >
+                  {picker === 'category' && <CategoryIcon label={value} selected={selected} />}
+                  <Text style={{ flex: 1, fontFamily: 'SpaceGrotesk_500Medium' }}>{value}</Text>
+                  {selected && (
+                    <Typography variant="caption" style={{ color: tokens.primary }}>
+                      SELECTED
+                    </Typography>
+                  )}
+                </Pressable>
+                {index < pickerValues.length - 1 && <Separator />}
+              </React.Fragment>
+            );
+          })}
+        </View>
+      </Sheet>
+    </KeyboardAvoidingView>
   );
 }

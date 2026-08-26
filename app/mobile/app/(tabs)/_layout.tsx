@@ -95,7 +95,11 @@ function SignatureBottomBar({ onAdd }: { onAdd: () => void }) {
                 }}
               />
             )}
-            <Icon size={22} strokeWidth={1.8} color={active ? tokens.foreground : tokens.foregroundSubtle} />
+            <Icon
+              size={22}
+              strokeWidth={1.8}
+              color={active ? tokens.foreground : tokens.foregroundSubtle}
+            />
             <Text
               style={{
                 color: active ? tokens.foreground : tokens.foregroundSubtle,

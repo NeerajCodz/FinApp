@@ -1,91 +1,74 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ChartLineUp, TrendDown, TrendUp } from '@/lib/icons';
+import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { BarChart, InsightBars } from '@/components/charts/BarChart';
-import { Button, Card, IconButton, SectionHeader, Text, Typography } from '@/components/ui';
+import { InsightBars, SpendingLineChart } from '@/components/charts/BarChart';
+import { Money } from '@/components/finance';
+import { IconButton, SectionHeader, Tabs, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function AnalyticsScreen() {
-  const [period, setPeriod] = useState('Month');
+  const [period, setPeriod] = useState('month');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
+      style={{ flex: 1, backgroundColor: tokens.background }}
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 12,
-        paddingBottom: 30,
-        gap: 22,
+        paddingBottom: insets.bottom + 32,
+        gap: 36,
       }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <View style={{ gap: 4 }}>
-          <Typography variant="label">Signals</Typography>
-          <Typography variant="title">Analytics</Typography>
+        <Typography variant="title">Analytics</Typography>
+      </View>
+
+      <Tabs
+        value={period}
+        onChange={setPeriod}
+        tabs={[
+          { label: 'Week', value: 'week' },
+          { label: 'Month', value: 'month' },
+          { label: 'Year', value: 'year' },
+        ]}
+      />
+
+      <View style={{ gap: 10 }}>
+        <Typography variant="display">Your spending,{`\n`}in focus.</Typography>
+        <View style={{ gap: 4, marginTop: 8 }}>
+          <Typography variant="label">Spent</Typography>
+          <Money amountMinor={0n} currency="INR" size="display" />
+          <Typography variant="caption">No comparison available yet</Typography>
         </View>
       </View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {['Week', 'Month', 'Year'].map((item) => (
-          <Button
-            key={item}
-            size="sm"
-            variant={period === item ? 'primary' : 'outline'}
-            onPress={() => setPeriod(item)}
-          >
-            {item}
-          </Button>
-        ))}
-      </View>
-      <Card style={{ backgroundColor: tokens.foreground, gap: 18 }}>
-        <View
-          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-        >
-          <Text style={{ color: tokens.background, opacity: 0.64, fontSize: 12 }}>
-            Spending trend
-          </Text>
-          <ChartLineUp size={20} color={tokens.background} weight="bold" />
-        </View>
-        <Typography
-          variant="display"
-          style={{ color: tokens.background, fontVariant: ['tabular-nums'] }}
-        >
-          ₹0
-        </Typography>
-        <Text style={{ color: tokens.background, opacity: 0.64, fontSize: 12 }}>
-          No spending recorded this {period.toLowerCase()}
-        </Text>
-        <BarChart values={[0, 0, 0, 0, 0, 0, 0]} labels={['M', 'T', 'W', 'T', 'F', 'S', 'S']} />
-      </Card>
-      <Card variant="outline" style={{ gap: 18 }}>
-        <SectionHeader title="Where it goes" />
+
+      <SpendingLineChart values={[0, 0, 0, 0, 0, 0, 0, 0]} />
+
+      <View style={{ gap: 20 }}>
+        <SectionHeader title="Where it went" />
         <InsightBars
           items={[
-            { label: 'Essentials', value: 0, amount: '₹0' },
-            { label: 'Lifestyle', value: 0, amount: '₹0' },
-            { label: 'Transfers', value: 0, amount: '₹0' },
+            { label: 'Food', value: 0, amount: '₹0', color: tokens.chart.volt },
+            { label: 'Transport', value: 0, amount: '₹0', color: tokens.chart.blue },
+            { label: 'Shopping', value: 0, amount: '₹0', color: tokens.chart.violet },
           ]}
         />
-        <Typography variant="caption">
-          Categories become useful once your ledger has a few entries.
-        </Typography>
-      </Card>
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <Card variant="subtle" style={{ flex: 1, gap: 9 }}>
-          <TrendUp size={19} color={tokens.income} weight="bold" />
-          <Typography variant="heading">Income</Typography>
-          <Typography variant="caption">₹0 recorded</Typography>
-        </Card>
-        <Card variant="subtle" style={{ flex: 1, gap: 9 }}>
-          <TrendDown size={19} color={tokens.expense} weight="bold" />
-          <Typography variant="heading">Outflow</Typography>
-          <Typography variant="caption">₹0 recorded</Typography>
-        </Card>
+        <Typography variant="caption">Categories appear after your first few entries.</Typography>
+      </View>
+
+      <View style={{ gap: 10 }}>
+        <SectionHeader title="Patterns" />
+        <Typography variant="heading">Nothing to call out yet.</Typography>
+        <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
+          Finapp will surface useful changes without filling this screen with noise.
+        </Text>
       </View>
     </ScrollView>
   );

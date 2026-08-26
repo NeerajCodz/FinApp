@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -42,15 +45,7 @@ export const Typography = ({
   ...props
 }: React.ComponentProps<typeof RNText> & {
   variant?:
-    | 'hero'
-    | 'display'
-    | 'title'
-    | 'heading'
-    | 'bodyLarge'
-    | 'body'
-    | 'small'
-    | 'caption'
-    | 'label';
+    'hero' | 'display' | 'title' | 'heading' | 'bodyLarge' | 'body' | 'small' | 'caption' | 'label';
 }) => {
   const { tokens } = useTheme();
   return (
@@ -395,7 +390,12 @@ export function Progress({
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: normalized }}
-      style={{ height, borderRadius: height / 2, backgroundColor: tokens.borderSubtle, overflow: 'hidden' }}
+      style={{
+        height,
+        borderRadius: height / 2,
+        backgroundColor: tokens.borderSubtle,
+        overflow: 'hidden',
+      }}
     >
       <View
         style={{
@@ -672,10 +672,45 @@ export function Skeleton({
   height?: number;
 }) {
   const { tokens } = useTheme();
+  const opacity = React.useRef(new Animated.Value(0.55)).current;
+  React.useEffect(() => {
+    let active = true;
+    let animation: Animated.CompositeAnimation | undefined;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduceMotion) => {
+      if (!active || reduceMotion) return;
+      animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 900,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0.55,
+            duration: 900,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      animation.start();
+    });
+    return () => {
+      active = false;
+      animation?.stop();
+    };
+  }, [opacity]);
   return (
-    <View
+    <Animated.View
       accessibilityLabel="Loading"
-      style={{ width, height, borderRadius: 10, backgroundColor: tokens.surfaceRaised }}
+      style={{
+        width,
+        height,
+        opacity,
+        borderRadius: 10,
+        backgroundColor: tokens.surfaceRaised,
+      }}
     />
   );
 }
