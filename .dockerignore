@@ -1,10 +1,11 @@
 node_modules/
 app/mobile/node_modules/
-app/mobile/.expo/
+app/mobile/android/
+app/mobile/ios/
 app/mobile/dist/
 .expo/
 .env
 .env.*
 !.env.example
-*.key
-.tmp-*
+.git/
+.convex/

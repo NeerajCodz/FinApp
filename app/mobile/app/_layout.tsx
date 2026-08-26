@@ -11,7 +11,8 @@ import { Text, View } from '@/components/ui';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 
-const configuredConvexUrl = Constants.expoConfig?.extra?.convexUrl;
+const configuredConvexUrl =
+  Constants.expoConfig?.extra?.convexUrl ?? process.env.EXPO_PUBLIC_CONVEX_URL;
 const platform = Platform.OS === 'android' ? 'android' : Platform.OS === 'web' ? 'web' : 'ios';
 const convexClient = new ConvexReactClient(resolveConvexUrl(configuredConvexUrl, platform));
 

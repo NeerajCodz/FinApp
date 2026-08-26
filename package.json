@@ -2,18 +2,23 @@
   "name": "finapp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.3.14",
   "workspaces": [
     "app/mobile"
   ],
   "scripts": {
-    "dev:mobile": "npm --prefix app/mobile run start",
-    "dev:convex": "npx convex dev",
-    "typecheck": "npm --prefix app/mobile run typecheck",
-    "test": "npm --prefix app/mobile run test",
-    "lint": "npm --prefix app/mobile run lint",
-    "format:check": "prettier --check .",
-    "expo:doctor": "npm --prefix app/mobile run expo:doctor",
-    "validate": "npm run typecheck && npm test && npm run lint && npm run format:check && npm run expo:doctor"
+    "dev": "bun run compose:up",
+    "dev:mobile": "docker compose up mobileexpo",
+    "dev:convex": "docker compose up convex convex-dashboard",
+    "compose:up": "docker compose up --build",
+    "compose:down": "docker compose down",
+    "compose:config": "docker compose config",
+    "typecheck": "bun run --cwd app/mobile typecheck",
+    "test": "bun run --cwd app/mobile test",
+    "lint": "bun run --cwd app/mobile lint",
+    "format:check": "bunx prettier --check .",
+    "expo:doctor": "bun run --cwd app/mobile expo:doctor",
+    "validate": "bun run typecheck && bun run test && bun run lint && bun run format:check && bun run expo:doctor"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

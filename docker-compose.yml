@@ -1,0 +1,81 @@
+name: finapp
+
+services:
+  convex:
+    image: ghcr.io/get-convex/convex-backend:latest
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - '${FINAPP_CONVEX_PORT:-2608}:3210'
+      - '${FINAPP_CONVEX_SITE_PORT:-2610}:3211'
+    environment:
+      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:2608}
+      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://127.0.0.1:2610}
+      DO_NOT_REQUIRE_SSL: ${DO_NOT_REQUIRE_SSL:-true}
+      DISABLE_METRICS_ENDPOINT: ${DISABLE_METRICS_ENDPOINT:-true}
+      DOCUMENT_RETENTION_DELAY: ${DOCUMENT_RETENTION_DELAY:-172800}
+      RUST_LOG: ${RUST_LOG:-info}
+      INSTANCE_NAME: ${INSTANCE_NAME:-finapp-local}
+      INSTANCE_SECRET: ${INSTANCE_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    volumes:
+      - finapp_convex_data:/convex/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://127.0.0.1:3210/version']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  convex-dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - '${FINAPP_CONVEX_DASHBOARD_PORT:-2611}:6791'
+    environment:
+      NEXT_PUBLIC_DEPLOYMENT_URL: ${NEXT_PUBLIC_DEPLOYMENT_URL:-http://127.0.0.1:2608}
+    depends_on:
+      convex:
+        condition: service_healthy
+
+  mobileexpo:
+    build:
+      context: .
+      dockerfile: infra/docker/mobileexpo.Dockerfile
+    working_dir: /workspace/app/mobile
+    command: ['bun', 'x', 'expo', 'start', '--dev-client', '--host', 'lan', '--port', '8081']
+    ports:
+      - '${FINAPP_EXPO_PORT:-2609}:8081'
+      - '${FINAPP_EXPO_DEVTOOLS_PORT:-2612}:19000'
+      - '${FINAPP_EXPO_LAN_PORT:-2613}:19001'
+      - '${FINAPP_EXPO_TUNNEL_PORT:-2614}:19002'
+    environment:
+      CI: '0'
+      EXPO_PUBLIC_APP_ENV: ${EXPO_PUBLIC_APP_ENV:-docker}
+      EXPO_PUBLIC_CONVEX_URL: ${EXPO_PUBLIC_CONVEX_URL:-http://10.0.2.2:2608}
+      EXPO_PUBLIC_METRO_URL: ${EXPO_PUBLIC_METRO_URL:-http://10.0.2.2:2609}
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${EXPO_HOSTNAME:-10.0.2.2}
+    volumes:
+      - .:/workspace
+      - finapp_node_modules:/workspace/node_modules
+      - finapp_mobile_node_modules:/workspace/app/mobile/node_modules
+    depends_on:
+      convex:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'bun',
+          '-e',
+          "fetch('http://127.0.0.1:8081/status').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  finapp_convex_data:
+  finapp_node_modules:
+  finapp_mobile_node_modules:

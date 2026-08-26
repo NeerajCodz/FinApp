@@ -12,6 +12,7 @@
     "expo-dev-client": "~57.0.15",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.5",
+    "expo-font": "~57.0.1",
     "expo-haptics": "~57.0.1",
     "expo-image-picker": "~57.0.13",
     "expo-linking": "~57.0.7",
@@ -39,13 +40,13 @@
     "vitest": "^4.1.11"
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "lint": "eslint . --max-warnings=0",
-    "expo:doctor": "npx expo-doctor"
+    "start": "bunx expo start",
+    "android": "bunx expo run:android",
+    "ios": "bunx expo run:ios",
+    "web": "bunx expo start --web",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "bunx vitest run",
+    "lint": "bunx eslint . --max-warnings=0",
+    "expo:doctor": "bunx expo-doctor"
   }
 }
