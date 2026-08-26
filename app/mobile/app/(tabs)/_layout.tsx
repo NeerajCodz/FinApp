@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Button, Sheet } from '@/components/ui';
+import { useTheme } from '@/providers/ThemeProvider';
 import { quickAddActions } from '@/lib/navigation/quick-add';
 
 export default function TabsLayout() {
   const [open, setOpen] = useState(false);
+  const { tokens } = useTheme();
   return (
     <>
-      <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#315CFF' }}>
+      <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: tokens.primary }}>
         <Tabs.Screen name="index" options={{ title: 'Home' }} />
         <Tabs.Screen name="activity" options={{ title: 'Activity' }} />
         <Tabs.Screen

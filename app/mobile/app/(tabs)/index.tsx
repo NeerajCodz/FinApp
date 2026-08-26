@@ -1,8 +1,10 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { Card, Empty, Progress, Skeleton, Text, Typography } from '@/components/ui';
+import { useTheme } from '@/providers/ThemeProvider';
 
 export default function HomeScreen() {
+  const { tokens } = useTheme();
   const loading = false;
   if (loading)
     return (
@@ -16,7 +18,7 @@ export default function HomeScreen() {
     <ScrollView contentContainerStyle={{ padding: 16, gap: 24 }}>
       <Typography variant="title">Good morning</Typography>
       <Card>
-        <Text style={{ color: '#667085' }}>Available balance</Text>
+        <Text style={{ color: tokens.mutedForeground }}>Available balance</Text>
         <Typography variant="title">₹0.00</Typography>
       </Card>
       <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -32,7 +34,7 @@ export default function HomeScreen() {
       <Card>
         <Typography variant="heading">Budget progress</Typography>
         <Progress value={0} />
-        <Text style={{ color: '#667085' }}>No budgets yet</Text>
+        <Text style={{ color: tokens.mutedForeground }}>No budgets yet</Text>
       </Card>
       <Empty
         title="Your activity will appear here"

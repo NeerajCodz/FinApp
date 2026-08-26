@@ -1,8 +1,9 @@
 import React from 'react';
 import { View } from 'react-native';
-
+import { useTheme } from '@/providers/ThemeProvider';
 export function BarChart({ values }: { values: readonly number[] }) {
   const maximum = Math.max(...values, 1);
+  const { tokens } = useTheme();
   return (
     <View
       accessibilityLabel="Spending bar chart"
@@ -15,7 +16,7 @@ export function BarChart({ values }: { values: readonly number[] }) {
           style={{
             flex: 1,
             height: `${Math.max(4, (value / maximum) * 100)}%`,
-            backgroundColor: '#315CFF',
+            backgroundColor: tokens.primary,
             borderRadius: 6,
           }}
         />

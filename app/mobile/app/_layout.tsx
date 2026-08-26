@@ -6,7 +6,7 @@ import { ConvexReactClient } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
-import { ThemeProvider } from '@/providers/ThemeProvider';
+import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
 import { Text, View } from '@/components/ui';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
@@ -27,6 +27,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ThemedStack() {
+  const { tokens } = useTheme();
+  return (
+    <Stack
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.background } }}
+    />
+  );
+}
+
 function AppErrorBoundary({ children }: { children: React.ReactNode }) {
   return <React.StrictMode>{children}</React.StrictMode>;
 }
@@ -36,7 +45,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <AppErrorBoundary>
           <AuthGate>
-            <Stack screenOptions={{ headerShown: false }} />
+            <ThemedStack />
           </AuthGate>
         </AppErrorBoundary>
       </ThemeProvider>

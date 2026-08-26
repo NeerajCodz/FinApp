@@ -3,12 +3,14 @@ import { View } from 'react-native';
 import { Button, Input, Label, Typography, Text } from '@/components/ui';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { useTheme } from '@/providers/ThemeProvider';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { signIn } = useAuthActions();
+  const { tokens } = useTheme();
   async function submit() {
     setError('');
     const form = new FormData();
@@ -41,7 +43,7 @@ export default function SignInScreen() {
         onChangeText={setPassword}
       />
       {error && (
-        <Text accessibilityRole="alert" style={{ color: '#D92D20' }}>
+        <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
           {error}
         </Text>
       )}
@@ -51,7 +53,7 @@ export default function SignInScreen() {
       <Button variant="secondary" onPress={() => router.push('/(auth)/verify')}>
         Verify email
       </Button>
-      <Text style={{ textAlign: 'center', color: '#667085' }}>
+      <Text style={{ textAlign: 'center', color: tokens.mutedForeground }}>
         Apple and Google sign-in can be enabled with deployment credentials.
       </Text>
     </View>

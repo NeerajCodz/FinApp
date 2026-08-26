@@ -12,10 +12,12 @@ import {
   type ViewProps,
 } from 'react-native';
 import { getTouchTargetStyle } from './touch-target';
+import { useTheme } from '@/providers/ThemeProvider';
 
 export function Text({ children, style, ...props }: React.ComponentProps<typeof RNText>) {
+  const { tokens } = useTheme();
   return (
-    <RNText style={[{ color: '#172033' }, style]} {...props}>
+    <RNText style={[{ color: tokens.foreground }, style]} {...props}>
       {children}
     </RNText>
   );
@@ -26,18 +28,21 @@ export const Typography = ({
   ...props
 }: React.ComponentProps<typeof RNText> & {
   variant?: 'title' | 'heading' | 'body' | 'caption';
-}) => (
-  <Text
-    style={[
-      variant === 'title' && { fontSize: 30, fontWeight: '700' },
-      variant === 'heading' && { fontSize: 20, fontWeight: '700' },
-      variant === 'caption' && { fontSize: 13, color: '#667085' },
-    ]}
-    {...props}
-  >
-    {children}
-  </Text>
-);
+}) => {
+  const { tokens } = useTheme();
+  return (
+    <Text
+      style={[
+        variant === 'title' && { fontSize: 30, fontWeight: '700' },
+        variant === 'heading' && { fontSize: 20, fontWeight: '700' },
+        variant === 'caption' && { fontSize: 13, color: tokens.mutedForeground },
+      ]}
+      {...props}
+    >
+      {children}
+    </Text>
+  );
+};
 type ButtonProps = Omit<PressableProps, 'children'> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
   children: React.ReactNode;
@@ -49,11 +54,12 @@ export function Button({
   accessibilityLabel,
   ...props
 }: ButtonProps) {
+  const { tokens } = useTheme();
   const colors = {
-    primary: ['#315CFF', '#FFFFFF'],
-    secondary: ['#E8EDFF', '#2442B8'],
-    ghost: ['transparent', '#172033'],
-    destructive: ['#D92D20', '#FFFFFF'],
+    primary: [tokens.primary, tokens.primaryForeground],
+    secondary: [tokens.secondary, tokens.secondaryForeground],
+    ghost: [tokens.background, tokens.foreground],
+    destructive: [tokens.destructive, tokens.destructiveForeground],
   } as const;
   const [backgroundColor, color] = colors[variant];
   const baseStyle = getTouchTargetStyle({
@@ -75,104 +81,125 @@ export function Button({
     </Pressable>
   );
 }
-export const Card = ({ children, style, ...props }: ViewProps) => (
-  <View
-    style={[
-      {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#D9E0EA',
-      },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </View>
-);
-export const Input = (props: TextInputProps) => (
-  <TextInput
-    accessibilityRole="none"
-    placeholderTextColor="#667085"
-    style={[
-      {
-        minHeight: 48,
-        borderWidth: 1,
-        borderColor: '#D9E0EA',
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        color: '#172033',
-        backgroundColor: '#FFFFFF',
-      },
-      props.style,
-    ]}
-    {...props}
-  />
-);
+export function Card({ children, style, ...props }: ViewProps) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: tokens.card,
+          borderRadius: 12,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: tokens.border,
+        },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </View>
+  );
+}
+export function Input(props: TextInputProps) {
+  const { tokens } = useTheme();
+  return (
+    <TextInput
+      accessibilityRole="none"
+      placeholderTextColor={tokens.mutedForeground}
+      style={[
+        {
+          minHeight: 48,
+          borderWidth: 1,
+          borderColor: tokens.border,
+          borderRadius: 10,
+          paddingHorizontal: 14,
+          color: tokens.foreground,
+          backgroundColor: tokens.input,
+        },
+        props.style,
+      ]}
+      {...props}
+    />
+  );
+}
 export const Label = ({ children, ...props }: React.ComponentProps<typeof RNText>) => (
   <Text {...props} style={[{ fontSize: 14, fontWeight: '600', marginBottom: 8 }, props.style]}>
     {children}
   </Text>
 );
-export const Badge = ({ children, ...props }: React.ComponentProps<typeof RNText>) => (
-  <Text
-    {...props}
-    style={[
-      {
-        paddingHorizontal: 9,
-        paddingVertical: 5,
-        borderRadius: 999,
-        overflow: 'hidden',
-        backgroundColor: '#E8EDFF',
-        color: '#2442B8',
-        fontSize: 12,
-        fontWeight: '600',
-      },
-      props.style,
-    ]}
-  >
-    {children}
-  </Text>
-);
-export const Avatar = ({ initials, label }: { initials: string; label?: string }) => (
-  <View
-    accessibilityRole="image"
-    accessibilityLabel={label ?? initials}
-    style={{
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: '#E8EDFF',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }}
-  >
-    <Text style={{ color: '#2442B8', fontWeight: '700' }}>
-      {initials.slice(0, 2).toUpperCase()}
+export function Badge({ children, ...props }: React.ComponentProps<typeof RNText>) {
+  const { tokens } = useTheme();
+  return (
+    <Text
+      {...props}
+      style={[
+        {
+          paddingHorizontal: 9,
+          paddingVertical: 5,
+          borderRadius: 999,
+          overflow: 'hidden',
+          backgroundColor: tokens.accent,
+          color: tokens.accentForeground,
+          fontSize: 12,
+          fontWeight: '600',
+        },
+        props.style,
+      ]}
+    >
+      {children}
     </Text>
-  </View>
-);
-export const Separator = () => (
-  <View accessibilityRole="none" style={{ height: 1, backgroundColor: '#D9E0EA', width: '100%' }} />
-);
-export const Progress = ({ value }: { value: number }) => (
-  <View
-    accessibilityRole="progressbar"
-    accessibilityValue={{ min: 0, max: 100, now: value }}
-    style={{ height: 8, borderRadius: 4, backgroundColor: '#EEF2F7', overflow: 'hidden' }}
-  >
+  );
+}
+export function Avatar({ initials, label }: { initials: string; label?: string }) {
+  const { tokens } = useTheme();
+  return (
     <View
+      accessibilityRole="image"
+      accessibilityLabel={label ?? initials}
       style={{
-        width: `${Math.max(0, Math.min(100, value))}%`,
-        height: '100%',
-        backgroundColor: '#315CFF',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: tokens.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
+    >
+      <Text style={{ color: tokens.accentForeground, fontWeight: '700' }}>
+        {initials.slice(0, 2).toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+export function Separator() {
+  const { tokens } = useTheme();
+  return (
+    <View
+      accessibilityRole="none"
+      style={{ height: 1, backgroundColor: tokens.border, width: '100%' }}
     />
-  </View>
-);
-export const Checkbox = ({
+  );
+}
+export function Progress({ value }: { value: number }) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: value }}
+      style={{ height: 8, borderRadius: 4, backgroundColor: tokens.muted, overflow: 'hidden' }}
+    >
+      <View
+        style={{
+          width: `${Math.max(0, Math.min(100, value))}%`,
+          height: '100%',
+          backgroundColor: tokens.primary,
+        }}
+      />
+    </View>
+  );
+}
+export function Checkbox({
   checked,
   onChange,
   label,
@@ -180,28 +207,31 @@ export const Checkbox = ({
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
-}) => (
-  <Pressable
-    accessibilityRole="checkbox"
-    accessibilityLabel={label}
-    accessibilityState={{ checked }}
-    onPress={() => onChange(!checked)}
-    style={getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 })}
-  >
-    <View
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: 5,
-        borderWidth: 2,
-        borderColor: checked ? '#315CFF' : '#667085',
-        backgroundColor: checked ? '#315CFF' : 'transparent',
-      }}
-    />{' '}
-    <Text>{label}</Text>
-  </Pressable>
-);
-export const RadioGroup = ({
+}) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      accessibilityState={{ checked }}
+      onPress={() => onChange(!checked)}
+      style={getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 })}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 5,
+          borderWidth: 2,
+          borderColor: checked ? tokens.primary : tokens.border,
+          backgroundColor: checked ? tokens.primary : tokens.background,
+        }}
+      />
+      <Text>{label}</Text>
+    </Pressable>
+  );
+}
+export function RadioGroup({
   options,
   value,
   onChange,
@@ -209,31 +239,34 @@ export const RadioGroup = ({
   options: { label: string; value: string }[];
   value?: string;
   onChange: (v: string) => void;
-}) => (
-  <View>
-    {options.map((option) => (
-      <Pressable
-        key={option.value}
-        accessibilityRole="radio"
-        accessibilityLabel={option.label}
-        accessibilityState={{ selected: option.value === value }}
-        onPress={() => onChange(option.value)}
-        style={getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 })}
-      >
-        <View
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            borderWidth: 2,
-            borderColor: option.value === value ? '#315CFF' : '#667085',
-          }}
-        />{' '}
-        <Text>{option.label}</Text>
-      </Pressable>
-    ))}
-  </View>
-);
+}) {
+  const { tokens } = useTheme();
+  return (
+    <View>
+      {options.map((option) => (
+        <Pressable
+          key={option.value}
+          accessibilityRole="radio"
+          accessibilityLabel={option.label}
+          accessibilityState={{ selected: option.value === value }}
+          onPress={() => onChange(option.value)}
+          style={getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 })}
+        >
+          <View
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              borderWidth: 2,
+              borderColor: option.value === value ? tokens.primary : tokens.border,
+            }}
+          />
+          <Text>{option.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 export const Switch = ({
   value,
   onValueChange,
@@ -297,7 +330,7 @@ export const Select = ({
 );
 export const Popover = ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
   visible ? <Card>{children}</Card> : null;
-export const Sheet = ({
+export function Sheet({
   visible,
   onClose,
   children,
@@ -307,29 +340,32 @@ export const Sheet = ({
   onClose: () => void;
   children: React.ReactNode;
   title?: string;
-}) => (
-  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Close sheet"
-      onPress={onClose}
-      style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' }}
-    >
-      <View
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          padding: 20,
-          gap: 10,
-        }}
+}) {
+  const { tokens } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Close sheet"
+        onPress={onClose}
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: `${tokens.foreground}99` }}
       >
-        <Typography variant="heading">{title}</Typography>
-        {children}
-      </View>
-    </Pressable>
-  </Modal>
-);
+        <View
+          style={{
+            backgroundColor: tokens.card,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 20,
+            gap: 10,
+          }}
+        >
+          <Typography variant="heading">{title}</Typography>
+          {children}
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
 export const Dialog = Sheet;
 export const AlertDialog = Sheet;
 export const Drawer = Sheet;
@@ -341,19 +377,22 @@ export const Calendar = ({ label = 'Calendar' }: { label?: string }) => (
     <Text accessibilityRole="header">{label}</Text>
   </Card>
 );
-export const Skeleton = ({
+export function Skeleton({
   width = '100%',
   height = 18,
 }: {
   width?: number | `${number}%`;
   height?: number;
-}) => (
-  <View
-    accessibilityLabel="Loading"
-    style={{ width, height, borderRadius: 8, backgroundColor: '#EEF2F7' }}
-  />
-);
-export const Empty = ({
+}) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      accessibilityLabel="Loading"
+      style={{ width, height, borderRadius: 8, backgroundColor: tokens.muted }}
+    />
+  );
+}
+export function Empty({
   title,
   description,
   action,
@@ -361,13 +400,18 @@ export const Empty = ({
   title: string;
   description?: string;
   action?: React.ReactNode;
-}) => (
-  <View accessibilityLabel="Empty state" style={{ alignItems: 'center', gap: 8, padding: 24 }}>
-    <Typography variant="heading">{title}</Typography>
-    {description && <Text style={{ color: '#667085', textAlign: 'center' }}>{description}</Text>}
-    {action}
-  </View>
-);
+}) {
+  const { tokens } = useTheme();
+  return (
+    <View accessibilityLabel="Empty state" style={{ alignItems: 'center', gap: 8, padding: 24 }}>
+      <Typography variant="heading">{title}</Typography>
+      {description && (
+        <Text style={{ color: tokens.mutedForeground, textAlign: 'center' }}>{description}</Text>
+      )}
+      {action}
+    </View>
+  );
+}
 export const ScrollArea = ({ children, ...props }: React.ComponentProps<typeof ScrollView>) => (
   <ScrollView {...props}>{children}</ScrollView>
 );
@@ -378,15 +422,21 @@ export function Slider({
   value: number;
   onValueChange: (value: number) => void;
 }) {
+  const { tokens } = useTheme();
   return (
     <Pressable
       accessibilityRole="adjustable"
       accessibilityValue={{ min: 0, max: 100, now: value }}
       onPress={() => onValueChange(value >= 100 ? 0 : value + 10)}
-      style={{ height: 8, backgroundColor: '#EEF2F7', borderRadius: 4 }}
+      style={{ height: 8, backgroundColor: tokens.muted, borderRadius: 4 }}
     >
       <View
-        style={{ width: `${value}%`, height: '100%', backgroundColor: '#315CFF', borderRadius: 4 }}
+        style={{
+          width: `${value}%`,
+          height: '100%',
+          backgroundColor: tokens.primary,
+          borderRadius: 4,
+        }}
       />
     </Pressable>
   );
@@ -437,22 +487,25 @@ export const Command = ({ onSubmit }: { onSubmit?: (text: string) => void }) => 
     onSubmitEditing={(e) => onSubmit?.(e.nativeEvent.text)}
   />
 );
-export const Toast = ({ message }: { message: string }) => (
-  <View
-    accessibilityLiveRegion="polite"
-    style={{
-      position: 'absolute',
-      bottom: 24,
-      left: 16,
-      right: 16,
-      padding: 14,
-      borderRadius: 10,
-      backgroundColor: '#172033',
-    }}
-  >
-    <Text style={{ color: '#FFFFFF' }}>{message}</Text>
-  </View>
-);
+export function Toast({ message }: { message: string }) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      accessibilityLiveRegion="polite"
+      style={{
+        position: 'absolute',
+        bottom: 24,
+        left: 16,
+        right: 16,
+        padding: 14,
+        borderRadius: 10,
+        backgroundColor: tokens.foreground,
+      }}
+    >
+      <Text style={{ color: tokens.background }}>{message}</Text>
+    </View>
+  );
+}
 export const Toggle = ({
   pressed,
   onPressedChange,

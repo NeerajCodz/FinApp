@@ -1,3 +1,6 @@
+export type ThemeMode = 'light' | 'dark';
+export type AccentName = 'blue' | 'red' | 'white';
+
 export type ThemeTokens = {
   background: string;
   foreground: string;
@@ -24,54 +27,46 @@ export type ThemeTokens = {
   warning: string;
 };
 
-export const lightTokens: ThemeTokens = {
-  background: '#F7F9FC',
-  foreground: '#172033',
-  card: '#FFFFFF',
-  cardForeground: '#172033',
-  popover: '#FFFFFF',
-  popoverForeground: '#172033',
-  primary: '#315CFF',
-  primaryForeground: '#FFFFFF',
-  secondary: '#E8EDFF',
-  secondaryForeground: '#2442B8',
-  muted: '#EEF2F7',
-  mutedForeground: '#667085',
-  accent: '#E4F7F0',
-  accentForeground: '#116149',
-  destructive: '#D92D20',
-  destructiveForeground: '#FFFFFF',
-  border: '#D9E0EA',
-  input: '#FFFFFF',
-  ring: '#315CFF',
-  income: '#0E9F6E',
-  expense: '#D92D20',
-  positive: '#0E9F6E',
-  warning: '#B7791F',
+export const accentPalette: Record<AccentName, string> = {
+  blue: '#2563EB',
+  red: '#DC2626',
+  white: '#FFFFFF',
 };
 
-export const darkTokens: ThemeTokens = {
-  background: '#111827',
-  foreground: '#F3F4F6',
-  card: '#1F2937',
-  cardForeground: '#F3F4F6',
-  popover: '#1F2937',
-  popoverForeground: '#F3F4F6',
-  primary: '#8AA4FF',
-  primaryForeground: '#111827',
-  secondary: '#29365E',
-  secondaryForeground: '#DDE5FF',
-  muted: '#273244',
-  mutedForeground: '#AAB4C4',
-  accent: '#173F35',
-  accentForeground: '#9BE6C5',
-  destructive: '#FF8A80',
-  destructiveForeground: '#2A0C0A',
-  border: '#374151',
-  input: '#1F2937',
-  ring: '#8AA4FF',
-  income: '#62D7A8',
-  expense: '#FF8A80',
-  positive: '#62D7A8',
-  warning: '#F4C66D',
-};
+export function createTokens(mode: ThemeMode, accent: AccentName = 'blue'): ThemeTokens {
+  const isDark = mode === 'dark';
+  const background = isDark ? '#000000' : '#FFFFFF';
+  const foreground = isDark ? '#FFFFFF' : '#000000';
+  const accentColor = accentPalette[accent];
+  const accentForeground = accent === 'white' ? '#000000' : '#FFFFFF';
+  const inverted = isDark ? '#FFFFFF' : '#000000';
+  const invertedForeground = isDark ? '#000000' : '#FFFFFF';
+  return {
+    background,
+    foreground,
+    card: background,
+    cardForeground: foreground,
+    popover: background,
+    popoverForeground: foreground,
+    primary: accentColor,
+    primaryForeground: accentForeground,
+    secondary: inverted,
+    secondaryForeground: invertedForeground,
+    muted: background,
+    mutedForeground: foreground,
+    accent: accentColor,
+    accentForeground,
+    destructive: accentPalette.red,
+    destructiveForeground: '#FFFFFF',
+    border: foreground,
+    input: background,
+    ring: accentColor,
+    income: accentColor,
+    expense: accentPalette.red,
+    positive: accentColor,
+    warning: accentPalette.red,
+  };
+}
+
+export const lightTokens = createTokens('light');
+export const darkTokens = createTokens('dark');

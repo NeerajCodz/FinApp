@@ -4,10 +4,12 @@ import { getTouchTargetStyle } from '../../app/mobile/components/ui/touch-target
 import { quickAddActions } from '../../app/mobile/lib/navigation/quick-add';
 
 describe('native shell contracts', () => {
-  it('provides semantic light and dark product tokens', () => {
-    expect(lightTokens.primary).toBe('#315CFF');
-    expect(darkTokens.background).toBe('#111827');
-    expect(lightTokens.income).not.toBe(lightTokens.expense);
+  it('provides pure monochrome light and dark foundations', () => {
+    expect(lightTokens.background).toBe('#FFFFFF');
+    expect(lightTokens.foreground).toBe('#000000');
+    expect(darkTokens.background).toBe('#000000');
+    expect(darkTokens.foreground).toBe('#FFFFFF');
+    expect(darkTokens.income).not.toBe(darkTokens.expense);
   });
 
   it('enforces a 44 point minimum touch target', () => {

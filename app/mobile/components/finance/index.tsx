@@ -1,6 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { Badge, Button, Card, Input, Progress, Text, Typography } from '@/components/ui';
+import { useTheme } from '@/providers/ThemeProvider';
 import { formatMinor, signedMinor } from '@/lib/money';
 
 export function MoneyText({
@@ -13,10 +14,11 @@ export function MoneyText({
   type?: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
 }) {
   const amount = signedMinor(amountMinor, type);
+  const { tokens } = useTheme();
   return (
     <Text
       accessibilityLabel={`${type} ${amount.toString()} ${currency}`}
-      style={{ color: type === 'expense' ? '#D92D20' : '#0E9F6E', fontWeight: '700' }}
+      style={{ color: type === 'expense' ? tokens.expense : tokens.income, fontWeight: '700' }}
     >
       {formatMinor(amount, currency)}
     </Text>
@@ -35,6 +37,7 @@ export function TransactionRow({
   currency: string;
   type: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
 }) {
+  const { tokens } = useTheme();
   return (
     <Card
       accessibilityLabel={`${title}, ${merchant ?? ''}, ${type}, ${formatMinor(signedMinor(amountMinor, type), currency)}`}
@@ -42,7 +45,7 @@ export function TransactionRow({
     >
       <View>
         <Typography>{title}</Typography>
-        {merchant && <Text style={{ color: '#667085' }}>{merchant}</Text>}
+        {merchant && <Text style={{ color: tokens.mutedForeground }}>{merchant}</Text>}
       </View>
       <MoneyText amountMinor={amountMinor} currency={currency} type={type} />
     </Card>
@@ -57,9 +60,10 @@ export function AccountCard({
   balanceMinor: bigint;
   currency: string;
 }) {
+  const { tokens } = useTheme();
   return (
     <Card>
-      <Text style={{ color: '#667085' }}>{name}</Text>
+      <Text style={{ color: tokens.mutedForeground }}>{name}</Text>
       <Typography variant="heading">{formatMinor(balanceMinor, currency)}</Typography>
     </Card>
   );
@@ -76,9 +80,10 @@ export function CurrencyInput({
   value: string;
   onChangeText: (value: string) => void;
 }) {
+  const { tokens } = useTheme();
   return (
     <View>
-      <Text style={{ color: '#667085' }}>{currency}</Text>
+      <Text style={{ color: tokens.mutedForeground }}>{currency}</Text>
       <Input
         accessibilityLabel={`Amount in ${currency}`}
         keyboardType="decimal-pad"
@@ -177,10 +182,11 @@ export function BudgetProgress({
   );
 }
 export function InsightCard({ title, body }: { title: string; body: string }) {
+  const { tokens } = useTheme();
   return (
     <Card>
       <Typography variant="heading">{title}</Typography>
-      <Text style={{ color: '#667085' }}>{body}</Text>
+      <Text style={{ color: tokens.mutedForeground }}>{body}</Text>
     </Card>
   );
 }
