@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Tabs, router } from 'expo-router';
-import { ClockCounterClockwise, House, Plus, UserCircle, UsersThree } from 'phosphor-react-native';
+import { ClockCounterClockwise, House, Plus, UserCircle, UsersThree } from '@/lib/icons';
 import { Button, Sheet } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { quickAddActions } from '@/lib/navigation/quick-add';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowDownRight, ArrowUpRight, ChartLineUp, Plus, Wallet } from 'phosphor-react-native';
+import { ArrowDownRight, ArrowUpRight, ChartLineUp, Plus, Wallet } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { BarChart } from '@/components/charts/BarChart';

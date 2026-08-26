@@ -6,6 +6,9 @@ import { ConvexReactClient } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Toaster } from 'sonner-native';
+import { Check, Info, LoaderCircle, TriangleAlert, X } from '@/lib/icons';
 import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
 import { Text, View } from '@/components/ui';
 import { secureTokenStorage } from '@/lib/auth/session';
@@ -30,9 +33,31 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 function ThemedStack() {
   const { tokens } = useTheme();
   return (
-    <Stack
-      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.background } }}
-    />
+    <>
+      <StatusBar style={tokens.background === '#000000' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.background } }}
+      />
+      <Toaster
+        position="top-center"
+        theme={tokens.background === '#000000' ? 'dark' : 'light'}
+        richColors
+        visibleToasts={3}
+        closeButton
+        icons={{
+          success: <Check size={18} color={tokens.income} strokeWidth={2.4} />,
+          error: <X size={18} color={tokens.destructive} strokeWidth={2.4} />,
+          warning: <TriangleAlert size={18} color={tokens.warning} strokeWidth={2.4} />,
+          info: <Info size={18} color={tokens.primary} strokeWidth={2.4} />,
+          loading: <LoaderCircle size={18} color={tokens.primary} strokeWidth={2.4} />,
+        }}
+        toastOptions={{
+          titleStyle: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: tokens.foreground },
+          descriptionStyle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, color: tokens.mutedForeground },
+          style: { backgroundColor: tokens.card, borderColor: tokens.borderSubtle, borderWidth: 1, borderRadius: 15 },
+        }}
+      />
+    </>
   );
 }
 
