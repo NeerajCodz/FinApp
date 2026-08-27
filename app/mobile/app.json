@@ -14,9 +14,9 @@
       "expo-notifications",
       ["expo-contacts", { "contactsPermission": "Allow Finapp to find people you split with." }]
     ],
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.finapp.mobile" },
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.neerajcodz.finapp" },
     "android": {
-      "package": "com.finapp.mobile",
+      "package": "com.neerajcodz.finapp",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -26,6 +26,9 @@
       "predictiveBackGestureEnabled": false
     },
     "web": { "favicon": "./assets/favicon.png" },
-    "extra": { "convexUrl": "${EXPO_PUBLIC_CONVEX_URL}" }
+    "extra": {
+      "convexUrl": "${EXPO_PUBLIC_CONVEX_URL}",
+      "convexSiteUrl": "${EXPO_PUBLIC_CONVEX_SITE_URL}"
+    }
   }
 }
