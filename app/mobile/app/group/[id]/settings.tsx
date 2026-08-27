@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { toast } from 'sonner-native';
+import { toast } from '@/lib/toast';
 import { SettingsRow } from '@/components/finance';
 import { Button, IconButton, Separator, Sheet, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';

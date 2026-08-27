@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { toast } from 'sonner-native';
+import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
 import { Button, IconButton, Input, Label, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';

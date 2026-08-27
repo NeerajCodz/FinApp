@@ -4,11 +4,10 @@ import Constants from 'expo-constants';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { ConvexReactClient } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Toaster } from 'sonner-native';
-import { Check, Info, LoaderCircle, TriangleAlert, X } from '@/lib/icons';
 import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
 import { View } from '@/components/ui';
 import { secureTokenStorage } from '@/lib/auth/session';
@@ -49,36 +48,6 @@ function ThemedStack() {
           animationDuration: reduceMotion ? 0 : 280,
         }}
       />
-      <Toaster
-        position="bottom-center"
-        offset={110}
-        visibleToasts={1}
-        icons={{
-          success: <Check size={18} color="#000000" strokeWidth={2.4} />,
-          error: <X size={18} color="#000000" strokeWidth={2.4} />,
-          warning: <TriangleAlert size={18} color="#000000" strokeWidth={2.4} />,
-          info: <Info size={18} color="#000000" strokeWidth={2.4} />,
-          loading: <LoaderCircle size={18} color="#000000" strokeWidth={2.4} />,
-        }}
-        toastOptions={{
-          titleStyle: {
-            fontFamily: 'SpaceGrotesk_600SemiBold',
-            fontSize: 13,
-            color: '#000000',
-          },
-          descriptionStyle: {
-            fontFamily: 'SpaceGrotesk_400Regular',
-            fontSize: 12,
-            color: '#000000A3',
-          },
-          style: {
-            backgroundColor: '#FFFFFF',
-            borderColor: '#FFFFFF',
-            borderWidth: 1,
-            borderRadius: 14,
-          },
-        }}
-      />
     </>
   );
 }
@@ -99,9 +68,11 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
   return (
-    <ConvexAuthProvider client={convexClient} storage={secureTokenStorage}>
-      {content}
-    </ConvexAuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ConvexAuthProvider client={convexClient} storage={secureTokenStorage}>
+        {content}
+      </ConvexAuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

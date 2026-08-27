@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { toast } from 'sonner-native';
+import { toast } from '@/lib/toast';
 import { CategoryIcon, CurrencyInput, SettingsRow } from '@/components/finance';
 import { Button, Input, Separator, Sheet, Tabs, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';

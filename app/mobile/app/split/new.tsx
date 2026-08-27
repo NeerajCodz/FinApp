@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { ArrowLeft } from '@/lib/icons';
 import { router } from 'expo-router';
-import { toast } from 'sonner-native';
+import { toast } from '@/lib/toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CurrencyInput, SettingsRow } from '@/components/finance';
 import { Button, Checkbox, IconButton, Separator, Tabs, Text, Typography } from '@/components/ui';
