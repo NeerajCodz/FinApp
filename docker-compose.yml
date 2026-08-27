@@ -59,7 +59,6 @@ services:
     volumes:
       - .:/workspace
       - finapp_node_modules:/workspace/node_modules
-      - finapp_mobile_node_modules:/workspace/app/mobile/node_modules
     depends_on:
       convex:
         condition: service_healthy
@@ -79,4 +78,3 @@ services:
 volumes:
   finapp_convex_data:
   finapp_node_modules:
-  finapp_mobile_node_modules:
