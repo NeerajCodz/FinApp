@@ -53,8 +53,8 @@ services:
       - '${FINAPP_EXPO_TUNNEL_PORT:-2614}:19002'
     environment:
       CI: '0'
-      EXPO_PUBLIC_APP_ENV: ${EXPO_PUBLIC_APP_ENV:-docker}
-      EXPO_PUBLIC_CONVEX_URL: ${EXPO_PUBLIC_CONVEX_URL:-http://10.0.2.2:2608}
+      EXPO_PUBLIC_APP_ENV: ${EXPO_PUBLIC_APP_ENV:-production}
+      EXPO_PUBLIC_CONVEX_URL: ${EXPO_PUBLIC_CONVEX_URL:-https://secret-kiwi-640.convex.cloud}
       EXPO_PUBLIC_METRO_URL: ${EXPO_PUBLIC_METRO_URL:-http://10.0.2.2:2609}
       REACT_NATIVE_PACKAGER_HOSTNAME: ${EXPO_HOSTNAME:-10.0.2.2}
     volumes:

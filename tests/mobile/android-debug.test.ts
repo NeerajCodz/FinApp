@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { resolveConvexUrl } from '../../app/mobile/lib/convex-url';
 
-describe('Android debug Convex connectivity', () => {
-  it('maps Android emulator localhost to the host machine', () => {
-    expect(resolveConvexUrl(undefined, 'android')).toBe('http://10.0.2.2:3212');
+describe('production Convex connectivity', () => {
+  it('falls back to the configured production cloud deployment', () => {
+    expect(resolveConvexUrl(undefined, 'android')).toBe('https://secret-kiwi-640.convex.cloud');
   });
 
   it('preserves configured deployment URLs', () => {
