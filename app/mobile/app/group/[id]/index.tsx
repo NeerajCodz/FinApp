@@ -52,7 +52,10 @@ export default function GroupHomeScreen() {
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        <Button style={{ flex: 1 }} onPress={() => router.push(`/group/${id}/expenses` as never)}>
+        <Button
+          style={{ flex: 1 }}
+          onPress={() => router.push(`/group/${id}/expenses/new` as never)}
+        >
           Add expense
         </Button>
         <Button
