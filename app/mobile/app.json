@@ -7,7 +7,13 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",
-    "plugins": ["expo-router", "expo-secure-store", "expo-sqlite", "expo-notifications"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-notifications",
+      ["expo-contacts", { "contactsPermission": "Allow Finapp to find people you split with." }]
+    ],
     "ios": { "supportsTablet": true, "bundleIdentifier": "com.finapp.mobile" },
     "android": {
       "package": "com.finapp.mobile",

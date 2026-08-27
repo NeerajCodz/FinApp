@@ -7,10 +7,21 @@ import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { currencies } from '@convex/shared/validators';
 import { BrandMark } from '@/components/finance';
-import { Button, IconButton, Input, Label, Progress, Tabs, Text, Typography } from '@/components/ui';
+import {
+  Button,
+  IconButton,
+  Input,
+  Label,
+  Progress,
+  Tabs,
+  Text,
+  Typography,
+} from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const localeCurrency = Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US') ? 'USD' : 'INR';
+const localeCurrency = Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US')
+  ? 'USD'
+  : 'INR';
 const totalSteps = 5;
 
 function normalizeHandle(value: string) {
@@ -112,7 +123,9 @@ export default function OnboardingScreen() {
                   </Button>
                 ))}
               </View>
-              <Typography variant="caption">Selected: {currencyLabel(currency)} · {currency}</Typography>
+              <Typography variant="caption">
+                Selected: {currencyLabel(currency)} · {currency}
+              </Typography>
             </>
           )}
 
@@ -121,7 +134,8 @@ export default function OnboardingScreen() {
               <View style={{ gap: 12 }}>
                 <Typography variant="title">Choose your{`\n`}username.</Typography>
                 <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Your @handle makes sharing groups and split expenses instant. Use letters, numbers, or underscores.
+                  Your @handle makes sharing groups and split expenses instant. Use letters,
+                  numbers, or underscores.
                 </Text>
               </View>
               <View>
@@ -148,12 +162,22 @@ export default function OnboardingScreen() {
           {step === 2 && (
             <>
               <View style={{ gap: 12 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: tokens.surfaceRaised, alignItems: 'center', justifyContent: 'center' }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: tokens.surfaceRaised,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <Phone size={21} color={tokens.foreground} />
                 </View>
                 <Typography variant="title">Add a phone{`\n`}number.</Typography>
                 <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Optional. It helps people find you when sharing a split or inviting you to a group.
+                  Optional. It helps people find you when sharing a split or inviting you to a
+                  group.
                 </Text>
               </View>
               <View>
@@ -176,7 +200,16 @@ export default function OnboardingScreen() {
           {step === 3 && (
             <>
               <View style={{ gap: 12 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: tokens.surfaceRaised, alignItems: 'center', justifyContent: 'center' }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: tokens.surfaceRaised,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <Wallet size={21} color={tokens.foreground} />
                 </View>
                 <Typography variant="title">Add your first{`\n`}account.</Typography>
@@ -201,7 +234,16 @@ export default function OnboardingScreen() {
           {step === 4 && (
             <>
               <View style={{ gap: 12 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: tokens.surfaceRaised, alignItems: 'center', justifyContent: 'center' }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: tokens.surfaceRaised,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <UsersThree size={21} color={tokens.foreground} />
                 </View>
                 <Typography variant="title">How will you{`\n`}use Finapp?</Typography>
@@ -229,13 +271,21 @@ export default function OnboardingScreen() {
 
         <View style={{ gap: 10 }}>
           <Button size="lg" disabled={!canContinue} onPress={goForward}>
-            <Text style={{ color: tokens.primaryForeground, fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 15 }}>
+            <Text
+              style={{
+                color: tokens.primaryForeground,
+                fontFamily: 'SpaceGrotesk_600SemiBold',
+                fontSize: 15,
+              }}
+            >
               {step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}
             </Text>
             <ArrowRight size={18} color={tokens.primaryForeground} style={{ marginLeft: 8 }} />
           </Button>
           {(step === 2 || step === 3) && (
-            <Button variant="ghost" onPress={goForward}>Skip for now</Button>
+            <Button variant="ghost" onPress={goForward}>
+              Skip for now
+            </Button>
           )}
         </View>
       </ScrollView>

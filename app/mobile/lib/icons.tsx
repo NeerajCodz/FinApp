@@ -11,6 +11,7 @@ import {
   CalendarDays as LucideCalendarDays,
   Car as LucideCar,
   ChevronRight as LucideCaretRight,
+  ContactRound as LucideContactRound,
   CircleDollarSign as LucideCurrencyDollar,
   Coins as LucideCoins,
   Eye as LucideEye,
@@ -21,6 +22,7 @@ import {
   Info as LucideInfo,
   KeyRound as LucideLockKey,
   Landmark as LucideLandmark,
+  MoreHorizontal as LucideMoreHorizontal,
   LoaderCircle as LucideLoaderCircle,
   Search as LucideMagnifyingGlass,
   NotebookPen as LucideNotePencil,
@@ -63,6 +65,7 @@ export const ChartLineUp = withWeight(LucideChartLineUp);
 export const CalendarDays = withWeight(LucideCalendarDays);
 export const Car = withWeight(LucideCar);
 export const CaretRight = withWeight(LucideCaretRight);
+export const ContactRound = withWeight(LucideContactRound);
 export const CurrencyDollar = withWeight(LucideCurrencyDollar);
 export const Coins = withWeight(LucideCoins);
 export const Gear = withWeight(LucideGear);
@@ -77,6 +80,7 @@ export const MagnifyingGlass = withWeight(LucideMagnifyingGlass);
 export const NotePencil = withWeight(LucideNotePencil);
 export const Palette = withWeight(LucidePalette);
 export const Landmark = withWeight(LucideLandmark);
+export const MoreHorizontal = withWeight(LucideMoreHorizontal);
 export const Plus = withWeight(LucidePlus);
 export const ShieldCheck = withWeight(LucideShieldCheck);
 export const TrendDown = withWeight(LucideTrendDown);

@@ -28,7 +28,12 @@ export default function CurrencySettingsScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32, gap: 24 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingTop: insets.top + 12,
+        paddingBottom: insets.bottom + 32,
+        gap: 24,
+      }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
@@ -39,7 +44,8 @@ export default function CurrencySettingsScreen() {
       <View style={{ gap: 12 }}>
         <Typography variant="label">Default currency</Typography>
         <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
-          Used for new accounts, budgets, groups, and transactions. Changing this does not rewrite historical entries.
+          Used for new accounts, budgets, groups, and transactions. Changing this does not rewrite
+          historical entries.
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {options.map((option) => (
@@ -57,7 +63,9 @@ export default function CurrencySettingsScreen() {
             </Button>
           ))}
         </View>
-        <Typography variant="caption">Selected: {currencyLabel(selected)} · {selected}</Typography>
+        <Typography variant="caption">
+          Selected: {currencyLabel(selected)} · {selected}
+        </Typography>
       </View>
     </ScrollView>
   );

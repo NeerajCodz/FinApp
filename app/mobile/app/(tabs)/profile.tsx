@@ -31,7 +31,7 @@ export default function ProfileScreen() {
 
   function openEditor(next: Editor) {
     setEditor(next);
-    setDraft(next === 'username' ? profile?.username ?? '' : profile?.phone ?? '');
+    setDraft(next === 'username' ? (profile?.username ?? '') : (profile?.phone ?? ''));
   }
 
   async function saveEditor() {
@@ -49,13 +49,22 @@ export default function ProfileScreen() {
     <>
       <ScrollView
         style={{ flex: 1, backgroundColor: tokens.background }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 124, gap: 32 }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 124,
+          gap: 32,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <Typography variant="title">Profile</Typography>
 
         <View style={{ gap: 14 }}>
-          <Avatar initials={(profile?.displayName ?? 'NS').slice(0, 2)} label="Your profile" size={58} />
+          <Avatar
+            initials={(profile?.displayName ?? 'NS').slice(0, 2)}
+            label="Your profile"
+            size={58}
+          />
           <View style={{ gap: 3 }}>
             <Typography variant="heading">{profile?.displayName ?? 'Your profile'}</Typography>
             <Typography variant="small">{profile?.email ?? 'Private ledger'}</Typography>
@@ -64,8 +73,19 @@ export default function ProfileScreen() {
 
         <View style={{ gap: 10 }}>
           <Typography variant="label">Your share tag</Typography>
-          <View style={{ gap: 6, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: tokens.borderSubtle }}>
-            <Typography variant="heading" style={{ color: profile?.username ? tokens.primary : tokens.foreground }}>
+          <View
+            style={{
+              gap: 6,
+              paddingVertical: 14,
+              borderTopWidth: 1,
+              borderBottomWidth: 1,
+              borderColor: tokens.borderSubtle,
+            }}
+          >
+            <Typography
+              variant="heading"
+              style={{ color: profile?.username ? tokens.primary : tokens.foreground }}
+            >
               {username}
             </Typography>
             <Text style={{ color: tokens.foregroundMuted }}>
@@ -75,14 +95,18 @@ export default function ProfileScreen() {
         </View>
 
         <View>
-          <Typography variant="label" style={{ marginBottom: 8 }}>Identity</Typography>
+          <Typography variant="label" style={{ marginBottom: 8 }}>
+            Identity
+          </Typography>
           <SettingsRow label="Username" value={username} onPress={() => openEditor('username')} />
           <Separator />
           <SettingsRow label="Phone number" value={phone} onPress={() => openEditor('phone')} />
         </View>
 
         <View>
-          <Typography variant="label" style={{ marginBottom: 8 }}>Money</Typography>
+          <Typography variant="label" style={{ marginBottom: 8 }}>
+            Money
+          </Typography>
           <SettingsRow label="Accounts" onPress={() => router.push('/account' as never)} />
           <Separator />
           <SettingsRow label="Categories" onPress={() => router.push('/category' as never)} />
@@ -91,27 +115,54 @@ export default function ProfileScreen() {
           <Separator />
           <SettingsRow label="Analytics" onPress={() => router.push('/analytics' as never)} />
           <Separator />
-          <SettingsRow label="Currency" value={profile?.defaultCurrency ?? 'INR'} onPress={() => setCurrencyOpen(true)} />
+          <SettingsRow
+            label="Currency"
+            value={profile?.defaultCurrency ?? 'INR'}
+            onPress={() => setCurrencyOpen(true)}
+          />
         </View>
 
         <View>
-          <Typography variant="label" style={{ marginBottom: 8 }}>Preferences</Typography>
-          <SettingsRow label="Appearance" value="Dark" onPress={() => router.push('/settings/appearance' as never)} />
+          <Typography variant="label" style={{ marginBottom: 8 }}>
+            Preferences
+          </Typography>
+          <SettingsRow
+            label="Appearance"
+            value="Dark"
+            onPress={() => router.push('/settings/appearance' as never)}
+          />
           <Separator />
-          <SettingsRow label="Notifications" onPress={() => router.push('/settings/notifications' as never)} />
+          <SettingsRow
+            label="Notifications"
+            onPress={() => router.push('/settings/notifications' as never)}
+          />
           <Separator />
-          <SettingsRow label="Security" onPress={() => router.push('/settings/security' as never)} />
+          <SettingsRow
+            label="Security"
+            onPress={() => router.push('/settings/security' as never)}
+          />
         </View>
 
         <View>
-          <Typography variant="label" style={{ marginBottom: 8 }}>Data</Typography>
-          <SettingsRow label="Export data" onPress={() => router.push('/settings/privacy' as never)} />
+          <Typography variant="label" style={{ marginBottom: 8 }}>
+            Data
+          </Typography>
+          <SettingsRow
+            label="Export data"
+            onPress={() => router.push('/settings/privacy' as never)}
+          />
           <Separator />
           <SettingsRow label="Privacy" onPress={() => router.push('/settings/privacy' as never)} />
         </View>
 
-        <Button variant="ghost" onPress={leave} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}>
-          <Text style={{ color: tokens.destructive, fontFamily: 'SpaceGrotesk_500Medium' }}>Sign out</Text>
+        <Button
+          variant="ghost"
+          onPress={leave}
+          style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
+        >
+          <Text style={{ color: tokens.destructive, fontFamily: 'SpaceGrotesk_500Medium' }}>
+            Sign out
+          </Text>
         </Button>
       </ScrollView>
 
@@ -133,7 +184,9 @@ export default function ProfileScreen() {
             onChangeText={setDraft}
           />
           <Typography variant="caption">
-            {editor === 'username' ? '3–32 letters, numbers, or underscores.' : 'Use an international format so friends can find you.'}
+            {editor === 'username'
+              ? '3–32 letters, numbers, or underscores.'
+              : 'Use an international format so friends can find you.'}
           </Typography>
           <Button size="lg" onPress={saveEditor} disabled={!draft.trim()}>
             Save changes
@@ -142,7 +195,10 @@ export default function ProfileScreen() {
       </Sheet>
 
       <Sheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} title="Default currency">
-        <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <ScrollView
+          style={{ maxHeight: 420 }}
+          contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+        >
           {currencyOptions.map((option) => (
             <Button
               key={option}

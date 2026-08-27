@@ -591,3 +591,4 @@ export function InsightCard({ title, body }: { title: string; body: string }) {
     </Card>
   );
 }
+export { PeopleRail } from './PeopleRail';
