@@ -190,6 +190,62 @@ describe('Convex public runtime functions', () => {
       authenticated.mutation(api.users.mutations.update, { username: '@rahul_42' }),
     ).rejects.toThrow('USERNAME_TAKEN');
   });
+  it('creates username groups and persists shared expenses', async () => {
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        identityId: identity.subject,
+        email: identity.email,
+        name: identity.name,
+        username: 'neeraj',
+      }),
+    );
+    const memberId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        identityId: 'group-member',
+        email: 'rahul@example.com',
+        name: 'Rahul',
+        username: 'rahul_42',
+      }),
+    );
+    const authenticated = t.withIdentity(identity);
+    const accountId = await authenticated.mutation(api.accounts.mutations.create, {
+      name: 'HDFC',
+      type: 'bank',
+      currency: 'INR',
+      openingBalanceMinor: 100000n,
+      isIncludedInTotal: true,
+    });
+    const groupId = await authenticated.mutation(api.groups.mutations.create, {
+      name: 'Goa Trip',
+      currency: 'INR',
+      memberUsernames: ['@rahul_42'],
+    });
+    expect(await authenticated.query(api.groups.queries.list, {})).toMatchObject([
+      { _id: groupId, name: 'Goa Trip', currency: 'INR', ownerId },
+    ]);
+    const transactionId = await authenticated.mutation(api.groups.mutations.addExpense, {
+      groupId,
+      accountId,
+      title: 'Hotel',
+      amountMinor: 240000n,
+      currency: 'INR',
+      occurredAt: Date.UTC(2026, 7, 27),
+      participantUsernames: ['@rahul_42'],
+    });
+    const detail = await authenticated.query(api.groups.queries.detail, { groupId });
+    expect(detail).toMatchObject({
+      _id: groupId,
+      members: [
+        { id: ownerId, role: 'owner' },
+        { id: memberId, username: 'rahul_42', role: 'member' },
+      ],
+      expenses: [{ _id: transactionId, title: 'Hotel', amountMinor: 240000n }],
+    });
+    expect(
+      await authenticated.query(api.groups.queries.personTimeline, { username: '@rahul_42' }),
+    ).toMatchObject([{ id: transactionId, title: 'Hotel', amountMinor: 240000n }]);
+  });
 
   it('rejects mutation attempts without an authenticated identity', async () => {
     const t = convexTest(schema, modules);
