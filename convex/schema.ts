@@ -29,7 +29,8 @@ export default defineSchema({
     deletedAt: optionalTime,
   })
     .index('email', ['email'])
-    .index('by_identityId', ['identityId']),
+    .index('by_identityId', ['identityId'])
+    .index('by_username', ['username']),
   userSettings: defineTable({
     userId: v.id('users'),
     currency,

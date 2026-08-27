@@ -1,4 +1,31 @@
-export const currencies = ['INR', 'USD', 'EUR', 'GBP', 'JPY'] as const;
+export const currencies = [
+  'INR',
+  'USD',
+  'EUR',
+  'GBP',
+  'JPY',
+  'AUD',
+  'CAD',
+  'CHF',
+  'CNY',
+  'HKD',
+  'SGD',
+  'AED',
+  'SAR',
+  'NZD',
+  'SEK',
+  'NOK',
+  'DKK',
+  'ZAR',
+  'BRL',
+  'MXN',
+  'KRW',
+  'TRY',
+  'THB',
+  'PLN',
+  'IDR',
+  'MYR',
+] as const;
 export type Currency = (typeof currencies)[number];
 export const transactionTypes = ['expense', 'income', 'transfer', 'refund', 'adjustment'] as const;
 export type TransactionType = (typeof transactionTypes)[number];

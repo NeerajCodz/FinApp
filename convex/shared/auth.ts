@@ -1,9 +1,15 @@
-type Identity = { subject: string; email?: string; name?: string; image?: string };
+type Identity = { subject: string; email?: string; name?: string; image?: string; phone?: string };
 type UserRecord = {
   _id: string;
   identityId?: string;
   email?: string;
+  name?: string;
+  image?: string;
   displayName?: string;
+  username?: string;
+  phone?: string;
+  defaultCurrency?: string;
+  deletedAt?: number;
   updatedAt?: number;
 };
 type QueryBuilder = { eq: (field: string, value: unknown) => unknown };
@@ -35,6 +41,7 @@ function asIdentity(value: unknown): Identity | null {
     email: typeof record.email === 'string' ? record.email : undefined,
     name: typeof record.name === 'string' ? record.name : undefined,
     image: typeof record.image === 'string' ? record.image : undefined,
+    phone: typeof record.phone === 'string' ? record.phone : undefined,
   };
 }
 
@@ -62,11 +69,7 @@ export async function requireUser(
     .withIndex('by_identityId', (query) => query.eq('identityId', identity.subject))
     .unique();
   if (existing) {
-    await ctx.db.patch(existing._id, {
-      email: identity.email ?? existing.email,
-      updatedAt: Date.now(),
-    });
-    return { ...existing, email: identity.email ?? existing.email };
+    return existing;
   }
   const now = Date.now();
   const userId = await ctx.db.insert('users', {
