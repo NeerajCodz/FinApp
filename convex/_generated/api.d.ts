@@ -30,6 +30,7 @@ import type * as goals_domain from "../goals/domain.js";
 import type * as goals_mutations from "../goals/mutations.js";
 import type * as groups_domain from "../groups/domain.js";
 import type * as groups_mutations from "../groups/mutations.js";
+import type * as groups_queries from "../groups/queries.js";
 import type * as http from "../http.js";
 import type * as notifications_domain from "../notifications/domain.js";
 import type * as notifications_mutations from "../notifications/mutations.js";
@@ -84,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   "goals/mutations": typeof goals_mutations;
   "groups/domain": typeof groups_domain;
   "groups/mutations": typeof groups_mutations;
+  "groups/queries": typeof groups_queries;
   http: typeof http;
   "notifications/domain": typeof notifications_domain;
   "notifications/mutations": typeof notifications_mutations;

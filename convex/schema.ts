@@ -162,6 +162,8 @@ export default defineSchema({
     groupId: v.id('groups'),
     inviterId: v.id('users'),
     inviteeEmail: v.string(),
+    inviteeUsername: optionalText,
+    inviteePhone: optionalText,
     status: v.union(v.literal('pending'), v.literal('accepted'), v.literal('declined')),
     createdAt: timestamp,
   }).index('by_group', ['groupId']),
