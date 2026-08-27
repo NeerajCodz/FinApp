@@ -113,7 +113,7 @@ export default function NewTransactionScreen() {
         </View>
 
         <Button size="lg" disabled={!amount || Number(amount) <= 0} onPress={save}>
-          Save {type}
+          {`Save ${type}`}
         </Button>
       </ScrollView>
 

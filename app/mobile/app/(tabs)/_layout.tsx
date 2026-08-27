@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
-import { Tabs, router, usePathname } from 'expo-router';
+import { Slot, router, usePathname } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { ClockCounterClockwise, House, Plus, UserCircle, UsersThree } from '@/lib/icons';
 import { Button, Separator, Sheet, Text, Typography } from '@/components/ui';
@@ -9,16 +9,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { quickAddActions } from '@/lib/navigation/quick-add';
 
 const navItems = [
-  { label: 'Home', route: '/(tabs)', match: '/(tabs)', icon: House, column: 0 },
-  {
-    label: 'Activity',
-    route: '/(tabs)/activity',
-    match: '/activity',
-    icon: ClockCounterClockwise,
-    column: 1,
-  },
-  { label: 'Groups', route: '/(tabs)/groups', match: '/groups', icon: UsersThree, column: 3 },
-  { label: 'Profile', route: '/(tabs)/profile', match: '/profile', icon: UserCircle, column: 4 },
+  { label: 'Home', route: '/(tabs)', match: '/(tabs)', icon: House },
+  { label: 'Activity', route: '/(tabs)/activity', match: '/activity', icon: ClockCounterClockwise },
+  { label: 'Groups', route: '/(tabs)/groups', match: '/groups', icon: UsersThree },
+  { label: 'Profile', route: '/(tabs)/profile', match: '/profile', icon: UserCircle },
 ] as const;
 
 const quickAddDescriptions: Record<(typeof quickAddActions)[number]['label'], string> = {
@@ -29,10 +23,103 @@ const quickAddDescriptions: Record<(typeof quickAddActions)[number]['label'], st
   Settlement: 'Pay someone back',
 };
 
+type NavItem = (typeof navItems)[number];
+
+function NavButton({ item }: { item: NavItem }) {
+  const pathname = usePathname();
+  const { tokens } = useTheme();
+  const active = item.match === '/(tabs)' ? pathname === '/' : pathname.includes(item.match);
+  const Icon = item.icon;
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityLabel={item.label}
+      accessibilityState={{ selected: active }}
+      onPress={() => router.navigate(item.route as never)}
+      style={({ pressed }) => ({
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        opacity: pressed ? 0.72 : 1,
+        transform: [{ scale: pressed ? 0.98 : 1 }],
+      })}
+    >
+      {active && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            width: 18,
+            height: 2,
+            borderRadius: 1,
+            backgroundColor: tokens.primary,
+          }}
+        />
+      )}
+      <Icon size={22} color={active ? tokens.foreground : tokens.foregroundSubtle} />
+      <Text
+        style={{
+          color: active ? tokens.foreground : tokens.foregroundSubtle,
+          fontFamily: 'SpaceGrotesk_500Medium',
+          fontSize: 10,
+          lineHeight: 13,
+        }}
+      >
+        {item.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function AddButton({ onPress }: { onPress: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        zIndex: 20,
+        elevation: 20,
+      }}
+    >
+      <View
+        style={{
+          width: 58,
+          height: 58,
+          borderRadius: 29,
+          backgroundColor: '#B7FF4A',
+          zIndex: 21,
+          elevation: 21,
+          shadowColor: tokens.primary,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.22,
+          shadowRadius: 18,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add"
+          onPress={onPress}
+          style={({ pressed }) => ({
+            flex: 1,
+            borderRadius: 29,
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: [{ scale: pressed ? 0.96 : 1 }],
+            opacity: pressed ? 0.88 : 1,
+          })}
+        >
+          <Plus size={25} strokeWidth={2.2} color={tokens.primaryForeground} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function SignatureBottomBar({ onAdd }: { onAdd: () => void }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
   const { tokens } = useTheme();
   const center = width / 2;
   const height = 96 + insets.bottom;
@@ -59,111 +146,34 @@ function SignatureBottomBar({ onAdd }: { onAdd: () => void }) {
       <Svg width={width} height={height} style={{ position: 'absolute' }} pointerEvents="none">
         <Path d={path} fill="#080808" stroke={tokens.borderSubtle} strokeWidth={1} />
       </Svg>
-
-      {navItems.map((item) => {
-        const active = item.match === '/(tabs)' ? pathname === '/' : pathname.includes(item.match);
-        const Icon = item.icon;
-        return (
-          <Pressable
-            key={item.label}
-            accessibilityRole="tab"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: active }}
-            onPress={() => router.navigate(item.route as never)}
-            style={({ pressed }) => ({
-              position: 'absolute',
-              left: item.column * (width / 5),
-              top: 34,
-              width: width / 5,
-              minHeight: 54,
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              opacity: pressed ? 0.72 : 1,
-              transform: [{ scale: pressed ? 0.98 : 1 }],
-            })}
-          >
-            {active && (
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  width: 18,
-                  height: 2,
-                  borderRadius: 1,
-                  backgroundColor: tokens.primary,
-                }}
-              />
-            )}
-            <Icon
-              size={22}
-              strokeWidth={1.8}
-              color={active ? tokens.foreground : tokens.foregroundSubtle}
-            />
-            <Text
-              style={{
-                color: active ? tokens.foreground : tokens.foregroundSubtle,
-                fontFamily: 'SpaceGrotesk_500Medium',
-                fontSize: 10,
-                lineHeight: 13,
-              }}
-            >
-              {item.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Add"
-        onPress={onAdd}
-        style={({ pressed }) => ({
+      <View
+        style={{
           position: 'absolute',
-          left: center - 29,
+          left: 0,
+          right: 0,
           top: 0,
-          width: 58,
-          height: 58,
-          borderRadius: 29,
-          backgroundColor: tokens.primary,
-          alignItems: 'center',
-          justifyContent: 'center',
-          transform: [{ scale: pressed ? 0.96 : 1 }],
-          opacity: pressed ? 0.88 : 1,
-          shadowColor: tokens.primary,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.22,
-          shadowRadius: 18,
-          elevation: 8,
-        })}
+          height: 88,
+          flexDirection: 'row',
+          zIndex: 10,
+          elevation: 10,
+        }}
       >
-        <Plus size={25} strokeWidth={2.2} color={tokens.primaryForeground} />
-      </Pressable>
+        <NavButton item={navItems[0]} />
+        <NavButton item={navItems[1]} />
+        <AddButton onPress={onAdd} />
+        <NavButton item={navItems[2]} />
+        <NavButton item={navItems[3]} />
+      </View>
     </View>
   );
 }
 
 export default function TabsLayout() {
   const [open, setOpen] = useState(false);
-  const { tokens } = useTheme();
   return (
     <>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          sceneStyle: { backgroundColor: tokens.background },
-          tabBarStyle: { display: 'none' },
-        }}
-      >
-        <Tabs.Screen name="index" options={{ title: 'Home' }} />
-        <Tabs.Screen name="activity" options={{ title: 'Activity' }} />
-        <Tabs.Screen name="add" options={{ title: 'Add' }} />
-        <Tabs.Screen name="groups" options={{ title: 'Groups' }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
-      </Tabs>
-
+      <Slot />
       <SignatureBottomBar onAdd={() => setOpen(true)} />
-
       <Sheet visible={open} onClose={() => setOpen(false)} title="Add">
         <View>
           {quickAddActions.map((action, index) => (
