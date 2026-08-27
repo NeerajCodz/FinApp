@@ -125,6 +125,71 @@ describe('Convex public runtime functions', () => {
       title: 'Dinner',
     });
   });
+  it('updates profile identity and discovers tagged users', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        identityId: identity.subject,
+        email: identity.email,
+        name: identity.name,
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert('userSettings', {
+        userId,
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'dark',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        updatedAt: Date.now(),
+      }),
+    );
+    const otherUserId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        identityId: 'other-runtime-user',
+        email: 'rahul@example.com',
+        name: 'Rahul',
+        username: 'rahul_42',
+      }),
+    );
+    const authenticated = t.withIdentity(identity);
+
+    const updated = await authenticated.mutation(api.users.mutations.update, {
+      username: '@Neeraj_27',
+      phone: '+91 (98765) 43210',
+      defaultCurrency: 'USD',
+    });
+    expect(updated).toMatchObject({
+      _id: userId,
+      username: 'neeraj_27',
+      phone: '+919876543210',
+      defaultCurrency: 'USD',
+    });
+    expect(await authenticated.query(api.users.queries.current, {})).toMatchObject({
+      username: 'neeraj_27',
+      phone: '+919876543210',
+      defaultCurrency: 'USD',
+    });
+    expect(await t.run((ctx) => ctx.db.get(userId))).toMatchObject({
+      defaultCurrency: 'USD',
+    });
+    expect(await authenticated.query(api.users.queries.search, { query: '@rah' })).toEqual([
+      {
+        id: otherUserId,
+        displayName: 'Rahul',
+        username: 'rahul_42',
+        image: undefined,
+      },
+    ]);
+
+    await expect(
+      authenticated.mutation(api.users.mutations.update, { username: '@rahul_42' }),
+    ).rejects.toThrow('USERNAME_TAKEN');
+  });
 
   it('rejects mutation attempts without an authenticated identity', async () => {
     const t = convexTest(schema, modules);
