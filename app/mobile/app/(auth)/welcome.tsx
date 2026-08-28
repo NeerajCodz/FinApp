@@ -1,69 +1,105 @@
 import React from 'react';
 import { View } from 'react-native';
-import { ArrowRight } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { BrandMark } from '@/components/finance';
-import { Button, Text, Typography } from '@/components/ui';
+import { Button, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function WelcomeScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+
   return (
     <View
       style={{
         flex: 1,
         backgroundColor: tokens.background,
         paddingHorizontal: 20,
-        paddingTop: insets.top + 24,
-        paddingBottom: insets.bottom + 20,
+        paddingTop: insets.top + 20,
+        paddingBottom: insets.bottom + 16,
       }}
     >
-      <BrandMark />
+      <Typography variant="caption" style={{ color: tokens.foregroundMuted, letterSpacing: 0.8 }}>
+        PRIVATE MONEY, CLEARLY
+      </Typography>
 
-      <View style={{ flex: 1, justifyContent: 'center', gap: 28, paddingBottom: 30 }}>
-        <View style={{ gap: 14 }}>
-          <Typography variant="display" style={{ maxWidth: 330 }}>
-            Money,{`\n`}without the mess.
-          </Typography>
-          <Text
-            style={{ color: tokens.foregroundMuted, fontSize: 17, lineHeight: 25, maxWidth: 300 }}
-          >
-            Track yours. Split theirs. Know where it went.
-          </Text>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingBottom: 28,
+        }}
+      >
+        <View
+          style={{
+            width: 176,
+            height: 176,
+            borderRadius: 88,
+            borderWidth: 1,
+            borderColor: '#B7FF4A29',
+            backgroundColor: '#B7FF4A0D',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 30,
+          }}
+        >
+          <View
+            accessibilityLabel="Finapp green dot"
+            style={{
+              width: 116,
+              height: 116,
+              borderRadius: 58,
+              backgroundColor: tokens.primary,
+            }}
+          />
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {['TRACK', 'SPLIT', 'UNDERSTAND'].map((word, index) => (
-            <View key={word} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {index > 0 && (
-                <View style={{ width: 12, height: 1, backgroundColor: tokens.border }} />
-              )}
-              <Typography variant="caption">{word}</Typography>
-            </View>
-          ))}
-        </View>
+        <Typography
+          style={{
+            color: tokens.foreground,
+            fontFamily: 'SpaceGrotesk_600SemiBold',
+            fontSize: 52,
+            lineHeight: 58,
+            letterSpacing: -2.2,
+          }}
+        >
+          finapp
+        </Typography>
+        <Typography
+          variant="bodyLarge"
+          style={{
+            color: tokens.foregroundMuted,
+            textAlign: 'center',
+            marginTop: 12,
+            maxWidth: 290,
+          }}
+        >
+          Your money. Your people. One clear place.
+        </Typography>
       </View>
 
       <View style={{ gap: 10 }}>
-        <Button size="lg" onPress={() => router.push('/(auth)/sign-in')}>
-          <Text
-            style={{
-              color: tokens.primaryForeground,
-              fontFamily: 'SpaceGrotesk_600SemiBold',
-              fontSize: 15,
-            }}
-          >
-            Sign in
-          </Text>
-          <ArrowRight size={18} color={tokens.primaryForeground} style={{ marginLeft: 8 }} />
-        </Button>
-        <Button size="lg" variant="outline" onPress={() => router.push('/(auth)/sign-up')}>
+        <Button
+          accessibilityLabel="Create account"
+          size="lg"
+          onPress={() => router.push('/(auth)/sign-up')}
+        >
           Create account
         </Button>
-        <Typography variant="caption" style={{ textAlign: 'center', marginTop: 6 }}>
-          Private by default. Your ledger stays yours.
+        <Button
+          accessibilityLabel="Log in"
+          size="lg"
+          variant="outline"
+          onPress={() => router.push('/(auth)/sign-in')}
+        >
+          Log in
+        </Button>
+        <Typography
+          variant="caption"
+          style={{ color: tokens.foregroundSubtle, textAlign: 'center', marginTop: 6 }}
+        >
+          Private by default. Built for everyday money.
         </Typography>
       </View>
     </View>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight, Phone, UsersThree, Wallet } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,14 +15,47 @@ import {
   Progress,
   Tabs,
   Text,
+  Sheet,
   Typography,
 } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const localeCurrency = Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US')
+type CurrencyCode = (typeof currencies)[number];
+const localeCurrency: CurrencyCode = Intl.NumberFormat()
+  .resolvedOptions()
+  .locale.startsWith('en-US')
   ? 'USD'
   : 'INR';
 const totalSteps = 5;
+
+const currencyCountries: Record<CurrencyCode, string> = {
+  INR: 'India',
+  USD: 'United States',
+  EUR: 'Eurozone',
+  GBP: 'United Kingdom',
+  JPY: 'Japan',
+  AUD: 'Australia',
+  CAD: 'Canada',
+  CHF: 'Switzerland',
+  CNY: 'China',
+  HKD: 'Hong Kong',
+  SGD: 'Singapore',
+  AED: 'United Arab Emirates',
+  SAR: 'Saudi Arabia',
+  NZD: 'New Zealand',
+  SEK: 'Sweden',
+  NOK: 'Norway',
+  DKK: 'Denmark',
+  ZAR: 'South Africa',
+  BRL: 'Brazil',
+  MXN: 'Mexico',
+  KRW: 'South Korea',
+  TRY: 'Türkiye',
+  THB: 'Thailand',
+  PLN: 'Poland',
+  IDR: 'Indonesia',
+  MYR: 'Malaysia',
+};
 
 function normalizeHandle(value: string) {
   return value.replace(/^@+/, '').toLowerCase();
@@ -39,7 +72,9 @@ function currencyLabel(currency: string) {
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
-  const [currency, setCurrency] = useState(localeCurrency);
+  const [currency, setCurrency] = useState<CurrencyCode>(localeCurrency);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState('');
   const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [accountName, setAccountName] = useState('');
@@ -49,8 +84,13 @@ export default function OnboardingScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const handle = normalizeHandle(username);
-  const currencyOptions = useMemo(() => [...currencies], []);
+  const normalizedCurrencySearch = currencySearch.trim().toLowerCase();
+  const currencyOptions = currencies.filter((code) => {
+    const searchable = `${currencyCountries[code]} ${code} ${currencyLabel(code)}`.toLowerCase();
+    return searchable.includes(normalizedCurrencySearch);
+  });
   const canContinue = step !== 1 || /^[a-z0-9_]{3,32}$/.test(handle);
+  const continueDisabled = !canContinue;
 
   function goBack() {
     if (step === 0) router.back();
@@ -78,16 +118,17 @@ export default function OnboardingScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: tokens.background }}
     >
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        style={{ flex: 1 }}
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 20,
           paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 20,
+          paddingBottom: 24,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -107,25 +148,24 @@ export default function OnboardingScreen() {
               <View style={{ gap: 12 }}>
                 <Typography variant="title">Your money,{`\n`}your format.</Typography>
                 <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Choose from every currency Finapp supports. You can change it later in Profile.
+                  Choose the country and currency you use every day. You can change it later.
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {currencyOptions.map((option) => (
-                  <Button
-                    key={option}
-                    size="sm"
-                    variant={currency === option ? 'primary' : 'outline'}
-                    onPress={() => setCurrency(option)}
-                    style={{ width: '31%', minHeight: 44 }}
-                  >
-                    {option}
-                  </Button>
-                ))}
+              <View style={{ gap: 10 }}>
+                <Label>Country — currency</Label>
+                <Button
+                  accessibilityLabel="Choose country and currency"
+                  size="lg"
+                  variant="outline"
+                  onPress={() => setCurrencyOpen(true)}
+                  style={{ justifyContent: 'flex-start' }}
+                >
+                  {currencyCountries[currency]} — {currency}
+                </Button>
+                <Typography variant="caption" style={{ color: tokens.primary }}>
+                  SELECTED CURRENCY
+                </Typography>
               </View>
-              <Typography variant="caption">
-                Selected: {currencyLabel(currency)} · {currency}
-              </Typography>
             </>
           )}
 
@@ -149,6 +189,7 @@ export default function OnboardingScreen() {
                   value={username}
                   onChangeText={setUsername}
                   returnKeyType="next"
+                  onSubmitEditing={goForward}
                 />
                 {handle && (
                   <Typography variant="small" style={{ color: tokens.primary, marginTop: 8 }}>
@@ -192,6 +233,7 @@ export default function OnboardingScreen() {
                   value={phone}
                   onChangeText={setPhone}
                   returnKeyType="next"
+                  onSubmitEditing={goForward}
                 />
               </View>
             </>
@@ -226,6 +268,7 @@ export default function OnboardingScreen() {
                   value={accountName}
                   onChangeText={setAccountName}
                   returnKeyType="next"
+                  onSubmitEditing={goForward}
                 />
               </View>
             </>
@@ -268,27 +311,93 @@ export default function OnboardingScreen() {
           )}
           {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
         </View>
-
-        <View style={{ gap: 10 }}>
-          <Button size="lg" disabled={!canContinue} onPress={goForward}>
-            <Text
-              style={{
-                color: tokens.primaryForeground,
-                fontFamily: 'SpaceGrotesk_600SemiBold',
-                fontSize: 15,
-              }}
-            >
-              {step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}
-            </Text>
-            <ArrowRight size={18} color={tokens.primaryForeground} style={{ marginLeft: 8 }} />
-          </Button>
-          {(step === 2 || step === 3) && (
-            <Button variant="ghost" onPress={goForward}>
-              Skip for now
-            </Button>
-          )}
-        </View>
       </ScrollView>
+
+      <View
+        style={{
+          gap: 8,
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: insets.bottom + 14,
+          borderTopWidth: 1,
+          borderTopColor: tokens.borderSubtle,
+          backgroundColor: tokens.background,
+        }}
+      >
+        <Button
+          accessibilityLabel={step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}
+          size="lg"
+          disabled={continueDisabled}
+          onPress={goForward}
+        >
+          <Text
+            style={{
+              color: continueDisabled
+                ? tokens.controlDisabledForeground
+                : tokens.primaryForeground,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 15,
+            }}
+          >
+            {step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}
+          </Text>
+          <ArrowRight
+            size={18}
+            color={
+              continueDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground
+            }
+            style={{ marginLeft: 8 }}
+          />
+        </Button>
+        {(step === 2 || step === 3) && (
+          <Button variant="ghost" onPress={goForward}>
+            Skip for now
+          </Button>
+        )}
+      </View>
+
+      <Sheet
+        visible={currencyOpen}
+        onClose={() => {
+          setCurrencyOpen(false);
+          setCurrencySearch('');
+        }}
+        title="Choose country and currency"
+      >
+        <Input
+          accessibilityLabel="Search countries and currencies"
+          autoFocus
+          placeholder="Search India, INR, rupee…"
+          value={currencySearch}
+          onChangeText={setCurrencySearch}
+        />
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          style={{ maxHeight: 460 }}
+          contentContainerStyle={{ gap: 4, paddingBottom: 8 }}
+        >
+          {currencyOptions.map((option) => (
+            <Button
+              key={option}
+              variant={currency === option ? 'primary' : 'ghost'}
+              onPress={() => {
+                setCurrency(option);
+                setCurrencyOpen(false);
+                setCurrencySearch('');
+              }}
+              style={{ justifyContent: 'flex-start' }}
+            >
+              {currencyCountries[option]} — {option}
+            </Button>
+          ))}
+          {currencyOptions.length === 0 && (
+            <Typography variant="small" style={{ paddingVertical: 24, textAlign: 'center' }}>
+              No matching country or currency.
+            </Typography>
+          )}
+        </ScrollView>
+      </Sheet>
     </KeyboardAvoidingView>
   );
 }

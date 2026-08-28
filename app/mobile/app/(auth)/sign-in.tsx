@@ -16,6 +16,7 @@ export default function SignInScreen() {
   const { signIn } = useAuthActions();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const signInDisabled = !email.trim() || !password;
 
   async function submit() {
     setError('');
@@ -35,16 +36,17 @@ export default function SignInScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: tokens.background }}
     >
       <ScrollView
+        style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 20,
           paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 20,
+          paddingBottom: 24,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -104,24 +106,40 @@ export default function SignInScreen() {
           </View>
         </View>
 
-        <View style={{ gap: 12 }}>
-          <Button size="lg" disabled={!email.trim() || !password} onPress={submit}>
-            <Text
-              style={{
-                color: tokens.primaryForeground,
-                fontFamily: 'SpaceGrotesk_600SemiBold',
-                fontSize: 15,
-              }}
-            >
-              Sign in
-            </Text>
-            <ArrowRight size={18} color={tokens.primaryForeground} style={{ marginLeft: 8 }} />
-          </Button>
-          <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-up')}>
-            New to Finapp? Create account
-          </Button>
-        </View>
       </ScrollView>
+      <View
+        style={{
+          gap: 12,
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: insets.bottom + 14,
+          borderTopWidth: 1,
+          borderTopColor: tokens.borderSubtle,
+          backgroundColor: tokens.background,
+        }}
+      >
+        <Button size="lg" disabled={signInDisabled} onPress={submit}>
+          <Text
+            style={{
+              color: signInDisabled
+                ? tokens.controlDisabledForeground
+                : tokens.primaryForeground,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 15,
+            }}
+          >
+            Sign in
+          </Text>
+          <ArrowRight
+            size={18}
+            color={signInDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
+            style={{ marginLeft: 8 }}
+          />
+        </Button>
+        <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-up')}>
+          New to Finapp? Create account
+        </Button>
+      </View>
     </KeyboardAvoidingView>
   );
 }
