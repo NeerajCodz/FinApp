@@ -1,7 +1,7 @@
 import { mutation } from '../_generated/server';
 import { v } from 'convex/values';
 import { DomainError } from '../shared/errors';
-import { requireIdentity } from '../shared/auth';
+import { requireUser } from '../shared/auth';
 import { requireOwner } from '../shared/permissions';
 import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 import { assertAccountCanReceiveTransaction, type AccountDraft } from '../accounts/mutations';
@@ -82,11 +82,7 @@ export const create = mutation({
     clientMutationId: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_identityId', (q) => q.eq('identityId', identity.subject))
-      .unique();
+    const user = await requireUser(ctx);
     const account = await ctx.db.get(args.accountId);
     const transferAccount = args.transferAccountId
       ? ((await ctx.db.get(args.transferAccountId)) ?? undefined)

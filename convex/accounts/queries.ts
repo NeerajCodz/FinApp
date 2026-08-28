@@ -1,5 +1,5 @@
 import { query } from '../_generated/server';
-import { requireIdentity } from '../shared/auth';
+import { getOptionalUser, requireIdentity } from '../shared/auth';
 
 export type AccountSummary = {
   id: string;
@@ -15,11 +15,8 @@ export function visibleAccounts(accounts: readonly AccountSummary[]): AccountSum
 export const list = query({
   args: {},
   handler: async (ctx): Promise<AccountSummary[]> => {
-    const identity = await requireIdentity(ctx);
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_identityId', (q) => q.eq('identityId', identity.subject))
-      .unique();
+    await requireIdentity(ctx);
+    const user = await getOptionalUser(ctx);
     if (!user) return [];
     const accounts = await ctx.db
       .query('accounts')

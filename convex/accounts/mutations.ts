@@ -1,6 +1,6 @@
 import { mutation } from '../_generated/server';
 import { v } from 'convex/values';
-import { requireIdentity } from '../shared/auth';
+import { requireUser } from '../shared/auth';
 import { requireOwner } from '../shared/permissions';
 
 export type AccountDraft<OwnerId extends string = string> = {
@@ -48,11 +48,7 @@ export const create = mutation({
     isIncludedInTotal: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_identityId', (q) => q.eq('identityId', identity.subject))
-      .unique();
+    const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     const record = createAccountRecord(user._id, {
       ...args,
@@ -66,11 +62,7 @@ export const create = mutation({
 export const archive = mutation({
   args: { accountId: v.id('accounts') },
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_identityId', (q) => q.eq('identityId', identity.subject))
-      .unique();
+    const user = await requireUser(ctx);
     const account = await ctx.db.get(args.accountId);
     if (!user || !account) throw new Error('AUTH_REQUIRED');
     requireOwner(user._id, account.ownerId);

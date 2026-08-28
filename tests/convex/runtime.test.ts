@@ -13,6 +13,35 @@ describe('Convex public runtime functions', () => {
     await expect(t.query(api.categories.queries.list, {})).rejects.toThrow('AUTH_REQUIRED');
   });
 
+  it('resolves Convex Auth session subjects to profile users', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        email: 'auth-session@example.com',
+        name: 'Auth Session User',
+      }),
+    );
+    const authenticated = t.withIdentity({
+      subject: `${userId}|session-id`,
+      email: 'auth-session@example.com',
+      name: 'Auth Session User',
+    });
+
+    expect(await authenticated.query(api.users.queries.current, {})).toMatchObject({
+      _id: userId,
+    });
+    const accountId = await authenticated.mutation(api.accounts.mutations.create, {
+      name: 'Auth Session Wallet',
+      type: 'wallet',
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+      isIncludedInTotal: true,
+    });
+    expect(await authenticated.query(api.accounts.queries.list, {})).toMatchObject([
+      { id: accountId, name: 'Auth Session Wallet' },
+    ]);
+  });
+
   it('runs the account and category mutation lifecycles', async () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) =>

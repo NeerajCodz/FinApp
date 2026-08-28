@@ -51,23 +51,37 @@ export async function requireIdentity(ctx: AuthIdentityContext): Promise<Identit
   return identity;
 }
 
-export async function getOptionalUser(ctx: AuthContext): Promise<UserRecord | null> {
-  const identity = asIdentity(await ctx.auth.getUserIdentity());
-  if (!identity || !ctx.db) return null;
-  return ctx.db
+async function findUserForIdentity(
+  db: UserDatabase,
+  identity: Identity,
+): Promise<UserRecord | null> {
+  const indexedUser = await db
     .query('users')
     .withIndex('by_identityId', (query) => query.eq('identityId', identity.subject))
     .unique();
+  if (indexedUser) return indexedUser;
+
+  // Convex Auth uses `<userId>|<sessionId>` as the JWT subject. Legacy
+  // users created by our identity-based flow are still resolved by index.
+  const userId = identity.subject.split('|', 1)[0];
+  try {
+    return await db.get(userId);
+  } catch {
+    return null;
+  }
+}
+
+export async function getOptionalUser(ctx: AuthContext): Promise<UserRecord | null> {
+  const identity = asIdentity(await ctx.auth.getUserIdentity());
+  if (!identity || !ctx.db) return null;
+  return findUserForIdentity(ctx.db, identity);
 }
 
 export async function requireUser(
   ctx: AuthContext & { db: UserDatabase },
 ): Promise<UserRecord | null> {
   const identity = await requireIdentity(ctx);
-  const existing = await ctx.db
-    .query('users')
-    .withIndex('by_identityId', (query) => query.eq('identityId', identity.subject))
-    .unique();
+  const existing = await findUserForIdentity(ctx.db, identity);
   if (existing) {
     return existing;
   }
@@ -95,3 +109,4 @@ export async function requireUser(
   });
   return ctx.db.get(userId);
 }
+
