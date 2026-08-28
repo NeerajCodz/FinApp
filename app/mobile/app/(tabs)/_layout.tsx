@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, View, useWindowDimensions } from 'react-native';
+import { TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Slot, router, usePathname } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { ClockCounterClockwise, House, Plus, UserCircle, UsersThree } from '@/lib/icons';
@@ -7,6 +7,8 @@ import { Button, Separator, Sheet, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { quickAddActions } from '@/lib/navigation/quick-add';
+
+const SIGNATURE_BAR_HEIGHT = 96;
 
 const navItems = [
   { label: 'Home', route: '/(tabs)', match: '/(tabs)', icon: House },
@@ -31,19 +33,18 @@ function NavButton({ item }: { item: NavItem }) {
   const active = item.match === '/(tabs)' ? pathname === '/' : pathname.includes(item.match);
   const Icon = item.icon;
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole="tab"
       accessibilityLabel={item.label}
       accessibilityState={{ selected: active }}
+      activeOpacity={0.72}
       onPress={() => router.navigate(item.route as never)}
-      style={({ pressed }) => ({
+      style={{
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         gap: 4,
-        opacity: pressed ? 0.72 : 1,
-        transform: [{ scale: pressed ? 0.98 : 1 }],
-      })}
+      }}
     >
       {active && (
         <View
@@ -68,7 +69,7 @@ function NavButton({ item }: { item: NavItem }) {
       >
         {item.label}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -97,21 +98,20 @@ function AddButton({ onPress }: { onPress: () => void }) {
           shadowRadius: 18,
         }}
       >
-        <Pressable
+        <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel="Add"
+          activeOpacity={0.82}
           onPress={onPress}
-          style={({ pressed }) => ({
+          style={{
             flex: 1,
             borderRadius: 29,
             alignItems: 'center',
             justifyContent: 'center',
-            transform: [{ scale: pressed ? 0.96 : 1 }],
-            opacity: pressed ? 0.88 : 1,
-          })}
+          }}
         >
           <Plus size={25} strokeWidth={2.2} color={tokens.primaryForeground} />
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -122,7 +122,7 @@ function SignatureBottomBar({ onAdd }: { onAdd: () => void }) {
   const insets = useSafeAreaInsets();
   const { tokens } = useTheme();
   const center = width / 2;
-  const height = 96 + insets.bottom;
+  const height = SIGNATURE_BAR_HEIGHT + insets.bottom;
   const topLine = 24;
   const valleyBottom = 68;
   const path = [
@@ -170,9 +170,17 @@ function SignatureBottomBar({ onAdd }: { onAdd: () => void }) {
 
 export default function TabsLayout() {
   const [open, setOpen] = useState(false);
+  const insets = useSafeAreaInsets();
   return (
     <>
-      <Slot />
+      <View
+        style={{
+          flex: 1,
+          paddingBottom: SIGNATURE_BAR_HEIGHT + insets.bottom,
+        }}
+      >
+        <Slot />
+      </View>
       <SignatureBottomBar onAdd={() => setOpen(true)} />
       <Sheet visible={open} onClose={() => setOpen(false)} title="Add">
         <View>

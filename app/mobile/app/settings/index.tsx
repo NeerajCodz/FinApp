@@ -3,11 +3,14 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { SettingsRow } from '@/components/finance';
 import { IconButton, Separator, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function SettingsScreen() {
+  const profile = useQuery(api.users.queries.current);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -39,7 +42,7 @@ export default function SettingsScreen() {
         <Separator />
         <SettingsRow
           label="Currency"
-          value="INR"
+          value={profile?.defaultCurrency ?? 'INR'}
           onPress={() => router.push('/settings/currency' as never)}
         />
       </View>

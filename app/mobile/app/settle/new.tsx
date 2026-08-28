@@ -28,7 +28,7 @@ export default function NewSettlementScreen() {
         gap: 28,
       }}
     >
-      <View>
+      <View style={{ alignItems: 'flex-start' }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>

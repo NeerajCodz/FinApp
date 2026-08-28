@@ -10,6 +10,7 @@ import { BalanceHero, GroupCard, MetricPair, PeopleRail } from '@/components/fin
 import {
   Button,
   IconButton,
+  Input,
   Progress,
   SectionHeader,
   Separator,
@@ -18,6 +19,7 @@ import {
   Typography,
 } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { layoutTokens } from '@/lib/theme/tokens';
 
 const currentMonth = new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date());
 const categories = [
@@ -42,7 +44,7 @@ export default function HomeScreen() {
         contentContainerStyle={{
           paddingHorizontal: 20,
           paddingTop: insets.top + 16,
-          paddingBottom: insets.bottom + 180,
+          paddingBottom: layoutTokens.sectionGap,
           gap: 36,
         }}
         showsVerticalScrollIndicator={false}
@@ -194,7 +196,7 @@ export default function HomeScreen() {
           {periodOptions.map((option) => (
             <Button
               key={option}
-              variant={period === option ? 'secondary' : 'ghost'}
+              variant={period === option ? 'primary' : 'ghost'}
               onPress={() => {
                 setPeriod(option);
                 if (option !== 'Custom date') setPeriodOpen(false);

@@ -15,7 +15,7 @@ export default function NewBudgetScreen() {
   const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: tokens.background }}
     >
       <ScrollView

@@ -18,7 +18,7 @@ export default function AnalyticsScreen() {
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
+        paddingBottom: insets.bottom + 64,
         gap: 36,
       }}
       showsVerticalScrollIndicator={false}

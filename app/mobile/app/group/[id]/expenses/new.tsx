@@ -5,8 +5,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CurrencyInput } from '@/components/finance';
 import { Button, IconButton, Input, Label, Separator, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { layoutTokens } from '@/lib/theme/tokens';
 
 function normalizeHandle(value: string) {
   return value.replace(/^@+/, '').trim().toLowerCase();
@@ -54,7 +56,7 @@ export default function NewGroupExpenseScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: tokens.background }}
     >
       <ScrollView
@@ -99,7 +101,11 @@ export default function NewGroupExpenseScreen() {
               onSubmitEditing={addMember}
               style={{ flex: 1 }}
             />
-            <Button size="sm" variant="outline" onPress={addMember}>
+            <Button
+              variant="outline"
+              onPress={addMember}
+              style={{ height: layoutTokens.inputHeight }}
+            >
               Add
             </Button>
           </View>

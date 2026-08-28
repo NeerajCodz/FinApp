@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupCard, Money, PeopleRail } from '@/components/finance';
 import { Button, IconButton, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { layoutTokens } from '@/lib/theme/tokens';
 
 export default function GroupsScreen() {
   const { tokens } = useTheme();
@@ -19,7 +20,7 @@ export default function GroupsScreen() {
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 16,
-        paddingBottom: insets.bottom + 180,
+        paddingBottom: layoutTokens.sectionGap,
         gap: 32,
       }}
     >

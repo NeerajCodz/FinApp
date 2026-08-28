@@ -29,12 +29,15 @@ export default function SettlementScreen() {
         gap: 28,
       }}
     >
-      <View>
+      <View style={{ alignItems: 'flex-start' }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
       </View>
-      <SettlementEditor memberName={userId ?? 'a group member'} onSave={save} />
+      <SettlementEditor
+        memberName={userId && userId.length <= 24 ? userId : 'a group member'}
+        onSave={save}
+      />
     </ScrollView>
   );
 }

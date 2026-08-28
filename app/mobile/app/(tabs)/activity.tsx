@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DateSection, MetricPair } from '@/components/finance';
 import { Empty, IconButton, Input, Tabs, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { layoutTokens } from '@/lib/theme/tokens';
 
 export default function ActivityScreen() {
   const [filter, setFilter] = useState('all');
@@ -18,7 +19,7 @@ export default function ActivityScreen() {
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 16,
-        paddingBottom: insets.bottom + 124,
+        paddingBottom: layoutTokens.sectionGap,
         gap: 32,
       }}
       keyboardShouldPersistTaps="handled"
