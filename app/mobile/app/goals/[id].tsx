@@ -1,14 +1,13 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
 import { IconButton, Progress, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function GoalDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -25,7 +24,7 @@ export default function GoalDetailScreen() {
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Typography variant="heading">{id ?? 'Goal'}</Typography>
+        <Typography variant="heading">Goal</Typography>
       </View>
       <View style={{ gap: 8 }}>
         <Money amountMinor={0n} currency="INR" size="display" />

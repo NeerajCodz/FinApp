@@ -1,14 +1,13 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MetricPair, Money } from '@/components/finance';
 import { Button, Empty, IconButton, SectionHeader, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function AccountDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -26,7 +25,7 @@ export default function AccountDetailScreen() {
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
         <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>
-          {id ?? 'Account'}
+          Account
         </Typography>
       </View>
 

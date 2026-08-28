@@ -1,17 +1,16 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon, Money } from '@/components/finance';
 import { Empty, IconButton, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function CategoryDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const label = id ?? 'Category';
+  const label = 'Category';
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}

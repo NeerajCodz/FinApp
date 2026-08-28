@@ -1,14 +1,13 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BudgetProgress, Money } from '@/components/finance';
 import { IconButton, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function BudgetDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -25,7 +24,7 @@ export default function BudgetDetailScreen() {
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Typography variant="heading">{id ?? 'Budget'}</Typography>
+        <Typography variant="heading">Budget</Typography>
       </View>
 
       <View style={{ gap: 8 }}>
