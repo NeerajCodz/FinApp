@@ -3,8 +3,18 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
+import { ArrowLeft, ArrowRight, ReceiptText, UsersThree } from '@/lib/icons';
 import { CategoryIcon, CurrencyInput, SettingsRow } from '@/components/finance';
-import { Button, Input, Separator, Sheet, Tabs, Text, Typography } from '@/components/ui';
+import {
+  Button,
+  IconButton,
+  Input,
+  Separator,
+  Sheet,
+  Tabs,
+  Text,
+  Typography,
+} from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,6 +38,7 @@ export default function NewTransactionScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  const saveDisabled = !amount || Number(amount) <= 0;
 
   async function save() {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -45,7 +56,7 @@ export default function NewTransactionScreen() {
   const pickerValues = picker === 'category' ? categories : accounts;
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: tokens.background }}
     >
       <ScrollView
@@ -58,19 +69,14 @@ export default function NewTransactionScreen() {
           gap: 28,
         }}
       >
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <Button
-            variant="ghost"
-            size="sm"
-            onPress={() => router.back()}
-            style={{ paddingHorizontal: 0 }}
-          >
-            Cancel
-          </Button>
-          <Typography variant="bodyLarge">Add {type}</Typography>
-          <View style={{ width: 52 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <IconButton label="Cancel" variant="ghost" onPress={() => router.back()}>
+            <ArrowLeft size={21} color={tokens.foreground} />
+          </IconButton>
+          <Typography variant="bodyLarge" style={{ flex: 1, textAlign: 'center' }}>
+            Add {type}
+          </Typography>
+          <View style={{ width: 44 }} />
         </View>
 
         <View style={{ minHeight: 150, alignItems: 'center', justifyContent: 'center' }}>
@@ -104,16 +110,55 @@ export default function NewTransactionScreen() {
             returnKeyType="done"
           />
           <Button
-            variant="ghost"
+            variant="outline"
             onPress={() => router.push('/split/new' as never)}
-            style={{ justifyContent: 'flex-start', paddingHorizontal: 0 }}
+            style={{
+              minHeight: 68,
+              paddingHorizontal: 16,
+              justifyContent: 'space-between',
+            }}
           >
-            Split this expense
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: tokens.controlDisabledBackground,
+                }}
+              >
+                <UsersThree size={19} color={tokens.primary} />
+              </View>
+              <View style={{ gap: 2 }}>
+                <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
+                  Split this expense
+                </Typography>
+                <Typography variant="caption">Choose people and shares</Typography>
+              </View>
+            </View>
+            <ArrowRight size={18} color={tokens.foregroundSubtle} />
           </Button>
         </View>
 
-        <Button size="lg" disabled={!amount || Number(amount) <= 0} onPress={save}>
-          {`Save ${type}`}
+        <Button size="lg" disabled={saveDisabled} onPress={save}>
+          <ReceiptText
+            size={18}
+            color={saveDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
+          />
+          <Text
+            style={{
+              marginLeft: 8,
+              color: saveDisabled
+                ? tokens.controlDisabledForeground
+                : tokens.primaryForeground,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 15,
+            }}
+          >
+            {`Save ${type}`}
+          </Text>
         </Button>
       </ScrollView>
 

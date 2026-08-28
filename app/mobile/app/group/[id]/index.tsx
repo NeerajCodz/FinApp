@@ -1,9 +1,9 @@
 import React from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { ArrowLeft, MoreHorizontal } from '@/lib/icons';
+import { ArrowLeft, ArrowLeftRight, MoreHorizontal, Plus } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money, TransactionRow } from '@/components/finance';
 import {
@@ -29,7 +29,7 @@ export default function GroupHomeScreen() {
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 180,
+        paddingBottom: insets.bottom + 32,
         gap: 32,
       }}
     >
@@ -45,7 +45,16 @@ export default function GroupHomeScreen() {
         </IconButton>
       </View>
 
-      <View style={{ gap: 8 }}>
+      <View
+        style={{
+          padding: 20,
+          gap: 7,
+          borderRadius: 22,
+          backgroundColor: tokens.surfaceSubtle,
+          borderWidth: 1,
+          borderColor: tokens.borderSubtle,
+        }}
+      >
         <Typography variant="label">Your balance</Typography>
         <Money amountMinor={0n} currency={group?.currency ?? 'INR'} size="display" />
         <Typography variant="caption">All settled</Typography>
@@ -53,17 +62,39 @@ export default function GroupHomeScreen() {
 
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Button
+          size="lg"
           style={{ flex: 1 }}
           onPress={() => router.push(`/group/${id}/expenses/new` as never)}
         >
-          Add expense
+          <Plus size={18} color={tokens.primaryForeground} />
+          <Text
+            style={{
+              marginLeft: 8,
+              color: tokens.primaryForeground,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 15,
+            }}
+          >
+            Expense
+          </Text>
         </Button>
         <Button
+          size="lg"
           style={{ flex: 1 }}
           variant="outline"
           onPress={() => router.push('/settle/new' as never)}
         >
-          Settle
+          <ArrowLeftRight size={18} color={tokens.foreground} />
+          <Text
+            style={{
+              marginLeft: 8,
+              color: tokens.foreground,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 15,
+            }}
+          >
+            Settle
+          </Text>
         </Button>
       </View>
 
@@ -76,16 +107,38 @@ export default function GroupHomeScreen() {
             contentContainerStyle={{ gap: 16 }}
           >
             {group.members.map((member) => (
-              <View key={member.id} style={{ alignItems: 'center', gap: 6, width: 60 }}>
+              <TouchableOpacity
+                key={member.id}
+                accessibilityRole={member.username ? 'button' : undefined}
+                accessibilityLabel={
+                  member.username
+                    ? `Open @${member.username}`
+                    : member.displayName
+                }
+                activeOpacity={member.username ? 0.72 : 1}
+                disabled={!member.username}
+                onPress={() =>
+                  member.username && router.push(`/person/${member.username}` as never)
+                }
+                style={{ alignItems: 'center', gap: 7, width: 96 }}
+              >
                 <Avatar
                   initials={member.displayName.slice(0, 2)}
                   label={member.displayName}
-                  size={44}
+                  size={48}
                 />
-                <Typography variant="caption" numberOfLines={1}>
+                <Typography
+                  variant="caption"
+                  numberOfLines={1}
+                  style={{
+                    maxWidth: 96,
+                    textAlign: 'center',
+                    color: member.username ? tokens.foregroundMuted : tokens.foregroundSubtle,
+                  }}
+                >
                   {member.username ? `@${member.username}` : member.displayName}
                 </Typography>
-              </View>
+              </TouchableOpacity>
             ))}
           </ScrollView>
         ) : (

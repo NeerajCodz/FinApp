@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { Pressable, View, type PressableProps } from 'react-native';
+import { Pressable, TouchableOpacity, View, type PressableProps } from 'react-native';
 import { Button, Card, Input, Progress, Separator, Text, Typography } from '@/components/ui';
 import {
+  ArrowLeftRight,
+  CalendarDays,
   Car,
   CaretRight,
+  Check,
   Eye,
   EyeOff,
   Landmark,
   ReceiptText,
   ShoppingBag,
   Utensils,
+  Wallet,
 } from '@/lib/icons';
 import { useTheme } from '@/providers/ThemeProvider';
 import { formatMinor, signedMinor } from '@/lib/money';
@@ -483,23 +487,36 @@ export function SettingsRow({
 }) {
   const { tokens } = useTheme();
   return (
-    <Pressable
+    <TouchableOpacity
+      accessibilityLabel={value ? [label, value].join(', ') : label}
       accessibilityRole={onPress ? 'button' : undefined}
-      onPress={onPress}
-      style={({ pressed }) => ({
+      activeOpacity={onPress ? 0.72 : 1}
+      disabled={!onPress}
+      onPress={onPress ?? undefined}
+      style={{
         minHeight: 58,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        opacity: pressed ? 0.72 : 1,
-      })}
+      }}
     >
-      <Typography variant="bodyLarge" style={{ flex: 1, fontSize: 15 }}>
-        {label}
-      </Typography>
-      {value && <Typography variant="small">{value}</Typography>}
-      {onPress && <CaretRight size={18} color={tokens.foregroundSubtle} />}
-    </Pressable>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
+          {label}
+        </Typography>
+        {value && <Typography variant="small">{value}</Typography>}
+      </View>
+      <View
+        style={{
+          width: 24,
+          flexShrink: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {onPress && <CaretRight size={18} color={tokens.foregroundSubtle} />}
+      </View>
+    </TouchableOpacity>
   );
 }
 export function SettlementEditor({
@@ -510,23 +527,94 @@ export function SettlementEditor({
   onSave: () => void;
 }) {
   const [amount, setAmount] = useState('');
+  const { tokens } = useTheme();
+  const settlementDisabled = !amount || Number(amount) <= 0;
   return (
     <View style={{ gap: 28 }}>
-      <View style={{ gap: 8 }}>
-        <Typography variant="title">
-          Settle with{`\n`}
-          {memberName}.
-        </Typography>
-        <Typography variant="small">Record what changed. The ledger keeps the history.</Typography>
+      <View style={{ gap: 14 }}>
+        <View
+          style={{
+            width: 50,
+            height: 50,
+            borderRadius: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: tokens.primary,
+          }}
+        >
+          <ArrowLeftRight size={23} color={tokens.primaryForeground} />
+        </View>
+        <View style={{ gap: 8 }}>
+          <Typography variant="title">
+            Settle with{`\n`}
+            {memberName}.
+          </Typography>
+          <Typography variant="small">
+            Record what changed. The ledger keeps the history.
+          </Typography>
+        </View>
       </View>
+
       <CurrencyInput currency="INR" value={amount} onChangeText={setAmount} />
-      <View>
-        <SettingsRow label="Payment account" value="HDFC" />
-        <Separator />
-        <SettingsRow label="Date" value="Today" />
+
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View
+          style={{
+            flex: 1,
+            minHeight: 108,
+            padding: 14,
+            gap: 12,
+            borderRadius: 16,
+            backgroundColor: tokens.surfaceSubtle,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+          }}
+        >
+          <Wallet size={20} color={tokens.primary} />
+          <View style={{ gap: 2 }}>
+            <Typography variant="caption">PAYMENT ACCOUNT</Typography>
+            <Typography variant="bodyLarge">HDFC</Typography>
+          </View>
+        </View>
+        <View
+          style={{
+            flex: 1,
+            minHeight: 108,
+            padding: 14,
+            gap: 12,
+            borderRadius: 16,
+            backgroundColor: tokens.surfaceSubtle,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+          }}
+        >
+          <CalendarDays size={20} color={tokens.primary} />
+          <View style={{ gap: 2 }}>
+            <Typography variant="caption">DATE</Typography>
+            <Typography variant="bodyLarge">Today</Typography>
+          </View>
+        </View>
       </View>
-      <Button size="lg" disabled={!amount || Number(amount) <= 0} onPress={onSave}>
-        Mark settled
+
+      <Button size="lg" disabled={settlementDisabled} onPress={onSave}>
+        <Check
+          size={18}
+          color={
+            settlementDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground
+          }
+        />
+        <Text
+          style={{
+            marginLeft: 8,
+            color: settlementDisabled
+              ? tokens.controlDisabledForeground
+              : tokens.primaryForeground,
+            fontFamily: 'SpaceGrotesk_600SemiBold',
+            fontSize: 15,
+          }}
+        >
+          Mark settled
+        </Text>
       </Button>
     </View>
   );

@@ -27,6 +27,7 @@ import {
   Search as LucideMagnifyingGlass,
   NotebookPen as LucideNotePencil,
   Palette as LucidePalette,
+  Phone as LucidePhone,
   Plus as LucidePlus,
   ReceiptText as LucideReceiptText,
   ShoppingBag as LucideShoppingBag,
@@ -80,6 +81,7 @@ export const MagnifyingGlass = withWeight(LucideMagnifyingGlass);
 export const NotePencil = withWeight(LucideNotePencil);
 export const Palette = withWeight(LucidePalette);
 export const Landmark = withWeight(LucideLandmark);
+export const Phone = withWeight(LucidePhone);
 export const MoreHorizontal = withWeight(LucideMoreHorizontal);
 export const Plus = withWeight(LucidePlus);
 export const ShieldCheck = withWeight(LucideShieldCheck);
