@@ -38,19 +38,19 @@ export default function AppearanceSettingsScreen() {
             return (
               <Button
                 key={option}
-                variant={selected ? 'secondary' : 'outline'}
+                variant={selected ? 'primary' : 'outline'}
                 onPress={() => setAppearance(option)}
                 style={{ justifyContent: 'space-between', minHeight: 56 }}
               >
                 <Text
                   style={{
-                    color: selected ? tokens.background : tokens.foreground,
+                    color: selected ? tokens.primaryForeground : tokens.foreground,
                     fontFamily: 'SpaceGrotesk_500Medium',
                   }}
                 >
                   {label}
                 </Text>
-                {selected && <Check size={18} color={tokens.background} />}
+                {selected && <Check size={18} color={tokens.primaryForeground} />}
               </Button>
             );
           })}

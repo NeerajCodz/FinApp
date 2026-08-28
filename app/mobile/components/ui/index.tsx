@@ -3,11 +3,15 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Switch as NativeSwitch,
   Text as RNText,
+  TouchableOpacity,
   TextInput,
   View,
   type PressableProps,
@@ -108,7 +112,7 @@ export const Typography = ({
   );
 };
 
-type ButtonProps = Omit<PressableProps, 'children'> & {
+type ButtonProps = Omit<React.ComponentProps<typeof TouchableOpacity>, 'children'> & {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
   size?: 'sm' | 'default' | 'lg' | 'icon';
   children: React.ReactNode;
@@ -124,44 +128,77 @@ export function Button({
   ...props
 }: ButtonProps) {
   const { tokens } = useTheme();
-  const colors = {
+  const enabledColors = {
     primary: { backgroundColor: tokens.primary, color: tokens.primaryForeground },
     secondary: { backgroundColor: tokens.secondary, color: tokens.secondaryForeground },
     outline: { backgroundColor: 'transparent', color: tokens.foreground },
     ghost: { backgroundColor: 'transparent', color: tokens.foregroundMuted },
     destructive: { backgroundColor: '#FF5C5C1A', color: tokens.destructive },
   } as const;
-  const { backgroundColor, color } = colors[variant];
+  const disabledColors = {
+    primary: {
+      backgroundColor: tokens.controlDisabledBackground,
+      color: tokens.controlDisabledForeground,
+    },
+    secondary: {
+      backgroundColor: tokens.secondary,
+      color: tokens.controlDisabledForeground,
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      color: tokens.controlDisabledForeground,
+    },
+    ghost: {
+      backgroundColor: 'transparent',
+      color: tokens.controlDisabledForeground,
+    },
+    destructive: {
+      backgroundColor: '#FF5C5C1A',
+      color: tokens.controlDisabledForeground,
+    },
+  } as const;
+  const { backgroundColor, color } = (disabled ? disabledColors : enabledColors)[variant];
   const compact = size === 'sm';
   const icon = size === 'icon';
-  const baseStyle = getTouchTargetStyle({
-    minWidth: icon ? 44 : undefined,
-    borderRadius: 14,
-    paddingHorizontal: icon ? 0 : compact ? 14 : 18,
-    paddingVertical: icon ? 0 : compact ? 8 : 14,
-    minHeight: icon ? 44 : compact ? 38 : size === 'lg' ? 54 : 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    backgroundColor,
-    borderWidth: variant === 'outline' ? 1 : 0,
-    borderColor: variant === 'outline' ? tokens.border : 'transparent',
-  });
+  const height = icon ? 44 : compact ? 38 : size === 'lg' ? 54 : 48;
+  const staticStyle = StyleSheet.flatten(style);
+  const content = React.Children.toArray(children);
+  const textOnly = content.every((child) => typeof child === 'string' || typeof child === 'number');
+  const contentJustify = staticStyle?.justifyContent ?? 'center';
+  const textAlign = contentJustify === 'flex-start' ? 'left' : 'center';
+
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: !!disabled }}
+      activeOpacity={0.78}
       disabled={disabled}
-      style={({ pressed }) => [
-        baseStyle,
-        pressed && { transform: [{ scale: 0.98 }], opacity: 0.88 },
-        disabled && { opacity: 0.32 },
-        typeof style === 'function' ? style({ pressed }) : style,
+      style={[
+        getTouchTargetStyle({
+          minWidth: icon ? 44 : undefined,
+          height,
+          minHeight: height,
+          borderRadius: 14,
+          paddingHorizontal: icon ? 0 : compact ? 14 : 18,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
+          overflow: 'hidden',
+          backgroundColor,
+          borderWidth: variant === 'outline' ? 1 : 0,
+          borderColor:
+            variant === 'outline'
+              ? disabled
+                ? tokens.borderSubtle
+                : tokens.border
+              : 'transparent',
+        }),
+        style,
       ]}
       {...props}
     >
-      {typeof children === 'string' ? (
+      {textOnly ? (
         <Text
           numberOfLines={1}
           style={{
@@ -169,14 +206,26 @@ export function Button({
             fontFamily: 'SpaceGrotesk_600SemiBold',
             fontSize: compact ? 13 : 15,
             lineHeight: compact ? 18 : 20,
+            textAlign,
+          }}
+        >
+          {content.join('')}
+        </Text>
+      ) : (
+        <View
+          pointerEvents="none"
+          style={{
+            alignSelf: 'stretch',
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: contentJustify,
           }}
         >
           {children}
-        </Text>
-      ) : (
-        children
+        </View>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -513,14 +562,34 @@ export const Switch = ({
         minHeight: 56,
       }}
     >
-      <Label style={{ marginBottom: 0, color: tokens.foreground }}>{label}</Label>
-      <NativeSwitch
-        accessibilityLabel={label}
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: tokens.border, true: tokens.primary }}
-        thumbColor={value ? tokens.background : tokens.foregroundMuted}
-      />
+      <Label
+        style={{
+          flex: 1,
+          paddingRight: 16,
+          marginBottom: 0,
+          color: tokens.foreground,
+        }}
+      >
+        {label}
+      </Label>
+      <View
+        style={{
+          width: 56,
+          height: 44,
+          flexShrink: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <NativeSwitch
+          accessibilityLabel={label}
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: tokens.border, true: tokens.primary }}
+          thumbColor={value ? tokens.background : tokens.foregroundMuted}
+          style={Platform.OS === 'android' ? { transform: [{ scale: 0.85 }] } : undefined}
+        />
+      </View>
     </View>
   );
 };
@@ -551,7 +620,7 @@ export const Tabs = ({
           <Button
             key={tab.value}
             size="sm"
-            variant={selected ? 'secondary' : 'ghost'}
+            variant={selected ? 'primary' : 'ghost'}
             onPress={() => onChange(tab.value)}
             style={{ flex: 1, borderRadius: 10 }}
           >
@@ -608,46 +677,51 @@ export function Sheet({
   const { tokens } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close sheet"
-        onPress={onClose}
-        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: tokens.overlay }}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        <View
-          onStartShouldSetResponder={() => true}
-          style={{
-            backgroundColor: tokens.popover,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingHorizontal: 20,
-            paddingTop: 12,
-            paddingBottom: 28,
-            gap: 16,
-            borderTopWidth: 1,
-            borderColor: tokens.borderSubtle,
-            shadowColor: '#000000',
-            shadowOffset: { width: 0, height: -8 },
-            shadowOpacity: 0.55,
-            shadowRadius: 40,
-          }}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close sheet"
+          onPress={onClose}
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: tokens.overlay }}
         >
           <View
+            onStartShouldSetResponder={() => true}
             style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: tokens.foregroundDisabled,
-              alignSelf: 'center',
-              marginBottom: 4,
+              backgroundColor: tokens.popover,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: 28,
+              gap: 16,
+              borderTopWidth: 1,
+              borderColor: tokens.borderSubtle,
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: -8 },
+              shadowOpacity: 0.55,
+              shadowRadius: 40,
             }}
-          />
-          <Typography variant="heading" style={{ fontSize: 22, lineHeight: 27 }}>
-            {title}
-          </Typography>
-          {children}
-        </View>
-      </Pressable>
+          >
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: tokens.foregroundDisabled,
+                alignSelf: 'center',
+                marginBottom: 4,
+              }}
+            />
+            <Typography variant="heading" style={{ fontSize: 22, lineHeight: 27 }}>
+              {title}
+            </Typography>
+            {children}
+          </View>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

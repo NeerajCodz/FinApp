@@ -62,6 +62,8 @@ export type ThemeTokens = {
   popoverForeground: string;
   primary: string;
   primaryForeground: string;
+  controlDisabledBackground: string;
+  controlDisabledForeground: string;
   secondary: string;
   secondaryForeground: string;
   muted: string;
@@ -112,6 +114,8 @@ export function createTokens(mode: ThemeMode = 'dark'): ThemeTokens {
     popoverForeground: foreground,
     primary: chartPalette.volt,
     primaryForeground: '#000000',
+    controlDisabledBackground: isDark ? '#263611' : '#DFEBCB',
+    controlDisabledForeground: isDark ? '#FFFFFFA3' : '#0000007A',
     secondary: foreground,
     secondaryForeground: background,
     muted: inverseOpacity.surfaceRaised,
