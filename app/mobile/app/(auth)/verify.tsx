@@ -1,15 +1,49 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
 import { Button, InputOTP, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function VerifyScreen() {
+  const { email: rawEmail, next: rawNext } = useLocalSearchParams<{
+    email?: string;
+    next?: string;
+  }>();
+  const email = typeof rawEmail === 'string' ? rawEmail : '';
+  const next = rawNext === 'onboarding' ? 'onboarding' : 'tabs';
   const [code, setCode] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const { signIn } = useAuthActions();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+
+  async function verify() {
+    if (pending || code.length !== 6 || !email) return;
+    setPending(true);
+    setError('');
+    const form = new FormData();
+    form.append('email', email);
+    form.append('code', code);
+    form.append('flow', 'email-verification');
+    try {
+      const result = await signIn('password', form);
+      if (!result.signingIn) throw new Error('That code could not be verified.');
+      toast.success('Email verified');
+      router.replace(next === 'onboarding' ? '/(auth)/onboarding' : '/(tabs)');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Could not verify this code.';
+      setError(message);
+      toast.error('Verification failed', { description: message });
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <View
       style={{
@@ -21,34 +55,44 @@ export default function VerifyScreen() {
       }}
     >
       <BrandMark />
-
       <View style={{ flex: 1, justifyContent: 'center', gap: 32 }}>
         <View style={{ gap: 12 }}>
           <Typography variant="title">Verify your email.</Typography>
-          <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
-            We sent a six-digit code to the email attached to your account.
+          <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
+            Enter the six-digit code sent to {email || 'your email address'}. The code expires in 10
+            minutes.
           </Text>
         </View>
-
         <InputOTP value={code} onChangeText={setCode} />
-
+        {!!error && (
+          <Typography
+            variant="small"
+            accessibilityLiveRegion="polite"
+            style={{ color: tokens.destructive }}
+          >
+            {error}
+          </Typography>
+        )}
         <View style={{ gap: 4 }}>
           <Typography variant="small" style={{ color: tokens.foreground }}>
-            Didn't get it?
+            Didn&apos;t get a code?
           </Typography>
           <Typography variant="caption">
-            Check spam or return to confirm your email address.
+            Sign in with your password to send a fresh code.
           </Typography>
         </View>
       </View>
-
-      <Button
-        disabled={code.length !== 6}
-        size="lg"
-        onPress={() => router.replace('/(auth)/onboarding')}
-      >
-        Continue
-      </Button>
+      <View style={{ gap: 10 }}>
+        <Button disabled={pending || code.length !== 6 || !email} size="lg" onPress={verify}>
+          {pending ? 'Verifying…' : 'Verify email'}
+        </Button>
+        <Button
+          variant="ghost"
+          onPress={() => router.replace({ pathname: '/(auth)/sign-in', params: { email } })}
+        >
+          Return to sign in
+        </Button>
+      </View>
     </View>
   );
 }

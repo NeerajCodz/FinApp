@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight } from '@/lib/icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
@@ -10,7 +10,8 @@ import { Button, IconButton, Input, Label, Text, Typography } from '@/components
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function SignInScreen() {
-  const [email, setEmail] = useState('');
+  const { email: initialEmail } = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(() => (typeof initialEmail === 'string' ? initialEmail : ''));
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { signIn } = useAuthActions();
@@ -26,7 +27,14 @@ export default function SignInScreen() {
     form.append('flow', 'signIn');
     try {
       const result = await signIn('password', form);
-      router.replace(result.signingIn ? '/(tabs)' : '/(auth)/verify');
+      if (result.signingIn) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace({
+          pathname: '/(auth)/verify',
+          params: { email: email.trim().toLowerCase(), next: 'tabs' },
+        });
+      }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Unable to sign in';
       setError(message);
@@ -105,7 +113,6 @@ export default function SignInScreen() {
             )}
           </View>
         </View>
-
       </ScrollView>
       <View
         style={{
@@ -118,12 +125,21 @@ export default function SignInScreen() {
           backgroundColor: tokens.background,
         }}
       >
+        <Button
+          variant="ghost"
+          onPress={() =>
+            router.push({
+              pathname: '/(auth)/forgot-password',
+              params: { email: email.trim().toLowerCase() },
+            })
+          }
+        >
+          Forgot password?
+        </Button>
         <Button size="lg" disabled={signInDisabled} onPress={submit}>
           <Text
             style={{
-              color: signInDisabled
-                ? tokens.controlDisabledForeground
-                : tokens.primaryForeground,
+              color: signInDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
               fontFamily: 'SpaceGrotesk_600SemiBold',
               fontSize: 15,
             }}

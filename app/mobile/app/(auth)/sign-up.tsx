@@ -26,7 +26,14 @@ export default function SignUpScreen() {
     form.append('flow', 'signUp');
     try {
       const result = await signIn('password', form);
-      router.replace(result.signingIn ? '/(auth)/onboarding' : '/(auth)/verify');
+      if (result.signingIn) {
+        router.replace('/(auth)/onboarding');
+      } else {
+        router.replace({
+          pathname: '/(auth)/verify',
+          params: { email: email.trim().toLowerCase(), next: 'onboarding' },
+        });
+      }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Unable to create account';
       setError(message);
@@ -111,7 +118,6 @@ export default function SignUpScreen() {
             )}
           </View>
         </View>
-
       </ScrollView>
       <View
         style={{
@@ -127,9 +133,7 @@ export default function SignUpScreen() {
         <Button size="lg" disabled={signUpDisabled} onPress={submit}>
           <Text
             style={{
-              color: signUpDisabled
-                ? tokens.controlDisabledForeground
-                : tokens.primaryForeground,
+              color: signUpDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
               fontFamily: 'SpaceGrotesk_600SemiBold',
               fontSize: 15,
             }}
