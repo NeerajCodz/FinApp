@@ -1,6 +1,7 @@
 import { mutation } from '../_generated/server';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
+import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 
 export const create = mutation({
   args: {
@@ -12,16 +13,86 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
-    if (!user || !args.name.trim()) throw new Error('INVALID_CATEGORY');
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const name = args.name.trim();
+    if (!name) throw new Error('INVALID_CATEGORY');
+    if (args.parentId !== undefined) {
+      const parentId = ctx.db.normalizeId('categories', args.parentId);
+      const parent = parentId ? await ctx.db.get(parentId) : null;
+      if (
+        !parent ||
+        parent.ownerId !== user._id ||
+        parent.archivedAt !== undefined ||
+        parent.kind !== args.kind
+      )
+        throw new Error('INVALID_CATEGORY');
+    }
     const now = Date.now();
     return ctx.db.insert('categories', {
       ...args,
+      name,
       ownerId: user._id,
       isSystem: false,
       sortOrder: now,
       createdAt: now,
       updatedAt: now,
     });
+  },
+});
+
+export const rename = mutation({
+  args: { categoryId: v.id('categories'), name: v.string() },
+  handler: async (ctx, { categoryId, name }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const category = await ctx.db.get(categoryId);
+    const trimmed = name.trim();
+    if (
+      !category ||
+      category.ownerId !== user._id ||
+      category.archivedAt !== undefined ||
+      category.isSystem ||
+      !trimmed
+    )
+      throw new Error('INVALID_CATEGORY');
+    await ctx.db.patch(categoryId, { name: trimmed, updatedAt: Date.now() });
+    return categoryId;
+  },
+});
+
+export const setLimit = mutation({
+  args: {
+    categoryId: v.id('categories'),
+    amountMinor: v.union(v.int64(), v.null()),
+    currency: v.optional(v.string()),
+  },
+  handler: async (ctx, { categoryId, amountMinor, currency }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const category = await ctx.db.get(categoryId);
+    if (
+      !category ||
+      category.ownerId !== user._id ||
+      category.archivedAt !== undefined ||
+      category.kind !== 'expense'
+    )
+      throw new Error('INVALID_CATEGORY');
+    if (currency !== undefined) assertCurrency(currency);
+    if (amountMinor !== null) assertPositiveAmount(amountMinor);
+    const limitCurrency =
+      amountMinor === null
+        ? undefined
+        : (currency ?? category.limitCurrency ?? user.defaultCurrency);
+    if (amountMinor !== null) {
+      if (!limitCurrency) throw new Error('INVALID_CURRENCY');
+      assertCurrency(limitCurrency);
+    }
+    await ctx.db.patch(categoryId, {
+      monthlyLimitMinor: amountMinor === null ? undefined : amountMinor,
+      limitCurrency,
+      updatedAt: Date.now(),
+    });
+    return categoryId;
   },
 });
 
@@ -32,7 +103,12 @@ export const archive = mutation({
     const category = await ctx.db.get(args.categoryId);
     if (!user || !category || category.ownerId !== user._id)
       throw new Error('INSUFFICIENT_PERMISSION');
-    await ctx.db.patch(args.categoryId, { archivedAt: Date.now(), updatedAt: Date.now() });
+    const now = Date.now();
+    await ctx.db.patch(args.categoryId, { archivedAt: now, updatedAt: now });
+    if (category.kind === 'expense' && user.defaultExpenseCategoryId === args.categoryId)
+      await ctx.db.patch(user._id, { defaultExpenseCategoryId: undefined, updatedAt: now });
+    if (category.kind === 'income' && user.defaultIncomeCategoryId === args.categoryId)
+      await ctx.db.patch(user._id, { defaultIncomeCategoryId: undefined, updatedAt: now });
     return args.categoryId;
   },
 });

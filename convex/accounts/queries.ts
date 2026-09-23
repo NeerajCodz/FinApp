@@ -22,12 +22,36 @@ export const list = query({
       .query('accounts')
       .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
       .collect();
+    const balances = new Map(accounts.map((account) => [account._id, account.openingBalanceMinor]));
+    const transactions = await ctx.db
+      .query('transactions')
+      .withIndex('by_owner_occurredAt', (q) => q.eq('ownerId', user._id))
+      .collect();
+    for (const transaction of transactions) {
+      if (transaction.status !== 'posted' || transaction.deletedAt !== undefined) continue;
+      const sourceBalance = balances.get(transaction.accountId);
+      if (sourceBalance !== undefined) {
+        const outgoing = transaction.type === 'expense' || transaction.type === 'transfer';
+        balances.set(
+          transaction.accountId,
+          sourceBalance + (outgoing ? -transaction.amountMinor : transaction.amountMinor),
+        );
+      }
+      if (transaction.type === 'transfer' && transaction.transferAccountId) {
+        const destinationId = ctx.db.normalizeId('accounts', transaction.transferAccountId);
+        if (destinationId) {
+          const destinationBalance = balances.get(destinationId);
+          if (destinationBalance !== undefined)
+            balances.set(destinationId, destinationBalance + transaction.amountMinor);
+        }
+      }
+    }
     return visibleAccounts(
       accounts.map((account) => ({
         id: account._id,
         name: account.name,
         currency: account.currency,
-        balanceMinor: account.openingBalanceMinor,
+        balanceMinor: balances.get(account._id) ?? account.openingBalanceMinor,
         archivedAt: account.archivedAt,
       })),
     );

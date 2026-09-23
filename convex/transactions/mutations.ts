@@ -25,7 +25,7 @@ export type TransactionDependencies = {
   account: AccountDraft & { archivedAt?: number };
   transferAccount?: AccountDraft & { archivedAt?: number };
   processedMutation: { clientMutationId: string } | null;
-  category?: { archivedAt?: number };
+  category?: { ownerId: string; kind: 'expense' | 'income'; archivedAt?: number };
 };
 
 export function createTransaction(
@@ -37,10 +37,20 @@ export function createTransaction(
   assertMutationAvailable(dependencies.processedMutation, draft.clientMutationId);
   assertCurrency(draft.currency);
   assertPositiveAmount(draft.amountMinor);
+  if (dependencies.account.ownerId !== draft.ownerId)
+    throw new DomainError('INSUFFICIENT_PERMISSION');
   assertAccountCanReceiveTransaction(dependencies.account);
-  if (dependencies.category) {
-    if (dependencies.category.archivedAt !== undefined)
-      throw new DomainError('INVALID_SPLIT', 'INVALID_CATEGORY');
+  if (dependencies.account.currency !== draft.currency) throw new DomainError('INVALID_CURRENCY');
+  if (draft.categoryId !== undefined) {
+    const category = dependencies.category;
+    if (
+      !category ||
+      category.ownerId !== draft.ownerId ||
+      category.archivedAt !== undefined ||
+      (draft.type !== 'expense' && draft.type !== 'income') ||
+      category.kind !== draft.type
+    )
+      throw new Error('INVALID_CATEGORY');
   }
   if (draft.type === 'transfer') {
     if (
@@ -73,7 +83,7 @@ export const create = mutation({
     ),
     amountMinor: v.int64(),
     currency: v.string(),
-    categoryId: v.optional(v.string()),
+    categoryId: v.optional(v.id('categories')),
     title: v.string(),
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
@@ -88,6 +98,9 @@ export const create = mutation({
       ? ((await ctx.db.get(args.transferAccountId)) ?? undefined)
       : undefined;
     if (!user || !account) throw new DomainError('AUTH_REQUIRED');
+    const category = args.categoryId
+      ? ((await ctx.db.get(args.categoryId)) ?? undefined)
+      : undefined;
     const processedMutation = await ctx.db
       .query('processedMutations')
       .withIndex('by_actor_clientMutationId', (q) =>
@@ -104,7 +117,7 @@ export const create = mutation({
         merchant: args.merchant,
         note: args.note,
       },
-      { account, transferAccount, processedMutation },
+      { account, transferAccount, processedMutation, category },
     );
     const {
       clientMutationId: _clientMutationId,
