@@ -71,19 +71,142 @@ describe('Convex public runtime functions', () => {
     expect(await authenticated.query(api.categories.queries.list, {})).toMatchObject([
       { _id: categoryId, name: 'Food', kind: 'expense', isSystem: false },
     ]);
+    await authenticated.mutation(api.categories.mutations.rename, {
+      categoryId,
+      name: 'Groceries',
+    });
+    expect(await authenticated.query(api.categories.queries.list, {})).toMatchObject([
+      { _id: categoryId, name: 'Groceries' },
+    ]);
 
     expect(await authenticated.mutation(api.categories.mutations.archive, { categoryId })).toBe(
       categoryId,
     );
     const categories = await authenticated.query(api.categories.queries.list, {});
-    expect(categories.find((category) => category._id === categoryId)?.archivedAt).toEqual(
-      expect.any(Number),
-    );
+    expect(categories).toEqual([]);
 
+    await authenticated.mutation(api.users.mutations.setDefaultAccount, { accountId });
     expect(await authenticated.mutation(api.accounts.mutations.archive, { accountId })).toBe(
       accountId,
     );
     expect(await authenticated.query(api.accounts.queries.list, {})).toEqual([]);
+    expect(
+      (await authenticated.query(api.users.queries.current, {}))?.defaultAccountId,
+    ).toBeUndefined();
+  });
+
+  it('persists defaults and limits while isolating monthly spending by owner', async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert('users', {
+        identityId: identity.subject,
+        email: identity.email,
+        name: identity.name,
+        defaultCurrency: 'INR',
+      });
+      await ctx.db.insert('users', {
+        identityId: 'other-owner',
+        email: 'other-owner@example.com',
+      });
+    });
+    const owner = t.withIdentity(identity);
+    const other = t.withIdentity({ subject: 'other-owner', email: 'other-owner@example.com' });
+    const accountId = await owner.mutation(api.accounts.mutations.create, {
+      name: 'Cash',
+      type: 'cash',
+      currency: 'INR',
+      openingBalanceMinor: 100000n,
+      isIncludedInTotal: true,
+    });
+    const categoryId = await owner.mutation(api.categories.mutations.create, {
+      name: 'Groceries',
+      kind: 'expense',
+    });
+    const incomeId = await owner.mutation(api.categories.mutations.create, {
+      name: 'Salary',
+      kind: 'income',
+    });
+    await owner.mutation(api.users.mutations.setDefaultAccount, { accountId });
+    await owner.mutation(api.users.mutations.setDefaultCategory, {
+      kind: 'expense',
+      categoryId,
+    });
+    await owner.mutation(api.categories.mutations.setLimit, {
+      categoryId,
+      amountMinor: 50000n,
+      currency: 'INR',
+    });
+    expect(await owner.query(api.users.queries.current, {})).toMatchObject({
+      defaultAccountId: accountId,
+      defaultExpenseCategoryId: categoryId,
+    });
+    await expect(
+      other.mutation(api.categories.mutations.setLimit, {
+        categoryId,
+        amountMinor: 100n,
+        currency: 'INR',
+      }),
+    ).rejects.toThrow('INVALID_CATEGORY');
+    await expect(
+      owner.mutation(api.users.mutations.setDefaultCategory, {
+        kind: 'expense',
+        categoryId: incomeId,
+      }),
+    ).rejects.toThrow('INVALID_CATEGORY');
+    await expect(
+      owner.mutation(api.categories.mutations.setLimit, {
+        categoryId: incomeId,
+        amountMinor: 100n,
+        currency: 'INR',
+      }),
+    ).rejects.toThrow('INVALID_CATEGORY');
+
+    const now = new Date();
+    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+    for (const [amountMinor, occurredAt, clientMutationId] of [
+      [25000n, Date.now(), 'this-month'],
+      [60000n, previousMonth.getTime(), 'previous-month'],
+    ] as const) {
+      await owner.mutation(api.transactions.mutations.create, {
+        accountId,
+        categoryId,
+        type: 'expense',
+        amountMinor,
+        currency: 'INR',
+        title: 'Groceries',
+        occurredAt,
+        clientMutationId,
+      });
+    }
+    const detail = await owner.query(api.categories.queries.detail, { categoryId });
+    expect(detail?.monthSpentMinor).toBe(25000n);
+    expect(detail?.category.monthlyLimitMinor).toBe(50000n);
+    expect(detail?.transactions).toHaveLength(2);
+    expect(await other.query(api.categories.queries.detail, { categoryId })).toBeNull();
+    expect(await owner.query(api.accounts.queries.list, {})).toMatchObject([
+      { id: accountId, balanceMinor: 15000n },
+    ]);
+    const startAt = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const endAt = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+    const summary = await owner.query(api.dashboard.queries.summary, { startAt, endAt });
+    expect(summary?.spentMinor).toBe(25000n);
+    expect(summary?.chart.reduce((total, value) => total + value, 0)).toBe(250);
+    expect(summary?.recent).toHaveLength(2);
+    expect((await other.query(api.dashboard.queries.summary, { startAt, endAt }))?.spentMinor).toBe(
+      0n,
+    );
+    await owner.mutation(api.categories.mutations.setLimit, { categoryId, amountMinor: null });
+    await owner.mutation(api.users.mutations.setDefaultCategory, {
+      kind: 'expense',
+      categoryId: null,
+    });
+    expect(
+      (await owner.query(api.categories.queries.detail, { categoryId }))?.category
+        .monthlyLimitMinor,
+    ).toBeUndefined();
+    expect(
+      (await owner.query(api.users.queries.current, {}))?.defaultExpenseCategoryId,
+    ).toBeUndefined();
   });
 
   it('persists a transaction and rejects replayed client mutation IDs', async () => {

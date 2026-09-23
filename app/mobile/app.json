@@ -2,7 +2,7 @@
   "expo": {
     "name": "Finapp",
     "slug": "finapp",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "scheme": "finapp",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -12,9 +12,17 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-notifications",
-      ["expo-contacts", { "contactsPermission": "Allow Finapp to find people you split with." }]
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Finapp to find people you split with."
+        }
+      ]
     ],
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.neerajcodz.finapp" },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.neerajcodz.finapp"
+    },
     "android": {
       "package": "com.neerajcodz.finapp",
       "adaptiveIcon": {
@@ -25,10 +33,18 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": { "favicon": "./assets/favicon.png" },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "extra": {
-      "convexUrl": "${EXPO_PUBLIC_CONVEX_URL}",
-      "convexSiteUrl": "${EXPO_PUBLIC_CONVEX_SITE_URL}"
-    }
+      "convexUrl": "https://secret-kiwi-640.convex.cloud",
+      "convexSiteUrl": "https://secret-kiwi-640.convex.site",
+      "metroUrl": "http://10.0.2.2:2609",
+      "router": {},
+      "eas": {
+        "projectId": "4b1aa903-c0f5-480f-a7ff-7f3ce4ff27ee"
+      }
+    },
+    "owner": "neerajcodz"
   }
 }
