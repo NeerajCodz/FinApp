@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery } from 'convex/react';
@@ -79,24 +79,21 @@ function DateSelector({ value, onChange }: { value: Date; onChange: (date: Date)
           return (
             <View key={index} style={{ width: '14.2857%', padding: 2 }}>
               {day > 0 && (
-                <Pressable
+                <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel={new Date(year, month, day).toLocaleDateString(undefined, {
                     dateStyle: 'full',
                   })}
                   accessibilityState={{ selected }}
                   onPress={() => onChange(new Date(year, month, day, 12))}
-                  style={({ pressed }) => ({
+                  activeOpacity={0.7}
+                  style={{
                     height: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: 12,
-                    backgroundColor: selected
-                      ? tokens.primary
-                      : pressed
-                        ? tokens.surfaceRaised
-                        : 'transparent',
-                  })}
+                    backgroundColor: selected ? tokens.primary : 'transparent',
+                  }}
                 >
                   <Text
                     style={{
@@ -106,7 +103,7 @@ function DateSelector({ value, onChange }: { value: Date; onChange: (date: Date)
                   >
                     {day}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               )}
             </View>
           );
@@ -301,23 +298,22 @@ export default function NewTransactionScreen() {
                   ? tokens.income
                   : tokens.warning;
             return (
-              <Pressable
+              <Button
                 key={item}
-                accessibilityRole="tab"
+                size="sm"
+                variant={selected ? 'primary' : 'ghost'}
+                accessibilityLabel={`${item} transaction`}
                 accessibilityState={{ selected }}
                 onPress={() => {
                   setType(item);
                   setCategoryId(null);
                 }}
-                style={({ pressed }) => ({
+                style={{
                   flex: 1,
                   minHeight: 42,
                   borderRadius: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   backgroundColor: selected ? color : 'transparent',
-                  opacity: pressed ? 0.75 : 1,
-                })}
+                }}
               >
                 <Text
                   style={{
@@ -328,7 +324,7 @@ export default function NewTransactionScreen() {
                 >
                   {item.charAt(0).toUpperCase() + item.slice(1)}
                 </Text>
-              </Pressable>
+              </Button>
             );
           })}
         </View>
@@ -475,18 +471,18 @@ export default function NewTransactionScreen() {
             >
               {pickerOptions?.map((item, index) => (
                 <React.Fragment key={item.id}>
-                  <Pressable
+                  <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel={item.name}
                     accessibilityState={{ selected: item.id === selectedId }}
                     onPress={() => selectValue(item.id)}
-                    style={({ pressed }) => ({
+                    activeOpacity={0.72}
+                    style={{
                       minHeight: 60,
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 12,
-                      opacity: pressed ? 0.72 : 1,
-                    })}
+                    }}
                   >
                     {picker === 'category' && (
                       <CategoryIcon label={item.name} selected={item.id === selectedId} />
@@ -506,15 +502,19 @@ export default function NewTransactionScreen() {
                         Selected
                       </Typography>
                     )}
-                  </Pressable>
+                  </TouchableOpacity>
                   {index < (pickerOptions?.length ?? 0) - 1 && <Separator />}
                 </React.Fragment>
               ))}
-              {pickerOptions?.length === 0 && (
+              {pickerOptions === undefined ? (
+                <Typography variant="small">
+                  Loading {picker === 'category' ? 'categories' : 'accounts'}…
+                </Typography>
+              ) : pickerOptions.length === 0 ? (
                 <Typography variant="small">
                   {picker === 'category' ? 'No categories yet.' : 'No accounts available.'}
                 </Typography>
-              )}
+              ) : null}
             </ScrollView>
             {picker === 'category' && (
               <Button
