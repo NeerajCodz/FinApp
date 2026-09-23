@@ -1,0 +1,97 @@
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { router } from 'expo-router';
+import { useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { ArrowLeft } from '@/lib/icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CategoryIcon } from '@/components/finance';
+import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@/components/ui';
+import { useTheme } from '@/providers/ThemeProvider';
+
+export default function NewCategoryScreen() {
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<'expense' | 'income'>('expense');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+  const create = useMutation(api.categories.mutations.create);
+
+  async function save() {
+    const trimmedName = name.trim();
+    if (!trimmedName || pending) return;
+    setPending(true);
+    setError('');
+    try {
+      const id = await create({ name: trimmedName, kind });
+      router.replace(`/category/${id}` as never);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not create category.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1, backgroundColor: tokens.background }}
+    >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 12,
+          paddingBottom: insets.bottom + 24,
+          gap: 30,
+          flexGrow: 1,
+        }}
+      >
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} color={tokens.foreground} />
+        </IconButton>
+
+        <View style={{ flex: 1, justifyContent: 'center', gap: 30 }}>
+          <View style={{ gap: 12 }}>
+            <CategoryIcon label={name.trim() || 'Category'} />
+            <Typography variant="title">New category.</Typography>
+            <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
+              Give your money a place to belong.
+            </Text>
+          </View>
+          <View style={{ gap: 20 }}>
+            <View>
+              <Label>Name</Label>
+              <Input
+                accessibilityLabel="Category name"
+                autoFocus
+                value={name}
+                onChangeText={setName}
+                placeholder="Groceries"
+                returnKeyType="done"
+                onSubmitEditing={save}
+              />
+            </View>
+            <View style={{ gap: 10 }}>
+              <Label>Type</Label>
+              <Tabs
+                value={kind}
+                onChange={(value) => setKind(value as 'expense' | 'income')}
+                tabs={[
+                  { label: 'Expense', value: 'expense' },
+                  { label: 'Income', value: 'income' },
+                ]}
+              />
+            </View>
+          </View>
+        </View>
+
+        {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
+        <Button size="lg" disabled={!name.trim() || pending} onPress={save}>
+          {pending ? 'Saving…' : 'Create category'}
+        </Button>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
