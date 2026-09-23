@@ -25,6 +25,7 @@
     },
     "android": {
       "package": "com.neerajcodz.finapp",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
