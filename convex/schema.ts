@@ -23,6 +23,9 @@ export default defineSchema({
     username: optionalText,
     avatarStorageId: optionalText,
     defaultCurrency: v.optional(currency),
+    defaultAccountId: v.optional(v.id('accounts')),
+    defaultExpenseCategoryId: v.optional(v.id('categories')),
+    defaultIncomeCategoryId: v.optional(v.id('categories')),
     timezone: v.optional(v.string()),
     createdAt: v.optional(timestamp),
     updatedAt: v.optional(timestamp),
@@ -81,6 +84,8 @@ export default defineSchema({
     color: optionalText,
     isSystem: v.boolean(),
     archivedAt: optionalTime,
+    monthlyLimitMinor: v.optional(v.int64()),
+    limitCurrency: v.optional(currency),
     sortOrder: v.number(),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -111,6 +116,7 @@ export default defineSchema({
     deletedAt: optionalTime,
   })
     .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
+    .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
     .index('by_account', ['accountId'])
     .index('by_group_occurredAt', ['groupId', 'occurredAt']),
   transactionTags: defineTable({ transactionId: v.id('transactions'), tag: v.string() }).index(

@@ -1,31 +1,8 @@
+import type { MutationCtx, QueryCtx } from '../_generated/server';
+import type { Doc } from '../_generated/dataModel';
+
 type Identity = { subject: string; email?: string; name?: string; image?: string; phone?: string };
-type UserRecord = {
-  _id: string;
-  identityId?: string;
-  email?: string;
-  name?: string;
-  image?: string;
-  displayName?: string;
-  username?: string;
-  phone?: string;
-  defaultCurrency?: string;
-  deletedAt?: number;
-  updatedAt?: number;
-};
-type QueryBuilder = { eq: (field: string, value: unknown) => unknown };
-type UserDatabase = {
-  query: (table: 'users') => {
-    withIndex: (
-      index: 'by_identityId',
-      callback: (query: QueryBuilder) => unknown,
-    ) => { unique: () => Promise<UserRecord | null> };
-  };
-  patch: (id: string, value: Record<string, unknown>) => Promise<void>;
-  insert: (table: 'users' | 'userSettings', value: Record<string, unknown>) => Promise<string>;
-  get: (id: string) => Promise<UserRecord | null>;
-};
 type AuthIdentityContext = { auth: { getUserIdentity: () => Promise<unknown> } };
-type AuthContext = AuthIdentityContext & { db?: UserDatabase };
 
 function asIdentity(value: unknown): Identity | null {
   if (
@@ -52,9 +29,9 @@ export async function requireIdentity(ctx: AuthIdentityContext): Promise<Identit
 }
 
 async function findUserForIdentity(
-  db: UserDatabase,
+  db: QueryCtx['db'],
   identity: Identity,
-): Promise<UserRecord | null> {
+): Promise<Doc<'users'> | null> {
   const indexedUser = await db
     .query('users')
     .withIndex('by_identityId', (query) => query.eq('identityId', identity.subject))
@@ -63,28 +40,20 @@ async function findUserForIdentity(
 
   // Convex Auth uses `<userId>|<sessionId>` as the JWT subject. Legacy
   // users created by our identity-based flow are still resolved by index.
-  const userId = identity.subject.split('|', 1)[0];
-  try {
-    return await db.get(userId);
-  } catch {
-    return null;
-  }
+  const userId = db.normalizeId('users', identity.subject.split('|', 1)[0] ?? '');
+  return userId ? db.get(userId) : null;
 }
 
-export async function getOptionalUser(ctx: AuthContext): Promise<UserRecord | null> {
+export async function getOptionalUser(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'> | null> {
   const identity = asIdentity(await ctx.auth.getUserIdentity());
-  if (!identity || !ctx.db) return null;
+  if (!identity) return null;
   return findUserForIdentity(ctx.db, identity);
 }
 
-export async function requireUser(
-  ctx: AuthContext & { db: UserDatabase },
-): Promise<UserRecord | null> {
+export async function requireUser(ctx: MutationCtx): Promise<Doc<'users'> | null> {
   const identity = await requireIdentity(ctx);
   const existing = await findUserForIdentity(ctx.db, identity);
-  if (existing) {
-    return existing;
-  }
+  if (existing) return existing;
   const now = Date.now();
   const userId = await ctx.db.insert('users', {
     identityId: identity.subject,
@@ -109,4 +78,3 @@ export async function requireUser(
   });
   return ctx.db.get(userId);
 }
-

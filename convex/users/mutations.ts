@@ -87,3 +87,48 @@ export async function requestAccountDeletion(ctx: UserMutationContext) {
   await ctx.db.patch(user._id, { deletedAt, updatedAt: deletedAt });
   return { deletedAt };
 }
+
+export const setDefaultAccount = mutation({
+  args: { accountId: v.union(v.id('accounts'), v.null()) },
+  handler: async (ctx, { accountId }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    if (accountId !== null) {
+      const account = await ctx.db.get(accountId);
+      if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
+        throw new Error('INVALID_ACCOUNT');
+    }
+    await ctx.db.patch(user._id, {
+      defaultAccountId: accountId ?? undefined,
+      updatedAt: Date.now(),
+    });
+    return accountId;
+  },
+});
+
+export const setDefaultCategory = mutation({
+  args: {
+    kind: v.union(v.literal('expense'), v.literal('income')),
+    categoryId: v.union(v.id('categories'), v.null()),
+  },
+  handler: async (ctx, { kind, categoryId }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    if (categoryId !== null) {
+      const category = await ctx.db.get(categoryId);
+      if (
+        !category ||
+        category.ownerId !== user._id ||
+        category.archivedAt !== undefined ||
+        category.kind !== kind
+      )
+        throw new Error('INVALID_CATEGORY');
+    }
+    await ctx.db.patch(user._id, {
+      [kind === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId']:
+        categoryId ?? undefined,
+      updatedAt: Date.now(),
+    });
+    return categoryId;
+  },
+});
