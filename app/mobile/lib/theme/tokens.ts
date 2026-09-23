@@ -131,9 +131,9 @@ export function createTokens(mode: ThemeMode = 'dark'): ThemeTokens {
     surfaceRaised: inverseOpacity.surfaceRaised,
     surfaceSubtle: inverseOpacity.surfaceSubtle,
     overlay: isDark ? '#000000C7' : '#FFFFFFD9',
-    income: foreground,
-    expense: foreground,
-    positive: chartPalette.volt,
+    income: '#4ED37A',
+    expense: '#FF5C5C',
+    positive: '#4ED37A',
     warning: chartPalette.yellow,
     chart: chartPalette,
   };
