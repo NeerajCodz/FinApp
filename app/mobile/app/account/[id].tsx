@@ -1,15 +1,20 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MetricPair, Money } from '@/components/finance';
-import { Button, Empty, IconButton, SectionHeader, Typography } from '@/components/ui';
+import { Money } from '@/components/finance';
+import { Empty, IconButton, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function AccountDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const accounts = useQuery(api.accounts.queries.list);
+  const account = accounts?.find((item) => item.id === id);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -25,39 +30,23 @@ export default function AccountDetailScreen() {
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
         <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>
-          Account
+          {account?.name ?? 'Account'}
         </Typography>
       </View>
 
-      <View style={{ gap: 8 }}>
-        <Money amountMinor={0n} currency="INR" size="display" />
-        <Typography variant="caption">Current balance</Typography>
-      </View>
-
-      <View style={{ gap: 16 }}>
-        <Typography variant="label">This month</Typography>
-        <MetricPair
-          left={{ label: 'Income', value: '₹0' }}
-          right={{ label: 'Spent', value: '₹0' }}
-        />
-      </View>
-
-      <View style={{ gap: 12 }}>
-        <SectionHeader title="Activity" />
+      {account ? (
+        <View style={{ gap: 8 }}>
+          <Money amountMinor={account.balanceMinor} currency={account.currency} size="display" />
+          <Typography variant="caption">Current balance</Typography>
+        </View>
+      ) : accounts === undefined && id ? (
+        <Typography variant="small">Loading account…</Typography>
+      ) : (
         <Empty
-          title="No transactions."
-          description="Transactions for this account will appear here."
-          action={
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => router.push('/transaction/new' as never)}
-            >
-              Add transaction
-            </Button>
-          }
+          title="Account unavailable."
+          description="This account could not be found or is no longer available."
         />
-      </View>
+      )}
     </ScrollView>
   );
 }

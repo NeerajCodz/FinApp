@@ -1,15 +1,18 @@
 import React from 'react';
-import { ScrollView, View } from 'react-native';
-import { ArrowLeft, Plus } from '@/lib/icons';
+import { Pressable, ScrollView, View } from 'react-native';
+import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
 import { router } from 'expo-router';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
-import { Button, Empty, IconButton, Typography } from '@/components/ui';
+import { Button, Empty, IconButton, Separator, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function AccountsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const accounts = useQuery(api.accounts.queries.list);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -36,20 +39,49 @@ export default function AccountsScreen() {
         </IconButton>
       </View>
 
-      <View style={{ gap: 8 }}>
-        <Typography variant="label">Total</Typography>
-        <Money amountMinor={0n} currency="INR" size="display" />
-      </View>
-
-      <Empty
-        title="No accounts yet."
-        description="Add cash, a bank account, card, or wallet to organize your money."
-        action={
-          <Button size="sm" variant="outline" onPress={() => router.push('/account/new' as never)}>
-            Add account
-          </Button>
-        }
-      />
+      {accounts === undefined ? (
+        <Typography variant="small">Loading accounts…</Typography>
+      ) : accounts.length === 0 ? (
+        <Empty
+          title="No accounts yet."
+          description="Add cash, a bank account, card, or wallet to organize your money."
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onPress={() => router.push('/account/new' as never)}
+            >
+              Add account
+            </Button>
+          }
+        />
+      ) : (
+        <View>
+          {accounts.map((account, index) => (
+            <React.Fragment key={account.id}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${account.name} account`}
+                onPress={() => router.push(`/account/${account.id}` as never)}
+                style={({ pressed }) => ({
+                  minHeight: 72,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Typography variant="bodyLarge" numberOfLines={1} style={{ flex: 1 }}>
+                  {account.name}
+                </Typography>
+                <Money amountMinor={account.balanceMinor} currency={account.currency} />
+                <CaretRight size={18} color={tokens.foregroundSubtle} />
+              </Pressable>
+              {index < accounts.length - 1 && <Separator />}
+            </React.Fragment>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
