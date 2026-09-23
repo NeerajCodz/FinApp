@@ -14,7 +14,6 @@ import {
   TouchableOpacity,
   TextInput,
   View,
-  type PressableProps,
   type TextInputProps,
   type ViewProps,
 } from 'react-native';
@@ -677,18 +676,15 @@ export function Sheet({
   const { tokens } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close sheet"
           onPress={onClose}
-          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: tokens.overlay }}
-        >
+          style={[StyleSheet.absoluteFill, { backgroundColor: tokens.overlay }]}
+        />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View
-            onStartShouldSetResponder={() => true}
             style={{
               backgroundColor: tokens.popover,
               borderTopLeftRadius: 28,
@@ -720,8 +716,8 @@ export function Sheet({
             </Typography>
             {children}
           </View>
-        </Pressable>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
