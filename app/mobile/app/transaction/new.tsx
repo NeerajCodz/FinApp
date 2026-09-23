@@ -139,7 +139,7 @@ export default function NewTransactionScreen() {
   const createTransaction = useMutation(api.transactions.mutations.create);
   const setDefaultAccount = useMutation(api.users.mutations.setDefaultAccount);
   const setDefaultCategory = useMutation(api.users.mutations.setDefaultCategory);
-  const categoryOptions = categories?.filter((item) => item.kind === type);
+  const categoryOptions = categories;
   const account =
     accounts?.find((item) => item.id === accountId) ??
     accounts?.find((item) => item.id === profile?.defaultAccountId) ??
@@ -213,7 +213,10 @@ export default function NewTransactionScreen() {
       if (picker === 'account' && account)
         await setDefaultAccount({ accountId: account.id as never });
       if (picker === 'category' && category)
-        await setDefaultCategory({ kind: type as 'expense' | 'income', categoryId: category._id });
+        await setDefaultCategory({
+          transactionType: type as 'expense' | 'income',
+          categoryId: category._id,
+        });
       toast.success('Default saved');
       setPicker(null);
     } catch (cause) {
@@ -225,7 +228,10 @@ export default function NewTransactionScreen() {
     try {
       if (picker === 'account') await setDefaultAccount({ accountId: null });
       if (picker === 'category')
-        await setDefaultCategory({ kind: type as 'expense' | 'income', categoryId: null });
+        await setDefaultCategory({
+          transactionType: type as 'expense' | 'income',
+          categoryId: null,
+        });
       setPicker(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not clear default');
@@ -415,7 +421,7 @@ export default function NewTransactionScreen() {
             style={{ color: tokens.foregroundMuted }}
             onPress={() => router.push('/category/new' as never)}
           >
-            Add a {type} category before recording a transaction.
+            Add a category before recording a transaction.
           </Typography>
         )}
         {!!error && <Typography style={{ color: tokens.expense }}>{error}</Typography>}
@@ -485,7 +491,13 @@ export default function NewTransactionScreen() {
                     }}
                   >
                     {picker === 'category' && (
-                      <CategoryIcon label={item.name} selected={item.id === selectedId} />
+                      <CategoryIcon
+                        label={item.name}
+                        icon={
+                          'icon' in item && typeof item.icon === 'string' ? item.icon : undefined
+                        }
+                        selected={item.id === selectedId}
+                      />
                     )}
                     <Text
                       style={{

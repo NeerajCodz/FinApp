@@ -6,13 +6,14 @@ import { api } from '@convex/_generated/api';
 import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon } from '@/components/finance';
+import { Money } from '@/components/finance';
 import { Button, Empty, IconButton, Separator, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function CategoriesScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const categories = useQuery(api.categories.queries.list);
+  const categories = useQuery(api.categories.queries.overview);
 
   return (
     <ScrollView
@@ -57,44 +58,64 @@ export default function CategoriesScreen() {
           }
         />
       ) : (
-        (['expense', 'income'] as const).map((kind) => {
-          const items = categories.filter((category) => category.kind === kind);
-          if (items.length === 0) return null;
-          return (
-            <View key={kind} style={{ gap: 12 }}>
-              <Typography variant="label">{kind === 'expense' ? 'Expenses' : 'Income'}</Typography>
-              <View>
-                {items.map((category, index) => (
-                  <React.Fragment key={category._id}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${category.name} category`}
-                      onPress={() => router.push(`/category/${category._id}` as never)}
-                      style={({ pressed }) => ({
-                        minHeight: 64,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 12,
-                        opacity: pressed ? 0.7 : 1,
-                      })}
-                    >
-                      <CategoryIcon label={category.name} />
-                      <Typography
-                        variant="bodyLarge"
-                        numberOfLines={1}
-                        style={{ flex: 1, fontSize: 15 }}
-                      >
-                        {category.name}
-                      </Typography>
-                      <CaretRight size={18} color={tokens.foregroundSubtle} />
-                    </Pressable>
-                    {index < items.length - 1 && <Separator />}
-                  </React.Fragment>
-                ))}
-              </View>
-            </View>
-          );
-        })
+        <View style={{ gap: 12 }}>
+          <Typography variant="label">Categories</Typography>
+          <View>
+            {categories.map((category, index) => (
+              <React.Fragment key={category._id}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${category.name} category`}
+                  onPress={() => router.push(`/category/${category._id}` as never)}
+                  style={({ pressed }) => ({
+                    minHeight: 72,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <CategoryIcon label={category.name} icon={category.icon} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Typography variant="bodyLarge" numberOfLines={1} style={{ fontSize: 15 }}>
+                      {category.name}
+                    </Typography>
+                    <Typography variant="caption">Monthly activity</Typography>
+                  </View>
+                  {category.monthCurrency && (
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Typography variant="caption">Spent</Typography>
+                        <Money
+                          amountMinor={category.monthSpentMinor}
+                          currency={category.monthCurrency}
+                        />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Typography variant="caption">Received</Typography>
+                        <Money
+                          amountMinor={category.monthReceivedMinor}
+                          currency={category.monthCurrency}
+                        />
+                      </View>
+                      {category.monthlyLimitMinor !== undefined && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Typography variant="caption">Limit</Typography>
+                          <Money
+                            amountMinor={category.monthlyLimitMinor}
+                            currency={category.monthCurrency}
+                          />
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  <CaretRight size={18} color={tokens.foregroundSubtle} />
+                </Pressable>
+                {index < categories.length - 1 && <Separator />}
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
       )}
     </ScrollView>
   );

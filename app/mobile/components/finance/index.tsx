@@ -123,7 +123,15 @@ function resolveCategoryIcon(label: string) {
   return ReceiptText;
 }
 
-export function CategoryIcon({ label, selected = false }: { label: string; selected?: boolean }) {
+export function CategoryIcon({
+  label,
+  icon,
+  selected = false,
+}: {
+  label: string;
+  icon?: string;
+  selected?: boolean;
+}) {
   const { tokens } = useTheme();
   const Icon = resolveCategoryIcon(label);
   return (
@@ -138,7 +146,11 @@ export function CategoryIcon({ label, selected = false }: { label: string; selec
         justifyContent: 'center',
       }}
     >
-      <Icon size={19} color={selected ? tokens.background : tokens.foregroundMuted} />
+      {icon ? (
+        <Text style={{ fontSize: 21, lineHeight: 26 }}>{icon}</Text>
+      ) : (
+        <Icon size={19} color={selected ? tokens.background : tokens.foregroundMuted} />
+      )}
     </View>
   );
 }
@@ -599,16 +611,12 @@ export function SettlementEditor({
       <Button size="lg" disabled={settlementDisabled} onPress={onSave}>
         <Check
           size={18}
-          color={
-            settlementDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground
-          }
+          color={settlementDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
         />
         <Text
           style={{
             marginLeft: 8,
-            color: settlementDisabled
-              ? tokens.controlDisabledForeground
-              : tokens.primaryForeground,
+            color: settlementDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
             fontFamily: 'SpaceGrotesk_600SemiBold',
             fontSize: 15,
           }}

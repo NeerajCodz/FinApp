@@ -8,6 +8,7 @@ import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BudgetProgress, CategoryIcon, Money, TransactionRow } from '@/components/finance';
 import { parseMinor } from '@/lib/money';
+import { CategoryEmojiPicker } from '@/components/finance/CategoryEmojiPicker';
 import {
   Button,
   Empty,
@@ -30,6 +31,7 @@ export default function CategoryDetailScreen() {
   );
   const profile = useQuery(api.users.queries.current);
   const setLimit = useMutation(api.categories.mutations.setLimit);
+  const setIcon = useMutation(api.categories.mutations.setIcon);
   const setDefaultCategory = useMutation(api.users.mutations.setDefaultCategory);
   const renameCategory = useMutation(api.categories.mutations.rename);
   const archiveCategory = useMutation(api.categories.mutations.archive);
@@ -43,11 +45,18 @@ export default function CategoryDetailScreen() {
   const category = detail?.category;
   const categoryId = category?._id;
   const currency = category?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
-  const defaultId =
-    category?.kind === 'expense'
-      ? profile?.defaultExpenseCategoryId
-      : profile?.defaultIncomeCategoryId;
-  const isDefault = !!categoryId && defaultId === categoryId;
+  async function saveIcon(icon?: string) {
+    if (!categoryId) return;
+    setPending(true);
+    setError('');
+    try {
+      await setIcon({ categoryId, icon: icon ?? null });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update the category emoji.');
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function saveLimit() {
     if (!categoryId) return;
@@ -85,13 +94,17 @@ export default function CategoryDetailScreen() {
     }
   }
 
-  async function toggleDefault() {
+  async function toggleDefault(transactionType: 'expense' | 'income') {
     if (!category) return;
+    const isDefault =
+      (transactionType === 'expense'
+        ? profile?.defaultExpenseCategoryId
+        : profile?.defaultIncomeCategoryId) === category._id;
     setPending(true);
     setError('');
     try {
       await setDefaultCategory({
-        kind: category.kind,
+        transactionType,
         categoryId: isDefault ? null : category._id,
       });
     } catch (cause) {
@@ -147,7 +160,14 @@ export default function CategoryDetailScreen() {
           <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
             <ArrowLeft size={21} color={tokens.foreground} />
           </IconButton>
-          {category && <CategoryIcon label={category.name} />}
+          {category && <CategoryIcon label={category.name} icon={category.icon} />}
+          {category && (
+            <CategoryEmojiPicker
+              compact
+              value={category.icon}
+              onChange={(icon) => void saveIcon(icon)}
+            />
+          )}
           <Typography variant="heading" numberOfLines={1} style={{ flex: 1 }}>
             {category?.name ?? 'Category'}
           </Typography>
@@ -197,83 +217,90 @@ export default function CategoryDetailScreen() {
           />
         ) : (
           <>
-            <View style={{ gap: 8 }}>
-              <Typography variant="label">
-                {category?.kind === 'expense' ? 'Spent this month' : 'Income category'}
-              </Typography>
-              {category?.kind === 'expense' ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
+              <View style={{ gap: 8 }}>
+                <Typography variant="label">Spent this month</Typography>
                 <Money amountMinor={detail.monthSpentMinor} currency={currency} size="display" />
-              ) : (
-                <Typography variant="bodyLarge">{category?.name}</Typography>
-              )}
+              </View>
+              <View style={{ gap: 8 }}>
+                <Typography variant="label">Received this month</Typography>
+                <Money amountMinor={detail.monthReceivedMinor} currency={currency} size="display" />
+              </View>
             </View>
 
-            {category?.kind === 'expense' && (
-              <View style={{ gap: 18 }}>
-                <View style={{ gap: 8 }}>
-                  <Typography variant="heading">Monthly limit</Typography>
-                  {category.monthlyLimitMinor !== undefined ? (
-                    <BudgetProgress
-                      spentMinor={detail.monthSpentMinor}
-                      limitMinor={category.monthlyLimitMinor}
-                      currency={currency}
-                      title="This month"
-                    />
-                  ) : (
-                    <Typography variant="small">No monthly limit set.</Typography>
-                  )}
-                </View>
-                <View>
-                  <Label>
-                    {category.monthlyLimitMinor === undefined
-                      ? 'Set a monthly limit'
-                      : 'Change monthly limit'}{' '}
-                    · {currency}
-                  </Label>
-                  <Input
-                    accessibilityLabel={`Monthly limit in ${currency}`}
-                    keyboardType="decimal-pad"
-                    value={limitInput}
-                    onChangeText={setLimitInput}
-                    placeholder="Amount"
+            <View style={{ gap: 18 }}>
+              <View style={{ gap: 8 }}>
+                <Typography variant="heading">Monthly limit</Typography>
+                {detail.category.monthlyLimitMinor !== undefined ? (
+                  <BudgetProgress
+                    spentMinor={detail.monthSpentMinor}
+                    limitMinor={detail.category.monthlyLimitMinor}
+                    currency={currency}
+                    title="This month"
                   />
-                </View>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <Button size="sm" disabled={pending || !limitInput.trim()} onPress={saveLimit}>
-                    Save limit
-                  </Button>
-                  {category.monthlyLimitMinor !== undefined && (
-                    <Button size="sm" variant="outline" disabled={pending} onPress={clearLimit}>
-                      Clear limit
-                    </Button>
-                  )}
-                </View>
+                ) : (
+                  <Typography variant="small">No monthly limit set.</Typography>
+                )}
               </View>
-            )}
+              <View>
+                <Label>
+                  {detail.category.monthlyLimitMinor === undefined
+                    ? 'Set a monthly limit'
+                    : 'Change monthly limit'}{' '}
+                  · {currency}
+                </Label>
+                <Input
+                  accessibilityLabel={`Monthly limit in ${currency}`}
+                  keyboardType="decimal-pad"
+                  value={limitInput}
+                  onChangeText={setLimitInput}
+                  placeholder="Amount"
+                />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Button size="sm" disabled={pending || !limitInput.trim()} onPress={saveLimit}>
+                  Save limit
+                </Button>
+                {detail.category.monthlyLimitMinor !== undefined && (
+                  <Button size="sm" variant="outline" disabled={pending} onPress={clearLimit}>
+                    Clear limit
+                  </Button>
+                )}
+              </View>
+            </View>
 
             <View style={{ gap: 10 }}>
               <Separator />
-              <Typography variant="heading">Default {category?.kind} category</Typography>
+              <Typography variant="heading">Default category</Typography>
               {profile === undefined ? (
-                <Typography variant="small">Loading preference…</Typography>
+                <Typography variant="small">Loading preferences…</Typography>
               ) : profile === null ? (
                 <Typography variant="small">Sign in to change your default category.</Typography>
               ) : (
                 <>
                   <Typography variant="small">
-                    {isDefault
-                      ? 'Selected automatically for new transactions.'
-                      : 'Choose this category automatically for new transactions.'}
+                    Choose separate defaults for expenses and income.
                   </Typography>
-                  <Button
-                    size="sm"
-                    variant={isDefault ? 'outline' : 'primary'}
-                    disabled={pending}
-                    onPress={toggleDefault}
-                    style={{ alignSelf: 'flex-start' }}
-                  >
-                    {isDefault ? 'Clear default' : 'Set as default'}
-                  </Button>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {(['expense', 'income'] as const).map((transactionType) => {
+                      const isDefault =
+                        (transactionType === 'expense'
+                          ? profile.defaultExpenseCategoryId
+                          : profile.defaultIncomeCategoryId) === detail.category._id;
+                      return (
+                        <Button
+                          key={transactionType}
+                          size="sm"
+                          variant={isDefault ? 'outline' : 'primary'}
+                          disabled={pending}
+                          onPress={() => toggleDefault(transactionType)}
+                          style={{ flex: 1 }}
+                        >
+                          {isDefault ? `Default ${transactionType}` : `Use for ${transactionType}`}
+                        </Button>
+                      );
+                    })}
+                  </View>
                 </>
               )}
             </View>

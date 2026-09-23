@@ -1,17 +1,104 @@
-import React, { useState } from 'react';
+import React, { Component, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { InsightBars, SpendingLineChart } from '@/components/charts/BarChart';
 import { Money } from '@/components/finance';
-import { IconButton, SectionHeader, Tabs, Text, Typography } from '@/components/ui';
+import { Button, Empty, IconButton, SectionHeader, Tabs, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { formatMinor } from '@/lib/money';
 
-export default function AnalyticsScreen() {
-  const [period, setPeriod] = useState('month');
+type Period = 'week' | 'month' | 'year';
+type AnalyticsProps = { children: React.ReactNode };
+type AnalyticsState = { hasError: boolean };
+
+class AnalyticsErrorBoundary extends Component<AnalyticsProps, AnalyticsState> {
+  state: AnalyticsState = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12 }}>
+          <Typography variant="heading">Analytics couldn’t load</Typography>
+          <Text>Check your connection and try again.</Text>
+          <Button onPress={() => router.replace('/analytics' as never)}>Try again</Button>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function getRange(period: Period) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  if (period === 'week') start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  if (period === 'month') start.setDate(1);
+  if (period === 'year') start.setMonth(0, 1);
+  const end = new Date(start);
+  if (period === 'week') end.setDate(end.getDate() + 7);
+  else if (period === 'month') end.setMonth(end.getMonth() + 1);
+  else end.setFullYear(end.getFullYear() + 1);
+  const previous = new Date(start);
+  if (period === 'week') previous.setDate(previous.getDate() - 7);
+  else if (period === 'month') previous.setMonth(previous.getMonth() - 1);
+  else previous.setFullYear(previous.getFullYear() - 1);
+  return { startAt: start.getTime(), endAt: end.getTime(), previousStartAt: previous.getTime() };
+}
+
+function bucketLabels(period: Period, startAt: number, endAt: number): [string, string] {
+  const start = new Date(startAt);
+  const end = new Date(endAt - 1);
+  if (period === 'week') {
+    return [
+      start.toLocaleDateString(undefined, { weekday: 'short' }),
+      end.toLocaleDateString(undefined, { weekday: 'short' }),
+    ];
+  }
+  if (period === 'month') {
+    return [
+      start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+      end.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+    ];
+  }
+  return [
+    start.toLocaleDateString(undefined, { month: 'short' }),
+    end.toLocaleDateString(undefined, { month: 'short' }),
+  ];
+}
+function AnalyticsContent() {
+  const [period, setPeriod] = useState<Period>('month');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const range = useMemo(() => getRange(period), [period]);
+  const analytics = useQuery(api.analytics.queries.summary, { period, ...range });
+  const currency = analytics?.currency;
+  const buckets = analytics?.buckets ?? [];
+  const categories = analytics?.categoryBreakdown ?? [];
+  const minorUnit = currency
+    ? 10 **
+      new Intl.NumberFormat('en', {
+        style: 'currency',
+        currency,
+      }).resolvedOptions().maximumFractionDigits!
+    : undefined;
+  const maxCategoryMinor = categories.reduce(
+    (maximum, category) => (category.amountMinor > maximum ? category.amountMinor : maximum),
+    0n,
+  );
+  const comparison = analytics
+    ? analytics.previousSpentMinor === 0n
+      ? analytics.spentMinor === 0n
+        ? 'No spending in either period'
+        : 'No spending in the previous period'
+      : `${analytics.spentMinor >= analytics.previousSpentMinor ? 'Up' : 'Down'} ${Math.abs(Number(((analytics.spentMinor - analytics.previousSpentMinor) * 100n) / analytics.previousSpentMinor))}% vs previous period`
+    : '';
+  const chartLabels = bucketLabels(period, range.startAt, range.endAt);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -32,7 +119,7 @@ export default function AnalyticsScreen() {
 
       <Tabs
         value={period}
-        onChange={setPeriod}
+        onChange={(value) => setPeriod(value as Period)}
         tabs={[
           { label: 'Week', value: 'week' },
           { label: 'Month', value: 'month' },
@@ -40,36 +127,90 @@ export default function AnalyticsScreen() {
         ]}
       />
 
-      <View style={{ gap: 10 }}>
-        <Typography variant="display">Your spending,{`\n`}in focus.</Typography>
-        <View style={{ gap: 4, marginTop: 8 }}>
-          <Typography variant="label">Spent</Typography>
-          <Money amountMinor={0n} currency="INR" size="display" />
-          <Typography variant="caption">No comparison available yet</Typography>
+      {analytics === undefined ? (
+        <View style={{ gap: 12 }} accessibilityLabel="Loading analytics">
+          <Typography variant="display">Loading analytics…</Typography>
         </View>
-      </View>
-
-      <SpendingLineChart values={[0, 0, 0, 0, 0, 0, 0, 0]} />
-
-      <View style={{ gap: 20 }}>
-        <SectionHeader title="Where it went" />
-        <InsightBars
-          items={[
-            { label: 'Food', value: 0, amount: '₹0', color: tokens.chart.volt },
-            { label: 'Transport', value: 0, amount: '₹0', color: tokens.chart.blue },
-            { label: 'Shopping', value: 0, amount: '₹0', color: tokens.chart.violet },
-          ]}
+      ) : analytics === null ? (
+        <Empty
+          title="Analytics unavailable"
+          description="Sign in to see your spending and income."
         />
-        <Typography variant="caption">Categories appear after your first few entries.</Typography>
-      </View>
+      ) : (
+        <>
+          <View style={{ gap: 10 }}>
+            <Typography variant="display">Your spending,{`\n`}in focus.</Typography>
+            <View style={{ gap: 4, marginTop: 8 }}>
+              <Typography variant="label">Spent</Typography>
+              <Money
+                amountMinor={analytics.spentMinor}
+                currency={analytics.currency}
+                size="display"
+              />
+              <Typography variant="caption">{comparison}</Typography>
+              <Typography variant="caption">Income</Typography>
+              <Money
+                amountMinor={analytics.incomeMinor}
+                currency={analytics.currency}
+                size="body"
+                type="income"
+              />
+            </View>
+          </View>
 
-      <View style={{ gap: 10 }}>
-        <SectionHeader title="Patterns" />
-        <Typography variant="heading">Nothing to call out yet.</Typography>
-        <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
-          Finapp will surface useful changes without filling this screen with noise.
-        </Text>
-      </View>
+          {analytics.spentMinor === 0n && analytics.incomeMinor === 0n ? (
+            <Empty
+              title="No activity in this period"
+              description="Posted expenses and income will appear here."
+            />
+          ) : (
+            <SpendingLineChart
+              values={buckets.map((bucket) => Number(bucket.amountMinor) / (minorUnit ?? 1))}
+            />
+          )}
+
+          <View style={{ gap: 20 }}>
+            <SectionHeader title="Where it went" />
+            {categories.length > 0 ? (
+              <InsightBars
+                items={categories.map((category, index) => ({
+                  label: category.label,
+                  value:
+                    maxCategoryMinor > 0n
+                      ? Number((category.amountMinor * 100n) / maxCategoryMinor)
+                      : 0,
+                  amount: formatMinor(category.amountMinor, analytics.currency),
+                  color: [tokens.chart.volt, tokens.chart.blue, tokens.chart.violet][index % 3],
+                }))}
+              />
+            ) : (
+              <Empty
+                title="No expense categories yet"
+                description="Categorized posted expenses will be shown here."
+              />
+            )}
+          </View>
+
+          <View style={{ gap: 10 }}>
+            <SectionHeader title="Patterns" />
+            <Typography variant="heading">
+              {analytics.spentMinor > analytics.previousSpentMinor
+                ? 'Spending increased'
+                : analytics.spentMinor < analytics.previousSpentMinor
+                  ? 'Spending decreased'
+                  : 'Spending stayed level'}
+            </Typography>
+            <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>{comparison}.</Text>
+          </View>
+        </>
+      )}
     </ScrollView>
+  );
+}
+export default function AnalyticsScreen() {
+  return (
+    <AnalyticsErrorBoundary>
+      <AnalyticsContent />
+    </AnalyticsErrorBoundary>
   );
 }

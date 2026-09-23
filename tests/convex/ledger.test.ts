@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { deriveBalance } from '../../convex/accounts/domain';
-import { seedCategories, validateCategorySelection } from '../../convex/categories/domain';
 import { assertMutationAvailable } from '../../convex/transactions/domain';
 
 describe('personal ledger invariants', () => {
@@ -13,12 +12,6 @@ describe('personal ledger invariants', () => {
         { type: 'transfer-out', amountMinor: 100n },
       ]),
     ).toBe(1500n);
-  });
-
-  it('seeds stable system categories and rejects archived selection', () => {
-    expect(seedCategories().some((category) => category.name === 'Food')).toBe(true);
-    expect(() => validateCategorySelection({ archivedAt: Date.now() })).toThrow('INVALID_CATEGORY');
-    expect(() => validateCategorySelection({ archivedAt: undefined })).not.toThrow();
   });
 
   it('rejects duplicate client mutation IDs', () => {

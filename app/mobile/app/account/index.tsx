@@ -9,6 +9,15 @@ import { Money } from '@/components/finance';
 import { Button, Empty, IconButton, Separator, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
+const ACCOUNT_TYPES = {
+  cash: 'Cash',
+  bank: 'Bank',
+  card: 'Card',
+  wallet: 'Wallet',
+  loan: 'Loan',
+  other: 'Other',
+} as const;
+
 export default function AccountsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -20,7 +29,7 @@ export default function AccountsScreen() {
         paddingHorizontal: 20,
         paddingTop: insets.top + 12,
         paddingBottom: insets.bottom + 32,
-        gap: 40,
+        gap: 28,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -64,16 +73,21 @@ export default function AccountsScreen() {
                 accessibilityLabel={`Open ${account.name} account`}
                 onPress={() => router.push(`/account/${account.id}` as never)}
                 style={({ pressed }) => ({
-                  minHeight: 72,
+                  minHeight: 76,
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 12,
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Typography variant="bodyLarge" numberOfLines={1} style={{ flex: 1 }}>
-                  {account.name}
-                </Typography>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Typography variant="bodyLarge" numberOfLines={1}>
+                    {account.name}
+                  </Typography>
+                  <Typography variant="caption">
+                    {ACCOUNT_TYPES[account.type]} · {account.currency}
+                  </Typography>
+                </View>
                 <Money amountMinor={account.balanceMinor} currency={account.currency} />
                 <CaretRight size={18} color={tokens.foregroundSubtle} />
               </Pressable>
@@ -83,5 +97,24 @@ export default function AccountsScreen() {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        padding: 24,
+        justifyContent: 'center',
+        gap: 12,
+        backgroundColor: tokens.background,
+      }}
+    >
+      <Typography variant="heading">Could not load accounts.</Typography>
+      <Typography variant="small">{error.message}</Typography>
+      <Button onPress={retry}>Try again</Button>
+    </View>
   );
 }

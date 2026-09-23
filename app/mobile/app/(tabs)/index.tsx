@@ -61,7 +61,6 @@ export default function HomeScreen() {
     accounts
       ?.filter((account) => account.currency === currency)
       .reduce((total, account) => total + account.balanceMinor, 0n) ?? 0n;
-  const displayName = profile?.displayName ?? profile?.name ?? '';
   return (
     <>
       <ScrollView
@@ -74,27 +73,6 @@ export default function HomeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <Typography variant="small" style={{ color: tokens.foreground }}>
-            {new Date().getHours() < 12
-              ? 'Good morning'
-              : new Date().getHours() < 17
-                ? 'Good afternoon'
-                : 'Good evening'}
-            {displayName ? `, ${displayName}` : ''}
-          </Typography>
-          <Button
-            variant="ghost"
-            size="sm"
-            onPress={() => router.push('/(tabs)/profile')}
-            style={{ paddingHorizontal: 0 }}
-          >
-            {displayName ? displayName.slice(0, 2).toUpperCase() : 'Profile'}
-          </Button>
-        </View>
-
         <BalanceHero amountMinor={balanceMinor} currency={currency} />
         <MetricPair
           left={{ label: 'Income', value: formatMinor(summary?.incomeMinor ?? 0n, currency) }}
@@ -178,7 +156,7 @@ export default function HomeScreen() {
                   }}
                 >
                   <View style={{ gap: 8 }}>
-                    <CategoryIcon label={category.name} />
+                    <CategoryIcon label={category.name} icon={category.icon} />
                     <Typography variant="small" style={{ color: tokens.foreground }}>
                       {category.name}
                     </Typography>

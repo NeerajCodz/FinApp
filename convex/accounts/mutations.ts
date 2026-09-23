@@ -2,6 +2,7 @@ import { mutation } from '../_generated/server';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
 import { requireOwner } from '../shared/permissions';
+import { assertCurrency } from '../shared/validators';
 
 export type AccountDraft<OwnerId extends string = string> = {
   ownerId: OwnerId;
@@ -42,13 +43,21 @@ export function assertAccountCanReceiveTransaction(account: { archivedAt?: numbe
 export const create = mutation({
   args: {
     name: v.string(),
-    type: v.string(),
+    type: v.union(
+      v.literal('cash'),
+      v.literal('bank'),
+      v.literal('card'),
+      v.literal('wallet'),
+      v.literal('loan'),
+      v.literal('other'),
+    ),
     currency: v.string(),
     openingBalanceMinor: v.int64(),
     isIncludedInTotal: v.boolean(),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    assertCurrency(args.currency);
     if (!user) throw new Error('AUTH_REQUIRED');
     const record = createAccountRecord(user._id, {
       ...args,
@@ -56,6 +65,21 @@ export const create = mutation({
       type: args.type as AccountDraft['type'],
     });
     return ctx.db.insert('accounts', record);
+  },
+});
+
+export const rename = mutation({
+  args: { accountId: v.id('accounts'), name: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
+      throw new Error('ACCOUNT_UNAVAILABLE');
+    const name = args.name.trim();
+    if (!name) throw new Error('INVALID_ACCOUNT');
+    await ctx.db.patch(args.accountId, { name, updatedAt: Date.now() });
+    return args.accountId;
   },
 });
 

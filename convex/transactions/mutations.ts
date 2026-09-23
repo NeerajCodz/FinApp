@@ -25,7 +25,7 @@ export type TransactionDependencies = {
   account: AccountDraft & { archivedAt?: number };
   transferAccount?: AccountDraft & { archivedAt?: number };
   processedMutation: { clientMutationId: string } | null;
-  category?: { ownerId: string; kind: 'expense' | 'income'; archivedAt?: number };
+  category?: { ownerId: string; archivedAt?: number };
 };
 
 export function createTransaction(
@@ -47,8 +47,7 @@ export function createTransaction(
       !category ||
       category.ownerId !== draft.ownerId ||
       category.archivedAt !== undefined ||
-      (draft.type !== 'expense' && draft.type !== 'income') ||
-      category.kind !== draft.type
+      (draft.type !== 'expense' && draft.type !== 'income')
     )
       throw new Error('INVALID_CATEGORY');
   }

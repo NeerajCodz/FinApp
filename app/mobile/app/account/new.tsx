@@ -6,11 +6,14 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@/components/ui';
+import { CurrencyInput } from '@/components/finance';
+import { parseMinor } from '@/lib/money';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function NewAccountScreen() {
   const [name, setName] = useState('');
-  const [type, setType] = useState<'cash' | 'bank' | 'card' | 'wallet'>('bank');
+  const [openingBalance, setOpeningBalance] = useState('');
+  const [type, setType] = useState<'cash' | 'bank' | 'card' | 'wallet' | 'loan' | 'other'>('bank');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const { tokens } = useTheme();
@@ -20,15 +23,25 @@ export default function NewAccountScreen() {
 
   async function save() {
     const trimmedName = name.trim();
-    if (!trimmedName || pending) return;
+    if (!trimmedName || pending || !profile?.defaultCurrency) return;
+    let openingBalanceMinor = 0n;
+    if (openingBalance.trim()) {
+      try {
+        openingBalanceMinor = parseMinor(openingBalance, profile.defaultCurrency);
+        if (openingBalanceMinor < 0n) throw new Error('INVALID_AMOUNT');
+      } catch {
+        setError('Enter a valid opening balance.');
+        return;
+      }
+    }
     setPending(true);
     setError('');
     try {
       await create({
         name: trimmedName,
         type,
-        currency: profile?.defaultCurrency ?? 'INR',
-        openingBalanceMinor: 0n,
+        currency: profile.defaultCurrency,
+        openingBalanceMinor,
         isIncludedInTotal: true,
       });
       router.back();
@@ -83,7 +96,7 @@ export default function NewAccountScreen() {
                 autoFocus
                 value={name}
                 onChangeText={setName}
-                placeholder="HDFC Bank"
+                placeholder="Everyday account"
                 returnKeyType="done"
                 onSubmitEditing={save}
               />
@@ -98,17 +111,71 @@ export default function NewAccountScreen() {
                   { label: 'Bank', value: 'bank' },
                   { label: 'Card', value: 'card' },
                   { label: 'Wallet', value: 'wallet' },
+                  { label: 'Loan', value: 'loan' },
+                  { label: 'Other', value: 'other' },
                 ]}
               />
             </View>
+            {profile?.defaultCurrency && (
+              <View>
+                <Label>Opening balance</Label>
+                <CurrencyInput
+                  currency={profile.defaultCurrency}
+                  value={openingBalance}
+                  onChangeText={setOpeningBalance}
+                />
+              </View>
+            )}
+            {profile === undefined ? (
+              <Typography variant="small">Loading your default currency…</Typography>
+            ) : profile === null ? (
+              <Typography style={{ color: tokens.destructive }}>
+                Sign in to create an account.
+              </Typography>
+            ) : profile.defaultCurrency ? (
+              <Typography variant="caption">
+                New account currency: {profile.defaultCurrency}
+              </Typography>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => router.push('/settings/currency' as never)}
+              >
+                Set your default currency
+              </Button>
+            )}
           </View>
         </View>
 
         {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
-        <Button size="lg" disabled={!name.trim() || pending} onPress={save}>
+        <Button
+          size="lg"
+          disabled={!name.trim() || pending || !profile?.defaultCurrency}
+          onPress={save}
+        >
           {pending ? 'Saving…' : 'Save account'}
         </Button>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        padding: 24,
+        justifyContent: 'center',
+        gap: 12,
+        backgroundColor: tokens.background,
+      }}
+    >
+      <Typography variant="heading">Could not load account setup.</Typography>
+      <Typography variant="small">{error.message}</Typography>
+      <Button onPress={retry}>Try again</Button>
+    </View>
   );
 }

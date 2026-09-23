@@ -108,24 +108,19 @@ export const setDefaultAccount = mutation({
 
 export const setDefaultCategory = mutation({
   args: {
-    kind: v.union(v.literal('expense'), v.literal('income')),
+    transactionType: v.union(v.literal('expense'), v.literal('income')),
     categoryId: v.union(v.id('categories'), v.null()),
   },
-  handler: async (ctx, { kind, categoryId }) => {
+  handler: async (ctx, { transactionType, categoryId }) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     if (categoryId !== null) {
       const category = await ctx.db.get(categoryId);
-      if (
-        !category ||
-        category.ownerId !== user._id ||
-        category.archivedAt !== undefined ||
-        category.kind !== kind
-      )
+      if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
         throw new Error('INVALID_CATEGORY');
     }
     await ctx.db.patch(user._id, {
-      [kind === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId']:
+      [transactionType === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId']:
         categoryId ?? undefined,
       updatedAt: Date.now(),
     });

@@ -6,7 +6,6 @@ import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 export const create = mutation({
   args: {
     name: v.string(),
-    kind: v.union(v.literal('expense'), v.literal('income')),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
     parentId: v.optional(v.string()),
@@ -19,12 +18,7 @@ export const create = mutation({
     if (args.parentId !== undefined) {
       const parentId = ctx.db.normalizeId('categories', args.parentId);
       const parent = parentId ? await ctx.db.get(parentId) : null;
-      if (
-        !parent ||
-        parent.ownerId !== user._id ||
-        parent.archivedAt !== undefined ||
-        parent.kind !== args.kind
-      )
+      if (!parent || parent.ownerId !== user._id || parent.archivedAt !== undefined)
         throw new Error('INVALID_CATEGORY');
     }
     const now = Date.now();
@@ -59,6 +53,19 @@ export const rename = mutation({
     return categoryId;
   },
 });
+export const setIcon = mutation({
+  args: { categoryId: v.id('categories'), icon: v.union(v.string(), v.null()) },
+  handler: async (ctx, { categoryId, icon }) => {
+    const user = await requireUser(ctx);
+    const category = await ctx.db.get(categoryId);
+    if (!user || !category || category.ownerId !== user._id || category.archivedAt !== undefined)
+      throw new Error('INVALID_CATEGORY');
+    if (icon !== null && (icon.length === 0 || icon.length > 32))
+      throw new Error('INVALID_CATEGORY');
+    await ctx.db.patch(categoryId, { icon: icon ?? undefined, updatedAt: Date.now() });
+    return categoryId;
+  },
+});
 
 export const setLimit = mutation({
   args: {
@@ -70,12 +77,7 @@ export const setLimit = mutation({
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     const category = await ctx.db.get(categoryId);
-    if (
-      !category ||
-      category.ownerId !== user._id ||
-      category.archivedAt !== undefined ||
-      category.kind !== 'expense'
-    )
+    if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
       throw new Error('INVALID_CATEGORY');
     if (currency !== undefined) assertCurrency(currency);
     if (amountMinor !== null) assertPositiveAmount(amountMinor);
@@ -105,10 +107,19 @@ export const archive = mutation({
       throw new Error('INSUFFICIENT_PERMISSION');
     const now = Date.now();
     await ctx.db.patch(args.categoryId, { archivedAt: now, updatedAt: now });
-    if (category.kind === 'expense' && user.defaultExpenseCategoryId === args.categoryId)
-      await ctx.db.patch(user._id, { defaultExpenseCategoryId: undefined, updatedAt: now });
-    if (category.kind === 'income' && user.defaultIncomeCategoryId === args.categoryId)
-      await ctx.db.patch(user._id, { defaultIncomeCategoryId: undefined, updatedAt: now });
+    if (
+      user.defaultExpenseCategoryId === args.categoryId ||
+      user.defaultIncomeCategoryId === args.categoryId
+    )
+      await ctx.db.patch(user._id, {
+        ...(user.defaultExpenseCategoryId === args.categoryId
+          ? { defaultExpenseCategoryId: undefined }
+          : {}),
+        ...(user.defaultIncomeCategoryId === args.categoryId
+          ? { defaultIncomeCategoryId: undefined }
+          : {}),
+        updatedAt: now,
+      });
     return args.categoryId;
   },
 });

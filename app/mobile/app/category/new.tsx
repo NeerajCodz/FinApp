@@ -6,12 +6,13 @@ import { api } from '@convex/_generated/api';
 import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon } from '@/components/finance';
-import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@/components/ui';
+import { CategoryEmojiPicker } from '@/components/finance/CategoryEmojiPicker';
+import { Button, IconButton, Input, Label, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function NewCategoryScreen() {
   const [name, setName] = useState('');
-  const [kind, setKind] = useState<'expense' | 'income'>('expense');
+  const [icon, setIcon] = useState<string>();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const { tokens } = useTheme();
@@ -24,7 +25,7 @@ export default function NewCategoryScreen() {
     setPending(true);
     setError('');
     try {
-      const id = await create({ name: trimmedName, kind });
+      const id = await create({ name: trimmedName, ...(icon ? { icon } : {}) });
       router.replace(`/category/${id}` as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create category.');
@@ -54,11 +55,12 @@ export default function NewCategoryScreen() {
 
         <View style={{ flex: 1, justifyContent: 'center', gap: 30 }}>
           <View style={{ gap: 12 }}>
-            <CategoryIcon label={name.trim() || 'Category'} />
+            <CategoryIcon label={name.trim() || 'Category'} icon={icon} />
             <Typography variant="title">New category.</Typography>
             <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
               Give your money a place to belong.
             </Text>
+            <CategoryEmojiPicker value={icon} onChange={setIcon} />
           </View>
           <View style={{ gap: 20 }}>
             <View>
@@ -71,17 +73,6 @@ export default function NewCategoryScreen() {
                 placeholder="Groceries"
                 returnKeyType="done"
                 onSubmitEditing={save}
-              />
-            </View>
-            <View style={{ gap: 10 }}>
-              <Label>Type</Label>
-              <Tabs
-                value={kind}
-                onChange={(value) => setKind(value as 'expense' | 'income')}
-                tabs={[
-                  { label: 'Expense', value: 'expense' },
-                  { label: 'Income', value: 'income' },
-                ]}
               />
             </View>
           </View>

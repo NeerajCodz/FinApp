@@ -78,7 +78,7 @@ export default defineSchema({
   categories: defineTable({
     ownerId: v.id('users'),
     name: v.string(),
-    kind: v.union(v.literal('expense'), v.literal('income')),
+    kind: v.optional(v.union(v.literal('expense'), v.literal('income'))),
     parentId: optionalText,
     icon: optionalText,
     color: optionalText,
