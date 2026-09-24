@@ -30,8 +30,12 @@ export function createOutboxEntry(
   };
 }
 
+const retryDelays = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000] as const;
+
 export function nextRetryDelay(retryCount: number): number {
-  return Math.min(30_000, 30_000 * 2 ** Math.max(0, retryCount - 1));
+  if (!Number.isFinite(retryCount)) return retryDelays[0];
+  const index = Math.max(0, Math.ceil(retryCount) - 1);
+  return retryDelays[Math.min(index, retryDelays.length - 1)] ?? retryDelays[0];
 }
 
 export function markConflict(reason: string): ConflictReview {

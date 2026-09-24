@@ -12,6 +12,11 @@ describe('offline financial safety', () => {
     expect(entry.payload).toContain('100n');
     expect(nextRetryDelay(10)).toBe(30_000);
   });
+  it('uses the bounded retry schedule after transient cloud failures', () => {
+    expect([1, 2, 3, 4, 5, 6, 7].map(nextRetryDelay)).toEqual([
+      1_000, 2_000, 4_000, 8_000, 15_000, 30_000, 30_000,
+    ]);
+  });
   it('surfaces financial conflicts for review', () => {
     expect(markConflict('amountMinor')).toEqual({
       status: 'conflict',
