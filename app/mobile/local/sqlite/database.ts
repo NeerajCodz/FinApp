@@ -47,8 +47,9 @@ export async function getLocalDatabase(): Promise<SQLite.SQLiteDatabase> {
 
 export async function initializeLocalDatabase(): Promise<void> {
   const db = await getLocalDatabase();
-  const version = db.getFirstSync<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0;
-  if (version >= 1) return;
+  const version =
+    db.getFirstSync<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0;
+  if (version >= 3) return;
   db.withTransactionSync(() => {
     const tables = db
       .getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -68,6 +69,8 @@ export async function initializeLocalDatabase(): Promise<void> {
         operation TEXT NOT NULL,
         payload TEXT NOT NULL,
         clientMutationId TEXT NOT NULL DEFAULT '',
+        entityType TEXT,
+        recordId TEXT,
         createdAt INTEGER NOT NULL,
         clientUpdatedAt INTEGER NOT NULL DEFAULT 0,
         baseUpdatedAt INTEGER,
@@ -165,6 +168,7 @@ export async function initializeLocalDatabase(): Promise<void> {
         transactionId TEXT NOT NULL,
         memberId TEXT NOT NULL,
         amountMinor TEXT NOT NULL,
+        payload TEXT NOT NULL,
         PRIMARY KEY (userId, transactionId, memberId)
       );
       CREATE TABLE IF NOT EXISTS expenseParticipants (
@@ -289,6 +293,8 @@ export async function initializeLocalDatabase(): Promise<void> {
     for (const [column, definition] of [
       ['userId', 'TEXT'],
       ['clientMutationId', "TEXT NOT NULL DEFAULT ''"],
+      ['entityType', 'TEXT'],
+      ['recordId', 'TEXT'],
       ['clientUpdatedAt', 'INTEGER NOT NULL DEFAULT 0'],
       ['baseUpdatedAt', 'INTEGER'],
       ['deviceId', 'TEXT'],
@@ -333,6 +339,6 @@ export async function initializeLocalDatabase(): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS outbox_user_mutation
         ON outbox(userId, clientMutationId) WHERE clientMutationId <> '';
     `);
-    db.execSync('PRAGMA user_version = 1');
+    db.execSync('PRAGMA user_version = 3');
   });
 }

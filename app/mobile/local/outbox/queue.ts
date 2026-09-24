@@ -4,7 +4,14 @@ export type OutboxEntry = {
   operation: string;
   payload: string;
   clientMutationId: string;
+  entityType?: string;
+  recordId?: string;
+  nextRetryAt?: number;
   createdAt: number;
+  clientUpdatedAt?: number;
+  baseUpdatedAt?: number;
+  deviceId?: string;
+  dependencies?: readonly string[];
   retryCount: number;
   status: OutboxStatus;
 };
@@ -18,13 +25,24 @@ export function createOutboxEntry(
   operation: string,
   payload: unknown,
   clientMutationId: string,
+  options: Pick<
+    OutboxEntry,
+    'entityType' | 'recordId' | 'clientUpdatedAt' | 'baseUpdatedAt' | 'deviceId' | 'dependencies'
+  > = {},
 ): OutboxEntry {
+  const createdAt = Date.now();
   return {
     localId: `local-${clientMutationId}`,
+    entityType: options.entityType,
+    recordId: options.recordId,
     operation,
     payload: serializePayload(payload),
     clientMutationId,
-    createdAt: Date.now(),
+    createdAt,
+    clientUpdatedAt: options.clientUpdatedAt ?? createdAt,
+    baseUpdatedAt: options.baseUpdatedAt,
+    deviceId: options.deviceId,
+    dependencies: options.dependencies,
     retryCount: 0,
     status: 'pending',
   };

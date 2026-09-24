@@ -1,5 +1,13 @@
 import type { OutboxEntry, ConflictReview } from '../outbox/queue';
 import { markConflict, nextRetryDelay } from '../outbox/queue';
+import {
+  areDependenciesMapped,
+  listOutbox,
+  markOperationSynced,
+  markSynced,
+  type LocalEntity,
+  type SyncReceipt,
+} from '../repository';
 import { updateOutboxStatus } from '../outbox/storage';
 
 export type SyncResult = {
@@ -12,37 +20,81 @@ export type SyncResult = {
 export async function syncOutbox(
   userId: string,
   entries: readonly OutboxEntry[],
-  send: (entry: OutboxEntry) => Promise<{ serverId: string }>,
+  send: (entry: OutboxEntry) => Promise<SyncReceipt>,
 ): Promise<SyncResult[]> {
   const results: SyncResult[] = [];
-  for (const entry of entries
-    .filter((candidate) => candidate.status === 'pending' || candidate.status === 'failed')
-    .slice(0, 25)) {
-    await updateOutboxStatus(userId, entry.localId, 'syncing', entry.retryCount);
-    try {
-      const response = await send(entry);
-      await updateOutboxStatus(userId, entry.localId, 'synced', entry.retryCount);
-      results.push({ localId: entry.localId, status: 'synced', serverId: response.serverId });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'SYNC_FAILED';
-      const conflict = reason === 'TRANSACTION_CHANGED' ? markConflict(reason) : undefined;
-      const retryCount = entry.retryCount + 1;
-      const retryAfter = nextRetryDelay(retryCount);
-      const safeError = reason.replace(/[\r\n]+/g, ' ').slice(0, 240);
-      await updateOutboxStatus(
-        userId,
-        entry.localId,
-        conflict ? 'conflict' : 'failed',
-        retryCount,
-        conflict ? null : Date.now() + retryAfter,
-        safeError,
+  const candidates = entries.slice(0, 25);
+  const attempted = new Set<string>();
+  const blockedRecords = new Set<string>();
+  let madeProgress = true;
+  while (madeProgress && results.length < 25) {
+    madeProgress = false;
+    for (const candidate of candidates) {
+      if (attempted.has(candidate.localId)) continue;
+      if (candidate.status !== 'pending' && candidate.status !== 'failed') {
+        attempted.add(candidate.localId);
+        continue;
+      }
+      const recordKey =
+        candidate.entityType && candidate.recordId
+          ? `${candidate.entityType}:${candidate.recordId}`
+          : null;
+      if (recordKey && blockedRecords.has(recordKey)) {
+        attempted.add(candidate.localId);
+        continue;
+      }
+      const current = (await listOutbox(userId)).find(
+        (entry) => entry.localId === candidate.localId,
       );
-      results.push({
-        localId: entry.localId,
-        status: conflict ? 'conflict' : 'failed',
-        retryAfter,
-        conflict,
-      });
+      if (!current || (current.status !== 'pending' && current.status !== 'failed')) {
+        attempted.add(candidate.localId);
+        continue;
+      }
+      if (current.nextRetryAt !== undefined && current.nextRetryAt > Date.now()) {
+        attempted.add(candidate.localId);
+        continue;
+      }
+      if (!(await areDependenciesMapped(userId, current.dependencies ?? []))) continue;
+      attempted.add(candidate.localId);
+      madeProgress = true;
+      await updateOutboxStatus(userId, current.localId, 'syncing', current.retryCount);
+      try {
+        const response = await send(current);
+        if (current.entityType && current.recordId) {
+          await markSynced(
+            userId,
+            current.localId,
+            current.entityType as LocalEntity,
+            current.recordId,
+            response,
+          );
+        } else {
+          await markOperationSynced(userId, current.localId, response);
+        }
+        results.push({ localId: current.localId, status: 'synced', serverId: response.serverId });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'SYNC_FAILED';
+        const conflict = reason === 'TRANSACTION_CHANGED' ? markConflict(reason) : undefined;
+        const retryCount = current.retryCount + 1;
+        const retryAfter = nextRetryDelay(retryCount);
+        const safeError = reason.replace(/[\\r\\n]+/g, ' ').slice(0, 240);
+        await updateOutboxStatus(
+          userId,
+          current.localId,
+          conflict ? 'conflict' : 'failed',
+          retryCount,
+          conflict ? null : Date.now() + retryAfter,
+          safeError,
+        );
+        if (recordKey) blockedRecords.add(recordKey);
+        results.push({
+          localId: current.localId,
+          status: conflict ? 'conflict' : 'failed',
+          retryAfter,
+          conflict,
+        });
+      }
+      if (results.length >= 25) break;
     }
   }
   return results;

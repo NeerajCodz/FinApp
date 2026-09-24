@@ -9,17 +9,19 @@ export async function enqueueOffline(entry: OutboxEntry, userId: string): Promis
     db.runSync(
       `INSERT OR IGNORE INTO outbox
         (localId, userId, operation, payload, clientMutationId, createdAt, clientUpdatedAt,
-         retryCount, dependencies, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         baseUpdatedAt, deviceId, dependencies, retryCount, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       entry.localId,
       userId,
       entry.operation,
       entry.payload,
       entry.clientMutationId,
       entry.createdAt,
-      entry.createdAt,
+      entry.clientUpdatedAt ?? entry.createdAt,
+      entry.baseUpdatedAt ?? null,
+      entry.deviceId ?? null,
+      JSON.stringify(entry.dependencies ?? []),
       entry.retryCount,
-      '[]',
       entry.status,
     );
   });
