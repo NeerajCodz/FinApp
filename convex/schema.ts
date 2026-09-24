@@ -52,6 +52,17 @@ export default defineSchema({
     platform: v.string(),
     lastSeenAt: timestamp,
   }).index('by_user', ['userId']),
+  authEmailChallenges: defineTable({
+    userId: v.id('users'),
+    challengeIdHash: v.string(),
+    codeHash: v.string(),
+    createdAt: timestamp,
+    expiresAt: timestamp,
+    attempts: v.number(),
+    consumedAt: optionalTime,
+  })
+    .index('by_user', ['userId'])
+    .index('by_challenge', ['challengeIdHash']),
   accounts: defineTable({
     ownerId: v.id('users'),
     name: v.string(),

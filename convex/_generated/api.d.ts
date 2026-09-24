@@ -17,6 +17,7 @@ import type * as analytics_domain from "../analytics/domain.js";
 import type * as analytics_insights from "../analytics/insights.js";
 import type * as analytics_queries from "../analytics/queries.js";
 import type * as auth from "../auth.js";
+import type * as authEmailChallenges from "../authEmailChallenges.js";
 import type * as budgets_domain from "../budgets/domain.js";
 import type * as budgets_mutations from "../budgets/mutations.js";
 import type * as budgets_queries from "../budgets/queries.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   "analytics/insights": typeof analytics_insights;
   "analytics/queries": typeof analytics_queries;
   auth: typeof auth;
+  authEmailChallenges: typeof authEmailChallenges;
   "budgets/domain": typeof budgets_domain;
   "budgets/mutations": typeof budgets_mutations;
   "budgets/queries": typeof budgets_queries;

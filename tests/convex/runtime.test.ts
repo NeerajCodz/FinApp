@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { generateKeyPairSync } from 'node:crypto';
+import { Scrypt } from 'lucia';
+import { describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
-import { api } from '../../convex/_generated/api';
+import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
 
 const modules = import.meta.glob('../../convex/**/*.ts');
@@ -40,6 +42,143 @@ describe('Convex public runtime functions', () => {
     expect(await authenticated.query(api.accounts.queries.list, {})).toMatchObject([
       { id: accountId, name: 'Auth Session Wallet' },
     ]);
+  });
+
+  it('resolves usernames through a non-public login lookup', async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert('users', {
+        identityId: 'username-login-user',
+        email: 'login-user@example.com',
+        name: 'Login User',
+        username: 'neeraj',
+      }),
+    );
+
+    await expect(
+      t.query(internal.users.queries.loginEmailForUsername, { username: '@NEERAJ' }),
+    ).resolves.toBe('login-user@example.com');
+  });
+
+  it('requires a single-use email second factor for password sign-in', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        email: 'login-user@example.com',
+        emailVerificationTime: 1,
+        name: 'Login User',
+        username: 'neeraj',
+      }),
+    );
+    const secret = await new Scrypt().hash('runtime-test-password');
+    await t.run((ctx) =>
+      ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: 'login-user@example.com',
+        secret,
+        emailVerified: '1',
+      }),
+    );
+
+    const previousPrivateKey = process.env.JWT_PRIVATE_KEY;
+    const previousSiteUrl = process.env.CONVEX_SITE_URL;
+    const previousResendKey = process.env.AUTH_RESEND_KEY;
+    const previousEmailFrom = process.env.AUTH_EMAIL_FROM;
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    process.env.JWT_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    process.env.CONVEX_SITE_URL = 'https://unit-test.convex.site';
+    process.env.AUTH_RESEND_KEY = 're_test_key';
+    process.env.AUTH_EMAIL_FROM = 'Finapp <mail@example.com>';
+    const resendFetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', resendFetch);
+    try {
+      const challenge = await t.action(api.auth.requestEmailTwoFactor, {
+        identifier: '@NEERAJ',
+        password: 'runtime-test-password',
+      });
+      expect(challenge.status).toBe('code-sent');
+      if (challenge.status !== 'code-sent') throw new Error('Expected a second-factor challenge.');
+
+      const payload = JSON.parse(resendFetch.mock.calls[0]![1]!.body as string);
+      expect(payload.to).toEqual(['login-user@example.com']);
+      const code = payload.text.match(/\b(\d{6})\b/)?.[1];
+      expect(code).toMatch(/^\d{6}$/);
+      if (!code) throw new Error('The email did not contain a code.');
+
+      const params = {
+        provider: 'password',
+        params: {
+          challengeId: challenge.challengeId,
+          code,
+          flow: 'twoFactorVerification',
+        },
+      } as const;
+      const result = await t.action(api.auth.signIn, params);
+      expect(result.tokens).toBeTruthy();
+      const replay = await t.action(api.auth.signIn, params);
+      expect(replay.tokens).toBeNull();
+
+      await expect(
+        t.action(api.auth.signIn, {
+          provider: 'password',
+          params: {
+            email: '@NEERAJ',
+            password: 'runtime-test-password',
+            flow: 'signIn',
+          },
+        }),
+      ).rejects.toThrow('Use the email second-factor sign-in flow.');
+      await expect(
+        t.action(api.auth.signIn, {
+          provider: 'password',
+          params: { email: 'login-user@example.com', code: '123456', flow: 'email-verification' },
+        }),
+      ).rejects.toThrow('Email is already verified.');
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousPrivateKey === undefined) delete process.env.JWT_PRIVATE_KEY;
+      else process.env.JWT_PRIVATE_KEY = previousPrivateKey;
+      if (previousSiteUrl === undefined) delete process.env.CONVEX_SITE_URL;
+      else process.env.CONVEX_SITE_URL = previousSiteUrl;
+      if (previousResendKey === undefined) delete process.env.AUTH_RESEND_KEY;
+      else process.env.AUTH_RESEND_KEY = previousResendKey;
+      if (previousEmailFrom === undefined) delete process.env.AUTH_EMAIL_FROM;
+      else process.env.AUTH_EMAIL_FROM = previousEmailFrom;
+    }
+  });
+
+  it('locks an email second-factor challenge after five wrong codes', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        email: 'locked@example.com',
+        emailVerificationTime: 1,
+        name: 'Locked User',
+      }),
+    );
+    const challengeIdHash = 'challenge-id-hash';
+    await t.mutation(internal.authEmailChallenges.create, {
+      userId,
+      challengeIdHash,
+      codeHash: 'correct-code-hash',
+      now: Date.now(),
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await t.mutation(internal.authEmailChallenges.consume, {
+        challengeIdHash,
+        codeHash: 'wrong-code-hash',
+        now: Date.now(),
+      });
+    }
+    await expect(
+      t.mutation(internal.authEmailChallenges.consume, {
+        challengeIdHash,
+        codeHash: 'correct-code-hash',
+        now: Date.now(),
+      }),
+    ).resolves.toBeNull();
   });
 
   it('runs the account and category mutation lifecycles', async () => {

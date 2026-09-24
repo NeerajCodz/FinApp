@@ -3,6 +3,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAction } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
@@ -10,29 +12,39 @@ import { Button, IconButton, Input, Label, Text, Typography } from '@/components
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function SignInScreen() {
-  const { email: initialEmail } = useLocalSearchParams<{ email?: string }>();
-  const [email, setEmail] = useState(() => (typeof initialEmail === 'string' ? initialEmail : ''));
+  const { email: initialIdentifier } = useLocalSearchParams<{ email?: string }>();
+  const [identifier, setIdentifier] = useState(() =>
+    typeof initialIdentifier === 'string' ? initialIdentifier : '',
+  );
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { signIn } = useAuthActions();
+  const requestEmailTwoFactor = useAction(api.auth.requestEmailTwoFactor);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const signInDisabled = !email.trim() || !password;
+  const signInDisabled = !identifier.trim() || !password;
 
   async function submit() {
     setError('');
-    const form = new FormData();
-    form.append('email', email.trim().toLowerCase());
-    form.append('password', password);
-    form.append('flow', 'signIn');
     try {
-      const result = await signIn('password', form);
-      if (result.signingIn) {
-        router.replace('/(tabs)');
-      } else {
+      const result = await requestEmailTwoFactor({
+        identifier: identifier.trim(),
+        password,
+      });
+      if (result.status === 'verification-required') {
+        const form = new FormData();
+        form.append('email', result.email);
+        form.append('password', password);
+        form.append('flow', 'verification-required');
+        await signIn('password', form);
         router.replace({
           pathname: '/(auth)/verify',
-          params: { email: email.trim().toLowerCase(), next: 'tabs' },
+          params: { email: result.email, next: 'tabs' },
+        });
+      } else {
+        router.replace({
+          pathname: '/(auth)/two-factor',
+          params: { challengeId: result.challengeId },
         });
       }
     } catch (cause) {
@@ -72,17 +84,16 @@ export default function SignInScreen() {
 
           <View style={{ gap: 18 }}>
             <View>
-              <Label>Email</Label>
+              <Label>Email or username</Label>
               <Input
-                accessibilityLabel="Email"
+                accessibilityLabel="Email or username"
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoComplete="email"
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                placeholder="you@example.com"
-                value={email}
-                onChangeText={setEmail}
+                autoComplete="username"
+                textContentType="username"
+                placeholder="you@example.com or @neeraj"
+                value={identifier}
+                onChangeText={setIdentifier}
                 returnKeyType="next"
                 error={!!error}
               />
@@ -130,7 +141,9 @@ export default function SignInScreen() {
           onPress={() =>
             router.push({
               pathname: '/(auth)/forgot-password',
-              params: { email: email.trim().toLowerCase() },
+              params: {
+                email: identifier.includes('@') ? identifier.trim().toLowerCase() : '',
+              },
             })
           }
         >
