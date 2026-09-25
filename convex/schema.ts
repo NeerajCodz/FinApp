@@ -156,8 +156,28 @@ export default defineSchema({
     clientMutationId: v.string(),
     operation: v.string(),
     resultEntityId: optionalText,
+    resultPayload: v.optional(v.any()),
+    revision: v.optional(v.int64()),
+    serverUpdatedAt: optionalTime,
     createdAt: timestamp,
   }).index('by_actor_clientMutationId', ['actorId', 'clientMutationId']),
+  userSyncState: defineTable({
+    userId: v.id('users'),
+    revision: v.int64(),
+    updatedAt: timestamp,
+  }).index('by_user', ['userId']),
+  syncChanges: defineTable({
+    scopeUserId: v.id('users'),
+    revision: v.int64(),
+    entityType: v.string(),
+    documentId: v.string(),
+    updatedAt: timestamp,
+    deletedAt: optionalTime,
+    document: v.optional(v.any()),
+    clientMutationId: optionalText,
+  })
+    .index('by_user_revision', ['scopeUserId', 'revision'])
+    .index('by_user_entity_updatedAt', ['scopeUserId', 'entityType', 'updatedAt']),
   groups: defineTable({
     ownerId: v.id('users'),
     name: v.string(),
@@ -212,7 +232,10 @@ export default defineSchema({
   })
     .index('by_group', ['groupId'])
     .index('by_from_user', ['fromUserId'])
-    .index('by_to_user', ['toUserId']),
+    .index('by_to_user', ['toUserId'])
+    .index('by_group_occurredAt', ['groupId', 'occurredAt'])
+    .index('by_from_user_occurredAt', ['fromUserId', 'occurredAt'])
+    .index('by_to_user_occurredAt', ['toUserId', 'occurredAt']),
   budgets: defineTable({
     ownerId: v.id('users'),
     name: v.string(),
@@ -252,7 +275,10 @@ export default defineSchema({
     accountId: optionalText,
     occurredAt: timestamp,
     createdAt: timestamp,
-  }).index('by_goal', ['goalId']),
+  })
+    .index('by_goal', ['goalId'])
+    .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
+    .index('by_goal_occurredAt', ['goalId', 'occurredAt']),
   recurringRules: defineTable({
     ownerId: v.id('users'),
     name: v.string(),

@@ -51,6 +51,8 @@ import type * as shared_permissions from "../shared/permissions.js";
 import type * as shared_validators from "../shared/validators.js";
 import type * as splits_domain from "../splits/domain.js";
 import type * as splits_mutations from "../splits/mutations.js";
+import type * as sync_common from "../sync/common.js";
+import type * as sync_queries from "../sync/queries.js";
 import type * as transactions_domain from "../transactions/domain.js";
 import type * as transactions_mutations from "../transactions/mutations.js";
 import type * as transactions_queries from "../transactions/queries.js";
@@ -109,6 +111,8 @@ declare const fullApi: ApiFromModules<{
   "shared/validators": typeof shared_validators;
   "splits/domain": typeof splits_domain;
   "splits/mutations": typeof splits_mutations;
+  "sync/common": typeof sync_common;
+  "sync/queries": typeof sync_queries;
   "transactions/domain": typeof transactions_domain;
   "transactions/mutations": typeof transactions_mutations;
   "transactions/queries": typeof transactions_queries;

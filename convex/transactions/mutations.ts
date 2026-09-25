@@ -6,6 +6,7 @@ import { requireOwner } from '../shared/permissions';
 import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 import { assertAccountCanReceiveTransaction, type AccountDraft } from '../accounts/mutations';
 import { assertMutationAvailable, transactionSignedAmount } from './domain';
+import { getMutationReceipt, recordSyncChange, storeMutationReceipt } from '../sync/common';
 
 export type TransactionDraft = {
   ownerId: string;
@@ -92,6 +93,18 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    if (!user) throw new DomainError('AUTH_REQUIRED');
+    const previousReceipt = await getMutationReceipt(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'transaction.create',
+    );
+    if (previousReceipt) {
+      const previousId = ctx.db.normalizeId('transactions', previousReceipt.resultEntityId ?? '');
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
     const account = await ctx.db.get(args.accountId);
     const transferAccount = args.transferAccountId
       ? ((await ctx.db.get(args.transferAccountId)) ?? undefined)
@@ -100,12 +113,7 @@ export const create = mutation({
     const category = args.categoryId
       ? ((await ctx.db.get(args.categoryId)) ?? undefined)
       : undefined;
-    const processedMutation = await ctx.db
-      .query('processedMutations')
-      .withIndex('by_actor_clientMutationId', (q) =>
-        q.eq('actorId', user._id).eq('clientMutationId', args.clientMutationId),
-      )
-      .unique();
+    const processedMutation = null;
     const result = createTransaction(
       user._id,
       {
@@ -130,13 +138,27 @@ export const create = mutation({
       transferAccountId: args.transferAccountId,
     };
     const transactionId = await ctx.db.insert('transactions', record);
-    await ctx.db.insert('processedMutations', {
-      actorId: user._id,
-      clientMutationId: args.clientMutationId,
-      operation: 'transaction.create',
-      resultEntityId: transactionId,
-      createdAt: Date.now(),
-    });
+    const updatedAt = record.updatedAt;
+    const revision = await recordSyncChange(
+      ctx,
+      user._id,
+      'transactions',
+      transactionId,
+      updatedAt,
+      { ...record, _id: transactionId },
+      undefined,
+      args.clientMutationId,
+    );
+    await storeMutationReceipt(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'transaction.create',
+      transactionId,
+      transactionId,
+      revision,
+      updatedAt,
+    );
     return transactionId;
   },
 });

@@ -9,6 +9,7 @@ import {
   type Membership,
 } from '../shared/permissions';
 import { changeMemberRole, createGroup, type Group } from './domain';
+import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 
 export function createGroupRecord(ownerId: string, name: string, currency: string): Group {
   return createGroup(ownerId, name, currency);
@@ -37,12 +38,21 @@ export const create = mutation({
     name: v.string(),
     currency: v.string(),
     memberUsernames: v.array(v.string()),
+    clientMutationId: v.optional(v.string()),
     memberPhones: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
+    await requireIdentity(ctx);
     const owner = await requireUser(ctx);
     if (!owner) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(ctx, owner._id, args.clientMutationId, 'group.create');
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('groups', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    if ((args.memberPhones?.length ?? 0) > 0 && owner.phoneVerificationTime === undefined)
+      throw new Error('PHONE_UNVERIFIED');
     const currency = args.currency.toUpperCase();
     assertCurrency(currency);
     const name = args.name.trim();
@@ -92,7 +102,7 @@ export const create = mutation({
     }
     for (const phone of args.memberPhones ?? []) {
       const normalizedPhone = phone.replace(/[\s().-]/g, '');
-      if (normalizedPhone && normalizedPhone !== identity.phone) {
+      if (normalizedPhone && normalizedPhone !== owner.phone) {
         await ctx.db.insert('groupInvites', {
           groupId,
           inviterId: owner._id,
@@ -103,6 +113,22 @@ export const create = mutation({
         });
       }
     }
+    const [group, memberships, invites] = await Promise.all([
+      ctx.db.get(groupId),
+      ctx.db.query('groupMembers').withIndex('by_group', (query) => query.eq('groupId', groupId)).collect(),
+      ctx.db.query('groupInvites').withIndex('by_group', (query) => query.eq('groupId', groupId)).collect(),
+    ]);
+    const scopes = memberships.map((membership) => membership.userId);
+    await publishMutationResult(
+      ctx, owner._id, args.clientMutationId, 'group.create', groupId,
+      'groups', String(groupId), now, group, scopes,
+    );
+    for (const scopeUserId of scopes) {
+      for (const member of memberships)
+        await recordSyncChange(ctx, scopeUserId, 'groupMembers', String(member._id), now, member);
+    }
+    for (const invite of invites)
+      await recordSyncChange(ctx, owner._id, 'groupInvites', String(invite._id), now, invite);
     return groupId;
   },
 });
@@ -116,10 +142,17 @@ export const addExpense = mutation({
     currency: v.string(),
     occurredAt: v.number(),
     participantUsernames: v.array(v.string()),
+    clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'group.addExpense');
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('transactions', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
     if (args.amountMinor <= 0n || !args.title.trim()) throw new Error('INVALID_AMOUNT');
     const group = await ctx.db.get(args.groupId);
     const account = await ctx.db.get(args.accountId);
@@ -188,6 +221,26 @@ export const addExpense = mutation({
       });
     }
     await ctx.db.patch(args.groupId, { updatedAt: now });
+    const [transaction, payers, participants, groupMembers] = await Promise.all([
+      ctx.db.get(transactionId),
+      ctx.db.query('expensePayers').withIndex('by_transaction', (query) => query.eq('transactionId', transactionId)).collect(),
+      ctx.db.query('expenseParticipants').withIndex('by_transaction', (query) => query.eq('transactionId', transactionId)).collect(),
+      ctx.db.query('groupMembers').withIndex('by_group', (query) => query.eq('groupId', args.groupId)).collect(),
+    ]);
+    const scopes = groupMembers.map((member) => member.userId);
+    await publishMutationResult(
+      ctx, user._id, args.clientMutationId, 'group.addExpense', transactionId,
+      'transactions', String(transactionId), now, transaction, scopes,
+    );
+    for (const scopeUserId of scopes) {
+      for (const payer of payers)
+        await recordSyncChange(ctx, scopeUserId, 'expensePayers', String(payer._id), now, payer);
+      for (const participant of participants)
+        await recordSyncChange(ctx, scopeUserId, 'expenseParticipants', String(participant._id), now, participant);
+      await recordSyncChange(ctx, scopeUserId, 'groups', String(args.groupId), now, {
+        ...group, updatedAt: now, _id: args.groupId,
+      });
+    }
     return transactionId;
   },
 });

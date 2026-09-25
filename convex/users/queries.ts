@@ -1,8 +1,20 @@
-import { query } from '../_generated/server';
+import { internalQuery, query } from '../_generated/server';
 import { v } from 'convex/values';
 import { getOptionalUser } from '../shared/auth';
 import { normalizeUsername } from './domain';
 
+export const loginEmailForUsername = internalQuery({
+  args: { username: v.string() },
+  handler: async (ctx, { username }) => {
+    const normalizedUsername = normalizeUsername(username);
+    if (!/^[a-z0-9_]{3,32}$/.test(normalizedUsername)) return null;
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_username', (query) => query.eq('username', normalizedUsername))
+      .unique();
+    return user && user.deletedAt === undefined ? (user.email?.toLowerCase() ?? null) : null;
+  },
+});
 export const current = query({
   args: {},
   handler: async (ctx) => getOptionalUser(ctx),

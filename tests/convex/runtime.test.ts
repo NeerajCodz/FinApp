@@ -558,8 +558,8 @@ describe('Convex public runtime functions', () => {
       status: 'posted',
     });
     expect(transactionId).toEqual(expect.any(String));
-    await expect(authenticated.mutation(api.transactions.mutations.create, input)).rejects.toThrow(
-      'DUPLICATE_MUTATION',
+    await expect(authenticated.mutation(api.transactions.mutations.create, input)).resolves.toBe(
+      transactionId,
     );
 
     const transaction = await t.run((ctx) => ctx.db.get(transactionId));
@@ -579,6 +579,8 @@ describe('Convex public runtime functions', () => {
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
+        phone: '+919876543210',
+        phoneVerificationTime: 1234,
       }),
     );
     await t.run((ctx) =>
@@ -605,8 +607,14 @@ describe('Convex public runtime functions', () => {
     );
     const authenticated = t.withIdentity(identity);
 
-    const updated = await authenticated.mutation(api.users.mutations.update, {
+    const usernameUpdated = await authenticated.mutation(api.users.mutations.update, {
       username: '@Neeraj_27',
+    });
+    expect(usernameUpdated).toMatchObject({
+      phone: '+919876543210',
+      phoneVerificationTime: 1234,
+    });
+    const updated = await authenticated.mutation(api.users.mutations.update, {
       phone: '+91 (98765) 43210',
       defaultCurrency: 'USD',
     });
@@ -614,6 +622,7 @@ describe('Convex public runtime functions', () => {
       _id: userId,
       username: 'neeraj_27',
       phone: '+919876543210',
+      phoneVerificationTime: 1234,
       defaultCurrency: 'USD',
     });
     expect(await authenticated.query(api.users.queries.current, {})).toMatchObject({
@@ -632,10 +641,47 @@ describe('Convex public runtime functions', () => {
         image: undefined,
       },
     ]);
-
     await expect(
       authenticated.mutation(api.users.mutations.update, { username: '@rahul_42' }),
     ).rejects.toThrow('USERNAME_TAKEN');
+
+    const changedPhone = await authenticated.mutation(api.users.mutations.update, {
+      phone: '+91 99999 88888',
+    });
+    expect(changedPhone.phone).toBe('+919999988888');
+    expect(changedPhone.phoneVerificationTime).toBeUndefined();
+    const storedUser = await t.run((ctx) => ctx.db.get(userId));
+    expect(storedUser?.phoneVerificationTime).toBeUndefined();
+  });
+  it('requires a manually verified phone before creating contact invites', async () => {
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        identityId: identity.subject,
+        email: identity.email,
+        name: identity.name,
+      }),
+    );
+    const authenticated = t.withIdentity(identity);
+    const input = {
+      name: 'Contact invite group',
+      currency: 'INR',
+      memberUsernames: [],
+      memberPhones: ['+919111111111'],
+    };
+
+    await expect(authenticated.mutation(api.groups.mutations.create, input)).rejects.toThrow(
+      'PHONE_UNVERIFIED',
+    );
+    expect(await t.run((ctx) => ctx.db.query('groups').collect())).toHaveLength(0);
+
+    await t.run((ctx) =>
+      ctx.db.patch(ownerId, { phone: '+919000000000', phoneVerificationTime: 1234 }),
+    );
+    const groupId = await authenticated.mutation(api.groups.mutations.create, input);
+    expect(await t.run((ctx) => ctx.db.query('groupInvites').collect())).toMatchObject([
+      { groupId, inviteePhone: '+919111111111', status: 'pending' },
+    ]);
   });
   it('creates username groups and persists shared expenses', async () => {
     const t = convexTest(schema, modules);

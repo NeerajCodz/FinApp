@@ -9,6 +9,7 @@ export type UserProfile = {
   timezone: string;
   createdAt: number;
   updatedAt: number;
+  phoneVerificationTime?: number;
   deletedAt?: number;
 };
 

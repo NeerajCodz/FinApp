@@ -1,18 +1,22 @@
 import { mutation } from '../_generated/server';
+import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
 import { assertCurrency, assertPositiveAmount } from '../shared/validators';
-
+import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 export const create = mutation({
   args: {
     name: v.string(),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
     parentId: v.optional(v.string()),
+    clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'category.create');
+    if (replay.found) return replay.result as Id<'categories'>;
     const name = args.name.trim();
     if (!name) throw new Error('INVALID_CATEGORY');
     if (args.parentId !== undefined) {
@@ -22,8 +26,9 @@ export const create = mutation({
         throw new Error('INVALID_CATEGORY');
     }
     const now = Date.now();
-    return ctx.db.insert('categories', {
-      ...args,
+    const { clientMutationId, ...categoryFields } = args;
+    const categoryId = await ctx.db.insert('categories', {
+      ...categoryFields,
       name,
       ownerId: user._id,
       isSystem: false,
@@ -31,14 +36,34 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    const category = await ctx.db.get(categoryId);
+    if (!category) throw new Error('INVALID_CATEGORY');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      clientMutationId,
+      'category.create',
+      categoryId,
+      'categories',
+      categoryId,
+      now,
+      category,
+    );
+    return categoryId;
   },
 });
 
 export const rename = mutation({
-  args: { categoryId: v.id('categories'), name: v.string() },
-  handler: async (ctx, { categoryId, name }) => {
+  args: {
+    categoryId: v.id('categories'),
+    name: v.string(),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, { categoryId, name, clientMutationId }) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(ctx, user._id, clientMutationId, 'category.rename');
+    if (replay.found) return replay.result as typeof categoryId;
     const category = await ctx.db.get(categoryId);
     const trimmed = name.trim();
     if (
@@ -49,20 +74,55 @@ export const rename = mutation({
       !trimmed
     )
       throw new Error('INVALID_CATEGORY');
-    await ctx.db.patch(categoryId, { name: trimmed, updatedAt: Date.now() });
+    const updatedAt = Date.now();
+    await ctx.db.patch(categoryId, { name: trimmed, updatedAt });
+    const updated = await ctx.db.get(categoryId);
+    if (!updated) throw new Error('INVALID_CATEGORY');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      clientMutationId,
+      'category.rename',
+      categoryId,
+      'categories',
+      categoryId,
+      updatedAt,
+      updated,
+    );
     return categoryId;
   },
 });
 export const setIcon = mutation({
-  args: { categoryId: v.id('categories'), icon: v.union(v.string(), v.null()) },
-  handler: async (ctx, { categoryId, icon }) => {
+  args: {
+    categoryId: v.id('categories'),
+    icon: v.union(v.string(), v.null()),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, { categoryId, icon, clientMutationId }) => {
     const user = await requireUser(ctx);
+    if (!user) throw new Error('INVALID_CATEGORY');
+    const replay = await replayMutationResult(ctx, user._id, clientMutationId, 'category.setIcon');
+    if (replay.found) return replay.result as typeof categoryId;
     const category = await ctx.db.get(categoryId);
-    if (!user || !category || category.ownerId !== user._id || category.archivedAt !== undefined)
+    if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
       throw new Error('INVALID_CATEGORY');
     if (icon !== null && (icon.length === 0 || icon.length > 32))
       throw new Error('INVALID_CATEGORY');
-    await ctx.db.patch(categoryId, { icon: icon ?? undefined, updatedAt: Date.now() });
+    const updatedAt = Date.now();
+    await ctx.db.patch(categoryId, { icon: icon ?? undefined, updatedAt });
+    const updated = await ctx.db.get(categoryId);
+    if (!updated) throw new Error('INVALID_CATEGORY');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      clientMutationId,
+      'category.setIcon',
+      categoryId,
+      'categories',
+      categoryId,
+      updatedAt,
+      updated,
+    );
     return categoryId;
   },
 });
@@ -72,10 +132,13 @@ export const setLimit = mutation({
     categoryId: v.id('categories'),
     amountMinor: v.union(v.int64(), v.null()),
     currency: v.optional(v.string()),
+    clientMutationId: v.optional(v.string()),
   },
-  handler: async (ctx, { categoryId, amountMinor, currency }) => {
+  handler: async (ctx, { categoryId, amountMinor, currency, clientMutationId }) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(ctx, user._id, clientMutationId, 'category.setLimit');
+    if (replay.found) return replay.result as typeof categoryId;
     const category = await ctx.db.get(categoryId);
     if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
       throw new Error('INVALID_CATEGORY');
@@ -89,37 +152,81 @@ export const setLimit = mutation({
       if (!limitCurrency) throw new Error('INVALID_CURRENCY');
       assertCurrency(limitCurrency);
     }
+    const updatedAt = Date.now();
     await ctx.db.patch(categoryId, {
       monthlyLimitMinor: amountMinor === null ? undefined : amountMinor,
       limitCurrency,
-      updatedAt: Date.now(),
+      updatedAt,
     });
+    const updated = await ctx.db.get(categoryId);
+    if (!updated) throw new Error('INVALID_CATEGORY');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      clientMutationId,
+      'category.setLimit',
+      categoryId,
+      'categories',
+      categoryId,
+      updatedAt,
+      updated,
+    );
     return categoryId;
   },
 });
 
 export const archive = mutation({
-  args: { categoryId: v.id('categories') },
+  args: { categoryId: v.id('categories'), clientMutationId: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    if (!user) throw new Error('INSUFFICIENT_PERMISSION');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'category.archive',
+    );
+    if (replay.found) return replay.result as typeof args.categoryId;
     const category = await ctx.db.get(args.categoryId);
-    if (!user || !category || category.ownerId !== user._id)
+    if (!category || category.ownerId !== user._id)
       throw new Error('INSUFFICIENT_PERMISSION');
     const now = Date.now();
     await ctx.db.patch(args.categoryId, { archivedAt: now, updatedAt: now });
+    const updated = await ctx.db.get(args.categoryId);
+    if (!updated) throw new Error('INSUFFICIENT_PERMISSION');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'category.archive',
+      args.categoryId,
+      'categories',
+      args.categoryId,
+      now,
+      updated,
+    );
     if (
       user.defaultExpenseCategoryId === args.categoryId ||
       user.defaultIncomeCategoryId === args.categoryId
     )
-      await ctx.db.patch(user._id, {
-        ...(user.defaultExpenseCategoryId === args.categoryId
-          ? { defaultExpenseCategoryId: undefined }
-          : {}),
-        ...(user.defaultIncomeCategoryId === args.categoryId
-          ? { defaultIncomeCategoryId: undefined }
-          : {}),
-        updatedAt: now,
-      });
+      {
+        const updatedUser = {
+          ...user,
+          ...(user.defaultExpenseCategoryId === args.categoryId ? { defaultExpenseCategoryId: undefined } : {}),
+          ...(user.defaultIncomeCategoryId === args.categoryId ? { defaultIncomeCategoryId: undefined } : {}),
+          updatedAt: now,
+        };
+        await ctx.db.patch(user._id, {
+          ...(user.defaultExpenseCategoryId === args.categoryId
+            ? { defaultExpenseCategoryId: undefined }
+            : {}),
+          ...(user.defaultIncomeCategoryId === args.categoryId
+            ? { defaultIncomeCategoryId: undefined }
+            : {}),
+          updatedAt: now,
+        });
+        await recordSyncChange(ctx, user._id, 'users', String(user._id), now, updatedUser);
+      }
     return args.categoryId;
   },
 });
