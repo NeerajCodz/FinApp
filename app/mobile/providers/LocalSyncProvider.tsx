@@ -127,25 +127,47 @@ async function persistTransactionPage(
   await upsert(userId, 'receiptMetadata', page.related.receipts);
 }
 
-async function sendMutation(convex: ReturnType<typeof useConvex>, entry: OutboxEntry): Promise<unknown> {
-  const payload = decodePayload(entry.payload) as never;
+async function sendMutation(
+  convex: ReturnType<typeof useConvex>,
+  userId: string,
+  entry: OutboxEntry,
+): Promise<unknown> {
+  const payload = decodePayload(entry.payload) as Record<string, unknown>;
   switch (entry.operation) {
-    case 'account.create': return convex.mutation(api.accounts.mutations.create, payload);
-    case 'account.rename': return convex.mutation(api.accounts.mutations.rename, payload);
-    case 'account.archive': return convex.mutation(api.accounts.mutations.archive, payload);
-    case 'category.create': return convex.mutation(api.categories.mutations.create, payload);
-    case 'category.rename': return convex.mutation(api.categories.mutations.rename, payload);
-    case 'category.setIcon': return convex.mutation(api.categories.mutations.setIcon, payload);
-    case 'category.setLimit': return convex.mutation(api.categories.mutations.setLimit, payload);
-    case 'category.archive': return convex.mutation(api.categories.mutations.archive, payload);
-    case 'budget.create': return convex.mutation(api.budgets.mutations.create, payload);
-    case 'budget.archive': return convex.mutation(api.budgets.mutations.archive, payload);
-    case 'transaction.create': return convex.mutation(api.transactions.mutations.create, payload);
-    case 'group.create': return convex.mutation(api.groups.mutations.create, payload);
-    case 'group.addExpense': return convex.mutation(api.groups.mutations.addExpense, payload);
-    case 'user.update': return convex.mutation(api.users.mutations.update, payload);
-    case 'user.defaultAccount': return convex.mutation(api.users.mutations.setDefaultAccount, payload);
-    case 'user.defaultCategory': return convex.mutation(api.users.mutations.setDefaultCategory, payload);
+    case 'account.create': return convex.mutation(api.accounts.mutations.create, payload as never);
+    case 'account.rename': return convex.mutation(api.accounts.mutations.rename, payload as never);
+    case 'account.archive': return convex.mutation(api.accounts.mutations.archive, payload as never);
+    case 'category.create': return convex.mutation(api.categories.mutations.create, payload as never);
+    case 'category.rename': return convex.mutation(api.categories.mutations.rename, payload as never);
+    case 'category.setIcon': return convex.mutation(api.categories.mutations.setIcon, payload as never);
+    case 'category.setLimit': return convex.mutation(api.categories.mutations.setLimit, payload as never);
+    case 'category.archive': return convex.mutation(api.categories.mutations.archive, payload as never);
+    case 'budget.create': return convex.mutation(api.budgets.mutations.create, payload as never);
+    case 'budget.archive': return convex.mutation(api.budgets.mutations.archive, payload as never);
+    case 'transaction.create': {
+      const accountId = String(payload.accountId);
+      const categoryId = typeof payload.categoryId === 'string' ? payload.categoryId : null;
+      const transferAccountId =
+        typeof payload.transferAccountId === 'string' ? payload.transferAccountId : null;
+      const [mappedAccountId, mappedCategoryId, mappedTransferAccountId] = await Promise.all([
+        getMappedCloudId(userId, 'account', accountId),
+        categoryId ? getMappedCloudId(userId, 'category', categoryId) : null,
+        transferAccountId ? getMappedCloudId(userId, 'account', transferAccountId) : null,
+      ]);
+      return convex.mutation(api.transactions.mutations.create, {
+        ...payload,
+        accountId: mappedAccountId ?? accountId,
+        ...(categoryId ? { categoryId: mappedCategoryId ?? categoryId } : {}),
+        ...(transferAccountId
+          ? { transferAccountId: mappedTransferAccountId ?? transferAccountId }
+          : {}),
+      } as never);
+    }
+    case 'group.create': return convex.mutation(api.groups.mutations.create, payload as never);
+    case 'group.addExpense': return convex.mutation(api.groups.mutations.addExpense, payload as never);
+    case 'user.update': return convex.mutation(api.users.mutations.update, payload as never);
+    case 'user.defaultAccount': return convex.mutation(api.users.mutations.setDefaultAccount, payload as never);
+    case 'user.defaultCategory': return convex.mutation(api.users.mutations.setDefaultCategory, payload as never);
     default: throw new Error(`UNSUPPORTED_SYNC_OPERATION:${entry.operation}`);
   }
 }
@@ -382,7 +404,7 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
         updatedAt: Date.now(),
       };
     }
-    await sendMutation(convex, entry);
+    await sendMutation(convex, targetUserId, entry);
     const receipt = await convex.query(api.sync.queries.mutationReceipt, {
       clientMutationId: entry.clientMutationId,
     });
@@ -510,6 +532,10 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (validatedOnline) void flush();
   }, [flush, validatedOnline]);
+
+  React.useEffect(() => {
+    if (validatedOnline && scopedStatus.pending > 0) void flush();
+  }, [flush, scopedStatus.pending, validatedOnline]);
 
   React.useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {

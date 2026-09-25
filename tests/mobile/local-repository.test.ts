@@ -1,4 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('expo-crypto', () => ({
+  getRandomBytesAsync: async (byteCount: number) => new Uint8Array(byteCount).fill(1),
+}));
+vi.mock('expo-file-system', () => ({
+  File: class {
+    constructor(_uri: string) {}
+    get exists() {
+      return false;
+    }
+    delete() {}
+    async move(_destination: unknown) {}
+  },
+}));
 import * as repo from '../../app/mobile/local/repository';
 import { createOutboxEntry } from '../../app/mobile/local/outbox/queue';
 import { syncOutbox } from '../../app/mobile/local/sync/engine';
@@ -10,16 +23,28 @@ vi.mock('expo-secure-store', () => ({
 vi.mock('expo-sqlite', async () => {
   const { DatabaseSync } = await import('node:sqlite');
   const native = new DatabaseSync(':memory:');
+  let keyApplied = false;
   const db = {
+    databasePath: 'memory://finapp.db',
     execSync(source: string) {
-      if (/^\s*PRAGMA\s+(key|rekey)\b/i.test(source)) return;
+      if (/^\s*PRAGMA\s+key\b/i.test(source)) {
+        keyApplied = true;
+        return;
+      }
+      if (/^\s*PRAGMA\s+rekey\b/i.test(source)) return;
       native.exec(source);
     },
     runSync(source: string, ...params: unknown[]) {
       return native.prepare(source).run(...(params as never[]));
     },
     getFirstSync<T>(source: string, ...params: unknown[]): T | null {
+      if (/^\s*SELECT\s+name\s+FROM\s+sqlite_master/i.test(source) && !keyApplied) {
+        throw new Error('SQLITE_NOTADB');
+      }
       if (/^\s*PRAGMA\s+cipher_version/i.test(source)) return { cipher_version: 'mock' } as T;
+      if (/^\s*PRAGMA\s+user_version/i.test(source) && !keyApplied) {
+        throw new Error('SQLITE_NOTADB');
+      }
       return (native.prepare(source).get(...(params as never[])) as T | undefined) ?? null;
     },
     getAllSync<T>(source: string, ...params: unknown[]): T[] {
@@ -36,7 +61,7 @@ vi.mock('expo-sqlite', async () => {
       }
     },
   };
-  return { openDatabaseAsync: async () => db };
+  return { defaultDatabaseDirectory: 'memory://', openDatabaseAsync: async () => db };
 });
 
 describe('local financial repository', () => {
@@ -170,6 +195,86 @@ describe('local financial repository', () => {
       { operation: 'transaction.create', accountId: 'cloud-account' },
     ]);
     expect((await repo.listOutbox(userId)).every((entry) => entry.status === 'synced')).toBe(true);
+  });
+
+  it('reuses optimistic IDs when historical cloud pages return synced entities', async () => {
+    const userId = 'user-range-mapping';
+    const categoryEntry = createOutboxEntry(
+      'category.create',
+      { name: 'Travel' },
+      'category-range',
+      { entityType: 'category', recordId: 'local-category' },
+    );
+    await repo.applyLocalMutationAndEnqueue(
+      userId,
+      'category',
+      {
+        id: 'local-category',
+        ownerId: userId,
+        name: 'Travel',
+        isSystem: false,
+        sortOrder: 1,
+      },
+      categoryEntry,
+    );
+    await repo.markSynced(userId, categoryEntry.localId, 'category', 'local-category', {
+      serverId: 'cloud-category',
+      revision: '1',
+      updatedAt: 2,
+    });
+    await repo.upsertCloudPage(userId, 'category', [
+      { _id: 'cloud-category', ownerId: userId, name: 'Travel', isSystem: false, sortOrder: 1 },
+    ]);
+
+    const transactionEntry = createOutboxEntry(
+      'transaction.create',
+      { title: 'Train', categoryId: 'local-category' },
+      'transaction-range',
+      { entityType: 'transaction', recordId: 'local-transaction' },
+    );
+    await repo.applyLocalMutationAndEnqueue(
+      userId,
+      'transaction',
+      {
+        id: 'local-transaction',
+        accountId: 'cloud-account',
+        categoryId: 'local-category',
+        title: 'Train',
+        amountMinor: 999n,
+        occurredAt: 10,
+        status: 'posted',
+      },
+      transactionEntry,
+    );
+    await repo.markSynced(userId, transactionEntry.localId, 'transaction', 'local-transaction', {
+      serverId: 'cloud-transaction',
+      revision: '2',
+      updatedAt: 3,
+    });
+    await repo.upsertCloudPage(userId, 'transaction', [
+      {
+        _id: 'cloud-transaction',
+        ownerId: userId,
+        accountId: 'cloud-account',
+        categoryId: 'cloud-category',
+        title: 'Train',
+        amountMinor: 999n,
+        occurredAt: 10,
+        status: 'posted',
+      },
+    ]);
+
+    expect(await repo.readLocal(userId, 'category')).toMatchObject([
+      { id: 'local-category', cloudId: 'cloud-category', name: 'Travel' },
+    ]);
+    expect(await repo.readTransactionRange(userId, 0, 20)).toMatchObject([
+      {
+        id: 'local-transaction',
+        cloudId: 'cloud-transaction',
+        categoryId: 'local-category',
+        title: 'Train',
+      },
+    ]);
   });
 
   it('retains conflicting versions and lets explicit resolution select a winner', async () => {

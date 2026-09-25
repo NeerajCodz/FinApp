@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+import { File } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
 
@@ -6,34 +8,94 @@ const encryptionKeyName = 'finapp.sqlite.encryption-key.v1';
 let database: SQLite.SQLiteDatabase | null = null;
 let initialization: Promise<SQLite.SQLiteDatabase> | null = null;
 
-function createEncryptionKey(): string {
-  const bytes = new Uint8Array(32);
-  if (!globalThis.crypto?.getRandomValues) {
-    throw new Error('SECURE_RANDOM_UNAVAILABLE');
-  }
-  globalThis.crypto.getRandomValues(bytes);
+async function createEncryptionKey(): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(32);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function fileUri(path: string): string {
+  return path.startsWith('file://') ? path : `file://${path}`;
+}
+
+function databaseSibling(path: string, suffix: string): File {
+  return new File(fileUri(`${path}${suffix}`));
 }
 
 async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
   const existingKey = await SecureStore.getItemAsync(encryptionKeyName);
-  const key = existingKey ?? createEncryptionKey();
-  const db = await SQLite.openDatabaseAsync(databaseName);
-  if (existingKey) {
-    db.execSync(`PRAGMA key = '${key}'`);
-  } else {
-    // The initial installation may contain the older plaintext outbox database.
-    // An empty SQLCipher key reads it before rekeying the same database in place.
-    db.execSync("PRAGMA key = ''");
-    db.getFirstSync('PRAGMA journal_mode = DELETE');
-    db.execSync(`PRAGMA rekey = '${key}'`);
-    await SecureStore.setItemAsync(encryptionKeyName, key);
-    db.getFirstSync('PRAGMA journal_mode = WAL');
+  const key = existingKey ?? (await createEncryptionKey());
+  const databasePath = `${String(SQLite.defaultDatabaseDirectory).replace(/\/+$/, '')}/${databaseName}`;
+  const databaseFile = new File(fileUri(databasePath));
+  const stagedFile = databaseSibling(databasePath, '.encrypted');
+  const backupFile = databaseSibling(databasePath, '.plaintext');
+
+  if (!databaseFile.exists && backupFile.exists) {
+    backupFile.rename(databaseName);
+    if (stagedFile.exists) stagedFile.delete();
+  } else if (!databaseFile.exists && stagedFile.exists && existingKey) {
+    stagedFile.rename(databaseName);
   }
+
+  const db = await SQLite.openDatabaseAsync(databaseName);
   const cipherVersion = db.getFirstSync<{ cipher_version: string }>('PRAGMA cipher_version');
   if (!cipherVersion?.cipher_version) throw new Error('SQLCIPHER_UNAVAILABLE');
-  db.getFirstSync('PRAGMA user_version');
-  return db;
+
+  if (existingKey) {
+    db.execSync(`PRAGMA key = '${key}'`);
+    db.getFirstSync('SELECT name FROM sqlite_master LIMIT 1');
+    db.getFirstSync('PRAGMA journal_mode = WAL');
+    if (backupFile.exists) backupFile.delete();
+    if (stagedFile.exists) stagedFile.delete();
+    return db;
+  }
+  if (databaseFile.exists) {
+    try {
+      db.getFirstSync('SELECT name FROM sqlite_master LIMIT 1');
+    } catch {
+      throw new Error('LOCAL_DATABASE_KEY_MISSING');
+    }
+  }
+
+  db.execSync('PRAGMA wal_checkpoint(FULL)');
+  db.getFirstSync('PRAGMA journal_mode = DELETE');
+  if (stagedFile.exists) stagedFile.delete();
+  let attached = false;
+  try {
+    db.execSync(`ATTACH DATABASE '${databasePath.replaceAll("'", "''")}.encrypted' AS migrated KEY '${key}'`);
+    attached = true;
+    db.execSync("SELECT sqlcipher_export('migrated')");
+  } catch (error) {
+    if (stagedFile.exists) stagedFile.delete();
+    throw error;
+  } finally {
+    if (attached) db.execSync('DETACH DATABASE migrated');
+  }
+  let sourceMoved = false;
+  let migratedDb: SQLite.SQLiteDatabase | null = null;
+  try {
+    await db.closeAsync();
+    databaseFile.rename(`${databaseName}.plaintext`);
+    sourceMoved = true;
+    stagedFile.rename(databaseName);
+    migratedDb = await SQLite.openDatabaseAsync(databaseName);
+    migratedDb.execSync(`PRAGMA key = '${key}'`);
+    migratedDb.getFirstSync('SELECT name FROM sqlite_master LIMIT 1');
+    migratedDb.getFirstSync('PRAGMA journal_mode = WAL');
+    await SecureStore.setItemAsync(encryptionKeyName, key);
+    await backupFile.delete();
+    return migratedDb;
+  } catch (error) {
+    if (migratedDb) await migratedDb.closeAsync().catch(() => undefined);
+    if (sourceMoved && backupFile.exists) {
+      const originalFile = new File(fileUri(databasePath));
+      if (originalFile.exists) originalFile.delete();
+      backupFile.rename(databaseName);
+      if (!existingKey) await SecureStore.deleteItemAsync(encryptionKeyName);
+    }
+    const remainingStageFile = databaseSibling(databasePath, '.encrypted');
+    if (remainingStageFile.exists) remainingStageFile.delete();
+    throw error;
+  }
 }
 
 export async function getLocalDatabase(): Promise<SQLite.SQLiteDatabase> {
@@ -49,7 +111,7 @@ export async function initializeLocalDatabase(): Promise<void> {
   const db = await getLocalDatabase();
   const version =
     db.getFirstSync<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0;
-  if (version >= 3) return;
+  if (version >= 4) return;
   db.withTransactionSync(() => {
     const tables = db
       .getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -339,6 +401,40 @@ export async function initializeLocalDatabase(): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS outbox_user_mutation
         ON outbox(userId, clientMutationId) WHERE clientMutationId <> '';
     `);
-    db.execSync('PRAGMA user_version = 3');
+    db.execSync(`
+      INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
+      SELECT userId, 'account', id, cloudId FROM accounts
+      WHERE cloudId IS NOT NULL AND id <> cloudId;
+      INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
+      SELECT userId, 'category', id, cloudId FROM categories
+      WHERE cloudId IS NOT NULL AND id <> cloudId;
+      INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
+      SELECT userId, 'group', id, cloudId FROM groups
+      WHERE cloudId IS NOT NULL AND id <> cloudId;
+      INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
+      SELECT userId, 'transaction', id, cloudId FROM transactions
+      WHERE cloudId IS NOT NULL AND id <> cloudId;
+      DELETE FROM accounts AS remote
+      WHERE remote.id = remote.cloudId AND EXISTS (
+        SELECT 1 FROM accounts AS local
+        WHERE local.userId = remote.userId AND local.cloudId = remote.cloudId AND local.id <> remote.id
+      );
+      DELETE FROM categories AS remote
+      WHERE remote.id = remote.cloudId AND EXISTS (
+        SELECT 1 FROM categories AS local
+        WHERE local.userId = remote.userId AND local.cloudId = remote.cloudId AND local.id <> remote.id
+      );
+      DELETE FROM groups AS remote
+      WHERE remote.id = remote.cloudId AND EXISTS (
+        SELECT 1 FROM groups AS local
+        WHERE local.userId = remote.userId AND local.cloudId = remote.cloudId AND local.id <> remote.id
+      );
+      DELETE FROM transactions AS remote
+      WHERE remote.id = remote.cloudId AND EXISTS (
+        SELECT 1 FROM transactions AS local
+        WHERE local.userId = remote.userId AND local.cloudId = remote.cloudId AND local.id <> remote.id
+      );
+    `);
+    db.execSync('PRAGMA user_version = 4');
   });
 }

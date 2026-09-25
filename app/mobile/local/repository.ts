@@ -422,10 +422,70 @@ export async function upsertCloudPage(
   requireUser(userId);
   await initializeLocalDatabase();
   const db = await getLocalDatabase();
+  const mappedEntityTables: Partial<Record<LocalEntity, string>> = {
+    account: 'accounts',
+    category: 'categories',
+    group: 'groups',
+    budget: 'budgets',
+    goal: 'goals',
+    recurringRule: 'recurringRules',
+    transaction: 'transactions',
+  };
+  const cloudIdTables: Partial<Record<LocalEntity, string>> = {
+    account: 'accounts',
+    category: 'categories',
+    group: 'groups',
+    transaction: 'transactions',
+  };
   db.withTransactionSync(() => {
-    for (const record of records) putRecord(db, userId, type, record);
+    for (const record of records) {
+      const cloudId = String(record.cloudId ?? record._id ?? '');
+      const table = cloudIdTables[type];
+      const mappedRecord =
+        cloudId && table
+          ? db.getFirstSync<{ id: string }>(
+              `SELECT id FROM ${table} WHERE userId = ? AND cloudId = ? AND id <> ? LIMIT 1`,
+              userId,
+              cloudId,
+              cloudId,
+            )
+          : null;
+      const mapping = mappedRecord
+        ? { localId: mappedRecord.id }
+        : cloudId
+          ? db.getFirstSync<{ localId: string }>(
+              `SELECT localId FROM idMappings
+               WHERE userId = ? AND entityType = ? AND cloudId = ?
+               ORDER BY CASE WHEN localId = cloudId THEN 1 ELSE 0 END`,
+              userId,
+              type,
+              cloudId,
+            )
+          : null;
+      if (mapping) {
+        const recordId = entityId(record, type);
+        const entityTable = mappedEntityTables[type];
+        if (recordId !== mapping.localId && entityTable) {
+          db.runSync(`DELETE FROM ${entityTable} WHERE userId = ? AND id = ?`, userId, recordId);
+        }
+        db.runSync(
+          'DELETE FROM idMappings WHERE userId = ? AND entityType = ? AND cloudId = ? AND localId = ?',
+          userId,
+          type,
+          cloudId,
+          cloudId,
+        );
+        putRecord(db, userId, type, {
+          ...record,
+          id: mapping.localId,
+          _id: cloudId,
+          cloudId,
+        });
+      } else {
+        putRecord(db, userId, type, record);
+      }
+    }
   });
-  notify(userId);
 }
 
 export async function applyCloudChanges(

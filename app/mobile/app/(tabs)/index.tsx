@@ -405,7 +405,7 @@ export default function HomeScreen() {
                 size="lg"
                 disabled={!customDate.trim()}
                 onPress={() => {
-                  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(customDate.trim());
+                  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(customDate.trim());
                   const selected = match
                     ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
                     : null;

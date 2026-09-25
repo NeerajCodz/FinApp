@@ -1,12 +1,11 @@
+import * as Crypto from 'expo-crypto';
 import { applyLocalMutationAndEnqueue, type LocalEntity, type LocalRecord } from './repository';
 import { createOutboxEntry } from './outbox/queue';
 
 const DEVICE_ID_KEY = 'finapp.local.device-id.v1';
 
-function randomId(): string {
-  const bytes = new Uint8Array(16);
-  if (!globalThis.crypto?.getRandomValues) throw new Error('SECURE_RANDOM_UNAVAILABLE');
-  globalThis.crypto.getRandomValues(bytes);
+async function randomId(): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(16);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
@@ -14,7 +13,7 @@ async function getDeviceId(): Promise<string> {
   const SecureStore = await import('expo-secure-store');
   const existing = await SecureStore.getItemAsync(DEVICE_ID_KEY);
   if (existing) return existing;
-  const id = randomId();
+  const id = await randomId();
   await SecureStore.setItemAsync(DEVICE_ID_KEY, id, {
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
@@ -38,7 +37,7 @@ export async function commitLocalWrite(
   payload: Record<string, unknown>,
   options: LocalWriteOptions = {},
 ): Promise<string> {
-  const clientMutationId = options.clientMutationId ?? randomId();
+  const clientMutationId = options.clientMutationId ?? (await randomId());
   const recordId = options.recordId ?? record.id ?? record._id ?? `local-${clientMutationId}`;
   const clientUpdatedAt = Date.now();
   const deviceId = options.deviceId ?? (await getDeviceId());
