@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { CalendarDays } from '@/lib/icons';
+import { CalendarDays, ClockCounterClockwise, ReceiptText, ShieldCheck, TriangleAlert, UsersThree } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SpendingLineChart } from '@/components/charts/BarChart';
 import {
@@ -28,7 +28,6 @@ import { formatMinor } from '@/lib/money';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { ClockCounterClockwise, ShieldCheck, TriangleAlert } from '@/lib/icons';
 
 type HomeAccount = LocalRecord & {
   id?: string;
@@ -53,6 +52,7 @@ type HomeTransaction = LocalRecord & {
   status: 'pending' | 'posted' | 'voided';
   occurredAt: number;
   deletedAt?: number;
+  groupId?: string;
   clientUpdatedAt?: number;
 };
 
@@ -267,14 +267,15 @@ export default function HomeScreen() {
               </Button>
             </View>
           ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            <View style={{ gap: 4 }}>
               {categories.slice(0, 4).map((category) => (
                 <Button
                   key={String(category.id ?? category._id)}
                   variant="ghost"
                   onPress={() => router.push(`/category/${String(category.id ?? category._id)}` as never)}
+                  accessibilityLabel={`Open ${category.name} category`}
                   style={{
-                    width: '48%',
+                    width: '100%',
                     minHeight: 64,
                     borderRadius: 14,
                     borderWidth: 1,
@@ -284,9 +285,9 @@ export default function HomeScreen() {
                     paddingHorizontal: 12,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                     <CategoryIcon label={category.name} icon={category.icon} />
-                    <Typography variant="small" numberOfLines={1} style={{ color: tokens.foreground, flex: 1 }}>
+                    <Typography variant="bodyLarge" numberOfLines={2} style={{ color: tokens.foreground, flex: 1 }}>
                       {category.name}
                     </Typography>
                   </View>
@@ -323,9 +324,15 @@ export default function HomeScreen() {
               );
             })
           ) : (
-            <Text style={{ color: tokens.foregroundMuted }}>
-              Create a group to split money with people you know.
-            </Text>
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 8 }}>
+              <UsersThree size={22} color={tokens.foregroundMuted} />
+              <Text style={{ color: tokens.foregroundMuted, textAlign: 'center' }}>
+                Create a group to split money with people you know.
+              </Text>
+              <Button size="sm" variant="outline" onPress={() => router.push('/group/new' as never)}>
+                Create group
+              </Button>
+            </View>
           )}
         </View>
 
@@ -352,18 +359,27 @@ export default function HomeScreen() {
                   key={transactionId}
                   title={transaction.title}
                   category={category?.name}
+                  categoryIcon={typeof category?.icon === 'string' ? category.icon : undefined}
                   amountMinor={transaction.amountMinor}
                   currency={transaction.currency}
                   type={transaction.type}
+                  semanticType={transaction.groupId ? 'split' : undefined}
                   date={new Date(transaction.occurredAt).toLocaleDateString()}
                   onPress={() => router.push(`/transaction/${transactionId}` as never)}
                 />
               );
             })
           ) : (
-            <Text style={{ color: tokens.foregroundMuted }}>
-              Your latest transactions will appear here.
-            </Text>
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 8 }}>
+              <ReceiptText size={22} color={tokens.foregroundMuted} />
+              <Typography variant="bodyLarge">No transactions yet</Typography>
+              <Typography variant="small" style={{ textAlign: 'center', maxWidth: 290 }}>
+                Record an expense or income to start your ledger.
+              </Typography>
+              <Button size="sm" variant="outline" onPress={() => router.push('/transaction/new' as never)}>
+                Add transaction
+              </Button>
+            </View>
           )}
         </View>
       </ScrollView>

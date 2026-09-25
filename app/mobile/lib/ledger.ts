@@ -49,15 +49,18 @@ export function ledgerTransaction(record: LocalRecord): AnalyticsTransaction | n
 export function transactionRow(record: LocalRecord, accounts: Map<string, LocalRecord>, categories: Map<string, LocalRecord>, timeZone: string) {
   const transaction = ledgerTransaction(record);
   if (!transaction) return null;
+  const category = categories.get(transaction.categoryId ?? '');
   return {
     title: transaction.title || transaction.merchant || 'Transaction',
     merchant: transaction.merchant,
-    category: categories.get(transaction.categoryId ?? '')?.name as string | undefined,
+    category: typeof category?.name === 'string' ? category.name : undefined,
+    categoryIcon: typeof category?.icon === 'string' ? category.icon : undefined,
     account: accounts.get(transaction.accountId ?? '')?.name as string | undefined,
     date: new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(transaction.occurredAt),
     status: transaction.status,
     amountMinor: transaction.amountMinor,
     currency: transaction.currency,
     type: transaction.type,
+    semanticType: typeof record.groupId === 'string' ? 'split' as const : undefined,
   };
 }

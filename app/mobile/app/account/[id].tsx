@@ -8,6 +8,7 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money, TransactionRow } from '@/components/finance';
+import { recordIndex } from '@/lib/ledger';
 import {
   Button,
   Empty,
@@ -60,6 +61,8 @@ type TransactionRecord = LocalRecord & {
   cloudId?: string;
   accountId: string;
   transferAccountId?: string;
+  categoryId?: string;
+  groupId?: string;
   type: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
   amountMinor: bigint;
   currency: string;
@@ -81,6 +84,8 @@ export default function AccountDetailScreen() {
     return { startAt: endAt - 30 * 86_400_000, endAt };
   });
   const accountState = useLocalRecords<AccountRecord>(userId, 'account');
+  const categoryState = useLocalRecords<LocalRecord>(userId, 'category');
+  const categories = useMemo(() => recordIndex(categoryState.data ?? []), [categoryState.data]);
   const localTransactions = useLocalRecords<TransactionRecord>(userId, 'transaction');
   const transactionRange = useLocalTransactionRange<TransactionRecord>(
     userId,
@@ -306,33 +311,40 @@ export default function AccountDetailScreen() {
                 </View>
               ) : (
                 <View>
-                  {accountTransactions.map((transaction, index) => (
-                    <React.Fragment key={transaction._id ?? transaction.id ?? transaction.cloudId}>
-                      <TransactionRow
-                        title={
-                          transaction.type === 'transfer'
-                            ? `${accountIds.has(transaction.accountId) ? 'Transfer out' : 'Transfer in'} · ${transaction.title}`
-                            : transaction.title
-                        }
-                        amountMinor={transaction.amountMinor}
-                        currency={transaction.currency}
-                        type={
-                          transaction.type === 'transfer'
-                            ? accountIds.has(transaction.accountId)
-                              ? 'expense'
-                              : 'income'
-                            : transaction.type
-                        }
-                        date={new Date(transaction.occurredAt).toLocaleDateString()}
-                        onPress={() =>
-                          router.push(
-                            `/transaction/${transaction._id ?? transaction.id ?? transaction.cloudId}` as never,
-                          )
-                        }
-                      />
-                      {index < accountTransactions.length - 1 && <Separator />}
-                    </React.Fragment>
-                  ))}
+                  {accountTransactions.map((transaction, index) => {
+                    const category = categories.get(transaction.categoryId ?? '');
+                    return (
+                      <React.Fragment key={transaction._id ?? transaction.id ?? transaction.cloudId}>
+                        <TransactionRow
+                          title={
+                            transaction.type === 'transfer'
+                              ? `${accountIds.has(transaction.accountId) ? 'Transfer out' : 'Transfer in'} · ${transaction.title}`
+                              : transaction.title
+                          }
+                          category={typeof category?.name === 'string' ? category.name : undefined}
+                          categoryIcon={typeof category?.icon === 'string' ? category.icon : undefined}
+                          amountMinor={transaction.amountMinor}
+                          currency={transaction.currency}
+                          type={
+                            transaction.type === 'transfer'
+                              ? accountIds.has(transaction.accountId)
+                                ? 'expense'
+                                : 'income'
+                              : transaction.type
+                          }
+                          semanticType={transaction.groupId ? 'split' :
+                            transaction.type === 'transfer' ? 'transfer' : undefined}
+                          date={new Date(transaction.occurredAt).toLocaleDateString()}
+                          onPress={() =>
+                            router.push(
+                              `/transaction/${transaction._id ?? transaction.id ?? transaction.cloudId}` as never,
+                            )
+                          }
+                        />
+                        {index < accountTransactions.length - 1 && <Separator />}
+                      </React.Fragment>
+                    );
+                  })}
                 </View>
               )}
             </View>

@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight, ReceiptText } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon, Money, SettingsRow } from '@/components/finance';
+import { CategoryIcon, Money, SemanticMarker, SettingsRow } from '@/components/finance';
 import { Button, Empty, IconButton, Separator, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -74,11 +74,25 @@ export default function TransactionDetailScreen() {
           />
           <Money amountMinor={transaction.amountMinor} currency={transaction.currency} type={transaction.type} size="display" />
           <Typography variant="heading" style={{ textAlign: 'center' }}>{transaction.title || 'Transaction'}</Typography>
-          <Typography variant="caption">{transaction.type.toUpperCase()} · {transaction.status.toUpperCase()}</Typography>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
+            <SemanticMarker type={record?.groupId ? 'split' : transaction.type} />
+            <Typography variant="caption">{transaction.status.toUpperCase()}</Typography>
+          </View>
         </View>
         <View>
           {transaction.merchant && <><SettingsRow label="Merchant" value={transaction.merchant} /><Separator /></>}
-          <SettingsRow label="Category" value={typeof category?.name === 'string' ? category.name : 'Uncategorized'} />
+          <View style={{ minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Text style={{ color: tokens.foregroundMuted, flex: 1 }}>Category</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flex: 1 }}>
+              <CategoryIcon
+                label={typeof category?.name === 'string' ? category.name : 'Uncategorized'}
+                icon={typeof category?.icon === 'string' ? category.icon : undefined}
+              />
+              <Typography variant="bodyLarge" numberOfLines={2} style={{ flexShrink: 1, textAlign: 'right' }}>
+                {typeof category?.name === 'string' ? category.name : 'Uncategorized'}
+              </Typography>
+            </View>
+          </View>
           <Separator />
           <SettingsRow label="Account" value={typeof account?.name === 'string' ? account.name : 'Unassigned account'} />
           {transaction.type === 'transfer' && <><Separator /><SettingsRow label="Destination" value={typeof destination?.name === 'string' ? destination.name : 'Unassigned account'} /></>}

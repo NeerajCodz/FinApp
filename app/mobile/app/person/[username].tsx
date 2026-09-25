@@ -64,6 +64,7 @@ function GroupTimeline({
           amountMinor={transaction.amountMinor ?? 0n}
           currency={String(transaction.currency ?? group.currency ?? 'INR')}
           type="expense"
+          semanticType="split"
           date={new Date(Number(transaction.occurredAt ?? Date.now())).toLocaleDateString()}
         />
       ))}

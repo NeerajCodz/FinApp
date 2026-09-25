@@ -474,31 +474,50 @@ export default function CategoryDetailScreen() {
                   <Typography variant="small">
                     Choose separate defaults for expenses and income.
                   </Typography>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {(['expense', 'income'] as const).map((transactionType) => {
-                      const isDefault =
-                        (transactionType === 'expense'
-                          ? profile.defaultExpenseCategoryId
-                          : profile.defaultIncomeCategoryId) !== undefined &&
-                        categoryIdentifiers.has(
-                          transactionType === 'expense'
-                            ? profile.defaultExpenseCategoryId!
-                            : profile.defaultIncomeCategoryId!,
-                        );
-                      return (
+                  {(['expense', 'income'] as const).map((transactionType) => {
+                    const isDefault =
+                      (transactionType === 'expense'
+                        ? profile.defaultExpenseCategoryId
+                        : profile.defaultIncomeCategoryId) !== undefined &&
+                      categoryIdentifiers.has(
+                        transactionType === 'expense'
+                          ? profile.defaultExpenseCategoryId!
+                          : profile.defaultIncomeCategoryId!,
+                      );
+                    return (
+                      <View
+                        key={transactionType}
+                        style={{
+                          minHeight: 52,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: tokens.borderSubtle,
+                        }}
+                      >
+                        <Typography variant="bodyLarge">
+                          {transactionType === 'expense' ? 'Expenses' : 'Income'}
+                        </Typography>
                         <Button
-                          key={transactionType}
+                          accessibilityLabel={
+                            isDefault
+                              ? `Remove ${transactionType} default category`
+                              : `Set ${category?.name ?? 'category'} as default for ${transactionType}`
+                          }
+                          accessibilityState={{ selected: isDefault, disabled: pending }}
                           size="sm"
-                          variant={isDefault ? 'outline' : 'primary'}
+                          variant="ghost"
                           disabled={pending}
                           onPress={() => toggleDefault(transactionType)}
-                          style={{ flex: 1 }}
+                          style={{ minHeight: 36, paddingHorizontal: 8 }}
                         >
-                          {isDefault ? `Default ${transactionType}` : `Use for ${transactionType}`}
+                          {isDefault ? 'Default' : 'Set default'}
                         </Button>
-                      );
-                    })}
-                  </View>
+                      </View>
+                    );
+                  })}
                 </>
               )}
             </View>
