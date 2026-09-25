@@ -23,6 +23,7 @@ const options: { type: NotificationType; label: string; detail: string }[] = [
   { type: 'recurring', label: 'Recurring reminders', detail: 'Due dates for reminder-only rules.' },
   { type: 'group', label: 'Groups & splits', detail: 'When you join a group or share an expense.' },
   { type: 'settlement', label: 'Settlements', detail: 'When another group member records a settlement.' },
+  { type: 'security', label: 'Security', detail: 'When a verified email recovery code is used for this device’s app passcode.' },
   { type: 'sync', label: 'Sync problems', detail: 'Changes that need your attention on this device.' },
 ];
 
@@ -95,13 +96,6 @@ export default function NotificationSettingsScreen() {
           </Typography>
         </View>)}
       </View>}
-      <View style={{ gap: 6 }}>
-        <Typography variant="label">Not delivered yet</Typography>
-        <Text style={{ color: tokens.foregroundMuted }}>
-          Security changes do not have a verified event producer yet, so this
-          category does not appear as an alert.
-        </Text>
-      </View>
       <View style={{ gap: 10, paddingTop: 12, borderTopWidth: 1, borderColor: tokens.borderSubtle }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Bell size={19} color={tokens.primary} />

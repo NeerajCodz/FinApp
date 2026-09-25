@@ -9,6 +9,7 @@ import { getOptionalUser } from './shared/auth';
 import { normalizeUsername } from './users/domain';
 import { action, internalMutation, internalQuery } from './_generated/server';
 import { v } from 'convex/values';
+import { createNotification } from './notifications/mutations';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -213,6 +214,10 @@ export const consumeAppLockReset = internalMutation({
       return false;
     }
     await ctx.db.patch(challenge._id, { consumedAt: now });
+    await createNotification(ctx, userId, `security:app-lock:${challenge._id}:verified`,
+      'security', 'security', String(challenge._id),
+      'Email recovery code verified',
+      'A code for resetting this device’s app passcode was verified.');
     return true;
   },
 });

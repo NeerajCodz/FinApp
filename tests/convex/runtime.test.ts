@@ -195,6 +195,9 @@ describe('Convex public runtime functions', () => {
         .toMatchObject({ verified: true, userId });
       expect(await authenticated.action(api.auth.verifyAppLockReset, { challengeId, code }))
         .toMatchObject({ verified: false });
+      expect(await t.run((ctx) => ctx.db.query('notifications')
+        .withIndex('by_recipient_createdAt', (query) => query.eq('recipientId', userId)).collect()))
+        .toMatchObject([{ type: 'security', title: 'Email recovery code verified' }]);
       await t.run(async (ctx) => {
         const challenge = await ctx.db.query('appLockResetChallenges')
           .withIndex('by_user', (query) => query.eq('userId', userId)).unique();
@@ -213,6 +216,9 @@ describe('Convex public runtime functions', () => {
       });
       expect(await authenticated.action(api.auth.verifyAppLockReset,
         { challengeId: expired.challengeId, code: expiredCode })).toMatchObject({ verified: false });
+      expect(await t.run((ctx) => ctx.db.query('notifications')
+        .withIndex('by_recipient_createdAt', (query) => query.eq('recipientId', userId)).collect()))
+        .toHaveLength(1);
 
       await t.run(async (ctx) => {
         await ctx.db.patch(userId, { emailVerificationTime: undefined });
