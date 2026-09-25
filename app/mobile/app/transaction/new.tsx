@@ -39,6 +39,7 @@ type CategoryRecord = LocalRecord & {
 type Picker = 'category' | 'account' | 'destination' | 'date' | null;
 const transactionTypes: TransactionType[] = ['expense', 'income', 'transfer'];
 const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const scalar = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
 
 function amountInMinor(value: string): bigint | null {
   if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
@@ -140,17 +141,23 @@ function DateSelector({ value, onChange }: { value: Date; onChange: (date: Date)
   );
 }
 export default function NewTransactionScreen() {
-  const { type: queryType } = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{
+    type?: string | string[]; amount?: string | string[]; accountId?: string | string[];
+    categoryId?: string | string[]; destinationId?: string | string[];
+    occurredAt?: string | string[]; note?: string | string[];
+  }>();
+  const queryType = scalar(params.type);
   const initialType: TransactionType = transactionTypes.includes(queryType as TransactionType)
-    ? (queryType as TransactionType)
-    : 'expense';
-  const [amount, setAmount] = useState('');
+    ? (queryType as TransactionType) : 'expense';
+  const initialAmount = scalar(params.amount);
+  const initialDate = Number(scalar(params.occurredAt));
+  const [amount, setAmount] = useState(initialAmount && amountInMinor(initialAmount) ? initialAmount : '');
   const [type, setType] = useState<TransactionType>(initialType);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [destinationId, setDestinationId] = useState<string | null>(null);
-  const [date, setDate] = useState(() => new Date());
-  const [note, setNote] = useState('');
+  const [categoryId, setCategoryId] = useState<string | null>(scalar(params.categoryId) || null);
+  const [accountId, setAccountId] = useState<string | null>(scalar(params.accountId) || null);
+  const [destinationId, setDestinationId] = useState<string | null>(scalar(params.destinationId) || null);
+  const [date, setDate] = useState(() => Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date());
+  const [note, setNote] = useState(scalar(params.note) ?? '');
   const [picker, setPicker] = useState<Picker>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -185,7 +192,7 @@ export default function NewTransactionScreen() {
         item.cloudId === preferredCategoryId,
     ) ??
     categoryOptions?.[0];
-  const destination = accounts?.find((item) => String(item.id ?? item._id) === destinationId);
+  const destination = accounts?.find((item) => String(item.id ?? item._id) === destinationId || item.cloudId === destinationId);
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   const typeColor =
     type === 'expense' ? tokens.expense : type === 'income' ? tokens.income : tokens.warning;
