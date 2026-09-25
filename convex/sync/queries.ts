@@ -10,7 +10,9 @@ const sectionValidator = v.union(
   v.literal('categories'),
   v.literal('budgets'),
   v.literal('goals'),
+  v.literal('goalContributions'),
   v.literal('recurringRules'),
+  v.literal('notifications'),
   v.literal('groupMemberships'),
 );
 function assertPageSize(numItems: number): void {
@@ -106,10 +108,22 @@ export const bootstrapSection = query({
         .paginate(paginationOpts);
       return { section, ...page };
     }
+    if (section === 'goalContributions') {
+      const page = await ctx.db.query('goalContributions')
+        .withIndex('by_owner_occurredAt', (index) => index.eq('ownerId', user._id))
+        .paginate(paginationOpts);
+      return { section, ...page };
+    }
     if (section === 'recurringRules') {
       const page = await ctx.db
         .query('recurringRules')
         .withIndex('by_owner_nextOccurrence', (index) => index.eq('ownerId', user._id))
+        .paginate(paginationOpts);
+      return { section, ...page };
+    }
+    if (section === 'notifications') {
+      const page = await ctx.db.query('notifications')
+        .withIndex('by_recipient_createdAt', (index) => index.eq('recipientId', user._id))
         .paginate(paginationOpts);
       return { section, ...page };
     }
@@ -130,10 +144,15 @@ export const bootstrapSection = query({
         ctx.db.query('settlements').withIndex('by_group', (index) => index.eq('groupId', groupId)).collect(),
       )).then((items) => items.flat()),
     ]);
+    const namedMembers = await Promise.all(members.map(async (member) => {
+      const person = await ctx.db.get(member.userId);
+      return { ...member, displayName: person?.displayName ?? person?.name ?? 'Finapp user',
+        username: person?.username };
+    }));
     const invites = await Promise.all(groupIds.map((groupId) =>
       ctx.db.query('groupInvites').withIndex('by_group', (index) => index.eq('groupId', groupId)).collect(),
     )).then((items) => items.flat());
-    return { section, ...page, related: { groups, members, invites, expenses, settlements } };
+    return { section, ...page, related: { groups, members: namedMembers, invites, expenses, settlements } };
   },
 });
 
@@ -181,6 +200,7 @@ async function relatedTransactionData(
           name: account.name,
           ownerId: account.ownerId,
           type: account.type,
+          customType: account.customType,
           currency: account.currency,
         }]
       : [],

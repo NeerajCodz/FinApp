@@ -10,6 +10,8 @@ import {
 } from '../shared/permissions';
 import { changeMemberRole, createGroup, type Group } from './domain';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
+import { createNotification } from '../notifications/mutations';
+import { allocateParticipants } from '../splits/domain';
 
 export function createGroupRecord(ownerId: string, name: string, currency: string): Group {
   return createGroup(ownerId, name, currency);
@@ -129,6 +131,11 @@ export const create = mutation({
     }
     for (const invite of invites)
       await recordSyncChange(ctx, owner._id, 'groupInvites', String(invite._id), now, invite);
+    for (const member of memberships) {
+      if (member.userId !== owner._id) await createNotification(ctx, member.userId,
+        `group:${groupId}:joined`, 'group', 'group', String(groupId),
+        `Added to ${name}`, 'A new shared group is ready.');
+    }
     return groupId;
   },
 });
@@ -141,7 +148,12 @@ export const addExpense = mutation({
     amountMinor: v.int64(),
     currency: v.string(),
     occurredAt: v.number(),
-    participantUsernames: v.array(v.string()),
+    participants: v.array(v.object({
+      userId: v.id('users'),
+      amountMinor: v.int64(),
+      method: v.union(v.literal('equal'), v.literal('exact'), v.literal('percentage'), v.literal('shares')),
+      basisValue: v.optional(v.string()),
+    })),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -161,6 +173,8 @@ export const addExpense = mutation({
     if (account.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
     const currency = args.currency.toUpperCase();
     assertCurrency(currency);
+    if (currency !== group.currency || currency !== account.currency || account.archivedAt !== undefined)
+      throw new Error('CURRENCY_MISMATCH');
     const membership = await ctx.db
       .query('groupMembers')
       .withIndex('by_group_user', (query) =>
@@ -168,26 +182,29 @@ export const addExpense = mutation({
       )
       .unique();
     if (!membership) throw new Error('NOT_MEMBER');
-    const handles = [
-      ...new Set(
-        args.participantUsernames.map((value) => value.replace(/^@+/, '').trim().toLowerCase()),
-      ),
-    ].filter(Boolean);
-    const participantIds = [user._id];
-    for (const handle of handles) {
-      const participant = await ctx.db
-        .query('users')
-        .withIndex('by_username', (query) => query.eq('username', handle))
-        .unique();
-      if (!participant) throw new Error('UNKNOWN_USERNAME');
+    const method = args.participants[0]?.method;
+    if (!method ||
+      new Set(args.participants.map((item) => item.userId)).size !== args.participants.length ||
+      args.participants.some((item) => item.method !== method || item.amountMinor < 0n ||
+        (method === 'equal' ? item.basisValue !== undefined : !/^\d+$/.test(item.basisValue ?? ''))) ||
+      args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor)
+      throw new Error('INVALID_SPLIT');
+    const allocation = allocateParticipants(
+      args.amountMinor,
+      args.participants.map((item) => item.userId),
+      method,
+      method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
+    );
+    if (allocation.some((item, index) => item.amountMinor !== args.participants[index]?.amountMinor))
+      throw new Error('INVALID_SPLIT');
+    for (const participant of args.participants) {
       const participantMembership = await ctx.db
         .query('groupMembers')
         .withIndex('by_group_user', (query) =>
-          query.eq('groupId', args.groupId).eq('userId', participant._id),
+          query.eq('groupId', args.groupId).eq('userId', participant.userId),
         )
         .unique();
       if (!participantMembership) throw new Error('NOT_MEMBER');
-      if (!participantIds.includes(participant._id)) participantIds.push(participant._id);
     }
     const now = Date.now();
     const transactionId = await ctx.db.insert('transactions', {
@@ -208,16 +225,13 @@ export const addExpense = mutation({
       userId: user._id,
       amountMinor: args.amountMinor,
     });
-    const base = args.amountMinor / BigInt(participantIds.length);
-    let remainder = args.amountMinor % BigInt(participantIds.length);
-    for (const participantId of participantIds) {
-      const share = base + (remainder > 0n ? 1n : 0n);
-      remainder -= remainder > 0n ? 1n : 0n;
+    for (const participant of args.participants) {
       await ctx.db.insert('expenseParticipants', {
         transactionId,
-        userId: participantId,
-        amountMinor: share,
-        method: 'equal',
+        userId: participant.userId,
+        amountMinor: participant.amountMinor,
+        method: participant.method,
+        ...(participant.basisValue === undefined ? {} : { basisValue: participant.basisValue }),
       });
     }
     await ctx.db.patch(args.groupId, { updatedAt: now });
@@ -240,6 +254,11 @@ export const addExpense = mutation({
       await recordSyncChange(ctx, scopeUserId, 'groups', String(args.groupId), now, {
         ...group, updatedAt: now, _id: args.groupId,
       });
+    }
+    for (const participant of args.participants) {
+      if (participant.userId !== user._id) await createNotification(ctx, participant.userId,
+        `split:${transactionId}`, 'group', 'group', String(args.groupId),
+        `New expense in ${group.name}`, args.title.trim());
     }
     return transactionId;
   },

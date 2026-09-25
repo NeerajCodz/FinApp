@@ -1,43 +1,8 @@
 import React from 'react';
-import { ScrollView, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { ArrowLeft } from '@/lib/icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { toast } from '@/lib/toast';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SettlementEditor } from '@/components/finance';
-import { IconButton } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 
 export default function SettlementScreen() {
-  const { userId } = useLocalSearchParams<{ userId: string }>();
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
-  async function save() {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    toast.success('Settlement complete');
-    router.back();
-  }
-  return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 28,
-      }}
-    >
-      <View style={{ alignItems: 'flex-start' }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-      </View>
-      <SettlementEditor
-        memberName={userId && userId.length <= 24 ? userId : 'a group member'}
-        onSave={save}
-      />
-    </ScrollView>
-  );
+  const params = useLocalSearchParams<{ userId?: string | string[] }>();
+  const member = Array.isArray(params.userId) ? params.userId[0] : params.userId;
+  return <Redirect href={{ pathname: '/settle/new', params: member ? { member } : {} }} />;
 }

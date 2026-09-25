@@ -1,12 +1,12 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, Plus } from '@/lib/icons';
+import { ArrowLeft, Plus, ReceiptText } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLocalGroupRange, useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TransactionRow } from '@/components/finance';
-import { Button, Empty, IconButton, Typography } from '@/components/ui';
+import { Button, IconButton, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function GroupExpensesScreen() {
@@ -57,16 +57,22 @@ export default function GroupExpensesScreen() {
               amountMinor={expense.amountMinor as bigint}
               currency={String(expense.currency ?? group?.currency ?? 'INR')}
               type="expense"
+              semanticType="split"
               date={new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
             />
           ))}
         </View>
       ) : (
-        <Empty
-          title="No group expenses."
-          description="Add the first expense and choose who shared it."
-          action={<Button size="sm" onPress={() => router.push(`/group/${id}/expenses/new` as never)}>Add expense</Button>}
-        />
+        <View style={{ alignItems: 'center', paddingVertical: 24, gap: 10 }}>
+          <ReceiptText size={28} color={tokens.foregroundMuted} />
+          <Typography variant="bodyLarge">No group expenses</Typography>
+          <Typography variant="small" style={{ textAlign: 'center' }}>
+            Add the first expense and choose who shared it.
+          </Typography>
+          <Button size="sm" variant="outline" onPress={() => router.push(`/group/${id}/expenses/new` as never)}>
+            Add expense
+          </Button>
+        </View>
       )}
     </ScrollView>
   );

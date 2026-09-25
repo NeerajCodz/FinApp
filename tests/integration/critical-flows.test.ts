@@ -26,6 +26,6 @@ describe('Finapp critical flow contracts', () => {
     expect(markConflict('TRANSACTION_CHANGED').action).toBe('Review changes');
     expect(
       notificationRoute({ type: 'expense', entityType: 'transaction', entityId: 'tx-1' }),
-    ).toBe('finapp://transaction/tx-1');
+    ).toBe('/transaction/tx-1');
   });
 });

@@ -7,6 +7,7 @@ import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 import { assertAccountCanReceiveTransaction, type AccountDraft } from '../accounts/mutations';
 import { assertMutationAvailable, transactionSignedAmount } from './domain';
 import { getMutationReceipt, recordSyncChange, storeMutationReceipt } from '../sync/common';
+import { createNotification } from '../notifications/mutations';
 
 export type TransactionDraft = {
   ownerId: string;
@@ -159,6 +160,42 @@ export const create = mutation({
       revision,
       updatedAt,
     );
+    if (args.type === 'expense') {
+      const budgets = await ctx.db.query('budgets')
+        .withIndex('by_owner_period', (query) => query.eq('ownerId', user._id))
+        .collect();
+      const active = budgets.filter((budget) =>
+        budget.archivedAt === undefined && budget.currency === args.currency &&
+        args.occurredAt >= budget.startAt && args.occurredAt < budget.endAt &&
+        (budget.period !== 'category' || budget.categoryId === args.categoryId) &&
+        (budget.period !== 'account' || budget.accountId === args.accountId));
+      if (active.length) {
+        const startAt = Math.min(...active.map((budget) => budget.startAt));
+        const endAt = Math.max(...active.map((budget) => budget.endAt));
+        const spending = await ctx.db.query('transactions')
+          .withIndex('by_owner_occurredAt', (query) => query.eq('ownerId', user._id)
+            .gte('occurredAt', startAt).lt('occurredAt', endAt)).collect();
+        for (const budget of active) {
+          const current = spending.reduce((sum, transaction) =>
+            transaction.type === 'expense' && transaction.status === 'posted' &&
+            transaction.deletedAt === undefined && transaction.currency === budget.currency &&
+            transaction.occurredAt >= budget.startAt && transaction.occurredAt < budget.endAt &&
+            (budget.period !== 'category' || budget.categoryId === transaction.categoryId) &&
+            (budget.period !== 'account' || budget.accountId === transaction.accountId)
+              ? sum + transaction.amountMinor : sum, 0n);
+          const previous = current - args.amountMinor;
+          const threshold = previous < budget.amountMinor && current >= budget.amountMinor
+            ? 100 : previous * 5n < budget.amountMinor * 4n && current * 5n >= budget.amountMinor * 4n
+              ? 80 : null;
+          if (threshold) await createNotification(ctx, user._id,
+            `budget:${budget._id}:${budget.startAt}:${threshold}`, 'budget', 'budget',
+            String(budget._id), `${budget.name}: ${threshold}% used`,
+            threshold === 100 ? 'You reached this budget limit.' : 'You are nearing this budget limit.');
+        }
+      }
+    }
+    await createNotification(ctx, user._id, `transaction:${transactionId}`, 'transaction',
+      'transaction', String(transactionId), 'Transaction recorded', record.title);
     return transactionId;
   },
 });

@@ -825,6 +825,19 @@ describe('Convex public runtime functions', () => {
     expect(
       await authenticated.query(api.groups.queries.personTimeline, { username: '@rahul_42' }),
     ).toMatchObject([{ id: transactionId, title: 'Hotel', amountMinor: 240000n }]);
+    const settlement = {
+      groupId, fromUserId: memberId, toUserId: ownerId, accountId,
+      amountMinor: 60000n, currency: 'INR', occurredAt: Date.UTC(2026, 7, 28),
+      clientMutationId: 'group-payment-1',
+    };
+    const settlementId = await authenticated.mutation(api.settlements.mutations.create, settlement);
+    expect(await authenticated.mutation(api.settlements.mutations.create, settlement)).toBe(settlementId);
+    expect(await t.run((ctx) => ctx.db.query('settlements').collect())).toMatchObject([
+      { _id: settlementId, fromUserId: memberId, toUserId: ownerId, amountMinor: 60000n },
+    ]);
+    await expect(authenticated.mutation(api.settlements.mutations.create, {
+      ...settlement, clientMutationId: 'group-payment-2', amountMinor: 60001n,
+    })).rejects.toThrow('SETTLEMENT_EXCEEDS_BALANCE');
   });
 
   it('rejects mutation attempts without an authenticated identity', async () => {

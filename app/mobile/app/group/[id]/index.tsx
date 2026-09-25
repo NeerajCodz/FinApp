@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
-import { ArrowLeft, Plus } from '@/lib/icons';
+import { ArrowLeft, Plus, ReceiptText, UsersThree } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money, TransactionRow } from '@/components/finance';
 import { Avatar, Button, Empty, IconButton, SectionHeader, Separator, Text, Typography } from '@/components/ui';
@@ -25,6 +25,9 @@ export default function GroupHomeScreen() {
       <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>{String(group?.name ?? 'Group')}</Typography>
     </View>
     {!id ? <Empty title="Missing group ID" description="Open a group from your groups list." />
+      : !group && error ? <Empty title="Group unavailable"
+        description="Saved group data could not be loaded on this device."
+        action={<Button variant="outline" onPress={retry}>Retry</Button>} />
       : !group && !loading ? <Empty title="Group unavailable" description="This group is not saved on this device." />
       : <>
         <View style={{ padding: 20, gap: 9, borderRadius: 22, backgroundColor: tokens.surfaceSubtle, borderWidth: 1, borderColor: tokens.borderSubtle }}>
@@ -36,6 +39,10 @@ export default function GroupHomeScreen() {
             <Money amountMinor={balance} currency={ledger.currency} size="display" />
             <Typography variant="caption">{balance > 0n ? 'Owed to you' : balance < 0n ? 'You owe' : 'You are settled'}</Typography>
             <Button variant="outline" onPress={() => router.push({ pathname: '/group/[id]/balances', params: { id: id! } })}>View member balances</Button>
+            {balance !== 0n && <Button variant="outline"
+              onPress={() => router.push({ pathname: '/settle/new', params: { groupId: id! } })}>
+              Record a settlement
+            </Button>}
           </>}
         </View>
         <Button size="lg" onPress={() => router.push({ pathname: '/group/[id]/expenses/new', params: { id: id! } })}>
@@ -59,7 +66,13 @@ export default function GroupHomeScreen() {
                 </Typography>
               </TouchableOpacity>;
             })}
-          </ScrollView> : <Text style={{ color: tokens.foregroundMuted }}>No members are saved yet.</Text>}
+          </ScrollView> : <View style={{ alignItems: 'center', paddingVertical: 20, gap: 8 }}>
+            <UsersThree size={26} color={tokens.foregroundMuted} />
+            <Typography variant="bodyLarge">No members saved</Typography>
+            <Typography variant="small" style={{ textAlign: 'center' }}>
+              Members invited to this group will appear here.
+            </Typography>
+          </View>}
         </View>
         <Separator />
         <View style={{ gap: 12 }}>
@@ -68,10 +81,20 @@ export default function GroupHomeScreen() {
             const transactionId = recordId(expense);
             return <TransactionRow key={transactionId} title={String(expense.title ?? 'Group expense')}
               category="Group expense" account={String(group?.name ?? 'Group')}
-              amountMinor={expense.amountMinor as bigint} currency={ledger!.currency} type="expense"
+              amountMinor={expense.amountMinor as bigint} currency={ledger!.currency} type="expense" semanticType="split"
               date={new Date(Number(expense.occurredAt)).toLocaleDateString()}
               onPress={transactionId ? () => router.push({ pathname: '/transaction/[id]', params: { id: transactionId } }) : undefined} />;
-          }) : <Empty title="No shared expenses" description="Posted group expenses will appear here." />}
+          }) : <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
+            <ReceiptText size={28} color={tokens.foregroundMuted} />
+            <Typography variant="bodyLarge">No shared expenses</Typography>
+            <Typography variant="small" style={{ textAlign: 'center' }}>
+              Add an expense to start your group history.
+            </Typography>
+            <Button size="sm" variant="outline"
+              onPress={() => router.push({ pathname: '/group/[id]/expenses/new', params: { id: id! } })}>
+              Add expense
+            </Button>
+          </View>}
         </View>
       </>}
   </ScrollView>;

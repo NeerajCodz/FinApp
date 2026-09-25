@@ -343,13 +343,20 @@ export async function readGroupRange<T extends LocalRecord>(
   assertRange(startAt, endAt);
   await initializeLocalDatabase();
   const db = await getLocalDatabase();
+  const mapped = db.getFirstSync<{ cloudId: string }>(
+    'SELECT cloudId FROM idMappings WHERE userId = ? AND entityType = ? AND localId = ?',
+    userId, 'group', groupId,
+  );
+  const groupIds = mapped?.cloudId && mapped.cloudId !== groupId
+    ? [groupId, mapped.cloudId] : [groupId];
+  const placeholders = groupIds.map(() => '?').join(', ');
   const transactions = db.getAllSync<{ payload: string }>(
-    'SELECT payload FROM transactions WHERE userId = ? AND groupId = ? AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt',
-    userId, groupId, startAt, endAt,
+    `SELECT payload FROM transactions WHERE userId = ? AND groupId IN (${placeholders}) AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt`,
+    userId, ...groupIds, startAt, endAt,
   );
   const settlements = db.getAllSync<{ payload: string }>(
-    'SELECT payload FROM settlements WHERE userId = ? AND groupId = ? AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt',
-    userId, groupId, startAt, endAt,
+    `SELECT payload FROM settlements WHERE userId = ? AND groupId IN (${placeholders}) AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt`,
+    userId, ...groupIds, startAt, endAt,
   );
   return {
     transactions: transactions.map((row) => decode<T>(row.payload)),
@@ -820,7 +827,7 @@ export async function markSynced(
     db.runSync(
       `INSERT INTO recordVersions (userId, entityType, recordId, cloudUpdatedAt, clientUpdatedAt, revision)
        VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(userId, entityType, recordId)
-       DO UPDATE SET cloudUpdatedAt = excluded.cloudUpdatedAt, revision = excluded.revision`,
+       DO UPDATE SET cloudUpdatedAt = excluded.cloudUpdatedAt, clientUpdatedAt = 0, revision = excluded.revision`,
       userId,
       entityType,
       localEntityId,
@@ -1172,5 +1179,39 @@ export async function resolveConflict(
       conflict.recordId,
     );
   });
+  notify(userId);
+}
+
+// Device-generated reminders are kept in the same inbox but never placed in the cloud outbox.
+// Their deterministic IDs make resume/restart reconciliation idempotent.
+export async function putLocalNotification(
+  userId: string,
+  eventKey: string,
+  record: LocalRecord,
+): Promise<void> {
+  requireUser(userId);
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  const id = `local:${eventKey}`;
+  const result = db.runSync(
+    'INSERT OR IGNORE INTO notifications (userId, id, createdAt, payload) VALUES (?, ?, ?, ?)',
+    userId, id, Number(record.createdAt), encode({ ...record, id, eventKey }),
+  );
+  if (result.changes > 0) notify(userId);
+}
+
+export async function markDeviceNotificationRead(userId: string, id: string): Promise<void> {
+  requireUser(userId);
+  if (!id.startsWith('local:')) throw new Error('NOT_DEVICE_NOTIFICATION');
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  const row = db.getFirstSync<{ payload: string }>(
+    'SELECT payload FROM notifications WHERE userId = ? AND id = ?', userId, id,
+  );
+  if (!row) throw new Error('NOTIFICATION_NOT_FOUND');
+  const record = decode<LocalRecord>(row.payload);
+  if (record.readAt !== undefined) return;
+  db.runSync('UPDATE notifications SET payload = ? WHERE userId = ? AND id = ?',
+    encode({ ...record, readAt: Date.now() }), userId, id);
   notify(userId);
 }

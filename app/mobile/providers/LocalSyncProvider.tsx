@@ -1,5 +1,7 @@
 import React from 'react';
 import { AppState } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
 import { useConvex, useConvexAuth, useConvexConnectionState, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
@@ -25,6 +27,9 @@ import {
   retryFailedEntry,
   resolveConflict as resolveLocalConflict,
 } from '@/local/repository';
+import { putLocalNotification } from '@/local/repository';
+import { clearDeviceReminders, reconcileRecurringNotifications } from '@/local/notification-events';
+import { normalizeNotificationPreferences } from '@convex/notifications/domain';
 import { syncOutbox } from '@/local/sync/engine';
 import type { OutboxEntry } from '@/local/outbox/queue';
 import { clearValidatedLocalUserId, readValidatedLocalUserId, saveValidatedLocalUserId } from '@/local/identity';
@@ -60,7 +65,9 @@ const sectionEntity: Record<string, LocalEntity> = {
   categories: 'category',
   budgets: 'budget',
   goals: 'goal',
+  goalContributions: 'goalContribution',
   recurringRules: 'recurringRule',
+  notifications: 'notification',
 };
 const cloudEntity: Record<string, LocalEntity> = {
   users: 'profile',
@@ -83,7 +90,7 @@ const cloudEntity: Record<string, LocalEntity> = {
   notifications: 'notification',
   receipts: 'receiptMetadata',
 };
-const bootstrapSections = ['accounts', 'categories', 'budgets', 'goals', 'recurringRules', 'groupMemberships'] as const;
+const bootstrapSections = ['accounts', 'categories', 'budgets', 'goals', 'goalContributions', 'recurringRules', 'notifications', 'groupMemberships'] as const;
 type ChangesPage = FunctionReturnType<typeof api.sync.queries.changes>;
 type TransactionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapTransactions>;
 type GroupRangePage = FunctionReturnType<typeof api.sync.queries.groupRange>;
@@ -164,7 +171,59 @@ async function sendMutation(
       } as never);
     }
     case 'group.create': return convex.mutation(api.groups.mutations.create, payload as never);
-    case 'group.addExpense': return convex.mutation(api.groups.mutations.addExpense, payload as never);
+    case 'group.addExpense': {
+      const groupId = String(payload.groupId);
+      const accountId = String(payload.accountId);
+      const [mappedGroupId, mappedAccountId] = await Promise.all([
+        getMappedCloudId(userId, 'group', groupId),
+        getMappedCloudId(userId, 'account', accountId),
+      ]);
+      return convex.mutation(api.groups.mutations.addExpense, {
+        ...payload,
+        groupId: mappedGroupId ?? groupId,
+        accountId: mappedAccountId ?? accountId,
+      } as never);
+    }
+    case 'settlement.create': {
+      const groupId = String(payload.groupId);
+      const accountId = String(payload.accountId);
+      const [mappedGroupId, mappedAccountId] = await Promise.all([
+        getMappedCloudId(userId, 'group', groupId),
+        getMappedCloudId(userId, 'account', accountId),
+      ]);
+      return convex.mutation(api.settlements.mutations.create, {
+        ...payload,
+        groupId: mappedGroupId ?? groupId,
+        accountId: mappedAccountId ?? accountId,
+      } as never);
+    }
+    case 'goal.create': return convex.mutation(api.goals.mutations.create, payload as never);
+    case 'goal.contribute': {
+      const goalId = String(payload.goalId);
+      const mapped = await getMappedCloudId(userId, 'goal', goalId);
+      return convex.mutation(api.goals.mutations.contribute,
+        { ...payload, goalId: mapped ?? goalId } as never);
+    }
+    case 'recurring.create': {
+      const accountId = String(payload.accountId);
+      const mapped = await getMappedCloudId(userId, 'account', accountId);
+      return convex.mutation(api.recurring.mutations.create,
+        { ...payload, accountId: mapped ?? accountId } as never);
+    }
+    case 'recurring.setEnabled': {
+      const ruleId = String(payload.ruleId);
+      const mapped = await getMappedCloudId(userId, 'recurringRule', ruleId);
+      return convex.mutation(api.recurring.mutations.setEnabled,
+        { ...payload, ruleId: mapped ?? ruleId } as never);
+    }
+    case 'notification.preferences':
+      return convex.mutation(api.notifications.mutations.setPreferences, payload as never);
+    case 'notification.markRead': {
+      const notificationId = String(payload.notificationId);
+      const mapped = await getMappedCloudId(userId, 'notification', notificationId);
+      return convex.mutation(api.notifications.mutations.markRead,
+        { ...payload, notificationId: mapped ?? notificationId } as never);
+    }
     case 'user.update': return convex.mutation(api.users.mutations.update, payload as never);
     case 'user.defaultAccount': return convex.mutation(api.users.mutations.setDefaultAccount, payload as never);
     case 'user.defaultCategory': return convex.mutation(api.users.mutations.setDefaultCategory, payload as never);
@@ -188,6 +247,7 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const accountSnapshotsStale = React.useRef(false);
   const running = React.useRef(false);
   const retryTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const previousReminderUserId = React.useRef<string | null>(null);
   const isConnected = connection.isWebSocketConnected;
   const authenticatedUserId = typeof currentProfile?._id === 'string' ? currentProfile._id : null;
   const userId = authenticatedUserId ?? (!isConnected ? storedUserId : null);
@@ -545,6 +605,62 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   }, [flush, validatedOnline]);
 
   React.useEffect(() => () => clearTimeout(retryTimer.current), []);
+  React.useEffect(() => {
+    const previous = previousReminderUserId.current;
+    if (previous && previous !== userId)
+      void clearDeviceReminders(previous).catch(() => undefined);
+    previousReminderUserId.current = userId;
+  }, [userId]);
+
+  React.useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    let running = false;
+    let pending = false;
+    const refresh = () => {
+      if (running) { pending = true; return; }
+      running = true;
+      void (async () => {
+        do {
+          pending = false;
+          try { await reconcileRecurringNotifications(userId, () => active); }
+          catch { /* Local inbox remains usable if native scheduling is unavailable. */ }
+        } while (pending && active);
+        running = false;
+      })();
+    };
+    const unsubscribe = subscribeLocalData(userId, refresh);
+    const foreground = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    refresh();
+    return () => { active = false; unsubscribe(); foreground.remove(); };
+  }, [userId]);
+
+  React.useEffect(() => {
+    if (!userId || scopedFailedEntries.length === 0) return;
+    void readLocal<LocalRecord>(userId, 'settings').then(([settings]) => {
+      if (!normalizeNotificationPreferences(settings?.notificationPreferences).sync) return;
+      return Promise.all(scopedFailedEntries.map((entry) =>
+        putLocalNotification(userId, `sync:${entry.localId}`, {
+          type: 'sync', title: 'Sync needs attention',
+          body: 'A change could not reach your other devices. Review it in local sync.',
+          entityType: 'sync', createdAt: Date.now(),
+        })));
+    }).catch(() => undefined);
+  }, [userId, scopedFailedEntries]);
+
+  React.useEffect(() => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false,
+      }),
+    });
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      if (response.notification.request.content.data?.url === '/recurring') router.push('/recurring');
+    });
+    return () => subscription.remove();
+  }, []);
 
   return (
     <LocalSyncContext.Provider value={{
