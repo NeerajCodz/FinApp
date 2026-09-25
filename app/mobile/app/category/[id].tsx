@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
 import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BudgetProgress, CategoryIcon, Money, TransactionRow } from '@/components/finance';
@@ -20,21 +17,56 @@ import {
   Typography,
 } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
+import { commitLocalWrite } from '@/local/commands';
+import type { LocalRecord } from '@/local/repository';
+
+type CategoryRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  icon?: string;
+  isSystem?: boolean;
+  archivedAt?: number;
+  limitCurrency?: string;
+  monthlyLimitMinor?: bigint;
+};
+type ProfileRecord = LocalRecord & {
+  defaultCurrency?: string;
+  defaultExpenseCategoryId?: string;
+  defaultIncomeCategoryId?: string;
+};
+type TransactionRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  categoryId?: string;
+  occurredAt: number;
+  amountMinor: bigint;
+  currency: string;
+  type: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
+  title: string;
+  status: string;
+  deletedAt?: number;
+};
 
 export default function CategoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const detail = useQuery(
-    api.categories.queries.detail,
-    id ? { categoryId: id as Id<'categories'> } : 'skip',
+  const { userId, fetchTransactionRange } = useLocalSync();
+  const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
+  const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const transactionRecordsState = useLocalRecords<TransactionRecord>(userId, 'transaction');
+  const now = new Date();
+  const startAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const endAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+  const transactionState = useLocalTransactionRange<TransactionRecord>(
+    userId,
+    startAt,
+    endAt,
+    fetchTransactionRange,
   );
-  const profile = useQuery(api.users.queries.current);
-  const setLimit = useMutation(api.categories.mutations.setLimit);
-  const setIcon = useMutation(api.categories.mutations.setIcon);
-  const setDefaultCategory = useMutation(api.users.mutations.setDefaultCategory);
-  const renameCategory = useMutation(api.categories.mutations.rename);
-  const archiveCategory = useMutation(api.categories.mutations.archive);
   const [limitInput, setLimitInput] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -42,15 +74,93 @@ export default function CategoryDetailScreen() {
   const [nameInput, setNameInput] = useState('');
   const [confirmingArchive, setConfirmingArchive] = useState(false);
 
-  const category = detail?.category;
-  const categoryId = category?._id;
-  const currency = category?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
+  if (categoryState.error) throw categoryState.error;
+  if (profileState.error) throw profileState.error;
+  if (transactionState.error) throw transactionState.error;
+  if (transactionRecordsState.error) throw transactionRecordsState.error;
+
+  const selectedCategory = categoryState.data?.find(
+    (item) =>
+      item.archivedAt === undefined && (item.id === id || item._id === id),
+  );
+  const categoryLocalId = selectedCategory?.id ?? selectedCategory?._id;
+  const categoryPayloadId = selectedCategory?._id ?? selectedCategory?.id;
+  const categoryIdentifiers = new Set(
+    [selectedCategory?.id, selectedCategory?._id].filter(
+      (value): value is string => typeof value === 'string',
+    ),
+  );
+  const profile =
+    profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
+  const currency = selectedCategory?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
+  const categoryTransactions = (transactionRecordsState.data ?? [])
+    .filter(
+      (transaction) =>
+        transaction.status === 'posted' &&
+        transaction.deletedAt === undefined &&
+        transaction.categoryId !== undefined &&
+        categoryIdentifiers.has(transaction.categoryId),
+    )
+    .sort(
+      (left, right) =>
+        right.occurredAt - left.occurredAt ||
+        (right._id ?? right.id ?? '').localeCompare(left._id ?? left.id ?? ''),
+    );
+  const monthlyTransactions = (transactionState.data ?? []).filter(
+    (transaction) =>
+      transaction.status === 'posted' &&
+      transaction.deletedAt === undefined &&
+      transaction.categoryId !== undefined &&
+      categoryIdentifiers.has(transaction.categoryId),
+  );
+  const reportingCurrency = selectedCategory?.limitCurrency ?? profile?.defaultCurrency;
+  const monthTotals = monthlyTransactions.reduce(
+    (totals, transaction) => {
+      if (!reportingCurrency || transaction.currency !== reportingCurrency) return totals;
+      if (transaction.type === 'expense') totals.spentMinor += transaction.amountMinor;
+      if (transaction.type === 'income') totals.receivedMinor += transaction.amountMinor;
+      return totals;
+    },
+    { spentMinor: 0n, receivedMinor: 0n },
+  );
+  const detail =
+    categoryState.data === undefined ||
+    profileState.data === undefined ||
+    transactionState.data === undefined ||
+    transactionRecordsState.data === undefined
+      ? undefined
+      : selectedCategory
+        ? {
+            category: selectedCategory,
+            monthSpentMinor: monthTotals.spentMinor,
+            monthReceivedMinor: monthTotals.receivedMinor,
+            transactions: categoryTransactions,
+          }
+        : null;
+  const category = selectedCategory;
+
   async function saveIcon(icon?: string) {
-    if (!categoryId) return;
+    if (!userId || !category || !categoryLocalId || !categoryPayloadId) return;
+    if (icon !== undefined && (icon.length === 0 || icon.length > 32)) {
+      setError('Choose a valid category emoji.');
+      return;
+    }
     setPending(true);
     setError('');
     try {
-      await setIcon({ categoryId, icon: icon ?? null });
+      await commitLocalWrite(
+        userId,
+        'category',
+        'category.setIcon',
+        { ...category, icon: icon ?? undefined },
+        { categoryId: categoryPayloadId, icon: icon ?? null },
+        {
+          recordId: categoryLocalId,
+          dependencies: categoryPayloadId.startsWith('local-')
+            ? [`category:${categoryPayloadId}`]
+            : [],
+        },
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update the category emoji.');
     } finally {
@@ -59,7 +169,7 @@ export default function CategoryDetailScreen() {
   }
 
   async function saveLimit() {
-    if (!categoryId) return;
+    if (!userId || !category || !categoryLocalId || !categoryPayloadId) return;
     setError('');
     let amountMinor: bigint;
     try {
@@ -71,7 +181,19 @@ export default function CategoryDetailScreen() {
     }
     setPending(true);
     try {
-      await setLimit({ categoryId, amountMinor, currency });
+      await commitLocalWrite(
+        userId,
+        'category',
+        'category.setLimit',
+        { ...category, monthlyLimitMinor: amountMinor, limitCurrency: currency },
+        { categoryId: categoryPayloadId, amountMinor, currency },
+        {
+          recordId: categoryLocalId,
+          dependencies: categoryPayloadId.startsWith('local-')
+            ? [`category:${categoryPayloadId}`]
+            : [],
+        },
+      );
       setLimitInput('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save the limit.');
@@ -81,11 +203,23 @@ export default function CategoryDetailScreen() {
   }
 
   async function clearLimit() {
-    if (!categoryId) return;
+    if (!userId || !category || !categoryLocalId || !categoryPayloadId) return;
     setPending(true);
     setError('');
     try {
-      await setLimit({ categoryId, amountMinor: null });
+      await commitLocalWrite(
+        userId,
+        'category',
+        'category.setLimit',
+        { ...category, monthlyLimitMinor: undefined, limitCurrency: undefined },
+        { categoryId: categoryPayloadId, amountMinor: null },
+        {
+          recordId: categoryLocalId,
+          dependencies: categoryPayloadId.startsWith('local-')
+            ? [`category:${categoryPayloadId}`]
+            : [],
+        },
+      );
       setLimitInput('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not clear the limit.');
@@ -95,18 +229,33 @@ export default function CategoryDetailScreen() {
   }
 
   async function toggleDefault(transactionType: 'expense' | 'income') {
-    if (!category) return;
-    const isDefault =
-      (transactionType === 'expense'
-        ? profile?.defaultExpenseCategoryId
-        : profile?.defaultIncomeCategoryId) === category._id;
+    if (!userId || !category || !categoryPayloadId || !profile) return;
+    const previousId =
+      transactionType === 'expense'
+        ? profile.defaultExpenseCategoryId
+        : profile.defaultIncomeCategoryId;
+    const isDefault = previousId !== undefined && categoryIdentifiers.has(previousId);
+    const nextCategoryId = isDefault ? null : categoryPayloadId;
     setPending(true);
     setError('');
     try {
-      await setDefaultCategory({
-        transactionType,
-        categoryId: isDefault ? null : category._id,
-      });
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.defaultCategory',
+        {
+          ...profile,
+          ...(transactionType === 'expense'
+            ? { defaultExpenseCategoryId: nextCategoryId ?? undefined }
+            : { defaultIncomeCategoryId: nextCategoryId ?? undefined }),
+        },
+        { transactionType, categoryId: nextCategoryId },
+        {
+          recordId: profile.id ?? profile._id,
+          dependencies:
+            nextCategoryId?.startsWith('local-') ? [`category:${nextCategoryId}`] : [],
+        },
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update the default category.');
     } finally {
@@ -115,11 +264,24 @@ export default function CategoryDetailScreen() {
   }
 
   async function saveName() {
-    if (!categoryId || !nameInput.trim()) return;
+    const name = nameInput.trim();
+    if (!userId || !category || !categoryLocalId || !categoryPayloadId || !name) return;
     setPending(true);
     setError('');
     try {
-      await renameCategory({ categoryId, name: nameInput });
+      await commitLocalWrite(
+        userId,
+        'category',
+        'category.rename',
+        { ...category, name },
+        { categoryId: categoryPayloadId, name },
+        {
+          recordId: categoryLocalId,
+          dependencies: categoryPayloadId.startsWith('local-')
+            ? [`category:${categoryPayloadId}`]
+            : [],
+        },
+      );
       setEditingName(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not rename category.');
@@ -129,11 +291,46 @@ export default function CategoryDetailScreen() {
   }
 
   async function archive() {
-    if (!categoryId) return;
+    if (!userId || !category || !categoryLocalId || !categoryPayloadId) return;
     setPending(true);
     setError('');
     try {
-      await archiveCategory({ categoryId });
+      const defaultExpenseCategoryId =
+        profile?.defaultExpenseCategoryId !== undefined &&
+        categoryIdentifiers.has(profile.defaultExpenseCategoryId);
+      const defaultIncomeCategoryId =
+        profile?.defaultIncomeCategoryId !== undefined &&
+        categoryIdentifiers.has(profile.defaultIncomeCategoryId);
+      await commitLocalWrite(
+        userId,
+        'category',
+        'category.archive',
+        { ...category, archivedAt: Date.now() },
+        { categoryId: categoryPayloadId },
+        {
+          recordId: categoryLocalId,
+          dependencies: categoryPayloadId.startsWith('local-')
+            ? [`category:${categoryPayloadId}`]
+            : [],
+          relatedRecords:
+            profile && (defaultExpenseCategoryId || defaultIncomeCategoryId)
+              ? [
+                  {
+                    entityType: 'profile',
+                    record: {
+                      ...profile,
+                      ...(defaultExpenseCategoryId
+                        ? { defaultExpenseCategoryId: undefined }
+                        : {}),
+                      ...(defaultIncomeCategoryId
+                        ? { defaultIncomeCategoryId: undefined }
+                        : {}),
+                    },
+                  },
+                ]
+              : [],
+        },
+      );
       setConfirmingArchive(false);
       router.replace('/category' as never);
     } catch (cause) {
@@ -286,7 +483,12 @@ export default function CategoryDetailScreen() {
                       const isDefault =
                         (transactionType === 'expense'
                           ? profile.defaultExpenseCategoryId
-                          : profile.defaultIncomeCategoryId) === detail.category._id;
+                          : profile.defaultIncomeCategoryId) !== undefined &&
+                        categoryIdentifiers.has(
+                          transactionType === 'expense'
+                            ? profile.defaultExpenseCategoryId!
+                            : profile.defaultIncomeCategoryId!,
+                        );
                       return (
                         <Button
                           key={transactionType}
@@ -317,7 +519,7 @@ export default function CategoryDetailScreen() {
               ) : (
                 <View>
                   {detail.transactions.map((transaction, index) => (
-                    <React.Fragment key={transaction._id}>
+                    <React.Fragment key={transaction.id ?? transaction._id}>
                       <TransactionRow
                         title={transaction.title}
                         category={category?.name}
@@ -325,7 +527,9 @@ export default function CategoryDetailScreen() {
                         currency={transaction.currency}
                         type={transaction.type}
                         date={new Date(transaction.occurredAt).toLocaleDateString()}
-                        onPress={() => router.push(`/transaction/${transaction._id}` as never)}
+                        onPress={() =>
+                          router.push(`/transaction/${transaction._id ?? transaction.id}` as never)
+                        }
                       />
                       {index < detail.transactions.length - 1 && <Separator />}
                     </React.Fragment>

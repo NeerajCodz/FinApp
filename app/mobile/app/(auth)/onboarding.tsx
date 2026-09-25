@@ -3,9 +3,11 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight, Phone, UsersThree, Wallet } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useMutation } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { currencies } from '@convex/shared/validators';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { commitLocalWrite } from '@/local/commands';
 import { BrandMark } from '@/components/finance';
 import {
   Button,
@@ -79,8 +81,10 @@ export default function OnboardingScreen() {
   const [phone, setPhone] = useState('');
   const [accountName, setAccountName] = useState('');
   const [mode, setMode] = useState('personal');
+  const { userId } = useLocalSync();
+  const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
+  const profile = profileState.data?.[0];
   const [error, setError] = useState('');
-  const updateProfile = useMutation(api.users.mutations.update);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const handle = normalizeHandle(username);
@@ -105,11 +109,16 @@ export default function OnboardingScreen() {
       return;
     }
     try {
-      await updateProfile({
-        username: handle,
-        phone: phone.trim() || undefined,
-        defaultCurrency: currency,
-      });
+      if (!userId) throw new Error('AUTH_REQUIRED');
+      const displayName = String(profile?.displayName ?? 'Your profile');
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.update',
+        { ...(profile ?? {}), displayName, username: handle, phone: phone.trim() || undefined, defaultCurrency: currency },
+        { displayName, username: handle, phone: phone.trim() || undefined, defaultCurrency: currency },
+        { recordId: String(profile?.id ?? profile?._id ?? userId) },
+      );
       router.replace('/(tabs)');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile');

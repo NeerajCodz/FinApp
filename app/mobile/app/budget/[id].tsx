@@ -2,12 +2,50 @@ import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
 import { Button, IconButton, Progress, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
+import { commitLocalWrite } from '@/local/commands';
+import type { LocalRecord } from '@/local/repository';
+
+type BudgetRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  amountMinor: bigint;
+  currency: string;
+  period: 'monthly' | 'category' | 'account' | 'custom';
+  categoryId?: string;
+  accountId?: string;
+  startAt: number;
+  endAt: number;
+  archivedAt?: number;
+};
+type CategoryRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  archivedAt?: number;
+};
+type AccountRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  archivedAt?: number;
+};
+type TransactionRecord = LocalRecord & {
+  categoryId?: string;
+  accountId: string;
+  occurredAt: number;
+  amountMinor: bigint;
+  currency: string;
+  type: string;
+  status: string;
+  deletedAt?: number;
+};
 
 export default function BudgetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,23 +53,113 @@ export default function BudgetDetailScreen() {
   const insets = useSafeAreaInsets();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const budget = useQuery(api.budgets.queries.detail, id ? { budgetId: id as never } : 'skip');
-  const categories = useQuery(api.categories.queries.list);
-  const accounts = useQuery(api.accounts.queries.list);
-  const archive = useMutation(api.budgets.mutations.archive);
+  const { userId, fetchTransactionRange } = useLocalSync();
+  const budgetState = useLocalRecords<BudgetRecord>(userId, 'budget');
+  const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
+  const accountState = useLocalRecords<AccountRecord>(userId, 'account');
+  const selectedBudget = budgetState.data?.find(
+    (item) =>
+      item.archivedAt === undefined && (item.id === id || item._id === id),
+  );
+  const transactionState = useLocalTransactionRange<TransactionRecord>(
+    userId,
+    selectedBudget?.startAt ?? 0,
+    selectedBudget?.endAt ?? 0,
+    fetchTransactionRange,
+  );
+
+  if (budgetState.error) throw budgetState.error;
+  if (categoryState.error) throw categoryState.error;
+  if (accountState.error) throw accountState.error;
+  if (transactionState.error) throw transactionState.error;
+  const categoryIdByAlias = new Map<string, string>();
+  for (const category of categoryState.data ?? []) {
+    const canonicalId = category.id ?? category._id;
+    if (!canonicalId) continue;
+    if (category.id) categoryIdByAlias.set(category.id, canonicalId);
+    if (category._id) categoryIdByAlias.set(category._id, canonicalId);
+  }
+  const accountIdByAlias = new Map<string, string>();
+  for (const account of accountState.data ?? []) {
+    const canonicalId = account.id ?? account._id;
+    if (!canonicalId) continue;
+    if (account.id) accountIdByAlias.set(account.id, canonicalId);
+    if (account._id) accountIdByAlias.set(account._id, canonicalId);
+  }
+
+  const budgetLocalId = selectedBudget?.id ?? selectedBudget?._id;
+  const budgetPayloadId = selectedBudget?._id ?? selectedBudget?.id;
+  const spentMinor =
+    selectedBudget && transactionState.data
+      ? transactionState.data.reduce((total, transaction) => {
+          if (
+            transaction.type !== 'expense' ||
+            transaction.status !== 'posted' ||
+            transaction.deletedAt !== undefined ||
+            transaction.currency !== selectedBudget.currency ||
+            transaction.occurredAt < selectedBudget.startAt ||
+            transaction.occurredAt >= selectedBudget.endAt ||
+            (selectedBudget.categoryId !== undefined &&
+              (categoryIdByAlias.get(transaction.categoryId ?? '') ?? transaction.categoryId) !==
+                (categoryIdByAlias.get(selectedBudget.categoryId) ?? selectedBudget.categoryId)) ||
+            (selectedBudget.accountId !== undefined &&
+              (accountIdByAlias.get(transaction.accountId) ?? transaction.accountId) !==
+                (accountIdByAlias.get(selectedBudget.accountId) ?? selectedBudget.accountId))
+          )
+            return total;
+          return total + transaction.amountMinor;
+        }, 0n)
+      : 0n;
+  const categoryIdsReady =
+    selectedBudget?.categoryId === undefined || categoryState.data !== undefined;
+  const accountIdsReady =
+    selectedBudget?.accountId === undefined || accountState.data !== undefined;
+  const budget =
+    selectedBudget &&
+    transactionState.data &&
+    categoryIdsReady &&
+    accountIdsReady
+      ? {
+          ...selectedBudget,
+          spentMinor,
+          remainingMinor: selectedBudget.amountMinor - spentMinor,
+        }
+      : budgetState.data === undefined || selectedBudget !== undefined
+        ? undefined
+        : null;
   const categoryName = budget?.categoryId
-    ? categories?.find((item) => item._id === budget.categoryId)?.name
+    ? categoryState.data?.find(
+        (item) =>
+          item.archivedAt === undefined &&
+          (item.id === budget.categoryId || item._id === budget.categoryId),
+      )?.name
     : undefined;
   const accountName = budget?.accountId
-    ? accounts?.find((item) => item.id === budget.accountId)?.name
+    ? accountState.data?.find(
+        (item) =>
+          item.archivedAt === undefined &&
+          (item.id === budget.accountId || item._id === budget.accountId),
+      )?.name
     : undefined;
 
   async function archiveBudget() {
-    if (!id || pending) return;
+    if (!userId || !selectedBudget || !budgetLocalId || !budgetPayloadId || pending) return;
     setPending(true);
     setError('');
     try {
-      await archive({ budgetId: id as never });
+      await commitLocalWrite(
+        userId,
+        'budget',
+        'budget.archive',
+        { ...selectedBudget, archivedAt: Date.now() },
+        { budgetId: budgetPayloadId },
+        {
+          recordId: budgetLocalId,
+          dependencies: budgetPayloadId.startsWith('local-')
+            ? [`budget:${budgetPayloadId}`]
+            : [],
+        },
+      );
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not archive budget.');

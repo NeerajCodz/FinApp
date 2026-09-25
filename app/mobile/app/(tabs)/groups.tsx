@@ -1,8 +1,8 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { Plus } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupCard, Money, PeopleRail } from '@/components/finance';
@@ -13,7 +13,8 @@ import { layoutTokens } from '@/lib/theme/tokens';
 export default function GroupsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const groups = useQuery(api.groups.queries.list);
+  const { userId } = useLocalSync();
+  const { data: groups } = useLocalRecords<Record<string, unknown>>(userId, 'group');
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -45,16 +46,19 @@ export default function GroupsScreen() {
       <View style={{ gap: 14 }}>
         <Typography variant="heading">Your groups</Typography>
         {groups && groups.length > 0 ? (
-          groups.map((group) => (
-            <GroupCard
-              key={group._id}
-              name={group.name}
-              meta={`${group.currency} · shared ledger`}
-              balance="₹0"
-              meaning="All settled"
-              onPress={() => router.push(`/group/${group._id}` as never)}
-            />
-          ))
+          groups.map((group) => {
+            const groupId = String(group.id ?? group._id ?? '');
+            return (
+              <GroupCard
+                key={groupId}
+                name={String(group.name ?? 'Group')}
+                meta={`${String(group.currency ?? 'INR')} · shared ledger`}
+                balance="₹0"
+                meaning="All settled"
+                onPress={() => router.push(`/group/${groupId}` as never)}
+              />
+            );
+          })
         ) : (
           <View style={{ gap: 10 }}>
             <Typography variant="heading">No groups yet.</Typography>

@@ -2,17 +2,114 @@ import React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
 import { Button, Empty, IconButton, Progress, Separator, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+
+type BudgetRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  amountMinor: bigint;
+  currency: string;
+  period: 'monthly' | 'category' | 'account' | 'custom';
+  categoryId?: string;
+  accountId?: string;
+  startAt: number;
+  endAt: number;
+  archivedAt?: number;
+};
+type TransactionRecord = LocalRecord & {
+  categoryId?: string;
+  accountId: string;
+  occurredAt: number;
+  amountMinor: bigint;
+  currency: string;
+  type: string;
+  status: string;
+  deletedAt?: number;
+};
+type CategoryRecord = LocalRecord & { id?: string; _id?: string };
+type AccountRecord = LocalRecord & { id?: string; _id?: string };
 
 export default function BudgetScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const budgets = useQuery(api.budgets.queries.list);
+  const { userId, fetchTransactionRange } = useLocalSync();
+  const budgetState = useLocalRecords<BudgetRecord>(userId, 'budget');
+  const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
+  const accountState = useLocalRecords<AccountRecord>(userId, 'account');
+  const activeBudgets = (budgetState.data ?? [])
+    .filter((budget) => budget.archivedAt === undefined)
+    .sort((left, right) => left.startAt - right.startAt || left.name.localeCompare(right.name));
+  const needsCategoryIds = activeBudgets.some((budget) => budget.categoryId !== undefined);
+  const needsAccountIds = activeBudgets.some((budget) => budget.accountId !== undefined);
+  const startAt =
+    activeBudgets.length > 0 ? Math.min(...activeBudgets.map((budget) => budget.startAt)) : 0;
+  const endAt =
+    activeBudgets.length > 0 ? Math.max(...activeBudgets.map((budget) => budget.endAt)) : 0;
+  const transactionState = useLocalTransactionRange<TransactionRecord>(
+    userId,
+    startAt,
+    endAt,
+    fetchTransactionRange,
+  );
+
+  if (budgetState.error) throw budgetState.error;
+  if (transactionState.error) throw transactionState.error;
+  if (needsCategoryIds && categoryState.error) throw categoryState.error;
+  if (needsAccountIds && accountState.error) throw accountState.error;
+  const categoryIdByAlias = new Map<string, string>();
+  for (const category of categoryState.data ?? []) {
+    const canonicalId = category.id ?? category._id;
+    if (!canonicalId) continue;
+    if (category.id) categoryIdByAlias.set(category.id, canonicalId);
+    if (category._id) categoryIdByAlias.set(category._id, canonicalId);
+  }
+  const accountIdByAlias = new Map<string, string>();
+  for (const account of accountState.data ?? []) {
+    const canonicalId = account.id ?? account._id;
+    if (!canonicalId) continue;
+    if (account.id) accountIdByAlias.set(account.id, canonicalId);
+    if (account._id) accountIdByAlias.set(account._id, canonicalId);
+  }
+
+  const transactions = activeBudgets.length > 0 ? transactionState.data ?? [] : [];
+  const budgets = activeBudgets.map((budget) => {
+    const spentMinor = transactions.reduce((total, transaction) => {
+      if (
+        transaction.type !== 'expense' ||
+        transaction.status !== 'posted' ||
+        transaction.deletedAt !== undefined ||
+        transaction.currency !== budget.currency ||
+        transaction.occurredAt < budget.startAt ||
+        transaction.occurredAt >= budget.endAt ||
+        (budget.categoryId !== undefined &&
+          (categoryIdByAlias.get(transaction.categoryId ?? '') ?? transaction.categoryId) !==
+            (categoryIdByAlias.get(budget.categoryId) ?? budget.categoryId)) ||
+        (budget.accountId !== undefined &&
+          (accountIdByAlias.get(transaction.accountId) ?? transaction.accountId) !==
+            (accountIdByAlias.get(budget.accountId) ?? budget.accountId))
+      )
+        return total;
+      return total + transaction.amountMinor;
+    }, 0n);
+    return {
+      ...budget,
+      spentMinor,
+      remainingMinor: budget.amountMinor - spentMinor,
+    };
+  });
+  const loading =
+    budgetState.loading ||
+    (needsCategoryIds && categoryState.loading) ||
+    (needsAccountIds && accountState.loading) ||
+    (activeBudgets.length > 0 && transactionState.loading);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -38,7 +135,7 @@ export default function BudgetScreen() {
           <Plus size={22} color={tokens.foreground} />
         </IconButton>
       </View>
-      {budgets === undefined ? (
+      {loading ? (
         <Text style={{ color: tokens.foregroundMuted }}>Loading budgets…</Text>
       ) : budgets.length === 0 ? (
         <Empty
@@ -64,11 +161,11 @@ export default function BudgetScreen() {
                     ? 'Account'
                     : 'Custom period';
             return (
-              <React.Fragment key={budget._id}>
+              <React.Fragment key={budget.id ?? budget._id}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${budget.name} budget`}
-                  onPress={() => router.push(`/budget/${budget._id}` as never)}
+                  onPress={() => router.push(`/budget/${budget.id ?? budget._id}` as never)}
                   style={({ pressed }) => ({
                     gap: 11,
                     paddingVertical: 8,

@@ -2,16 +2,40 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, ArrowRight, ReceiptText, UsersThree } from '@/lib/icons';
 import { CategoryIcon, CurrencyInput, SettingsRow } from '@/components/finance';
 import { Button, IconButton, Input, Separator, Sheet, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { commitLocalWrite } from '@/local/commands';
 
 type TransactionType = 'expense' | 'income' | 'transfer';
+type ProfileRecord = LocalRecord & {
+  defaultCurrency?: string;
+  defaultAccountId?: string | null;
+  defaultExpenseCategoryId?: string | null;
+  defaultIncomeCategoryId?: string | null;
+};
+type AccountRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  name: string;
+  currency: string;
+  archivedAt?: number;
+};
+type CategoryRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  name: string;
+  icon?: string;
+  archivedAt?: number;
+};
 type Picker = 'category' | 'account' | 'destination' | 'date' | null;
 const transactionTypes: TransactionType[] = ['expense', 'income', 'transfer'];
 const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -115,7 +139,6 @@ function DateSelector({ value, onChange }: { value: Date; onChange: (date: Date)
     </View>
   );
 }
-
 export default function NewTransactionScreen() {
   const { type: queryType } = useLocalSearchParams<{ type?: string }>();
   const initialType: TransactionType = transactionTypes.includes(queryType as TransactionType)
@@ -129,28 +152,40 @@ export default function NewTransactionScreen() {
   const [date, setDate] = useState(() => new Date());
   const [note, setNote] = useState('');
   const [picker, setPicker] = useState<Picker>(null);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const profile = useQuery(api.users.queries.current);
-  const accounts = useQuery(api.accounts.queries.list);
-  const categories = useQuery(api.categories.queries.list);
-  const createTransaction = useMutation(api.transactions.mutations.create);
-  const setDefaultAccount = useMutation(api.users.mutations.setDefaultAccount);
-  const setDefaultCategory = useMutation(api.users.mutations.setDefaultCategory);
+  const { userId } = useLocalSync();
+  const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const accountState = useLocalRecords<AccountRecord>(userId, 'account');
+  const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
+  const profile = profileState.data?.[0];
+  const accounts = accountState.data?.filter((item) => item.archivedAt === undefined);
+  const categories = categoryState.data?.filter((item) => item.archivedAt === undefined);
   const categoryOptions = categories;
   const account =
-    accounts?.find((item) => item.id === accountId) ??
-    accounts?.find((item) => item.id === profile?.defaultAccountId) ??
+    accounts?.find((item) => String(item.id ?? item._id) === accountId || item.cloudId === accountId) ??
+    accounts?.find(
+      (item) =>
+        String(item.id ?? item._id) === String(profile?.defaultAccountId) ||
+        item.cloudId === profile?.defaultAccountId,
+    ) ??
     accounts?.[0];
   const preferredCategoryId =
     type === 'expense' ? profile?.defaultExpenseCategoryId : profile?.defaultIncomeCategoryId;
   const category =
-    categoryOptions?.find((item) => item._id === categoryId) ??
-    categoryOptions?.find((item) => item._id === preferredCategoryId) ??
+    categoryOptions?.find(
+      (item) =>
+        String(item.id ?? item._id) === categoryId || item.cloudId === categoryId,
+    ) ??
+    categoryOptions?.find(
+      (item) =>
+        String(item.id ?? item._id) === String(preferredCategoryId) ||
+        item.cloudId === preferredCategoryId,
+    ) ??
     categoryOptions?.[0];
-  const destination = accounts?.find((item) => item.id === destinationId);
+  const destination = accounts?.find((item) => String(item.id ?? item._id) === destinationId);
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   const typeColor =
     type === 'expense' ? tokens.expense : type === 'income' ? tokens.income : tokens.warning;
@@ -170,22 +205,49 @@ export default function NewTransactionScreen() {
         : profile?.defaultIncomeCategoryId;
 
   async function save() {
-    if (saveDisabled || !account || !validAmount) return;
+    if (saveDisabled || !account || !validAmount || !userId) return;
     setSaving(true);
     setError('');
     try {
-      await createTransaction({
-        accountId: account.id as never,
+      const accountRecordId = String(account.id ?? account._id);
+      const categoryRecordId = category ? String(category.id ?? category._id) : undefined;
+      const destinationRecordId = destination ? String(destination.id ?? destination._id) : undefined;
+      const title =
+        type === 'transfer' ? `Transfer to ${destination!.name}` : note.trim() || category!.name;
+      const payload = {
+        accountId: accountRecordId,
         type,
         amountMinor: validAmount,
-        currency: account.currency,
-        categoryId: type === 'transfer' ? undefined : category?._id,
-        title:
-          type === 'transfer' ? `Transfer to ${destination!.name}` : note.trim() || category!.name,
+        currency: String(account.currency),
+        categoryId: type === 'transfer' ? undefined : categoryRecordId,
+        title,
         note: note.trim() || undefined,
-        transferAccountId: type === 'transfer' ? (destination!.id as never) : undefined,
+        transferAccountId: type === 'transfer' ? destinationRecordId : undefined,
         occurredAt: date.getTime(),
-        clientMutationId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      };
+      const record: LocalRecord = {
+        accountId: accountRecordId,
+        categoryId: type === 'transfer' ? undefined : categoryRecordId,
+        transferAccountId: type === 'transfer' ? destinationRecordId : undefined,
+        amountMinor: validAmount,
+        currency: String(account.currency),
+        occurredAt: date.getTime(),
+        type,
+        status: 'posted',
+        title,
+        note: note.trim() || undefined,
+      };
+      const dependencies = [
+        !account.cloudId && !account._id ? `account:${accountRecordId}` : null,
+        type !== 'transfer' && category && !category.cloudId && !category._id
+          ? `category:${categoryRecordId}`
+          : null,
+        type === 'transfer' && destination && !destination.cloudId && !destination._id
+          ? `account:${destinationRecordId}`
+          : null,
+      ].filter((dependency): dependency is string => dependency !== null);
+      await commitLocalWrite(userId, 'transaction', 'transaction.create', record, payload, {
+        dependencies,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       toast.success(`${typeLabel} added`);
@@ -209,14 +271,32 @@ export default function NewTransactionScreen() {
   }
 
   async function saveDefault() {
+    if (!userId) return;
+    const currentProfile = profile ?? { id: userId };
     try {
-      if (picker === 'account' && account)
-        await setDefaultAccount({ accountId: account.id as never });
-      if (picker === 'category' && category)
-        await setDefaultCategory({
-          transactionType: type as 'expense' | 'income',
-          categoryId: category._id,
-        });
+      if (picker === 'account' && account) {
+        const id = String(account.id ?? account._id);
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultAccount',
+          { ...currentProfile, defaultAccountId: id },
+          { accountId: id },
+          { dependencies: !account.cloudId && !account._id ? [`account:${id}`] : [] },
+        );
+      }
+      if (picker === 'category' && category) {
+        const id = String(category.id ?? category._id);
+        const field = type === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId';
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultCategory',
+          { ...currentProfile, [field]: id },
+          { transactionType: type as 'expense' | 'income', categoryId: id },
+          { dependencies: !category.cloudId && !category._id ? [`category:${id}`] : [] },
+        );
+      }
       toast.success('Default saved');
       setPicker(null);
     } catch (cause) {
@@ -225,13 +305,27 @@ export default function NewTransactionScreen() {
   }
 
   async function clearDefault() {
+    if (!userId) return;
+    const currentProfile = profile ?? { id: userId };
     try {
-      if (picker === 'account') await setDefaultAccount({ accountId: null });
-      if (picker === 'category')
-        await setDefaultCategory({
-          transactionType: type as 'expense' | 'income',
-          categoryId: null,
-        });
+      if (picker === 'account')
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultAccount',
+          { ...currentProfile, defaultAccountId: null },
+          { accountId: null },
+        );
+      if (picker === 'category') {
+        const field = type === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId';
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultCategory',
+          { ...currentProfile, [field]: null },
+          { transactionType: type as 'expense' | 'income', categoryId: null },
+        );
+      }
       setPicker(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not clear default');
@@ -240,21 +334,24 @@ export default function NewTransactionScreen() {
 
   const pickerOptions =
     picker === 'category'
-      ? categoryOptions?.map((item) => ({ id: item._id, name: item.name }))
+      ? categoryOptions?.map((item) => ({ id: String(item.id ?? item._id), name: String(item.name) }))
       : accounts
           ?.filter(
             (item) =>
               picker !== 'destination' ||
-              (item.id !== account?.id && item.currency === account?.currency),
+              (String(item.id ?? item._id) !== String(account?.id ?? account?._id) &&
+                item.currency === account?.currency),
           )
-          .map((item) => ({ id: item.id, name: `${item.name} · ${item.currency}` }));
+          .map((item) => ({
+            id: String(item.id ?? item._id),
+            name: `${String(item.name)} · ${String(item.currency)}`,
+          }));
   const selectedId =
     picker === 'category'
-      ? category?._id
+      ? category && String(category.id ?? category._id)
       : picker === 'destination'
-        ? destination?.id
-        : account?.id;
-
+        ? destination && String(destination.id ?? destination._id)
+        : account && String(account.id ?? account._id);
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}

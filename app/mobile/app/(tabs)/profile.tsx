@@ -2,8 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { commitLocalWrite } from '@/local/commands';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { currencies } from '@convex/shared/validators';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar, Button, IconButton, Input, Label, Sheet, Text, Typography } from '@/components/ui';
@@ -27,8 +29,17 @@ import {
 } from '@/lib/icons';
 import { useTheme } from '@/providers/ThemeProvider';
 import { layoutTokens } from '@/lib/theme/tokens';
+import { clearValidatedLocalUserId } from '@/local/identity';
 
 type Editor = 'username' | 'phone' | null;
+type ProfileRecord = LocalRecord & {
+  displayName?: string;
+  username?: string;
+  email?: string;
+  phone?: string;
+  phoneVerificationTime?: number;
+  defaultCurrency?: string;
+};
 
 function normalizeHandle(value: string) {
   return value.replace(/^@+/, '').toLowerCase();
@@ -141,8 +152,9 @@ function ProfileActionRow({
 
 export default function ProfileScreen() {
   const { signOut } = useAuthActions();
-  const profile = useQuery(api.users.queries.current);
-  const updateProfile = useMutation(api.users.mutations.update);
+  const { userId } = useLocalSync();
+  const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const profile = profileState.data?.[0];
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [editor, setEditor] = useState<Editor>(null);
@@ -150,21 +162,55 @@ export default function ProfileScreen() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const currencyOptions = useMemo(() => [...currencies], []);
   const username = profile?.username ? `@${profile.username}` : 'Set username';
-  const phone = profile?.phone ?? 'Add phone number';
+  const phone = profile?.phone
+    ? profile.phoneVerificationTime
+      ? 'Verified'
+      : 'Unverified'
+    : 'Add phone number';
   const editorDisabled = !draft.trim();
+  const [saveError, setSaveError] = useState('');
+
+  async function saveProfile(update: Partial<ProfileRecord>) {
+    if (!userId) throw new Error('AUTH_REQUIRED');
+    const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
+    const nextProfile: ProfileRecord = { ...currentProfile, ...update };
+    if (update.phone !== undefined && update.phone !== profile?.phone)
+      nextProfile.phoneVerificationTime = undefined;
+    await commitLocalWrite(
+      userId,
+      'profile',
+      'user.update',
+      nextProfile,
+      update,
+      {
+        recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
+      },
+    );
+  }
 
   function openEditor(next: Editor) {
+    setSaveError('');
     setEditor(next);
     setDraft(next === 'username' ? (profile?.username ?? '') : (profile?.phone ?? ''));
   }
-
   async function saveEditor() {
-    if (editor === 'username') await updateProfile({ username: normalizeHandle(draft) });
-    if (editor === 'phone') await updateProfile({ phone: draft });
-    setEditor(null);
+    const update = editor === 'username'
+      ? { username: normalizeHandle(draft) }
+      : editor === 'phone'
+        ? { phone: draft }
+        : null;
+    if (!update) return;
+    setSaveError('');
+    try {
+      await saveProfile(update);
+      setEditor(null);
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Could not save profile.');
+    }
   }
 
   async function leave() {
+    await clearValidatedLocalUserId();
     await signOut();
     router.replace('/(auth)/welcome');
   }
@@ -406,21 +452,20 @@ export default function ProfileScreen() {
           <Typography variant="caption">
             {editor === 'username'
               ? '3–32 letters, numbers, or underscores.'
-              : 'Use an international format so friends can find you.'}
+              : profile?.phone
+                ? `Current number: ${profile.phone} · ${profile.phoneVerificationTime ? 'Verified' : 'Unverified'}. Contacts require a manually verified number.`
+                : 'Use an international format. Contacts require a manually verified number.'}
           </Typography>
+          {!!saveError && <Typography style={{ color: tokens.destructive }}>{saveError}</Typography>}
           <Button size="lg" onPress={saveEditor} disabled={editorDisabled}>
             <Check
               size={18}
-              color={
-                editorDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground
-              }
+              color={editorDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
             />
             <Text
               style={{
                 marginLeft: 8,
-                color: editorDisabled
-                  ? tokens.controlDisabledForeground
-                  : tokens.primaryForeground,
+                color: editorDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
                 fontFamily: 'SpaceGrotesk_600SemiBold',
                 fontSize: 15,
               }}
@@ -442,8 +487,13 @@ export default function ProfileScreen() {
               size="sm"
               variant={profile?.defaultCurrency === option ? 'primary' : 'outline'}
               onPress={async () => {
-                await updateProfile({ defaultCurrency: option });
-                setCurrencyOpen(false);
+                setSaveError('');
+                try {
+                  await saveProfile({ defaultCurrency: option });
+                  setCurrencyOpen(false);
+                } catch (cause) {
+                  setSaveError(cause instanceof Error ? cause.message : 'Could not save currency.');
+                }
               }}
               style={{ width: '31%' }}
             >

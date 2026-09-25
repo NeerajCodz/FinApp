@@ -2,19 +2,95 @@ import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowLeftRight, UsersThree } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money, TransactionRow } from '@/components/finance';
 import { Avatar, Button, Empty, IconButton, SectionHeader, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import {
+  useLocalGroupRange,
+  useLocalRecords,
+  type FetchCloudGroupRangePage,
+} from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+
+type GroupRecord = LocalRecord & { id?: string; _id?: string; name?: string; currency?: string };
+type GroupMemberRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  groupId?: string;
+  username?: string;
+};
+type TimelineRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  groupId?: string;
+  amountMinor?: bigint;
+  currency?: string;
+  title?: string;
+  occurredAt?: number;
+};
+
+function GroupTimeline({
+  userId,
+  group,
+  startAt,
+  endAt,
+  fetchGroupRange,
+}: {
+  userId: string | null;
+  group: GroupRecord;
+  startAt: number;
+  endAt: number;
+  fetchGroupRange: FetchCloudGroupRangePage;
+}) {
+  const groupId = String(group.id ?? group._id ?? '');
+  const { transactions } = useLocalGroupRange<TimelineRecord>(
+    userId,
+    groupId,
+    startAt,
+    endAt,
+    fetchGroupRange,
+  );
+  const expenses = transactions?.filter((record) => String(record.groupId) === groupId) ?? [];
+  return expenses.length > 0 ? (
+    <>
+      {expenses.map((transaction) => (
+        <TransactionRow
+          key={String(transaction.id ?? transaction._id ?? '')}
+          title={String(transaction.title ?? 'Group expense')}
+          category="Shared expense"
+          account={String(group.name ?? 'Group')}
+          amountMinor={transaction.amountMinor ?? 0n}
+          currency={String(transaction.currency ?? group.currency ?? 'INR')}
+          type="expense"
+          date={new Date(Number(transaction.occurredAt ?? Date.now())).toLocaleDateString()}
+        />
+      ))}
+    </>
+  ) : (
+    <Empty
+      title="Nothing shared yet."
+      description="Expenses between you will appear here, grouped across your shared groups."
+    />
+  );
+}
 
 export default function PersonTimelineScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const timeline = useQuery(api.groups.queries.personTimeline, username ? { username } : 'skip');
+  const { userId, fetchGroupRange } = useLocalSync();
+  const { data: groups } = useLocalRecords<GroupRecord>(userId, 'group');
+  const { data: allMembers } = useLocalRecords<GroupMemberRecord>(userId, 'groupMember');
   const handle = username?.replace(/^@+/, '') ?? 'person';
+  const matchingMembers = (allMembers ?? []).filter(
+    (member) => member.username?.replace(/^@+/, '').toLowerCase() === handle.toLowerCase(),
+  );
+  const groupIds = new Set(matchingMembers.map((member) => String(member.groupId ?? '')));
+  const sharedGroups = (groups ?? []).filter((group) => groupIds.has(String(group.id ?? group._id)));
+  const startAt = React.useMemo(() => Date.now() - 90 * 24 * 60 * 60 * 1000, []);
+  const endAt = React.useMemo(() => Date.now() + 1, []);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -43,11 +119,7 @@ export default function PersonTimelineScreen() {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <Avatar
-            initials={handle.slice(0, 2).toUpperCase()}
-            label={`@${handle}`}
-            size={60}
-          />
+          <Avatar initials={handle.slice(0, 2).toUpperCase()} label={`@${handle}`} size={60} />
           <View style={{ flex: 1, gap: 3 }}>
             <Typography variant="heading">@{handle}</Typography>
             <Typography variant="small">Shared money timeline</Typography>
@@ -62,7 +134,7 @@ export default function PersonTimelineScreen() {
           }}
         >
           <Typography variant="label">Shared balance</Typography>
-          <Money amountMinor={0n} currency="INR" size="display" />
+          <Money amountMinor={0n} currency={String(sharedGroups[0]?.currency ?? 'INR')} size="display" />
           <Typography variant="caption">Across shared groups</Typography>
         </View>
       </View>
@@ -102,17 +174,15 @@ export default function PersonTimelineScreen() {
       </View>
       <View style={{ gap: 12 }}>
         <SectionHeader title="Between you" />
-        {timeline && timeline.length > 0 ? (
-          timeline.map((transaction) => (
-            <TransactionRow
-              key={transaction.id}
-              title={transaction.title}
-              category="Shared expense"
-              account="Group"
-              amountMinor={transaction.amountMinor}
-              currency={transaction.currency}
-              type={transaction.type}
-              date={new Date(transaction.occurredAt).toLocaleDateString()}
+        {sharedGroups.length > 0 ? (
+          sharedGroups.map((group) => (
+            <GroupTimeline
+              key={String(group.id ?? group._id)}
+              userId={userId}
+              group={group}
+              startAt={startAt}
+              endAt={endAt}
+              fetchGroupRange={fetchGroupRange}
             />
           ))
         ) : (

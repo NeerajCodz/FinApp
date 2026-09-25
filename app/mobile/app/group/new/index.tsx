@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeft, Check, UsersThree } from '@/lib/icons';
 import { router } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { commitLocalWrite } from '@/local/commands';
 import { normalizeContactPhone, type DeviceContact } from '@/lib/contacts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PeopleRail } from '@/components/finance/PeopleRail';
@@ -23,7 +25,7 @@ export default function NewGroupScreen() {
   const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const createGroup = useMutation(api.groups.mutations.create);
+  const { userId } = useLocalSync();
   const suggestions = useQuery(
     api.users.queries.search,
     normalizeHandle(memberInput).length >= 2 ? { query: normalizeHandle(memberInput) } : 'skip',
@@ -45,14 +47,28 @@ export default function NewGroupScreen() {
   }
 
   async function save() {
+    if (!userId) return;
     setError('');
     try {
-      const groupId = await createGroup({
-        name,
-        currency: 'INR',
-        memberUsernames: members,
-        memberPhones: contactPhones,
-      });
+      const groupId = await commitLocalWrite(
+        userId,
+        'group',
+        'group.create',
+        {
+          name: name.trim(),
+          currency: 'INR',
+          participantUsernames: members,
+          contactPhones,
+          contactNames,
+        },
+        {
+          name: name.trim(),
+          currency: 'INR',
+          participantUsernames: members,
+          contactPhones,
+          contactNames,
+        },
+      );
       router.replace(`/group/${groupId}` as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create group');

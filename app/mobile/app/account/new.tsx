@@ -2,13 +2,19 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { ArrowLeft, Landmark } from '@/lib/icons';
 import { router } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { commitLocalWrite } from '@/local/commands';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@/components/ui';
 import { CurrencyInput } from '@/components/finance';
 import { parseMinor } from '@/lib/money';
 import { useTheme } from '@/providers/ThemeProvider';
+
+type ProfileRecord = LocalRecord & {
+  defaultCurrency?: string;
+};
 
 export default function NewAccountScreen() {
   const [name, setName] = useState('');
@@ -18,12 +24,14 @@ export default function NewAccountScreen() {
   const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const profile = useQuery(api.users.queries.current);
-  const create = useMutation(api.accounts.mutations.create);
+  const { userId } = useLocalSync();
+  const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  if (profileState.error) throw profileState.error;
+  const profile = profileState.data?.[0] ?? (profileState.loading ? undefined : null);
 
   async function save() {
     const trimmedName = name.trim();
-    if (!trimmedName || pending || !profile?.defaultCurrency) return;
+    if (!userId || !trimmedName || pending || !profile?.defaultCurrency) return;
     let openingBalanceMinor = 0n;
     if (openingBalance.trim()) {
       try {
@@ -37,13 +45,30 @@ export default function NewAccountScreen() {
     setPending(true);
     setError('');
     try {
-      await create({
-        name: trimmedName,
-        type,
-        currency: profile.defaultCurrency,
-        openingBalanceMinor,
-        isIncludedInTotal: true,
-      });
+      const now = Date.now();
+      await commitLocalWrite(
+        userId,
+        'account',
+        'account.create',
+        {
+          ownerId: userId,
+          name: trimmedName,
+          type,
+          currency: profile.defaultCurrency,
+          openingBalanceMinor,
+          balanceMinor: openingBalanceMinor,
+          isIncludedInTotal: true,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          name: trimmedName,
+          type,
+          currency: profile.defaultCurrency,
+          openingBalanceMinor,
+          isIncludedInTotal: true,
+        },
+      );
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create account.');

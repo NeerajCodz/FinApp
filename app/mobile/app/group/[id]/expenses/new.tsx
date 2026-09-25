@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { commitLocalWrite } from '@/local/commands';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CurrencyInput } from '@/components/finance';
 import { Button, IconButton, Input, Label, Separator, Text, Typography } from '@/components/ui';
@@ -23,10 +24,11 @@ export default function NewGroupExpenseScreen() {
   const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const group = useQuery(api.groups.queries.detail, id ? { groupId: id as never } : 'skip');
-  const accounts = useQuery(api.accounts.queries.list);
-  const addExpense = useMutation(api.groups.mutations.addExpense);
-  const account = accounts?.[0];
+  const { userId } = useLocalSync();
+  const { data: groups } = useLocalRecords<Record<string, unknown>>(userId, 'group');
+  const { data: accounts } = useLocalRecords<Record<string, unknown>>(userId, 'account');
+  const group = groups?.find((record) => String(record.id ?? record._id) === id);
+  const account = accounts?.find((record) => record.archivedAt === undefined);
 
   function addMember() {
     const handle = normalizeHandle(memberInput);
@@ -36,18 +38,46 @@ export default function NewGroupExpenseScreen() {
   }
 
   async function save() {
-    if (!id || !account || !group) return;
+    const groupId = typeof group?.id === 'string'
+      ? group.id
+      : typeof group?._id === 'string'
+        ? group._id
+        : String(id ?? '');
+    const accountId = typeof account?.id === 'string'
+      ? account.id
+      : typeof account?._id === 'string'
+        ? account._id
+        : undefined;
+    if (!userId || !id || !group || !accountId) return;
     setError('');
     try {
-      await addExpense({
-        groupId: id as never,
-        accountId: account.id as never,
-        title,
-        amountMinor: BigInt(Math.round(Number(amount) * 100)),
-        currency: group.currency,
-        occurredAt: Date.now(),
-        participantUsernames: members,
-      });
+      const occurredAt = Date.now();
+      const amountMinor = BigInt(Math.round(Number(amount) * 100));
+      await commitLocalWrite(
+        userId,
+        'transaction',
+        'group.addExpense',
+        {
+          groupId,
+          accountId,
+          title: title.trim(),
+          amountMinor,
+          currency: String(group.currency ?? 'INR'),
+          occurredAt,
+          type: 'expense',
+          participantUsernames: members,
+        },
+        {
+          groupId,
+          accountId,
+          title: title.trim(),
+          amountMinor,
+          currency: String(group.currency ?? 'INR'),
+          occurredAt,
+          participantUsernames: members,
+        },
+        { dependencies: [`group:${groupId}`, `account:${accountId}`] },
+      );
       router.replace(`/group/${id}` as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save group expense');
@@ -72,10 +102,10 @@ export default function NewGroupExpenseScreen() {
           <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
             <ArrowLeft size={21} color={tokens.foreground} />
           </IconButton>
-          <Typography variant="heading">Add to {group?.name ?? 'group'}</Typography>
+          <Typography variant="heading">Add to {String(group?.name ?? 'group')}</Typography>
         </View>
         <CurrencyInput
-          currency={group?.currency ?? 'INR'}
+          currency={String(group?.currency ?? 'INR')}
           value={amount}
           onChangeText={setAmount}
         />
@@ -119,7 +149,7 @@ export default function NewGroupExpenseScreen() {
           </Typography>
         </View>
         <Separator />
-        {account && <Typography variant="small">Paid from {account.name}</Typography>}
+        {account && <Typography variant="small">Paid from {String(account.name ?? 'Account')}</Typography>}
         {!account && (
           <Typography style={{ color: tokens.destructive }}>
             Add an account before recording a group expense.

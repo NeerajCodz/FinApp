@@ -1,7 +1,6 @@
 import React, { Component, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { aggregateAnalytics, validateAnalyticsRange, type AnalyticsTransaction } from '@convex/analytics/domain';
 import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -10,6 +9,9 @@ import { Money } from '@/components/finance';
 import { Button, Empty, IconButton, SectionHeader, Tabs, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { formatMinor } from '@/lib/money';
+import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 type Period = 'week' | 'month' | 'year';
 type AnalyticsProps = { children: React.ReactNode };
@@ -51,32 +53,55 @@ function getRange(period: Period) {
   return { startAt: start.getTime(), endAt: end.getTime(), previousStartAt: previous.getTime() };
 }
 
-function bucketLabels(period: Period, startAt: number, endAt: number): [string, string] {
-  const start = new Date(startAt);
-  const end = new Date(endAt - 1);
-  if (period === 'week') {
-    return [
-      start.toLocaleDateString(undefined, { weekday: 'short' }),
-      end.toLocaleDateString(undefined, { weekday: 'short' }),
-    ];
-  }
-  if (period === 'month') {
-    return [
-      start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
-      end.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
-    ];
-  }
-  return [
-    start.toLocaleDateString(undefined, { month: 'short' }),
-    end.toLocaleDateString(undefined, { month: 'short' }),
-  ];
-}
 function AnalyticsContent() {
   const [period, setPeriod] = useState<Period>('month');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const range = useMemo(() => getRange(period), [period]);
-  const analytics = useQuery(api.analytics.queries.summary, { period, ...range });
+  const { userId, fetchTransactionRange } = useLocalSync();
+  const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
+  const categoryState = useLocalRecords<LocalRecord>(userId, 'category');
+  const rangeState = useLocalTransactionRange<LocalRecord>(
+    userId,
+    range.previousStartAt,
+    range.endAt,
+    fetchTransactionRange,
+  );
+  const analytics = useMemo(() => {
+    if (!profileState.data || !categoryState.data || !rangeState.data) return undefined;
+    const profile = profileState.data[0];
+    if (!profile) return null;
+    const currency = typeof profile.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
+    const timeZone = typeof profile.timezone === 'string' ? profile.timezone : 'UTC';
+    validateAnalyticsRange(period, range.startAt, range.endAt);
+    validateAnalyticsRange(period, range.previousStartAt, range.startAt);
+    const analyticsTransactions = rangeState.data as AnalyticsTransaction[];
+    const categoryNames = categoryState.data
+      .filter((category) => typeof category.name === 'string')
+      .map((category) => ({
+        id: String(category.id ?? category._id),
+        name: category.name as string,
+      }));
+    const current = aggregateAnalytics(
+      analyticsTransactions,
+      categoryNames,
+      currency,
+      period,
+      range.startAt,
+      range.endAt,
+      timeZone,
+    );
+    const previous = aggregateAnalytics(
+      analyticsTransactions,
+      [],
+      currency,
+      period,
+      range.previousStartAt,
+      range.startAt,
+      timeZone,
+    );
+    return { currency, ...current, previousSpentMinor: previous.spentMinor };
+  }, [categoryState.data, period, profileState.data, range, rangeState.data]);
   const currency = analytics?.currency;
   const buckets = analytics?.buckets ?? [];
   const categories = analytics?.categoryBreakdown ?? [];
@@ -98,7 +123,6 @@ function AnalyticsContent() {
         : 'No spending in the previous period'
       : `${analytics.spentMinor >= analytics.previousSpentMinor ? 'Up' : 'Down'} ${Math.abs(Number(((analytics.spentMinor - analytics.previousSpentMinor) * 100n) / analytics.previousSpentMinor))}% vs previous period`
     : '';
-  const chartLabels = bucketLabels(period, range.startAt, range.endAt);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}

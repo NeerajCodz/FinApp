@@ -2,8 +2,9 @@ import React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import type { LocalRecord } from '@/local/repository';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
 import { Button, Empty, IconButton, Separator, Typography } from '@/components/ui';
@@ -17,11 +18,29 @@ const ACCOUNT_TYPES = {
   loan: 'Loan',
   other: 'Other',
 } as const;
+type AccountRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  name: string;
+  type: keyof typeof ACCOUNT_TYPES;
+  currency: string;
+  balanceMinor?: bigint;
+  openingBalanceMinor?: bigint;
+  archivedAt?: number;
+};
 
 export default function AccountsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const accounts = useQuery(api.accounts.queries.list);
+  const { userId } = useLocalSync();
+  const accountState = useLocalRecords<AccountRecord>(userId, 'account');
+  if (accountState.error) throw accountState.error;
+  const accounts = (accountState.data ?? []).filter(
+    (account) =>
+      account.archivedAt === undefined &&
+      (account.id ?? account._id ?? account.cloudId) !== undefined,
+  );
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -48,7 +67,7 @@ export default function AccountsScreen() {
         </IconButton>
       </View>
 
-      {accounts === undefined ? (
+      {accountState.loading ? (
         <Typography variant="small">Loading accounts…</Typography>
       ) : accounts.length === 0 ? (
         <Empty
@@ -67,11 +86,13 @@ export default function AccountsScreen() {
       ) : (
         <View>
           {accounts.map((account, index) => (
-            <React.Fragment key={account.id}>
+            <React.Fragment key={account.id ?? account._id ?? account.cloudId}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${account.name} account`}
-                onPress={() => router.push(`/account/${account.id}` as never)}
+                onPress={() =>
+                  router.push(`/account/${account.id ?? account._id ?? account.cloudId}` as never)
+                }
                 style={({ pressed }) => ({
                   minHeight: 76,
                   flexDirection: 'row',
@@ -88,7 +109,10 @@ export default function AccountsScreen() {
                     {ACCOUNT_TYPES[account.type]} · {account.currency}
                   </Typography>
                 </View>
-                <Money amountMinor={account.balanceMinor} currency={account.currency} />
+                <Money
+                  amountMinor={account.balanceMinor ?? account.openingBalanceMinor ?? 0n}
+                  currency={account.currency}
+                />
                 <CaretRight size={18} color={tokens.foregroundSubtle} />
               </Pressable>
               {index < accounts.length - 1 && <Separator />}

@@ -1,19 +1,99 @@
 import React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon } from '@/components/finance';
 import { Money } from '@/components/finance';
 import { Button, Empty, IconButton, Separator, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+
+type CategoryRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  icon?: string;
+  sortOrder: number;
+  archivedAt?: number;
+  monthlyLimitMinor?: bigint;
+  limitCurrency?: string;
+};
+type ProfileRecord = LocalRecord & { defaultCurrency?: string };
+type TransactionRecord = LocalRecord & {
+  categoryId?: string;
+  occurredAt: number;
+  amountMinor: bigint;
+  currency: string;
+  type: string;
+  status: string;
+  deletedAt?: number;
+};
 
 export default function CategoriesScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const categories = useQuery(api.categories.queries.overview);
+  const { userId, fetchTransactionRange } = useLocalSync();
+  const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
+  const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const now = new Date();
+  const startAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const endAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+  const transactionState = useLocalTransactionRange<TransactionRecord>(
+    userId,
+    startAt,
+    endAt,
+    fetchTransactionRange,
+  );
+
+  if (categoryState.error) throw categoryState.error;
+  if (profileState.error) throw profileState.error;
+  if (transactionState.error) throw transactionState.error;
+
+  const categoriesInStore = categoryState.data;
+  const profile = profileState.data?.[0];
+  const activeCategories = (categoriesInStore ?? [])
+    .filter((category) => category.archivedAt === undefined)
+    .sort(
+      (left, right) =>
+        left.sortOrder - right.sortOrder ||
+        (left._id ?? left.id ?? '').localeCompare(right._id ?? right.id ?? ''),
+    );
+  const categoryById = new Map<string, CategoryRecord>();
+  for (const category of activeCategories) {
+    if (category.id) categoryById.set(category.id, category);
+    if (category._id) categoryById.set(category._id, category);
+  }
+  const totals = new Map<CategoryRecord, { spentMinor: bigint; receivedMinor: bigint }>();
+  for (const transaction of transactionState.data ?? []) {
+    if (
+      transaction.status !== 'posted' ||
+      transaction.deletedAt !== undefined ||
+      !transaction.categoryId ||
+      (transaction.type !== 'expense' && transaction.type !== 'income')
+    )
+      continue;
+    const category = categoryById.get(transaction.categoryId);
+    const currency = category?.limitCurrency ?? profile?.defaultCurrency;
+    if (!category || !currency || transaction.currency !== currency) continue;
+    const total = totals.get(category) ?? { spentMinor: 0n, receivedMinor: 0n };
+    if (transaction.type === 'expense') total.spentMinor += transaction.amountMinor;
+    else total.receivedMinor += transaction.amountMinor;
+    totals.set(category, total);
+  }
+  const categories = activeCategories.map((category) => {
+    const total = totals.get(category);
+    return {
+      ...category,
+      monthSpentMinor: total?.spentMinor ?? 0n,
+      monthReceivedMinor: total?.receivedMinor ?? 0n,
+      monthCurrency: category.limitCurrency ?? profile?.defaultCurrency ?? null,
+    };
+  });
+  const loading =
+    categoryState.loading || profileState.loading || transactionState.loading;
 
   return (
     <ScrollView
@@ -41,7 +121,7 @@ export default function CategoriesScreen() {
         </IconButton>
       </View>
 
-      {categories === undefined ? (
+      {loading ? (
         <Typography variant="small">Loading categories…</Typography>
       ) : categories.length === 0 ? (
         <Empty
@@ -62,11 +142,13 @@ export default function CategoriesScreen() {
           <Typography variant="label">Categories</Typography>
           <View>
             {categories.map((category, index) => (
-              <React.Fragment key={category._id}>
+              <React.Fragment key={category.id ?? category._id}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${category.name} category`}
-                  onPress={() => router.push(`/category/${category._id}` as never)}
+                  onPress={() =>
+                    router.push(`/category/${category.id ?? category._id}` as never)
+                  }
                   style={({ pressed }) => ({
                     minHeight: 72,
                     flexDirection: 'row',

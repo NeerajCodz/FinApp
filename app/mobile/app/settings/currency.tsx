@@ -2,9 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { router } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { currencies } from '@convex/shared/validators';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { commitLocalWrite } from '@/local/commands';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton, Button, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -18,13 +20,14 @@ function currencyLabel(currency: string) {
 }
 
 export default function CurrencySettingsScreen() {
-  const profile = useQuery(api.users.queries.current);
-  const updateProfile = useMutation(api.users.mutations.update);
+  const { userId } = useLocalSync();
+  const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
+  const profile = profileState.data?.[0];
   const [currency, setCurrency] = useState('INR');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const options = useMemo(() => [...currencies], []);
-  const selected = profile?.defaultCurrency ?? currency;
+  const selected = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : currency;
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -54,8 +57,22 @@ export default function CurrencySettingsScreen() {
               size="sm"
               variant={selected === option ? 'primary' : 'outline'}
               onPress={async () => {
+                if (!userId) return;
+                const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
+                await commitLocalWrite(
+                  userId,
+                  'profile',
+                  'user.update',
+                  { ...currentProfile, defaultCurrency: option },
+                  {
+                    displayName: String(currentProfile.displayName ?? 'Your profile'),
+                    defaultCurrency: option,
+                  },
+                  {
+                    recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
+                  },
+                );
                 setCurrency(option);
-                await updateProfile({ defaultCurrency: option });
               }}
               style={{ width: '31%', minHeight: 44 }}
             >

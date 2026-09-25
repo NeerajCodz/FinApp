@@ -4,6 +4,9 @@ import { ContactRound } from '@/lib/icons';
 import { readDeviceContacts, type DeviceContact } from '@/lib/contacts';
 import { Avatar, Button, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 export function PeopleRail({
   title = 'Recent people',
@@ -15,8 +18,13 @@ export function PeopleRail({
   const [contacts, setContacts] = useState<DeviceContact[]>([]);
   const [loading, setLoading] = useState(false);
   const { tokens } = useTheme();
+  const { userId } = useLocalSync();
+  const { data: profiles } = useLocalRecords<LocalRecord>(userId, 'profile');
+  const profile = profiles?.[0];
+  const phoneVerified = Boolean(profile?.phone && profile.phoneVerificationTime !== undefined);
 
   async function allowContacts() {
+    if (!phoneVerified) return;
     setLoading(true);
     try {
       setContacts(await readDeviceContacts());
@@ -31,7 +39,30 @@ export function PeopleRail({
         <Typography variant="heading">{title}</Typography>
         {contacts.length > 0 && <Typography variant="caption">{contacts.length} found</Typography>}
       </View>
-      {contacts.length === 0 ? (
+      {!phoneVerified ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              backgroundColor: tokens.surfaceRaised,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <ContactRound size={19} color={tokens.foregroundMuted} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: tokens.foreground }}>Verify a phone number to use contacts</Text>
+            <Typography variant="caption">
+              {profile === undefined
+                ? 'Checking verification status…'
+                : 'Add a phone number in your profile. Contacts unlock after manual verification.'}
+            </Typography>
+          </View>
+        </View>
+      ) : contacts.length === 0 ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
           <View
             style={{

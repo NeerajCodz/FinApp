@@ -2,14 +2,31 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { router } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CurrencyInput } from '@/components/finance';
 import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@/components/ui';
 import { parseMinor } from '@/lib/money';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { commitLocalWrite } from '@/local/commands';
+import type { LocalRecord } from '@/local/repository';
 
+type ProfileRecord = LocalRecord & { defaultCurrency?: string };
+type AccountRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  currency: string;
+  archivedAt?: number;
+};
+type CategoryRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  name: string;
+  sortOrder: number;
+  archivedAt?: number;
+};
 type Period = 'monthly' | 'category' | 'account' | 'custom';
 const periodOptions: { label: string; value: Period }[] = [
   { label: 'Monthly', value: 'monthly' },
@@ -58,12 +75,33 @@ export default function NewBudgetScreen() {
   const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const profile = useQuery(api.users.queries.current);
-  const accounts = useQuery(api.accounts.queries.list);
-  const categories = useQuery(api.categories.queries.list);
-  const create = useMutation(api.budgets.mutations.create);
+  const { userId } = useLocalSync();
+  const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const accountState = useLocalRecords<AccountRecord>(userId, 'account');
+  const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
+  if (profileState.error) throw profileState.error;
+  if (accountState.error) throw accountState.error;
+  if (categoryState.error) throw categoryState.error;
+  const profile =
+    profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
+  const accounts = accountState.data?.filter((account) => account.archivedAt === undefined);
+  const categories = categoryState.data
+    ?.filter((category) => category.archivedAt === undefined)
+    .sort(
+      (left, right) =>
+        left.sortOrder - right.sortOrder ||
+        (left._id ?? left.id ?? '').localeCompare(right._id ?? right.id ?? ''),
+    );
   const selectedAccount =
-    period === 'account' ? accounts?.find((account) => account.id === accountId) : undefined;
+    period === 'account'
+      ? accounts?.find((account) => account.id === accountId || account._id === accountId)
+      : undefined;
+  const selectedCategory =
+    period === 'category'
+      ? categories?.find((category) => category.id === categoryId || category._id === categoryId)
+      : undefined;
+  const selectedCategoryId = selectedCategory?._id ?? selectedCategory?.id;
+  const selectedAccountId = selectedAccount?._id ?? selectedAccount?.id;
   const currency = selectedAccount?.currency ?? profile?.defaultCurrency;
   const amountMinor = currency ? amountInMinor(limit, currency) : null;
   const startAt =
@@ -78,19 +116,63 @@ export default function NewBudgetScreen() {
 
   async function save() {
     if (!name.trim() || !ready || pending) return;
+    if (!userId) {
+      setError('Sign in to create a budget.');
+      return;
+    }
+    if (
+      !currency ||
+      amountMinor === null ||
+      startAt === null ||
+      endAt === null ||
+      endAt <= startAt
+    )
+      return;
     setPending(true);
     setError('');
     try {
-      await create({
-        name: name.trim(),
-        amountMinor,
-        currency,
-        period,
-        categoryId: period === 'category' ? (categoryId as never) : undefined,
-        accountId: period === 'account' ? (accountId as never) : undefined,
-        startAt,
-        endAt,
-      });
+      const now = Date.now();
+      const dependencies = [
+        ...(period === 'category' && selectedCategoryId?.startsWith('local-')
+          ? [`category:${selectedCategoryId}`]
+          : []),
+        ...(period === 'account' && selectedAccountId?.startsWith('local-')
+          ? [`account:${selectedAccountId}`]
+          : []),
+      ];
+      await commitLocalWrite(
+        userId,
+        'budget',
+        'budget.create',
+        {
+          ownerId: userId,
+          name: name.trim(),
+          amountMinor,
+          currency,
+          period,
+          ...(period === 'category' && selectedCategoryId
+            ? { categoryId: selectedCategoryId }
+            : {}),
+          ...(period === 'account' && selectedAccountId ? { accountId: selectedAccountId } : {}),
+          startAt,
+          endAt,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          name: name.trim(),
+          amountMinor,
+          currency,
+          period,
+          ...(period === 'category' && selectedCategoryId
+            ? { categoryId: selectedCategoryId }
+            : {}),
+          ...(period === 'account' && selectedAccountId ? { accountId: selectedAccountId } : {}),
+          startAt,
+          endAt,
+        },
+        { dependencies },
+      );
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create budget.');
@@ -102,11 +184,11 @@ export default function NewBudgetScreen() {
   const ready =
     !!profile &&
     !!currency &&
-    !!amountMinor &&
+    amountMinor !== null &&
     startAt !== null &&
     endAt !== null &&
     endAt > startAt &&
-    (period !== 'category' || (categories !== undefined && !!categoryId)) &&
+    (period !== 'category' || (categories !== undefined && !!selectedCategory)) &&
     (period !== 'account' || !!selectedAccount);
   return (
     <KeyboardAvoidingView
@@ -168,9 +250,9 @@ export default function NewBudgetScreen() {
             ) : categoryOptions.length ? (
               categoryOptions.map((item) => (
                 <Button
-                  key={item._id}
-                  variant={categoryId === item._id ? 'primary' : 'outline'}
-                  onPress={() => setCategoryId(item._id)}
+                  key={item.id ?? item._id}
+                  variant={categoryId === item.id || categoryId === item._id ? 'primary' : 'outline'}
+                  onPress={() => setCategoryId(item.id ?? item._id ?? '')}
                 >
                   {item.name}
                 </Button>
@@ -193,9 +275,9 @@ export default function NewBudgetScreen() {
             ) : accounts.length ? (
               accounts.map((item) => (
                 <Button
-                  key={item.id}
-                  variant={accountId === item.id ? 'primary' : 'outline'}
-                  onPress={() => setAccountId(item.id)}
+                  key={item.id ?? item._id}
+                  variant={accountId === item.id || accountId === item._id ? 'primary' : 'outline'}
+                  onPress={() => setAccountId(item.id ?? item._id ?? '')}
                 >
                   {item.name} · {item.currency}
                 </Button>

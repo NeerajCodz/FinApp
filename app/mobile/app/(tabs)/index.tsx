@@ -1,8 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { CalendarDays } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SpendingLineChart } from '@/components/charts/BarChart';
@@ -28,14 +26,54 @@ import {
 import { useTheme } from '@/providers/ThemeProvider';
 import { layoutTokens } from '@/lib/theme/tokens';
 import { formatMinor } from '@/lib/money';
+import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { ClockCounterClockwise, ShieldCheck, TriangleAlert } from '@/lib/icons';
+
+type HomeAccount = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  currency?: string;
+  balanceMinor?: bigint;
+  openingBalanceMinor?: bigint;
+};
+type HomeCategory = LocalRecord & { id?: string; _id?: string; name: string; icon?: string };
+type HomeGroup = LocalRecord & { id?: string; _id?: string; name: string; currency: string };
+type HomeTransaction = LocalRecord & {
+  id?: string;
+  _id?: string;
+  accountId: string;
+  transferAccountId?: string;
+  categoryId?: string;
+  title: string;
+  amountMinor: bigint;
+  currency: string;
+  type: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
+  status: 'pending' | 'posted' | 'voided';
+  occurredAt: number;
+  deletedAt?: number;
+  clientUpdatedAt?: number;
+};
 
 export default function HomeScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const groups = useQuery(api.groups.queries.list);
-  const accounts = useQuery(api.accounts.queries.list);
-  const categories = useQuery(api.categories.queries.list);
-  const profile = useQuery(api.users.queries.current);
+  const {
+    userId,
+    isConnected,
+    isSyncing,
+    status,
+    syncError,
+    retryNow,
+    retryEntry,
+    resolveConflict,
+    failedEntries,
+    conflicts,
+    fetchTransactionRange,
+  } = useLocalSync();
+  const [syncOpen, setSyncOpen] = useState(false);
   const [period, setPeriod] = useState('This month');
   const [periodOpen, setPeriodOpen] = useState(false);
   const [customDate, setCustomDate] = useState('');
@@ -55,12 +93,97 @@ export default function HomeScreen() {
     else end.setDate(end.getDate() + 1);
     return { startAt: start.getTime(), endAt: end.getTime() };
   }, [period, appliedDate]);
-  const summary = useQuery(api.dashboard.queries.summary, range);
-  const currency = profile?.defaultCurrency ?? 'INR';
+  const { data: groups } = useLocalRecords<HomeGroup>(userId, 'group');
+  const { data: accounts } = useLocalRecords<HomeAccount>(userId, 'account');
+  const { data: categories } = useLocalRecords<HomeCategory>(userId, 'category');
+  const { data: profiles } = useLocalRecords<LocalRecord>(userId, 'profile');
+  const { data: transactions } = useLocalRecords<HomeTransaction>(userId, 'transaction');
+  const transactionRange = useLocalTransactionRange<HomeTransaction>(
+    userId,
+    range.startAt,
+    range.endAt,
+    fetchTransactionRange,
+  );
+  const profile = profiles?.[0];
+  const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
+  const summary = useMemo(() => {
+    if (!transactionRange.data) return undefined;
+    const chart = Array<number>(8).fill(0);
+    let incomeMinor = 0n;
+    let spentMinor = 0n;
+    for (const transaction of transactionRange.data) {
+      if (
+        transaction.status !== 'posted' ||
+        transaction.deletedAt !== undefined ||
+        transaction.currency !== currency ||
+        transaction.occurredAt < range.startAt ||
+        transaction.occurredAt >= range.endAt
+      )
+        continue;
+      if (transaction.type === 'income') incomeMinor += transaction.amountMinor;
+      if (transaction.type === 'expense') {
+        spentMinor += transaction.amountMinor;
+        const bucket = Math.min(
+          7,
+          Math.floor(((transaction.occurredAt - range.startAt) / (range.endAt - range.startAt)) * 8),
+        );
+        chart[bucket] = (chart[bucket] ?? 0) + Number(transaction.amountMinor) / 100;
+      }
+    }
+    return { chart, incomeMinor, spentMinor };
+  }, [currency, range, transactionRange.data]);
+  const recentTransactions = useMemo(
+    () => [...(transactions ?? [])].sort((left, right) => right.occurredAt - left.occurredAt).slice(0, 4),
+    [transactions],
+  );
+  const currencyAccounts = accounts?.filter((account) => account.currency === currency) ?? [];
+  const accountIds = new Set(
+    currencyAccounts.flatMap((account) =>
+      [account.id, account._id, account.cloudId].filter(
+        (value): value is string => typeof value === 'string',
+      ),
+    ),
+  );
   const balanceMinor =
-    accounts
-      ?.filter((account) => account.currency === currency)
-      .reduce((total, account) => total + account.balanceMinor, 0n) ?? 0n;
+    currencyAccounts.reduce(
+      (total, account) => total + (account.balanceMinor ?? account.openingBalanceMinor ?? 0n),
+      0n,
+    ) +
+    (transactions ?? []).reduce((delta, transaction) => {
+      if (
+        typeof transaction.clientUpdatedAt !== 'number' ||
+        transaction.status !== 'posted' ||
+        transaction.deletedAt !== undefined ||
+        transaction.currency !== currency
+      )
+        return delta;
+      const sourceDelta = accountIds.has(transaction.accountId)
+        ? transaction.type === 'expense' || transaction.type === 'transfer'
+          ? -transaction.amountMinor
+          : transaction.amountMinor
+        : 0n;
+      const destinationDelta =
+        transaction.type === 'transfer' &&
+        transaction.transferAccountId &&
+        accountIds.has(transaction.transferAccountId)
+          ? transaction.amountMinor
+          : 0n;
+      return delta + sourceDelta + destinationDelta;
+    }, 0n);
+  const syncHasIssue = status.failed > 0 || status.conflicts > 0;
+  const SyncIcon = syncHasIssue
+    ? TriangleAlert
+    : !isConnected
+      ? ClockCounterClockwise
+      : isSyncing || status.pending > 0
+        ? ClockCounterClockwise
+        : ShieldCheck;
+  const syncIconColor = syncHasIssue
+    ? tokens.destructive
+    : isConnected
+      ? tokens.primary
+      : tokens.foregroundMuted;
+  const syncAccessibilityLabel = `Local sync, ${isConnected ? 'online' : 'offline'}, ${status.pending} pending, ${status.failed} failed, ${status.conflicts} conflicts`;
   return (
     <>
       <ScrollView
@@ -73,6 +196,16 @@ export default function HomeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="label">Overview</Typography>
+          <IconButton
+            label={syncAccessibilityLabel}
+            variant="ghost"
+            onPress={() => setSyncOpen(true)}
+          >
+            <SyncIcon size={20} color={syncIconColor} />
+          </IconButton>
+        </View>
         <BalanceHero amountMinor={balanceMinor} currency={currency} />
         <MetricPair
           left={{ label: 'Income', value: formatMinor(summary?.incomeMinor ?? 0n, currency) }}
@@ -141,9 +274,9 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {categories.slice(0, 4).map((category) => (
                 <Button
-                  key={category._id}
+                  key={String(category.id ?? category._id)}
                   variant="ghost"
-                  onPress={() => router.push(`/category/${category._id}` as never)}
+                  onPress={() => router.push(`/category/${String(category.id ?? category._id)}` as never)}
                   style={{
                     width: '48%',
                     minHeight: 76,
@@ -182,16 +315,17 @@ export default function HomeScreen() {
           {groups === undefined ? (
             <Typography variant="small">Loading groups…</Typography>
           ) : groups.length > 0 ? (
-            groups
-              .slice(0, 2)
-              .map((group) => (
+            groups.slice(0, 2).map((group) => {
+              const groupId = String(group.id ?? group._id);
+              return (
                 <SettingsRow
-                  key={group._id}
+                  key={groupId}
                   label={group.name}
                   value={group.currency}
-                  onPress={() => router.push(`/group/${group._id}` as never)}
+                  onPress={() => router.push(`/group/${groupId}` as never)}
                 />
-              ))
+              );
+            })
           ) : (
             <Text style={{ color: tokens.foregroundMuted }}>
               Create a group to split money with people you know.
@@ -209,23 +343,27 @@ export default function HomeScreen() {
               </Button>
             }
           />
-          {summary === undefined ? (
+          {transactions === undefined ? (
             <Typography variant="small">Loading activity…</Typography>
-          ) : summary?.recent.length ? (
-            summary.recent.map((transaction) => (
-              <TransactionRow
-                key={transaction._id}
-                title={transaction.title}
-                category={
-                  categories?.find((category) => category._id === transaction.categoryId)?.name
-                }
-                amountMinor={transaction.amountMinor}
-                currency={transaction.currency}
-                type={transaction.type}
-                date={new Date(transaction.occurredAt).toLocaleDateString()}
-                onPress={() => router.push(`/transaction/${transaction._id}` as never)}
-              />
-            ))
+          ) : recentTransactions.length ? (
+            recentTransactions.map((transaction) => {
+              const transactionId = String(transaction.id ?? transaction._id);
+              const category = categories?.find(
+                (item) => String(item.id ?? item._id) === transaction.categoryId,
+              );
+              return (
+                <TransactionRow
+                  key={transactionId}
+                  title={transaction.title}
+                  category={category?.name}
+                  amountMinor={transaction.amountMinor}
+                  currency={transaction.currency}
+                  type={transaction.type}
+                  date={new Date(transaction.occurredAt).toLocaleDateString()}
+                  onPress={() => router.push(`/transaction/${transactionId}` as never)}
+                />
+              );
+            })
           ) : (
             <Text style={{ color: tokens.foregroundMuted }}>
               Your latest transactions will appear here.
@@ -289,6 +427,118 @@ export default function HomeScreen() {
               </Button>
             </View>
           )}
+        </View>
+      </Sheet>
+      <Sheet visible={syncOpen} onClose={() => setSyncOpen(false)} title="Local sync">
+        <View style={{ gap: 14 }}>
+          <View style={{ gap: 4 }}>
+            <Typography variant="heading">
+              {!isConnected
+                ? 'Offline'
+                : isSyncing
+                  ? 'Syncing changes'
+                  : syncHasIssue
+                    ? 'Action needed'
+                    : status.pending > 0
+                      ? 'Changes pending'
+                      : 'Up to date'}
+            </Typography>
+            <Text style={{ color: tokens.foregroundMuted }}>
+              {!isConnected
+                ? 'Your cached records stay available. New edits are queued on this device.'
+                : 'Local changes sync to your cloud account when connected.'}
+            </Text>
+          </View>
+          <View style={{ gap: 6 }}>
+            <Text>Connection: {isConnected ? 'Online' : 'Offline'}</Text>
+            <Text>Pending: {status.pending}</Text>
+            <Text>Active sync: {isSyncing ? 'Yes' : 'No'}</Text>
+            <Text>Failed: {status.failed}</Text>
+            <Text>Conflicts: {status.conflicts}</Text>
+            <Text>
+              Last successful cloud sync:{' '}
+              {status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleString() : 'Never'}
+            </Text>
+          </View>
+          {failedEntries.length > 0 && (
+            <ScrollView style={{ maxHeight: 220 }} contentContainerStyle={{ gap: 10 }}>
+              {failedEntries.map((entry) => (
+                <View key={entry.localId} style={{ gap: 5 }}>
+                  <Typography variant="small">{entry.operation}</Typography>
+                  <Text style={{ color: tokens.destructive }}>
+                    {entry.lastError ?? 'Cloud rejected this change.'}
+                  </Text>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isSyncing}
+                    onPress={() => void retryEntry(entry.localId)}
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    Retry this change
+                  </Button>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+          {conflicts.length > 0 && (
+            <ScrollView style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 12 }}>
+              {conflicts.map((conflict) => {
+                const localValue = String(
+                  conflict.localRecord.title ??
+                    conflict.localRecord.name ??
+                    conflict.localRecord.amountMinor ??
+                    'Local version',
+                );
+                const cloudValue = String(
+                  conflict.cloudRecord.title ??
+                    conflict.cloudRecord.name ??
+                    conflict.cloudRecord.amountMinor ??
+                    'Cloud version',
+                );
+                return (
+                  <View key={conflict.id} style={{ gap: 6 }}>
+                    <Typography variant="small">
+                      {conflict.entityType} · {conflict.recordId}
+                    </Typography>
+                    <Text style={{ color: tokens.foregroundMuted }}>Local: {localValue}</Text>
+                    <Text style={{ color: tokens.foregroundMuted }}>Cloud: {cloudValue}</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isSyncing}
+                        onPress={() => void resolveConflict(conflict.id, 'local')}
+                      >
+                        Keep local
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isSyncing}
+                        onPress={() => void resolveConflict(conflict.id, 'cloud')}
+                      >
+                        Use cloud
+                      </Button>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+          {!!syncError && <Typography style={{ color: tokens.destructive }}>{syncError}</Typography>}
+          <Button size="lg" disabled={isSyncing} onPress={() => void retryNow()}>
+            Retry now
+          </Button>
+          <Button
+            variant="outline"
+            onPress={() => {
+              setSyncOpen(false);
+              router.push('/settings/sync' as never);
+            }}
+          >
+            Local sync settings
+          </Button>
         </View>
       </Sheet>
     </>

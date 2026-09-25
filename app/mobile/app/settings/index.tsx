@@ -3,14 +3,18 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { SettingsRow } from '@/components/finance';
 import { IconButton, Separator, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function SettingsScreen() {
-  const profile = useQuery(api.users.queries.current);
+  const { userId, syncWindow } = useLocalSync();
+  const { data: profiles } = useLocalRecords<Record<string, unknown>>(userId, 'profile');
+  const profile = profiles?.[0];
+  const syncWindowLabel = syncWindow === 'all' ? 'All history' : `${syncWindow} days`;
+  const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -42,7 +46,7 @@ export default function SettingsScreen() {
         <Separator />
         <SettingsRow
           label="Currency"
-          value={profile?.defaultCurrency ?? 'INR'}
+          value={currency}
           onPress={() => router.push('/settings/currency' as never)}
         />
       </View>
@@ -63,6 +67,12 @@ export default function SettingsScreen() {
         <Typography variant="label" style={{ marginBottom: 8 }}>
           Data
         </Typography>
+        <SettingsRow
+          label="Local sync"
+          value={syncWindowLabel}
+          onPress={() => router.push('/settings/sync' as never)}
+        />
+        <Separator />
         <SettingsRow
           label="Privacy and export"
           onPress={() => router.push('/settings/privacy' as never)}

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { useMutation } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon } from '@/components/finance';
 import { CategoryEmojiPicker } from '@/components/finance/CategoryEmojiPicker';
 import { Button, IconButton, Input, Label, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { commitLocalWrite } from '@/local/commands';
 
 export default function NewCategoryScreen() {
   const [name, setName] = useState('');
@@ -17,15 +17,38 @@ export default function NewCategoryScreen() {
   const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const create = useMutation(api.categories.mutations.create);
+  const { userId } = useLocalSync();
 
   async function save() {
     const trimmedName = name.trim();
     if (!trimmedName || pending) return;
+    if (!userId) {
+      setError('Sign in to create a category.');
+      return;
+    }
+    if (icon !== undefined && (icon.length === 0 || icon.length > 32)) {
+      setError('Choose a valid category emoji.');
+      return;
+    }
     setPending(true);
     setError('');
     try {
-      const id = await create({ name: trimmedName, ...(icon ? { icon } : {}) });
+      const now = Date.now();
+      const id = await commitLocalWrite(
+        userId,
+        'category',
+        'category.create',
+        {
+          ownerId: userId,
+          name: trimmedName,
+          ...(icon ? { icon } : {}),
+          isSystem: false,
+          sortOrder: now,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { name: trimmedName, ...(icon ? { icon } : {}) },
+      );
       router.replace(`/category/${id}` as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create category.');
