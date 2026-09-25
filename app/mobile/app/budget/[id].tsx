@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft, ChartLineUp } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
-import { Button, IconButton, Progress, Text, Typography } from '@/components/ui';
+import { Button, Card, IconButton, Progress, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
@@ -14,6 +14,7 @@ import type { LocalRecord } from '@/local/repository';
 type BudgetRecord = LocalRecord & {
   id?: string;
   _id?: string;
+  cloudId?: string;
   name: string;
   amountMinor: bigint;
   currency: string;
@@ -48,7 +49,8 @@ type TransactionRecord = LocalRecord & {
 };
 
 export default function BudgetDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [pending, setPending] = useState(false);
@@ -59,7 +61,7 @@ export default function BudgetDetailScreen() {
   const accountState = useLocalRecords<AccountRecord>(userId, 'account');
   const selectedBudget = budgetState.data?.find(
     (item) =>
-      item.archivedAt === undefined && (item.id === id || item._id === id),
+      item.archivedAt === undefined && (item.id === id || item._id === id || item.cloudId === id),
   );
   const transactionState = useLocalTransactionRange<TransactionRecord>(
     userId,
@@ -87,8 +89,8 @@ export default function BudgetDetailScreen() {
     if (account._id) accountIdByAlias.set(account._id, canonicalId);
   }
 
-  const budgetLocalId = selectedBudget?.id ?? selectedBudget?._id;
-  const budgetPayloadId = selectedBudget?._id ?? selectedBudget?.id;
+  const budgetLocalId = selectedBudget?.id ?? selectedBudget?._id ?? selectedBudget?.cloudId;
+  const budgetPayloadId = selectedBudget?._id ?? selectedBudget?.cloudId ?? selectedBudget?.id;
   const spentMinor =
     selectedBudget && transactionState.data
       ? transactionState.data.reduce((total, transaction) => {
@@ -115,10 +117,7 @@ export default function BudgetDetailScreen() {
   const accountIdsReady =
     selectedBudget?.accountId === undefined || accountState.data !== undefined;
   const budget =
-    selectedBudget &&
-    transactionState.data &&
-    categoryIdsReady &&
-    accountIdsReady
+    selectedBudget && transactionState.data && categoryIdsReady && accountIdsReady
       ? {
           ...selectedBudget,
           spentMinor,
@@ -155,9 +154,7 @@ export default function BudgetDetailScreen() {
         { budgetId: budgetPayloadId },
         {
           recordId: budgetLocalId,
-          dependencies: budgetPayloadId.startsWith('local-')
-            ? [`budget:${budgetPayloadId}`]
-            : [],
+          dependencies: budgetPayloadId.startsWith('local-') ? [`budget:${budgetPayloadId}`] : [],
         },
       );
       router.back();
@@ -187,18 +184,45 @@ export default function BudgetDetailScreen() {
         style={{
           flex: 1,
           backgroundColor: tokens.background,
-          padding: 20,
+          paddingHorizontal: 20,
           paddingTop: insets.top + 12,
-          gap: 18,
+          paddingBottom: insets.bottom + 24,
         }}
       >
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+        <IconButton
+          label="Back to budgets"
+          variant="ghost"
+          style={{ alignSelf: 'flex-start' }}
+          onPress={() => router.replace('/budget' as never)}
+        >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Typography variant="heading">Budget not found</Typography>
-        <Text style={{ color: tokens.foregroundMuted }}>
-          This budget may have been archived or is unavailable.
-        </Text>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Card variant="subtle" style={{ gap: 14, padding: 22 }}>
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 15,
+                backgroundColor: tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ChartLineUp size={22} color={tokens.primary} />
+            </View>
+            <Typography variant="heading">This budget isn’t available</Typography>
+            <Text style={{ color: tokens.foregroundMuted }}>
+              It may have been archived or removed. Your other budgets are still available.
+            </Text>
+            <Button variant="outline" onPress={() => router.replace('/budget' as never)}>
+              View budgets
+            </Button>
+            <Button variant="ghost" onPress={() => router.push('/budget/new' as never)}>
+              Create a budget
+            </Button>
+          </Card>
+        </View>
       </View>
     );
 

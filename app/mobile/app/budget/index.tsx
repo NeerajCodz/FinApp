@@ -13,6 +13,7 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 type BudgetRecord = LocalRecord & {
   id?: string;
   _id?: string;
+  cloudId?: string;
   name: string;
   amountMinor: bigint;
   currency: string;
@@ -44,7 +45,11 @@ export default function BudgetScreen() {
   const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
   const accountState = useLocalRecords<AccountRecord>(userId, 'account');
   const activeBudgets = (budgetState.data ?? [])
-    .filter((budget) => budget.archivedAt === undefined)
+    .filter(
+      (budget) =>
+        budget.archivedAt === undefined &&
+        (budget.id ?? budget._id ?? budget.cloudId) !== undefined,
+    )
     .sort((left, right) => left.startAt - right.startAt || left.name.localeCompare(right.name));
   const needsCategoryIds = activeBudgets.some((budget) => budget.categoryId !== undefined);
   const needsAccountIds = activeBudgets.some((budget) => budget.accountId !== undefined);
@@ -78,7 +83,7 @@ export default function BudgetScreen() {
     if (account._id) accountIdByAlias.set(account._id, canonicalId);
   }
 
-  const transactions = activeBudgets.length > 0 ? transactionState.data ?? [] : [];
+  const transactions = activeBudgets.length > 0 ? (transactionState.data ?? []) : [];
   const budgets = activeBudgets.map((budget) => {
     const spentMinor = transactions.reduce((total, transaction) => {
       if (
@@ -150,6 +155,8 @@ export default function BudgetScreen() {
       ) : (
         <View style={{ gap: 18 }}>
           {budgets.map((budget, index) => {
+            const budgetId = budget.id ?? budget._id ?? budget.cloudId;
+            if (!budgetId) return null;
             const progress = Number((budget.spentMinor * 10000n) / budget.amountMinor) / 100;
             const percent = Math.min(100, Math.max(0, progress));
             const period =
@@ -161,11 +168,13 @@ export default function BudgetScreen() {
                     ? 'Account'
                     : 'Custom period';
             return (
-              <React.Fragment key={budget.id ?? budget._id}>
+              <React.Fragment key={budgetId}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${budget.name} budget`}
-                  onPress={() => router.push(`/budget/${budget.id ?? budget._id}` as never)}
+                  onPress={() =>
+                    router.push({ pathname: '/budget/[id]', params: { id: budgetId } } as never)
+                  }
                   style={({ pressed }) => ({
                     gap: 11,
                     paddingVertical: 8,
