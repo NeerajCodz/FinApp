@@ -33,7 +33,7 @@ export default function GroupExpensesScreen() {
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 180,
+        paddingBottom: insets.bottom + 32,
         gap: 28,
       }}
     >
