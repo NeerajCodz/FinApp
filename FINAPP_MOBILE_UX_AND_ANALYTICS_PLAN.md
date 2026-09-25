@@ -16,29 +16,29 @@ The supplied emulator screenshots are baseline evidence, not proof of the refres
 2. Inspect the active `Pixel_10_Pro_2` AVD without clearing its data. Map images 1–24 to screens and audit current UI and navigation. If the original app database is corrupt, do not clear it; use a separate app install/data context for smoke verification and report the limitation precisely.
 3. Implement the requests in coherent screen/system slices below, reusing the app's theme, header, row, icon, and empty-state patterns. Commit and push after each distinct fix, feature, or major visual change, without co-author trailers. Verify changed paths on device, plus focused checks, before each push.
 
-## New request checklist (screenshot order)
-1. Audit every screen header: a pushed detail/form must have a consistent top-left back action, while root tabs must not show a misleading back button. Check Android hardware back and nested navigation.
-2. Use a round, colored type marker everywhere transactions appear: expense red, income green, transfer yellow, split blue, settlement orange. Centralize the mapping and retain text/icon labels so color is not the only signal (Image 1).
-3. Display categories horizontally as `{emoji/icon} Name` in selectors, lists, summaries, charts, details, and notifications, never as a vertically stacked emoji and name. Unknown categories need a visible fallback icon.
-4. Apply the same transaction type palette and accessible labels to the surface in Image 2.
-5. Redesign the Image 3 surface after identifying its route; correct hierarchy, spacing, alignment, and interaction states without changing its data meaning.
-6. Add a selectable White theme immediately after Volt (the default) in the theme picker (Image 4). Keep persisted theme choice, contrast, and system/light/dark behavior coherent.
-7. Define two distinct security paths for Image 5: device credential/biometric unlock via platform authentication and an in-app passcode. A forgotten in-app passcode must be recoverable through verified email OTP (plus existing required auth factors), with server-verified identity, retry/rate limiting, and no plaintext passcode or insecure local reset. Do not call biometrics a remotely recoverable passkey.
-8. Expand notifications beyond a cosmetic settings list (Image 6): define event sources, delivery channels, user preferences, permission handling, scheduling, recurrence, deep links, read/unread state, and an overall breakdown for transaction, budget, goal, recurring, group/split, settlement, security, and sync events. Avoid claiming delivery for unsupported infrastructure.
-9. Remove oversized decorative headings such as “Where it went.” Whenever a category appears, pair its name with its emoji or icon (Image 7).
-10. Recompose Image 8: improve hierarchy and layout, make “Default” a compact text action rather than a large button, and audit any adjacent options/controls against the actual screen before adding them.
-11. Check Image 9 against the current implementation; if it is still the old design, replace it completely rather than layering cosmetic tweaks.
-12. Fully improve the Image 10 screen's visual hierarchy and layout, preserving its flows.
-13. Improve Image 11 with meaningful visuals tied to real data, not fabricated metrics.
-14. Replace the Type control in Image 12 with a dropdown that supports a user-defined custom type; persist and display custom types correctly across creation, editing, lists, and details. Rework surrounding layout and validation.
-15. Improve Image 13 with clearer hierarchy and meaningful data-backed visuals.
-16. Apply the same full visual/layout treatment to Image 14.
-17. Redesign notifications, recurring, and goals together: coherent illustrations/visuals, useful summaries, list rows, actions, loading/error/empty states, and functional notification behavior rather than UI-only toggles.
-18. Replace bare-text empty states in Images 15–17 and analogous screens with a centered icon/illustration and concise centered explanation; put an add/recovery CTA below where applicable. Distinguish empty, loading, offline, and errors.
-19. Verify Image 18 against actual persisted data and interaction; fix incorrect state, copy, or layout found.
-20. Audit all screens for stacked `{icon}` newline `{text}` patterns (Image 19); align icon and label on one row unless a deliberately larger feature composition warrants otherwise.
-21. Improve Images 20, 21, and 22 individually with better visual hierarchy, spacing, layout, real-data visualization, and touch targets.
-22. Completely redesign Image 23 while preserving functionality and accessible navigation.
+## New request checklist (23 requirements, screenshot order)
+1. Audit navigation headers across every screen: detail and form routes need a consistent top-left back action; root tabs must not show a misleading back action. Verify nested and Android hardware-back navigation.
+2. On Image 1 and throughout the app, use a round, logo-like semantic marker for each transaction type: red expense, green income, yellow transfer, blue split, and orange settlement. Keep text/icon meaning accessible; never rely on color alone.
+3. Render every category as one horizontal `{emoji/icon} {name}` unit in selectors, lists, summaries, charts, details, notifications, and other screens. Never stack the icon and name on separate lines; use a visible fallback icon for unknown categories.
+4. Apply the Image 1 transaction-type palette and accessible type labels to the separate surface shown in Image 2.
+5. Improve Image 3 only after identifying its actual route from the supplied image; refine hierarchy, spacing, alignment, and interaction states without changing its data meaning.
+6. Add a selectable White theme immediately after Volt (the default) in Image 4's theme picker. Preserve selection across restart and keep contrast and system/light/dark behavior coherent.
+7. On Image 5, provide two distinct security options: platform device authentication (biometric/device credential) and an in-app passcode. A forgotten in-app passcode must be recoverable through server-verified email OTP plus any existing required auth factors, with retry/rate limiting and no plaintext passcode or insecure local reset. Do not describe biometrics as a remotely recoverable passkey.
+8. Expand Image 6 notifications into a real product-wide system, not a cosmetic settings list: define event sources, supported delivery channels, preferences, permission handling, scheduling/recurrence, deep links, read/unread state, and an overall breakdown for transaction, budget, goal, recurring, group/split, settlement, security, and sync events. Do not claim delivery for unsupported infrastructure.
+9. Remove oversized decorative headings such as “Where it went.” Whenever a category appears, show its emoji or icon alongside its name; never show only the title.
+10. Redesign Image 8's poor layout and arrange its existing controls coherently. Keep “Default” as a compact text action, not a large button. Inspect the image before deciding whether to add any adjacent option; do not invent controls.
+11. Inspect Image 9 against the current implementation. If it still has the old design, replace that design completely rather than layering cosmetic tweaks; otherwise preserve the current implementation.
+12. Fully improve Image 10's visual hierarchy and layout while preserving its existing flows and data meaning.
+13. Improve Image 11 with meaningful visuals derived from real data; do not fabricate metrics.
+14. Replace Image 12's Type control with a dropdown that supports user-defined custom types. Rework the surrounding layout and validation, and persist/display custom types correctly across creation, editing, lists, and details.
+15. Improve Image 13's hierarchy and add meaningful, data-backed visuals.
+16. Apply the same complete visual and layout treatment to Image 14.
+17. Improve notifications, recurring, and goals together: coherent visuals, useful summaries and rows, working actions and notification behavior, and explicit loading/error/empty states.
+18. Replace bare-text empty states in Images 15–17 and analogous screens with a centered icon/illustration, centered concise explanation, and an add/recovery CTA below when applicable. Distinguish empty, loading, offline, and error states.
+19. Verify Image 18 against actual persisted data and interactions; correct any incorrect state, copy, or layout found.
+20. Audit all screens for vertically stacked `{icon}` followed by `{text}` patterns (Image 19); align each icon and label on one row unless a deliberately larger feature composition requires stacking.
+21. Improve Images 20, 21, and 22 individually: hierarchy, spacing, layout, real-data visualization, and usable touch targets.
+22. Completely redesign Image 23 while preserving its functionality and accessible navigation.
 23. Improve Image 24's visual organization, layout, readability, and responsive/safe-area behavior.
 
 ## Acceptance and verification for the new checklist
