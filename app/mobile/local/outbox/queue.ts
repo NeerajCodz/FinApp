@@ -1,3 +1,4 @@
+import { serializeLocalValue } from '../serialization';
 export type OutboxStatus = 'pending' | 'syncing' | 'failed' | 'synced' | 'conflict';
 export type OutboxEntry = {
   localId: string;
@@ -13,12 +14,13 @@ export type OutboxEntry = {
   deviceId?: string;
   dependencies?: readonly string[];
   retryCount: number;
+  lastError?: string;
   status: OutboxStatus;
 };
 
 export type ConflictReview = { status: 'conflict'; reason: string; action: 'Review changes' };
 export function serializePayload(value: unknown): string {
-  return JSON.stringify(value, (_, item) => (typeof item === 'bigint' ? `${item}n` : item));
+  return serializeLocalValue(value);
 }
 
 export function createOutboxEntry(

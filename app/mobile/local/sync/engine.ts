@@ -10,6 +10,17 @@ import {
 } from '../repository';
 import { updateOutboxStatus } from '../outbox/storage';
 
+function isTransientSyncFailure(error: unknown): boolean {
+  if (error && typeof error === 'object') {
+    const details = error as { status?: unknown; data?: unknown };
+    if (typeof details.status === 'number')
+      return details.status === 408 || details.status === 429 || details.status >= 500;
+    if (details.data !== undefined) return false;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return /network|fetch|timeout|timed out|disconnect|offline|websocket|socket|connection|temporar|unavailable|econn|etimedout|\b(408|429|502|503|504)\b/i.test(message);
+}
+
 export type SyncResult = {
   localId: string;
   status: 'synced' | 'failed' | 'conflict';
@@ -75,15 +86,16 @@ export async function syncOutbox(
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'SYNC_FAILED';
         const conflict = reason === 'TRANSACTION_CHANGED' ? markConflict(reason) : undefined;
+        const transient = !conflict && isTransientSyncFailure(error);
         const retryCount = current.retryCount + 1;
-        const retryAfter = nextRetryDelay(retryCount);
+        const retryAfter = transient ? nextRetryDelay(retryCount) : undefined;
         const safeError = reason.replace(/[\\r\\n]+/g, ' ').slice(0, 240);
         await updateOutboxStatus(
           userId,
           current.localId,
           conflict ? 'conflict' : 'failed',
           retryCount,
-          conflict ? null : Date.now() + retryAfter,
+          transient ? Date.now() + (retryAfter ?? nextRetryDelay(retryCount)) : null,
           safeError,
         );
         if (recordKey) blockedRecords.add(recordKey);

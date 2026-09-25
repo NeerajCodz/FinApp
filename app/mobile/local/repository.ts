@@ -1,8 +1,10 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getLocalDatabase, initializeLocalDatabase } from './sqlite/database';
 import type { OutboxEntry } from './outbox/queue';
+import { deserializeLocalValue, serializeLocalValue } from './serialization';
 export type LocalEntity =
   | 'profile'
+  | 'settings'
   | 'account'
   | 'accountMember'
   | 'category'
@@ -32,6 +34,7 @@ export type CloudChange = {
 
 type BasicTable = 'accounts' | 'categories' | 'groups' | 'budgets' | 'goals' | 'recurringRules';
 const listeners = new Map<string, Set<() => void>>();
+const cloudToLocalIds = new Map<string, Map<string, string>>();
 
 function requireUser(userId: string): void {
   if (!userId) throw new Error('AUTH_REQUIRED');
@@ -68,12 +71,10 @@ function sameFinancialContent(left: LocalRecord, right: LocalRecord): boolean {
   return encode(normalize(left)) === encode(normalize(right));
 }
 function encode(value: unknown): string {
-  return JSON.stringify(value, (_, item) => (typeof item === 'bigint' ? `${item}n` : item));
+  return serializeLocalValue(value);
 }
 function decode<T>(value: string): T {
-  return JSON.parse(value, (_, item) =>
-    typeof item === 'string' && /^-?\d+n$/.test(item) ? BigInt(item.slice(0, -1)) : item,
-  ) as T;
+  return deserializeLocalValue<T>(value);
 }
 function notify(userId: string): void {
   for (const listener of listeners.get(userId) ?? []) listener();
@@ -107,21 +108,67 @@ function putBasic(
     encode(record),
   );
 }
+function mapCloudForeignIds(db: SQLiteDatabase, userId: string, value: unknown): unknown {
+  let localByCloudId = cloudToLocalIds.get(userId);
+  if (!localByCloudId) {
+    const mappings = db.getAllSync<{ localId: string; cloudId: string }>(
+      'SELECT localId, cloudId FROM idMappings WHERE userId = ?',
+      userId,
+    );
+    localByCloudId = new Map(mappings.map(({ localId, cloudId }) => [cloudId, localId]));
+    cloudToLocalIds.set(userId, localByCloudId);
+  }
+  const normalize = (current: unknown): unknown => {
+    if (Array.isArray(current)) return current.map(normalize);
+    if (!current || typeof current !== 'object') return current;
+    return Object.fromEntries(
+      Object.entries(current).map(([key, item]) => [
+        key,
+        key !== 'id' && key !== '_id' && key !== 'cloudId' && /id$/i.test(key) && typeof item === 'string'
+          ? (localByCloudId.get(item) ?? item)
+          : normalize(item),
+      ]),
+    );
+  };
+  return normalize(value);
+}
 function putRecord(
   db: SQLiteDatabase,
   userId: string,
   type: LocalEntity,
   record: LocalRecord,
 ): void {
+  record = mapCloudForeignIds(db, userId, record) as LocalRecord;
   const id = entityId(record, type);
   const payload = encode(record);
   const cloudId = typeof record.cloudId === 'string' ? record.cloudId : (record._id ?? null);
+  if (cloudId) {
+    db.runSync(
+      'INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId) VALUES (?, ?, ?, ?)',
+      userId,
+      type,
+      id,
+      cloudId,
+    );
+    cloudToLocalIds.get(userId)?.set(String(cloudId), id);
+  }
   if (type === 'profile') {
     db.runSync(
       `INSERT INTO appProfile (userId, cloudId, payload, updatedAt) VALUES (?, ?, ?, ?)
        ON CONFLICT(userId) DO UPDATE SET cloudId = excluded.cloudId, payload = excluded.payload, updatedAt = excluded.updatedAt`,
       userId,
       cloudId,
+      payload,
+      Number(record.updatedAt ?? Date.now()),
+    );
+    return;
+  }
+  if (type === 'settings') {
+    db.runSync(
+      `INSERT INTO appSettings (userId, key, payload, updatedAt) VALUES (?, ?, ?, ?)
+       ON CONFLICT(userId, key) DO UPDATE SET payload = excluded.payload, updatedAt = excluded.updatedAt`,
+      userId,
+      'cloud',
       payload,
       Number(record.updatedAt ?? Date.now()),
     );
@@ -253,6 +300,7 @@ export async function readLocal<T extends LocalRecord>(
     budget: 'budgets',
     goal: 'goals',
     goalContribution: 'goalContributions',
+    settings: 'appSettings',
     recurringRule: 'recurringRules',
     notification: 'notifications',
     receiptMetadata: 'receiptMetadata',
@@ -284,6 +332,30 @@ export async function readTransactionRange<T extends LocalRecord>(
   );
   return rows.map((row) => decode<T>(row.payload));
 }
+
+export async function readGroupRange<T extends LocalRecord>(
+  userId: string,
+  groupId: string,
+  startAt: number,
+  endAt: number,
+): Promise<{ transactions: T[]; settlements: T[] }> {
+  requireUser(userId);
+  assertRange(startAt, endAt);
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  const transactions = db.getAllSync<{ payload: string }>(
+    'SELECT payload FROM transactions WHERE userId = ? AND groupId = ? AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt',
+    userId, groupId, startAt, endAt,
+  );
+  const settlements = db.getAllSync<{ payload: string }>(
+    'SELECT payload FROM settlements WHERE userId = ? AND groupId = ? AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt',
+    userId, groupId, startAt, endAt,
+  );
+  return {
+    transactions: transactions.map((row) => decode<T>(row.payload)),
+    settlements: settlements.map((row) => decode<T>(row.payload)),
+  };
+}
 function assertRange(startAt: number, endAt: number): void {
   if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
     throw new Error('INVALID_DATE_RANGE');
@@ -294,6 +366,7 @@ export async function applyLocalMutationAndEnqueue(
   type: LocalEntity,
   record: LocalRecord,
   entry: OutboxEntry,
+  relatedRecords: readonly { entityType: LocalEntity; record: LocalRecord }[] = [],
 ): Promise<void> {
   requireUser(userId);
   if (!entry.clientMutationId) throw new Error('CLIENT_MUTATION_ID_REQUIRED');
@@ -306,6 +379,7 @@ export async function applyLocalMutationAndEnqueue(
       entry.clientMutationId,
     );
     if (prior) return;
+    for (const related of relatedRecords) putRecord(db, userId, related.entityType, related.record);
     putRecord(db, userId, type, record);
     db.runSync(
       `INSERT INTO outbox (localId, userId, operation, payload, clientMutationId, entityType, recordId,
@@ -373,6 +447,13 @@ export async function applyCloudChanges(
       const localId =
         mapped?.localId ?? String(change.document?.id ?? change.document?._id ?? change.documentId);
       const localTable: Partial<Record<LocalEntity, string>> = {
+        profile: 'appProfile',
+        settings: 'appSettings',
+        accountMember: 'accountMembers',
+        groupMember: 'groupMembers',
+        expensePayer: 'expensePayers',
+        expenseParticipant: 'expenseParticipants',
+        transactionTag: 'transactionTags',
         account: 'accounts',
         category: 'categories',
         transaction: 'transactions',
@@ -396,12 +477,22 @@ export async function applyCloudChanges(
         'goals',
         'recurringRules',
       ].includes(table ?? '');
-      const row = table
+      const row = table === 'appProfile'
         ? db.getFirstSync<{ id: string; payload: string }>(
-            `SELECT id, payload FROM ${table} WHERE userId = ? AND ${hasCloudId ? '(id = ? OR cloudId = ?)' : 'id = ?'} LIMIT 1`,
-            ...(hasCloudId ? [userId, localId, change.documentId] : [userId, localId]),
+            'SELECT userId AS id, payload FROM appProfile WHERE userId = ?',
+            userId,
           )
-        : null;
+        : table === 'appSettings'
+          ? db.getFirstSync<{ id: string; payload: string }>(
+              "SELECT key AS id, payload FROM appSettings WHERE userId = ? AND key = 'cloud'",
+              userId,
+            )
+          : table && !['accountMembers', 'groupMembers', 'expensePayers', 'expenseParticipants', 'transactionTags'].includes(table)
+            ? db.getFirstSync<{ id: string; payload: string }>(
+                `SELECT id, payload FROM ${table} WHERE userId = ? AND ${hasCloudId ? '(id = ? OR cloudId = ?)' : 'id = ?'} LIMIT 1`,
+                ...(hasCloudId ? [userId, localId, change.documentId] : [userId, localId]),
+              )
+            : null;
       const localVersion = db.getFirstSync<{ clientUpdatedAt: number }>(
         'SELECT clientUpdatedAt FROM recordVersions WHERE userId = ? AND entityType = ? AND recordId = ?',
         userId,
@@ -418,7 +509,15 @@ export async function applyCloudChanges(
           String(change.revision),
           change.deletedAt,
         );
-        if (table && row)
+        if (table === 'appProfile')
+          db.runSync('DELETE FROM appProfile WHERE userId = ?', userId);
+        else if (table === 'appSettings')
+          db.runSync("DELETE FROM appSettings WHERE userId = ? AND key = 'cloud'", userId);
+        else if (
+          table &&
+          row &&
+          !['accountMembers', 'groupMembers', 'expensePayers', 'expenseParticipants', 'transactionTags'].includes(table)
+        )
           db.runSync(`DELETE FROM ${table} WHERE userId = ? AND id = ?`, userId, row.id);
       } else if (change.document) {
         if (row && localVersion && localVersion.clientUpdatedAt > 0) {
@@ -614,6 +713,31 @@ export async function markSynced(
       localEntityId,
       receipt.serverId,
     );
+    cloudToLocalIds.get(userId)?.set(receipt.serverId, localEntityId);
+    const recordTable: Partial<Record<LocalEntity, string>> = {
+      account: 'accounts',
+      category: 'categories',
+      transaction: 'transactions',
+      group: 'groups',
+      budget: 'budgets',
+      profile: 'appProfile',
+    };
+    const table = recordTable[entityType];
+    const localRecord = table === 'appProfile'
+      ? db.getFirstSync<{ payload: string }>('SELECT payload FROM appProfile WHERE userId = ?', userId)
+      : table
+        ? db.getFirstSync<{ payload: string }>(`SELECT payload FROM ${table} WHERE userId = ? AND id = ?`, userId, localEntityId)
+        : null;
+    if (localRecord) {
+      putRecord(db, userId, entityType, {
+        ...decode<LocalRecord>(localRecord.payload),
+        id: localEntityId,
+        _id: receipt.serverId,
+        cloudId: receipt.serverId,
+        clientUpdatedAt: undefined,
+        updatedAt: receipt.updatedAt,
+      });
+    }
     const dependencies = db.getAllSync<{ localId: string; payload: string; dependencies: string }>(
       `SELECT localId, payload, dependencies FROM outbox
        WHERE userId = ? AND status IN ('pending', 'failed', 'syncing')`,
@@ -624,9 +748,7 @@ export async function markSynced(
       const unresolved = JSON.parse(dependent.dependencies) as string[];
       const matching = unresolved.filter((dependency) => dependencyKeys.has(dependency));
       if (matching.length === 0) continue;
-      const value = JSON.parse(dependent.payload, (_, item) =>
-        typeof item === 'string' && /^-?\d+n$/.test(item) ? BigInt(item.slice(0, -1)) : item,
-      );
+      const value = decode<unknown>(dependent.payload);
       db.runSync(
         'UPDATE outbox SET payload = ?, dependencies = ? WHERE userId = ? AND localId = ?',
         encode(rewriteForeignIds(value, localEntityId, receipt.serverId)),
@@ -701,6 +823,18 @@ export async function retryFailed(userId: string): Promise<void> {
   notify(userId);
 }
 
+export async function retryFailedEntry(userId: string, localId: string): Promise<void> {
+  requireUser(userId);
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  db.runSync(
+    "UPDATE outbox SET status = 'pending', nextRetryAt = NULL, lastError = NULL WHERE userId = ? AND localId = ? AND status = 'failed'",
+    userId,
+    localId,
+  );
+  notify(userId);
+}
+
 export async function recoverInterruptedSync(userId: string): Promise<void> {
   requireUser(userId);
   await initializeLocalDatabase();
@@ -710,6 +844,47 @@ export async function recoverInterruptedSync(userId: string): Promise<void> {
     userId,
   );
   notify(userId);
+}
+
+export async function getSyncCursor(userId: string): Promise<string | null> {
+  requireUser(userId);
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  return db.getFirstSync<{ cursor: string | null }>(
+    'SELECT cursor FROM syncState WHERE userId = ?',
+    userId,
+  )?.cursor ?? null;
+}
+
+export async function hasCompletedBootstrap(userId: string): Promise<boolean> {
+  requireUser(userId);
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  return db.getFirstSync<{ value: string }>(
+    "SELECT value FROM localMetadata WHERE userId = ? AND key = 'bootstrapComplete'",
+    userId,
+  )?.value === '1';
+}
+
+export async function markBootstrapCompleted(userId: string): Promise<void> {
+  requireUser(userId);
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  db.runSync(
+    `INSERT INTO localMetadata (userId, key, value) VALUES (?, 'bootstrapComplete', '1')
+     ON CONFLICT(userId, key) DO UPDATE SET value = '1'`,
+    userId,
+  );
+}
+
+export async function getSyncRevision(userId: string): Promise<string> {
+  requireUser(userId);
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  return db.getFirstSync<{ revision: string }>(
+    'SELECT revision FROM syncState WHERE userId = ?',
+    userId,
+  )?.revision ?? '0';
 }
 
 export type LocalSyncWindow = 7 | 30 | 90 | 180 | 365 | 'all';
@@ -742,8 +917,19 @@ export async function setSyncWindow(userId: string, days: LocalSyncWindow): Prom
   await initializeLocalDatabase();
   const db = await getLocalDatabase();
   const now = Date.now();
-  const mutationId = `sync-window:${userId}:${now}`;
   db.withTransactionSync(() => {
+    const priorVersion = db.getFirstSync<{ value: string }>(
+      "SELECT value FROM localMetadata WHERE userId = ? AND key = 'syncWindowMutationVersion'",
+      userId,
+    );
+    const version = Number(priorVersion?.value ?? 0) + 1;
+    const mutationId = `sync-window:${userId}:${version}`;
+    db.runSync(
+      `INSERT INTO localMetadata (userId, key, value) VALUES (?, 'syncWindowMutationVersion', ?)
+       ON CONFLICT(userId, key) DO UPDATE SET value = excluded.value`,
+      userId,
+      String(version),
+    );
     db.runSync(
       `INSERT INTO localMetadata (userId, key, value) VALUES (?, ?, ?)
        ON CONFLICT(userId, key) DO UPDATE SET value = excluded.value`,
@@ -816,6 +1002,7 @@ export async function listOutbox(userId: string): Promise<OutboxEntry[]> {
     dependencies: string;
     retryCount: number;
     nextRetryAt: number | null;
+    lastError: string | null;
     status: OutboxEntry['status'];
   }>('SELECT * FROM outbox WHERE userId = ? ORDER BY createdAt, localId', userId);
   return rows.map((row) => ({
@@ -826,6 +1013,7 @@ export async function listOutbox(userId: string): Promise<OutboxEntry[]> {
     dependencies: JSON.parse(row.dependencies) as string[],
     baseUpdatedAt: row.baseUpdatedAt ?? undefined,
     deviceId: row.deviceId ?? undefined,
+    lastError: row.lastError ?? undefined,
   }));
 }
 

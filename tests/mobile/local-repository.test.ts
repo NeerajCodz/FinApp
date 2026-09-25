@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as repo from '../../app/mobile/local/repository';
 import { createOutboxEntry } from '../../app/mobile/local/outbox/queue';
 import { syncOutbox } from '../../app/mobile/local/sync/engine';
+import { deserializeLocalValue } from '../../app/mobile/local/serialization';
 vi.mock('expo-secure-store', () => ({
   getItemAsync: async () => 'test-key',
   setItemAsync: async () => undefined,
@@ -255,8 +256,99 @@ describe('local financial repository', () => {
     ]);
     await repo.setSyncWindow(userId, 7);
     expect(await repo.getSyncWindow(userId)).toBe(7);
+    const backfill = (await repo.listOutbox(userId)).find(
+      (entry) => entry.operation === 'sync.bootstrap',
+    );
+    expect(backfill?.status).toBe('pending');
+    expect(
+      backfill ? deserializeLocalValue<{ days: number }>(backfill.payload) : undefined,
+    ).toEqual({ days: 7 });
     expect(await repo.readTransactionRange(userId, 0, 10)).toMatchObject([
       { title: 'Old history', amountMinor: 500n },
     ]);
+  });
+
+  it('backs off transient network failures but leaves server rejections for manual retry', async () => {
+    const userId = 'user-retry-policy';
+    const makePending = async (id: string) => {
+      const entry = createOutboxEntry(
+        'transaction.create',
+        { title: id, amountMinor: 1n },
+        `mutation-${id}`,
+        { entityType: 'transaction', recordId: `local-${id}` },
+      );
+      await repo.applyLocalMutationAndEnqueue(
+        userId,
+        'transaction',
+        { id: `local-${id}`, title: id, occurredAt: 1, amountMinor: 1n },
+        entry,
+      );
+      return entry;
+    };
+    const transient = await makePending('transient');
+    await syncOutbox(userId, [transient], async () => {
+      throw new Error('Network request failed');
+    });
+    const [transientState] = await repo.listOutbox(userId);
+    expect(transientState?.status).toBe('failed');
+    expect(transientState?.nextRetryAt).toBeGreaterThan(Date.now());
+
+    const rejected = await makePending('rejected');
+    await syncOutbox(userId, [rejected], async () => {
+      throw Object.assign(new Error('INVALID_AMOUNT'), { data: { code: 'INVALID_AMOUNT' } });
+    });
+    const rejectedState = (await repo.listOutbox(userId)).find(
+      (entry) => entry.localId === rejected.localId,
+    );
+    expect(rejectedState?.status).toBe('failed');
+    expect(rejectedState?.nextRetryAt).toBeUndefined();
+    await repo.retryFailedEntry(userId, rejected.localId);
+    const manuallyRetried = (await repo.listOutbox(userId)).find(
+      (entry) => entry.localId === rejected.localId,
+    );
+    expect(manuallyRetried?.status).toBe('pending');
+    expect(manuallyRetried?.nextRetryAt).toBeUndefined();
+    expect(manuallyRetried?.lastError).toBeUndefined();
+    expect((await repo.listOutbox(userId)).find(
+      (entry) => entry.localId === transient.localId,
+    )?.status).toBe('failed');
+  });
+
+  it('keeps cloud group references addressable by their stable local route ID', async () => {
+    const userId = 'user-group-mapping';
+    const groupWrite = createOutboxEntry(
+      'group.create',
+      { name: 'Trip' },
+      'mutation-group-map',
+      { entityType: 'group', recordId: 'local-group-map' },
+    );
+    await repo.applyLocalMutationAndEnqueue(
+      userId,
+      'group',
+      { id: 'local-group-map', name: 'Trip', currency: 'INR' },
+      groupWrite,
+    );
+    await repo.markSynced(userId, groupWrite.localId, 'group', 'local-group-map', {
+      serverId: 'cloud-group-map',
+      revision: '1',
+      updatedAt: 10,
+    });
+    await repo.upsertCloudPage(userId, 'transaction', [
+      {
+        _id: 'cloud-expense-map',
+        groupId: 'cloud-group-map',
+        title: 'Dinner',
+        amountMinor: 2500n,
+        currency: 'INR',
+        status: 'posted',
+        occurredAt: 20,
+      },
+    ]);
+
+    expect(
+      await repo.readGroupRange(userId, 'local-group-map', 0, 30),
+    ).toMatchObject({
+      transactions: [{ groupId: 'local-group-map', title: 'Dinner' }],
+    });
   });
 });

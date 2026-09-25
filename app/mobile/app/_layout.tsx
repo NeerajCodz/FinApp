@@ -2,16 +2,18 @@ import '../global.css';
 import React from 'react';
 import Constants from 'expo-constants';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { ConvexReactClient } from 'convex/react';
+import { ConvexReactClient, useConvexConnectionState } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
-import { View } from '@/components/ui';
+import { Button, View } from '@/components/ui';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
+import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
+import { LocalSyncProvider, useLocalSync } from '@/providers/LocalSyncProvider';
 
 const configuredConvexUrl =
   Constants.expoConfig?.extra?.convexUrl ?? process.env.EXPO_PUBLIC_CONVEX_URL;
@@ -20,13 +22,68 @@ const convexClient = new ConvexReactClient(resolveConvexUrl(configuredConvexUrl,
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
+  const { userId: localUserId } = useLocalSync();
+  const connection = useConvexConnectionState();
   const router = useRouter();
   const segments = useSegments();
+  const { tokens } = useTheme();
   const isAuthRoute = segments[0] === '(auth)';
+  const privateRoute = !isAuthRoute && !isAuthenticated && !localUserId;
+  const [authTimedOut, setAuthTimedOut] = React.useState(false);
+
   React.useEffect(() => {
-    if (!isLoading && !isAuthenticated && !isAuthRoute) router.replace('/(auth)/welcome');
-  }, [isAuthRoute, isAuthenticated, isLoading, router]);
-  return <>{children}</>;
+    if (!isLoading && !isAuthenticated && !localUserId && !isAuthRoute)
+      router.replace('/(auth)/welcome');
+  }, [isAuthRoute, isAuthenticated, isLoading, localUserId, router]);
+  React.useEffect(() => {
+    if (!privateRoute || !isLoading) {
+      setAuthTimedOut(false);
+      return;
+    }
+    const timeout = setTimeout(() => setAuthTimedOut(true), 12_000);
+    return () => clearTimeout(timeout);
+  }, [isLoading, privateRoute]);
+
+  return (
+    <>
+      {children}
+      {privateRoute && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            zIndex: 1000,
+            elevation: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
+            padding: 24,
+            backgroundColor: tokens.background,
+          }}
+        >
+          <RNText
+            style={{
+              color: tokens.foreground,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 22,
+              textAlign: 'center',
+            }}
+          >
+            {authTimedOut ? 'We couldn’t verify your account.' : 'Checking your account…'}
+          </RNText>
+          {authTimedOut && (
+            <Button variant="outline" onPress={() => router.replace('/(auth)/welcome')}>
+              Go to sign in
+            </Button>
+          )}
+        </View>
+      )}
+      <BackendConnectionNotice isConnected={connection.isWebSocketConnected} tokens={tokens} />
+    </>
+  );
 }
 
 function ThemedStack() {
@@ -70,7 +127,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ConvexAuthProvider client={convexClient} storage={secureTokenStorage}>
-        {content}
+        <LocalSyncProvider>{content}</LocalSyncProvider>
       </ConvexAuthProvider>
     </GestureHandlerRootView>
   );
