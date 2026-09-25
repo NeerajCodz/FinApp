@@ -14,6 +14,8 @@ import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
 import { LocalSyncProvider, useLocalSync } from '@/providers/LocalSyncProvider';
+import { AppLockProvider } from '@/lib/security/AppLockProvider';
+import { readValidatedLocalUserId } from '@/local/identity';
 
 const configuredConvexUrl =
   Constants.expoConfig?.extra?.convexUrl ?? process.env.EXPO_PUBLIC_CONVEX_URL;
@@ -28,15 +30,27 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const { tokens } = useTheme();
   const isAuthRoute = segments[0] === '(auth)';
-  const privateRoute = !isAuthRoute && !isAuthenticated && !localUserId;
+  const privateRoute = !isAuthRoute && !localUserId;
   const [authTimedOut, setAuthTimedOut] = React.useState(false);
+  const [cachedIdentity, setCachedIdentity] = React.useState<string | null | undefined>();
 
   React.useEffect(() => {
-    if (!isLoading && !isAuthenticated && !localUserId && !isAuthRoute)
-      router.replace('/(auth)/welcome');
-  }, [isAuthRoute, isAuthenticated, isLoading, localUserId, router]);
+    let active = true;
+    void readValidatedLocalUserId().then((id) => {
+      if (active) setCachedIdentity(id);
+    }).catch(() => {
+      // Secure storage errors remain behind the account gate rather than exposing private routes.
+    });
+    return () => { active = false; };
+  }, []);
+
   React.useEffect(() => {
-    if (!privateRoute || !isLoading) {
+    if (!isLoading && !isAuthenticated && !localUserId && !isAuthRoute &&
+        (connection.isWebSocketConnected || cachedIdentity === null))
+      router.replace('/(auth)/welcome');
+  }, [cachedIdentity, connection.isWebSocketConnected, isAuthRoute, isAuthenticated, isLoading, localUserId, router]);
+  React.useEffect(() => {
+    if (!privateRoute) {
       setAuthTimedOut(false);
       return;
     }
@@ -45,7 +59,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [isLoading, privateRoute]);
 
   return (
-    <>
+    <AppLockProvider userId={localUserId} authRoute={isAuthRoute}>
       {children}
       {privateRoute && (
         <View
@@ -82,7 +96,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         </View>
       )}
       <BackendConnectionNotice isConnected={connection.isWebSocketConnected} tokens={tokens} />
-    </>
+    </AppLockProvider>
   );
 }
 

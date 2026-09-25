@@ -148,6 +148,67 @@ describe('Convex public runtime functions', () => {
     }
   });
 
+  it('requires verified identity and a fresh single-use OTP to reset app lock', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) => ctx.db.insert('users', {
+      email: 'lock@example.com', emailVerificationTime: 1, name: 'Lock User',
+    }));
+    const authenticated = t.withIdentity({
+      subject: `${userId}|session-id`, email: 'lock@example.com', name: 'Lock User',
+    });
+    const previousKey = process.env.AUTH_RESEND_KEY;
+    const previousFrom = process.env.AUTH_EMAIL_FROM;
+    process.env.AUTH_RESEND_KEY = 're_test_key';
+    process.env.AUTH_EMAIL_FROM = 'Finapp <mail@example.com>';
+    const email = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', email);
+    try {
+      await expect(t.action(api.auth.requestAppLockReset, {})).rejects.toThrow();
+      const { challengeId } = await authenticated.action(api.auth.requestAppLockReset, {});
+      expect(JSON.parse(email.mock.calls[0]![1]!.body as string).to).toEqual(['lock@example.com']);
+      const code = (JSON.parse(email.mock.calls[0]![1]!.body as string).text as string)
+        .match(/\b(\d{6})\b/)?.[1];
+      expect(code).toMatch(/^\d{6}$/);
+      if (!code) throw new Error('Reset email did not contain a code.');
+      expect(await authenticated.action(api.auth.verifyAppLockReset,
+        { challengeId, code: code === '000000' ? '111111' : '000000' })).toMatchObject({ verified: false });
+      expect(await authenticated.action(api.auth.verifyAppLockReset, { challengeId, code }))
+        .toMatchObject({ verified: true, userId });
+      expect(await authenticated.action(api.auth.verifyAppLockReset, { challengeId, code }))
+        .toMatchObject({ verified: false });
+      await t.run(async (ctx) => {
+        const challenge = await ctx.db.query('appLockResetChallenges')
+          .withIndex('by_user', (query) => query.eq('userId', userId)).unique();
+        if (!challenge) throw new Error('Missing challenge.');
+        await ctx.db.patch(challenge._id, { createdAt: Date.now() - 31_000 });
+      });
+      const expired = await authenticated.action(api.auth.requestAppLockReset, {});
+      const expiredCode = (JSON.parse(email.mock.calls[1]![1]!.body as string).text as string)
+        .match(/\b(\d{6})\b/)?.[1];
+      if (!expiredCode) throw new Error('Second reset email did not contain a code.');
+      await t.run(async (ctx) => {
+        const challenge = await ctx.db.query('appLockResetChallenges')
+          .withIndex('by_user', (query) => query.eq('userId', userId)).unique();
+        if (!challenge) throw new Error('Missing challenge.');
+        await ctx.db.patch(challenge._id, { expiresAt: Date.now() - 1 });
+      });
+      expect(await authenticated.action(api.auth.verifyAppLockReset,
+        { challengeId: expired.challengeId, code: expiredCode })).toMatchObject({ verified: false });
+
+      await t.run(async (ctx) => {
+        await ctx.db.patch(userId, { emailVerificationTime: undefined });
+      });
+      await expect(authenticated.action(api.auth.requestAppLockReset, {}))
+        .rejects.toThrow('verified email');
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousKey === undefined) delete process.env.AUTH_RESEND_KEY;
+      else process.env.AUTH_RESEND_KEY = previousKey;
+      if (previousFrom === undefined) delete process.env.AUTH_EMAIL_FROM;
+      else process.env.AUTH_EMAIL_FROM = previousFrom;
+    }
+  });
+
   it('locks an email second-factor challenge after five wrong codes', async () => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) =>
@@ -724,7 +785,10 @@ describe('Convex public runtime functions', () => {
       amountMinor: 240000n,
       currency: 'INR',
       occurredAt: Date.UTC(2026, 7, 27),
-      participantUsernames: ['@rahul_42'],
+      participants: [
+        { userId: ownerId, amountMinor: 120000n, method: 'equal' },
+        { userId: memberId, amountMinor: 120000n, method: 'equal' },
+      ],
     });
     const detail = await authenticated.query(api.groups.queries.detail, { groupId });
     expect(detail).toMatchObject({
@@ -735,6 +799,10 @@ describe('Convex public runtime functions', () => {
       ],
       expenses: [{ _id: transactionId, title: 'Hotel', amountMinor: 240000n }],
     });
+    expect(await t.run((ctx) => ctx.db.query('expenseParticipants').collect())).toMatchObject([
+      { transactionId, userId: ownerId, amountMinor: 120000n, method: 'equal' },
+      { transactionId, userId: memberId, amountMinor: 120000n, method: 'equal' },
+    ]);
     expect(
       await authenticated.query(api.groups.queries.personTimeline, { username: '@rahul_42' }),
     ).toMatchObject([{ id: transactionId, title: 'Hotel', amountMinor: 240000n }]);

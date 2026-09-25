@@ -63,6 +63,17 @@ export default defineSchema({
   })
     .index('by_user', ['userId'])
     .index('by_challenge', ['challengeIdHash']),
+  appLockResetChallenges: defineTable({
+    userId: v.id('users'),
+    challengeIdHash: v.string(),
+    codeHash: v.string(),
+    createdAt: timestamp,
+    expiresAt: timestamp,
+    attempts: v.number(),
+    consumedAt: optionalTime,
+  })
+    .index('by_user', ['userId'])
+    .index('by_challenge', ['challengeIdHash']),
   accounts: defineTable({
     ownerId: v.id('users'),
     name: v.string(),
@@ -74,6 +85,7 @@ export default defineSchema({
       v.literal('loan'),
       v.literal('other'),
     ),
+    customType: optionalText,
     currency,
     openingBalanceMinor: v.int64(),
     icon: optionalText,
@@ -304,6 +316,7 @@ export default defineSchema({
   notifications: defineTable({
     recipientId: v.id('users'),
     type: v.string(),
+    eventKey: optionalText,
     actorId: optionalText,
     entityType: optionalText,
     entityId: optionalText,
@@ -311,7 +324,9 @@ export default defineSchema({
     body: v.string(),
     readAt: optionalTime,
     createdAt: timestamp,
-  }).index('by_recipient_createdAt', ['recipientId', 'createdAt']),
+  })
+    .index('by_recipient_createdAt', ['recipientId', 'createdAt'])
+    .index('by_recipient_eventKey', ['recipientId', 'eventKey']),
   pushDevices: defineTable({
     userId: v.id('users'),
     token: v.string(),

@@ -19,7 +19,7 @@ function escapeHtml(value: string): string {
   });
 }
 
-type OtpPurpose = 'verify' | 'reset' | 'two-factor';
+type OtpPurpose = 'verify' | 'reset' | 'two-factor' | 'app-lock-reset';
 
 function otpEmailTemplate(purpose: OtpPurpose, token: string) {
   const content = {
@@ -44,6 +44,13 @@ function otpEmailTemplate(purpose: OtpPurpose, token: string) {
       action: 'Enter this code in Finapp to finish signing in. Never share this code with anyone.',
       text: `Your Finapp two-factor sign-in code is ${token}. It expires in 10 minutes. If you did not try to sign in, ignore this email and secure your account.`,
       notice: 'If you did not try to sign in, ignore this email and secure your account.',
+    },
+    'app-lock-reset': {
+      subject: 'Reset your Finapp app passcode',
+      title: 'Reset your app passcode',
+      action: 'Enter this code in Finapp to reset the passcode on this device. Never share this code.',
+      text: `Your Finapp app passcode reset code is ${token}. It expires in 10 minutes. If you did not request this, ignore this email and secure your account.`,
+      notice: 'If you did not request this, ignore this email and secure your account.',
     },
   }[purpose];
   const safeToken = escapeHtml(token);
@@ -135,6 +142,16 @@ async function sendOtpEmail(
 export function sendTwoFactorEmail(recipient: string, token: string) {
   return sendOtpEmail(
     'two-factor',
+    recipient,
+    token,
+    process.env.AUTH_RESEND_KEY,
+    process.env.AUTH_EMAIL_FROM ?? 'Finapp <onboarding@resend.dev>',
+  );
+}
+
+export function sendAppLockResetEmail(recipient: string, token: string) {
+  return sendOtpEmail(
+    'app-lock-reset',
     recipient,
     token,
     process.env.AUTH_RESEND_KEY,
