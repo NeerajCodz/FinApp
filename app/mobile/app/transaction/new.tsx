@@ -341,7 +341,7 @@ export default function NewTransactionScreen() {
 
   const pickerOptions =
     picker === 'category'
-      ? categoryOptions?.map((item) => ({ id: String(item.id ?? item._id), name: String(item.name) }))
+      ? categoryOptions?.map((item) => ({ id: String(item.id ?? item._id), name: String(item.name), icon: item.icon }))
       : accounts
           ?.filter(
             (item) =>
@@ -627,9 +627,17 @@ export default function NewTransactionScreen() {
                   Loading {picker === 'category' ? 'categories' : 'accounts'}…
                 </Typography>
               ) : pickerOptions.length === 0 ? (
-                <Typography variant="small">
-                  {picker === 'category' ? 'No categories yet.' : 'No accounts available.'}
-                </Typography>
+                <View style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}>
+                  {picker === 'category'
+                    ? <CategoryIcon label="Category" />
+                    : <ReceiptText size={24} color={tokens.foregroundMuted} />}
+                  <Typography variant="bodyLarge">
+                    {picker === 'category' ? 'No categories yet' : 'No accounts yet'}
+                  </Typography>
+                  <Typography variant="small" style={{ textAlign: 'center' }}>
+                    {picker === 'category' ? 'Create a category to organize this transaction.' : 'Add an account before recording this transaction.'}
+                  </Typography>
+                </View>
               ) : null}
             </ScrollView>
             {picker === 'category' && (
@@ -637,10 +645,10 @@ export default function NewTransactionScreen() {
                 variant="outline"
                 onPress={() => {
                   setPicker(null);
-                  router.push('/category' as never);
+                  router.push(pickerOptions?.length === 0 ? '/category/new' as never : '/category' as never);
                 }}
               >
-                Manage categories
+                {pickerOptions?.length === 0 ? 'Create category' : 'Manage categories'}
               </Button>
             )}
             {picker === 'account' && (
@@ -654,15 +662,15 @@ export default function NewTransactionScreen() {
                 Add account
               </Button>
             )}
-            {(picker === 'category' || picker === 'account') && selectedId && (
-              <Button variant="outline" onPress={saveDefault} disabled={selectedId === defaultId}>
-                Set selected as default
-              </Button>
-            )}
-            {(picker === 'category' || picker === 'account') && defaultId && (
-              <Button variant="ghost" onPress={clearDefault}>
-                Clear default
-              </Button>
+            {(picker === 'category' || picker === 'account') && (selectedId || defaultId) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {selectedId && selectedId !== defaultId && (
+                  <Button size="sm" variant="outline" onPress={saveDefault}>Set as default</Button>
+                )}
+                {defaultId && (
+                  <Button size="sm" variant="ghost" onPress={clearDefault}>Clear default</Button>
+                )}
+              </View>
             )}
           </>
         )}

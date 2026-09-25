@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft } from '@/lib/icons';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
-import { Button, InputOTP, Text, Typography } from '@/components/ui';
+import { Button, IconButton, InputOTP, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function TwoFactorScreen() {
@@ -49,7 +50,16 @@ export default function TwoFactorScreen() {
         paddingBottom: insets.bottom + 20,
       }}
     >
-      <BrandMark />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <IconButton
+          label="Go back"
+          variant="ghost"
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in')}
+        >
+          <ArrowLeft size={21} color={tokens.foreground} />
+        </IconButton>
+        <BrandMark />
+      </View>
       <View style={{ flex: 1, justifyContent: 'center', gap: 32 }}>
         <View style={{ gap: 12 }}>
           <Typography variant="title">One last step.</Typography>

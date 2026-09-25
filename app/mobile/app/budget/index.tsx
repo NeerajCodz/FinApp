@@ -1,10 +1,10 @@
 import React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
+import { ArrowLeft, CaretRight, ChartLineUp, Plus } from '@/lib/icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money } from '@/components/finance';
-import { Button, Empty, IconButton, Progress, Separator, Text, Typography } from '@/components/ui';
+import { CategoryIcon, Money } from '@/components/finance';
+import { Button, IconButton, Progress, Separator, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
@@ -34,7 +34,7 @@ type TransactionRecord = LocalRecord & {
   status: string;
   deletedAt?: number;
 };
-type CategoryRecord = LocalRecord & { id?: string; _id?: string };
+type CategoryRecord = LocalRecord & { id?: string; _id?: string; name?: string; icon?: string };
 type AccountRecord = LocalRecord & { id?: string; _id?: string };
 
 export default function BudgetScreen() {
@@ -69,10 +69,13 @@ export default function BudgetScreen() {
   if (needsCategoryIds && categoryState.error) throw categoryState.error;
   if (needsAccountIds && accountState.error) throw accountState.error;
   const categoryIdByAlias = new Map<string, string>();
+  const categoryById = new Map<string, CategoryRecord>();
   for (const category of categoryState.data ?? []) {
     const canonicalId = category.id ?? category._id;
     if (!canonicalId) continue;
     if (category.id) categoryIdByAlias.set(category.id, canonicalId);
+    if (category.id) categoryById.set(category.id, category);
+    if (category._id) categoryById.set(category._id, category);
     if (category._id) categoryIdByAlias.set(category._id, canonicalId);
   }
   const accountIdByAlias = new Map<string, string>();
@@ -143,45 +146,45 @@ export default function BudgetScreen() {
       {loading ? (
         <Text style={{ color: tokens.foregroundMuted }}>Loading budgets…</Text>
       ) : budgets.length === 0 ? (
-        <Empty
-          title="No budgets yet."
-          description="Set a spending limit and see real expenses count toward it."
-          action={
-            <Button size="sm" variant="outline" onPress={() => router.push('/budget/new' as never)}>
-              Create budget
-            </Button>
-          }
-        />
+        <View style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
+          <ChartLineUp size={30} color={tokens.foregroundMuted} />
+          <Typography variant="bodyLarge">No budgets yet</Typography>
+          <Typography variant="small" style={{ textAlign: 'center', maxWidth: 290 }}>
+            Set a spending limit and see real expenses count toward it.
+          </Typography>
+          <Button size="sm" variant="outline" onPress={() => router.push('/budget/new' as never)}>
+            Create budget
+          </Button>
+        </View>
       ) : (
         <View style={{ gap: 18 }}>
           {budgets.map((budget, index) => {
             const budgetId = budget.id ?? budget._id ?? budget.cloudId;
             if (!budgetId) return null;
             const progress = Number((budget.spentMinor * 10000n) / budget.amountMinor) / 100;
+            const category = budget.categoryId ? categoryById.get(budget.categoryId) : undefined;
             const percent = Math.min(100, Math.max(0, progress));
             const period =
               budget.period === 'monthly'
                 ? 'Monthly'
                 : budget.period === 'category'
-                  ? 'Category'
+                  ? category?.name ?? 'Category'
                   : budget.period === 'account'
                     ? 'Account'
                     : 'Custom period';
             return (
               <React.Fragment key={budgetId}>
-                <Pressable
+                <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${budget.name} budget`}
                   onPress={() =>
                     router.push({ pathname: '/budget/[id]', params: { id: budgetId } } as never)
                   }
-                  style={({ pressed }) => ({
-                    gap: 11,
-                    paddingVertical: 8,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
+                  activeOpacity={0.7}
+                  style={{ gap: 11, paddingVertical: 8 }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {category && <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />}
                     <View style={{ flex: 1, gap: 3 }}>
                       <Typography variant="bodyLarge">{budget.name}</Typography>
                       <Text style={{ color: tokens.foregroundMuted }}>{period}</Text>
@@ -210,7 +213,7 @@ export default function BudgetScreen() {
                       />
                     }
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
                 {index < budgets.length - 1 && <Separator />}
               </React.Fragment>
             );
@@ -234,7 +237,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 18,
       }}
     >
-      <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Typography variant="heading">Budgets unavailable</Typography>

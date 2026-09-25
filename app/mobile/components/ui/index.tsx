@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { getTouchTargetStyle } from './touch-target';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Check } from '@/lib/icons';
+import { Check, ReceiptText } from '@/lib/icons';
 
 export function Text({ children, style, ...props }: React.ComponentProps<typeof RNText>) {
   const { tokens } = useTheme();
@@ -468,15 +468,13 @@ export function Checkbox({
 }) {
   const { tokens } = useTheme();
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       accessibilityState={{ checked }}
       onPress={() => onChange(!checked)}
-      style={({ pressed }) => [
-        getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 }),
-        pressed && { opacity: 0.88 },
-      ]}
+      activeOpacity={0.88}
+      style={getTouchTargetStyle({ flexDirection: 'row', alignItems: 'center', gap: 10 })}
     >
       <View
         style={{
@@ -493,7 +491,7 @@ export function Checkbox({
         {checked && <Check size={15} strokeWidth={2.4} color={tokens.background} />}
       </View>
       <Text>{label}</Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -789,24 +787,34 @@ export function Empty({
   title,
   description,
   action,
+  icon,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  icon?: React.ReactNode;
 }) {
   const { tokens } = useTheme();
   return (
     <View
       accessibilityLabel="Empty state"
-      style={{ alignItems: 'flex-start', gap: 10, paddingVertical: 24 }}
+      style={{ minHeight: 260, alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 32 }}
     >
-      <Typography variant="heading">{title}</Typography>
+      <View style={{
+        width: 64, height: 64, borderRadius: 20, backgroundColor: tokens.surfaceRaised,
+        alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+      }}>
+        {icon ?? <ReceiptText size={28} color={tokens.foregroundMuted} />}
+      </View>
+      <Typography variant="heading" style={{ textAlign: 'center' }}>{title}</Typography>
       {description && (
-        <Text style={{ color: tokens.foregroundMuted, lineHeight: 22, maxWidth: 280 }}>
+        <Text style={{
+          color: tokens.foregroundMuted, lineHeight: 22, maxWidth: 300, textAlign: 'center',
+        }}>
           {description}
         </Text>
       )}
-      {action && <View style={{ marginTop: 6 }}>{action}</View>}
+      {action && <View style={{ marginTop: 10, alignItems: 'center' }}>{action}</View>}
     </View>
   );
 }

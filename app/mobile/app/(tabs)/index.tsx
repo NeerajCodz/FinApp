@@ -14,7 +14,6 @@ import {
 } from '@/components/finance';
 import {
   Button,
-  Empty,
   IconButton,
   Input,
   SectionHeader,
@@ -257,19 +256,16 @@ export default function HomeScreen() {
           {categories === undefined ? (
             <Typography variant="small">Loading categories…</Typography>
           ) : categories.length === 0 ? (
-            <Empty
-              title="No categories yet."
-              description="Create a category to organize transactions."
-              action={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onPress={() => router.push('/category/new' as never)}
-                >
-                  Add category
-                </Button>
-              }
-            />
+            <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
+              <CategoryIcon label="Categories" />
+              <Typography variant="bodyLarge">No categories yet</Typography>
+              <Typography variant="small" style={{ textAlign: 'center', maxWidth: 290 }}>
+                Create a category to organize transactions.
+              </Typography>
+              <Button size="sm" variant="outline" onPress={() => router.push('/category/new' as never)}>
+                Add category
+              </Button>
+            </View>
           ) : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {categories.slice(0, 4).map((category) => (
@@ -279,18 +275,18 @@ export default function HomeScreen() {
                   onPress={() => router.push(`/category/${String(category.id ?? category._id)}` as never)}
                   style={{
                     width: '48%',
-                    minHeight: 76,
+                    minHeight: 64,
                     borderRadius: 14,
                     borderWidth: 1,
                     borderColor: tokens.borderSubtle,
                     backgroundColor: tokens.surfaceSubtle,
                     justifyContent: 'flex-start',
-                    paddingHorizontal: 14,
+                    paddingHorizontal: 12,
                   }}
                 >
-                  <View style={{ gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1 }}>
                     <CategoryIcon label={category.name} icon={category.icon} />
-                    <Typography variant="small" style={{ color: tokens.foreground }}>
+                    <Typography variant="small" numberOfLines={1} style={{ color: tokens.foreground, flex: 1 }}>
                       {category.name}
                     </Typography>
                   </View>

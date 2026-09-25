@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -143,19 +143,19 @@ export default function CategoriesScreen() {
           <View>
             {categories.map((category, index) => (
               <React.Fragment key={category.id ?? category._id}>
-                <Pressable
+                <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${category.name} category`}
                   onPress={() =>
                     router.push(`/category/${category.id ?? category._id}` as never)
                   }
-                  style={({ pressed }) => ({
+                  activeOpacity={0.7}
+                  style={{
                     minHeight: 72,
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 12,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
+                  }}
                 >
                   <CategoryIcon label={category.name} icon={category.icon} />
                   <View style={{ flex: 1, gap: 2 }}>
@@ -192,7 +192,7 @@ export default function CategoriesScreen() {
                     </View>
                   )}
                   <CaretRight size={18} color={tokens.foregroundSubtle} />
-                </Pressable>
+                </TouchableOpacity>
                 {index < categories.length - 1 && <Separator />}
               </React.Fragment>
             ))}
@@ -216,7 +216,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 24,
       }}
     >
-      <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Empty

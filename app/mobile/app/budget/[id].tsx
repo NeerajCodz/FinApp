@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, ChartLineUp } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money } from '@/components/finance';
+import { CategoryIcon, Money } from '@/components/finance';
 import { Button, Card, IconButton, Progress, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -29,6 +29,7 @@ type CategoryRecord = LocalRecord & {
   id?: string;
   _id?: string;
   name: string;
+  icon?: string;
   archivedAt?: number;
 };
 type AccountRecord = LocalRecord & {
@@ -126,12 +127,12 @@ export default function BudgetDetailScreen() {
       : budgetState.data === undefined || selectedBudget !== undefined
         ? undefined
         : null;
-  const categoryName = budget?.categoryId
+  const selectedCategory = budget?.categoryId
     ? categoryState.data?.find(
         (item) =>
           item.archivedAt === undefined &&
           (item.id === budget.categoryId || item._id === budget.categoryId),
-      )?.name
+      )
     : undefined;
   const accountName = budget?.accountId
     ? accountState.data?.find(
@@ -175,6 +176,9 @@ export default function BudgetDetailScreen() {
           paddingTop: insets.top + 12,
         }}
       >
+        <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+          <ArrowLeft size={21} color={tokens.foreground} />
+        </IconButton>
         <Text style={{ color: tokens.foregroundMuted }}>Loading budget…</Text>
       </View>
     );
@@ -193,7 +197,7 @@ export default function BudgetDetailScreen() {
           label="Back to budgets"
           variant="ghost"
           style={{ alignSelf: 'flex-start' }}
-          onPress={() => router.replace('/budget' as never)}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/budget' as never)}
         >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
@@ -234,7 +238,7 @@ export default function BudgetDetailScreen() {
     budget.period === 'monthly'
       ? 'Monthly'
       : budget.period === 'category'
-        ? (categoryName ?? 'Category budget')
+        ? (selectedCategory?.name ?? 'Category budget')
         : budget.period === 'account'
           ? (accountName ?? 'Account budget')
           : 'Custom period';
@@ -258,9 +262,14 @@ export default function BudgetDetailScreen() {
         </Typography>
       </View>
       <View style={{ gap: 10 }}>
-        <Text style={{ color: tokens.foregroundMuted }}>
-          {periodLabel} · {range}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {selectedCategory && (
+            <CategoryIcon label={selectedCategory.name} icon={selectedCategory.icon} />
+          )}
+          <Text style={{ color: tokens.foregroundMuted, flex: 1 }}>
+            {periodLabel} · {range}
+          </Text>
+        </View>
         <Money amountMinor={budget.spentMinor} currency={budget.currency} size="display" />
         <Typography variant="caption">
           spent of <Money amountMinor={budget.amountMinor} currency={budget.currency} />
@@ -307,7 +316,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 18,
       }}
     >
-      <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Typography variant="heading">Budget unavailable</Typography>

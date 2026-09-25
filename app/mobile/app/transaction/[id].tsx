@@ -68,7 +68,10 @@ export default function TransactionDetailScreen() {
           <Button onPress={() => { transactionState.retry(); accountState.retry(); categoryState.retry(); profileState.retry(); }}>Retry</Button>
         </View>}
         <View style={{ alignItems: 'center', gap: 12, paddingVertical: 24 }}>
-          <CategoryIcon label={typeof category?.name === 'string' ? category.name : transaction.type} />
+          <CategoryIcon
+            label={typeof category?.name === 'string' ? category.name : transaction.type}
+            icon={typeof category?.icon === 'string' ? category.icon : undefined}
+          />
           <Money amountMinor={transaction.amountMinor} currency={transaction.currency} type={transaction.type} size="display" />
           <Typography variant="heading" style={{ textAlign: 'center' }}>{transaction.title || 'Transaction'}</Typography>
           <Typography variant="caption">{transaction.type.toUpperCase()} · {transaction.status.toUpperCase()}</Typography>

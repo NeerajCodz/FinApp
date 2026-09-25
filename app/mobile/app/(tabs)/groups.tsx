@@ -3,10 +3,10 @@ import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { Plus } from '@/lib/icons';
+import { Plus, UsersThree } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GroupCard, Money, PeopleRail } from '@/components/finance';
-import { Button, IconButton, Text, Typography } from '@/components/ui';
+import { GroupCard, PeopleRail } from '@/components/finance';
+import { Button, Empty, IconButton, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { layoutTokens } from '@/lib/theme/tokens';
 
@@ -14,7 +14,8 @@ export default function GroupsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId } = useLocalSync();
-  const { data: groups } = useLocalRecords<Record<string, unknown>>(userId, 'group');
+  const groupState = useLocalRecords<Record<string, unknown>>(userId, 'group');
+  const groups = groupState.data;
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -35,9 +36,11 @@ export default function GroupsScreen() {
           <Plus size={22} color={tokens.foreground} />
         </IconButton>
       </View>
-      <View style={{ gap: 8 }}>
-        <Typography variant="label">You are owed</Typography>
-        <Money amountMinor={0n} currency="INR" size="display" />
+      <View style={{ gap: 6 }}>
+        <Typography variant="label">Shared ledgers</Typography>
+        <Typography variant="small">
+          {groups ? `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}` : 'Your groups will appear here when available.'}
+        </Typography>
       </View>
       <PeopleRail
         title="People to split with"
@@ -53,27 +56,28 @@ export default function GroupsScreen() {
                 key={groupId}
                 name={String(group.name ?? 'Group')}
                 meta={`${String(group.currency ?? 'INR')} · shared ledger`}
-                balance="₹0"
-                meaning="All settled"
+                balance="View balance"
+                meaning="Calculated from the complete group ledger"
                 onPress={() => router.push(`/group/${groupId}` as never)}
               />
             );
           })
+        ) : groupState.loading ? (
+          <Typography variant="small">Loading groups…</Typography>
+        ) : groupState.error ? (
+          <Empty
+            title="Groups unavailable"
+            description="Your saved groups could not be loaded."
+            icon={<UsersThree size={28} color={tokens.foregroundMuted} />}
+            action={<Button size="sm" variant="outline" onPress={groupState.retry}>Retry</Button>}
+          />
         ) : (
-          <View style={{ gap: 10 }}>
-            <Typography variant="heading">No groups yet.</Typography>
-            <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
-              Create one for a trip, home, or any expense shared with people.
-            </Text>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => router.push('/group/new' as never)}
-              style={{ alignSelf: 'flex-start' }}
-            >
-              Create group
-            </Button>
-          </View>
+          <Empty
+            title="No groups yet"
+            description="Create one for a trip, home, or any expense shared with people."
+            icon={<UsersThree size={28} color={tokens.foregroundMuted} />}
+            action={<Button size="sm" variant="outline" onPress={() => router.push('/group/new' as never)}>Create group</Button>}
+          />
         )}
       </View>
     </ScrollView>

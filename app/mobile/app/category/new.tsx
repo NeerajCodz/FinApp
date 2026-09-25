@@ -72,14 +72,18 @@ export default function NewCategoryScreen() {
           flexGrow: 1,
         }}
       >
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+        <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
 
         <View style={{ flex: 1, justifyContent: 'center', gap: 30 }}>
           <View style={{ gap: 12 }}>
-            <CategoryIcon label={name.trim() || 'Category'} icon={icon} />
-            <Typography variant="title">New category.</Typography>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <CategoryIcon label={name.trim() || 'Category'} icon={icon} />
+              <Typography variant="title" style={{ flex: 1 }} numberOfLines={1}>
+                {name.trim() || 'New category'}
+              </Typography>
+            </View>
             <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
               Give your money a place to belong.
             </Text>

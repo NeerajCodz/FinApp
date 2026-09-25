@@ -7,7 +7,7 @@ import {
   aggregateAnalytics, getAnalyticsRange, UNCATEGORIZED_ID, UNASSIGNED_ACCOUNT_ID,
   UNSPECIFIED_MERCHANT, validateAnalyticsRange, type AnalyticsPeriod,
 } from '@convex/analytics/domain';
-import { TransactionRow } from '@/components/finance';
+import { CategoryIcon, TransactionRow } from '@/components/finance';
 import { Button, Empty, IconButton, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
@@ -53,6 +53,7 @@ export default function AnalyticsBreakdownScreen() {
   );
   const accounts = useMemo(() => recordIndex(accountState.data ?? []), [accountState.data]);
   const categories = useMemo(() => recordIndex(categoryState.data ?? []), [categoryState.data]);
+  const categoryIcon = categories.get(key ?? '')?.icon;
   const result = useMemo(() => {
     if (!valid || !rangeState.data || !accountState.data || !categoryState.data) return null;
     const source = rangeState.data.flatMap((record) => {
@@ -96,7 +97,15 @@ export default function AnalyticsBreakdownScreen() {
       </View>}
       {rangeState.refreshing && <Typography variant="caption">Refreshing transactions…</Typography>}
       {(!result || (!result.item && !rangeState.covered)) && !error ? <Typography variant="heading">Loading breakdown…</Typography> : result && result.item && <>
-        <Typography variant="display">{result.item.label}</Typography>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {dimension === 'category' && (
+            <CategoryIcon
+              label={result.item.label}
+              icon={typeof categoryIcon === 'string' ? categoryIcon : undefined}
+            />
+          )}
+          <Typography variant="heading" style={{ flex: 1 }}>{result.item.label}</Typography>
+        </View>
         <Typography variant="heading">{formatMinor(result.item.amountMinor, currency)}</Typography>
         <Typography variant="caption">
           {result.totalMinor > 0n ? Number((result.item.amountMinor * 1000n) / result.totalMinor) / 10 : 0}% of spending · {period}

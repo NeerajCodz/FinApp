@@ -1,10 +1,10 @@
 import React, { Component, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
 import {
   aggregateAnalytics, getAnalyticsRange, validateAnalyticsRange,
   type AnalyticsBreakdownItem, type AnalyticsPeriod,
 } from '@convex/analytics/domain';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft, ReceiptText } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { BreakdownDonut, CashFlowChart } from '@/components/charts/BarChart';
@@ -44,21 +44,21 @@ function RankedBreakdown({
   onSelect: (item: AnalyticsBreakdownItem) => void;
 }) {
   const { tokens } = useTheme();
-  if (!items.length) return <Typography variant="small">No posted expenses in this period.</Typography>;
+  if (!items.length) return <Empty title="No expenses to break down" description="Posted expenses in this period will appear here." />;
   return <View style={{ gap: 4 }}>
     {items.map((item, index) => {
       const share = totalMinor > 0n ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0;
-      return <Pressable key={item.id} accessibilityRole="button"
+      return <TouchableOpacity key={item.id} accessibilityRole="button"
         accessibilityLabel={`${item.label}, ${formatMinor(item.amountMinor, currency)}, ${share}% of spending`}
-        onPress={() => onSelect(item)}
-        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, opacity: pressed ? 0.65 : 1 })}>
+        onPress={() => onSelect(item)} activeOpacity={0.65}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56 }}>
         <Typography variant="caption" style={{ color: tokens.primary, width: 20 }}>{String(index + 1).padStart(2, '0')}</Typography>
         <Typography variant="small" numberOfLines={2} style={{ flex: 1 }}>{item.label}</Typography>
         <View style={{ alignItems: 'flex-end' }}>
           <Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography>
           <Typography variant="caption">{share}%</Typography>
         </View>
-      </Pressable>;
+      </TouchableOpacity>;
     })}
   </View>;
 }
@@ -152,14 +152,27 @@ function AnalyticsContent() {
         </View>
       </View>
       {rangeState.covered && analytics.spentMinor === 0n && analytics.incomeMinor === 0n &&
-        <Empty title="No activity in this period" description="Posted expenses and income will appear here." />}
+        <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
+          <ReceiptText size={28} color={tokens.foregroundMuted} />
+          <Typography variant="bodyLarge">No activity in this period</Typography>
+          <Typography variant="small" style={{ textAlign: 'center' }}>
+            Record a transaction to start seeing trends.
+          </Typography>
+          <Button size="sm" variant="outline" onPress={() => router.push('/transaction/new')}>
+            Add transaction
+          </Button>
+        </View>}
       <View style={{ gap: 16 }}>
         <SectionHeader title="Cash flow" />
         <CashFlowChart buckets={analytics.buckets} currency={currency} />
       </View>
       <View style={{ gap: 16 }}>
-        <SectionHeader title="Where it went" />
+        <Typography variant="bodyLarge">Spending by category</Typography>
         <BreakdownDonut items={analytics.categoryBreakdown} totalMinor={analytics.spentMinor} currency={currency}
+          iconForCategory={(id) => {
+            const icon = categories.get(id)?.icon;
+            return typeof icon === 'string' ? icon : undefined;
+          }}
           onSelectItem={(item) => navigate('category', item)} />
       </View>
       <View style={{ gap: 12 }}>
@@ -179,7 +192,7 @@ function AnalyticsContent() {
       </View>
       <View style={{ gap: 12 }}>
         <SectionHeader title="Largest expenses" />
-        {analytics.largest.length === 0 ? <Typography variant="small">No posted expenses in this period.</Typography>
+        {analytics.largest.length === 0 ? <Empty title="No expenses yet" description="Your largest posted expenses in this period will appear here." />
           : analytics.largest.map((record) => {
             const row = transactionRow(record, accounts, categories, timeZone);
             const id = recordId(record);

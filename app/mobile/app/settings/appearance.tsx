@@ -7,7 +7,7 @@ import { Button, IconButton, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function AppearanceSettingsScreen() {
-  const { appearance, setAppearance, tokens } = useTheme();
+  const { appearance, setAppearance, accentName, setAccentName, tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -29,7 +29,7 @@ export default function AppearanceSettingsScreen() {
       <View style={{ gap: 12 }}>
         <Typography variant="label">Theme</Typography>
         <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
-          Finapp starts dark. Volt remains the single product accent in every mode.
+          Choose the app theme. System follows your device setting.
         </Text>
         <View style={{ gap: 8 }}>
           {(['dark', 'system', 'light'] as const).map((option) => {
@@ -58,26 +58,47 @@ export default function AppearanceSettingsScreen() {
       </View>
 
       <View style={{ gap: 12 }}>
-        <Typography variant="label">Signature accent</Typography>
-        <View
-          style={{
-            minHeight: 72,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 14,
-            borderTopWidth: 1,
-            borderBottomWidth: 1,
-            borderColor: tokens.borderSubtle,
-          }}
-        >
-          <View
-            style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: tokens.primary }}
-          />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Typography variant="bodyLarge">Volt</Typography>
-            <Typography variant="caption">#B7FF4A · Finapp identity</Typography>
-          </View>
-          <Check size={18} color={tokens.primary} />
+        <Typography variant="label">Accent</Typography>
+        <Text style={{ color: tokens.foregroundMuted }}>
+          White uses dark controls in light mode so buttons and labels stay readable.
+        </Text>
+        <View>
+          {(['volt', 'white'] as const).map((option, index) => {
+            const selected = accentName === option;
+            return (
+              <React.Fragment key={option}>
+                {index > 0 && <View style={{ height: 1, backgroundColor: tokens.borderSubtle }} />}
+                <Button
+                  accessibilityLabel={`${option === 'volt' ? 'Volt' : 'White'} accent`}
+                  accessibilityState={{ selected }}
+                  variant="ghost"
+                  onPress={() => setAccentName(option)}
+                  style={{ minHeight: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }}
+                >
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      marginRight: 14,
+                      backgroundColor: option === 'white' ? '#FFFFFF' : '#B7FF4A',
+                      borderWidth: option === 'white' && !isDark ? 1 : 0,
+                      borderColor: tokens.foregroundSubtle,
+                    }}
+                  />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Typography variant="bodyLarge" style={{ color: tokens.foreground }}>
+                      {option === 'volt' ? 'Volt' : 'White'}
+                    </Typography>
+                    <Typography variant="caption">
+                      {option === 'volt' ? '#B7FF4A · Finapp identity' : '#FFFFFF · Neutral accent'}
+                    </Typography>
+                  </View>
+                  {selected && <Check size={18} color={tokens.foreground} />}
+                </Button>
+              </React.Fragment>
+            );
+          })}
         </View>
       </View>
     </ScrollView>

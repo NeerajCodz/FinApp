@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { ContactRound } from '@/lib/icons';
 import { readDeviceContacts, type DeviceContact } from '@/lib/contacts';
 import { Avatar, Button, Text, Typography } from '@/components/ui';
@@ -93,17 +93,13 @@ export function PeopleRail({
           contentContainerStyle={{ gap: 18, paddingRight: 12 }}
         >
           {contacts.map((contact) => (
-            <Pressable
+            <TouchableOpacity
               key={contact.id}
               accessibilityRole="button"
               accessibilityLabel={`Add ${contact.name}`}
               onPress={() => onSelect?.(contact)}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                gap: 7,
-                width: 62,
-                opacity: pressed ? 0.72 : 1,
-              })}
+              activeOpacity={0.72}
+              style={{ alignItems: 'center', gap: 7, width: 62 }}
             >
               <Avatar initials={contact.name.slice(0, 2)} label={contact.name} size={48} />
               <Typography
@@ -113,7 +109,7 @@ export function PeopleRail({
               >
                 {contact.name.split(' ')[0]}
               </Typography>
-            </Pressable>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       )}

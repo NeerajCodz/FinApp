@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, View } from 'react-native';
+import { AccessibilityInfo, ScrollView, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { Text, Typography } from '@/components/ui';
+import { CategoryIcon } from '@/components/finance';
 import { useTheme } from '@/providers/ThemeProvider';
 import { formatMinor } from '@/lib/money';
 import type { AnalyticsBreakdownItem, AnalyticsBucket } from '@convex/analytics/domain';
@@ -195,7 +196,7 @@ export function CashFlowChart({
             {buckets.map((bucket, index) => {
               const accessible = `${bucket.label}: spent ${formatMinor(bucket.amountMinor, currency)}, income ${formatMinor(bucket.incomeMinor, currency)}`;
               return (
-                <Pressable
+                <TouchableOpacity
                   key={bucket.startAt}
                   accessibilityRole="button"
                   accessibilityLabel={accessible}
@@ -205,7 +206,8 @@ export function CashFlowChart({
                     AccessibilityInfo.announceForAccessibility(accessible);
                     onSelectBucket?.(bucket);
                   }}
-                  style={({ pressed }) => ({ width: periodWidth(buckets.length), opacity: pressed ? 0.65 : 1, gap: 7 })}
+                  activeOpacity={0.65}
+                  style={{ width: periodWidth(buckets.length), gap: 7 }}
                 >
                   <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
                     <Rect x={2} y={height - barHeight(bucket.amountMinor)} width={11} height={barHeight(bucket.amountMinor)} rx={2} fill={tokens.chart.volt} />
@@ -214,7 +216,7 @@ export function CashFlowChart({
                   <Typography variant="caption" numberOfLines={1} style={{ textAlign: 'center', color: selected === index ? tokens.foreground : tokens.foregroundMuted }}>
                     {buckets.length > 12 && index % 5 !== 0 && index !== buckets.length - 1 ? ' ' : bucket.label}
                   </Typography>
-                </Pressable>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -238,11 +240,13 @@ export function BreakdownDonut({
   totalMinor,
   currency,
   onSelectItem,
+  iconForCategory,
 }: {
   items: readonly AnalyticsBreakdownItem[];
   totalMinor: bigint;
   currency: string;
   onSelectItem?: (item: AnalyticsBreakdownItem) => void;
+  iconForCategory?: (id: string) => string | undefined;
 }) {
   const { tokens } = useTheme();
   const colors = chartColors.map((name) => tokens.chart[name]);
@@ -279,20 +283,22 @@ export function BreakdownDonut({
         const percentage = totalMinor > 0n
           ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0;
         return (
-          <Pressable
+          <TouchableOpacity
             key={item.id}
             accessibilityRole="button"
             accessibilityLabel={`${item.label}, ${formatMinor(item.amountMinor, currency)}, ${percentage}% of spending`}
             onPress={() => onSelectItem?.(item)}
-            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.65 : 1, minHeight: 48 })}
+            activeOpacity={0.65}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 }}
           >
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[index % colors.length] }} />
+            {iconForCategory && <CategoryIcon label={item.label} icon={iconForCategory(item.id)} />}
             <Typography variant="small" numberOfLines={2} style={{ flex: 1 }}>{item.label}</Typography>
             <View style={{ alignItems: 'flex-end', minWidth: 88 }}>
               <Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography>
               <Typography variant="caption">{percentage}%</Typography>
             </View>
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>

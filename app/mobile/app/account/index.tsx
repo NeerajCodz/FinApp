@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
 import {
   ArrowLeft,
   CaretRight,
@@ -33,6 +33,7 @@ type AccountRecord = LocalRecord & {
   cloudId?: string;
   name: string;
   type: keyof typeof ACCOUNT_TYPES;
+  customType?: string;
   currency: string;
   balanceMinor?: bigint;
   openingBalanceMinor?: bigint;
@@ -181,21 +182,21 @@ export default function AccountsScreen() {
           />
         </Card>
       ) : accounts.length === 0 ? (
-        <Card variant="subtle" style={{ gap: 14, padding: 20 }}>
+        <Card variant="subtle" style={{ gap: 14, padding: 24, alignItems: 'center' }}>
           <View
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 15,
+              width: 56,
+              height: 56,
+              borderRadius: 18,
               backgroundColor: tokens.surfaceRaised,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Wallet size={23} color={tokens.primary} />
+            <Wallet size={26} color={tokens.primary} />
           </View>
-          <Typography variant="heading">Start with an account</Typography>
-          <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
+          <Typography variant="heading" style={{ textAlign: 'center' }}>Start with an account</Typography>
+          <Text style={{ color: tokens.foregroundMuted, maxWidth: 300, textAlign: 'center' }}>
             Add cash, a bank account, or a card to keep balances and activity in one place.
           </Text>
           <Button variant="outline" onPress={() => router.push('/account/new' as never)}>
@@ -272,14 +273,15 @@ export default function AccountsScreen() {
             {accounts.map(({ account, id, name, balanceMinor }) => {
               const TypeIcon = ACCOUNT_ICONS[account.type] ?? Wallet;
               return (
-                <Pressable
+                <TouchableOpacity
                   key={id}
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${name} account`}
                   onPress={() =>
                     router.push({ pathname: '/account/[id]', params: { id } } as never)
                   }
-                  style={({ pressed }) => ({
+                  activeOpacity={0.72}
+                  style={{
                     width: '100%',
                     alignSelf: 'stretch',
                     minHeight: 82,
@@ -293,8 +295,7 @@ export default function AccountsScreen() {
                     backgroundColor: tokens.card,
                     borderWidth: 1,
                     borderColor: tokens.borderSubtle,
-                    opacity: pressed ? 0.72 : 1,
-                  })}
+                  }}
                 >
                   <View
                     style={{
@@ -323,7 +324,9 @@ export default function AccountsScreen() {
                         {name}
                       </Typography>
                       <Typography variant="caption">
-                        {ACCOUNT_TYPES[account.type] ?? 'Account'} · {account.currency}
+                        {account.type === 'other' && account.customType
+                          ? account.customType
+                          : ACCOUNT_TYPES[account.type] ?? 'Account'} · {account.currency}
                       </Typography>
                     </View>
                     <View style={{ flexShrink: 0, alignItems: 'flex-end', gap: 4 }}>
@@ -334,7 +337,7 @@ export default function AccountsScreen() {
                     </View>
                     <CaretRight size={18} color={tokens.foregroundSubtle} />
                   </View>
-                </Pressable>
+                </TouchableOpacity>
               );
             })}
           </View>

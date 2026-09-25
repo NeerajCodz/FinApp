@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Pressable, TouchableOpacity, View, type PressableProps } from 'react-native';
+import { TouchableOpacity, View, type PressableProps } from 'react-native';
 import { Button, Card, Input, Progress, Separator, Text, Typography } from '@/components/ui';
 import {
+  ArrowDownRight,
   ArrowLeftRight,
-  CalendarDays,
+  ArrowUpRight,
   Car,
   CaretRight,
   Check,
@@ -13,12 +14,13 @@ import {
   ReceiptText,
   ShoppingBag,
   Utensils,
-  Wallet,
+  UsersThree,
 } from '@/lib/icons';
 import { useTheme } from '@/providers/ThemeProvider';
-import { formatMinor, signedMinor } from '@/lib/money';
+import { formatMinor, parseMinor, signedMinor } from '@/lib/money';
 
 type TransactionType = 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
+export type SemanticType = TransactionType | 'split' | 'settlement';
 type MoneySize = 'hero' | 'display' | 'body';
 
 export function Money({
@@ -87,19 +89,19 @@ export function BalanceHero({
     <View style={{ gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Typography variant="label">{label}</Typography>
-        <Pressable
+        <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
           onPress={() => setHidden((current) => !current)}
           hitSlop={10}
-          style={({ pressed }) => ({ opacity: pressed ? 0.64 : 1 })}
+          activeOpacity={0.64}
         >
           {hidden ? (
             <EyeOff size={17} color={tokens.foregroundSubtle} />
           ) : (
             <Eye size={17} color={tokens.foregroundSubtle} />
           )}
-        </Pressable>
+        </TouchableOpacity>
       </View>
       <Money amountMinor={amountMinor} currency={currency} size="hero" hidden={hidden} />
       {delta && (
@@ -149,62 +151,115 @@ export function CategoryIcon({
       {icon ? (
         <Text style={{ fontSize: 21, lineHeight: 26 }}>{icon}</Text>
       ) : (
-        <Icon size={19} color={selected ? tokens.background : tokens.foregroundMuted} />
+        <Icon size={19} color={selected ? tokens.primaryForeground : tokens.foregroundMuted} />
       )}
     </View>
   );
 }
+const semanticLabels: Record<SemanticType, string> = {
+  expense: 'Expense',
+  income: 'Income',
+  transfer: 'Transfer',
+  split: 'Split',
+  settlement: 'Settlement',
+  refund: 'Refund',
+  adjustment: 'Adjustment',
+};
+
+export function SemanticMarker({ type }: { type: SemanticType }) {
+  const { tokens } = useTheme();
+  const color =
+    type === 'expense' ? tokens.expense :
+    type === 'income' || type === 'refund' ? tokens.income :
+    type === 'split' ? tokens.split :
+    type === 'settlement' ? tokens.settlement : tokens.transfer;
+  const Icon =
+    type === 'expense' ? ArrowUpRight :
+    type === 'income' || type === 'refund' ? ArrowDownRight :
+    type === 'split' ? UsersThree :
+    type === 'settlement' ? Check : ArrowLeftRight;
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={`${semanticLabels[type]} transaction type`}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: `${color}24`,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon size={13} color={color} strokeWidth={2.2} />
+      </View>
+      <Typography variant="caption" style={{ color, fontFamily: 'SpaceGrotesk_600SemiBold' }}>
+        {semanticLabels[type]}
+      </Typography>
+    </View>
+  );
+}
+
 
 export function TransactionRow({
   title,
   merchant,
   category,
   account,
+  categoryIcon,
   date,
   status,
   amountMinor,
   currency,
   type,
+  semanticType,
   onPress,
 }: {
   title: string;
   merchant?: string;
   category?: string;
+  categoryIcon?: string;
   account?: string;
   date?: string;
   status?: string;
   amountMinor: bigint;
   currency: string;
+  semanticType?: SemanticType;
   type: TransactionType;
   onPress?: PressableProps['onPress'];
 }) {
   const detail = [merchant ?? category, account].filter(Boolean).join(' · ');
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${title}, ${detail}, ${formatMinor(signedMinor(amountMinor, type), currency)}`}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 64,
+      accessibilityLabel={`${title}, ${semanticLabels[semanticType ?? type]}, ${detail}, ${formatMinor(signedMinor(amountMinor, type), currency)}`}
+      onPress={onPress ?? undefined}
+      disabled={!onPress}
+      activeOpacity={0.72}
+      style={{
+        minHeight: 72,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        opacity: pressed ? 0.72 : 1,
-        transform: [{ scale: pressed ? 0.99 : 1 }],
-      })}
+      }}
     >
-      <CategoryIcon label={category ?? title} />
+      <CategoryIcon label={category ?? title} icon={categoryIcon} />
       <View style={{ flex: 1, gap: 3 }}>
         <Typography variant="bodyLarge" numberOfLines={1} style={{ fontSize: 15, lineHeight: 20 }}>
           {title}
         </Typography>
-        {!!detail && <Typography variant="caption">{detail}</Typography>}
+        {!!detail && <Typography variant="caption" numberOfLines={1}>{detail}</Typography>}
+        <SemanticMarker type={semanticType ?? type} />
       </View>
       <View style={{ alignItems: 'flex-end', gap: 3 }}>
         <Money amountMinor={amountMinor} currency={currency} type={type} />
         <Typography variant="caption">{status ?? date}</Typography>
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -334,7 +389,10 @@ export function SplitMemberRow({
         alignItems: 'center',
       }}
     >
-      <Typography variant="bodyLarge">{name}</Typography>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Typography variant="bodyLarge" numberOfLines={1}>{name}</Typography>
+        <SemanticMarker type="split" />
+      </View>
       <Money amountMinor={amountMinor} currency={currency} />
     </View>
   );
@@ -378,7 +436,12 @@ export function SettlementRow({
   amountMinor: bigint;
   currency: string;
 }) {
-  return <BalanceRow name={name} balanceMinor={amountMinor} currency={currency} />;
+  return (
+    <View style={{ gap: 2 }}>
+      <SemanticMarker type="settlement" />
+      <BalanceRow name={name} balanceMinor={amountMinor} currency={currency} />
+    </View>
+  );
 }
 
 export function BudgetProgress({
@@ -548,96 +611,70 @@ export function SettingsRow({
   );
 }
 export function SettlementEditor({
-  memberName = 'a group member',
+  memberName,
+  currency,
+  direction,
+  maxAmountMinor,
+  disabledReason,
+  saving = false,
+  error,
   onSave,
 }: {
-  memberName?: string;
-  onSave: () => void;
+  memberName: string;
+  currency: string;
+  direction: 'pay' | 'receive';
+  maxAmountMinor: bigint;
+  disabledReason?: string;
+  saving?: boolean;
+  error?: string;
+  onSave: (amountMinor: bigint) => void;
 }) {
   const [amount, setAmount] = useState('');
   const { tokens } = useTheme();
-  const settlementDisabled = !amount || Number(amount) <= 0;
+  let amountMinor: bigint | null = null;
+  try {
+    amountMinor = parseMinor(amount, currency);
+  } catch {
+    // Incomplete or invalid amounts remain editable, but cannot be submitted.
+  }
+  const invalidAmount = amount.length > 0 && (amountMinor === null || amountMinor <= 0n);
+  const tooMuch = amountMinor !== null && amountMinor > maxAmountMinor;
+  const disabled = saving || !!disabledReason || amountMinor === null || amountMinor <= 0n || tooMuch;
   return (
-    <View style={{ gap: 28 }}>
+    <View style={{ gap: 24 }}>
       <View style={{ gap: 14 }}>
-        <View
-          style={{
-            width: 50,
-            height: 50,
-            borderRadius: 16,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: tokens.primary,
-          }}
-        >
-          <ArrowLeftRight size={23} color={tokens.primaryForeground} />
-        </View>
-        <View style={{ gap: 8 }}>
-          <Typography variant="title">
-            Settle with{`\n`}
-            {memberName}.
-          </Typography>
-          <Typography variant="small">
-            Record what changed. The ledger keeps the history.
-          </Typography>
-        </View>
+        <SemanticMarker type="settlement" />
+        <Typography variant="title">Record a settlement</Typography>
+        <Typography variant="small">
+          {maxAmountMinor > 0n
+            ? direction === 'pay' ? `You paid ${memberName}. ` : `${memberName} paid you. `
+            : 'Choose a group and member with an outstanding balance. '}
+          This records a payment already made; it does not send money.
+        </Typography>
+        {maxAmountMinor > 0n && <Typography variant="caption">
+          Outstanding up to {formatMinor(maxAmountMinor, currency)}
+        </Typography>}
       </View>
-
-      <CurrencyInput currency="INR" value={amount} onChangeText={setAmount} />
-
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View
-          style={{
-            flex: 1,
-            minHeight: 108,
-            padding: 14,
-            gap: 12,
-            borderRadius: 16,
-            backgroundColor: tokens.surfaceSubtle,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-          }}
-        >
-          <Wallet size={20} color={tokens.primary} />
-          <View style={{ gap: 2 }}>
-            <Typography variant="caption">PAYMENT ACCOUNT</Typography>
-            <Typography variant="bodyLarge">HDFC</Typography>
-          </View>
-        </View>
-        <View
-          style={{
-            flex: 1,
-            minHeight: 108,
-            padding: 14,
-            gap: 12,
-            borderRadius: 16,
-            backgroundColor: tokens.surfaceSubtle,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-          }}
-        >
-          <CalendarDays size={20} color={tokens.primary} />
-          <View style={{ gap: 2 }}>
-            <Typography variant="caption">DATE</Typography>
-            <Typography variant="bodyLarge">Today</Typography>
-          </View>
-        </View>
-      </View>
-
-      <Button size="lg" disabled={settlementDisabled} onPress={onSave}>
-        <Check
-          size={18}
-          color={settlementDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
-        />
-        <Text
-          style={{
-            marginLeft: 8,
-            color: settlementDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
-            fontFamily: 'SpaceGrotesk_600SemiBold',
-            fontSize: 15,
-          }}
-        >
-          Mark settled
+      <CurrencyInput currency={currency} value={amount} onChangeText={setAmount} />
+      {disabledReason && <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+        {disabledReason}
+      </Typography>}
+      {invalidAmount && <Typography variant="small" style={{ color: tokens.destructive }}>
+        Enter a positive amount in {currency}.
+      </Typography>}
+      {tooMuch && <Typography variant="small" style={{ color: tokens.destructive }}>
+        Amount exceeds the outstanding balance.
+      </Typography>}
+      {!!error && <View accessibilityRole="alert">
+        <Typography variant="small" style={{ color: tokens.destructive }}>{error}</Typography>
+      </View>}
+      <Button size="lg" disabled={disabled} onPress={() => amountMinor !== null && onSave(amountMinor)}
+        accessibilityLabel={saving ? 'Saving settlement' : 'Record settlement'}
+        style={!disabled ? { backgroundColor: tokens.settlement } : undefined}>
+        <Check size={18} color={disabled ? tokens.controlDisabledForeground : tokens.background} />
+        <Text style={{ marginLeft: 8, color: disabled ? tokens.controlDisabledForeground : tokens.background,
+          fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 15 }}>
+          {saving ? 'Saving…' : 'Record settlement'}
         </Text>
       </Button>
     </View>
@@ -659,20 +696,19 @@ export function GroupCard({
 }) {
   const { tokens } = useTheme();
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`${name}, ${meaning} ${balance}`}
-      onPress={onPress}
-      style={({ pressed }) => ({
+      onPress={onPress ?? undefined}
+      activeOpacity={0.78}
+      style={{
         borderRadius: 18,
         borderWidth: 1,
         borderColor: tokens.borderSubtle,
         backgroundColor: tokens.surfaceSubtle,
         padding: 18,
         gap: 20,
-        opacity: pressed ? 0.78 : 1,
-        transform: [{ scale: pressed ? 0.99 : 1 }],
-      })}
+      }}
     >
       <View
         style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}
@@ -689,7 +725,7 @@ export function GroupCard({
         </Typography>
         <Typography variant="caption">{meaning}</Typography>
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 

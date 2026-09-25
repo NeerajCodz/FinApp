@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@/lib/icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CurrencyInput } from '@/components/finance';
+import { CategoryIcon, CurrencyInput } from '@/components/finance';
 import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@/components/ui';
 import { parseMinor } from '@/lib/money';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -24,6 +24,7 @@ type CategoryRecord = LocalRecord & {
   id?: string;
   _id?: string;
   name: string;
+  icon?: string;
   sortOrder: number;
   archivedAt?: number;
 };
@@ -248,22 +249,33 @@ export default function NewBudgetScreen() {
             {categories === undefined ? (
               <Text>Loading categories…</Text>
             ) : categoryOptions.length ? (
-              categoryOptions.map((item) => (
-                <Button
-                  key={item.id ?? item._id}
-                  variant={categoryId === item.id || categoryId === item._id ? 'primary' : 'outline'}
-                  onPress={() => setCategoryId(item.id ?? item._id ?? '')}
-                >
-                  {item.name}
-                </Button>
-              ))
+              categoryOptions.map((item) => {
+                const selected = categoryId === item.id || categoryId === item._id;
+                return (
+                  <Button
+                    key={item.id ?? item._id}
+                    variant={selected ? 'primary' : 'outline'}
+                    onPress={() => setCategoryId(item.id ?? item._id ?? '')}
+                    style={{ justifyContent: 'flex-start' }}
+                  >
+                    <CategoryIcon label={item.name} icon={item.icon} selected={selected} />
+                    <Text style={{ marginLeft: 10, color: selected ? tokens.primaryForeground : tokens.foreground }}>
+                      {item.name}
+                    </Text>
+                  </Button>
+                );
+              })
             ) : (
-              <>
-                <Text style={{ color: tokens.foregroundMuted }}>Create a category first.</Text>
-                <Button variant="outline" onPress={() => router.push('/category/new' as never)}>
+              <View style={{ alignItems: 'center', paddingVertical: 16, gap: 9 }}>
+                <CategoryIcon label="Category" />
+                <Typography variant="bodyLarge">No categories yet</Typography>
+                <Typography variant="small" style={{ textAlign: 'center' }}>
+                  Create one before setting a category budget.
+                </Typography>
+                <Button size="sm" variant="outline" onPress={() => router.push('/category/new' as never)}>
                   Create category
                 </Button>
-              </>
+              </View>
             )}
           </View>
         )}
@@ -340,7 +352,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 18,
       }}
     >
-      <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Typography variant="heading">Budget form unavailable</Typography>

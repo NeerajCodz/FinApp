@@ -23,7 +23,7 @@ export default function SettingsScreen() {
   const profile = profiles?.[0];
   const syncWindowLabel = syncWindow === 'all' ? 'All history' : `${syncWindow} days`;
   const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
-  const { tokens } = useTheme();
+  const { tokens, appearance, accentName } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -48,7 +48,7 @@ export default function SettingsScreen() {
         </Typography>
         <SettingsRow
           label="Appearance"
-          value="Dark"
+          value={`${appearance.charAt(0).toUpperCase()}${appearance.slice(1)} · ${accentName === 'volt' ? 'Volt' : 'White'}`}
           leadingIcon={<Palette size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/appearance' as never)}
         />

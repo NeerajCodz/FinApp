@@ -358,13 +358,6 @@ export default function CategoryDetailScreen() {
             <ArrowLeft size={21} color={tokens.foreground} />
           </IconButton>
           {category && <CategoryIcon label={category.name} icon={category.icon} />}
-          {category && (
-            <CategoryEmojiPicker
-              compact
-              value={category.icon}
-              onChange={(icon) => void saveIcon(icon)}
-            />
-          )}
           <Typography variant="heading" numberOfLines={1} style={{ flex: 1 }}>
             {category?.name ?? 'Category'}
           </Typography>
@@ -381,6 +374,9 @@ export default function CategoryDetailScreen() {
             </Button>
           )}
         </View>
+        {category && (
+          <CategoryEmojiPicker value={category.icon} onChange={(icon) => void saveIcon(icon)} />
+        )}
 
         {editingName && (
           <View style={{ gap: 10 }}>
@@ -513,8 +509,13 @@ export default function CategoryDetailScreen() {
               <Typography variant="heading">Transactions</Typography>
               {detail.transactions.length === 0 ? (
                 <Empty
-                  title="No transactions."
-                  description="Posted transactions in this category will appear here."
+                  title="No transactions in this category."
+                  description="Choose this category when you add an expense or income to see it here."
+                  action={
+                    <Button size="sm" variant="outline" onPress={() => router.push('/transaction/new' as never)}>
+                      Add transaction
+                    </Button>
+                  }
                 />
               ) : (
                 <View>
@@ -523,6 +524,7 @@ export default function CategoryDetailScreen() {
                       <TransactionRow
                         title={transaction.title}
                         category={category?.name}
+                        categoryIcon={category?.icon}
                         amountMinor={transaction.amountMinor}
                         currency={transaction.currency}
                         type={transaction.type}
@@ -582,7 +584,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 24,
       }}
     >
-      <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Empty

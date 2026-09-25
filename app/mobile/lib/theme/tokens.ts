@@ -1,5 +1,5 @@
 export type ThemeMode = 'light' | 'dark';
-export type AccentName = 'volt';
+export type AccentName = 'volt' | 'white';
 
 export const neutralOpacity = {
   white100: '#FFFFFF',
@@ -26,6 +26,7 @@ export const chartPalette = {
 
 export const accentPalette: Record<AccentName, string> = {
   volt: chartPalette.volt,
+  white: '#FFFFFF',
 };
 
 export const layoutTokens = {
@@ -83,12 +84,18 @@ export type ThemeTokens = {
   expense: string;
   positive: string;
   warning: string;
+  transfer: string;
+  split: string;
+  settlement: string;
   chart: typeof chartPalette;
 };
 
-export function createTokens(mode: ThemeMode = 'dark'): ThemeTokens {
+export function createTokens(mode: ThemeMode = 'dark', accentName: AccentName = 'volt'): ThemeTokens {
   const isDark = mode === 'dark';
   const background = isDark ? '#000000' : '#FFFFFF';
+  // Bright accents need dark interactive surfaces on a light canvas; swatches keep their true color.
+  const primary = isDark ? accentPalette[accentName] : accentName === 'white' ? '#242424' : '#365D00';
+  const primaryForeground = isDark ? '#000000' : '#FFFFFF';
   const foreground = isDark ? '#FFFFFF' : '#000000';
   const inverseOpacity = {
     strong: isDark ? neutralOpacity.white80 : '#000000CC',
@@ -112,29 +119,32 @@ export function createTokens(mode: ThemeMode = 'dark'): ThemeTokens {
     cardForeground: foreground,
     popover: isDark ? '#080808' : '#F7F7F7',
     popoverForeground: foreground,
-    primary: chartPalette.volt,
-    primaryForeground: '#000000',
-    controlDisabledBackground: isDark ? '#263611' : '#DFEBCB',
+    primary,
+    primaryForeground,
+    controlDisabledBackground: isDark ? (accentName === 'volt' ? '#263611' : '#303030') : '#E4E4E4',
     controlDisabledForeground: isDark ? '#FFFFFFA3' : '#0000007A',
     secondary: foreground,
     secondaryForeground: background,
     muted: inverseOpacity.surfaceRaised,
     mutedForeground: inverseOpacity.subtle,
-    accent: chartPalette.volt,
-    accentForeground: '#000000',
+    accent: primary,
+    accentForeground: primaryForeground,
     destructive: '#FF5C5C',
     destructiveForeground: '#FFFFFF',
     border: inverseOpacity.border,
     borderSubtle: inverseOpacity.borderSubtle,
     input: inverseOpacity.surfaceSubtle,
-    ring: chartPalette.volt,
+    ring: primary,
     surfaceRaised: inverseOpacity.surfaceRaised,
     surfaceSubtle: inverseOpacity.surfaceSubtle,
     overlay: isDark ? '#000000C7' : '#FFFFFFD9',
-    income: '#4ED37A',
-    expense: '#FF5C5C',
-    positive: '#4ED37A',
-    warning: chartPalette.yellow,
+    income: isDark ? '#4ED37A' : '#187F43',
+    expense: isDark ? '#FF6868' : '#C93F43',
+    positive: isDark ? '#4ED37A' : '#187F43',
+    warning: isDark ? chartPalette.yellow : '#876700',
+    transfer: isDark ? chartPalette.yellow : '#876700',
+    split: isDark ? '#78A1FF' : '#3568BD',
+    settlement: isDark ? chartPalette.orange : '#B95B1C',
     chart: chartPalette,
   };
 }

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft, ReceiptText } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -34,6 +34,7 @@ type AccountRecord = LocalRecord & {
   cloudId?: string;
   name: string;
   type: keyof typeof ACCOUNT_TYPES;
+  customType?: string;
   currency: string;
   balanceMinor?: bigint;
   openingBalanceMinor?: bigint;
@@ -247,7 +248,9 @@ export default function AccountDetailScreen() {
             <View style={{ gap: 8 }}>
               <Typography variant="heading">{displayAccountName(account.name)}</Typography>
               <Typography variant="small">
-                {ACCOUNT_TYPES[account.type]} · {account.currency}
+                {account.type === 'other' && account.customType
+                  ? account.customType
+                  : ACCOUNT_TYPES[account.type] ?? 'Account'} · {account.currency}
               </Typography>
               <Typography variant="caption">
                 {account.isIncludedInTotal
@@ -287,10 +290,20 @@ export default function AccountDetailScreen() {
             <View style={{ gap: 10 }}>
               <Typography variant="heading">Recent activity</Typography>
               {accountTransactions.length === 0 ? (
-                <Empty
-                  title="No posted activity yet."
-                  description="Posted, non-deleted transactions for this account will appear here."
-                />
+                <View style={{ alignItems: 'center', paddingVertical: 24, gap: 10 }}>
+                  <ReceiptText size={28} color={tokens.foregroundMuted} />
+                  <Typography variant="bodyLarge">No posted activity yet</Typography>
+                  <Typography variant="small" style={{ textAlign: 'center' }}>
+                    Record a transaction to see it here.
+                  </Typography>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: id } } as never)}
+                  >
+                    Add transaction
+                  </Button>
+                </View>
               ) : (
                 <View>
                   {accountTransactions.map((transaction, index) => (
