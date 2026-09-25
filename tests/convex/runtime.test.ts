@@ -44,6 +44,25 @@ describe('Convex public runtime functions', () => {
     ]);
   });
 
+  it('persists a custom account type and rejects an unnamed custom type', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) => ctx.db.insert('users', {
+      email: 'custom-type@example.com', name: 'Custom Type User',
+    }));
+    const authenticated = t.withIdentity({
+      subject: `${userId}|session-id`, email: 'custom-type@example.com',
+    });
+    const draft = { name: 'Brokerage', type: 'other' as const, currency: 'INR',
+      openingBalanceMinor: 0n, isIncludedInTotal: true };
+    await expect(authenticated.mutation(api.accounts.mutations.create,
+      { ...draft, customType: '  Investment  ' })).resolves.toBeTruthy();
+    expect(await authenticated.query(api.accounts.queries.list, {})).toMatchObject([
+      { name: 'Brokerage', type: 'other', customType: 'Investment' },
+    ]);
+    await expect(authenticated.mutation(api.accounts.mutations.create,
+      { ...draft, customType: '   ' })).rejects.toThrow('INVALID_ACCOUNT');
+  });
+
   it('resolves usernames through a non-public login lookup', async () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) =>

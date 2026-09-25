@@ -6,6 +6,7 @@ export type AccountSummary = {
   id: string;
   name: string;
   type: 'cash' | 'bank' | 'card' | 'wallet' | 'loan' | 'other';
+  customType?: string;
   currency: string;
   balanceMinor: bigint;
   icon?: string;
@@ -112,6 +113,7 @@ export const list = query({
         name: account.name,
         type: account.type,
         currency: account.currency,
+        customType: account.customType,
         balanceMinor: balances.get(account._id) ?? account.openingBalanceMinor,
         icon: account.icon,
         color: account.color,

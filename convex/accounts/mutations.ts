@@ -9,6 +9,7 @@ export type AccountDraft<OwnerId extends string = string> = {
   ownerId: OwnerId;
   name: string;
   type: 'cash' | 'bank' | 'card' | 'wallet' | 'loan' | 'other';
+  customType?: string;
   currency: string;
   openingBalanceMinor: bigint;
   isIncludedInTotal: boolean;
@@ -20,9 +21,13 @@ export function createAccountRecord<OwnerId extends string>(
 ) {
   requireOwner(actorId, draft.ownerId);
   if (!draft.name.trim() || draft.openingBalanceMinor < 0n) throw new Error('INVALID_ACCOUNT');
+  const customType = draft.type === 'other' ? draft.customType?.trim() : undefined;
+  if (draft.type === 'other' && (!customType || customType.length > 40))
+    throw new Error('INVALID_ACCOUNT');
   return {
     ...draft,
     name: draft.name.trim(),
+    customType,
     archivedAt: undefined,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -52,6 +57,7 @@ export const create = mutation({
       v.literal('loan'),
       v.literal('other'),
     ),
+    customType: v.optional(v.string()),
     currency: v.string(),
     openingBalanceMinor: v.int64(),
     isIncludedInTotal: v.boolean(),
