@@ -59,8 +59,9 @@ export default function VerifyScreen() {
         <View style={{ gap: 12 }}>
           <Typography variant="title">Verify your email.</Typography>
           <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
-            Enter the six-digit code sent to {email || 'your email address'}. The code expires in 10
-            minutes.
+            {next === 'onboarding'
+              ? `Enter the six-digit code sent to ${email || 'your email address'}. The code expires in 10 minutes.`
+              : 'Enter the six-digit code sent to the email on your account. The code expires in 10 minutes.'}
           </Text>
         </View>
         <InputOTP value={code} onChangeText={setCode} />
