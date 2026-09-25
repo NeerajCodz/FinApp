@@ -1,6 +1,14 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft } from '@/lib/icons';
+import {
+  ArrowLeft,
+  Bell,
+  ClockCounterClockwise,
+  CurrencyDollar,
+  Eye,
+  LockKey,
+  Palette,
+} from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -41,12 +49,14 @@ export default function SettingsScreen() {
         <SettingsRow
           label="Appearance"
           value="Dark"
+          leadingIcon={<Palette size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/appearance' as never)}
         />
         <Separator />
         <SettingsRow
           label="Currency"
           value={currency}
+          leadingIcon={<CurrencyDollar size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/currency' as never)}
         />
       </View>
@@ -57,10 +67,15 @@ export default function SettingsScreen() {
         </Typography>
         <SettingsRow
           label="Notifications"
+          leadingIcon={<Bell size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/notifications' as never)}
         />
         <Separator />
-        <SettingsRow label="Security" onPress={() => router.push('/settings/security' as never)} />
+        <SettingsRow
+          label="Security"
+          leadingIcon={<LockKey size={19} color={tokens.primary} />}
+          onPress={() => router.push('/settings/security' as never)}
+        />
       </View>
 
       <View>
@@ -70,11 +85,13 @@ export default function SettingsScreen() {
         <SettingsRow
           label="Local sync"
           value={syncWindowLabel}
+          leadingIcon={<ClockCounterClockwise size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/sync' as never)}
         />
         <Separator />
         <SettingsRow
           label="Privacy and export"
+          leadingIcon={<Eye size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/privacy' as never)}
         />
       </View>

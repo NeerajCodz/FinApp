@@ -492,10 +492,12 @@ export function SettingsRow({
   label,
   value,
   onPress,
+  leadingIcon,
 }: {
   label: string;
   value?: string;
   onPress?: PressableProps['onPress'];
+  leadingIcon?: React.ReactNode;
 }) {
   const { tokens } = useTheme();
   return (
@@ -509,9 +511,23 @@ export function SettingsRow({
         minHeight: 58,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
       }}
     >
+      {leadingIcon && (
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 13,
+            backgroundColor: tokens.surfaceRaised,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {leadingIcon}
+        </View>
+      )}
       <View style={{ flex: 1, gap: 2 }}>
         <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
           {label}
