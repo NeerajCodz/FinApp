@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
-import { ArrowLeft, Plus, ReceiptText, UsersThree } from '@/lib/icons';
+import { ArrowLeft, Gear, Plus, ReceiptText, UsersThree } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money, TransactionRow } from '@/components/finance';
 import { Avatar, Button, Empty, IconButton, SectionHeader, Separator, Text, Typography } from '@/components/ui';
@@ -23,6 +23,10 @@ export default function GroupHomeScreen() {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       <IconButton label="Go back" variant="ghost" onPress={() => router.back()}><ArrowLeft size={21} color={tokens.foreground} /></IconButton>
       <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>{String(group?.name ?? 'Group')}</Typography>
+      {!!id && <IconButton label="Group settings" variant="ghost"
+        onPress={() => router.push({ pathname: '/group/[id]/settings', params: { id } })}>
+        <Gear size={20} color={tokens.foreground} />
+      </IconButton>}
     </View>
     {!id ? <Empty title="Missing group ID" description="Open a group from your groups list." />
       : !group && error ? <Empty title="Group unavailable"
