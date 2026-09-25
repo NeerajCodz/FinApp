@@ -3,7 +3,7 @@ import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { ArrowLeft, Bell, CaretRight, Gear } from '@/lib/icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { notificationRoute, normalizeNotificationPreferences,
+import { notificationRoute, normalizeNotificationPreferences, notificationTypes,
   type NotificationType } from '@convex/notifications/domain';
 import { Button, IconButton, Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -11,6 +11,17 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { markNotificationAsRead, type NotificationRecord } from '@/local/notification-events';
 import type { LocalRecord } from '@/local/repository';
+
+const notificationLabels: Record<NotificationType, string> = {
+  transaction: 'Transactions',
+  budget: 'Budget limits',
+  goal: 'Goals',
+  recurring: 'Recurring',
+  group: 'Groups & splits',
+  settlement: 'Settlements',
+  security: 'Security',
+  sync: 'Sync problems',
+};
 
 export default function NotificationsScreen() {
   const { tokens } = useTheme();
@@ -20,13 +31,29 @@ export default function NotificationsScreen() {
   const settings = useLocalRecords<LocalRecord>(userId, 'settings');
   const [unreadOnly, setUnreadOnly] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [typeFilter, setTypeFilter] = React.useState<NotificationType | null>(null);
   const preferences = normalizeNotificationPreferences(settings.data?.[0]?.notificationPreferences);
-  const entries = settings.data
+  const baseEntries = settings.data
     ? notifications.data?.filter((event) =>
         Object.prototype.hasOwnProperty.call(preferences, event.type) &&
         preferences[event.type as NotificationType])
         .sort((a, b) => b.createdAt - a.createdAt)
     : undefined;
+  const entries = typeFilter
+    ? baseEntries?.filter((event) => event.type === typeFilter)
+    : baseEntries;
+  const notificationCounts = Object.fromEntries(
+    notificationTypes.map((type) => [type, { total: 0, unread: 0 }]),
+  ) as Record<NotificationType, { total: number; unread: number }>;
+  for (const event of baseEntries ?? []) {
+    const counts = notificationCounts[event.type as NotificationType];
+    if (!counts) continue;
+    counts.total += 1;
+    if (event.readAt === undefined) counts.unread += 1;
+  }
+  const breakdown = baseEntries
+    ? notificationTypes.map((type) => ({ type, ...notificationCounts[type] }))
+    : null;
   const unread = entries?.filter((event) => event.readAt === undefined).length ?? 0;
   const visible = unreadOnly ? entries?.filter((event) => event.readAt === undefined) : entries;
 
@@ -79,6 +106,46 @@ export default function NotificationsScreen() {
             accessibilityState={{ selected: unreadOnly }} onPress={() => setUnreadOnly(true)}>Unread</Button>
         </View>
       </View>}
+      {breakdown && <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="label">Activity breakdown</Typography>
+          {typeFilter && <Button variant="ghost" size="sm" onPress={() => setTypeFilter(null)}>
+            Show all
+          </Button>}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {breakdown.map((item) => {
+            const selected = typeFilter === item.type;
+            return (
+              <TouchableOpacity
+                key={item.type}
+                accessibilityRole="button"
+                accessibilityLabel={`${notificationLabels[item.type]}, ${item.total} events, ${item.unread} unread`}
+                accessibilityState={{ selected }}
+                onPress={() => setTypeFilter(selected ? null : item.type)}
+                activeOpacity={0.7}
+                style={{
+                  width: '48%',
+                  minHeight: 70,
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: selected ? tokens.primary : tokens.borderSubtle,
+                  backgroundColor: tokens.surfaceRaised,
+                }}
+              >
+                <Typography variant="caption">{notificationLabels[item.type]}</Typography>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+                  <Typography variant="bodyLarge">{item.total}</Typography>
+                  <Typography variant="caption">{item.unread ? `${item.unread} unread` : 'All read'}</Typography>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>}
       {!!error && <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>{error}</Text>}
       {notifications.error && <View style={{ gap: 8 }}>
         <Text style={{ color: tokens.destructive }}>Saved activity could not be loaded.</Text>
@@ -119,11 +186,14 @@ export default function NotificationsScreen() {
           <Bell size={32} color={tokens.primary} />
         </View>
         <Typography variant="heading" style={{ textAlign: 'center' }}>
-          {unreadOnly ? 'Nothing unread' : 'No activity yet'}
+          {unreadOnly ? 'Nothing unread' : typeFilter
+            ? `No ${notificationLabels[typeFilter].toLowerCase()} yet`
+            : 'No activity yet'}
         </Typography>
         <Text style={{ color: tokens.foregroundMuted, textAlign: 'center', maxWidth: 280 }}>
-          {unreadOnly ? 'New items will show up here.' :
-            'Budget limits, shared expenses, due reminders, and sync problems appear here when they happen.'}
+          {unreadOnly ? 'New items will show here when they are unread.' : typeFilter
+            ? `No saved ${notificationLabels[typeFilter].toLowerCase()} match the current inbox filters.`
+            : 'Budget limits, shared expenses, due reminders, and sync problems appear here when they happen.'}
         </Text>
         {!isConnected && <Typography variant="small" style={{ textAlign: 'center' }}>
           Offline · showing saved activity
