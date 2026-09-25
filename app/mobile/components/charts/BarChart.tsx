@@ -1,8 +1,10 @@
-import React from 'react';
-import { View } from 'react-native';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import React, { useState } from 'react';
+import { AccessibilityInfo, Pressable, ScrollView, View } from 'react-native';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { Text, Typography } from '@/components/ui';
 import { useTheme } from '@/providers/ThemeProvider';
+import { formatMinor } from '@/lib/money';
+import type { AnalyticsBreakdownItem, AnalyticsBucket } from '@convex/analytics/domain';
 
 export function SpendingLineChart({
   values,
@@ -154,6 +156,145 @@ export function InsightBars({
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+const chartColors = ['volt', 'blue', 'violet'] as const;
+
+export function CashFlowChart({
+  buckets,
+  currency,
+  onSelectBucket,
+}: {
+  buckets: readonly AnalyticsBucket[];
+  currency: string;
+  onSelectBucket?: (bucket: AnalyticsBucket) => void;
+}) {
+  const { tokens } = useTheme();
+  const [selected, setSelected] = useState<number | null>(null);
+  const maximum = buckets.reduce((max, bucket) => {
+    const amount = bucket.amountMinor > bucket.incomeMinor ? bucket.amountMinor : bucket.incomeMinor;
+    return amount > max ? amount : max;
+  }, 0n);
+  const height = 116;
+  const width = 30;
+  const barHeight = (amount: bigint) =>
+    maximum > 0n ? Number((amount * BigInt(height)) / maximum) : 0;
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={{ flexDirection: 'row', gap: 18, alignItems: 'center' }}>
+        <Typography variant="caption" style={{ color: tokens.chart.volt }}>■ Spent</Typography>
+        <Typography variant="caption" style={{ color: tokens.chart.blue }}>■ Income</Typography>
+      </View>
+      {buckets.length === 0 ? (
+        <Typography variant="small">No cash flow in this period.</Typography>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
+            {buckets.map((bucket, index) => {
+              const accessible = `${bucket.label}: spent ${formatMinor(bucket.amountMinor, currency)}, income ${formatMinor(bucket.incomeMinor, currency)}`;
+              return (
+                <Pressable
+                  key={bucket.startAt}
+                  accessibilityRole="button"
+                  accessibilityLabel={accessible}
+                  accessibilityState={{ selected: selected === index }}
+                  onPress={() => {
+                    setSelected(index);
+                    AccessibilityInfo.announceForAccessibility(accessible);
+                    onSelectBucket?.(bucket);
+                  }}
+                  style={({ pressed }) => ({ width: periodWidth(buckets.length), opacity: pressed ? 0.65 : 1, gap: 7 })}
+                >
+                  <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+                    <Rect x={2} y={height - barHeight(bucket.amountMinor)} width={11} height={barHeight(bucket.amountMinor)} rx={2} fill={tokens.chart.volt} />
+                    <Rect x={17} y={height - barHeight(bucket.incomeMinor)} width={11} height={barHeight(bucket.incomeMinor)} rx={2} fill={tokens.chart.blue} />
+                  </Svg>
+                  <Typography variant="caption" numberOfLines={1} style={{ textAlign: 'center', color: selected === index ? tokens.foreground : tokens.foregroundMuted }}>
+                    {buckets.length > 12 && index % 5 !== 0 && index !== buckets.length - 1 ? ' ' : bucket.label}
+                  </Typography>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      )}
+      {selected !== null && buckets[selected] && (
+        <Typography variant="small">
+          {buckets[selected].label} · Spent {formatMinor(buckets[selected].amountMinor, currency)} · Income {formatMinor(buckets[selected].incomeMinor, currency)}
+        </Typography>
+      )}
+    </View>
+  );
+}
+
+function periodWidth(count: number) {
+  return count > 12 ? 37 : count > 7 ? 48 : 42;
+}
+
+export function BreakdownDonut({
+  items,
+  totalMinor,
+  currency,
+  onSelectItem,
+}: {
+  items: readonly AnalyticsBreakdownItem[];
+  totalMinor: bigint;
+  currency: string;
+  onSelectItem?: (item: AnalyticsBreakdownItem) => void;
+}) {
+  const { tokens } = useTheme();
+  const colors = chartColors.map((name) => tokens.chart[name]);
+  const radius = 48;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  return (
+    <View style={{ gap: 18 }}>
+      {totalMinor > 0n && (
+        <View style={{ alignItems: 'center', justifyContent: 'center', height: 142 }}>
+          <Svg width={142} height={142} viewBox="0 0 142 142" accessibilityLabel="Expense share by category">
+            <Circle cx={71} cy={71} r={radius} stroke={tokens.borderSubtle} strokeWidth={19} fill="none" />
+            {items.map((item, index) => {
+              const fraction = Number((item.amountMinor * 10000n) / totalMinor) / 10000;
+              const length = circumference * fraction;
+              const segment = (
+                <Circle key={item.id} cx={71} cy={71} r={radius} stroke={colors[index % colors.length]} strokeWidth={19}
+                  fill="none" strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-offset}
+                  rotation={-90} origin="71, 71" />
+              );
+              offset += length;
+              return segment;
+            })}
+          </Svg>
+          <View style={{ position: 'absolute', alignItems: 'center' }}>
+            <Typography variant="caption">Total spent</Typography>
+            <Typography variant="small">{formatMinor(totalMinor, currency)}</Typography>
+          </View>
+        </View>
+      )}
+      {items.length === 0 ? (
+        <Typography variant="small">No posted expenses in this period.</Typography>
+      ) : items.map((item, index) => {
+        const percentage = totalMinor > 0n
+          ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0;
+        return (
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.label}, ${formatMinor(item.amountMinor, currency)}, ${percentage}% of spending`}
+            onPress={() => onSelectItem?.(item)}
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.65 : 1, minHeight: 48 })}
+          >
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[index % colors.length] }} />
+            <Typography variant="small" numberOfLines={2} style={{ flex: 1 }}>{item.label}</Typography>
+            <View style={{ alignItems: 'flex-end', minWidth: 88 }}>
+              <Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography>
+              <Typography variant="caption">{percentage}%</Typography>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

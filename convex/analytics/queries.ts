@@ -30,6 +30,11 @@ export const summary = query({
       .query('categories')
       .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
       .collect();
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
+      .collect();
+    const accountNames = accounts.map((account) => ({ id: account._id, name: account.name }));
     const categoryNames = categories.map((category) => ({ id: category._id, name: category.name }));
     const analyticsPeriod = period as AnalyticsPeriod;
     const timeZone = user.timezone ?? 'UTC';
@@ -41,15 +46,17 @@ export const summary = query({
       startAt,
       endAt,
       timeZone,
+      accountNames,
     );
     const previous = aggregateAnalytics(
       transactions,
-      [],
+      categoryNames,
       currency,
       analyticsPeriod,
       previousStartAt,
       startAt,
       timeZone,
+      accountNames,
     );
     return { currency, ...current, previousSpentMinor: previous.spentMinor };
   },
