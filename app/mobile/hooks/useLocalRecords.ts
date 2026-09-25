@@ -12,6 +12,7 @@ import type { LocalEntity, LocalRecord } from '@/local/repository';
 
 export function useLocalRecords<T extends LocalRecord>(userId: string | null, type: LocalEntity) {
   const [state, setState] = useState<{ userId: string; data?: T[]; error?: Error } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!userId) return;
     let active = true;
@@ -24,10 +25,11 @@ export function useLocalRecords<T extends LocalRecord>(userId: string | null, ty
         },
         (error: unknown) => {
           if (active && current === request)
-            setState({
+            setState((previous) => ({
               userId,
+              data: previous?.userId === userId ? previous.data : undefined,
               error: error instanceof Error ? error : new Error('LOCAL_READ_FAILED'),
-            });
+            }));
         },
       );
     };
@@ -37,12 +39,13 @@ export function useLocalRecords<T extends LocalRecord>(userId: string | null, ty
       active = false;
       unsubscribe();
     };
-  }, [userId, type]);
+  }, [userId, type, attempt]);
   const scopedState = state?.userId === userId ? state : null;
   return {
     data: scopedState?.data,
     error: scopedState?.error,
     loading: !!userId && !scopedState?.data && !scopedState?.error,
+    retry: () => setAttempt((current) => current + 1),
   };
 }
 
@@ -69,31 +72,36 @@ export function useLocalTransactionRange<T extends LocalRecord>(
     data?: T[];
     error?: Error;
     refreshing: boolean;
+    covered: boolean;
   } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const scope = `${userId ?? ''}:${startAt}:${endAt}`;
   useEffect(() => {
     if (!userId || !Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt) return;
     let active = true;
     let request = 0;
+    let completed = false;
     const refresh = () => {
       const current = ++request;
       void readTransactionRange<T>(userId, startAt, endAt).then(
         (data) => {
           if (active && current === request)
             setState((previous) => ({
-              scope,
-              data,
-              error: previous?.scope === scope ? previous.error : undefined,
-              refreshing: false,
+              scope, data,
+              error: completed ? undefined : previous?.scope === scope ? previous.error : undefined,
+              refreshing: previous?.scope === scope ? previous.refreshing : false,
+              covered: completed || (previous?.scope === scope ? previous.covered : false),
             }));
         },
         (error: unknown) => {
           if (active && current === request)
-            setState({
+            setState((previous) => ({
               scope,
+              data: previous?.scope === scope ? previous.data : undefined,
               error: error instanceof Error ? error : new Error('LOCAL_READ_FAILED'),
               refreshing: false,
-            });
+              covered: previous?.scope === scope ? previous.covered : false,
+            }));
         },
       );
     };
@@ -105,11 +113,17 @@ export function useLocalTransactionRange<T extends LocalRecord>(
       const download =
         running ??
         (async () => {
-          if (await isRangeCovered(userId, 'transactions', startAt, endAt)) return;
+          if (await isRangeCovered(userId, 'transactions', startAt, endAt)) {
+            completed = true;
+            if (active) refresh();
+            return;
+          }
           setState((previous) => ({
             scope,
             data: previous?.scope === scope ? previous.data : undefined,
+            error: undefined,
             refreshing: true,
+            covered: false,
           }));
           let cursor: string | null = null;
           while (true) {
@@ -131,7 +145,10 @@ export function useLocalTransactionRange<T extends LocalRecord>(
       void download.then(
         () => {
           if (rangeRequests.get(requestKey) === download) rangeRequests.delete(requestKey);
-          if (active) refresh();
+          if (active) {
+            completed = true;
+            refresh();
+          }
         },
         (error: unknown) => {
           if (rangeRequests.get(requestKey) === download) rangeRequests.delete(requestKey);
@@ -141,6 +158,7 @@ export function useLocalTransactionRange<T extends LocalRecord>(
               data: previous?.scope === scope ? previous.data : undefined,
               error: error instanceof Error ? error : new Error('RANGE_SYNC_FAILED'),
               refreshing: false,
+              covered: false,
             }));
         },
       );
@@ -149,13 +167,15 @@ export function useLocalTransactionRange<T extends LocalRecord>(
       active = false;
       unsubscribe();
     };
-  }, [userId, startAt, endAt, fetchPage, scope]);
+  }, [userId, startAt, endAt, fetchPage, scope, attempt]);
   const scopedState = state?.scope === scope ? state : null;
   return {
     data: scopedState?.data,
     error: scopedState?.error,
     loading: !!userId && !scopedState?.data && !scopedState?.error,
     refreshing: scopedState?.refreshing ?? false,
+    covered: scopedState?.covered ?? false,
+    retry: () => setAttempt((current) => current + 1),
   };
 }
 
@@ -188,13 +208,16 @@ export function useLocalGroupRange<T extends LocalRecord>(
     settlements?: T[];
     error?: Error;
     refreshing: boolean;
+    covered: boolean;
   } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const scope = `${userId ?? ''}:${groupId ?? ''}:${startAt}:${endAt}`;
   useEffect(() => {
     if (!userId || !groupId || !Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
       return;
     let active = true;
     let request = 0;
+    let completed = false;
     const refresh = () => {
       const current = ++request;
       void readGroupRange<T>(userId, groupId, startAt, endAt).then(
@@ -206,15 +229,19 @@ export function useLocalGroupRange<T extends LocalRecord>(
               settlements,
               error: previous?.scope === scope ? previous.error : undefined,
               refreshing: false,
+              covered: completed || (previous?.scope === scope ? previous.covered : false),
             }));
         },
         (error: unknown) => {
           if (active && current === request)
-            setState({
+            setState((previous) => ({
               scope,
+              transactions: previous?.scope === scope ? previous.transactions : undefined,
+              settlements: previous?.scope === scope ? previous.settlements : undefined,
               error: error instanceof Error ? error : new Error('LOCAL_READ_FAILED'),
               refreshing: false,
-            });
+              covered: previous?.scope === scope ? previous.covered : false,
+            }));
         },
       );
     };
@@ -225,11 +252,24 @@ export function useLocalGroupRange<T extends LocalRecord>(
       if (!download) {
         download = (async () => {
           const coverage = `group:${groupId}`;
-          if (await isRangeCovered(userId, coverage, startAt, endAt)) return;
+          if (await isRangeCovered(userId, coverage, startAt, endAt)) {
+            completed = true;
+            if (active) setState((previous) => ({
+              scope,
+              transactions: previous?.scope === scope ? previous.transactions : undefined,
+              settlements: previous?.scope === scope ? previous.settlements : undefined,
+              error: previous?.scope === scope ? previous.error : undefined,
+              refreshing: false,
+              covered: true,
+            }));
+            return;
+          }
           setState((previous) => ({
             scope,
             transactions: previous?.scope === scope ? previous.transactions : undefined,
             settlements: previous?.scope === scope ? previous.settlements : undefined,
+            error: undefined,
+            covered: false,
             refreshing: true,
           }));
           let transactionCursor: string | null = null;
@@ -270,12 +310,7 @@ export function useLocalGroupRange<T extends LocalRecord>(
         () => {
           if (groupRangeRequests.get(requestKey) === download) groupRangeRequests.delete(requestKey);
           if (active) {
-            setState((previous) => ({
-              scope,
-              transactions: previous?.scope === scope ? previous.transactions : undefined,
-              settlements: previous?.scope === scope ? previous.settlements : undefined,
-              refreshing: false,
-            }));
+            completed = true;
             refresh();
           }
         },
@@ -287,6 +322,7 @@ export function useLocalGroupRange<T extends LocalRecord>(
               transactions: previous?.scope === scope ? previous.transactions : undefined,
               settlements: previous?.scope === scope ? previous.settlements : undefined,
               error: error instanceof Error ? error : new Error('RANGE_SYNC_FAILED'),
+              covered: false,
               refreshing: false,
             }));
         },
@@ -302,7 +338,7 @@ export function useLocalGroupRange<T extends LocalRecord>(
       active = false;
       unsubscribe();
     };
-  }, [userId, groupId, startAt, endAt, fetchPage, scope]);
+  }, [userId, groupId, startAt, endAt, fetchPage, scope, attempt]);
   const scopedState = state?.scope === scope ? state : null;
   return {
     transactions: scopedState?.transactions,
@@ -310,5 +346,7 @@ export function useLocalGroupRange<T extends LocalRecord>(
     error: scopedState?.error,
     loading: !!userId && !!groupId && !scopedState?.transactions && !scopedState?.error,
     refreshing: scopedState?.refreshing ?? false,
+    covered: scopedState?.covered ?? false,
+    retry: () => setAttempt((current) => current + 1),
   };
 }

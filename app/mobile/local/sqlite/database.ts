@@ -61,7 +61,9 @@ async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (stagedFile.exists) stagedFile.delete();
   let attached = false;
   try {
-    db.execSync(`ATTACH DATABASE '${databasePath.replaceAll("'", "''")}.encrypted' AS migrated KEY '${key}'`);
+    db.execSync(
+      `ATTACH DATABASE '${databasePath.replaceAll("'", "''")}.encrypted' AS migrated KEY '${key}'`,
+    );
     attached = true;
     db.execSync("SELECT sqlcipher_export('migrated')");
   } catch (error) {
@@ -111,7 +113,7 @@ export async function initializeLocalDatabase(): Promise<void> {
   const db = await getLocalDatabase();
   const version =
     db.getFirstSync<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0;
-  if (version >= 4) return;
+  if (version >= 5) return;
   db.withTransactionSync(() => {
     const tables = db
       .getAllSync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -253,12 +255,14 @@ export async function initializeLocalDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS budgets (
         userId TEXT NOT NULL,
         id TEXT NOT NULL,
+        cloudId TEXT,
         payload TEXT NOT NULL,
         PRIMARY KEY (userId, id)
       );
       CREATE TABLE IF NOT EXISTS goals (
         userId TEXT NOT NULL,
         id TEXT NOT NULL,
+        cloudId TEXT,
         payload TEXT NOT NULL,
         PRIMARY KEY (userId, id)
       );
@@ -274,6 +278,7 @@ export async function initializeLocalDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS recurringRules (
         userId TEXT NOT NULL,
         id TEXT NOT NULL,
+        cloudId TEXT,
         payload TEXT NOT NULL,
         PRIMARY KEY (userId, id)
       );
@@ -349,6 +354,12 @@ export async function initializeLocalDatabase(): Promise<void> {
         resolvedAt INTEGER
       );
     `);
+    for (const table of ['budgets', 'goals', 'recurringRules'] as const) {
+      const columns = db
+        .getAllSync<{ name: string }>(`PRAGMA table_info(${table})`)
+        .map((column) => column.name);
+      if (!columns.includes('cloudId')) db.execSync(`ALTER TABLE ${table} ADD COLUMN cloudId TEXT`);
+    }
     const outboxColumns = db
       .getAllSync<{ name: string }>('PRAGMA table_info(outbox)')
       .map((column) => column.name);
@@ -386,6 +397,9 @@ export async function initializeLocalDatabase(): Promise<void> {
     db.execSync(`
       CREATE INDEX IF NOT EXISTS accounts_user_cloud ON accounts(userId, cloudId);
       CREATE INDEX IF NOT EXISTS categories_user_cloud ON categories(userId, cloudId);
+      CREATE INDEX IF NOT EXISTS budgets_user_cloud ON budgets(userId, cloudId);
+      CREATE INDEX IF NOT EXISTS goals_user_cloud ON goals(userId, cloudId);
+      CREATE INDEX IF NOT EXISTS recurringRules_user_cloud ON recurringRules(userId, cloudId);
       CREATE INDEX IF NOT EXISTS transactions_user_date ON transactions(userId, occurredAt);
       CREATE INDEX IF NOT EXISTS transactions_account_date ON transactions(userId, accountId, occurredAt);
       CREATE INDEX IF NOT EXISTS transactions_category_date ON transactions(userId, categoryId, occurredAt);
@@ -414,6 +428,15 @@ export async function initializeLocalDatabase(): Promise<void> {
       INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
       SELECT userId, 'transaction', id, cloudId FROM transactions
       WHERE cloudId IS NOT NULL AND id <> cloudId;
+      INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
+      SELECT userId, 'budget', id, cloudId FROM budgets
+      WHERE cloudId IS NOT NULL AND id <> cloudId;
+      INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
+      SELECT userId, 'goal', id, cloudId FROM goals
+      WHERE cloudId IS NOT NULL AND id <> cloudId;
+      INSERT OR REPLACE INTO idMappings (userId, entityType, localId, cloudId)
+      SELECT userId, 'recurringRule', id, cloudId FROM recurringRules
+      WHERE cloudId IS NOT NULL AND id <> cloudId;
       DELETE FROM accounts AS remote
       WHERE remote.id = remote.cloudId AND EXISTS (
         SELECT 1 FROM accounts AS local
@@ -435,6 +458,6 @@ export async function initializeLocalDatabase(): Promise<void> {
         WHERE local.userId = remote.userId AND local.cloudId = remote.cloudId AND local.id <> remote.id
       );
     `);
-    db.execSync('PRAGMA user_version = 4');
+    db.execSync('PRAGMA user_version = 5');
   });
 }

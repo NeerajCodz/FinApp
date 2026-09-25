@@ -255,10 +255,18 @@ export const groupRange = query({
         .paginate(settlementPaginationOpts),
     ]);
     const related = await relatedTransactionData(ctx, transactions.page);
-    const groupMembers = await ctx.db
+    const memberships = await ctx.db
       .query('groupMembers')
       .withIndex('by_group', (index) => index.eq('groupId', groupId))
       .collect();
+    const groupMembers = await Promise.all(memberships.map(async (member) => {
+      const person = await ctx.db.get(member.userId);
+      return {
+        ...member,
+        displayName: person?.displayName ?? 'Finapp user',
+        username: person?.username,
+      };
+    }));
     const [group, payersAndParticipants] = await Promise.all([
       ctx.db.get(groupId),
       Promise.all(transactions.page.map(async (transaction) => {
