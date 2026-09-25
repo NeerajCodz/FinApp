@@ -443,6 +443,12 @@ export default function NewTransactionScreen() {
             <>
               <SettingsRow
                 label="Category"
+                leadingIcon={
+                  <CategoryIcon
+                    label={category?.name ?? 'Category'}
+                    icon={category?.icon}
+                  />
+                }
                 value={
                   category?.name ?? (categoryOptions ? 'Choose a category' : 'Loading categories…')
                 }

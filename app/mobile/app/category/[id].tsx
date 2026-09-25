@@ -47,6 +47,7 @@ type TransactionRecord = LocalRecord & {
   type: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
   title: string;
   status: string;
+  groupId?: string;
   deletedAt?: number;
 };
 
@@ -548,6 +549,7 @@ export default function CategoryDetailScreen() {
                         currency={transaction.currency}
                         type={transaction.type}
                         date={new Date(transaction.occurredAt).toLocaleDateString()}
+                        semanticType={transaction.groupId ? 'split' : undefined}
                         onPress={() =>
                           router.push(`/transaction/${transaction._id ?? transaction.id}` as never)
                         }
