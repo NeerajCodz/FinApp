@@ -13,7 +13,7 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { formatMinor, parseMinor } from '@/lib/money';
-import { recordId, recordIds } from '@/lib/ledger';
+import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
 
 type Method = 'equal' | 'exact' | 'percentage' | 'shares';
 type Member = { userId: string; name: string };
@@ -218,11 +218,11 @@ export default function SplitExpenseScreen() {
             {compatibleAccounts.map((item) => {
               const id = recordId(item);
               const chosen = account ? recordIds(account).includes(id) : false;
-              return <Pressable key={id} accessibilityRole="radio" accessibilityLabel={String(item.name ?? 'Account')}
+              return <Pressable key={id} accessibilityRole="radio" accessibilityLabel={displayAccountName(String(item.name ?? 'Account'))}
                 accessibilityState={{ selected: chosen }} onPress={() => setAccountId(id)}
                 style={{ minHeight: 48, padding: 12, borderRadius: 12, borderWidth: 1,
                   borderColor: chosen ? tokens.split : tokens.borderSubtle }}>
-                <Text style={{ color: chosen ? tokens.split : tokens.foreground }}>{String(item.name ?? 'Account')}</Text>
+                <Text style={{ color: chosen ? tokens.split : tokens.foreground }}>{displayAccountName(String(item.name ?? 'Account'))}</Text>
               </Pressable>;
             })}
             {!compatibleAccounts.length && <Typography variant="small">

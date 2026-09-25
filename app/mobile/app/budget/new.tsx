@@ -11,6 +11,7 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
+import { displayAccountName } from '@/lib/ledger';
 
 type ProfileRecord = LocalRecord & { defaultCurrency?: string };
 type AccountRecord = LocalRecord & {
@@ -291,7 +292,7 @@ export default function NewBudgetScreen() {
                   variant={accountId === item.id || accountId === item._id ? 'primary' : 'outline'}
                   onPress={() => setAccountId(item.id ?? item._id ?? '')}
                 >
-                  {item.name} · {item.currency}
+                  {displayAccountName(String(item.name))} · {item.currency}
                 </Button>
               ))
             ) : (

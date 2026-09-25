@@ -12,6 +12,7 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import { parseMinor } from '@/lib/money';
 import type { LocalRecord } from '@/local/repository';
+import { displayAccountName } from '@/lib/ledger';
 
 type Rule = LocalRecord & {
   id: string; name: string; frequency: Recurrence; interval: number;
@@ -154,7 +155,7 @@ export default function RecurringScreen() {
       {activeAccounts?.map((account) => <Button key={account.id} size="sm"
         variant={accountId === account.id ? 'secondary' : 'outline'}
         onPress={() => setAccountId(account.id)} style={{ justifyContent: 'flex-start' }}>
-        {account.name} · {account.currency}
+        {displayAccountName(account.name)} · {account.currency}
       </Button>)}
       <Input placeholder={selected ? `Amount · ${selected.currency}` : 'Choose an account first'}
         keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />

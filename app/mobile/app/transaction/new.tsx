@@ -12,6 +12,7 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
+import { displayAccountName } from '@/lib/ledger';
 
 type TransactionType = 'expense' | 'income' | 'transfer';
 type ProfileRecord = LocalRecord & {
@@ -220,7 +221,7 @@ export default function NewTransactionScreen() {
       const categoryRecordId = category ? String(category.id ?? category._id) : undefined;
       const destinationRecordId = destination ? String(destination.id ?? destination._id) : undefined;
       const title =
-        type === 'transfer' ? `Transfer to ${destination!.name}` : note.trim() || category!.name;
+        type === 'transfer' ? `Transfer to ${displayAccountName(destination!.name)}` : note.trim() || category!.name;
       const payload = {
         accountId: accountRecordId,
         type,
@@ -351,7 +352,7 @@ export default function NewTransactionScreen() {
           )
           .map((item) => ({
             id: String(item.id ?? item._id),
-            name: `${String(item.name)} · ${String(item.currency)}`,
+            name: `${displayAccountName(String(item.name))} · ${String(item.currency)}`,
           }));
   const selectedId =
     picker === 'category'
@@ -459,7 +460,7 @@ export default function NewTransactionScreen() {
           )}
           <SettingsRow
             label={type === 'transfer' ? 'From account' : 'Account'}
-            value={account?.name ?? (accounts ? 'Choose an account' : 'Loading accounts…')}
+            value={account ? displayAccountName(account.name) : accounts ? 'Choose an account' : 'Loading accounts…'}
             onPress={() => setPicker('account')}
           />
           {type === 'transfer' && (
@@ -467,7 +468,7 @@ export default function NewTransactionScreen() {
               <Separator />
               <SettingsRow
                 label="To account"
-                value={destination?.name ?? 'Choose destination'}
+                value={destination ? displayAccountName(destination.name) : 'Choose destination'}
                 onPress={() => setPicker('destination')}
               />
             </>

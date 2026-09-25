@@ -10,6 +10,7 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
+import { displayAccountName } from '@/lib/ledger';
 
 type BudgetRecord = LocalRecord & {
   id?: string;
@@ -134,13 +135,14 @@ export default function BudgetDetailScreen() {
           (item.id === budget.categoryId || item._id === budget.categoryId),
       )
     : undefined;
-  const accountName = budget?.accountId
+  const rawAccountName = budget?.accountId
     ? accountState.data?.find(
         (item) =>
           item.archivedAt === undefined &&
           (item.id === budget.accountId || item._id === budget.accountId),
       )?.name
     : undefined;
+  const accountName = typeof rawAccountName === 'string' ? displayAccountName(rawAccountName) : undefined;
 
   async function archiveBudget() {
     if (!userId || !selectedBudget || !budgetLocalId || !budgetPayloadId || pending) return;

@@ -8,7 +8,7 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money, TransactionRow } from '@/components/finance';
-import { recordIndex } from '@/lib/ledger';
+import { displayAccountName, recordIndex } from '@/lib/ledger';
 import {
   Button,
   Empty,
@@ -46,14 +46,6 @@ type AccountRecord = LocalRecord & {
   icon?: string;
   color?: string;
 };
-function displayAccountName(name: string) {
-  if (!name.includes('%')) return name;
-  try {
-    return decodeURIComponent(name);
-  } catch {
-    return name;
-  }
-}
 
 type TransactionRecord = LocalRecord & {
   id?: string;

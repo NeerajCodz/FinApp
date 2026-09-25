@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { displayAccountName } from '@/lib/ledger';
 import type { LocalRecord } from '@/local/repository';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
@@ -59,15 +60,6 @@ const ACCOUNT_ICONS = {
   loan: CurrencyDollar,
   other: Wallet,
 } as const;
-
-function displayAccountName(name: string) {
-  if (!name.includes('%')) return name;
-  try {
-    return decodeURIComponent(name);
-  } catch {
-    return name;
-  }
-}
 
 export default function AccountsScreen() {
   const { tokens } = useTheme();

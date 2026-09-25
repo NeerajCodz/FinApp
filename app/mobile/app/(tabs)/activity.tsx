@@ -12,7 +12,7 @@ import { filterActivity, type ActivityFilter, type ActivityKind } from '@convex/
 import { formatMinor } from '@/lib/money';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
-import { analyticsEntities, ledgerTransaction, recordId, recordIndex, transactionRow } from '@/lib/ledger';
+import { analyticsEntities, displayAccountName, ledgerTransaction, recordId, recordIndex, transactionRow } from '@/lib/ledger';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 const filters: ActivityFilter[] = ['All', 'Expenses', 'Income', 'Transfers', 'Groups'];
@@ -52,9 +52,10 @@ export default function ActivityScreen() {
       if (!needle) return true;
       const record = records.get(row.id)!;
       const transaction = ledgerTransaction(record)!;
+      const accountName = accounts.get(transaction.accountId ?? '')?.name;
       return [transaction.title, transaction.merchant,
         categories.get(transaction.categoryId ?? '')?.name,
-        accounts.get(transaction.accountId ?? '')?.name,
+        typeof accountName === 'string' ? displayAccountName(accountName) : undefined,
         transaction.amountMinor.toString(), formatMinor(transaction.amountMinor, transaction.currency),
       ].some((value) => String(value ?? '').toLocaleLowerCase().includes(needle));
     }).sort((a, b) => b.occurredAt - a.occurredAt).map((row) => records.get(row.id)!);

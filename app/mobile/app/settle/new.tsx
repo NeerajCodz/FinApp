@@ -12,7 +12,7 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
-import { recordId, recordIds } from '@/lib/ledger';
+import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
 
 export default function NewSettlementScreen() {
   const params = useLocalSearchParams<{ groupId?: string | string[]; member?: string | string[] }>();
@@ -144,9 +144,9 @@ export default function NewSettlementScreen() {
         {accountOptions.map((item) => {
           const id = recordId(item);
           return <Button key={id} variant="outline" onPress={() => { setChosenAccountId(id); setError(''); }}
-            accessibilityLabel={`Select account ${String(item.name ?? 'account')}`}
+            accessibilityLabel={`Select account ${displayAccountName(String(item.name ?? 'account'))}`}
             style={{ justifyContent: 'flex-start', borderColor: id === recordId(account ?? {}) ? tokens.settlement : tokens.border }}>
-            {id === recordId(account ?? {}) ? '✓  ' : ''}{String(item.name ?? 'Account')}
+            {id === recordId(account ?? {}) ? '✓  ' : ''}{displayAccountName(String(item.name ?? 'Account'))}
           </Button>;
         })}
         <Typography variant="caption">For recordkeeping only. No money is moved from this account.</Typography>

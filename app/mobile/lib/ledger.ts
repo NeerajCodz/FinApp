@@ -17,6 +17,16 @@ export function recordIndex(records: readonly LocalRecord[]): Map<string, LocalR
   return index;
 }
 
+export function displayAccountName(name: string): string {
+  if (!name.includes('%')) return name;
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
+}
+
+
 export function analyticsEntities(records: readonly LocalRecord[]): (AnalyticsAccount & AnalyticsCategory)[] {
   return records.flatMap((record) => {
     if (typeof record.name !== 'string') return [];
@@ -50,12 +60,13 @@ export function transactionRow(record: LocalRecord, accounts: Map<string, LocalR
   const transaction = ledgerTransaction(record);
   if (!transaction) return null;
   const category = categories.get(transaction.categoryId ?? '');
+  const accountName = accounts.get(transaction.accountId ?? '')?.name;
   return {
     title: transaction.title || transaction.merchant || 'Transaction',
     merchant: transaction.merchant,
     category: typeof category?.name === 'string' ? category.name : undefined,
     categoryIcon: typeof category?.icon === 'string' ? category.icon : undefined,
-    account: accounts.get(transaction.accountId ?? '')?.name as string | undefined,
+    account: typeof accountName === 'string' ? displayAccountName(accountName) : undefined,
     date: new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(transaction.occurredAt),
     status: transaction.status,
     amountMinor: transaction.amountMinor,

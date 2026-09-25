@@ -9,7 +9,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import type { LocalRecord } from '@/local/repository';
-import { ledgerTransaction, recordIds, recordIndex } from '@/lib/ledger';
+import { displayAccountName, ledgerTransaction, recordIds, recordIndex } from '@/lib/ledger';
 
 export default function TransactionDetailScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -94,8 +94,8 @@ export default function TransactionDetailScreen() {
             </View>
           </View>
           <Separator />
-          <SettingsRow label="Account" value={typeof account?.name === 'string' ? account.name : 'Unassigned account'} />
-          {transaction.type === 'transfer' && <><Separator /><SettingsRow label="Destination" value={typeof destination?.name === 'string' ? destination.name : 'Unassigned account'} /></>}
+          <SettingsRow label="Account" value={typeof account?.name === 'string' ? displayAccountName(account.name) : 'Unassigned account'} />
+          {transaction.type === 'transfer' && <><Separator /><SettingsRow label="Destination" value={typeof destination?.name === 'string' ? displayAccountName(destination.name) : 'Unassigned account'} /></>}
           <Separator />
           <SettingsRow label="Date" value={new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short', timeZone }).format(transaction.occurredAt)} />
           <Separator />
