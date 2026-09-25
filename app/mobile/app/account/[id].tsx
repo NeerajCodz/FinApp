@@ -38,12 +38,20 @@ type AccountRecord = LocalRecord & {
   balanceMinor?: bigint;
   openingBalanceMinor?: bigint;
   archivedAt?: number;
-  createdAt: number;
+  createdAt?: number;
   updatedAt?: number;
-  isIncludedInTotal: boolean;
+  isIncludedInTotal?: boolean;
   icon?: string;
   color?: string;
 };
+function displayAccountName(name: string) {
+  if (!name.includes('%')) return name;
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
+}
 
 type TransactionRecord = LocalRecord & {
   id?: string;
@@ -62,7 +70,8 @@ type TransactionRecord = LocalRecord & {
 };
 
 export default function AccountDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId, fetchTransactionRange } = useLocalSync();
@@ -123,12 +132,11 @@ export default function AccountDetailScreen() {
       )
         return delta;
       const amount = transaction.amountMinor;
-      const sourceDelta =
-        accountIds.has(transaction.accountId)
-          ? transaction.type === 'expense' || transaction.type === 'transfer'
-            ? -amount
-            : amount
-          : 0n;
+      const sourceDelta = accountIds.has(transaction.accountId)
+        ? transaction.type === 'expense' || transaction.type === 'transfer'
+          ? -amount
+          : amount
+        : 0n;
       const destinationDelta =
         transaction.type === 'transfer' &&
         transaction.transferAccountId &&
@@ -155,8 +163,7 @@ export default function AccountDetailScreen() {
         { accountId: operationAccountId, name: trimmedName },
         {
           recordId: localRecordId,
-          dependencies:
-            account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
+          dependencies: account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
           baseUpdatedAt: account.updatedAt,
         },
       );
@@ -184,8 +191,7 @@ export default function AccountDetailScreen() {
         { accountId: operationAccountId },
         {
           recordId: localRecordId,
-          dependencies:
-            account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
+          dependencies: account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
           baseUpdatedAt: account.updatedAt,
         },
       );
@@ -200,8 +206,7 @@ export default function AccountDetailScreen() {
   if (accountState.error) throw accountState.error;
   if (localTransactions.error) throw localTransactions.error;
   if (transactionRange.error && !transactionRange.data) throw transactionRange.error;
-  const isLoading =
-    accountState.loading || localTransactions.loading || transactionRange.loading;
+  const isLoading = accountState.loading || localTransactions.loading || transactionRange.loading;
 
   return (
     <>
@@ -219,7 +224,7 @@ export default function AccountDetailScreen() {
             <ArrowLeft size={21} color={tokens.foreground} />
           </IconButton>
           <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>
-            {account?.name ?? 'Account'}
+            {account ? displayAccountName(account.name) : 'Account'}
           </Typography>
         </View>
 
@@ -240,8 +245,7 @@ export default function AccountDetailScreen() {
             </View>
 
             <View style={{ gap: 8 }}>
-              <Separator />
-              <Typography variant="heading">{account.name}</Typography>
+              <Typography variant="heading">{displayAccountName(account.name)}</Typography>
               <Typography variant="small">
                 {ACCOUNT_TYPES[account.type]} · {account.currency}
               </Typography>
@@ -256,15 +260,17 @@ export default function AccountDetailScreen() {
               {account.color ? (
                 <Typography variant="caption">Color: {account.color}</Typography>
               ) : null}
-              <Typography variant="caption">
-                Added {new Date(account.createdAt).toLocaleDateString()}
-              </Typography>
+              {typeof account.createdAt === 'number' && Number.isFinite(account.createdAt) ? (
+                <Typography variant="caption">
+                  Added {new Date(account.createdAt).toLocaleDateString()}
+                </Typography>
+              ) : null}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Button
                   size="sm"
                   variant="outline"
                   onPress={() => {
-                    setName(account.name);
+                    setName(displayAccountName(account.name));
                     setEditing(true);
                   }}
                 >
@@ -341,7 +347,9 @@ export default function AccountDetailScreen() {
           available for new activity.
         </Typography>
         <Button variant="destructive" disabled={pending} onPress={archiveAccount}>
-          {pending ? 'Archiving…' : `Archive ${account?.name ?? 'account'}`}
+          {pending
+            ? 'Archiving…'
+            : `Archive ${account ? displayAccountName(account.name) : 'account'}`}
         </Button>
         <Button variant="outline" onPress={() => setConfirmingArchive(false)}>
           Cancel
