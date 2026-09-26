@@ -156,7 +156,7 @@ export default function ActivityPage() {
       <FinanceSignedOut
         section="ACTIVITY"
         title="Keep the details close."
-        description="Sign in to search your saved ledger. Activity in this browser remains available offline and syncs when connected."
+        description="Sign in to open your activity. After your first sign-in, this browser keeps a local copy for offline access and syncs when connected."
       />
     );
 
