@@ -4,12 +4,12 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Copy, ReceiptText } from 'lucide-react';
-import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-import { aliasesOf, asMinor, belongsToUser, idOf, matchesId, minorToInput, PageHeading, SignInGate } from '../../_personal';
+import { aliasesOf, asMinor, belongsToUser, matchesId, minorToInput, PageHeading, SignInGate } from '../../_personal';
 
 type Transaction = LocalRecord & { title?: string; note?: string; type?: string; amountMinor?: bigint | number | string; currency?: string; accountId?: string; categoryId?: string; transferAccountId?: string; occurredAt?: number; status?: string; deletedAt?: number; merchant?: string };
 type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: number };

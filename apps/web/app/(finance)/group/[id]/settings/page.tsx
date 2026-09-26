@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Pencil, UsersRound } from 'lucide-react';
+import { ArrowRight, Check, Pencil, UsersRound } from 'lucide-react';
 import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';

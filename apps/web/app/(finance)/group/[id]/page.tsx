@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeftRight, ArrowRight, ClipboardList, Settings2, UsersRound } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, ClipboardList, Settings2 } from 'lucide-react';
 import { calculateNetBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
 import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
