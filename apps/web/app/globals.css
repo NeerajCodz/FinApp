@@ -1,0 +1,38 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: #000;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--finapp-background, #000);
+  color: var(--finapp-foreground, #fff);
+  font-family: var(--font-space-grotesk, 'Space Grotesk', 'Avenir Next', sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--finapp-primary, #b7ff4a);
+  color: var(--finapp-primary-foreground, #000);
+}
+
+:focus-visible {
+  outline: 2px solid var(--finapp-ring, #b7ff4a);
+  outline-offset: 3px;
+}
