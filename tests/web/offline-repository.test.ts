@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { openWebDatabase, WEB_DATABASE_NAME } from '../../apps/web/lib/offline/database';
 import * as repository from '../../apps/web/lib/offline/repository';
+import type { OutboxEntry } from '../../apps/web/lib/offline/repository';
+import { syncOutbox } from '../../apps/web/lib/offline/sync';
 
 const userA = 'user-a';
 const userB = 'user-b';
@@ -37,6 +39,88 @@ describe('browser offline repository', () => {
     });
     expect(await repository.readLocal(userB, 'transaction')).toEqual([]);
     expect(await repository.listOutbox(userB)).toEqual([]);
+  });
+
+  it('round-trips bigint values without coercing numeric-looking strings', async () => {
+    const id = await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'transaction.create',
+      { id: 'txn-bigint', amountMinor: 12_500n, externalReference: '0012500' },
+      { amountMinor: 12_500n, externalReference: '0012500' },
+      { clientMutationId: 'bigint-round-trip' },
+    );
+
+    await expect(repository.getLocalRecord(userA, 'transaction', id)).resolves.toMatchObject({
+      amountMinor: 12_500n,
+      externalReference: '0012500',
+    });
+    expect(typeof (await repository.getLocalRecord(userA, 'transaction', id))?.amountMinor).toBe(
+      'bigint',
+    );
+  });
+
+  it('does not replay a receipted outbox mutation twice', async () => {
+    const id = await repository.commitLocalWrite(
+      userA,
+      'account',
+      'account.create',
+      { id: 'account-replay', name: 'Reserve' },
+      { name: 'Reserve' },
+      { clientMutationId: 'replay-once' },
+    );
+    const sent: string[] = [];
+    const send = async (entry: OutboxEntry) => {
+      sent.push(entry.clientMutationId);
+      return { serverId: 'cloud-reserve', revision: '1', updatedAt: 1_700_000_000_001 };
+    };
+
+    await syncOutbox(userA, send);
+    await syncOutbox(userA, send);
+
+    expect(sent).toEqual(['replay-once']);
+    expect(await repository.getMappedCloudId(userA, 'account', id)).toBe('cloud-reserve');
+    expect(await repository.listOutbox(userA)).toMatchObject([{ status: 'synced' }]);
+  });
+
+  it('replays a child expense only after its parent group ID is mapped', async () => {
+    await repository.commitLocalWrite(
+      userA,
+      'group',
+      'group.create',
+      { id: 'group-local', name: 'Trip' },
+      { id: 'group-local', name: 'Trip' },
+      { clientMutationId: 'create-group' },
+    );
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'group.addExpense',
+      { id: 'expense-local', groupId: 'group-local', amountMinor: 2_500n },
+      { groupId: 'group-local', amountMinor: 2_500n },
+      {
+        clientMutationId: 'add-group-expense',
+        dependencies: ['group:group-local'],
+      },
+    );
+    const sent: OutboxEntry[] = [];
+    const receipts = new Map([
+      ['group.create', 'cloud-group'],
+      ['group.addExpense', 'cloud-expense'],
+    ]);
+
+    await syncOutbox(userA, async (entry) => {
+      sent.push(entry);
+      return {
+        serverId: receipts.get(entry.operation)!,
+        revision: '1',
+        updatedAt: 1_700_000_000_002,
+      };
+    });
+
+    expect(sent.map((entry) => entry.operation)).toEqual(['group.create', 'group.addExpense']);
+    expect(sent[1]?.payload.groupId).toBe('cloud-group');
+    expect(sent[1]?.dependencies).toEqual([]);
   });
 
   it('isolates records, pending writes, and cloud acknowledgements by user', async () => {
