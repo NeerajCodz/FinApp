@@ -3,14 +3,14 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, ChartLineUp } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon, Money } from '@/components/finance';
-import { Button, Card, IconButton, Progress, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { CategoryIcon, Money, TransactionRow } from '@/components/finance';
+import { Button, Card, IconButton, Progress, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
-import { displayAccountName } from '@/lib/ledger';
+import { displayAccountName, recordId, recordIndex, transactionRow } from '@/lib/ledger';
 
 type BudgetRecord = LocalRecord & {
   id?: string;
@@ -93,27 +93,28 @@ export default function BudgetDetailScreen() {
 
   const budgetLocalId = selectedBudget?.id ?? selectedBudget?._id ?? selectedBudget?.cloudId;
   const budgetPayloadId = selectedBudget?._id ?? selectedBudget?.cloudId ?? selectedBudget?.id;
-  const spentMinor =
+  const matchingExpenses =
     selectedBudget && transactionState.data
-      ? transactionState.data.reduce((total, transaction) => {
-          if (
-            transaction.type !== 'expense' ||
-            transaction.status !== 'posted' ||
-            transaction.deletedAt !== undefined ||
-            transaction.currency !== selectedBudget.currency ||
-            transaction.occurredAt < selectedBudget.startAt ||
-            transaction.occurredAt >= selectedBudget.endAt ||
-            (selectedBudget.categoryId !== undefined &&
-              (categoryIdByAlias.get(transaction.categoryId ?? '') ?? transaction.categoryId) !==
-                (categoryIdByAlias.get(selectedBudget.categoryId) ?? selectedBudget.categoryId)) ||
-            (selectedBudget.accountId !== undefined &&
-              (accountIdByAlias.get(transaction.accountId) ?? transaction.accountId) !==
-                (accountIdByAlias.get(selectedBudget.accountId) ?? selectedBudget.accountId))
-          )
-            return total;
-          return total + transaction.amountMinor;
-        }, 0n)
-      : 0n;
+      ? transactionState.data.filter(
+          (transaction) =>
+            transaction.type === 'expense' &&
+            transaction.status === 'posted' &&
+            transaction.deletedAt === undefined &&
+            transaction.currency === selectedBudget.currency &&
+            transaction.occurredAt >= selectedBudget.startAt &&
+            transaction.occurredAt < selectedBudget.endAt &&
+            (selectedBudget.categoryId === undefined ||
+              (categoryIdByAlias.get(transaction.categoryId ?? '') ?? transaction.categoryId) ===
+                (categoryIdByAlias.get(selectedBudget.categoryId) ?? selectedBudget.categoryId)) &&
+            (selectedBudget.accountId === undefined ||
+              (accountIdByAlias.get(transaction.accountId) ?? transaction.accountId) ===
+                (accountIdByAlias.get(selectedBudget.accountId) ?? selectedBudget.accountId)),
+        )
+      : [];
+  const spentMinor = matchingExpenses.reduce(
+    (total, transaction) => total + transaction.amountMinor,
+    0n,
+  );
   const categoryIdsReady =
     selectedBudget?.categoryId === undefined || categoryState.data !== undefined;
   const accountIdsReady =
@@ -142,7 +143,23 @@ export default function BudgetDetailScreen() {
           (item.id === budget.accountId || item._id === budget.accountId),
       )?.name
     : undefined;
-  const accountName = typeof rawAccountName === 'string' ? displayAccountName(rawAccountName) : undefined;
+  const accountName =
+    typeof rawAccountName === 'string' ? displayAccountName(rawAccountName) : undefined;
+  const accountIndex = recordIndex(accountState.data ?? []);
+  const categoryIndex = recordIndex(categoryState.data ?? []);
+  const recentExpenses = [...matchingExpenses]
+    .sort((left, right) => right.occurredAt - left.occurredAt)
+    .slice(0, 5)
+    .flatMap((record) => {
+      const row = transactionRow(
+        record,
+        accountIndex,
+        categoryIndex,
+        Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      );
+      const transactionId = recordId(record);
+      return row && transactionId ? [{ ...row, id: transactionId }] : [];
+    });
 
   async function archiveBudget() {
     if (!userId || !selectedBudget || !budgetLocalId || !budgetPayloadId || pending) return;
@@ -178,7 +195,12 @@ export default function BudgetDetailScreen() {
           paddingTop: insets.top + 12,
         }}
       >
-        <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+        <IconButton
+          label="Go back"
+          variant="ghost"
+          style={{ alignSelf: 'flex-start' }}
+          onPress={() => router.back()}
+        >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
         <Text style={{ color: tokens.foregroundMuted }}>Loading budget…</Text>
@@ -199,7 +221,7 @@ export default function BudgetDetailScreen() {
           label="Back to budgets"
           variant="ghost"
           style={{ alignSelf: 'flex-start' }}
-          onPress={() => router.canGoBack() ? router.back() : router.replace('/budget' as never)}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/budget' as never))}
         >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
@@ -244,59 +266,141 @@ export default function BudgetDetailScreen() {
         : budget.period === 'account'
           ? (accountName ?? 'Account budget')
           : 'Custom period';
-  const range = `${new Date(budget.startAt).toLocaleDateString()} – ${new Date(budget.endAt).toLocaleDateString()}`;
+  const dateOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const range = `${new Date(budget.startAt).toLocaleDateString(undefined, dateOptions)} – ${new Date(budget.endAt).toLocaleDateString(undefined, dateOptions)}`;
+  const remaining = budget.remainingMinor;
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 32,
+        paddingBottom: insets.bottom + 36,
+        gap: 24,
       }}
+      showsVerticalScrollIndicator={false}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>
-          {budget.name}
-        </Typography>
-      </View>
-      <View style={{ gap: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {selectedCategory && (
-            <CategoryIcon label={selectedCategory.name} icon={selectedCategory.icon} />
-          )}
-          <Text style={{ color: tokens.foregroundMuted, flex: 1 }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Typography variant="heading" numberOfLines={1}>
+            {budget.name}
+          </Typography>
+          <Typography variant="caption">
             {periodLabel} · {range}
-          </Text>
+          </Typography>
         </View>
-        <Money amountMinor={budget.spentMinor} currency={budget.currency} size="display" />
-        <Typography variant="caption">
-          spent of <Money amountMinor={budget.amountMinor} currency={budget.currency} />
-        </Typography>
-        <Typography
-          variant="heading"
-          style={{ color: budget.remainingMinor < 0n ? tokens.destructive : tokens.foreground }}
-        >
-          {budget.remainingMinor < 0n ? 'Over by ' : 'Remaining '}
-          <Money
-            amountMinor={
-              budget.remainingMinor < 0n ? -budget.remainingMinor : budget.remainingMinor
-            }
-            currency={budget.currency}
-          />
-        </Typography>
+      </View>
+
+      <Card
+        variant="subtle"
+        style={{
+          padding: 20,
+          gap: 18,
+          borderWidth: 1,
+          borderColor: tokens.borderSubtle,
+          backgroundColor: tokens.surfaceRaised,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {selectedCategory ? (
+            <CategoryIcon label={selectedCategory.name} icon={selectedCategory.icon} />
+          ) : (
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 15,
+                backgroundColor: tokens.surfaceSubtle,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ChartLineUp size={21} color={tokens.primary} />
+            </View>
+          )}
+          <View style={{ flex: 1, gap: 3 }}>
+            <Typography variant="bodyLarge">Budget progress</Typography>
+            <Typography variant="caption">{Math.round(percent)}% used</Typography>
+          </View>
+          <Typography variant="caption">{budget.currency}</Typography>
+        </View>
+        <View style={{ gap: 4 }}>
+          <Typography variant="caption">Spent this period</Typography>
+          <Money amountMinor={budget.spentMinor} currency={budget.currency} size="display" />
+          <Typography variant="small">
+            of <Money amountMinor={budget.amountMinor} currency={budget.currency} />
+          </Typography>
+        </View>
         <Progress
           value={percent}
           color={percent >= 90 ? tokens.destructive : tokens.primary}
-          height={8}
+          height={10}
         />
-        <Text style={{ color: tokens.foregroundMuted }}>
-          {((budget.spentMinor * 100n) / budget.amountMinor).toString()}% used
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 20 }}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Typography variant="caption">Limit</Typography>
+            <Money amountMinor={budget.amountMinor} currency={budget.currency} />
+          </View>
+          <View style={{ flex: 1, alignItems: 'flex-end', gap: 4 }}>
+            <Typography variant="caption">
+              {remaining < 0n ? 'Over limit' : 'Still available'}
+            </Typography>
+            <Money
+              amountMinor={remaining < 0n ? -remaining : remaining}
+              currency={budget.currency}
+            />
+          </View>
+        </View>
+      </Card>
+
+      <View style={{ gap: 8 }}>
+        <Typography variant="heading">Recent expenses</Typography>
+        <Typography variant="caption">Posted transactions counted toward this budget</Typography>
+        {recentExpenses.length > 0 ? (
+          <View
+            style={{
+              paddingHorizontal: 14,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: tokens.borderSubtle,
+              backgroundColor: tokens.surfaceSubtle,
+            }}
+          >
+            {recentExpenses.map((expense, index) => (
+              <React.Fragment key={expense.id}>
+                {index > 0 && <View style={{ height: 1, backgroundColor: tokens.borderSubtle }} />}
+                <TransactionRow
+                  {...expense}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/transaction/[id]',
+                      params: { id: expense.id },
+                    } as never)
+                  }
+                />
+              </React.Fragment>
+            ))}
+          </View>
+        ) : (
+          <View
+            style={{
+              padding: 18,
+              gap: 6,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: tokens.borderSubtle,
+              backgroundColor: tokens.surfaceSubtle,
+            }}
+          >
+            <Typography variant="bodyLarge">No expenses counted yet</Typography>
+            <Typography variant="small">Matching posted expenses will appear here.</Typography>
+          </View>
+        )}
       </View>
+
       {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
       <Button variant="outline" disabled={pending} onPress={archiveBudget}>
         {pending ? 'Archiving…' : 'Archive budget'}
@@ -318,7 +422,12 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 18,
       }}
     >
-      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+      <IconButton
+        label="Go back"
+        variant="ghost"
+        style={{ alignSelf: 'flex-start' }}
+        onPress={() => router.back()}
+      >
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Typography variant="heading">Budget unavailable</Typography>

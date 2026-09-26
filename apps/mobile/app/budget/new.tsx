@@ -4,9 +4,9 @@ import { ArrowLeft } from '@/lib/icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon, CurrencyInput } from '@/components/finance';
-import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@/components/ui';
+import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@finapp/ui/native';
 import { parseMinor } from '@/lib/money';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -84,8 +84,7 @@ export default function NewBudgetScreen() {
   if (profileState.error) throw profileState.error;
   if (accountState.error) throw accountState.error;
   if (categoryState.error) throw categoryState.error;
-  const profile =
-    profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
+  const profile = profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
   const accounts = accountState.data?.filter((account) => account.archivedAt === undefined);
   const categories = categoryState.data
     ?.filter((category) => category.archivedAt === undefined)
@@ -122,13 +121,7 @@ export default function NewBudgetScreen() {
       setError('Sign in to create a budget.');
       return;
     }
-    if (
-      !currency ||
-      amountMinor === null ||
-      startAt === null ||
-      endAt === null ||
-      endAt <= startAt
-    )
+    if (!currency || amountMinor === null || startAt === null || endAt === null || endAt <= startAt)
       return;
     setPending(true);
     setError('');
@@ -260,7 +253,12 @@ export default function NewBudgetScreen() {
                     style={{ justifyContent: 'flex-start' }}
                   >
                     <CategoryIcon label={item.name} icon={item.icon} selected={selected} />
-                    <Text style={{ marginLeft: 10, color: selected ? tokens.primaryForeground : tokens.foreground }}>
+                    <Text
+                      style={{
+                        marginLeft: 10,
+                        color: selected ? tokens.primaryForeground : tokens.foreground,
+                      }}
+                    >
                       {item.name}
                     </Text>
                   </Button>
@@ -273,7 +271,11 @@ export default function NewBudgetScreen() {
                 <Typography variant="small" style={{ textAlign: 'center' }}>
                   Create one before setting a category budget.
                 </Typography>
-                <Button size="sm" variant="outline" onPress={() => router.push('/category/new' as never)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onPress={() => router.push('/category/new' as never)}
+                >
                   Create category
                 </Button>
               </View>
@@ -353,7 +355,12 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 18,
       }}
     >
-      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+      <IconButton
+        label="Go back"
+        variant="ghost"
+        style={{ alignSelf: 'flex-start' }}
+        onPress={() => router.back()}
+      >
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Typography variant="heading">Budget form unavailable</Typography>
