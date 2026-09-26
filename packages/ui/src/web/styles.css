@@ -1,0 +1,959 @@
+:root {
+  color-scheme: dark;
+  --finapp-background: #000000;
+  --finapp-foreground: #ffffff;
+  --finapp-foreground-strong: #ffffffcc;
+  --finapp-foreground-muted: #ffffffa3;
+  --finapp-foreground-subtle: #ffffff7a;
+  --finapp-foreground-disabled: #ffffff52;
+  --finapp-card: #ffffff0a;
+  --finapp-card-foreground: #ffffff;
+  --finapp-popover: #080808;
+  --finapp-popover-foreground: #ffffff;
+  --finapp-primary: #b7ff4a;
+  --finapp-primary-foreground: #000000;
+  --finapp-control-disabled-background: #263611;
+  --finapp-control-disabled-foreground: #ffffffa3;
+  --finapp-secondary: #ffffff;
+  --finapp-secondary-foreground: #000000;
+  --finapp-muted: #ffffff0f;
+  --finapp-muted-foreground: #ffffff7a;
+  --finapp-accent: #b7ff4a;
+  --finapp-accent-foreground: #000000;
+  --finapp-destructive: #ff5c5c;
+  --finapp-destructive-foreground: #ffffff;
+  --finapp-border: #ffffff1f;
+  --finapp-border-subtle: #ffffff14;
+  --finapp-input: #ffffff0a;
+  --finapp-ring: #b7ff4a;
+  --finapp-surface-raised: #ffffff0f;
+  --finapp-surface-subtle: #ffffff0a;
+  --finapp-overlay: #000000c7;
+  --finapp-income: #4ed37a;
+  --finapp-expense: #ff6868;
+  --finapp-positive: #4ed37a;
+  --finapp-warning: #ffd75a;
+  --finapp-transfer: #ffd75a;
+  --finapp-split: #78a1ff;
+  --finapp-settlement: #ff9a51;
+  --finapp-font-sans: 'Space Grotesk', 'Avenir Next', sans-serif;
+}
+
+.finapp-ui-root,
+.finapp-ui-root *,
+.finapp-ui-root *::before,
+.finapp-ui-root *::after {
+  box-sizing: border-box;
+}
+
+.finapp-ui-root {
+  min-height: 100vh;
+  background: var(--finapp-background);
+  color: var(--finapp-foreground);
+  font-family: var(--finapp-font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  color-scheme: light dark;
+  -webkit-font-smoothing: antialiased;
+}
+
+.finapp-ui-root[data-theme='light'] {
+  color-scheme: light;
+}
+
+.finapp-ui-root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+.finapp-text,
+.finapp-typography {
+  color: inherit;
+}
+
+.finapp-typography {
+  margin: 0;
+}
+
+.finapp-typography--hero {
+  font-size: clamp(2.5rem, 7vw, 3rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.042em;
+  font-variant-numeric: tabular-nums;
+}
+
+.finapp-typography--display {
+  font-size: clamp(2.25rem, 6vw, 2.75rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.036em;
+}
+
+.finapp-typography--title {
+  font-size: clamp(1.75rem, 5vw, 2rem);
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: -0.03em;
+}
+
+.finapp-typography--heading {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.015em;
+}
+
+.finapp-typography--bodyLarge {
+  font-size: 1.0625rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.finapp-typography--body {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.finapp-typography--small {
+  color: var(--finapp-foreground-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.finapp-typography--caption {
+  color: var(--finapp-foreground-subtle);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.36;
+  letter-spacing: 0.018em;
+}
+
+.finapp-typography--label,
+.finapp-label {
+  color: var(--finapp-foreground-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.finapp-button {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.875rem;
+  padding: 0.75rem 1rem;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.finapp-button:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.finapp-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.finapp-button--primary {
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+}
+
+.finapp-button--secondary {
+  background: var(--finapp-secondary);
+  color: var(--finapp-secondary-foreground);
+}
+
+.finapp-button--outline {
+  border-color: var(--finapp-border);
+  background: transparent;
+  color: var(--finapp-foreground);
+}
+
+.finapp-button--ghost {
+  background: transparent;
+  color: var(--finapp-foreground);
+}
+
+.finapp-button--destructive {
+  background: var(--finapp-destructive);
+  color: var(--finapp-destructive-foreground);
+}
+
+.finapp-button--sm {
+  min-height: 36px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.7rem;
+  font-size: 0.875rem;
+}
+
+.finapp-button--lg {
+  min-height: 56px;
+  padding: 1rem 1.25rem;
+}
+
+.finapp-button--icon {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.finapp-button:disabled,
+.finapp-button[aria-disabled='true'] {
+  border-color: transparent;
+  background: var(--finapp-control-disabled-background);
+  color: var(--finapp-control-disabled-foreground);
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.finapp-button--outline:disabled,
+.finapp-button--ghost:disabled {
+  border-color: var(--finapp-border-subtle);
+  background: transparent;
+}
+
+.finapp-icon-button {
+  flex-shrink: 0;
+}
+
+.finapp-card {
+  border: 1px solid transparent;
+  border-radius: 1.125rem;
+  padding: 1.125rem;
+  background: var(--finapp-card);
+  color: var(--finapp-card-foreground);
+}
+
+.finapp-card--subtle {
+  background: var(--finapp-surface-raised);
+}
+
+.finapp-card--outline {
+  border-color: var(--finapp-border-subtle);
+  background: transparent;
+}
+
+.finapp-input {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 0.875rem;
+  padding: 0.75rem 0.875rem;
+  background: var(--finapp-input);
+  color: var(--finapp-foreground);
+  font: inherit;
+  line-height: 1.4;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.finapp-input::placeholder {
+  color: var(--finapp-foreground-disabled);
+  opacity: 1;
+}
+
+.finapp-input:focus-visible,
+.finapp-input:focus {
+  border-color: var(--finapp-ring);
+  outline: 2px solid color-mix(in srgb, var(--finapp-ring) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.finapp-input[aria-invalid='true'],
+.finapp-input.is-error {
+  border-color: var(--finapp-destructive);
+}
+
+.finapp-input:disabled {
+  border-color: var(--finapp-border-subtle);
+  background: var(--finapp-control-disabled-background);
+  color: var(--finapp-control-disabled-foreground);
+  cursor: not-allowed;
+}
+
+.finapp-input[type='date'],
+.finapp-input[type='time'],
+.finapp-input[type='datetime-local'] {
+  color-scheme: inherit;
+}
+
+.finapp-select {
+  appearance: auto;
+}
+
+.finapp-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.finapp-label {
+  display: inline-block;
+}
+
+.finapp-badge {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.32rem 0.625rem;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.012em;
+}
+
+.finapp-badge--success {
+  background: color-mix(in srgb, var(--finapp-positive) 16%, transparent);
+  color: var(--finapp-positive);
+}
+
+.finapp-badge--danger {
+  background: color-mix(in srgb, var(--finapp-destructive) 16%, transparent);
+  color: var(--finapp-destructive);
+}
+
+.finapp-badge--neutral {
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground-muted);
+}
+
+.finapp-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 50%;
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.finapp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.finapp-separator {
+  width: 100%;
+  height: 1px;
+  border: 0;
+  margin: 0;
+  background: var(--finapp-border-subtle);
+}
+
+.finapp-progress {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--finapp-border-subtle);
+}
+
+.finapp-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 220ms ease;
+}
+
+.finapp-choice {
+  position: relative;
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+}
+
+.finapp-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.finapp-choice__indicator {
+  position: relative;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--finapp-border);
+  border-radius: 7px;
+  background: var(--finapp-background);
+}
+
+.finapp-choice input[type='radio'] + .finapp-choice__indicator {
+  width: 20px;
+  height: 20px;
+  flex-basis: 20px;
+  border-width: 2px;
+  border-radius: 50%;
+}
+
+.finapp-choice input:checked + .finapp-choice__indicator {
+  border-color: var(--finapp-primary);
+  background: var(--finapp-primary);
+}
+
+.finapp-choice input[type='checkbox']:checked + .finapp-choice__indicator::after {
+  width: 6px;
+  height: 10px;
+  border: solid var(--finapp-primary-foreground);
+  border-width: 0 2px 2px 0;
+  content: '';
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.finapp-choice input[type='radio']:checked + .finapp-choice__indicator::after {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--finapp-primary-foreground);
+  content: '';
+}
+
+.finapp-choice input:focus-visible + .finapp-choice__indicator {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 3px;
+}
+
+.finapp-choice.is-disabled,
+.finapp-choice:has(input:disabled) {
+  color: var(--finapp-foreground-disabled);
+  cursor: not-allowed;
+}
+
+.finapp-radio-group {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.finapp-radio-group legend {
+  margin-bottom: 0.35rem;
+}
+
+.finapp-switch-row {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.finapp-switch {
+  display: inline-flex;
+  width: 52px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid var(--finapp-border);
+  border-radius: 999px;
+  padding: 3px;
+  background: var(--finapp-surface-raised);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.finapp-switch[aria-checked='true'] {
+  border-color: var(--finapp-primary);
+  background: var(--finapp-primary);
+}
+
+.finapp-switch:disabled {
+  background: var(--finapp-control-disabled-background);
+  cursor: not-allowed;
+}
+
+.finapp-switch__thumb {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--finapp-foreground);
+  transition: transform 150ms ease;
+}
+
+.finapp-switch[aria-checked='true'] .finapp-switch__thumb {
+  background: var(--finapp-primary-foreground);
+  transform: translateX(20px);
+}
+
+.finapp-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-radius: 0.875rem;
+  padding: 0.25rem;
+  background: var(--finapp-surface-raised);
+}
+
+.finapp-tab {
+  min-width: 44px;
+  min-height: 40px;
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  color: var(--finapp-foreground-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.finapp-tab[aria-selected='true'] {
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+  font-weight: 600;
+}
+
+.finapp-popover {
+  position: relative;
+  z-index: 2;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: var(--finapp-popover);
+  color: var(--finapp-popover-foreground);
+  box-shadow: 0 16px 48px #0005;
+}
+
+.finapp-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: var(--finapp-overlay);
+  animation: finapp-overlay-in 150ms ease-out both;
+}
+
+.finapp-overlay__panel {
+  width: min(100%, 32rem);
+  max-height: min(90vh, 52rem);
+  overflow: auto;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 1.5rem;
+  padding: 1.25rem;
+  background: var(--finapp-popover);
+  color: var(--finapp-popover-foreground);
+  box-shadow: 0 24px 80px #0006;
+  animation: finapp-panel-in 180ms ease-out both;
+}
+
+.finapp-overlay__panel:focus {
+  outline: none;
+}
+
+.finapp-overlay__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.finapp-overlay__heading > :first-child {
+  flex: 1;
+}
+
+.finapp-overlay__close {
+  flex: 0 0 auto;
+}
+
+.finapp-overlay__content {
+  display: grid;
+  gap: 1rem;
+}
+
+.finapp-sheet-handle {
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  width: 2.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--finapp-foreground-disabled);
+  transform: translateX(-50%);
+}
+
+.finapp-overlay--sheet {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.finapp-overlay--sheet .finapp-overlay__panel {
+  position: relative;
+  width: 100%;
+  max-height: min(90vh, 52rem);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 1.75rem 1.75rem 0 0;
+  padding: 1.5rem max(1.25rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom))
+    max(1.25rem, env(safe-area-inset-left));
+  animation-name: finapp-sheet-in;
+}
+
+.finapp-overlay--sheet .finapp-overlay__heading {
+  padding-top: 0.25rem;
+}
+
+.finapp-overlay--drawer {
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.finapp-overlay--drawer .finapp-overlay__panel {
+  width: min(100%, 26rem);
+  height: 100%;
+  max-height: none;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 1.5rem 0 0 1.5rem;
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom));
+}
+
+.finapp-dropdown-menu {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.finapp-calendar input {
+  min-height: 48px;
+}
+
+.finapp-skeleton {
+  display: block;
+  max-width: 100%;
+  border-radius: 0.625rem;
+  background: linear-gradient(
+    90deg,
+    var(--finapp-surface-raised),
+    var(--finapp-border-subtle),
+    var(--finapp-surface-raised)
+  );
+  background-size: 200% 100%;
+  animation: finapp-shimmer 1.5s ease-in-out infinite;
+}
+
+.finapp-empty {
+  display: flex;
+  min-height: 16rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.finapp-empty__icon {
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  place-items: center;
+  border-radius: 1.25rem;
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground-muted);
+}
+
+.finapp-empty__description {
+  max-width: 20rem;
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+}
+
+.finapp-empty__action {
+  margin-top: 0.5rem;
+}
+
+.finapp-scroll-area {
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--finapp-foreground-subtle) transparent;
+  scrollbar-width: thin;
+}
+
+.finapp-slider {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--finapp-primary);
+  cursor: pointer;
+}
+
+.finapp-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.finapp-textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.finapp-otp {
+  position: relative;
+  display: grid;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.finapp-otp__cells {
+  display: flex;
+  gap: clamp(0.375rem, 2vw, 0.5rem);
+  justify-content: space-between;
+  cursor: text;
+}
+
+.finapp-otp__cell {
+  display: grid;
+  width: clamp(2.5rem, 12vw, 3rem);
+  height: 3.5rem;
+  flex: 1 1 0;
+  place-items: center;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 0.75rem;
+  background: var(--finapp-surface-subtle);
+  color: var(--finapp-foreground);
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.finapp-otp:focus-within .finapp-otp__cell {
+  border-color: var(--finapp-ring);
+}
+
+.finapp-otp__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  cursor: text;
+}
+
+.finapp-otp__input:focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 3px;
+}
+
+.finapp-collapsible {
+  border-bottom: 1px solid var(--finapp-border-subtle);
+}
+
+.finapp-collapsible summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 500;
+  list-style: none;
+}
+
+.finapp-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.finapp-collapsible summary::after {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: '';
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 150ms ease;
+}
+
+.finapp-collapsible[open] summary::after {
+  transform: rotate(225deg) translate(-2px, -2px);
+}
+
+.finapp-collapsible__content {
+  padding: 0 0 1rem;
+}
+
+.finapp-command {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.finapp-command .finapp-input {
+  flex: 1;
+}
+
+.finapp-toast {
+  position: fixed;
+  z-index: 1100;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: max(1rem, env(safe-area-inset-left));
+  width: fit-content;
+  max-width: min(32rem, calc(100vw - 2rem));
+  margin: 0 auto;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 0.875rem;
+  padding: 0.875rem 1rem;
+  background: var(--finapp-popover);
+  color: var(--finapp-popover-foreground);
+  box-shadow: 0 12px 40px #0005;
+}
+
+.finapp-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.finapp-tooltip__content {
+  position: absolute;
+  z-index: 1200;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  width: max-content;
+  max-width: min(18rem, 80vw);
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.625rem;
+  background: var(--finapp-popover);
+  color: var(--finapp-popover-foreground);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0.25rem);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.finapp-tooltip[data-open] .finapp-tooltip__content {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.finapp-ui-root :focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 3px;
+}
+
+.finapp-ui-root button:focus:not(:focus-visible),
+.finapp-ui-root summary:focus:not(:focus-visible) {
+  outline: none;
+}
+
+@keyframes finapp-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes finapp-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes finapp-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes finapp-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 560px) {
+  .finapp-overlay:not(.finapp-overlay--sheet) {
+    padding: 0.75rem;
+  }
+
+  .finapp-overlay--drawer .finapp-overlay__panel {
+    width: min(100%, 22rem);
+  }
+
+  .finapp-command {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .finapp-command > * {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finapp-ui-root *,
+  .finapp-ui-root *::before,
+  .finapp-ui-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
