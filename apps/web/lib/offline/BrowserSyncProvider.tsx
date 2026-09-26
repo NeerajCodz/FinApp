@@ -30,6 +30,7 @@ import { syncOutbox } from './sync';
 type ChangesPage = FunctionReturnType<typeof api.sync.queries.changes>;
 type SectionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapSection>;
 type TransactionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapTransactions>;
+type GroupRangePage = FunctionReturnType<typeof api.sync.queries.groupRange>;
 type TransactionRangePage = FunctionReturnType<typeof api.sync.queries.transactionRange>;
 
 const localUserKey = 'finapp.web.validated-user.v1';
@@ -74,12 +75,14 @@ const emptyStatus: LocalSyncStatus = {
 
 type BrowserSyncContextValue = {
   userId: string | null;
+  identityReady: boolean;
   isConnected: boolean;
   isSyncing: boolean;
   syncError: string | null;
   status: LocalSyncStatus;
   retryNow: () => Promise<void>;
   fetchTransactionRange: (startAt: number, endAt: number) => Promise<void>;
+  fetchGroupRange: (groupId: string, startAt: number, endAt: number) => Promise<void>;
   read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) => Promise<T[]>;
 };
 const BrowserSyncContext = React.createContext<BrowserSyncContextValue | null>(null);
@@ -268,6 +271,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const connection = useConvexConnectionState();
   const currentProfile = useQuery(api.users.queries.current, auth.isAuthenticated ? {} : 'skip');
   const [storedUserId, setStoredUserId] = React.useState<string | null>(null);
+  const [localIdentityReady, setLocalIdentityReady] = React.useState(false);
   const [online, setOnline] = React.useState(false);
   const [status, setStatus] = React.useState(emptyStatus);
   const [statusUserId, setStatusUserId] = React.useState<string | null>(null);
@@ -279,6 +283,8 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const isConnected = online && connection.isWebSocketConnected;
   const authenticatedUserId = typeof currentProfile?._id === 'string' ? currentProfile._id : null;
   const userId = authenticatedUserId ?? (!isConnected ? storedUserId : null);
+  const identityReady =
+    localIdentityReady && !auth.isLoading && (!auth.isAuthenticated || currentProfile !== undefined);
   const validatedOnline = Boolean(auth.isAuthenticated && isConnected && authenticatedUserId);
   const scopedStatus = statusUserId === userId ? status : emptyStatus;
 
@@ -294,7 +300,14 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   }, []);
 
   React.useEffect(() => {
-    setStoredUserId(window.localStorage.getItem(localUserKey));
+    try {
+      setStoredUserId(window.localStorage.getItem(localUserKey));
+    } catch {
+      setStoredUserId(null);
+      setSyncError('LOCAL_STORAGE_FAILED');
+    } finally {
+      setLocalIdentityReady(true);
+    }
   }, []);
 
   React.useEffect(() => {
@@ -457,6 +470,96 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     },
     [convex, userId, validatedOnline],
   );
+  const fetchGroupRange = React.useCallback(
+    (groupId: string, startAt: number, endAt: number): Promise<void> => {
+      if (!userId || !validatedOnline)
+        return Promise.reject(new Error('ONLINE_RANGE_SYNC_REQUIRED'));
+      if (!groupId || !Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
+        return Promise.reject(new Error('INVALID_DATE_RANGE'));
+      const key = `group:${userId}:${groupId}:${startAt}:${endAt}`;
+      const existing = rangeFetches.current.get(key);
+      if (existing) return existing;
+
+      const request = (async () => {
+        const mappedGroupId = await getMappedCloudId(userId, 'group', groupId);
+        if (groupId.startsWith('local-') && !mappedGroupId)
+          throw new Error('SYNC_PARENT_PENDING');
+        const cloudGroupId = mappedGroupId ?? groupId;
+        const persistGroup = async (page: GroupRangePage) => {
+          await Promise.all([
+            upsert(userId, 'group', page.group ? [page.group as LocalRecord] : []),
+            upsert(userId, 'groupMember', page.groupMembers as LocalRecord[]),
+          ]);
+        };
+        const persistTransactionPage = async (page: GroupRangePage) => {
+          await persistGroup(page);
+          await Promise.all([
+            upsert(userId, 'transaction', page.transactions.page as LocalRecord[]),
+            upsert(
+              userId,
+              'account',
+              (page.related.accounts as LocalRecord[]).filter((record) => record.ownerId === userId),
+            ),
+            upsert(
+              userId,
+              'category',
+              (page.related.categories as LocalRecord[]).filter(
+                (record) => record.ownerId === userId,
+              ),
+            ),
+            upsert(userId, 'expensePayer', page.related.payers as LocalRecord[]),
+            upsert(userId, 'expenseParticipant', page.related.participants as LocalRecord[]),
+            upsert(userId, 'transactionTag', page.related.tags as LocalRecord[]),
+            upsert(userId, 'receiptMetadata', page.related.receipts as LocalRecord[]),
+          ]);
+        };
+
+        const fetchTransactions = async () => {
+          let cursor: string | null = null;
+          while (true) {
+            const page: GroupRangePage = await convex.query(api.sync.queries.groupRange, {
+              groupId: cloudGroupId as never,
+              startAt,
+              endAt,
+              paginationOpts: { numItems: 100, cursor },
+              settlementPaginationOpts: { numItems: 100, cursor: null },
+            });
+            await persistTransactionPage(page);
+            if (page.transactions.isDone) break;
+            if (!page.transactions.continueCursor || page.transactions.continueCursor === cursor)
+              throw new Error('INVALID_SYNC_CURSOR');
+            cursor = page.transactions.continueCursor;
+          }
+        };
+        const fetchSettlements = async () => {
+          let cursor: string | null = null;
+          while (true) {
+            const page: GroupRangePage = await convex.query(api.sync.queries.groupRange, {
+              groupId: cloudGroupId as never,
+              startAt,
+              endAt,
+              paginationOpts: { numItems: 100, cursor: null },
+              settlementPaginationOpts: { numItems: 100, cursor },
+            });
+            await persistGroup(page);
+            await upsert(userId, 'settlement', page.settlements.page as LocalRecord[]);
+            if (page.settlements.isDone) break;
+            if (!page.settlements.continueCursor || page.settlements.continueCursor === cursor)
+              throw new Error('INVALID_SYNC_CURSOR');
+            cursor = page.settlements.continueCursor;
+          }
+        };
+        await Promise.all([fetchTransactions(), fetchSettlements()]);
+      })();
+      rangeFetches.current.set(key, request);
+      const removeRequest = () => {
+        if (rangeFetches.current.get(key) === request) rangeFetches.current.delete(key);
+      };
+      void request.then(removeRequest, removeRequest);
+      return request;
+    },
+    [convex, userId, validatedOnline],
+  );
 
   const runOutboxEntry = React.useCallback(
     async (targetUserId: string, entry: OutboxEntry): Promise<SyncReceipt> => {
@@ -562,16 +665,20 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const value = React.useMemo<BrowserSyncContextValue>(
     () => ({
       userId,
+      identityReady,
       isConnected,
       isSyncing,
       syncError: statusUserId === userId ? syncError : null,
       status: scopedStatus,
       retryNow,
       fetchTransactionRange,
+      fetchGroupRange,
       read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) =>
         userId ? readLocal<T>(userId, entityType) : Promise.resolve([]),
     }),
     [
+      identityReady,
+      fetchGroupRange,
       fetchTransactionRange,
       isConnected,
       isSyncing,
