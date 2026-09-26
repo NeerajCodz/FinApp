@@ -8,8 +8,8 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconButton, Button, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { IconButton, Button, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 function currencyLabel(currency: string) {
   try {
@@ -27,7 +27,8 @@ export default function CurrencySettingsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const options = useMemo(() => [...currencies], []);
-  const selected = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : currency;
+  const selected =
+    typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : currency;
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}

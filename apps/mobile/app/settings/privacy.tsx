@@ -5,8 +5,8 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toast } from '@/lib/toast';
 import { writeExportBundle } from '@/lib/export';
-import { Button, IconButton, Separator, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 export default function PrivacySettingsScreen() {
   const [exporting, setExporting] = useState(false);

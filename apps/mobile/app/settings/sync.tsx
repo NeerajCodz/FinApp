@@ -3,8 +3,8 @@ import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Check } from '@/lib/icons';
-import { Button, IconButton, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import type { LocalSyncWindow } from '@/local/repository';
 
@@ -56,7 +56,8 @@ export default function SyncSettingsScreen() {
       <View style={{ gap: 8 }}>
         <Typography variant="label">Initial download window</Typography>
         <Text style={{ color: tokens.foregroundMuted, maxWidth: 340 }}>
-          Choose how much recent history syncs automatically. Changing this setting backfills cloud data; it never removes older history already downloaded to this device.
+          Choose how much recent history syncs automatically. Changing this setting backfills cloud
+          data; it never removes older history already downloaded to this device.
         </Text>
       </View>
       <View style={{ gap: 8 }}>
