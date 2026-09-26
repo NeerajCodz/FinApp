@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getTouchTargetStyle } from '../../app/mobile/components/ui/touch-target';
-import { quickAddActions } from '../../app/mobile/lib/navigation/quick-add';
+import { getTouchTargetStyle } from '../../packages/ui/src/native/touch-target';
+import { quickAddActions } from '../../apps/mobile/lib/navigation/quick-add';
 
 describe('native shell contracts', () => {
   it('enforces a 44 point minimum touch target', () => {

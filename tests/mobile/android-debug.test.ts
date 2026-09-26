@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveConvexUrl } from '../../app/mobile/lib/convex-url';
+import { resolveConvexUrl } from '../../apps/mobile/lib/convex-url';
 
 describe('production Convex connectivity', () => {
   it('falls back to the configured production cloud deployment', () => {
