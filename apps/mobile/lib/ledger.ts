@@ -1,4 +1,8 @@
-import type { AnalyticsAccount, AnalyticsCategory, AnalyticsTransaction } from '@convex/analytics/domain';
+import type {
+  AnalyticsAccount,
+  AnalyticsCategory,
+  AnalyticsTransaction,
+} from '@convex/analytics/domain';
 import type { LocalRecord } from '@/local/repository';
 
 export function recordIds(record: LocalRecord): string[] {
@@ -26,8 +30,9 @@ export function displayAccountName(name: string): string {
   }
 }
 
-
-export function analyticsEntities(records: readonly LocalRecord[]): (AnalyticsAccount & AnalyticsCategory)[] {
+export function analyticsEntities(
+  records: readonly LocalRecord[],
+): (AnalyticsAccount & AnalyticsCategory)[] {
   return records.flatMap((record) => {
     if (typeof record.name !== 'string') return [];
     const [id, ...aliases] = recordIds(record);
@@ -39,9 +44,11 @@ export function ledgerTransaction(record: LocalRecord): AnalyticsTransaction | n
   if (
     !['expense', 'income', 'transfer', 'refund', 'adjustment'].includes(String(record.type)) ||
     !['pending', 'posted', 'voided'].includes(String(record.status)) ||
-    typeof record.amountMinor !== 'bigint' || typeof record.currency !== 'string' ||
+    typeof record.amountMinor !== 'bigint' ||
+    typeof record.currency !== 'string' ||
     typeof record.occurredAt !== 'number'
-  ) return null;
+  )
+    return null;
   return {
     type: record.type as AnalyticsTransaction['type'],
     status: record.status as AnalyticsTransaction['status'],
@@ -56,7 +63,12 @@ export function ledgerTransaction(record: LocalRecord): AnalyticsTransaction | n
   };
 }
 
-export function transactionRow(record: LocalRecord, accounts: Map<string, LocalRecord>, categories: Map<string, LocalRecord>, timeZone: string) {
+export function transactionRow(
+  record: LocalRecord,
+  accounts: Map<string, LocalRecord>,
+  categories: Map<string, LocalRecord>,
+  timeZone: string,
+) {
   const transaction = ledgerTransaction(record);
   if (!transaction) return null;
   const category = categories.get(transaction.categoryId ?? '');
@@ -67,11 +79,13 @@ export function transactionRow(record: LocalRecord, accounts: Map<string, LocalR
     category: typeof category?.name === 'string' ? category.name : undefined,
     categoryIcon: typeof category?.icon === 'string' ? category.icon : undefined,
     account: typeof accountName === 'string' ? displayAccountName(accountName) : undefined,
-    date: new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(transaction.occurredAt),
+    date: new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(
+      transaction.occurredAt,
+    ),
     status: transaction.status,
     amountMinor: transaction.amountMinor,
     currency: transaction.currency,
     type: transaction.type,
-    semanticType: typeof record.groupId === 'string' ? 'split' as const : undefined,
+    semanticType: typeof record.groupId === 'string' ? ('split' as const) : undefined,
   };
 }

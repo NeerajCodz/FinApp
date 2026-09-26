@@ -4,12 +4,18 @@ import { AppState, Platform, View } from 'react-native';
 import { useAction, useConvexAuth } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, InputOTP, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, InputOTP, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { PasscodeInput } from './PasscodeInput';
 import {
-  authenticateDevice, clearPasscodeThrottle, createPasscodeLock, readAppLock,
-  readPasscodeThrottle, recordFailedPasscode, saveAppLock, verifyPasscode,
+  authenticateDevice,
+  clearPasscodeThrottle,
+  createPasscodeLock,
+  readAppLock,
+  readPasscodeThrottle,
+  recordFailedPasscode,
+  saveAppLock,
+  verifyPasscode,
   type AppLock,
 } from './app-lock';
 
@@ -36,12 +42,20 @@ export function useAppLock(): LockContextValue {
   return value;
 }
 
-export function AppLockProvider({ userId, authRoute, children }: {
+export function AppLockProvider({
+  userId,
+  authRoute,
+  children,
+}: {
   userId: string | null;
   authRoute: boolean;
   children: React.ReactNode;
 }) {
-  const [state, setState] = React.useState<LockState>({ userId: null, lock: null, phase: 'checking' });
+  const [state, setState] = React.useState<LockState>({
+    userId: null,
+    lock: null,
+    phase: 'checking',
+  });
   const [code, setCode] = React.useState('');
   const [newCode, setNewCode] = React.useState('');
   const [confirmCode, setConfirmCode] = React.useState('');
@@ -61,7 +75,8 @@ export function AppLockProvider({ userId, authRoute, children }: {
   const verifyReset = useAction(api.auth.verifyAppLockReset);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const scoped = state.userId === userId ? state : { userId, lock: null, phase: 'checking' as const };
+  const scoped =
+    state.userId === userId ? state : { userId, lock: null, phase: 'checking' as const };
   const locked = !!userId && !authRoute && scoped.phase !== 'unlocked';
 
   const reload = React.useCallback(async (target: string) => {
@@ -109,7 +124,7 @@ export function AppLockProvider({ userId, authRoute, children }: {
         ++generation.current;
         if (devicePromptInFlight.current) suppressNextPrompt.current = true;
         lastPrompt.current = -1;
-        setState((old) => old.lock ? { ...old, phase: 'locked', error: undefined } : old);
+        setState((old) => (old.lock ? { ...old, phase: 'locked', error: undefined } : old));
         setCode('');
         setResetStep('none');
         setNewCode('');
@@ -127,11 +142,12 @@ export function AppLockProvider({ userId, authRoute, children }: {
     setBusy(true);
     devicePromptInFlight.current = true;
     try {
-      if (await authenticateDevice() && token === generation.current)
-        setState((old) => old.userId === userId ? { ...old, phase: 'unlocked', error: undefined } : old);
+      if ((await authenticateDevice()) && token === generation.current)
+        setState((old) =>
+          old.userId === userId ? { ...old, phase: 'unlocked', error: undefined } : old,
+        );
     } catch (cause) {
-      if (token === generation.current)
-        setState((old) => ({ ...old, error: errorMessage(cause) }));
+      if (token === generation.current) setState((old) => ({ ...old, error: errorMessage(cause) }));
     } finally {
       devicePromptInFlight.current = false;
       setBusy(false);
@@ -156,7 +172,8 @@ export function AppLockProvider({ userId, authRoute, children }: {
   }, [retryAt]);
 
   async function unlockPasscode() {
-    if (!userId || scoped.lock?.method !== 'passcode' || busy || code.length !== 6 || retryAt > now) return;
+    if (!userId || scoped.lock?.method !== 'passcode' || busy || code.length !== 6 || retryAt > now)
+      return;
     const token = generation.current;
     setBusy(true);
     try {
@@ -171,7 +188,9 @@ export function AppLockProvider({ userId, authRoute, children }: {
       if (verified) {
         await clearPasscodeThrottle(userId);
         if (token !== generation.current) return;
-        setState((old) => old.userId === userId ? { ...old, phase: 'unlocked', error: undefined } : old);
+        setState((old) =>
+          old.userId === userId ? { ...old, phase: 'unlocked', error: undefined } : old,
+        );
         setRetryAt(0);
       } else {
         const next = await recordFailedPasscode(userId);
@@ -195,7 +214,8 @@ export function AppLockProvider({ userId, authRoute, children }: {
     try {
       const result = await requestReset({});
       if (token !== generation.current) return;
-      if (result.userId !== userId) throw new Error('Sign in to this account before resetting its passcode.');
+      if (result.userId !== userId)
+        throw new Error('Sign in to this account before resetting its passcode.');
       setResetChallenge(result.challengeId);
       setResetStep('email');
       setCode('');
@@ -252,46 +272,69 @@ export function AppLockProvider({ userId, authRoute, children }: {
     }
   }
 
-  const changeLock = React.useCallback(async (next: 'device' | 'passcode' | null, passcode?: string) => {
-    if (!userId || scoped.phase !== 'unlocked') throw new Error('Unlock the app first.');
-    if (Platform.OS === 'web') throw new Error('App lock is only available on mobile devices.');
-    const token = generation.current;
-    let lock: AppLock | null = null;
-    if (next === 'device') {
-      if (!(await authenticateDevice())) throw new Error('Device authentication was cancelled.');
-      lock = { method: 'device' };
-    } else if (next === 'passcode') {
-      lock = await createPasscodeLock(passcode ?? '');
-    }
-    if (token !== generation.current) throw new Error('App lock change was interrupted.');
-    await saveAppLock(userId, lock);
-    await clearPasscodeThrottle(userId);
-    if (token !== generation.current) throw new Error('App lock change was interrupted.');
-    ++generation.current;
-    setState({ userId, lock, phase: 'unlocked' });
-  }, [scoped.phase, userId]);
+  const changeLock = React.useCallback(
+    async (next: 'device' | 'passcode' | null, passcode?: string) => {
+      if (!userId || scoped.phase !== 'unlocked') throw new Error('Unlock the app first.');
+      if (Platform.OS === 'web') throw new Error('App lock is only available on mobile devices.');
+      const token = generation.current;
+      let lock: AppLock | null = null;
+      if (next === 'device') {
+        if (!(await authenticateDevice())) throw new Error('Device authentication was cancelled.');
+        lock = { method: 'device' };
+      } else if (next === 'passcode') {
+        lock = await createPasscodeLock(passcode ?? '');
+      }
+      if (token !== generation.current) throw new Error('App lock change was interrupted.');
+      await saveAppLock(userId, lock);
+      await clearPasscodeThrottle(userId);
+      if (token !== generation.current) throw new Error('App lock change was interrupted.');
+      ++generation.current;
+      setState({ userId, lock, phase: 'unlocked' });
+    },
+    [scoped.phase, userId],
+  );
 
-  const value = React.useMemo(() => ({
-    lock: scoped.lock,
-    ready: scoped.phase === 'unlocked',
-    changeLock,
-  }), [scoped.lock, scoped.phase, changeLock]);
+  const value = React.useMemo(
+    () => ({
+      lock: scoped.lock,
+      ready: scoped.phase === 'unlocked',
+      changeLock,
+    }),
+    [scoped.lock, scoped.phase, changeLock],
+  );
 
   return (
     <LockContext.Provider value={value}>
-      <View style={{ flex: 1 }} importantForAccessibility={locked ? 'no-hide-descendants' : 'auto'} pointerEvents={locked ? 'none' : 'auto'}>
+      <View
+        style={{ flex: 1 }}
+        importantForAccessibility={locked ? 'no-hide-descendants' : 'auto'}
+        pointerEvents={locked ? 'none' : 'auto'}
+      >
         {children}
       </View>
       {locked && (
-        <View style={{
-          position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
-          zIndex: 2000, elevation: 20, backgroundColor: tokens.background,
-          paddingHorizontal: 24, paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32,
-          justifyContent: 'center', gap: 18,
-        }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            zIndex: 2000,
+            elevation: 20,
+            backgroundColor: tokens.background,
+            paddingHorizontal: 24,
+            paddingTop: insets.top + 32,
+            paddingBottom: insets.bottom + 32,
+            justifyContent: 'center',
+            gap: 18,
+          }}
+        >
           <Typography variant="title">Finapp is locked</Typography>
           {scoped.phase === 'checking' && <Text>Checking your app lock…</Text>}
-          {scoped.phase === 'error' && <Button onPress={() => void reload(userId!)}>Retry secure storage</Button>}
+          {scoped.phase === 'error' && (
+            <Button onPress={() => void reload(userId!)}>Retry secure storage</Button>
+          )}
           {scoped.phase === 'locked' && scoped.lock?.method === 'device' && (
             <>
               <Text style={{ color: tokens.foregroundMuted }}>
@@ -306,10 +349,17 @@ export function AppLockProvider({ userId, authRoute, children }: {
             <>
               {resetStep === 'none' && (
                 <>
-                  <Text style={{ color: tokens.foregroundMuted }}>Enter your six-digit app passcode.</Text>
+                  <Text style={{ color: tokens.foregroundMuted }}>
+                    Enter your six-digit app passcode.
+                  </Text>
                   <PasscodeInput value={code} onChangeText={setCode} label="App passcode" />
-                  <Button disabled={busy || code.length !== 6 || retryAt > now} onPress={() => void unlockPasscode()}>
-                    {retryAt > now ? `Try again in ${Math.ceil((retryAt - now) / 1000)}s` : 'Unlock'}
+                  <Button
+                    disabled={busy || code.length !== 6 || retryAt > now}
+                    onPress={() => void unlockPasscode()}
+                  >
+                    {retryAt > now
+                      ? `Try again in ${Math.ceil((retryAt - now) / 1000)}s`
+                      : 'Unlock'}
                   </Button>
                   <Button variant="ghost" disabled={busy} onPress={() => void sendReset()}>
                     Forgot app passcode?
@@ -325,17 +375,40 @@ export function AppLockProvider({ userId, authRoute, children }: {
                   <Button disabled={busy || code.length !== 6} onPress={() => void checkReset()}>
                     {busy ? 'Verifying…' : 'Verify email code'}
                   </Button>
-                  <Button variant="ghost" disabled={busy} onPress={() => void sendReset()}>Request another code</Button>
-                  <Button variant="ghost" onPress={() => { setResetStep('none'); setCode(''); }}>Back to unlock</Button>
+                  <Button variant="ghost" disabled={busy} onPress={() => void sendReset()}>
+                    Request another code
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onPress={() => {
+                      setResetStep('none');
+                      setCode('');
+                    }}
+                  >
+                    Back to unlock
+                  </Button>
                 </>
               )}
               {resetStep === 'new-code' && (
                 <>
-                  <Text style={{ color: tokens.foregroundMuted }}>Choose a new six-digit app passcode.</Text>
-                  <PasscodeInput value={newCode} onChangeText={setNewCode} label="New app passcode" />
+                  <Text style={{ color: tokens.foregroundMuted }}>
+                    Choose a new six-digit app passcode.
+                  </Text>
+                  <PasscodeInput
+                    value={newCode}
+                    onChangeText={setNewCode}
+                    label="New app passcode"
+                  />
                   <Text>Confirm passcode</Text>
-                  <PasscodeInput value={confirmCode} onChangeText={setConfirmCode} label="Confirm app passcode" />
-                  <Button disabled={busy || newCode.length !== 6 || confirmCode.length !== 6} onPress={() => void finishReset()}>
+                  <PasscodeInput
+                    value={confirmCode}
+                    onChangeText={setConfirmCode}
+                    label="Confirm app passcode"
+                  />
+                  <Button
+                    disabled={busy || newCode.length !== 6 || confirmCode.length !== 6}
+                    onPress={() => void finishReset()}
+                  >
                     {busy ? 'Saving…' : 'Save new passcode'}
                   </Button>
                 </>
@@ -352,7 +425,15 @@ export function AppLockProvider({ userId, authRoute, children }: {
               )}
             </>
           )}
-          {!!scoped.error && <Typography variant="small" accessibilityLiveRegion="polite" style={{ color: tokens.destructive }}>{scoped.error}</Typography>}
+          {!!scoped.error && (
+            <Typography
+              variant="small"
+              accessibilityLiveRegion="polite"
+              style={{ color: tokens.destructive }}
+            >
+              {scoped.error}
+            </Typography>
+          )}
         </View>
       )}
     </LockContext.Provider>

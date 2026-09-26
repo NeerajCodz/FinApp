@@ -1,8 +1,12 @@
 import React from 'react';
 import { TextInput } from 'react-native';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@finapp/ui/native';
 
-export function PasscodeInput({ value, onChangeText, label }: {
+export function PasscodeInput({
+  value,
+  onChangeText,
+  label,
+}: {
   value: string;
   onChangeText: (value: string) => void;
   label: string;

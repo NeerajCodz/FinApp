@@ -87,7 +87,8 @@ export function useLocalTransactionRange<T extends LocalRecord>(
         (data) => {
           if (active && current === request)
             setState((previous) => ({
-              scope, data,
+              scope,
+              data,
               error: completed ? undefined : previous?.scope === scope ? previous.error : undefined,
               refreshing: previous?.scope === scope ? previous.refreshing : false,
               covered: completed || (previous?.scope === scope ? previous.covered : false),
@@ -213,7 +214,13 @@ export function useLocalGroupRange<T extends LocalRecord>(
   const [attempt, setAttempt] = useState(0);
   const scope = `${userId ?? ''}:${groupId ?? ''}:${startAt}:${endAt}`;
   useEffect(() => {
-    if (!userId || !groupId || !Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
+    if (
+      !userId ||
+      !groupId ||
+      !Number.isFinite(startAt) ||
+      !Number.isFinite(endAt) ||
+      startAt >= endAt
+    )
       return;
     let active = true;
     let request = 0;
@@ -254,14 +261,15 @@ export function useLocalGroupRange<T extends LocalRecord>(
           const coverage = `group:${groupId}`;
           if (await isRangeCovered(userId, coverage, startAt, endAt)) {
             completed = true;
-            if (active) setState((previous) => ({
-              scope,
-              transactions: previous?.scope === scope ? previous.transactions : undefined,
-              settlements: previous?.scope === scope ? previous.settlements : undefined,
-              error: previous?.scope === scope ? previous.error : undefined,
-              refreshing: false,
-              covered: true,
-            }));
+            if (active)
+              setState((previous) => ({
+                scope,
+                transactions: previous?.scope === scope ? previous.transactions : undefined,
+                settlements: previous?.scope === scope ? previous.settlements : undefined,
+                error: previous?.scope === scope ? previous.error : undefined,
+                refreshing: false,
+                covered: true,
+              }));
             return;
           }
           setState((previous) => ({
@@ -308,14 +316,16 @@ export function useLocalGroupRange<T extends LocalRecord>(
       }
       void download.then(
         () => {
-          if (groupRangeRequests.get(requestKey) === download) groupRangeRequests.delete(requestKey);
+          if (groupRangeRequests.get(requestKey) === download)
+            groupRangeRequests.delete(requestKey);
           if (active) {
             completed = true;
             refresh();
           }
         },
         (error: unknown) => {
-          if (groupRangeRequests.get(requestKey) === download) groupRangeRequests.delete(requestKey);
+          if (groupRangeRequests.get(requestKey) === download)
+            groupRangeRequests.delete(requestKey);
           if (active)
             setState((previous) => ({
               scope,
