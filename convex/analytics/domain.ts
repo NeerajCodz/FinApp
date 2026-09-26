@@ -47,12 +47,22 @@ function calendarFormatter(timeZone: string) {
 function calendarParts(formatter: Intl.DateTimeFormat, at: number) {
   const parts = formatter.formatToParts(at);
   const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-  return { year: value('year'), month: value('month'), date: value('day'), hour: value('hour'), minute: value('minute') };
+  return {
+    year: value('year'),
+    month: value('month'),
+    date: value('day'),
+    hour: value('hour'),
+    minute: value('minute'),
+  };
 }
 
 function shiftDate(date: CalendarDate, days: number): CalendarDate {
   const shifted = new Date(Date.UTC(date.year, date.month - 1, date.date + days));
-  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, date: shifted.getUTCDate() };
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    date: shifted.getUTCDate(),
+  };
 }
 
 function compareDates(a: CalendarDate, b: CalendarDate) {
@@ -119,11 +129,18 @@ function ranked(totals: Map<string, AnalyticsBreakdownItem>) {
   return [...totals.values()].sort((a, b) =>
     a.amountMinor === b.amountMinor
       ? a.label.localeCompare(b.label) || a.id.localeCompare(b.id)
-      : a.amountMinor > b.amountMinor ? -1 : 1,
+      : a.amountMinor > b.amountMinor
+        ? -1
+        : 1,
   );
 }
 
-function add(totals: Map<string, AnalyticsBreakdownItem>, id: string, label: string, amountMinor: bigint) {
+function add(
+  totals: Map<string, AnalyticsBreakdownItem>,
+  id: string,
+  label: string,
+  amountMinor: bigint,
+) {
   const existing = totals.get(id);
   if (existing) existing.amountMinor += amountMinor;
   else totals.set(id, { id, label, amountMinor });
@@ -150,8 +167,12 @@ export function aggregateAnalytics(
 ) {
   const formatter = calendarFormatter(timeZone);
   const start = calendarParts(formatter, startAt);
-  const count = period === 'week' ? 7 : period === 'month'
-    ? new Date(Date.UTC(start.year, start.month, 0)).getUTCDate() : 12;
+  const count =
+    period === 'week'
+      ? 7
+      : period === 'month'
+        ? new Date(Date.UTC(start.year, start.month, 0)).getUTCDate()
+        : 12;
   const labelFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     month: 'short',
@@ -159,9 +180,10 @@ export function aggregateAnalytics(
     ...(period === 'week' ? { weekday: 'short' } : {}),
   });
   const boundaries = Array.from({ length: count + 1 }, (_, index) => {
-    const date = period === 'year'
-      ? shiftDate({ year: start.year, month: start.month + index, date: 1 }, 0)
-      : shiftDate(start, index);
+    const date =
+      period === 'year'
+        ? shiftDate({ year: start.year, month: start.month + index, date: 1 }, 0)
+        : shiftDate(start, index);
     return startOfDate(date, formatter);
   });
   const buckets: AnalyticsBucket[] = Array.from({ length: count }, (_, index) => ({
@@ -180,11 +202,14 @@ export function aggregateAnalytics(
   let incomeMinor = 0n;
   for (const transaction of transactions) {
     if (
-      transaction.status !== 'posted' || transaction.deletedAt !== undefined ||
-      transaction.currency !== currency || transaction.occurredAt < startAt ||
+      transaction.status !== 'posted' ||
+      transaction.deletedAt !== undefined ||
+      transaction.currency !== currency ||
+      transaction.occurredAt < startAt ||
       transaction.occurredAt >= endAt ||
       (transaction.type !== 'expense' && transaction.type !== 'income')
-    ) continue;
+    )
+      continue;
     // Binary search exact instant boundaries; local days may be 23 or 25 hours long.
     let low = 0;
     let high = buckets.length;
@@ -205,8 +230,18 @@ export function aggregateAnalytics(
     const category = categoryById.get(transaction.categoryId ?? '');
     const account = accountById.get(transaction.accountId ?? '');
     const merchant = transaction.merchant?.trim() || UNSPECIFIED_MERCHANT;
-    add(categoryTotals, category?.id ?? UNCATEGORIZED_ID, category?.name ?? 'Uncategorized', transaction.amountMinor);
-    add(accountTotals, account?.id ?? UNASSIGNED_ACCOUNT_ID, account?.name ?? 'Unassigned account', transaction.amountMinor);
+    add(
+      categoryTotals,
+      category?.id ?? UNCATEGORIZED_ID,
+      category?.name ?? 'Uncategorized',
+      transaction.amountMinor,
+    );
+    add(
+      accountTotals,
+      account?.id ?? UNASSIGNED_ACCOUNT_ID,
+      account?.name ?? 'Unassigned account',
+      transaction.amountMinor,
+    );
     add(merchantTotals, merchant, merchant, transaction.amountMinor);
   }
   return {

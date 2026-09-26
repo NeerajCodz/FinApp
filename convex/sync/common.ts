@@ -35,7 +35,9 @@ function sanitize(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(
     Object.entries(value).flatMap(([key, item]) =>
-      /(?:identity|password|token|secret|verification|session)/i.test(key) ? [] : [[key, sanitize(item)]],
+      /(?:identity|password|token|secret|verification|session)/i.test(key)
+        ? []
+        : [[key, sanitize(item)]],
     ),
   );
 }

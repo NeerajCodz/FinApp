@@ -60,19 +60,35 @@ export const bootstrapSection = query({
         .withIndex('by_owner', (index) => index.eq('ownerId', user._id))
         .paginate(paginationOpts);
       const [accountMembers, allAccounts, transactions] = await Promise.all([
-        Promise.all(page.page.map((account) =>
-          ctx.db.query('accountMembers').withIndex('by_account', (index) => index.eq('accountId', account._id)).collect(),
-        )).then((items) => items.flat()),
-        ctx.db.query('accounts').withIndex('by_owner', (index) => index.eq('ownerId', user._id)).collect(),
-        ctx.db.query('transactions').withIndex('by_owner_occurredAt', (index) => index.eq('ownerId', user._id)).collect(),
+        Promise.all(
+          page.page.map((account) =>
+            ctx.db
+              .query('accountMembers')
+              .withIndex('by_account', (index) => index.eq('accountId', account._id))
+              .collect(),
+          ),
+        ).then((items) => items.flat()),
+        ctx.db
+          .query('accounts')
+          .withIndex('by_owner', (index) => index.eq('ownerId', user._id))
+          .collect(),
+        ctx.db
+          .query('transactions')
+          .withIndex('by_owner_occurredAt', (index) => index.eq('ownerId', user._id))
+          .collect(),
       ]);
-      const balances = new Map(allAccounts.map((account) => [account._id, account.openingBalanceMinor]));
+      const balances = new Map(
+        allAccounts.map((account) => [account._id, account.openingBalanceMinor]),
+      );
       for (const transaction of transactions) {
         if (transaction.status !== 'posted' || transaction.deletedAt !== undefined) continue;
         const source = balances.get(transaction.accountId);
         if (source !== undefined) {
           const outgoing = transaction.type === 'expense' || transaction.type === 'transfer';
-          balances.set(transaction.accountId, source + (outgoing ? -transaction.amountMinor : transaction.amountMinor));
+          balances.set(
+            transaction.accountId,
+            source + (outgoing ? -transaction.amountMinor : transaction.amountMinor),
+          );
         }
         if (transaction.type === 'transfer' && transaction.transferAccountId) {
           const destinationId = ctx.db.normalizeId('accounts', transaction.transferAccountId);
@@ -109,7 +125,8 @@ export const bootstrapSection = query({
       return { section, ...page };
     }
     if (section === 'goalContributions') {
-      const page = await ctx.db.query('goalContributions')
+      const page = await ctx.db
+        .query('goalContributions')
         .withIndex('by_owner_occurredAt', (index) => index.eq('ownerId', user._id))
         .paginate(paginationOpts);
       return { section, ...page };
@@ -122,7 +139,8 @@ export const bootstrapSection = query({
       return { section, ...page };
     }
     if (section === 'notifications') {
-      const page = await ctx.db.query('notifications')
+      const page = await ctx.db
+        .query('notifications')
         .withIndex('by_recipient_createdAt', (index) => index.eq('recipientId', user._id))
         .paginate(paginationOpts);
       return { section, ...page };
@@ -133,84 +151,182 @@ export const bootstrapSection = query({
       .paginate(paginationOpts);
     const groupIds = [...new Set(page.page.map((membership) => membership.groupId))];
     const [groups, members, expenses, settlements] = await Promise.all([
-      Promise.all(groupIds.map((groupId) => ctx.db.get(groupId))).then((items) => items.filter(Boolean)),
-      Promise.all(groupIds.map((groupId) =>
-        ctx.db.query('groupMembers').withIndex('by_group', (index) => index.eq('groupId', groupId)).collect(),
-      )).then((items) => items.flat()),
-      Promise.all(groupIds.map((groupId) =>
-        ctx.db.query('transactions').withIndex('by_group_occurredAt', (index) => index.eq('groupId', groupId)).order('desc').take(MAX_PAGE_SIZE),
-      )).then((items) => items.flat()),
-      Promise.all(groupIds.map((groupId) =>
-        ctx.db.query('settlements').withIndex('by_group', (index) => index.eq('groupId', groupId)).collect(),
-      )).then((items) => items.flat()),
+      Promise.all(groupIds.map((groupId) => ctx.db.get(groupId))).then((items) =>
+        items.filter(Boolean),
+      ),
+      Promise.all(
+        groupIds.map((groupId) =>
+          ctx.db
+            .query('groupMembers')
+            .withIndex('by_group', (index) => index.eq('groupId', groupId))
+            .collect(),
+        ),
+      ).then((items) => items.flat()),
+      Promise.all(
+        groupIds.map((groupId) =>
+          ctx.db
+            .query('transactions')
+            .withIndex('by_group_occurredAt', (index) => index.eq('groupId', groupId))
+            .order('desc')
+            .take(MAX_PAGE_SIZE),
+        ),
+      ).then((items) => items.flat()),
+      Promise.all(
+        groupIds.map((groupId) =>
+          ctx.db
+            .query('settlements')
+            .withIndex('by_group', (index) => index.eq('groupId', groupId))
+            .collect(),
+        ),
+      ).then((items) => items.flat()),
     ]);
-    const namedMembers = await Promise.all(members.map(async (member) => {
-      const person = await ctx.db.get(member.userId);
-      return { ...member, displayName: person?.displayName ?? person?.name ?? 'Finapp user',
-        username: person?.username };
-    }));
-    const invites = await Promise.all(groupIds.map((groupId) =>
-      ctx.db.query('groupInvites').withIndex('by_group', (index) => index.eq('groupId', groupId)).collect(),
-    )).then((items) => items.flat());
-    return { section, ...page, related: { groups, members: namedMembers, invites, expenses, settlements } };
+    const namedMembers = await Promise.all(
+      members.map(async (member) => {
+        const person = await ctx.db.get(member.userId);
+        return {
+          ...member,
+          displayName: person?.displayName ?? person?.name ?? 'Finapp user',
+          username: person?.username,
+        };
+      }),
+    );
+    const invites = await Promise.all(
+      groupIds.map((groupId) =>
+        ctx.db
+          .query('groupInvites')
+          .withIndex('by_group', (index) => index.eq('groupId', groupId))
+          .collect(),
+      ),
+    ).then((items) => items.flat());
+    return {
+      section,
+      ...page,
+      related: { groups, members: namedMembers, invites, expenses, settlements },
+    };
   },
 });
 
 async function relatedTransactionData(
   ctx: Parameters<typeof getOptionalUser>[0],
-  transactions: readonly { accountId: Id<'accounts'>; categoryId?: string; groupId?: string; _id: Id<'transactions'> }[],
+  transactions: readonly {
+    accountId: Id<'accounts'>;
+    categoryId?: string;
+    groupId?: string;
+    _id: Id<'transactions'>;
+  }[],
 ) {
   const accountIds = [...new Set(transactions.map((transaction) => transaction.accountId))];
-  const categoryIds = [...new Set(transactions.flatMap((transaction) => {
-    const id = transaction.categoryId ? ctx.db.normalizeId('categories', transaction.categoryId) : null;
-    return id ? [id] : [];
-  }))];
-  const groupIds = [...new Set(transactions.flatMap((transaction) => {
-    const id = transaction.groupId ? ctx.db.normalizeId('groups', transaction.groupId) : null;
-    return id ? [id] : [];
-  }))];
+  const categoryIds = [
+    ...new Set(
+      transactions.flatMap((transaction) => {
+        const id = transaction.categoryId
+          ? ctx.db.normalizeId('categories', transaction.categoryId)
+          : null;
+        return id ? [id] : [];
+      }),
+    ),
+  ];
+  const groupIds = [
+    ...new Set(
+      transactions.flatMap((transaction) => {
+        const id = transaction.groupId ? ctx.db.normalizeId('groups', transaction.groupId) : null;
+        return id ? [id] : [];
+      }),
+    ),
+  ];
   const [accounts, categories, groups, payers, participants, tags, receipts] = await Promise.all([
-    Promise.all(accountIds.map((id) => ctx.db.get(id))).then((items) => items.flatMap((item) => item ? [item] : [])),
-    Promise.all(categoryIds.map((id) => ctx.db.get(id))).then((items) => items.flatMap((item) => item ? [item] : [])),
-    Promise.all(groupIds.map((id) => ctx.db.get(id))).then((items) => items.flatMap((item) => item ? [item] : [])),
-    Promise.all(transactions.map((transaction) =>
-      ctx.db.query('expensePayers').withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id)).collect(),
-    )).then((items) => items.flat()),
-    Promise.all(transactions.map((transaction) =>
-      ctx.db.query('expenseParticipants').withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id)).collect(),
-    )).then((items) => items.flat()),
-    Promise.all(transactions.map((transaction) =>
-      ctx.db.query('transactionTags').withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id)).collect(),
-    )).then((items) => items.flat()),
-    Promise.all(transactions.map((transaction) =>
-      ctx.db.query('receipts').withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id)).collect(),
-    )).then((items) => items.flat()),
+    Promise.all(accountIds.map((id) => ctx.db.get(id))).then((items) =>
+      items.flatMap((item) => (item ? [item] : [])),
+    ),
+    Promise.all(categoryIds.map((id) => ctx.db.get(id))).then((items) =>
+      items.flatMap((item) => (item ? [item] : [])),
+    ),
+    Promise.all(groupIds.map((id) => ctx.db.get(id))).then((items) =>
+      items.flatMap((item) => (item ? [item] : [])),
+    ),
+    Promise.all(
+      transactions.map((transaction) =>
+        ctx.db
+          .query('expensePayers')
+          .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+          .collect(),
+      ),
+    ).then((items) => items.flat()),
+    Promise.all(
+      transactions.map((transaction) =>
+        ctx.db
+          .query('expenseParticipants')
+          .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+          .collect(),
+      ),
+    ).then((items) => items.flat()),
+    Promise.all(
+      transactions.map((transaction) =>
+        ctx.db
+          .query('transactionTags')
+          .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+          .collect(),
+      ),
+    ).then((items) => items.flat()),
+    Promise.all(
+      transactions.map((transaction) =>
+        ctx.db
+          .query('receipts')
+          .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+          .collect(),
+      ),
+    ).then((items) => items.flat()),
   ]);
   const personIds = [...new Set([...payers, ...participants].map((entry) => entry.userId))];
-  const people = await Promise.all(personIds.map(async (id) => {
-    const person = await ctx.db.get(id);
-    return person
-      ? { _id: person._id, displayName: person.displayName, username: person.username, avatarStorageId: person.avatarStorageId }
-      : null;
-  })).then((items) => items.filter(Boolean));
+  const people = await Promise.all(
+    personIds.map(async (id) => {
+      const person = await ctx.db.get(id);
+      return person
+        ? {
+            _id: person._id,
+            displayName: person.displayName,
+            username: person.username,
+            avatarStorageId: person.avatarStorageId,
+          }
+        : null;
+    }),
+  ).then((items) => items.filter(Boolean));
   const publicAccounts = accounts.flatMap((account) =>
     account
-      ? [{
-          _id: account._id,
-          name: account.name,
-          ownerId: account.ownerId,
-          type: account.type,
-          customType: account.customType,
-          currency: account.currency,
-        }]
+      ? [
+          {
+            _id: account._id,
+            name: account.name,
+            ownerId: account.ownerId,
+            type: account.type,
+            customType: account.customType,
+            currency: account.currency,
+          },
+        ]
       : [],
   );
-  return { accounts: publicAccounts, categories, groups, payers, participants, tags, receipts, people };
+  return {
+    accounts: publicAccounts,
+    categories,
+    groups,
+    payers,
+    participants,
+    tags,
+    receipts,
+    people,
+  };
 }
 
 export const bootstrapTransactions = query({
   args: {
-    windowDays: v.union(v.literal(7), v.literal(30), v.literal(90), v.literal(180), v.literal(365), v.literal(-1)),
+    windowDays: v.union(
+      v.literal(7),
+      v.literal(30),
+      v.literal(90),
+      v.literal(180),
+      v.literal(365),
+      v.literal(-1),
+    ),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, { windowDays, paginationOpts }) => {
@@ -263,12 +379,14 @@ export const groupRange = query({
       .unique();
     if (!membership) throw new Error('INSUFFICIENT_PERMISSION');
     const [transactions, settlements] = await Promise.all([
-      ctx.db.query('transactions')
+      ctx.db
+        .query('transactions')
         .withIndex('by_group_occurredAt', (index) =>
           index.eq('groupId', groupId).gte('occurredAt', startAt).lt('occurredAt', endAt),
         )
         .paginate(paginationOpts),
-      ctx.db.query('settlements')
+      ctx.db
+        .query('settlements')
         .withIndex('by_group_occurredAt', (index) =>
           index.eq('groupId', groupId).gte('occurredAt', startAt).lt('occurredAt', endAt),
         )
@@ -279,23 +397,33 @@ export const groupRange = query({
       .query('groupMembers')
       .withIndex('by_group', (index) => index.eq('groupId', groupId))
       .collect();
-    const groupMembers = await Promise.all(memberships.map(async (member) => {
-      const person = await ctx.db.get(member.userId);
-      return {
-        ...member,
-        displayName: person?.displayName ?? 'Finapp user',
-        username: person?.username,
-      };
-    }));
+    const groupMembers = await Promise.all(
+      memberships.map(async (member) => {
+        const person = await ctx.db.get(member.userId);
+        return {
+          ...member,
+          displayName: person?.displayName ?? 'Finapp user',
+          username: person?.username,
+        };
+      }),
+    );
     const [group, payersAndParticipants] = await Promise.all([
       ctx.db.get(groupId),
-      Promise.all(transactions.page.map(async (transaction) => {
-        const [payers, participants] = await Promise.all([
-          ctx.db.query('expensePayers').withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id)).collect(),
-          ctx.db.query('expenseParticipants').withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id)).collect(),
-        ]);
-        return { transactionId: transaction._id, payers, participants };
-      })),
+      Promise.all(
+        transactions.page.map(async (transaction) => {
+          const [payers, participants] = await Promise.all([
+            ctx.db
+              .query('expensePayers')
+              .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+              .collect(),
+            ctx.db
+              .query('expenseParticipants')
+              .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+              .collect(),
+          ]);
+          return { transactionId: transaction._id, payers, participants };
+        }),
+      ),
     ]);
     return { group, groupMembers, transactions, settlements, related, payersAndParticipants };
   },
@@ -350,19 +478,24 @@ export const settlementRange = query({
     const user = await authenticatedUser(ctx);
     assertRange(startAt, endAt);
     assertPageSize(paginationOpts.numItems);
-    const page = direction === 'from'
-      ? await ctx.db.query('settlements')
-          .withIndex('by_from_user_occurredAt', (index) =>
-            index.eq('fromUserId', user._id).gte('occurredAt', startAt).lt('occurredAt', endAt),
-          )
-          .paginate(paginationOpts)
-      : await ctx.db.query('settlements')
-          .withIndex('by_to_user_occurredAt', (index) =>
-            index.eq('toUserId', user._id).gte('occurredAt', startAt).lt('occurredAt', endAt),
-          )
-          .paginate(paginationOpts);
+    const page =
+      direction === 'from'
+        ? await ctx.db
+            .query('settlements')
+            .withIndex('by_from_user_occurredAt', (index) =>
+              index.eq('fromUserId', user._id).gte('occurredAt', startAt).lt('occurredAt', endAt),
+            )
+            .paginate(paginationOpts)
+        : await ctx.db
+            .query('settlements')
+            .withIndex('by_to_user_occurredAt', (index) =>
+              index.eq('toUserId', user._id).gte('occurredAt', startAt).lt('occurredAt', endAt),
+            )
+            .paginate(paginationOpts);
     const groupIds = [...new Set(page.page.map((settlement) => settlement.groupId))];
-    const groups = await Promise.all(groupIds.map((id) => ctx.db.get(id))).then((items) => items.filter(Boolean));
+    const groups = await Promise.all(groupIds.map((id) => ctx.db.get(id))).then((items) =>
+      items.filter(Boolean),
+    );
     return { ...page, groups };
   },
 });
@@ -373,13 +506,15 @@ export const contributionRange = query({
     const user = await authenticatedUser(ctx);
     assertRange(startAt, endAt);
     assertPageSize(paginationOpts.numItems);
-    const page = await ctx.db.query('goalContributions')
+    const page = await ctx.db
+      .query('goalContributions')
       .withIndex('by_owner_occurredAt', (index) =>
         index.eq('ownerId', user._id).gte('occurredAt', startAt).lt('occurredAt', endAt),
       )
       .paginate(paginationOpts);
-    const goals = await Promise.all([...new Set(page.page.map((item) => item.goalId))].map((id) => ctx.db.get(id)))
-      .then((items) => items.filter(Boolean));
+    const goals = await Promise.all(
+      [...new Set(page.page.map((item) => item.goalId))].map((id) => ctx.db.get(id)),
+    ).then((items) => items.filter(Boolean));
     return { ...page, goals };
   },
 });
@@ -390,7 +525,8 @@ export const notificationRange = query({
     const user = await authenticatedUser(ctx);
     assertRange(startAt, endAt);
     assertPageSize(paginationOpts.numItems);
-    return ctx.db.query('notifications')
+    return ctx.db
+      .query('notifications')
       .withIndex('by_recipient_createdAt', (index) =>
         index.eq('recipientId', user._id).gte('createdAt', startAt).lt('createdAt', endAt),
       )
