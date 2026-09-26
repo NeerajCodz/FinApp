@@ -4,20 +4,26 @@
   "private": true,
   "packageManager": "bun@1.3.14",
   "workspaces": [
-    "app/mobile"
+    "apps/mobile",
+    "apps/web",
+    "packages/ui"
   ],
   "scripts": {
     "dev": "bun run compose:up",
+    "dev:web": "bun run --cwd apps/web dev",
+    "build:web": "bun run --cwd apps/web build",
     "dev:mobile": "docker compose up mobileexpo",
     "dev:convex": "docker compose up convex convex-dashboard",
     "compose:up": "docker compose up --build",
     "compose:down": "docker compose down",
     "compose:config": "docker compose config",
-    "typecheck": "bun run --cwd app/mobile typecheck",
-    "test": "bun run --cwd app/mobile test",
-    "lint": "bun run --cwd app/mobile lint",
+    "typecheck:mobile": "bun run --cwd apps/mobile typecheck",
+    "typecheck:web": "bun run --cwd apps/web typecheck",
+    "typecheck": "bun run typecheck:mobile && bun run typecheck:web",
+    "test": "bun run --cwd apps/mobile test",
+    "lint": "bun run --cwd apps/mobile lint && bun run --cwd apps/web lint",
     "format:check": "bunx prettier --check .",
-    "expo:doctor": "bun run --cwd app/mobile expo:doctor",
+    "expo:doctor": "bun run --cwd apps/mobile expo:doctor",
     "validate": "bun run typecheck && bun run test && bun run lint && bun run format:check && bun run expo:doctor"
   },
   "devDependencies": {

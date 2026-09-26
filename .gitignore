@@ -1,10 +1,13 @@
 node_modules/
-app/mobile/node_modules/
-app/mobile/.expo/
-app/mobile/dist/
+apps/mobile/node_modules/
+apps/mobile/.expo/
+apps/mobile/dist/
 .expo/
 .env
 .env.*
 !.env.example
 *.key
 .tmp-*
+apps/web/.next/
+apps/web/out/
+apps/web/node_modules/
