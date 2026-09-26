@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { allocateSplit, parseMinor } from '../../convex/shared/money';
 import { composeDashboard } from '../../convex/dashboard/domain';
 import { notificationRoute } from '../../convex/notifications/domain';
-import { markConflict } from '../../app/mobile/local/outbox/queue';
+import { markConflict } from '../../apps/mobile/local/outbox/queue';
 
 describe('Finapp critical flow contracts', () => {
   it('keeps amount parsing, split rounding, and dashboard derivation consistent', () => {

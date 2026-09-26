@@ -46,21 +46,35 @@ describe('Convex public runtime functions', () => {
 
   it('persists a custom account type and rejects an unnamed custom type', async () => {
     const t = convexTest(schema, modules);
-    const userId = await t.run((ctx) => ctx.db.insert('users', {
-      email: 'custom-type@example.com', name: 'Custom Type User',
-    }));
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        email: 'custom-type@example.com',
+        name: 'Custom Type User',
+      }),
+    );
     const authenticated = t.withIdentity({
-      subject: `${userId}|session-id`, email: 'custom-type@example.com',
+      subject: `${userId}|session-id`,
+      email: 'custom-type@example.com',
     });
-    const draft = { name: 'Brokerage', type: 'other' as const, currency: 'INR',
-      openingBalanceMinor: 0n, isIncludedInTotal: true };
-    await expect(authenticated.mutation(api.accounts.mutations.create,
-      { ...draft, customType: '  Investment  ' })).resolves.toBeTruthy();
+    const draft = {
+      name: 'Brokerage',
+      type: 'other' as const,
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+      isIncludedInTotal: true,
+    };
+    await expect(
+      authenticated.mutation(api.accounts.mutations.create, {
+        ...draft,
+        customType: '  Investment  ',
+      }),
+    ).resolves.toBeTruthy();
     expect(await authenticated.query(api.accounts.queries.list, {})).toMatchObject([
       { name: 'Brokerage', type: 'other', customType: 'Investment' },
     ]);
-    await expect(authenticated.mutation(api.accounts.mutations.create,
-      { ...draft, customType: '   ' })).rejects.toThrow('INVALID_ACCOUNT');
+    await expect(
+      authenticated.mutation(api.accounts.mutations.create, { ...draft, customType: '   ' }),
+    ).rejects.toThrow('INVALID_ACCOUNT');
   });
 
   it('resolves usernames through a non-public login lookup', async () => {
@@ -169,11 +183,17 @@ describe('Convex public runtime functions', () => {
 
   it('requires verified identity and a fresh single-use OTP to reset app lock', async () => {
     const t = convexTest(schema, modules);
-    const userId = await t.run((ctx) => ctx.db.insert('users', {
-      email: 'lock@example.com', emailVerificationTime: 1, name: 'Lock User',
-    }));
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        email: 'lock@example.com',
+        emailVerificationTime: 1,
+        name: 'Lock User',
+      }),
+    );
     const authenticated = t.withIdentity({
-      subject: `${userId}|session-id`, email: 'lock@example.com', name: 'Lock User',
+      subject: `${userId}|session-id`,
+      email: 'lock@example.com',
+      name: 'Lock User',
     });
     const previousKey = process.env.AUTH_RESEND_KEY;
     const previousFrom = process.env.AUTH_EMAIL_FROM;
@@ -185,46 +205,73 @@ describe('Convex public runtime functions', () => {
       await expect(t.action(api.auth.requestAppLockReset, {})).rejects.toThrow();
       const { challengeId } = await authenticated.action(api.auth.requestAppLockReset, {});
       expect(JSON.parse(email.mock.calls[0]![1]!.body as string).to).toEqual(['lock@example.com']);
-      const code = (JSON.parse(email.mock.calls[0]![1]!.body as string).text as string)
-        .match(/\b(\d{6})\b/)?.[1];
+      const code = (JSON.parse(email.mock.calls[0]![1]!.body as string).text as string).match(
+        /\b(\d{6})\b/,
+      )?.[1];
       expect(code).toMatch(/^\d{6}$/);
       if (!code) throw new Error('Reset email did not contain a code.');
-      expect(await authenticated.action(api.auth.verifyAppLockReset,
-        { challengeId, code: code === '000000' ? '111111' : '000000' })).toMatchObject({ verified: false });
-      expect(await authenticated.action(api.auth.verifyAppLockReset, { challengeId, code }))
-        .toMatchObject({ verified: true, userId });
-      expect(await authenticated.action(api.auth.verifyAppLockReset, { challengeId, code }))
-        .toMatchObject({ verified: false });
-      expect(await t.run((ctx) => ctx.db.query('notifications')
-        .withIndex('by_recipient_createdAt', (query) => query.eq('recipientId', userId)).collect()))
-        .toMatchObject([{ type: 'security', title: 'Email recovery code verified' }]);
+      expect(
+        await authenticated.action(api.auth.verifyAppLockReset, {
+          challengeId,
+          code: code === '000000' ? '111111' : '000000',
+        }),
+      ).toMatchObject({ verified: false });
+      expect(
+        await authenticated.action(api.auth.verifyAppLockReset, { challengeId, code }),
+      ).toMatchObject({ verified: true, userId });
+      expect(
+        await authenticated.action(api.auth.verifyAppLockReset, { challengeId, code }),
+      ).toMatchObject({ verified: false });
+      expect(
+        await t.run((ctx) =>
+          ctx.db
+            .query('notifications')
+            .withIndex('by_recipient_createdAt', (query) => query.eq('recipientId', userId))
+            .collect(),
+        ),
+      ).toMatchObject([{ type: 'security', title: 'Email recovery code verified' }]);
       await t.run(async (ctx) => {
-        const challenge = await ctx.db.query('appLockResetChallenges')
-          .withIndex('by_user', (query) => query.eq('userId', userId)).unique();
+        const challenge = await ctx.db
+          .query('appLockResetChallenges')
+          .withIndex('by_user', (query) => query.eq('userId', userId))
+          .unique();
         if (!challenge) throw new Error('Missing challenge.');
         await ctx.db.patch(challenge._id, { createdAt: Date.now() - 31_000 });
       });
       const expired = await authenticated.action(api.auth.requestAppLockReset, {});
-      const expiredCode = (JSON.parse(email.mock.calls[1]![1]!.body as string).text as string)
-        .match(/\b(\d{6})\b/)?.[1];
+      const expiredCode = (
+        JSON.parse(email.mock.calls[1]![1]!.body as string).text as string
+      ).match(/\b(\d{6})\b/)?.[1];
       if (!expiredCode) throw new Error('Second reset email did not contain a code.');
       await t.run(async (ctx) => {
-        const challenge = await ctx.db.query('appLockResetChallenges')
-          .withIndex('by_user', (query) => query.eq('userId', userId)).unique();
+        const challenge = await ctx.db
+          .query('appLockResetChallenges')
+          .withIndex('by_user', (query) => query.eq('userId', userId))
+          .unique();
         if (!challenge) throw new Error('Missing challenge.');
         await ctx.db.patch(challenge._id, { expiresAt: Date.now() - 1 });
       });
-      expect(await authenticated.action(api.auth.verifyAppLockReset,
-        { challengeId: expired.challengeId, code: expiredCode })).toMatchObject({ verified: false });
-      expect(await t.run((ctx) => ctx.db.query('notifications')
-        .withIndex('by_recipient_createdAt', (query) => query.eq('recipientId', userId)).collect()))
-        .toHaveLength(1);
+      expect(
+        await authenticated.action(api.auth.verifyAppLockReset, {
+          challengeId: expired.challengeId,
+          code: expiredCode,
+        }),
+      ).toMatchObject({ verified: false });
+      expect(
+        await t.run((ctx) =>
+          ctx.db
+            .query('notifications')
+            .withIndex('by_recipient_createdAt', (query) => query.eq('recipientId', userId))
+            .collect(),
+        ),
+      ).toHaveLength(1);
 
       await t.run(async (ctx) => {
         await ctx.db.patch(userId, { emailVerificationTime: undefined });
       });
-      await expect(authenticated.action(api.auth.requestAppLockReset, {}))
-        .rejects.toThrow('verified email');
+      await expect(authenticated.action(api.auth.requestAppLockReset, {})).rejects.toThrow(
+        'verified email',
+      );
     } finally {
       vi.unstubAllGlobals();
       if (previousKey === undefined) delete process.env.AUTH_RESEND_KEY;
@@ -832,18 +879,29 @@ describe('Convex public runtime functions', () => {
       await authenticated.query(api.groups.queries.personTimeline, { username: '@rahul_42' }),
     ).toMatchObject([{ id: transactionId, title: 'Hotel', amountMinor: 240000n }]);
     const settlement = {
-      groupId, fromUserId: memberId, toUserId: ownerId, accountId,
-      amountMinor: 60000n, currency: 'INR', occurredAt: Date.UTC(2026, 7, 28),
+      groupId,
+      fromUserId: memberId,
+      toUserId: ownerId,
+      accountId,
+      amountMinor: 60000n,
+      currency: 'INR',
+      occurredAt: Date.UTC(2026, 7, 28),
       clientMutationId: 'group-payment-1',
     };
     const settlementId = await authenticated.mutation(api.settlements.mutations.create, settlement);
-    expect(await authenticated.mutation(api.settlements.mutations.create, settlement)).toBe(settlementId);
+    expect(await authenticated.mutation(api.settlements.mutations.create, settlement)).toBe(
+      settlementId,
+    );
     expect(await t.run((ctx) => ctx.db.query('settlements').collect())).toMatchObject([
       { _id: settlementId, fromUserId: memberId, toUserId: ownerId, amountMinor: 60000n },
     ]);
-    await expect(authenticated.mutation(api.settlements.mutations.create, {
-      ...settlement, clientMutationId: 'group-payment-2', amountMinor: 60001n,
-    })).rejects.toThrow('SETTLEMENT_EXCEEDS_BALANCE');
+    await expect(
+      authenticated.mutation(api.settlements.mutations.create, {
+        ...settlement,
+        clientMutationId: 'group-payment-2',
+        amountMinor: 60001n,
+      }),
+    ).rejects.toThrow('SETTLEMENT_EXCEEDS_BALANCE');
   });
 
   it('rejects mutation attempts without an authenticated identity', async () => {
