@@ -26,7 +26,12 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'budget.create');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'budget.create',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('budgets', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
@@ -89,7 +94,12 @@ export const archive = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'budget.archive');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'budget.archive',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('budgets', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
