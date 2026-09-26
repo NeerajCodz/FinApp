@@ -4,22 +4,32 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { ArrowRight, Bell, Download, LogOut, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowRight, Bell, Download, Fingerprint, LogOut, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button, Card, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { clearLocalData, type LocalRecord } from '@/lib/offline/repository';
-import { accountsCsv, downloadCsv, transactionsCsv } from '@/lib/browser/export';
+import { downloadFinanceBackup } from '@/lib/browser/export';
+import {
+  disableWebAuthnLock,
+  enableWebAuthnLock,
+  hasWebAuthnLock,
+  isWebAuthnLockAvailable,
+} from '@/lib/security/webauthn-lock';
 
 type Account = LocalRecord;
 type Transaction = LocalRecord;
 type Category = LocalRecord;
+type Budget = LocalRecord;
+type Goal = LocalRecord;
 
 export default function SettingsPage() {
   const { userId, status } = useBrowserSync();
   const { records: accounts } = useLocalRecords<Account>('account');
   const { records: transactions } = useLocalRecords<Transaction>('transaction');
   const { records: categories } = useLocalRecords<Category>('category');
+  const { records: budgets } = useLocalRecords<Budget>('budget');
+  const { records: goals } = useLocalRecords<Goal>('goal');
   const { signOut } = useAuthActions();
   const router = useRouter();
   const [permission, setPermission] = React.useState<NotificationPermission | 'unsupported'>(
@@ -27,19 +37,46 @@ export default function SettingsPage() {
   );
   const [message, setMessage] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [lockEnabled, setLockEnabled] = React.useState(false);
+  const [lockAvailable, setLockAvailable] = React.useState(false);
 
   React.useEffect(() => {
     setPermission('Notification' in window ? Notification.permission : 'unsupported');
-  }, []);
+    void isWebAuthnLockAvailable().then(setLockAvailable);
+    try {
+      setLockEnabled(Boolean(userId && hasWebAuthnLock(userId)));
+    } catch {
+      setMessage('Browser storage is unavailable; the passkey lock cannot be changed.');
+    }
+  }, [userId]);
 
   const exportData = () => {
-    const stamp = new Date().toISOString().slice(0, 10);
-    downloadCsv(`finapp-accounts-${stamp}.csv`, accountsCsv(accounts));
-    downloadCsv(
-      `finapp-transactions-${stamp}.csv`,
-      transactionsCsv(transactions, accounts, categories),
+    const stamp = new Date();
+    downloadFinanceBackup({ accounts, categories, transactions, budgets, goals }, stamp);
+    setMessage(
+      `Five CSV tables were prepared in a ZIP: ${accounts.length} accounts, ${categories.length} categories, ${transactions.length} transactions, ${budgets.length} budgets, ${goals.length} goals.`,
     );
-    setMessage('Two CSV files were prepared in your browser downloads.');
+  };
+
+  const changeBrowserLock = async () => {
+    if (!userId || busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      if (lockEnabled) {
+        disableWebAuthnLock(userId);
+        setLockEnabled(false);
+        setMessage('The passkey screen lock was removed from this browser.');
+      } else {
+        await enableWebAuthnLock(userId);
+        setLockEnabled(true);
+        setMessage('A passkey screen lock is enabled for this browser and account.');
+      }
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Could not update the passkey lock.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const enableNotifications = async () => {
@@ -122,18 +159,26 @@ export default function SettingsPage() {
             action={<Download size={17} aria-hidden="true" />}
           />
           <p>
-            Download accounts and transactions as CSV. Amounts are in minor units, and the export
-            runs only when you request it.
+            Download all five financial tables as CSV files in one ZIP. Record JSON columns retain
+            fields not shown individually; amounts remain in minor units. Export runs only when you
+            request it.
           </p>
           <p className="finance-settings-count">
-            {accounts.length} accounts · {transactions.length} transactions available in this
-            browser
+            {accounts.length} accounts · {categories.length} categories · {transactions.length}{' '}
+            transactions · {budgets.length} budgets · {goals.length} goals in this browser
           </p>
           <Button
             onPress={exportData}
-            disabled={accounts.length === 0 && transactions.length === 0}
+            disabled={
+              accounts.length +
+                categories.length +
+                transactions.length +
+                budgets.length +
+                goals.length ===
+              0
+            }
           >
-            Export CSVs
+            Export five-table ZIP
           </Button>
         </Card>
         <Card className="finance-settings-card">
@@ -152,6 +197,34 @@ export default function SettingsPage() {
           >
             Enable notifications
           </Button>
+        </Card>
+        <Card className="finance-settings-card">
+          <SectionHeader
+            title="Passkey screen lock"
+            action={<Fingerprint size={17} aria-hidden="true" />}
+          />
+          <p>
+            {lockEnabled
+              ? 'A platform authenticator is required before this browser session opens.'
+              : 'Require a platform passkey before opening this browser session.'}
+          </p>
+          <p>
+            This is a screen-level gate, not encryption. Browser-profile access can still expose
+            offline data; remove it separately below.
+          </p>
+          <Button
+            variant={lockEnabled ? 'secondary' : 'primary'}
+            onPress={changeBrowserLock}
+            disabled={!userId || !lockAvailable || busy}
+            aria-busy={busy}
+          >
+            {lockEnabled ? 'Remove passkey lock' : 'Enable passkey lock'}
+          </Button>
+          {!lockAvailable && (
+            <p className="finance-settings-count">
+              A supported platform authenticator in a secure browser context is required.
+            </p>
+          )}
         </Card>
         <Card className="finance-settings-card">
           <SectionHeader

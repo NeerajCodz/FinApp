@@ -25,8 +25,9 @@ export default function PrivacyPage() {
           </p>
           <p>
             The browser copy is not separately encrypted by Finapp. Anyone who can use your browser
-            profile may be able to access it. Use a trusted, protected device and sign out when
-            appropriate.
+            profile may be able to access it. The optional passkey screen lock only gates the
+            interface; it does not encrypt data or protect against browser-profile or developer
+            tools access.
           </p>
         </section>
         <section>
@@ -44,9 +45,10 @@ export default function PrivacyPage() {
         <section>
           <h2>Your controls</h2>
           <p>
-            Settings lets you export locally available accounts and transactions as CSV, request
-            browser notifications, remove this browser’s offline copy, or sign out. Exports are
-            created only after you request them.
+            Settings lets you export locally available accounts, categories, transactions, budgets,
+            and goals as five CSV files in one ZIP, request browser notifications, manage the
+            optional passkey screen lock, remove this browser’s offline copy, or sign out. Exports
+            are created only after you request them.
           </p>
           <Link className="privacy-settings-link" href="/settings">
             Open settings
@@ -55,9 +57,11 @@ export default function PrivacyPage() {
         <section>
           <h2>Contact and third-party services</h2>
           <p>
-            Finapp does not import contacts. Authentication and sync depend on the configured Convex
-            deployment and its enabled authentication providers; their operational handling is
-            governed by their deployment configuration.
+            The browser app does not read contacts. On mobile, the group flow uses only the person
+            you explicitly select in the operating system’s contact picker; it does not scan the
+            address book. Authentication and sync depend on the configured Convex deployment and its
+            enabled authentication providers; their operational handling is governed by that
+            deployment.
           </p>
         </section>
         <Link className="privacy-back-link" href="/">
