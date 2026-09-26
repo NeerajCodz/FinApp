@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { ArrowRight, Bell, Download, Fingerprint, LogOut, ShieldCheck, Trash2 } from 'lucide-react';
-import { Button, Card, SectionHeader } from '@finapp/ui/web';
+import { Button, Card, Input, Label, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { clearLocalData, type LocalRecord } from '@/lib/offline/repository';
@@ -13,23 +13,25 @@ import { downloadFinanceBackup } from '@/lib/browser/export';
 import {
   disableWebAuthnLock,
   enableWebAuthnLock,
-  hasWebAuthnLock,
+  getPasscodeLockStatus,
+  hasBrowserLock,
   isWebAuthnLockAvailable,
+  setPasscodeLock,
 } from '@/lib/security/webauthn-lock';
 
 type Account = LocalRecord;
 type Transaction = LocalRecord;
 type Category = LocalRecord;
-type Budget = LocalRecord;
-type Goal = LocalRecord;
+type Group = LocalRecord;
+type Settlement = LocalRecord;
 
 export default function SettingsPage() {
   const { userId, status } = useBrowserSync();
   const { records: accounts } = useLocalRecords<Account>('account');
   const { records: transactions } = useLocalRecords<Transaction>('transaction');
   const { records: categories } = useLocalRecords<Category>('category');
-  const { records: budgets } = useLocalRecords<Budget>('budget');
-  const { records: goals } = useLocalRecords<Goal>('goal');
+  const { records: groups } = useLocalRecords<Group>('group');
+  const { records: settlements } = useLocalRecords<Settlement>('settlement');
   const { signOut } = useAuthActions();
   const router = useRouter();
   const [permission, setPermission] = React.useState<NotificationPermission | 'unsupported'>(
@@ -39,22 +41,26 @@ export default function SettingsPage() {
   const [busy, setBusy] = React.useState(false);
   const [lockEnabled, setLockEnabled] = React.useState(false);
   const [lockAvailable, setLockAvailable] = React.useState(false);
+  const [passcodeEnabled, setPasscodeEnabled] = React.useState(false);
+  const [passcode, setPasscode] = React.useState('');
+  const [passcodeConfirm, setPasscodeConfirm] = React.useState('');
 
   React.useEffect(() => {
     setPermission('Notification' in window ? Notification.permission : 'unsupported');
     void isWebAuthnLockAvailable().then(setLockAvailable);
     try {
-      setLockEnabled(Boolean(userId && hasWebAuthnLock(userId)));
+      setLockEnabled(Boolean(userId && hasBrowserLock(userId)));
+      setPasscodeEnabled(Boolean(userId && getPasscodeLockStatus(userId).configured));
     } catch {
-      setMessage('Browser storage is unavailable; the passkey lock cannot be changed.');
+      setMessage('Browser storage is unavailable; the local lock cannot be changed.');
     }
   }, [userId]);
 
   const exportData = () => {
     const stamp = new Date();
-    downloadFinanceBackup({ accounts, categories, transactions, budgets, goals }, stamp);
+    downloadFinanceBackup({ accounts, transactions, categories, groups, settlements }, stamp);
     setMessage(
-      `Five CSV tables were prepared in a ZIP: ${accounts.length} accounts, ${categories.length} categories, ${transactions.length} transactions, ${budgets.length} budgets, ${goals.length} goals.`,
+      `Five CSV tables were prepared in a ZIP: ${accounts.length} accounts, ${transactions.length} transactions, ${categories.length} categories, ${groups.length} groups, ${settlements.length} settlements.`,
     );
   };
 
@@ -66,7 +72,8 @@ export default function SettingsPage() {
       if (lockEnabled) {
         disableWebAuthnLock(userId);
         setLockEnabled(false);
-        setMessage('The passkey screen lock was removed from this browser.');
+        setPasscodeEnabled(false);
+        setMessage('The browser lock was removed from this browser.');
       } else {
         await enableWebAuthnLock(userId);
         setLockEnabled(true);
@@ -78,6 +85,29 @@ export default function SettingsPage() {
       setBusy(false);
     }
   };
+
+  async function savePasscode(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!userId || busy || !/^\d{6}$/.test(passcode)) return;
+    if (passcode !== passcodeConfirm) {
+      setMessage('The passcodes do not match.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      await setPasscodeLock(userId, passcode);
+      setLockEnabled(true);
+      setPasscodeEnabled(true);
+      setPasscode('');
+      setPasscodeConfirm('');
+      setMessage('The six-digit browser passcode is enabled. It does not encrypt offline data.');
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Could not set the browser passcode.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const enableNotifications = async () => {
     if (!('Notification' in window)) {
@@ -94,10 +124,15 @@ export default function SettingsPage() {
   };
 
   const removeLocalCopy = async () => {
+    const unsynced = status.pending + status.syncing + status.failed + status.conflicts;
+    const pendingWarning =
+      unsynced > 0
+        ? ` This will permanently remove ${unsynced} queued, failed, or conflicted changes that may not have reached your account.`
+        : '';
     if (
       !userId ||
       !window.confirm(
-        'Remove this user’s offline copy from this browser? Data on your synced account is not deleted.',
+        `Remove this user's offline copy from this browser? Synced account data will remain on your account.${pendingWarning}`,
       )
     )
       return;
@@ -152,6 +187,53 @@ export default function SettingsPage() {
           </p>
         </div>
       </header>
+      <section aria-label="Settings subsections" style={{ display: 'grid', gap: 12 }}>
+        <h2 style={{ margin: 0, fontSize: '1rem' }}>More settings</h2>
+        <nav className="finance-settings-grid" aria-label="Settings subsections">
+          {[
+            {
+              label: 'Appearance',
+              detail: 'Choose dark, light, or system theme.',
+              href: '/settings/appearance',
+            },
+            {
+              label: 'Currency',
+              detail: 'Set the default currency for new records.',
+              href: '/settings/currency',
+            },
+            {
+              label: 'Security',
+              detail: 'Review this browser’s passkey screen lock.',
+              href: '/settings/security',
+            },
+            {
+              label: 'Local sync',
+              detail: 'Retry changes and resolve saved conflicts.',
+              href: '/settings/sync',
+            },
+            {
+              label: 'Privacy and data',
+              detail: 'Review browser storage and export controls.',
+              href: '/settings/privacy',
+            },
+            {
+              label: 'Notification preferences',
+              detail: 'Choose which updates reach your inbox.',
+              href: '/settings/notifications',
+            },
+          ].map((item) => (
+            <Card key={item.href} className="finance-settings-card">
+              <h3 style={{ margin: 0, color: 'var(--finance-text)', fontSize: '0.95rem' }}>
+                {item.label}
+              </h3>
+              <p>{item.detail}</p>
+              <Link className="finance-inline-link" href={item.href}>
+                Open {item.label} <ArrowRight size={15} aria-hidden="true" />
+              </Link>
+            </Card>
+          ))}
+        </nav>
+      </section>
       <div className="finance-settings-grid">
         <Card className="finance-settings-card">
           <SectionHeader
@@ -159,22 +241,22 @@ export default function SettingsPage() {
             action={<Download size={17} aria-hidden="true" />}
           />
           <p>
-            Download all five financial tables as CSV files in one ZIP. Record JSON columns retain
-            fields not shown individually; amounts remain in minor units. Export runs only when you
-            request it.
+            Download locally available accounts, transactions, categories, groups, and settlements
+            as one ZIP containing five CSV files. Export uses the canonical Finapp CSV format and
+            runs only when you request it.
           </p>
           <p className="finance-settings-count">
-            {accounts.length} accounts · {categories.length} categories · {transactions.length}{' '}
-            transactions · {budgets.length} budgets · {goals.length} goals in this browser
+            {accounts.length} accounts · {transactions.length} transactions · {categories.length}{' '}
+            categories · {groups.length} groups · {settlements.length} settlements in this browser
           </p>
           <Button
             onPress={exportData}
             disabled={
               accounts.length +
-                categories.length +
                 transactions.length +
-                budgets.length +
-                goals.length ===
+                categories.length +
+                groups.length +
+                settlements.length ===
               0
             }
           >
@@ -200,31 +282,76 @@ export default function SettingsPage() {
         </Card>
         <Card className="finance-settings-card">
           <SectionHeader
-            title="Passkey screen lock"
+            title="Browser app lock"
             action={<Fingerprint size={17} aria-hidden="true" />}
           />
           <p>
             {lockEnabled
-              ? 'A platform authenticator is required before this browser session opens.'
-              : 'Require a platform passkey before opening this browser session.'}
+              ? 'A passkey or six-digit passcode is required before this browser session opens.'
+              : 'Use a platform passkey where supported, or set a six-digit passcode below.'}
           </p>
           <p>
-            This is a screen-level gate, not encryption. Browser-profile access can still expose
-            offline data; remove it separately below.
+            Five failed attempts trigger a 30-second lockout. This screen-level gate is not
+            encryption; browser-profile or developer tools access can still expose offline data.
           </p>
           <Button
             variant={lockEnabled ? 'secondary' : 'primary'}
             onPress={changeBrowserLock}
-            disabled={!userId || !lockAvailable || busy}
+            disabled={!userId || busy || (!lockEnabled && !lockAvailable)}
             aria-busy={busy}
           >
-            {lockEnabled ? 'Remove passkey lock' : 'Enable passkey lock'}
+            {lockEnabled ? 'Remove browser lock' : 'Enable passkey lock'}
           </Button>
-          {!lockAvailable && (
+          {!lockAvailable && !lockEnabled && (
             <p className="finance-settings-count">
-              A supported platform authenticator in a secure browser context is required.
+              Passkeys are unavailable in this browser. A six-digit passcode still works.
             </p>
           )}
+          <form onSubmit={savePasscode} className="auth-form">
+            <p className="finance-settings-count">
+              {passcodeEnabled
+                ? 'Passcode configured; enter a new one to replace it.'
+                : 'Set a six-digit browser passcode.'}
+            </p>
+            <div className="auth-field">
+              <Label htmlFor="browser-lock-passcode">Six-digit passcode</Label>
+              <Input
+                id="browser-lock-passcode"
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength={6}
+                value={passcode}
+                onChangeText={setPasscode}
+                required
+              />
+            </div>
+            <div className="auth-field">
+              <Label htmlFor="browser-lock-passcode-confirm">Confirm passcode</Label>
+              <Input
+                id="browser-lock-passcode-confirm"
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength={6}
+                value={passcodeConfirm}
+                onChangeText={setPasscodeConfirm}
+                required
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={
+                !userId ||
+                busy ||
+                !/^\d{6}$/.test(passcode) ||
+                !/^\d{6}$/.test(passcodeConfirm)
+              }
+            >
+              {passcodeEnabled ? 'Replace passcode' : 'Set passcode'}
+            </Button>
+          </form>
         </Card>
         <Card className="finance-settings-card">
           <SectionHeader

@@ -9,6 +9,7 @@ import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { deliverDueReminders } from '@/lib/browser/recurring-reminders';
 import { FinanceInput } from '@/components/finance/FinanceInput';
 
 type Account = LocalRecord & {
@@ -41,6 +42,8 @@ export default function RecurringPage() {
     error: accountsError,
   } = useLocalRecords<Account>('account');
   const activeAccounts = accounts.filter((account) => account.archivedAt === undefined);
+  const sentReminders = React.useRef(new Set<string>());
+  const [notificationsAllowed, setNotificationsAllowed] = React.useState(false);
   const [name, setName] = React.useState('');
   const [amount, setAmount] = React.useState('');
   const [accountId, setAccountId] = React.useState('');
@@ -54,7 +57,65 @@ export default function RecurringPage() {
   const ordered = [...rules].sort(
     (a, b) => Number(a.nextOccurrence ?? 0) - Number(b.nextOccurrence ?? 0),
   );
-  const now = Date.now();
+  const [now, setNow] = React.useState(() => Date.now());
+  const dueRules = React.useMemo(
+    () =>
+      rules.filter(
+        (rule) =>
+          rule.enabled &&
+          Number(rule.nextOccurrence ?? 0) > 0 &&
+          Number(rule.nextOccurrence ?? 0) <= now,
+      ),
+    [now, rules],
+  );
+
+  React.useEffect(() => {
+    const refreshClock = () => setNow(Date.now());
+    const timer = window.setInterval(refreshClock, 60_000);
+    window.addEventListener('focus', refreshClock);
+    document.addEventListener('visibilitychange', refreshClock);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshClock);
+      document.removeEventListener('visibilitychange', refreshClock);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const updatePermission = () =>
+      setNotificationsAllowed(
+        'Notification' in window && Notification.permission === 'granted',
+      );
+    updatePermission();
+    window.addEventListener('focus', updatePermission);
+    return () => window.removeEventListener('focus', updatePermission);
+  }, []);
+
+  React.useEffect(() => {
+    if (
+      !userId ||
+      rulesLoading ||
+      dueRules.length === 0 ||
+      !notificationsAllowed ||
+      document.visibilityState !== 'visible'
+    )
+      return;
+    deliverDueReminders(
+      userId,
+      dueRules,
+      now,
+      window.localStorage,
+      (rule) => {
+        const id = String(rule.id ?? rule._id ?? '');
+        const occurrence = Number(rule.nextOccurrence ?? 0);
+        new Notification(rule.name ? `Reminder: ${rule.name}` : 'Recurring reminder due', {
+          body: 'Finapp is open. Review the reminder and decide whether to record it.',
+          tag: `finapp-recurring:${id}:${occurrence}`,
+        });
+      },
+      sentReminders.current,
+    );
+  }, [dueRules, notificationsAllowed, now, rulesLoading, userId]);
 
   React.useEffect(() => {
     const hasSelectedAccount = activeAccounts.some(
@@ -179,6 +240,30 @@ export default function RecurringPage() {
         </div>
         <Badge variant="neutral">{rules.filter((rule) => rule.enabled).length} active</Badge>
       </header>
+      {dueRules.length > 0 && (
+        <Card className="finance-record-panel" role="status" aria-live="polite">
+          <SectionHeader title="Reminder due" action={<CalendarClock size={18} aria-hidden="true" />} />
+          <p>
+            {dueRules.length} scheduled {dueRules.length === 1 ? 'reminder is' : 'reminders are'} due.
+            Finapp never records a transaction automatically.
+          </p>
+          <ul>
+            {dueRules.map((rule) => (
+              <li key={String(rule.id ?? rule._id ?? '')}>
+                <strong>{rule.name ?? 'Recurring reminder'}</strong>
+                {` · ${new Date(Number(rule.nextOccurrence)).toLocaleDateString()}`}
+              </li>
+            ))}
+          </ul>
+          <p className="finance-muted">
+            This in-app reminder remains available if browser notifications are unavailable or
+            permission has not been granted. Notifications are delivered only while Finapp is open.
+          </p>
+          <Link className="finance-inline-link" href="/settings/notifications">
+            Notification controls <ArrowRight size={15} />
+          </Link>
+        </Card>
+      )}
       {(error || loadError) && (
         <p className="finance-form-error" role="alert">
           {error ?? `Saved reminders could not be loaded: ${loadError}`}
