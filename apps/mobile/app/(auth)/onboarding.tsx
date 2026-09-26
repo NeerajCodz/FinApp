@@ -130,7 +130,34 @@ export default function OnboardingScreen() {
         },
         { recordId: String(profile?.id ?? profile?._id ?? userId) },
       );
-      router.replace('/(tabs)');
+      const trimmedAccountName = accountName.trim();
+      if (trimmedAccountName) {
+        const now = Date.now();
+        await commitLocalWrite(
+          userId,
+          'account',
+          'account.create',
+          {
+            ownerId: userId,
+            name: trimmedAccountName,
+            type: 'cash',
+            currency,
+            openingBalanceMinor: 0n,
+            balanceMinor: 0n,
+            isIncludedInTotal: true,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            name: trimmedAccountName,
+            type: 'cash',
+            currency,
+            openingBalanceMinor: 0n,
+            isIncludedInTotal: true,
+          },
+        );
+      }
+      router.replace(mode === 'shared' ? '/(tabs)/groups' : '/(tabs)');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile');
     }
