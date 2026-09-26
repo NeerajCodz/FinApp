@@ -5,7 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Bell, Check, Settings2 } from 'lucide-react';
 import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { notificationRoute, notificationTypes, normalizeNotificationPreferences, type NotificationType } from '@convex/notifications/domain';
+import {
+  notificationRoute,
+  notificationTypes,
+  normalizeNotificationPreferences,
+  type NotificationType,
+} from '@convex/notifications/domain';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -45,19 +50,24 @@ export default function NotificationsPage() {
   const [typeFilter, setTypeFilter] = React.useState<NotificationType | 'all'>('all');
   const [busy, setBusy] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
-  const preferences = normalizeNotificationPreferences(settingsState.records[0]?.notificationPreferences);
+  const preferences = normalizeNotificationPreferences(
+    settingsState.records[0]?.notificationPreferences,
+  );
   const events = React.useMemo(
-    () => notificationState.records
-      .filter((event) =>
-        notificationTypes.includes(event.type as NotificationType) &&
-        preferences[event.type as NotificationType],
-      )
-      .sort((left, right) => Number(right.createdAt ?? 0) - Number(left.createdAt ?? 0)),
+    () =>
+      notificationState.records
+        .filter(
+          (event) =>
+            notificationTypes.includes(event.type as NotificationType) &&
+            preferences[event.type as NotificationType],
+        )
+        .sort((left, right) => Number(right.createdAt ?? 0) - Number(left.createdAt ?? 0)),
     [notificationState.records, preferences],
   );
-  const visible = events.filter((event) =>
-    (!unreadOnly || event.readAt === undefined) &&
-    (typeFilter === 'all' || event.type === typeFilter),
+  const visible = events.filter(
+    (event) =>
+      (!unreadOnly || event.readAt === undefined) &&
+      (typeFilter === 'all' || event.type === typeFilter),
   );
   const unread = events.filter((event) => event.readAt === undefined).length;
 
@@ -88,7 +98,9 @@ export default function NotificationsPage() {
       );
       return true;
     } catch (cause) {
-      setErrorMessage(cause instanceof Error ? cause.message : 'Could not mark this update as read.');
+      setErrorMessage(
+        cause instanceof Error ? cause.message : 'Could not mark this update as read.',
+      );
       return false;
     } finally {
       setBusy(false);
@@ -121,7 +133,13 @@ export default function NotificationsPage() {
   }
 
   if (notificationState.loading || settingsState.loading)
-    return <div className="finance-page"><p className="finance-muted" role="status">Loading your saved inbox…</p></div>;
+    return (
+      <div className="finance-page">
+        <p className="finance-muted" role="status">
+          Loading your saved inbox…
+        </p>
+      </div>
+    );
 
   const stateError = notificationState.error ?? settingsState.error;
   return (
@@ -130,7 +148,9 @@ export default function NotificationsPage() {
         <div>
           <p className="finance-kicker">YOUR UPDATES</p>
           <h1>Notifications</h1>
-          <p className="finance-muted">{events.length} updates · {unread} unread</p>
+          <p className="finance-muted">
+            {events.length} updates · {unread} unread
+          </p>
         </div>
         <Link className="finance-secondary-action" href="/settings/notifications">
           <Settings2 size={16} aria-hidden="true" /> Preferences
@@ -142,18 +162,49 @@ export default function NotificationsPage() {
           title={unread ? `${unread} unread` : 'You are all caught up'}
           action={<Bell size={17} aria-hidden="true" />}
         />
-        <p className="finance-form-note">New updates appear in this inbox when your account syncs.</p>
+        <p className="finance-form-note">
+          New updates appear in this inbox when your account syncs.
+        </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          <Button size="sm" variant={!unreadOnly ? 'secondary' : 'outline'} aria-pressed={!unreadOnly} onPress={() => setUnreadOnly(false)}>All</Button>
-          <Button size="sm" variant={unreadOnly ? 'secondary' : 'outline'} aria-pressed={unreadOnly} onPress={() => setUnreadOnly(true)}>Unread</Button>
+          <Button
+            size="sm"
+            variant={!unreadOnly ? 'secondary' : 'outline'}
+            aria-pressed={!unreadOnly}
+            onPress={() => setUnreadOnly(false)}
+          >
+            All
+          </Button>
+          <Button
+            size="sm"
+            variant={unreadOnly ? 'secondary' : 'outline'}
+            aria-pressed={unreadOnly}
+            onPress={() => setUnreadOnly(true)}
+          >
+            Unread
+          </Button>
           <label className="finance-form-field" style={{ marginLeft: 'auto', minWidth: 180 }}>
             <span>Notification type</span>
-            <select aria-label="Notification type filter" value={typeFilter} onChange={(event) => setTypeFilter(event.currentTarget.value as NotificationType | 'all')}>
+            <select
+              aria-label="Notification type filter"
+              value={typeFilter}
+              onChange={(event) =>
+                setTypeFilter(event.currentTarget.value as NotificationType | 'all')
+              }
+            >
               <option value="all">All types</option>
-              {notificationTypes.map((type) => <option key={type} value={type}>{labels[type]}</option>)}
+              {notificationTypes.map((type) => (
+                <option key={type} value={type}>
+                  {labels[type]}
+                </option>
+              ))}
             </select>
           </label>
-          <Button size="sm" variant="outline" disabled={!visible.some((event) => event.readAt === undefined) || busy} onPress={() => void markVisibleRead()}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!visible.some((event) => event.readAt === undefined) || busy}
+            onPress={() => void markVisibleRead()}
+          >
             <Check size={15} aria-hidden="true" /> Mark visible read
           </Button>
         </div>
@@ -161,15 +212,35 @@ export default function NotificationsPage() {
 
       {stateError && (
         <div role="alert">
-          <p className="finance-form-error">{stateError === notificationState.error ? 'Saved notifications could not be loaded.' : 'Notification preferences could not be loaded.'}</p>
-          <Button variant="outline" onPress={() => window.location.reload()}>Reload inbox</Button>
+          <p className="finance-form-error">
+            {stateError === notificationState.error
+              ? 'Saved notifications could not be loaded.'
+              : 'Notification preferences could not be loaded.'}
+          </p>
+          <Button variant="outline" onPress={() => window.location.reload()}>
+            Reload inbox
+          </Button>
         </div>
       )}
-      {errorMessage && <p className="finance-form-error" role="alert">{errorMessage}</p>}
+      {errorMessage && (
+        <p className="finance-form-error" role="alert">
+          {errorMessage}
+        </p>
+      )}
       {visible.length === 0 ? (
         <Empty
-          title={unreadOnly ? 'Nothing unread' : typeFilter === 'all' ? 'No notifications yet' : `No ${labels[typeFilter].toLowerCase()} yet`}
-          description={unreadOnly ? 'New unread updates will appear here.' : 'Budget changes, shared activity, reminders, and sync issues appear here when available.'}
+          title={
+            unreadOnly
+              ? 'Nothing unread'
+              : typeFilter === 'all'
+                ? 'No notifications yet'
+                : `No ${labels[typeFilter].toLowerCase()} yet`
+          }
+          description={
+            unreadOnly
+              ? 'New unread updates will appear here.'
+              : 'Budget changes, shared activity, reminders, and sync issues appear here when available.'
+          }
           icon={<Bell size={20} aria-hidden="true" />}
         />
       ) : (
@@ -194,7 +265,9 @@ export default function NotificationsPage() {
                     {event.createdAt ? new Date(event.createdAt).toLocaleString() : 'Recently'}
                   </small>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}>
+                <div
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}
+                >
                   {destination !== '/notifications' && (
                     <Link
                       className="finance-inline-link"
@@ -210,7 +283,14 @@ export default function NotificationsPage() {
                     </Link>
                   )}
                   {event.readAt === undefined && (
-                    <Button size="sm" variant="outline" disabled={busy} onPress={() => void markRead(event)}>Mark read</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onPress={() => void markRead(event)}
+                    >
+                      Mark read
+                    </Button>
                   )}
                 </div>
               </Card>
@@ -218,7 +298,11 @@ export default function NotificationsPage() {
           })}
         </section>
       )}
-      {!isConnected && <p className="finance-data-footnote">Offline · showing updates already saved in this browser. Changes will sync when connected.</p>}
+      {!isConnected && (
+        <p className="finance-data-footnote">
+          Offline · showing updates already saved in this browser. Changes will sync when connected.
+        </p>
+      )}
     </div>
   );
 }

@@ -4,7 +4,12 @@ import * as React from 'react';
 import Link from 'next/link';
 import { ArrowDownLeft, ArrowUpRight, Repeat2 } from 'lucide-react';
 import { Badge, Button, Card, Empty, Input, SectionHeader } from '@finapp/ui/web';
-import { filterActivity, type ActivityFilter, type ActivityKind, type ActivityRow } from '@convex/activity/domain';
+import {
+  filterActivity,
+  type ActivityFilter,
+  type ActivityKind,
+  type ActivityRow,
+} from '@convex/activity/domain';
 import { getAnalyticsRange, type AnalyticsPeriod } from '@convex/analytics/domain';
 import { formatMinor } from '@convex/shared/money';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
@@ -118,7 +123,8 @@ export default function ActivityPage() {
         !['expense', 'income', 'transfer', 'refund', 'adjustment'].includes(record.type ?? '')
       )
         continue;
-      const kind: ActivityKind = record.groupId && record.type === 'expense' ? 'group' : record.type as ActivityKind;
+      const kind: ActivityKind =
+        record.groupId && record.type === 'expense' ? 'group' : (record.type as ActivityKind);
       const amountMinor = asMinor(record.amountMinor);
       records.set(id, record);
       activity.push({
@@ -145,11 +151,25 @@ export default function ActivityPage() {
           category?.name,
           record.amountMinor,
           formatMinor(row.amountMinor, record.currency ?? currency),
-        ].some((value) => String(value ?? '').toLocaleLowerCase().includes(needle));
+        ].some((value) =>
+          String(value ?? '')
+            .toLocaleLowerCase()
+            .includes(needle),
+        );
       })
       .sort((left, right) => right.occurredAt - left.occurredAt)
       .map((row) => records.get(row.id)!);
-  }, [accountById, categoryById, currency, filter, query, range.endAt, range.startAt, transactionState.records, userId]);
+  }, [
+    accountById,
+    categoryById,
+    currency,
+    filter,
+    query,
+    range.endAt,
+    range.startAt,
+    transactionState.records,
+    userId,
+  ]);
 
   if (!userId)
     return (
@@ -160,8 +180,14 @@ export default function ActivityPage() {
       />
     );
 
-  const error = transactionState.error ?? accountState.error ?? categoryState.error ?? profileState.error;
-  const ready = referenceAt !== null && !transactionState.loading && !accountState.loading && !categoryState.loading && !profileState.loading;
+  const error =
+    transactionState.error ?? accountState.error ?? categoryState.error ?? profileState.error;
+  const ready =
+    referenceAt !== null &&
+    !transactionState.loading &&
+    !accountState.loading &&
+    !categoryState.loading &&
+    !profileState.loading;
   const spent = rows
     .filter((record) => record.type === 'expense')
     .reduce((sum, record) => sum + asMinor(record.amountMinor), 0n);
@@ -182,9 +208,13 @@ export default function ActivityPage() {
         <div>
           <p className="finance-kicker">EVERY MOVE, CLEARLY</p>
           <h1>Activity</h1>
-          <p className="finance-muted">Search and filter transactions saved in your local ledger.</p>
+          <p className="finance-muted">
+            Search and filter transactions saved in your local ledger.
+          </p>
         </div>
-        <Badge variant={isConnected ? 'success' : 'neutral'}>{isConnected ? 'Online' : 'Offline'}</Badge>
+        <Badge variant={isConnected ? 'success' : 'neutral'}>
+          {isConnected ? 'Online' : 'Offline'}
+        </Badge>
       </header>
 
       <Card className="finance-record-panel" style={{ display: 'grid', gap: 16 }}>
@@ -198,7 +228,9 @@ export default function ActivityPage() {
           />
         </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          <span className="finance-muted" style={{ marginRight: 4 }}>Period</span>
+          <span className="finance-muted" style={{ marginRight: 4 }}>
+            Period
+          </span>
           {periods.map((option) => (
             <Button
               key={option.value}
@@ -217,13 +249,21 @@ export default function ActivityPage() {
               value={filter}
               onChange={(event) => setFilter(event.currentTarget.value as ActivityFilter)}
             >
-              {filters.map((option) => <option key={option} value={option}>{option}</option>)}
+              {filters.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </label>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
-          <span className="finance-muted">Money out <strong>{currencyFormat(spent, currency)}</strong></span>
-          <span className="finance-muted">Money in <strong>{currencyFormat(income, currency)}</strong></span>
+          <span className="finance-muted">
+            Money out <strong>{currencyFormat(spent, currency)}</strong>
+          </span>
+          <span className="finance-muted">
+            Money in <strong>{currencyFormat(income, currency)}</strong>
+          </span>
           <span className="finance-muted">{rows.length} matching records</span>
         </div>
       </Card>
@@ -234,14 +274,28 @@ export default function ActivityPage() {
           {rangeError || (error ? 'Some saved records could not be loaded.' : '')}
         </p>
       )}
-      {error && <Button variant="outline" onPress={() => window.location.reload()}>Reload saved activity</Button>}
+      {error && (
+        <Button variant="outline" onPress={() => window.location.reload()}>
+          Reload saved activity
+        </Button>
+      )}
       {!ready ? (
-        <p className="finance-muted" role="status">Opening your saved activity…</p>
+        <p className="finance-muted" role="status">
+          Opening your saved activity…
+        </p>
       ) : rows.length === 0 ? (
         <Empty
           title={query ? 'No search matches' : 'No activity in this period'}
-          description={query ? 'Try a different title, merchant, category, account, or amount.' : 'Transactions you add or sync will appear here.'}
-          action={<Link className="finance-inline-link" href="/add">Add to your ledger</Link>}
+          description={
+            query
+              ? 'Try a different title, merchant, category, account, or amount.'
+              : 'Transactions you add or sync will appear here.'
+          }
+          action={
+            <Link className="finance-inline-link" href="/add">
+              Add to your ledger
+            </Link>
+          }
         />
       ) : (
         <Card className="finance-record-panel">
@@ -254,7 +308,12 @@ export default function ActivityPage() {
               const category = categoryById.get(transaction.categoryId ?? '');
               const account = accountById.get(transaction.accountId ?? '');
               const date = transaction.occurredAt
-                ? new Date(transaction.occurredAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone })
+                ? new Date(transaction.occurredAt).toLocaleDateString('en', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    timeZone,
+                  })
                 : 'Saved offline';
               return (
                 <li key={id} style={{ listStyle: 'none' }}>
@@ -274,10 +333,19 @@ export default function ActivityPage() {
                     </div>
                     <strong className={isIncome ? 'finance-positive' : ''}>
                       {isTransfer ? '↔ ' : isIncome ? '+' : '−'}
-                      {currencyFormat(asMinor(transaction.amountMinor), transaction.currency ?? currency)}
+                      {currencyFormat(
+                        asMinor(transaction.amountMinor),
+                        transaction.currency ?? currency,
+                      )}
                     </strong>
                     <span aria-hidden="true">
-                      {isTransfer ? <Repeat2 size={17} /> : isIncome ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
+                      {isTransfer ? (
+                        <Repeat2 size={17} />
+                      ) : isIncome ? (
+                        <ArrowDownLeft size={17} />
+                      ) : (
+                        <ArrowUpRight size={17} />
+                      )}
                     </span>
                   </Link>
                 </li>
@@ -286,7 +354,11 @@ export default function ActivityPage() {
           </ul>
         </Card>
       )}
-      {rangeError && !isConnected && <p className="finance-data-footnote">Offline mode shows matching records already downloaded to this browser.</p>}
+      {rangeError && !isConnected && (
+        <p className="finance-data-footnote">
+          Offline mode shows matching records already downloaded to this browser.
+        </p>
+      )}
     </div>
   );
 }

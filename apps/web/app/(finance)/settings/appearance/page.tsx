@@ -33,11 +33,16 @@ export default function AppearanceSettingsPage() {
           <h1>Appearance</h1>
           <p className="finance-muted">Theme changes are saved in this browser.</p>
         </div>
-        <Link className="finance-secondary-action" href="/settings"><ArrowLeft size={15} aria-hidden="true" /> Settings</Link>
+        <Link className="finance-secondary-action" href="/settings">
+          <ArrowLeft size={15} aria-hidden="true" /> Settings
+        </Link>
       </header>
       <Card className="finance-record-panel" style={{ display: 'grid', gap: 12 }}>
         <SectionHeader title="Theme" />
-        <p className="finance-form-note">System follows the current device preference. Your selection is stored as finapp.appearance.mode.v1.</p>
+        <p className="finance-form-note">
+          System follows the current device preference. Your selection is stored as
+          finapp.appearance.mode.v1.
+        </p>
         {options.map((option) => {
           const selected = appearance === option.value;
           return (

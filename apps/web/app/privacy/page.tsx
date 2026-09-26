@@ -45,8 +45,8 @@ export default function PrivacyPage() {
         <section>
           <h2>Your controls</h2>
           <p>
-            Settings lets you export locally available accounts, transactions, categories, groups, and
-            settlements as five CSV files in one ZIP, request browser notifications, manage the
+            Settings lets you export locally available accounts, transactions, categories, groups,
+            and settlements as five CSV files in one ZIP, request browser notifications, manage the
             optional passcode or passkey screen lock, remove this browser’s offline copy, or sign
             out. Exports are created only after you request them.
           </p>
@@ -60,8 +60,8 @@ export default function PrivacyPage() {
             Contact access is always user-selected. Where the browser Contact Picker is available,
             Finapp requests only the selected person’s name and phone after a user action; elsewhere
             you can enter invite details manually. Mobile uses the operating system’s picker. Finapp
-            does not scan or upload an address book. Authentication and sync depend on the configured
-            Convex deployment and its enabled providers.
+            does not scan or upload an address book. Authentication and sync depend on the
+            configured Convex deployment and its enabled providers.
           </p>
         </section>
         <Link className="privacy-back-link" href="/">

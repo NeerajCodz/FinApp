@@ -91,8 +91,7 @@ function constantTimeEqual(left: string, right: string): boolean {
 function assertNotLockedOut(userId: string): void {
   const throttle = readThrottle(userId);
   if (throttle.retryAt > Date.now()) throw new Error('PASSCODE_LOCKED_OUT');
-  if (throttle.retryAt !== 0)
-    window.localStorage.removeItem(throttleKey(userId));
+  if (throttle.retryAt !== 0) window.localStorage.removeItem(throttleKey(userId));
 }
 
 async function recordFailedAttempt(userId: string): Promise<ThrottleRecord> {

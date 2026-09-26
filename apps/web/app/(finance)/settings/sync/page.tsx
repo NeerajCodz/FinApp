@@ -9,10 +9,15 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { readConflicts, resolveConflict, type LocalConflict } from '@/lib/offline/repository';
 
 function summarize(record: Record<string, unknown>): string {
-  const display = [record.title, record.name, record.displayName, record.type]
-    .find((value) => typeof value === 'string' && value.length > 0);
+  const display = [record.title, record.name, record.displayName, record.type].find(
+    (value) => typeof value === 'string' && value.length > 0,
+  );
   if (typeof display === 'string') return display;
-  if (typeof record.amountMinor === 'bigint' || typeof record.amountMinor === 'number' || typeof record.amountMinor === 'string')
+  if (
+    typeof record.amountMinor === 'bigint' ||
+    typeof record.amountMinor === 'number' ||
+    typeof record.amountMinor === 'string'
+  )
     return `Amount ${String(record.amountMinor)}${typeof record.currency === 'string' ? ` ${record.currency}` : ''}`;
   return 'Saved record version';
 }
@@ -41,7 +46,9 @@ export default function SyncSettingsPage() {
       setConflictsLoading(false);
     }
   }, [userId]);
-  React.useEffect(() => { void refreshConflicts(); }, [refreshConflicts, status.conflicts]);
+  React.useEffect(() => {
+    void refreshConflicts();
+  }, [refreshConflicts, status.conflicts]);
 
   if (!userId)
     return (
@@ -58,7 +65,11 @@ export default function SyncSettingsPage() {
     try {
       await retryNow();
       await refreshConflicts();
-      setMessage(isConnected ? 'Sync retry started.' : 'Failed changes were queued for retry when this browser reconnects.');
+      setMessage(
+        isConnected
+          ? 'Sync retry started.'
+          : 'Failed changes were queued for retry when this browser reconnects.',
+      );
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Could not retry sync.');
     } finally {
@@ -74,7 +85,11 @@ export default function SyncSettingsPage() {
       await resolveConflict(userId, conflict.id, winner);
       await refreshConflicts();
       if (winner === 'local') await retryNow();
-      setMessage(winner === 'local' ? 'Local version selected and queued for sync.' : 'Cloud version selected for this browser.');
+      setMessage(
+        winner === 'local'
+          ? 'Local version selected and queued for sync.'
+          : 'Cloud version selected for this browser.',
+      );
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Could not resolve this conflict.');
     } finally {
@@ -98,21 +113,31 @@ export default function SyncSettingsPage() {
         <div>
           <p className="finance-kicker">DATA CONTROLS</p>
           <h1>Local sync</h1>
-          <p className="finance-muted">Changes are saved here first, then reconciled with your account.</p>
+          <p className="finance-muted">
+            Changes are saved here first, then reconciled with your account.
+          </p>
         </div>
-        <Link className="finance-secondary-action" href="/settings"><ArrowLeft size={15} aria-hidden="true" /> Settings</Link>
+        <Link className="finance-secondary-action" href="/settings">
+          <ArrowLeft size={15} aria-hidden="true" /> Settings
+        </Link>
       </header>
 
       <div className="finance-metric-grid">
         <Card className="finance-metric-card">
           <span className="finance-metric-label">CONNECTION</span>
           <strong>{syncLabel}</strong>
-          <span className="finance-metric-foot">{isConnected ? 'Convex connection available' : 'Saved local changes remain in this browser'}</span>
+          <span className="finance-metric-foot">
+            {isConnected
+              ? 'Convex connection available'
+              : 'Saved local changes remain in this browser'}
+          </span>
         </Card>
         <Card className="finance-metric-card">
           <span className="finance-metric-label">WAITING</span>
           <strong>{status.pending + status.syncing}</strong>
-          <span className="finance-metric-foot">{status.failed} failed · {status.conflicts} conflicts</span>
+          <span className="finance-metric-foot">
+            {status.failed} failed · {status.conflicts} conflicts
+          </span>
         </Card>
         <Card className="finance-metric-card">
           <span className="finance-metric-label">LAST SYNC</span>
@@ -121,11 +146,24 @@ export default function SyncSettingsPage() {
         </Card>
       </div>
 
-      {syncError && <p className="finance-form-error" role="alert">{syncError}</p>}
+      {syncError && (
+        <p className="finance-form-error" role="alert">
+          {syncError}
+        </p>
+      )}
       <Card className="finance-record-panel" style={{ display: 'grid', gap: 12 }}>
-        <SectionHeader title="Retry saved changes" action={<RefreshCw size={17} aria-hidden="true" />} />
-        <p className="finance-form-note">Retry uses the existing outbox and mutation receipt protocol. It does not create a second record.</p>
-        <Button onPress={() => void retry()} disabled={busy || isSyncing || (!status.failed && !status.pending)}>
+        <SectionHeader
+          title="Retry saved changes"
+          action={<RefreshCw size={17} aria-hidden="true" />}
+        />
+        <p className="finance-form-note">
+          Retry uses the existing outbox and mutation receipt protocol. It does not create a second
+          record.
+        </p>
+        <Button
+          onPress={() => void retry()}
+          disabled={busy || isSyncing || (!status.failed && !status.pending)}
+        >
           {busy ? 'Working…' : 'Retry failed and pending changes'}
         </Button>
       </Card>
@@ -133,17 +171,28 @@ export default function SyncSettingsPage() {
       <section aria-labelledby="sync-conflicts-title" style={{ display: 'grid', gap: 12 }}>
         <SectionHeader title="Conflicts" action={<ShieldAlert size={17} aria-hidden="true" />} />
         {conflictsLoading ? (
-          <p className="finance-muted" role="status">Loading conflict choices…</p>
+          <p className="finance-muted" role="status">
+            Loading conflict choices…
+          </p>
         ) : conflicts.length === 0 ? (
-          <Card className="finance-record-panel"><p className="finance-form-note">No unresolved local/cloud conflicts.</p></Card>
+          <Card className="finance-record-panel">
+            <p className="finance-form-note">No unresolved local/cloud conflicts.</p>
+          </Card>
         ) : (
           conflicts.map((conflict) => (
             <ConflictCard key={conflict.id} conflict={conflict} busy={busy} onChoose={choose} />
           ))
         )}
       </section>
-      {message && <p className="finance-settings-message" role="status">{message}</p>}
-      <p className="finance-data-footnote">Offline: retries remain queued until a connection returns. Choosing a cloud version only changes the local browser copy; it does not remove the cloud record.</p>
+      {message && (
+        <p className="finance-settings-message" role="status">
+          {message}
+        </p>
+      )}
+      <p className="finance-data-footnote">
+        Offline: retries remain queued until a connection returns. Choosing a cloud version only
+        changes the local browser copy; it does not remove the cloud record.
+      </p>
     </div>
   );
 }
@@ -159,7 +208,10 @@ function ConflictCard({
 }) {
   return (
     <Card className="finance-record-panel" style={{ display: 'grid', gap: 14 }}>
-      <SectionHeader title={`${conflict.entityType} · ${conflict.recordId}`} action={<Badge variant="neutral">Choose a version</Badge>} />
+      <SectionHeader
+        title={`${conflict.entityType} · ${conflict.recordId}`}
+        action={<Badge variant="neutral">Choose a version</Badge>}
+      />
       <div className="finance-settings-grid">
         <div className="finance-record-item" style={{ alignItems: 'flex-start' }}>
           <div>
@@ -167,7 +219,12 @@ function ConflictCard({
             <small>{summarize(conflict.localRecord)}</small>
             <small>Updated {dateLabel(conflict.localUpdatedAt)}</small>
           </div>
-          <Button size="sm" variant="outline" disabled={busy} onPress={() => void onChoose(conflict, 'local')}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onPress={() => void onChoose(conflict, 'local')}
+          >
             Keep local <Check size={14} aria-hidden="true" />
           </Button>
         </div>
@@ -177,12 +234,20 @@ function ConflictCard({
             <small>{summarize(conflict.cloudRecord)}</small>
             <small>Updated {dateLabel(conflict.cloudUpdatedAt)}</small>
           </div>
-          <Button size="sm" variant="outline" disabled={busy} onPress={() => void onChoose(conflict, 'cloud')}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onPress={() => void onChoose(conflict, 'cloud')}
+          >
             Use cloud
           </Button>
         </div>
       </div>
-      <p className="finance-form-note">Created {dateLabel(conflict.createdAt)}. Review both versions before choosing which one this browser should keep.</p>
+      <p className="finance-form-note">
+        Created {dateLabel(conflict.createdAt)}. Review both versions before choosing which one this
+        browser should keep.
+      </p>
     </Card>
   );
 }

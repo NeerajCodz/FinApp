@@ -63,7 +63,10 @@ export default function SecuritySettingsPage() {
         </div>
       </header>
       <Card className="finance-settings-card">
-        <SectionHeader title="Browser screen lock" action={<Fingerprint size={18} aria-hidden="true" />} />
+        <SectionHeader
+          title="Browser screen lock"
+          action={<Fingerprint size={18} aria-hidden="true" />}
+        />
         <p>
           {enabled
             ? `A browser lock is enabled${passcodeEnabled ? ' with a six-digit passcode configured.' : '.'}`
@@ -77,19 +80,35 @@ export default function SecuritySettingsPage() {
               : 'Passkeys require a secure browser context and supported platform authenticator. A six-digit passcode is also available.'}
         </p>
         <p>
-          This is a screen-level gate, not encryption. Browser IndexedDB and WebAuthn are scoped to this origin and browser profile; they do not provide the native SQLCipher or SecureStore guarantee.
+          This is a screen-level gate, not encryption. Browser IndexedDB and WebAuthn are scoped to
+          this origin and browser profile; they do not provide the native SQLCipher or SecureStore
+          guarantee.
         </p>
-        {error && <p className="finance-form-error" role="alert">{error}</p>}
+        {error && (
+          <p className="finance-form-error" role="alert">
+            {error}
+          </p>
+        )}
         <Link className="finance-inline-link" href="/settings">
           Manage the browser lock in Settings <ArrowRight size={15} aria-hidden="true" />
         </Link>
       </Card>
       <Card className="finance-settings-card">
-        <SectionHeader title="Browser privacy" action={<ShieldCheck size={18} aria-hidden="true" />} />
-        <p>Remove the local copy or read the complete browser-storage disclosure from the privacy controls.</p>
+        <SectionHeader
+          title="Browser privacy"
+          action={<ShieldCheck size={18} aria-hidden="true" />}
+        />
+        <p>
+          Remove the local copy or read the complete browser-storage disclosure from the privacy
+          controls.
+        </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/settings/privacy">Privacy and data</Link>
-          <Button variant="outline" onPress={() => window.location.assign('/privacy')}>Read privacy notes</Button>
+          <Link className="finance-secondary-action" href="/settings/privacy">
+            Privacy and data
+          </Link>
+          <Button variant="outline" onPress={() => window.location.assign('/privacy')}>
+            Read privacy notes
+          </Button>
         </div>
       </Card>
     </div>

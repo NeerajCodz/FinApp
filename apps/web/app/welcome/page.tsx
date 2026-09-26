@@ -22,7 +22,9 @@ export default function WelcomePage() {
       <main className="landing" role="status" aria-live="polite">
         <p className="finance-kicker">PRIVATE WORKSPACE</p>
         <h1>Restoring your space.</h1>
-        <p className="finance-muted">Your saved records are being checked before the ledger opens.</p>
+        <p className="finance-muted">
+          Your saved records are being checked before the ledger opens.
+        </p>
       </main>
     );
   }
@@ -61,7 +63,10 @@ export default function WelcomePage() {
               Sign in
             </Link>
           </div>
-          <p className="finance-muted" style={{ color: 'var(--finapp-foreground-subtle, #9a9e91)' }}>
+          <p
+            className="finance-muted"
+            style={{ color: 'var(--finapp-foreground-subtle, #9a9e91)' }}
+          >
             <ShieldCheck size={15} aria-hidden="true" /> Your browser copy is profile-scoped and is
             not separately encrypted by Finapp.
           </p>
@@ -70,7 +75,9 @@ export default function WelcomePage() {
           <div className="preview-card">
             <div className="preview-topline">
               <span className="preview-label">PRIVATE FINANCIAL WORKSPACE</span>
-              <span className="preview-add" aria-hidden="true">+</span>
+              <span className="preview-add" aria-hidden="true">
+                +
+              </span>
             </div>
             <p className="preview-caption">Your financial life in one place</p>
             <div className="preview-balance">

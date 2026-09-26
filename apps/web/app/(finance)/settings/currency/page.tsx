@@ -30,7 +30,13 @@ export default function CurrencySettingsPage() {
     );
 
   async function changeCurrency(value: string) {
-    if (!userId || !currencies.includes(value as (typeof currencies)[number]) || value === selected || saving) return;
+    if (
+      !userId ||
+      !currencies.includes(value as (typeof currencies)[number]) ||
+      value === selected ||
+      saving
+    )
+      return;
     setSaving(true);
     setMessage('');
     try {
@@ -57,25 +63,46 @@ export default function CurrencySettingsPage() {
         <div>
           <p className="finance-kicker">PREFERENCES</p>
           <h1>Currency</h1>
-          <p className="finance-muted">Used for new accounts and entries. Existing records keep their original currency.</p>
+          <p className="finance-muted">
+            Used for new accounts and entries. Existing records keep their original currency.
+          </p>
         </div>
-        <Link className="finance-secondary-action" href="/settings"><ArrowLeft size={15} aria-hidden="true" /> Settings</Link>
+        <Link className="finance-secondary-action" href="/settings">
+          <ArrowLeft size={15} aria-hidden="true" /> Settings
+        </Link>
       </header>
       <Card className="finance-record-panel" style={{ display: 'grid', gap: 14 }}>
         <SectionHeader title="Default currency" action={<span>{selected}</span>} />
         {loading ? (
-          <p className="finance-muted" role="status">Loading your profile…</p>
+          <p className="finance-muted" role="status">
+            Loading your profile…
+          </p>
         ) : error ? (
-          <p className="finance-form-error" role="alert">The saved currency could not be loaded. Reload the profile before changing it.</p>
+          <p className="finance-form-error" role="alert">
+            The saved currency could not be loaded. Reload the profile before changing it.
+          </p>
         ) : (
           <label className="finance-form-field">
             <span>Currency for new records</span>
-            <select value={selected} aria-label="Default currency" disabled={saving} onChange={(event) => void changeCurrency(event.currentTarget.value)}>
-              {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+            <select
+              value={selected}
+              aria-label="Default currency"
+              disabled={saving}
+              onChange={(event) => void changeCurrency(event.currentTarget.value)}
+            >
+              {currencies.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
             </select>
           </label>
         )}
-        {message && <p className="finance-settings-message" role="status">{message}</p>}
+        {message && (
+          <p className="finance-settings-message" role="status">
+            {message}
+          </p>
+        )}
       </Card>
     </div>
   );

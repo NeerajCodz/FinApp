@@ -1,17 +1,49 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, HandCoins, UsersRound } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowUpRight,
+  HandCoins,
+  UsersRound,
+} from 'lucide-react';
 import { Card, SectionHeader } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 const actions = [
-  { label: 'Expense', description: 'Money you spent', href: '/transaction/new?type=expense', icon: ArrowUpRight },
-  { label: 'Income', description: 'Money you received', href: '/transaction/new?type=income', icon: ArrowDownLeft },
-  { label: 'Transfer', description: 'Move money between accounts', href: '/transaction/new?type=transfer', icon: ArrowLeftRight },
-  { label: 'Split expense', description: 'Share an expense with people', href: '/split/new', icon: UsersRound },
-  { label: 'Settlement', description: 'Record paying someone back', href: '/settle/new', icon: HandCoins },
+  {
+    label: 'Expense',
+    description: 'Money you spent',
+    href: '/transaction/new?type=expense',
+    icon: ArrowUpRight,
+  },
+  {
+    label: 'Income',
+    description: 'Money you received',
+    href: '/transaction/new?type=income',
+    icon: ArrowDownLeft,
+  },
+  {
+    label: 'Transfer',
+    description: 'Move money between accounts',
+    href: '/transaction/new?type=transfer',
+    icon: ArrowLeftRight,
+  },
+  {
+    label: 'Split expense',
+    description: 'Share an expense with people',
+    href: '/split/new',
+    icon: UsersRound,
+  },
+  {
+    label: 'Settlement',
+    description: 'Record paying someone back',
+    href: '/settle/new',
+    icon: HandCoins,
+  },
 ];
 
 export default function AddPage() {
@@ -30,7 +62,9 @@ export default function AddPage() {
         <div>
           <p className="finance-kicker">QUICK ADD</p>
           <h1>What would you like to record?</h1>
-          <p className="finance-muted">Each choice opens the existing entry flow and saves locally before sync.</p>
+          <p className="finance-muted">
+            Each choice opens the existing entry flow and saves locally before sync.
+          </p>
         </div>
       </header>
       <div className="finance-settings-grid">

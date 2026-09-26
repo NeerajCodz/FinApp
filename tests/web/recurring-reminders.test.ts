@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { deliverDueReminders, type DueReminder } from '../../apps/web/lib/browser/recurring-reminders';
+import {
+  deliverDueReminders,
+  type DueReminder,
+} from '../../apps/web/lib/browser/recurring-reminders';
 
 function createStorage() {
   const values = new Map<string, string>();
@@ -34,15 +37,29 @@ describe('foreground recurring reminders', () => {
     const sent = new Set<string>();
 
     expect(
-      deliverDueReminders('user-a', [rule], 10_000, storage, () => {
-        throw new Error('notification permission was revoked');
-      }, sent),
+      deliverDueReminders(
+        'user-a',
+        [rule],
+        10_000,
+        storage,
+        () => {
+          throw new Error('notification permission was revoked');
+        },
+        sent,
+      ),
     ).toBe(0);
     let delivered = 0;
     expect(
-      deliverDueReminders('user-a', [rule], 10_000, storage, () => {
-        delivered += 1;
-      }, sent),
+      deliverDueReminders(
+        'user-a',
+        [rule],
+        10_000,
+        storage,
+        () => {
+          delivered += 1;
+        },
+        sent,
+      ),
     ).toBe(1);
     expect(delivered).toBe(1);
   });

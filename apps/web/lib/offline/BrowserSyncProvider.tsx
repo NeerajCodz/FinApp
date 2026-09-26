@@ -481,8 +481,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
 
       const request = (async () => {
         const mappedGroupId = await getMappedCloudId(userId, 'group', groupId);
-        if (groupId.startsWith('local-') && !mappedGroupId)
-          throw new Error('SYNC_PARENT_PENDING');
+        if (groupId.startsWith('local-') && !mappedGroupId) throw new Error('SYNC_PARENT_PENDING');
         const cloudGroupId = mappedGroupId ?? groupId;
         const persistGroup = async (page: GroupRangePage) => {
           await Promise.all([
@@ -497,7 +496,9 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
             upsert(
               userId,
               'account',
-              (page.related.accounts as LocalRecord[]).filter((record) => record.ownerId === userId),
+              (page.related.accounts as LocalRecord[]).filter(
+                (record) => record.ownerId === userId,
+              ),
             ),
             upsert(
               userId,

@@ -343,10 +343,7 @@ export default function SettingsPage() {
               type="submit"
               variant="secondary"
               disabled={
-                !userId ||
-                busy ||
-                !/^\d{6}$/.test(passcode) ||
-                !/^\d{6}$/.test(passcodeConfirm)
+                !userId || busy || !/^\d{6}$/.test(passcode) || !/^\d{6}$/.test(passcodeConfirm)
               }
             >
               {passcodeEnabled ? 'Replace passcode' : 'Set passcode'}

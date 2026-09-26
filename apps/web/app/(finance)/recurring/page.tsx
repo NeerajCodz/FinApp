@@ -83,9 +83,7 @@ export default function RecurringPage() {
 
   React.useEffect(() => {
     const updatePermission = () =>
-      setNotificationsAllowed(
-        'Notification' in window && Notification.permission === 'granted',
-      );
+      setNotificationsAllowed('Notification' in window && Notification.permission === 'granted');
     updatePermission();
     window.addEventListener('focus', updatePermission);
     return () => window.removeEventListener('focus', updatePermission);
@@ -242,10 +240,13 @@ export default function RecurringPage() {
       </header>
       {dueRules.length > 0 && (
         <Card className="finance-record-panel" role="status" aria-live="polite">
-          <SectionHeader title="Reminder due" action={<CalendarClock size={18} aria-hidden="true" />} />
+          <SectionHeader
+            title="Reminder due"
+            action={<CalendarClock size={18} aria-hidden="true" />}
+          />
           <p>
-            {dueRules.length} scheduled {dueRules.length === 1 ? 'reminder is' : 'reminders are'} due.
-            Finapp never records a transaction automatically.
+            {dueRules.length} scheduled {dueRules.length === 1 ? 'reminder is' : 'reminders are'}{' '}
+            due. Finapp never records a transaction automatically.
           </p>
           <ul>
             {dueRules.map((rule) => (

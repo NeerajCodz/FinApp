@@ -35,13 +35,19 @@ const toMinor = (value: unknown): bigint => {
   return 0n;
 };
 const aliases = (record: LocalRecord) =>
-  [record.id, record._id, record.cloudId].filter((value): value is string => typeof value === 'string');
+  [record.id, record._id, record.cloudId].filter(
+    (value): value is string => typeof value === 'string',
+  );
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function GoalDetailPage() {
   const { id: routeId } = useParams<{ id: string }>();
   const { userId } = useBrowserSync();
-  const { records: goals, loading: goalsLoading, error: goalsError } = useLocalRecords<Goal>('goal');
+  const {
+    records: goals,
+    loading: goalsLoading,
+    error: goalsError,
+  } = useLocalRecords<Goal>('goal');
   const {
     records: contributions,
     loading: contributionsLoading,
@@ -111,15 +117,23 @@ export default function GoalDetailPage() {
         <ArrowLeft size={15} /> Back to goals
       </Link>
       {loading ? (
-        <p className="finance-muted" role="status">Opening this saved goal…</p>
+        <p className="finance-muted" role="status">
+          Opening this saved goal…
+        </p>
       ) : loadError ? (
-        <p className="finance-form-error" role="alert">Saved goal details could not be opened: {loadError}</p>
+        <p className="finance-form-error" role="alert">
+          Saved goal details could not be opened: {loadError}
+        </p>
       ) : !goal || goal.archivedAt !== undefined ? (
         <Empty
           title="Goal unavailable"
           description="This goal is not saved on this device or has been archived."
           icon={<Target size={20} />}
-          action={<Link className="finance-inline-link" href="/goals">Return to goals</Link>}
+          action={
+            <Link className="finance-inline-link" href="/goals">
+              Return to goals
+            </Link>
+          }
         />
       ) : (
         <>
@@ -128,7 +142,9 @@ export default function GoalDetailPage() {
               <p className="finance-kicker">SAVINGS GOAL</p>
               <h1>{goal.name ?? 'Savings goal'}</h1>
               <p className="finance-muted">
-                {goal.targetDate ? `Target ${new Date(goal.targetDate).toLocaleDateString()}` : 'No target date'}
+                {goal.targetDate
+                  ? `Target ${new Date(goal.targetDate).toLocaleDateString()}`
+                  : 'No target date'}
               </p>
             </div>
             <span className="finance-goal-total">{percent}% reached</span>
@@ -143,7 +159,9 @@ export default function GoalDetailPage() {
           </Card>
           <Card className="finance-form-panel">
             <SectionHeader title="Record a contribution" />
-            <p className="finance-muted">This tracks progress; it does not move money between accounts.</p>
+            <p className="finance-muted">
+              This tracks progress; it does not move money between accounts.
+            </p>
             <form className="finance-form" onSubmit={contribute}>
               <FinanceInput
                 label={`Contribution amount · ${currency}`}
@@ -152,14 +170,21 @@ export default function GoalDetailPage() {
                 inputMode="decimal"
                 required
               />
-              {error && <p className="finance-form-error" role="alert">{error}</p>}
+              {error && (
+                <p className="finance-form-error" role="alert">
+                  {error}
+                </p>
+              )}
               <Button type="submit" disabled={saving || !amount.trim()}>
                 {saving ? 'Saving locally…' : 'Add contribution'} <ArrowRight size={15} />
               </Button>
             </form>
           </Card>
           <Card className="finance-record-panel">
-            <SectionHeader title="Contribution history" action={<span>{history.length} entries</span>} />
+            <SectionHeader
+              title="Contribution history"
+              action={<span>{history.length} entries</span>}
+            />
             {history.length === 0 ? (
               <p className="finance-muted">No contributions recorded yet.</p>
             ) : (
@@ -167,7 +192,9 @@ export default function GoalDetailPage() {
                 {history.map((entry) => (
                   <li key={idOf(entry)}>
                     <span className="finance-record-copy">
-                      <strong>{new Date(Number(entry.occurredAt ?? 0)).toLocaleDateString()}</strong>
+                      <strong>
+                        {new Date(Number(entry.occurredAt ?? 0)).toLocaleDateString()}
+                      </strong>
                       <small>Saved locally first</small>
                     </span>
                     <strong>{formatMinor(toMinor(entry.amountMinor), currency)}</strong>

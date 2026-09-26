@@ -91,13 +91,16 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (!userId || !passcodeStatus.retryAt) return;
-    const timer = window.setTimeout(() => {
-      try {
-        setPasscodeStatus(getPasscodeLockStatus(userId));
-      } catch {
-        setPhase('storage-error');
-      }
-    }, Math.max(0, passcodeStatus.retryAt - Date.now()) + 1);
+    const timer = window.setTimeout(
+      () => {
+        try {
+          setPasscodeStatus(getPasscodeLockStatus(userId));
+        } catch {
+          setPhase('storage-error');
+        }
+      },
+      Math.max(0, passcodeStatus.retryAt - Date.now()) + 1,
+    );
     return () => window.clearTimeout(timer);
   }, [passcodeStatus.retryAt, userId]);
 
@@ -225,7 +228,10 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
           tools access may still inspect the offline copy.
         </p>
         {passkeyEnabled && (
-          <Button onPress={unlockWithPasskey} disabled={pending || passcodeStatus.retryAt > Date.now()}>
+          <Button
+            onPress={unlockWithPasskey}
+            disabled={pending || passcodeStatus.retryAt > Date.now()}
+          >
             {pending ? 'Waiting for passkey…' : 'Unlock with passkey'}
           </Button>
         )}
