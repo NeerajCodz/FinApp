@@ -1,4 +1,13 @@
-export const notificationTypes = ['transaction', 'budget', 'goal', 'recurring', 'group', 'settlement', 'security', 'sync'] as const;
+export const notificationTypes = [
+  'transaction',
+  'budget',
+  'goal',
+  'recurring',
+  'group',
+  'settlement',
+  'security',
+  'sync',
+] as const;
 export type NotificationType = (typeof notificationTypes)[number];
 export type NotificationPreferences = Record<NotificationType, boolean>;
 
@@ -14,11 +23,16 @@ export const defaultNotificationPreferences: NotificationPreferences = {
 };
 
 export function normalizeNotificationPreferences(value: unknown): NotificationPreferences {
-  const saved = value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown> : {};
-  return Object.fromEntries(notificationTypes.map((type) => [
-    type, typeof saved[type] === 'boolean' ? saved[type] : defaultNotificationPreferences[type],
-  ])) as NotificationPreferences;
+  const saved =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  return Object.fromEntries(
+    notificationTypes.map((type) => [
+      type,
+      typeof saved[type] === 'boolean' ? saved[type] : defaultNotificationPreferences[type],
+    ]),
+  ) as NotificationPreferences;
 }
 
 export type NotificationRoute = { type: string; entityType?: string; entityId?: string };

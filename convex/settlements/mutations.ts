@@ -33,7 +33,12 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const actor = await requireUser(ctx);
     if (!actor) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, actor._id, args.clientMutationId, 'settlement.create');
+    const replay = await replayMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'settlement.create',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('settlements', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
@@ -46,37 +51,66 @@ export const create = mutation({
     const [group, account, memberships] = await Promise.all([
       ctx.db.get(args.groupId),
       ctx.db.get(args.accountId),
-      ctx.db.query('groupMembers').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
+        .collect(),
     ]);
     if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
     if (group.currency !== currency) throw new Error('CURRENCY_MISMATCH');
-    if (!account || account.ownerId !== actor._id || account.archivedAt !== undefined ||
-      account.currency !== currency) throw new Error('ACCOUNT_UNAVAILABLE');
+    if (
+      !account ||
+      account.ownerId !== actor._id ||
+      account.archivedAt !== undefined ||
+      account.currency !== currency
+    )
+      throw new Error('ACCOUNT_UNAVAILABLE');
     const memberIds = new Set(memberships.map((member) => member.userId));
-    if (!memberIds.has(actor._id) || !memberIds.has(args.fromUserId) ||
-      !memberIds.has(args.toUserId)) throw new Error('NOT_MEMBER');
+    if (
+      !memberIds.has(actor._id) ||
+      !memberIds.has(args.fromUserId) ||
+      !memberIds.has(args.toUserId)
+    )
+      throw new Error('NOT_MEMBER');
 
     // Check the current group ledger inside this mutation, so concurrent payments
     // cannot both clear the same debt.
     const [expenses, settlements] = await Promise.all([
-      ctx.db.query('transactions').withIndex('by_group_occurredAt',
-        (q) => q.eq('groupId', args.groupId)).collect(),
-      ctx.db.query('settlements').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
+      ctx.db
+        .query('transactions')
+        .withIndex('by_group_occurredAt', (q) => q.eq('groupId', args.groupId))
+        .collect(),
+      ctx.db
+        .query('settlements')
+        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
+        .collect(),
     ]);
     const payers: { userId: string; amountMinor: bigint }[] = [];
     const participants: { userId: string; amountMinor: bigint }[] = [];
     for (const expense of expenses) {
-      if (expense.type !== 'expense' || expense.status !== 'posted' ||
-        expense.deletedAt !== undefined || expense.currency !== currency) continue;
+      if (
+        expense.type !== 'expense' ||
+        expense.status !== 'posted' ||
+        expense.deletedAt !== undefined ||
+        expense.currency !== currency
+      )
+        continue;
       const [paid, shared] = await Promise.all([
-        ctx.db.query('expensePayers').withIndex('by_transaction',
-          (q) => q.eq('transactionId', expense._id)).collect(),
-        ctx.db.query('expenseParticipants').withIndex('by_transaction',
-          (q) => q.eq('transactionId', expense._id)).collect(),
+        ctx.db
+          .query('expensePayers')
+          .withIndex('by_transaction', (q) => q.eq('transactionId', expense._id))
+          .collect(),
+        ctx.db
+          .query('expenseParticipants')
+          .withIndex('by_transaction', (q) => q.eq('transactionId', expense._id))
+          .collect(),
       ]);
-      if (!paid.length || !shared.length ||
+      if (
+        !paid.length ||
+        !shared.length ||
         paid.reduce((sum, entry) => sum + entry.amountMinor, 0n) !== expense.amountMinor ||
-        shared.reduce((sum, entry) => sum + entry.amountMinor, 0n) !== expense.amountMinor)
+        shared.reduce((sum, entry) => sum + entry.amountMinor, 0n) !== expense.amountMinor
+      )
         throw new Error('INCOMPLETE_GROUP_SPLITS');
       payers.push(...paid);
       participants.push(...shared);
@@ -99,13 +133,29 @@ export const create = mutation({
       createdAt: now,
     });
     const settlement = await ctx.db.get(settlementId);
-    await publishMutationResult(ctx, actor._id, args.clientMutationId, 'settlement.create',
-      settlementId, 'settlements', String(settlementId), now, settlement,
-      memberships.map((member) => member.userId));
+    await publishMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'settlement.create',
+      settlementId,
+      'settlements',
+      String(settlementId),
+      now,
+      settlement,
+      memberships.map((member) => member.userId),
+    );
     const otherUserId = actor._id === args.fromUserId ? args.toUserId : args.fromUserId;
-    await createNotification(ctx, otherUserId, `settlement:${settlementId}`,
-      'settlement', 'settlement', String(args.groupId), 'Settlement recorded',
-      `${formatMinor(args.amountMinor, currency)} was recorded in ${group.name}.`);
+    await createNotification(
+      ctx,
+      otherUserId,
+      `settlement:${settlementId}`,
+      'settlement',
+      'settlement',
+      String(args.groupId),
+      'Settlement recorded',
+      `${formatMinor(args.amountMinor, currency)} was recorded in ${group.name}.`,
+    );
     return settlementId;
   },
 });

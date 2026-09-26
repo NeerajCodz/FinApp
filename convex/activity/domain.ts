@@ -1,4 +1,5 @@
-export type ActivityKind = 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment' | 'settlement' | 'group';
+export type ActivityKind =
+  'expense' | 'income' | 'transfer' | 'refund' | 'adjustment' | 'settlement' | 'group';
 export type ActivityRow = {
   id: string;
   ownerId: string;
