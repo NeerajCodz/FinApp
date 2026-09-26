@@ -16,6 +16,12 @@ jobs:
       - run: bun run test
       - run: bun run lint
       - run: bun run format:check
+      - name: Build web bundle
+        run: bun run build:web
+        env:
+          NEXT_PUBLIC_CONVEX_URL: http://127.0.0.1:2608
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
       - run: bun run expo:doctor
       - name: Convex validation
         run: bunx convex codegen

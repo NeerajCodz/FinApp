@@ -9,9 +9,9 @@ services:
       - '${FINAPP_CONVEX_PORT:-2608}:3210'
       - '${FINAPP_CONVEX_SITE_PORT:-2610}:3211'
     environment:
-      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
-      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
-      CONVEX_SITE_URL: ${CONVEX_SITE_URL:-http://127.0.0.1:3211}
+      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://10.0.2.2:2608}
+      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://10.0.2.2:2610}
+      CONVEX_SITE_URL: ${CONVEX_SITE_URL:-http://10.0.2.2:2610}
       DO_NOT_REQUIRE_SSL: ${DO_NOT_REQUIRE_SSL:-true}
       DISABLE_METRICS_ENDPOINT: ${DISABLE_METRICS_ENDPOINT:-true}
       DOCUMENT_RETENTION_DELAY: ${DOCUMENT_RETENTION_DELAY:-172800}
@@ -39,12 +39,53 @@ services:
       convex:
         condition: service_healthy
 
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    working_dir: /workspace
+    command:
+      [
+        'sh',
+        '-lc',
+        'cd /workspace && bun install --frozen-lockfile && cd /workspace/apps/web && exec bun run dev',
+      ]
+    ports:
+      - '${FINAPP_WEB_PORT:-3000}:3000'
+    environment:
+      NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://127.0.0.1:2608}
+      WATCHPACK_POLLING: 'true'
+    volumes:
+      - .:/workspace
+      - finapp_web_node_modules:/workspace/node_modules
+      - finapp_web_next:/workspace/apps/web/.next
+    depends_on:
+      convex:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'bun',
+          '-e',
+          "fetch('http://127.0.0.1:3000/dashboard').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
   mobileexpo:
     build:
       context: .
       dockerfile: infra/docker/mobileexpo.Dockerfile
-    working_dir: /workspace/app/mobile
-    command: ['bun', 'x', 'expo', 'start', '--dev-client', '--host', 'lan', '--port', '2609']
+    working_dir: /workspace/apps/mobile
+    command:
+      [
+        'sh',
+        '-lc',
+        'cd /workspace && bun install --frozen-lockfile && cd /workspace/apps/mobile && exec bun x expo start --dev-client --host lan --port 2609',
+      ]
     ports:
       - '${FINAPP_EXPO_PORT:-2609}:2609'
       - '${FINAPP_EXPO_COMPAT_PORT:-8081}:2609'
@@ -54,7 +95,8 @@ services:
     environment:
       CI: '0'
       EXPO_PUBLIC_APP_ENV: ${EXPO_PUBLIC_APP_ENV:-production}
-      EXPO_PUBLIC_CONVEX_URL: ${EXPO_PUBLIC_CONVEX_URL:-https://secret-kiwi-640.convex.cloud}
+      EXPO_PUBLIC_CONVEX_URL: ${EXPO_PUBLIC_CONVEX_URL:-http://10.0.2.2:2608}
+      EXPO_PUBLIC_CONVEX_SITE_URL: ${EXPO_PUBLIC_CONVEX_SITE_URL:-http://10.0.2.2:2610}
       EXPO_PUBLIC_METRO_URL: ${EXPO_PUBLIC_METRO_URL:-http://10.0.2.2:2609}
       REACT_NATIVE_PACKAGER_HOSTNAME: ${EXPO_HOSTNAME:-10.0.2.2}
     volumes:
@@ -79,3 +121,5 @@ services:
 volumes:
   finapp_convex_data:
   finapp_node_modules:
+  finapp_web_node_modules:
+  finapp_web_next:

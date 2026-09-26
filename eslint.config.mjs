@@ -2,7 +2,15 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/**', '**/.expo/**', 'app/mobile/assets/**', '**/*.config.js'] },
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/.expo/**',
+      '**/.next/**',
+      'apps/mobile/assets/**',
+      '**/*.config.js',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

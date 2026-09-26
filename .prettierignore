@@ -1,6 +1,11 @@
-app/mobile/dist/
+apps/mobile/dist/
 node_modules/
 .convex/
 convex/_generated/
-app/mobile/android/
+apps/mobile/android/
 .agents/
+apps/web/.next/
+.next/
+apps/web/next-env.d.ts
+FINAPP_MOBILE_UX_AND_ANALYTICS_PLAN.md
+local-plan.md
