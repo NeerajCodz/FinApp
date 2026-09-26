@@ -193,7 +193,7 @@ export default function GoalsPage() {
                   <li className="finance-plan-card" key={idOf(goal)}>
                     <div className="finance-budget-heading">
                       <span>
-                        <strong>{goal.name ?? 'Savings goal'}</strong>
+                        <Link href={`/goal/${encodeURIComponent(idOf(goal))}`}>{goal.name ?? 'Savings goal'}</Link>
                         <small>
                           {goal.targetDate
                             ? `Target ${new Date(goal.targetDate).toLocaleDateString('en', { month: 'short', year: 'numeric' })}`
