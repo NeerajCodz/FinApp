@@ -47,19 +47,20 @@ export async function commitLocalWrite(
     updatedAt: clientUpdatedAt,
     clientUpdatedAt,
   };
-  const entry = createOutboxEntry(
-    operation,
-    { ...payload, clientMutationId },
-    clientMutationId,
-    {
-      entityType,
-      recordId,
-      clientUpdatedAt,
-      baseUpdatedAt: options.baseUpdatedAt,
-      deviceId,
-      dependencies: options.dependencies,
-    },
+  const entry = createOutboxEntry(operation, { ...payload, clientMutationId }, clientMutationId, {
+    entityType,
+    recordId,
+    clientUpdatedAt,
+    baseUpdatedAt: options.baseUpdatedAt,
+    deviceId,
+    dependencies: options.dependencies,
+  });
+  await applyLocalMutationAndEnqueue(
+    userId,
+    entityType,
+    localRecord,
+    entry,
+    options.relatedRecords,
   );
-  await applyLocalMutationAndEnqueue(userId, entityType, localRecord, entry, options.relatedRecords);
   return recordId;
 }

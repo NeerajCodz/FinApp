@@ -124,7 +124,11 @@ function mapCloudForeignIds(db: SQLiteDatabase, userId: string, value: unknown):
     return Object.fromEntries(
       Object.entries(current).map(([key, item]) => [
         key,
-        key !== 'id' && key !== '_id' && key !== 'cloudId' && /id$/i.test(key) && typeof item === 'string'
+        key !== 'id' &&
+        key !== '_id' &&
+        key !== 'cloudId' &&
+        /id$/i.test(key) &&
+        typeof item === 'string'
           ? (localByCloudId.get(item) ?? item)
           : normalize(item),
       ]),
@@ -345,18 +349,26 @@ export async function readGroupRange<T extends LocalRecord>(
   const db = await getLocalDatabase();
   const mapped = db.getFirstSync<{ cloudId: string }>(
     'SELECT cloudId FROM idMappings WHERE userId = ? AND entityType = ? AND localId = ?',
-    userId, 'group', groupId,
+    userId,
+    'group',
+    groupId,
   );
-  const groupIds = mapped?.cloudId && mapped.cloudId !== groupId
-    ? [groupId, mapped.cloudId] : [groupId];
+  const groupIds =
+    mapped?.cloudId && mapped.cloudId !== groupId ? [groupId, mapped.cloudId] : [groupId];
   const placeholders = groupIds.map(() => '?').join(', ');
   const transactions = db.getAllSync<{ payload: string }>(
     `SELECT payload FROM transactions WHERE userId = ? AND groupId IN (${placeholders}) AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt`,
-    userId, ...groupIds, startAt, endAt,
+    userId,
+    ...groupIds,
+    startAt,
+    endAt,
   );
   const settlements = db.getAllSync<{ payload: string }>(
     `SELECT payload FROM settlements WHERE userId = ? AND groupId IN (${placeholders}) AND occurredAt >= ? AND occurredAt < ? ORDER BY occurredAt`,
-    userId, ...groupIds, startAt, endAt,
+    userId,
+    ...groupIds,
+    startAt,
+    endAt,
   );
   return {
     transactions: transactions.map((row) => decode<T>(row.payload)),
@@ -544,24 +556,35 @@ export async function applyCloudChanges(
         'goals',
         'recurringRules',
       ].includes(table ?? '');
-      const row = table === 'appProfile'
-        ? db.getFirstSync<{ id: string; payload: string }>(
-            'SELECT userId AS id, payload FROM appProfile WHERE userId = ?',
-            userId,
-          )
-        : table === 'appSettings'
+      const row =
+        table === 'appProfile'
           ? db.getFirstSync<{ id: string; payload: string }>(
-              "SELECT key AS id, payload FROM appSettings WHERE userId = ? AND key = 'cloud'",
+              'SELECT userId AS id, payload FROM appProfile WHERE userId = ?',
               userId,
             )
-          : table && !['accountMembers', 'groupMembers', 'expensePayers', 'expenseParticipants', 'transactionTags'].includes(table)
+          : table === 'appSettings'
             ? db.getFirstSync<{ id: string; payload: string }>(
-                `SELECT id, payload FROM ${table} WHERE userId = ? AND ${hasCloudId ? '(id = ? OR cloudId = ?)' : 'id = ?'} LIMIT 1`,
-                ...(hasCloudId ? [userId, localId, change.documentId] : [userId, localId]),
+                "SELECT key AS id, payload FROM appSettings WHERE userId = ? AND key = 'cloud'",
+                userId,
               )
-            : null;
-      const localVersion = db.getFirstSync<{ clientUpdatedAt: number }>(
-        'SELECT clientUpdatedAt FROM recordVersions WHERE userId = ? AND entityType = ? AND recordId = ?',
+            : table &&
+                ![
+                  'accountMembers',
+                  'groupMembers',
+                  'expensePayers',
+                  'expenseParticipants',
+                  'transactionTags',
+                ].includes(table)
+              ? db.getFirstSync<{ id: string; payload: string }>(
+                  `SELECT id, payload FROM ${table} WHERE userId = ? AND ${hasCloudId ? '(id = ? OR cloudId = ?)' : 'id = ?'} LIMIT 1`,
+                  ...(hasCloudId ? [userId, localId, change.documentId] : [userId, localId]),
+                )
+              : null;
+      const localVersion = db.getFirstSync<{
+        clientUpdatedAt: number;
+        cloudUpdatedAt: number | null;
+      }>(
+        'SELECT clientUpdatedAt, cloudUpdatedAt FROM recordVersions WHERE userId = ? AND entityType = ? AND recordId = ?',
         userId,
         change.entityType,
         localId,
@@ -576,18 +599,28 @@ export async function applyCloudChanges(
           String(change.revision),
           change.deletedAt,
         );
-        if (table === 'appProfile')
-          db.runSync('DELETE FROM appProfile WHERE userId = ?', userId);
+        if (table === 'appProfile') db.runSync('DELETE FROM appProfile WHERE userId = ?', userId);
         else if (table === 'appSettings')
           db.runSync("DELETE FROM appSettings WHERE userId = ? AND key = 'cloud'", userId);
         else if (
           table &&
           row &&
-          !['accountMembers', 'groupMembers', 'expensePayers', 'expenseParticipants', 'transactionTags'].includes(table)
+          ![
+            'accountMembers',
+            'groupMembers',
+            'expensePayers',
+            'expenseParticipants',
+            'transactionTags',
+          ].includes(table)
         )
           db.runSync(`DELETE FROM ${table} WHERE userId = ? AND id = ?`, userId, row.id);
       } else if (change.document) {
-        if (row && localVersion && localVersion.clientUpdatedAt > 0) {
+        if (
+          row &&
+          localVersion &&
+          (localVersion.clientUpdatedAt > 0 ||
+            (localVersion.cloudUpdatedAt ?? 0) > change.updatedAt)
+        ) {
           const cloudPayload = encode(change.document);
           if (!sameFinancialContent(decode<LocalRecord>(row.payload), change.document)) {
             const conflictId = `${change.entityType}:${localId}:${change.revision}`;
@@ -613,9 +646,12 @@ export async function applyCloudChanges(
               change.entityType,
               localId,
             );
-            if (localVersion.clientUpdatedAt > change.updatedAt) {
+            if (
+              localVersion.clientUpdatedAt > change.updatedAt ||
+              (localVersion.cloudUpdatedAt ?? 0) > change.updatedAt
+            ) {
               db.runSync(
-                `UPDATE recordVersions SET cloudUpdatedAt = ?, revision = ?
+                `UPDATE recordVersions SET cloudUpdatedAt = MAX(COALESCE(cloudUpdatedAt, 0), ?), revision = ?
                  WHERE userId = ? AND entityType = ? AND recordId = ?`,
                 change.updatedAt,
                 String(change.revision),
@@ -790,11 +826,19 @@ export async function markSynced(
       profile: 'appProfile',
     };
     const table = recordTable[entityType];
-    const localRecord = table === 'appProfile'
-      ? db.getFirstSync<{ payload: string }>('SELECT payload FROM appProfile WHERE userId = ?', userId)
-      : table
-        ? db.getFirstSync<{ payload: string }>(`SELECT payload FROM ${table} WHERE userId = ? AND id = ?`, userId, localEntityId)
-        : null;
+    const localRecord =
+      table === 'appProfile'
+        ? db.getFirstSync<{ payload: string }>(
+            'SELECT payload FROM appProfile WHERE userId = ?',
+            userId,
+          )
+        : table
+          ? db.getFirstSync<{ payload: string }>(
+              `SELECT payload FROM ${table} WHERE userId = ? AND id = ?`,
+              userId,
+              localEntityId,
+            )
+          : null;
     if (localRecord) {
       putRecord(db, userId, entityType, {
         ...decode<LocalRecord>(localRecord.payload),
@@ -917,20 +961,24 @@ export async function getSyncCursor(userId: string): Promise<string | null> {
   requireUser(userId);
   await initializeLocalDatabase();
   const db = await getLocalDatabase();
-  return db.getFirstSync<{ cursor: string | null }>(
-    'SELECT cursor FROM syncState WHERE userId = ?',
-    userId,
-  )?.cursor ?? null;
+  return (
+    db.getFirstSync<{ cursor: string | null }>(
+      'SELECT cursor FROM syncState WHERE userId = ?',
+      userId,
+    )?.cursor ?? null
+  );
 }
 
 export async function hasCompletedBootstrap(userId: string): Promise<boolean> {
   requireUser(userId);
   await initializeLocalDatabase();
   const db = await getLocalDatabase();
-  return db.getFirstSync<{ value: string }>(
-    "SELECT value FROM localMetadata WHERE userId = ? AND key = 'bootstrapComplete'",
-    userId,
-  )?.value === '1';
+  return (
+    db.getFirstSync<{ value: string }>(
+      "SELECT value FROM localMetadata WHERE userId = ? AND key = 'bootstrapComplete'",
+      userId,
+    )?.value === '1'
+  );
 }
 
 export async function markBootstrapCompleted(userId: string): Promise<void> {
@@ -948,10 +996,10 @@ export async function getSyncRevision(userId: string): Promise<string> {
   requireUser(userId);
   await initializeLocalDatabase();
   const db = await getLocalDatabase();
-  return db.getFirstSync<{ revision: string }>(
-    'SELECT revision FROM syncState WHERE userId = ?',
-    userId,
-  )?.revision ?? '0';
+  return (
+    db.getFirstSync<{ revision: string }>('SELECT revision FROM syncState WHERE userId = ?', userId)
+      ?.revision ?? '0'
+  );
 }
 
 export type LocalSyncWindow = 7 | 30 | 90 | 180 | 365 | 'all';
@@ -1195,7 +1243,10 @@ export async function putLocalNotification(
   const id = `local:${eventKey}`;
   const result = db.runSync(
     'INSERT OR IGNORE INTO notifications (userId, id, createdAt, payload) VALUES (?, ?, ?, ?)',
-    userId, id, Number(record.createdAt), encode({ ...record, id, eventKey }),
+    userId,
+    id,
+    Number(record.createdAt),
+    encode({ ...record, id, eventKey }),
   );
   if (result.changes > 0) notify(userId);
 }
@@ -1206,12 +1257,18 @@ export async function markDeviceNotificationRead(userId: string, id: string): Pr
   await initializeLocalDatabase();
   const db = await getLocalDatabase();
   const row = db.getFirstSync<{ payload: string }>(
-    'SELECT payload FROM notifications WHERE userId = ? AND id = ?', userId, id,
+    'SELECT payload FROM notifications WHERE userId = ? AND id = ?',
+    userId,
+    id,
   );
   if (!row) throw new Error('NOTIFICATION_NOT_FOUND');
   const record = decode<LocalRecord>(row.payload);
   if (record.readAt !== undefined) return;
-  db.runSync('UPDATE notifications SET payload = ? WHERE userId = ? AND id = ?',
-    encode({ ...record, readAt: Date.now() }), userId, id);
+  db.runSync(
+    'UPDATE notifications SET payload = ? WHERE userId = ? AND id = ?',
+    encode({ ...record, readAt: Date.now() }),
+    userId,
+    id,
+  );
   notify(userId);
 }

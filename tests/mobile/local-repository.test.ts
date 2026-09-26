@@ -12,10 +12,10 @@ vi.mock('expo-file-system', () => ({
     async move(_destination: unknown) {}
   },
 }));
-import * as repo from '../../app/mobile/local/repository';
-import { createOutboxEntry } from '../../app/mobile/local/outbox/queue';
-import { syncOutbox } from '../../app/mobile/local/sync/engine';
-import { deserializeLocalValue } from '../../app/mobile/local/serialization';
+import * as repo from '../../apps/mobile/local/repository';
+import { createOutboxEntry } from '../../apps/mobile/local/outbox/queue';
+import { syncOutbox } from '../../apps/mobile/local/sync/engine';
+import { deserializeLocalValue } from '../../apps/mobile/local/serialization';
 vi.mock('expo-secure-store', () => ({
   getItemAsync: async () => 'test-key',
   setItemAsync: async () => undefined,
@@ -414,19 +414,17 @@ describe('local financial repository', () => {
     expect(manuallyRetried?.status).toBe('pending');
     expect(manuallyRetried?.nextRetryAt).toBeUndefined();
     expect(manuallyRetried?.lastError).toBeUndefined();
-    expect((await repo.listOutbox(userId)).find(
-      (entry) => entry.localId === transient.localId,
-    )?.status).toBe('failed');
+    expect(
+      (await repo.listOutbox(userId)).find((entry) => entry.localId === transient.localId)?.status,
+    ).toBe('failed');
   });
 
   it('keeps cloud group references addressable by their stable local route ID', async () => {
     const userId = 'user-group-mapping';
-    const groupWrite = createOutboxEntry(
-      'group.create',
-      { name: 'Trip' },
-      'mutation-group-map',
-      { entityType: 'group', recordId: 'local-group-map' },
-    );
+    const groupWrite = createOutboxEntry('group.create', { name: 'Trip' }, 'mutation-group-map', {
+      entityType: 'group',
+      recordId: 'local-group-map',
+    });
     await repo.applyLocalMutationAndEnqueue(
       userId,
       'group',
@@ -450,9 +448,7 @@ describe('local financial repository', () => {
       },
     ]);
 
-    expect(
-      await repo.readGroupRange(userId, 'local-group-map', 0, 30),
-    ).toMatchObject({
+    expect(await repo.readGroupRange(userId, 'local-group-map', 0, 30)).toMatchObject({
       transactions: [{ groupId: 'local-group-map', title: 'Dinner' }],
     });
   });

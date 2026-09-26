@@ -18,7 +18,9 @@ function isTransientSyncFailure(error: unknown): boolean {
     if (details.data !== undefined) return false;
   }
   const message = error instanceof Error ? error.message : String(error);
-  return /network|fetch|timeout|timed out|disconnect|offline|websocket|socket|connection|temporar|unavailable|econn|etimedout|\b(408|429|502|503|504)\b/i.test(message);
+  return /network|fetch|timeout|timed out|disconnect|offline|websocket|socket|connection|temporar|unavailable|econn|etimedout|\b(408|429|502|503|504)\b/i.test(
+    message,
+  );
 }
 
 export type SyncResult = {

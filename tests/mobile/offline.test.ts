@@ -3,18 +3,14 @@ import {
   createOutboxEntry,
   nextRetryDelay,
   markConflict,
-} from '../../app/mobile/local/outbox/queue';
-import { deserializeLocalValue } from '../../app/mobile/local/serialization';
-import { exportCsv } from '../../app/mobile/lib/export/csv';
+} from '../../apps/mobile/local/outbox/queue';
+import { deserializeLocalValue } from '../../apps/mobile/local/serialization';
+import { exportCsv } from '../../apps/mobile/lib/export/csv';
 
 describe('offline financial safety', () => {
   it('round trips arbitrary-precision amounts and numeric-looking text', () => {
     const amountMinor = 900719925474099312345n;
-    const entry = createOutboxEntry(
-      'transaction.create',
-      { amountMinor, title: '100n' },
-      'm-1',
-    );
+    const entry = createOutboxEntry('transaction.create', { amountMinor, title: '100n' }, 'm-1');
     const payload = deserializeLocalValue<{ amountMinor: bigint; title: string }>(entry.payload);
     expect(payload).toEqual({ amountMinor, title: '100n' });
   });
