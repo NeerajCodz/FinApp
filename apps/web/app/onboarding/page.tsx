@@ -6,12 +6,18 @@ import { useRouter } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
 import { ArrowRight } from 'lucide-react';
 import { Button, Input, Label } from '@finapp/ui/web';
+import { currencies } from '@convex/shared/validators';
 import { AuthFrame } from '@/components/auth/AuthFrame';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
-type Profile = LocalRecord & { displayName?: string };
+type Profile = LocalRecord & {
+  displayName?: string;
+  username?: string;
+  defaultCurrency?: string;
+  timezone?: string;
+};
 
 export default function OnboardingPage() {
   const auth = useConvexAuth();
@@ -20,35 +26,62 @@ export default function OnboardingPage() {
   const profile = profiles[0];
   const router = useRouter();
   const [displayName, setDisplayName] = React.useState('');
+  const [username, setUsername] = React.useState('');
+  const [defaultCurrency, setDefaultCurrency] = React.useState<(typeof currencies)[number]>('INR');
+  const [timezone, setTimezone] = React.useState('UTC');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
     if (!displayName && profile?.displayName) setDisplayName(profile.displayName);
   }, [displayName, profile?.displayName]);
+  React.useEffect(() => {
+    if (!username && profile?.username) setUsername(profile.username);
+  }, [profile?.username, username]);
+  React.useEffect(() => {
+    if (
+      profile?.defaultCurrency &&
+      currencies.some((currency) => currency === profile.defaultCurrency)
+    )
+      setDefaultCurrency(profile.defaultCurrency as (typeof currencies)[number]);
+  }, [profile?.defaultCurrency]);
+  React.useEffect(() => {
+    setTimezone(profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  }, [profile?.timezone]);
 
   async function finish(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = displayName.trim();
-    if (!userId || !auth.isAuthenticated || !normalized || saving) return;
+    const normalizedUsername = username.trim().replace(/^@+/, '');
+    const normalizedTimezone = timezone.trim();
+    if (!normalized || !normalizedTimezone) {
+      setError('Enter your name and time zone to continue.');
+      return;
+    }
+    if (normalizedUsername && !/^[a-z0-9_]{3,32}$/i.test(normalizedUsername)) {
+      setError('Usernames must be 3–32 letters, numbers, or underscores.');
+      return;
+    }
+    if (!userId || !auth.isAuthenticated || saving) return;
     setSaving(true);
     setError('');
     try {
       const profileId = String(profile?.id ?? profile?._id ?? crypto.randomUUID());
+      const update = {
+        displayName: normalized,
+        defaultCurrency,
+        timezone: normalizedTimezone,
+        ...(normalizedUsername ? { username: normalizedUsername } : {}),
+      };
       const record: LocalRecord = {
         ...(profile ?? {}),
         id: profileId,
         ownerId: userId,
-        displayName: normalized,
+        ...update,
       };
-      await commitLocalWrite(
-        userId,
-        'profile',
-        'user.update',
-        record,
-        { displayName: normalized },
-        { recordId: profileId },
-      );
+      await commitLocalWrite(userId, 'profile', 'user.update', record, update, {
+        recordId: profileId,
+      });
       router.replace('/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile.');
@@ -88,15 +121,15 @@ export default function OnboardingPage() {
   return (
     <AuthFrame
       eyebrow="MAKE IT YOURS"
-      title="A name for your space."
-      description="Choose how Finapp greets you. You can change this later."
+      title="Set up your profile."
+      description="Choose how Finapp greets you and the defaults it uses. You can change these later."
       footer={
         <span>
           Already know your way around? <Link href="/dashboard">Go to your overview</Link>
         </span>
       }
     >
-      <form onSubmit={finish} noValidate>
+      <form onSubmit={finish} noValidate className="auth-form">
         <div className="auth-field">
           <Label htmlFor="display-name">Your name</Label>
           <Input
@@ -108,12 +141,55 @@ export default function OnboardingPage() {
             required
           />
         </div>
+        <div className="auth-field">
+          <Label htmlFor="username">Username (optional)</Label>
+          <Input
+            id="username"
+            autoComplete="username"
+            maxLength={32}
+            value={username}
+            onChangeText={setUsername}
+            placeholder="your_name"
+          />
+        </div>
+        <div className="auth-field">
+          <Label htmlFor="default-currency">Default currency</Label>
+          <select
+            id="default-currency"
+            className="finapp-input finapp-select"
+            value={defaultCurrency}
+            onChange={(event) =>
+              setDefaultCurrency(event.currentTarget.value as (typeof currencies)[number])
+            }
+          >
+            {currencies.map((currency) => (
+              <option key={currency} value={currency}>
+                {currency}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="auth-field">
+          <Label htmlFor="time-zone">Time zone</Label>
+          <Input
+            id="time-zone"
+            maxLength={100}
+            value={timezone}
+            onChangeText={setTimezone}
+            required
+          />
+        </div>
         {error && (
           <p className="auth-error" role="alert" aria-live="polite">
             {error}
           </p>
         )}
-        <Button type="submit" size="lg" disabled={saving || !displayName.trim()} aria-busy={saving}>
+        <Button
+          type="submit"
+          size="lg"
+          disabled={saving || !displayName.trim() || !timezone.trim()}
+          aria-busy={saving}
+        >
           {saving ? 'Saving your space…' : 'Continue'} <ArrowRight size={16} />
         </Button>
       </form>

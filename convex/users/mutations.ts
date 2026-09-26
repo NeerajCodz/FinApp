@@ -18,6 +18,7 @@ type ProfileUpdateArgs = {
   username?: string;
   phone?: string;
   defaultCurrency?: string;
+  timezone?: string;
   clientMutationId?: string;
 };
 
@@ -60,6 +61,7 @@ export const update = mutation({
     username: v.optional(v.string()),
     phone: v.optional(v.string()),
     defaultCurrency: v.optional(v.string()),
+    timezone: v.optional(v.string()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args: ProfileUpdateArgs) => {
@@ -81,17 +83,24 @@ export const update = mutation({
     const patch = profilePatch(user, normalized, updatedAt);
     await ctx.db.patch(user._id, patch);
     let settingsSyncChange: { id: string; document: unknown } | null = null;
-    if (normalized.defaultCurrency !== undefined) {
+    if (normalized.defaultCurrency !== undefined || normalized.timezone !== undefined) {
       const settings = await ctx.db
         .query('userSettings')
         .withIndex('by_user', (query) => query.eq('userId', user._id))
         .unique();
       if (settings) {
+        const settingsPatch = {
+          ...(normalized.defaultCurrency !== undefined
+            ? { currency: normalized.defaultCurrency }
+            : {}),
+          ...(normalized.timezone !== undefined ? { timezone: normalized.timezone } : {}),
+          updatedAt,
+        };
         settingsSyncChange = {
           id: String(settings._id),
-          document: { ...settings, currency: normalized.defaultCurrency, updatedAt },
+          document: { ...settings, ...settingsPatch },
         };
-        await ctx.db.patch(settings._id, { currency: normalized.defaultCurrency, updatedAt });
+        await ctx.db.patch(settings._id, settingsPatch);
       }
     }
     const updated = { ...user, ...patch };

@@ -750,6 +750,7 @@ describe('Convex public runtime functions', () => {
     const updated = await authenticated.mutation(api.users.mutations.update, {
       phone: '+91 (98765) 43210',
       defaultCurrency: 'USD',
+      timezone: 'Asia/Kolkata',
     });
     expect(updated).toMatchObject({
       _id: userId,
@@ -757,15 +758,32 @@ describe('Convex public runtime functions', () => {
       phone: '+919876543210',
       phoneVerificationTime: 1234,
       defaultCurrency: 'USD',
+      timezone: 'Asia/Kolkata',
     });
     expect(await authenticated.query(api.users.queries.current, {})).toMatchObject({
       username: 'neeraj_27',
       phone: '+919876543210',
       defaultCurrency: 'USD',
+      timezone: 'Asia/Kolkata',
     });
     expect(await t.run((ctx) => ctx.db.get(userId))).toMatchObject({
       defaultCurrency: 'USD',
     });
+    const updatedSettings = await t.run((ctx) =>
+      ctx.db
+        .query('userSettings')
+        .withIndex('by_user', (query) => query.eq('userId', userId))
+        .unique(),
+    );
+    expect(updatedSettings).toMatchObject({
+      currency: 'USD',
+      timezone: 'Asia/Kolkata',
+    });
+    await expect(
+      authenticated.mutation(api.users.mutations.update, {
+        timezone: 'Mars/Olympus_Mons',
+      }),
+    ).rejects.toThrow('INVALID_TIMEZONE');
     expect(await authenticated.query(api.users.queries.search, { query: '@rah' })).toEqual([
       {
         id: otherUserId,

@@ -48,8 +48,14 @@ export function validateProfileUpdate(update: ProfileUpdate): void {
     throw new Error('INVALID_PHONE');
   if (update.defaultCurrency !== undefined && !/^[A-Z]{3}$/.test(update.defaultCurrency))
     throw new Error('INVALID_CURRENCY');
-  if (update.timezone !== undefined && update.timezone.trim().length === 0)
-    throw new Error('INVALID_PROFILE');
+  if (update.timezone !== undefined) {
+    if (update.timezone.trim().length === 0) throw new Error('INVALID_PROFILE');
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: update.timezone }).format(0);
+    } catch {
+      throw new Error('INVALID_TIMEZONE');
+    }
+  }
 }
 
 export function canCompleteOnboarding(

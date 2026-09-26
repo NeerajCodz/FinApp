@@ -1,9 +1,28 @@
+'use client';
+
+import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useConvexAuth } from 'convex/react';
 import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, Plus } from 'lucide-react';
+import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 const spending = [34, 58, 45, 72, 49, 87, 61, 77, 54, 92, 68, 83];
 
 export default function HomePage() {
+  const auth = useConvexAuth();
+  const { userId } = useBrowserSync();
+  const router = useRouter();
+  React.useEffect(() => {
+    if (!auth.isLoading && auth.isAuthenticated && userId) router.replace('/dashboard');
+  }, [auth.isAuthenticated, auth.isLoading, router, userId]);
+  if (auth.isLoading || (auth.isAuthenticated && !userId))
+    return (
+      <main className="landing" role="status" aria-live="polite">
+        <p className="finance-kicker">PRIVATE WORKSPACE</p>
+        <h1>Restoring your space.</h1>
+      </main>
+    );
   return (
     <main className="landing">
       <header className="site-header">
