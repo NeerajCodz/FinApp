@@ -96,12 +96,24 @@ export const update = mutation({
     }
     const updated = { ...user, ...patch };
     await publishMutationResult(
-      ctx, user._id, args.clientMutationId, 'user.update', updated,
-      'users', String(user._id), updatedAt, { ...updated, _id: user._id },
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'user.update',
+      updated,
+      'users',
+      String(user._id),
+      updatedAt,
+      { ...updated, _id: user._id },
     );
     if (settingsSyncChange) {
       await recordSyncChange(
-        ctx, user._id, 'userSettings', settingsSyncChange.id, updatedAt, settingsSyncChange.document,
+        ctx,
+        user._id,
+        'userSettings',
+        settingsSyncChange.id,
+        updatedAt,
+        settingsSyncChange.document,
       );
     }
     return updated;
@@ -131,7 +143,12 @@ export const setDefaultAccount = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'user.defaultAccount');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'user.defaultAccount',
+    );
     if (replay.found) return replay.result;
     if (args.accountId !== null) {
       const account = await ctx.db.get(args.accountId);
@@ -142,8 +159,15 @@ export const setDefaultAccount = mutation({
     const patch = { defaultAccountId: args.accountId ?? undefined, updatedAt };
     await ctx.db.patch(user._id, patch);
     await publishMutationResult(
-      ctx, user._id, args.clientMutationId, 'user.defaultAccount', args.accountId,
-      'users', String(user._id), updatedAt, { ...user, ...patch, _id: user._id },
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'user.defaultAccount',
+      args.accountId,
+      'users',
+      String(user._id),
+      updatedAt,
+      { ...user, ...patch, _id: user._id },
     );
     return args.accountId;
   },
@@ -158,7 +182,12 @@ export const setDefaultCategory = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'user.defaultCategory');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'user.defaultCategory',
+    );
     if (replay.found) return replay.result;
     if (args.categoryId !== null) {
       const category = await ctx.db.get(args.categoryId);
@@ -173,10 +202,16 @@ export const setDefaultCategory = mutation({
     };
     await ctx.db.patch(user._id, patch);
     await publishMutationResult(
-      ctx, user._id, args.clientMutationId, 'user.defaultCategory', args.categoryId,
-      'users', String(user._id), updatedAt, { ...user, ...patch, _id: user._id },
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'user.defaultCategory',
+      args.categoryId,
+      'users',
+      String(user._id),
+      updatedAt,
+      { ...user, ...patch, _id: user._id },
     );
     return args.categoryId;
   },
 });
-

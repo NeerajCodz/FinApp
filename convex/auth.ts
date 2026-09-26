@@ -4,7 +4,12 @@ import { convexAuth, retrieveAccount } from '@convex-dev/auth/server';
 import type { DataModel } from './_generated/dataModel';
 import type { Id } from './_generated/dataModel';
 import { internal } from './_generated/api';
-import { generateOtp, resendOtpProvider, sendAppLockResetEmail, sendTwoFactorEmail } from './shared/email';
+import {
+  generateOtp,
+  resendOtpProvider,
+  sendAppLockResetEmail,
+  sendTwoFactorEmail,
+} from './shared/email';
 import { getOptionalUser } from './shared/auth';
 import { normalizeUsername } from './users/domain';
 import { action, internalMutation, internalQuery } from './_generated/server';
@@ -139,13 +144,20 @@ export const appLockResetIdentity = internalQuery({
   handler: async (ctx) => {
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined || !user.email || !user.emailVerificationTime)
-      throw new Error('A signed-in account with a verified email is required to reset the app passcode.');
+      throw new Error(
+        'A signed-in account with a verified email is required to reset the app passcode.',
+      );
     return { userId: user._id, email: user.email.toLowerCase() };
   },
 });
 
 export const createAppLockReset = internalMutation({
-  args: { userId: v.id('users'), challengeIdHash: v.string(), codeHash: v.string(), now: v.number() },
+  args: {
+    userId: v.id('users'),
+    challengeIdHash: v.string(),
+    codeHash: v.string(),
+    now: v.number(),
+  },
   handler: async (ctx, { userId, challengeIdHash, codeHash, now }) => {
     const previous = await ctx.db
       .query('appLockResetChallenges')
@@ -154,8 +166,12 @@ export const createAppLockReset = internalMutation({
     if (previous && now - previous.createdAt < 30_000)
       throw new Error('Please wait 30 seconds before requesting another code.');
     const challenge = {
-      challengeIdHash, codeHash, createdAt: now,
-      expiresAt: now + 10 * 60_000, attempts: 0, consumedAt: undefined,
+      challengeIdHash,
+      codeHash,
+      createdAt: now,
+      expiresAt: now + 10 * 60_000,
+      attempts: 0,
+      consumedAt: undefined,
     };
     if (previous) await ctx.db.patch(previous._id, challenge);
     else await ctx.db.insert('appLockResetChallenges', { userId, ...challenge });
@@ -165,8 +181,10 @@ export const createAppLockReset = internalMutation({
 export const revokeAppLockReset = internalMutation({
   args: { challengeIdHash: v.string() },
   handler: async (ctx, { challengeIdHash }) => {
-    const challenge = await ctx.db.query('appLockResetChallenges')
-      .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash)).unique();
+    const challenge = await ctx.db
+      .query('appLockResetChallenges')
+      .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
+      .unique();
     if (challenge) await ctx.db.delete(challenge._id);
   },
 });
@@ -179,7 +197,10 @@ export const requestAppLockReset = action({
     const code = generateOtp();
     const challengeIdHash = await sha256(challengeId);
     await ctx.runMutation(internal.auth.createAppLockReset, {
-      userId, challengeIdHash, codeHash: await sha256(`${challengeId}:${code}`), now: Date.now(),
+      userId,
+      challengeIdHash,
+      codeHash: await sha256(`${challengeId}:${code}`),
+      now: Date.now(),
     });
     try {
       await sendAppLockResetEmail(email, code);
@@ -192,9 +213,15 @@ export const requestAppLockReset = action({
 });
 
 export const consumeAppLockReset = internalMutation({
-  args: { userId: v.id('users'), challengeIdHash: v.string(), codeHash: v.string(), now: v.number() },
+  args: {
+    userId: v.id('users'),
+    challengeIdHash: v.string(),
+    codeHash: v.string(),
+    now: v.number(),
+  },
   handler: async (ctx, { userId, challengeIdHash, codeHash, now }) => {
-    const challenge = await ctx.db.query('appLockResetChallenges')
+    const challenge = await ctx.db
+      .query('appLockResetChallenges')
       .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
       .unique();
     if (!challenge || challenge.userId !== userId || challenge.consumedAt !== undefined)
@@ -209,28 +236,40 @@ export const consumeAppLockReset = internalMutation({
     if (mismatch !== 0) {
       const attempts = challenge.attempts + 1;
       await ctx.db.patch(challenge._id, {
-        attempts, ...(attempts >= 5 ? { consumedAt: now } : {}),
+        attempts,
+        ...(attempts >= 5 ? { consumedAt: now } : {}),
       });
       return false;
     }
     await ctx.db.patch(challenge._id, { consumedAt: now });
-    await createNotification(ctx, userId, `security:app-lock:${challenge._id}:verified`,
-      'security', 'security', String(challenge._id),
+    await createNotification(
+      ctx,
+      userId,
+      `security:app-lock:${challenge._id}:verified`,
+      'security',
+      'security',
+      String(challenge._id),
       'Email recovery code verified',
-      'A code for resetting this device’s app passcode was verified.');
+      'A code for resetting this device’s app passcode was verified.',
+    );
     return true;
   },
 });
 
 export const verifyAppLockReset = action({
   args: { challengeId: v.string(), code: v.string() },
-  handler: async (ctx, { challengeId, code }): Promise<{ verified: boolean; userId: Id<'users'> }> => {
+  handler: async (
+    ctx,
+    { challengeId, code },
+  ): Promise<{ verified: boolean; userId: Id<'users'> }> => {
     if (!/^[a-f0-9]{64}$/.test(challengeId) || !/^\d{6}$/.test(code))
       throw new Error('Invalid or expired reset code.');
     const { userId } = await ctx.runQuery(internal.auth.appLockResetIdentity, {});
     const verified = await ctx.runMutation(internal.auth.consumeAppLockReset, {
-      userId, challengeIdHash: await sha256(challengeId),
-      codeHash: await sha256(`${challengeId}:${code}`), now: Date.now(),
+      userId,
+      challengeIdHash: await sha256(challengeId),
+      codeHash: await sha256(`${challengeId}:${code}`),
+      now: Date.now(),
     });
     return { verified, userId };
   },

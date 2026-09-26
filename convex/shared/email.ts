@@ -48,7 +48,8 @@ function otpEmailTemplate(purpose: OtpPurpose, token: string) {
     'app-lock-reset': {
       subject: 'Reset your Finapp app passcode',
       title: 'Reset your app passcode',
-      action: 'Enter this code in Finapp to reset the passcode on this device. Never share this code.',
+      action:
+        'Enter this code in Finapp to reset the passcode on this device. Never share this code.',
       text: `Your Finapp app passcode reset code is ${token}. It expires in 10 minutes. If you did not request this, ignore this email and secure your account.`,
       notice: 'If you did not request this, ignore this email and secure your account.',
     },
