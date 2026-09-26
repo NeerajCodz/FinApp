@@ -19,8 +19,8 @@ import {
   Text,
   Sheet,
   Typography,
-} from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+} from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 type CurrencyCode = (typeof currencies)[number];
 const localeCurrency: CurrencyCode = Intl.NumberFormat()
@@ -115,8 +115,19 @@ export default function OnboardingScreen() {
         userId,
         'profile',
         'user.update',
-        { ...(profile ?? {}), displayName, username: handle, phone: phone.trim() || undefined, defaultCurrency: currency },
-        { displayName, username: handle, phone: phone.trim() || undefined, defaultCurrency: currency },
+        {
+          ...(profile ?? {}),
+          displayName,
+          username: handle,
+          phone: phone.trim() || undefined,
+          defaultCurrency: currency,
+        },
+        {
+          displayName,
+          username: handle,
+          phone: phone.trim() || undefined,
+          defaultCurrency: currency,
+        },
         { recordId: String(profile?.id ?? profile?._id ?? userId) },
       );
       router.replace('/(tabs)');
@@ -341,9 +352,7 @@ export default function OnboardingScreen() {
         >
           <Text
             style={{
-              color: continueDisabled
-                ? tokens.controlDisabledForeground
-                : tokens.primaryForeground,
+              color: continueDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
               fontFamily: 'SpaceGrotesk_600SemiBold',
               fontSize: 15,
             }}
@@ -352,9 +361,7 @@ export default function OnboardingScreen() {
           </Text>
           <ArrowRight
             size={18}
-            color={
-              continueDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground
-            }
+            color={continueDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
             style={{ marginLeft: 8 }}
           />
         </Button>

@@ -1,56 +1,43 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight } from '@/lib/icons';
-import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAction } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
-import { Button, IconButton, Input, Label, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
-export default function SignInScreen() {
-  const { email: initialIdentifier } = useLocalSearchParams<{ email?: string }>();
-  const [identifier, setIdentifier] = useState(() =>
-    typeof initialIdentifier === 'string' ? initialIdentifier : '',
-  );
+export default function SignUpScreen() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { signIn } = useAuthActions();
-  const requestEmailTwoFactor = useAction(api.auth.requestEmailTwoFactor);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const signInDisabled = !identifier.trim() || !password;
+  const signUpDisabled = !email.trim() || password.length < 8;
 
   async function submit() {
     setError('');
+    const form = new FormData();
+    form.append('email', email.trim().toLowerCase());
+    form.append('password', password);
+    form.append('flow', 'signUp');
     try {
-      const result = await requestEmailTwoFactor({
-        identifier: identifier.trim(),
-        password,
-      });
-      if (result.status === 'verification-required') {
-        const form = new FormData();
-        form.append('email', result.email);
-        form.append('password', password);
-        form.append('flow', 'verification-required');
-        await signIn('password', form);
-        router.replace({
-          pathname: '/(auth)/verify',
-          params: { email: result.email, next: 'tabs' },
-        });
+      const result = await signIn('password', form);
+      if (result.signingIn) {
+        router.replace('/(auth)/onboarding');
       } else {
         router.replace({
-          pathname: '/(auth)/two-factor',
-          params: { challengeId: result.challengeId },
+          pathname: '/(auth)/verify',
+          params: { email: email.trim().toLowerCase(), next: 'onboarding' },
         });
       }
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Unable to sign in';
+      const message = cause instanceof Error ? cause.message : 'Unable to create account';
       setError(message);
-      toast.error('Sign in failed', { description: message });
+      toast.error('Account creation failed', { description: message });
     }
   }
 
@@ -78,22 +65,26 @@ export default function SignInScreen() {
 
         <View style={{ flex: 1, justifyContent: 'center', gap: 28, paddingVertical: 40 }}>
           <View style={{ gap: 10 }}>
-            <Typography variant="title">Welcome back.</Typography>
-            <Typography variant="display">Your money,{`\n`}back in focus.</Typography>
+            <Typography variant="title">Start clearly.</Typography>
+            <Typography variant="display">Build a calmer{`\n`}money habit.</Typography>
+            <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
+              One private ledger for spending, accounts, budgets, and shared expenses.
+            </Text>
           </View>
 
           <View style={{ gap: 18 }}>
             <View>
-              <Label>Email or username</Label>
+              <Label>Email</Label>
               <Input
-                accessibilityLabel="Email or username"
+                accessibilityLabel="Email"
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoComplete="username"
-                textContentType="username"
-                placeholder="you@example.com or @neeraj"
-                value={identifier}
-                onChangeText={setIdentifier}
+                autoComplete="email"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                placeholder="you@example.com"
+                value={email}
+                onChangeText={setEmail}
                 returnKeyType="next"
                 error={!!error}
               />
@@ -102,16 +93,19 @@ export default function SignInScreen() {
               <Label>Password</Label>
               <Input
                 accessibilityLabel="Password"
-                autoComplete="current-password"
-                textContentType="password"
+                autoComplete="new-password"
+                textContentType="newPassword"
                 secureTextEntry
-                placeholder="Your password"
+                placeholder="Create a secure password"
                 value={password}
                 onChangeText={setPassword}
                 returnKeyType="go"
                 onSubmitEditing={submit}
                 error={!!error}
               />
+              <Typography variant="caption" style={{ marginTop: 8 }}>
+                Use at least eight characters.
+              </Typography>
             </View>
             {!!error && (
               <Typography
@@ -136,37 +130,24 @@ export default function SignInScreen() {
           backgroundColor: tokens.background,
         }}
       >
-        <Button
-          variant="ghost"
-          onPress={() =>
-            router.push({
-              pathname: '/(auth)/forgot-password',
-              params: {
-                email: identifier.includes('@') ? identifier.trim().toLowerCase() : '',
-              },
-            })
-          }
-        >
-          Forgot password?
-        </Button>
-        <Button size="lg" disabled={signInDisabled} onPress={submit}>
+        <Button size="lg" disabled={signUpDisabled} onPress={submit}>
           <Text
             style={{
-              color: signInDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
+              color: signUpDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
               fontFamily: 'SpaceGrotesk_600SemiBold',
               fontSize: 15,
             }}
           >
-            Sign in
+            Create account
           </Text>
           <ArrowRight
             size={18}
-            color={signInDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
+            color={signUpDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
             style={{ marginLeft: 8 }}
           />
         </Button>
-        <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-up')}>
-          New to Finapp? Create account
+        <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-in')}>
+          Already have an account? Sign in
         </Button>
       </View>
     </KeyboardAvoidingView>

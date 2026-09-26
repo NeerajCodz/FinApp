@@ -1,9 +1,10 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
+import appIcon from '../../assets/icon.png';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Button, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 export default function WelcomeScreen() {
   const { tokens } = useTheme();
@@ -36,22 +37,16 @@ export default function WelcomeScreen() {
             width: 176,
             height: 176,
             borderRadius: 88,
-            borderWidth: 1,
-            borderColor: '#B7FF4A29',
-            backgroundColor: '#B7FF4A0D',
-            alignItems: 'center',
-            justifyContent: 'center',
+            overflow: 'hidden',
+            backgroundColor: tokens.background,
             marginBottom: 30,
           }}
         >
-          <View
-            accessibilityLabel="Finapp green dot"
-            style={{
-              width: 116,
-              height: 116,
-              borderRadius: 58,
-              backgroundColor: tokens.primary,
-            }}
+          <Image
+            accessibilityLabel="Finapp app icon"
+            source={appIcon}
+            resizeMode="contain"
+            style={{ width: '100%', height: '100%', transform: [{ scale: 2.12 }] }}
           />
         </View>
 

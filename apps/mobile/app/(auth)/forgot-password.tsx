@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from '@/lib/icons';
 import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
-import { Button, IconButton, Input, InputOTP, Label, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Input, InputOTP, Label, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 export default function ForgotPasswordScreen() {
   const { email: initialEmail } = useLocalSearchParams<{ email?: string }>();

@@ -6,8 +6,8 @@ import { ArrowLeft } from '@/lib/icons';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { BrandMark } from '@/components/finance';
-import { Button, IconButton, InputOTP, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, InputOTP, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 export default function VerifyScreen() {
   const { email: rawEmail, next: rawNext } = useLocalSearchParams<{
@@ -59,7 +59,7 @@ export default function VerifyScreen() {
         <IconButton
           label="Go back"
           variant="ghost"
-          onPress={() => router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in')}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in'))}
         >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
