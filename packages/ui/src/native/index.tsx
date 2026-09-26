@@ -18,8 +18,8 @@ import {
   type ViewProps,
 } from 'react-native';
 import { getTouchTargetStyle } from './touch-target';
-import { useTheme } from '@/providers/ThemeProvider';
-import { Check, ReceiptText } from '@/lib/icons';
+import { useTheme } from './ThemeProvider';
+import { Check, ReceiptText } from 'lucide-react-native';
 
 export function Text({ children, style, ...props }: React.ComponentProps<typeof RNText>) {
   const { tokens } = useTheme();
@@ -798,19 +798,39 @@ export function Empty({
   return (
     <View
       accessibilityLabel="Empty state"
-      style={{ minHeight: 260, alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 32 }}
+      style={{
+        minHeight: 260,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        paddingVertical: 32,
+      }}
     >
-      <View style={{
-        width: 64, height: 64, borderRadius: 20, backgroundColor: tokens.surfaceRaised,
-        alignItems: 'center', justifyContent: 'center', marginBottom: 4,
-      }}>
+      <View
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 20,
+          backgroundColor: tokens.surfaceRaised,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 4,
+        }}
+      >
         {icon ?? <ReceiptText size={28} color={tokens.foregroundMuted} />}
       </View>
-      <Typography variant="heading" style={{ textAlign: 'center' }}>{title}</Typography>
+      <Typography variant="heading" style={{ textAlign: 'center' }}>
+        {title}
+      </Typography>
       {description && (
-        <Text style={{
-          color: tokens.foregroundMuted, lineHeight: 22, maxWidth: 300, textAlign: 'center',
-        }}>
+        <Text
+          style={{
+            color: tokens.foregroundMuted,
+            lineHeight: 22,
+            maxWidth: 300,
+            textAlign: 'center',
+          }}
+        >
           {description}
         </Text>
       )}
@@ -984,3 +1004,5 @@ export { View, getTouchTargetStyle };
 export const Tooltip = ({ children, label }: { children: React.ReactNode; label: string }) => (
   <View accessibilityLabel={label}>{children}</View>
 );
+
+export { ThemeProvider, useTheme } from './ThemeProvider';
