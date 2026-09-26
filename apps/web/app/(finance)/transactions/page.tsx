@@ -9,6 +9,7 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { FinanceInput } from '@/components/finance/FinanceInput';
+import { transactionHistoryRange } from '@/lib/browser/history-window';
 
 type Account = LocalRecord & {
   name?: string;
@@ -50,19 +51,18 @@ export default function TransactionsPage() {
   const [title, setTitle] = React.useState('');
   const [amount, setAmount] = React.useState('');
   const [occurredOn, setOccurredOn] = React.useState('');
-  const [historyWindow, setHistoryWindow] = React.useState<'30' | '90' | '365' | 'all'>('30');
+  const [historyWindow, setHistoryWindow] = React.useState<
+    '7' | '30' | '90' | '180' | '365' | 'all'
+  >('30');
   const [rangeLoading, setRangeLoading] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
 
-  const range = React.useMemo(() => {
-    const endAt = Date.now() + 1;
-    return {
-      startAt: historyWindow === 'all' ? 0 : endAt - Number(historyWindow) * 86_400_000,
-      endAt,
-    };
-  }, [historyWindow]);
+  const range = React.useMemo(
+    () => transactionHistoryRange(historyWindow, Date.now()),
+    [historyWindow],
+  );
 
   React.useEffect(() => {
     if (!accountId && activeAccounts[0]) setAccountId(idOf(activeAccounts[0]));
@@ -218,8 +218,10 @@ export default function TransactionsPage() {
           value={historyWindow}
           onChange={(event) => setHistoryWindow(event.currentTarget.value as typeof historyWindow)}
         >
+          <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
           <option value="90">Last 90 days</option>
+          <option value="180">Last 180 days</option>
           <option value="365">Last year</option>
           <option value="all">All history</option>
         </select>
