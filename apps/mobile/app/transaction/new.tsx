@@ -5,8 +5,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, ArrowRight, ReceiptText, UsersThree } from '@/lib/icons';
 import { CategoryIcon, CurrencyInput, SettingsRow } from '@/components/finance';
-import { Button, IconButton, Input, Separator, Sheet, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Input, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
@@ -40,7 +40,7 @@ type CategoryRecord = LocalRecord & {
 type Picker = 'category' | 'account' | 'destination' | 'date' | null;
 const transactionTypes: TransactionType[] = ['expense', 'income', 'transfer'];
 const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-const scalar = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+const scalar = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 function amountInMinor(value: string): bigint | null {
   if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
@@ -143,21 +143,32 @@ function DateSelector({ value, onChange }: { value: Date; onChange: (date: Date)
 }
 export default function NewTransactionScreen() {
   const params = useLocalSearchParams<{
-    type?: string | string[]; amount?: string | string[]; accountId?: string | string[];
-    categoryId?: string | string[]; destinationId?: string | string[];
-    occurredAt?: string | string[]; note?: string | string[];
+    type?: string | string[];
+    amount?: string | string[];
+    accountId?: string | string[];
+    categoryId?: string | string[];
+    destinationId?: string | string[];
+    occurredAt?: string | string[];
+    note?: string | string[];
   }>();
   const queryType = scalar(params.type);
   const initialType: TransactionType = transactionTypes.includes(queryType as TransactionType)
-    ? (queryType as TransactionType) : 'expense';
+    ? (queryType as TransactionType)
+    : 'expense';
   const initialAmount = scalar(params.amount);
   const initialDate = Number(scalar(params.occurredAt));
-  const [amount, setAmount] = useState(initialAmount && amountInMinor(initialAmount) ? initialAmount : '');
+  const [amount, setAmount] = useState(
+    initialAmount && amountInMinor(initialAmount) ? initialAmount : '',
+  );
   const [type, setType] = useState<TransactionType>(initialType);
   const [categoryId, setCategoryId] = useState<string | null>(scalar(params.categoryId) || null);
   const [accountId, setAccountId] = useState<string | null>(scalar(params.accountId) || null);
-  const [destinationId, setDestinationId] = useState<string | null>(scalar(params.destinationId) || null);
-  const [date, setDate] = useState(() => Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date());
+  const [destinationId, setDestinationId] = useState<string | null>(
+    scalar(params.destinationId) || null,
+  );
+  const [date, setDate] = useState(() =>
+    Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date(),
+  );
   const [note, setNote] = useState(scalar(params.note) ?? '');
   const [picker, setPicker] = useState<Picker>(null);
   const [error, setError] = useState('');
@@ -173,7 +184,9 @@ export default function NewTransactionScreen() {
   const categories = categoryState.data?.filter((item) => item.archivedAt === undefined);
   const categoryOptions = categories;
   const account =
-    accounts?.find((item) => String(item.id ?? item._id) === accountId || item.cloudId === accountId) ??
+    accounts?.find(
+      (item) => String(item.id ?? item._id) === accountId || item.cloudId === accountId,
+    ) ??
     accounts?.find(
       (item) =>
         String(item.id ?? item._id) === String(profile?.defaultAccountId) ||
@@ -184,8 +197,7 @@ export default function NewTransactionScreen() {
     type === 'expense' ? profile?.defaultExpenseCategoryId : profile?.defaultIncomeCategoryId;
   const category =
     categoryOptions?.find(
-      (item) =>
-        String(item.id ?? item._id) === categoryId || item.cloudId === categoryId,
+      (item) => String(item.id ?? item._id) === categoryId || item.cloudId === categoryId,
     ) ??
     categoryOptions?.find(
       (item) =>
@@ -193,7 +205,9 @@ export default function NewTransactionScreen() {
         item.cloudId === preferredCategoryId,
     ) ??
     categoryOptions?.[0];
-  const destination = accounts?.find((item) => String(item.id ?? item._id) === destinationId || item.cloudId === destinationId);
+  const destination = accounts?.find(
+    (item) => String(item.id ?? item._id) === destinationId || item.cloudId === destinationId,
+  );
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   const typeColor =
     type === 'expense' ? tokens.expense : type === 'income' ? tokens.income : tokens.warning;
@@ -219,9 +233,13 @@ export default function NewTransactionScreen() {
     try {
       const accountRecordId = String(account.id ?? account._id);
       const categoryRecordId = category ? String(category.id ?? category._id) : undefined;
-      const destinationRecordId = destination ? String(destination.id ?? destination._id) : undefined;
+      const destinationRecordId = destination
+        ? String(destination.id ?? destination._id)
+        : undefined;
       const title =
-        type === 'transfer' ? `Transfer to ${displayAccountName(destination!.name)}` : note.trim() || category!.name;
+        type === 'transfer'
+          ? `Transfer to ${displayAccountName(destination!.name)}`
+          : note.trim() || category!.name;
       const payload = {
         accountId: accountRecordId,
         type,
@@ -342,7 +360,11 @@ export default function NewTransactionScreen() {
 
   const pickerOptions =
     picker === 'category'
-      ? categoryOptions?.map((item) => ({ id: String(item.id ?? item._id), name: String(item.name), icon: item.icon }))
+      ? categoryOptions?.map((item) => ({
+          id: String(item.id ?? item._id),
+          name: String(item.name),
+          icon: item.icon,
+        }))
       : accounts
           ?.filter(
             (item) =>
@@ -445,10 +467,7 @@ export default function NewTransactionScreen() {
               <SettingsRow
                 label="Category"
                 leadingIcon={
-                  <CategoryIcon
-                    label={category?.name ?? 'Category'}
-                    icon={category?.icon}
-                  />
+                  <CategoryIcon label={category?.name ?? 'Category'} icon={category?.icon} />
                 }
                 value={
                   category?.name ?? (categoryOptions ? 'Choose a category' : 'Loading categories…')
@@ -460,7 +479,13 @@ export default function NewTransactionScreen() {
           )}
           <SettingsRow
             label={type === 'transfer' ? 'From account' : 'Account'}
-            value={account ? displayAccountName(account.name) : accounts ? 'Choose an account' : 'Loading accounts…'}
+            value={
+              account
+                ? displayAccountName(account.name)
+                : accounts
+                  ? 'Choose an account'
+                  : 'Loading accounts…'
+            }
             onPress={() => setPicker('account')}
           />
           {type === 'transfer' && (
@@ -635,14 +660,18 @@ export default function NewTransactionScreen() {
                 </Typography>
               ) : pickerOptions.length === 0 ? (
                 <View style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}>
-                  {picker === 'category'
-                    ? <CategoryIcon label="Category" />
-                    : <ReceiptText size={24} color={tokens.foregroundMuted} />}
+                  {picker === 'category' ? (
+                    <CategoryIcon label="Category" />
+                  ) : (
+                    <ReceiptText size={24} color={tokens.foregroundMuted} />
+                  )}
                   <Typography variant="bodyLarge">
                     {picker === 'category' ? 'No categories yet' : 'No accounts yet'}
                   </Typography>
                   <Typography variant="small" style={{ textAlign: 'center' }}>
-                    {picker === 'category' ? 'Create a category to organize this transaction.' : 'Add an account before recording this transaction.'}
+                    {picker === 'category'
+                      ? 'Create a category to organize this transaction.'
+                      : 'Add an account before recording this transaction.'}
                   </Typography>
                 </View>
               ) : null}
@@ -652,7 +681,11 @@ export default function NewTransactionScreen() {
                 variant="outline"
                 onPress={() => {
                   setPicker(null);
-                  router.push(pickerOptions?.length === 0 ? '/category/new' as never : '/category' as never);
+                  router.push(
+                    pickerOptions?.length === 0
+                      ? ('/category/new' as never)
+                      : ('/category' as never),
+                  );
                 }}
               >
                 {pickerOptions?.length === 0 ? 'Create category' : 'Manage categories'}
@@ -670,12 +703,18 @@ export default function NewTransactionScreen() {
               </Button>
             )}
             {(picker === 'category' || picker === 'account') && (selectedId || defaultId) && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+              >
                 {selectedId && selectedId !== defaultId && (
-                  <Button size="sm" variant="outline" onPress={saveDefault}>Set as default</Button>
+                  <Button size="sm" variant="outline" onPress={saveDefault}>
+                    Set as default
+                  </Button>
                 )}
                 {defaultId && (
-                  <Button size="sm" variant="ghost" onPress={clearDefault}>Clear default</Button>
+                  <Button size="sm" variant="ghost" onPress={clearDefault}>
+                    Clear default
+                  </Button>
                 )}
               </View>
             )}
