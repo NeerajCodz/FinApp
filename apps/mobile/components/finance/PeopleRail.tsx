@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, TouchableOpacity, View } from 'react-native';
+import { View } from 'react-native';
 import { ContactRound } from '@/lib/icons';
-import { readDeviceContacts, type DeviceContact } from '@/lib/contacts';
-import { Avatar, Button, Text, Typography } from '@finapp/ui/native';
+import { pickDeviceContact, type DeviceContact } from '@/lib/contacts';
+import { Button, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
@@ -15,7 +15,6 @@ export function PeopleRail({
   title?: string;
   onSelect?: (contact: DeviceContact) => void;
 }) {
-  const [contacts, setContacts] = useState<DeviceContact[]>([]);
   const [loading, setLoading] = useState(false);
   const { tokens } = useTheme();
   const { userId } = useLocalSync();
@@ -23,11 +22,12 @@ export function PeopleRail({
   const profile = profiles?.[0];
   const phoneVerified = Boolean(profile?.phone && profile.phoneVerificationTime !== undefined);
 
-  async function allowContacts() {
+  async function chooseContact() {
     if (!phoneVerified) return;
     setLoading(true);
     try {
-      setContacts(await readDeviceContacts());
+      const contact = await pickDeviceContact();
+      if (contact) onSelect?.(contact);
     } finally {
       setLoading(false);
     }
@@ -35,10 +35,7 @@ export function PeopleRail({
 
   return (
     <View style={{ gap: 14 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="heading">{title}</Typography>
-        {contacts.length > 0 && <Typography variant="caption">{contacts.length} found</Typography>}
-      </View>
+      <Typography variant="heading">{title}</Typography>
       {!phoneVerified ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
           <View
@@ -62,7 +59,7 @@ export function PeopleRail({
             </Typography>
           </View>
         </View>
-      ) : contacts.length === 0 ? (
+      ) : (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
           <View
             style={{
@@ -77,41 +74,15 @@ export function PeopleRail({
             <ContactRound size={19} color={tokens.foregroundMuted} />
           </View>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: tokens.foreground }}>Find people you already know</Text>
+            <Text style={{ color: tokens.foreground }}>Choose one person to invite</Text>
             <Typography variant="caption">
-              We only read names and phone numbers on this device.
+              Only the selected contact’s name and phone number are used.
             </Typography>
           </View>
-          <Button size="sm" variant="outline" disabled={loading} onPress={allowContacts}>
-            {loading ? 'Loading' : 'Allow'}
+          <Button size="sm" variant="outline" disabled={loading} onPress={chooseContact}>
+            {loading ? 'Opening' : 'Choose'}
           </Button>
         </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 18, paddingRight: 12 }}
-        >
-          {contacts.map((contact) => (
-            <TouchableOpacity
-              key={contact.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${contact.name}`}
-              onPress={() => onSelect?.(contact)}
-              activeOpacity={0.72}
-              style={{ alignItems: 'center', gap: 7, width: 62 }}
-            >
-              <Avatar initials={contact.name.slice(0, 2)} label={contact.name} size={48} />
-              <Typography
-                variant="caption"
-                numberOfLines={1}
-                style={{ color: tokens.foreground, maxWidth: 62 }}
-              >
-                {contact.name.split(' ')[0]}
-              </Typography>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       )}
     </View>
   );

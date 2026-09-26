@@ -16,13 +16,7 @@
           "useSQLCipher": true
         }
       ],
-      "expo-notifications",
-      [
-        "expo-contacts",
-        {
-          "contactsPermission": "Allow Finapp to find people you split with."
-        }
-      ]
+      "expo-notifications"
     ],
     "ios": {
       "supportsTablet": true,

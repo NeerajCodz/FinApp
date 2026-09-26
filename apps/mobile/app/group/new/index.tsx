@@ -6,7 +6,7 @@ import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
-import { normalizeContactPhone, type DeviceContact } from '@/lib/contacts';
+import type { DeviceContact } from '@/lib/contacts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PeopleRail } from '@/components/finance/PeopleRail';
 import { Button, IconButton, Input, Label, Separator, Text, Typography } from '@finapp/ui/native';
@@ -39,10 +39,8 @@ export default function NewGroupScreen() {
   }
 
   function addContact(contact: DeviceContact) {
-    if (!contact.phone) return;
-    const phone = normalizeContactPhone(contact.phone);
-    if (contactPhones.includes(phone)) return;
-    setContactPhones((current) => [...current, phone]);
+    if (contactPhones.includes(contact.phone)) return;
+    setContactPhones((current) => [...current, contact.phone]);
     setContactNames((current) => [...current, contact.name]);
   }
 
