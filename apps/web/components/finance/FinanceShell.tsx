@@ -5,9 +5,12 @@ import { usePathname } from 'next/navigation';
 import {
   Activity,
   ArrowLeftRight,
+  CalendarClock,
   ChartNoAxesCombined,
   CircleUserRound,
+  Ellipsis,
   Landmark,
+  Tags,
   Target,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -21,6 +24,9 @@ const navigation: NavItem[] = [
   { href: '/accounts', label: 'Accounts', icon: Landmark },
   { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
+  { href: '/categories', label: 'Categories', icon: Tags },
+  { href: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
+  { href: '/recurring', label: 'Recurring', icon: CalendarClock },
 ];
 
 export function FinanceShell({ children }: { children: ReactNode }) {
@@ -127,7 +133,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         </header>
         <main className="finance-content">{children}</main>
         <nav className="finance-mobile-nav" aria-label="Main navigation">
-          {navigation.slice(0, 5).map(({ href, label, icon: Icon }) => {
+          {navigation.slice(0, 4).map(({ href, label, icon: Icon }) => {
             const active =
               pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
             return (
@@ -143,6 +149,77 @@ export function FinanceShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          <details style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+            <summary
+              aria-label="More finance pages"
+              style={{
+                display: 'flex',
+                minWidth: 44,
+                minHeight: 48,
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                borderRadius: 12,
+                color: navigation
+                  .slice(4)
+                  .some(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+                  ? 'var(--finance-lime)'
+                  : 'var(--finance-dim)',
+                fontSize: '0.62rem',
+                listStyle: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <Ellipsis size={19} aria-hidden="true" />
+              <span>More</span>
+            </summary>
+            <div
+              style={{
+                position: 'absolute',
+                right: 0,
+                bottom: 'calc(100% + 12px)',
+                display: 'grid',
+                width: 190,
+                gap: 4,
+                border: '1px solid var(--finance-line)',
+                borderRadius: 13,
+                padding: 8,
+                background: '#10130f',
+                boxShadow: '0 12px 30px #0008',
+              }}
+            >
+              {navigation.slice(4).map(({ href, label }) => {
+                const active =
+                  pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={(event) => {
+                      event.currentTarget.closest('details')?.removeAttribute('open');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      gap: 10,
+                      minHeight: 42,
+                      display: 'flex',
+                      alignItems: 'center',
+                      borderRadius: 9,
+                      padding: '0 11px',
+                      background: active ? '#1a2116' : 'transparent',
+                      color: active ? 'var(--finance-lime)' : 'inherit',
+                      fontSize: '0.78rem',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          </details>
         </nav>
       </div>
     </div>

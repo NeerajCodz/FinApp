@@ -30,6 +30,7 @@ import { syncOutbox } from './sync';
 type ChangesPage = FunctionReturnType<typeof api.sync.queries.changes>;
 type SectionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapSection>;
 type TransactionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapTransactions>;
+type TransactionRangePage = FunctionReturnType<typeof api.sync.queries.transactionRange>;
 
 const localUserKey = 'finapp.web.validated-user.v1';
 const cloudEntity: Record<string, LocalEntity> = {
@@ -78,6 +79,7 @@ type BrowserSyncContextValue = {
   syncError: string | null;
   status: LocalSyncStatus;
   retryNow: () => Promise<void>;
+  fetchTransactionRange: (startAt: number, endAt: number) => Promise<void>;
   read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) => Promise<T[]>;
 };
 const BrowserSyncContext = React.createContext<BrowserSyncContextValue | null>(null);
@@ -273,6 +275,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const running = React.useRef(false);
   const retryTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const rangeFetches = React.useRef(new Map<string, Promise<void>>());
   const isConnected = online && connection.isWebSocketConnected;
   const authenticatedUserId = typeof currentProfile?._id === 'string' ? currentProfile._id : null;
   const userId = authenticatedUserId ?? (!isConnected ? storedUserId : null);
@@ -420,6 +423,40 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     },
     [convex, pullChanges],
   );
+  const fetchTransactionRange = React.useCallback(
+    (startAt: number, endAt: number): Promise<void> => {
+      if (!userId || !validatedOnline)
+        return Promise.reject(new Error('ONLINE_RANGE_SYNC_REQUIRED'));
+      if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
+        return Promise.reject(new Error('INVALID_DATE_RANGE'));
+      const key = `${userId}:${startAt}:${endAt}`;
+      const existing = rangeFetches.current.get(key);
+      if (existing) return existing;
+
+      const request = (async () => {
+        let cursor: string | null = null;
+        while (true) {
+          const page: TransactionRangePage = await convex.query(api.sync.queries.transactionRange, {
+            startAt,
+            endAt,
+            paginationOpts: { numItems: 100, cursor },
+          });
+          await persistTransactionPage(userId, page);
+          if (page.isDone) break;
+          if (!page.continueCursor || page.continueCursor === cursor)
+            throw new Error('INVALID_SYNC_CURSOR');
+          cursor = page.continueCursor;
+        }
+      })();
+      rangeFetches.current.set(key, request);
+      const removeRequest = () => {
+        if (rangeFetches.current.get(key) === request) rangeFetches.current.delete(key);
+      };
+      void request.then(removeRequest, removeRequest);
+      return request;
+    },
+    [convex, userId, validatedOnline],
+  );
 
   const runOutboxEntry = React.useCallback(
     async (targetUserId: string, entry: OutboxEntry): Promise<SyncReceipt> => {
@@ -530,10 +567,20 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       syncError: statusUserId === userId ? syncError : null,
       status: scopedStatus,
       retryNow,
+      fetchTransactionRange,
       read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) =>
         userId ? readLocal<T>(userId, entityType) : Promise.resolve([]),
     }),
-    [isConnected, isSyncing, retryNow, scopedStatus, statusUserId, syncError, userId],
+    [
+      fetchTransactionRange,
+      isConnected,
+      isSyncing,
+      retryNow,
+      scopedStatus,
+      statusUserId,
+      syncError,
+      userId,
+    ],
   );
 
   return <BrowserSyncContext.Provider value={value}>{children}</BrowserSyncContext.Provider>;

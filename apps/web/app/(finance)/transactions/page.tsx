@@ -37,7 +37,7 @@ const localDependency = (entity: 'account' | 'category', record: LocalRecord) =>
   record.cloudId || record._id ? null : `${entity}:${idOf(record)}`;
 
 export default function TransactionsPage() {
-  const { userId } = useBrowserSync();
+  const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
   const { records: accounts } = useLocalRecords<Account>('account');
   const { records: categories } = useLocalRecords<Category>('category');
   const { records: transactions, loading } = useLocalRecords<Transaction>('transaction');
@@ -50,8 +50,19 @@ export default function TransactionsPage() {
   const [title, setTitle] = React.useState('');
   const [amount, setAmount] = React.useState('');
   const [occurredOn, setOccurredOn] = React.useState('');
+  const [historyWindow, setHistoryWindow] = React.useState<'30' | '90' | '365' | 'all'>('30');
+  const [rangeLoading, setRangeLoading] = React.useState(false);
+  const [rangeError, setRangeError] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
+
+  const range = React.useMemo(() => {
+    const endAt = Date.now() + 1;
+    return {
+      startAt: historyWindow === 'all' ? 0 : endAt - Number(historyWindow) * 86_400_000,
+      endAt,
+    };
+  }, [historyWindow]);
 
   React.useEffect(() => {
     if (!accountId && activeAccounts[0]) setAccountId(idOf(activeAccounts[0]));
@@ -59,13 +70,40 @@ export default function TransactionsPage() {
   React.useEffect(() => {
     if (!occurredOn) setOccurredOn(new Date().toISOString().slice(0, 10));
   }, [occurredOn]);
+  React.useEffect(() => {
+    if (!userId || historyWindow === '30') return;
+    let active = true;
+    setRangeLoading(true);
+    setRangeError('');
+    void fetchTransactionRange(range.startAt, range.endAt)
+      .catch((cause: unknown) => {
+        if (active)
+          setRangeError(
+            !isConnected
+              ? 'Connect to load this date range. Previously cached activity remains available.'
+              : cause instanceof Error
+                ? cause.message
+                : 'Could not load this date range.',
+          );
+      })
+      .finally(() => {
+        if (active) setRangeLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fetchTransactionRange, historyWindow, isConnected, range, userId]);
 
   const visibleTransactions = [...transactions]
-    .filter(
-      (transaction) =>
+    .filter((transaction) => {
+      const occurredAt = Number(transaction.occurredAt ?? 0);
+      return (
+        occurredAt >= range.startAt &&
+        occurredAt < range.endAt &&
         transaction.deletedAt === undefined &&
-        (transaction.status === undefined || transaction.status === 'posted'),
-    )
+        (transaction.status === undefined || transaction.status === 'posted')
+      );
+    })
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
 
   async function createTransaction(event: React.FormEvent<HTMLFormElement>) {
@@ -173,6 +211,29 @@ export default function TransactionsPage() {
         </div>
         <Badge variant="neutral">{visibleTransactions.length} records</Badge>
       </header>
+      <label className="finance-form-field finance-range-control">
+        <span>Activity history</span>
+        <select
+          aria-label="Activity history window"
+          value={historyWindow}
+          onChange={(event) => setHistoryWindow(event.currentTarget.value as typeof historyWindow)}
+        >
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last year</option>
+          <option value="all">All history</option>
+        </select>
+      </label>
+      {rangeLoading && (
+        <p className="finance-muted" role="status">
+          Loading this date range…
+        </p>
+      )}
+      {rangeError && (
+        <p className="finance-error" role="alert">
+          {rangeError}
+        </p>
+      )}
       <div className="finance-transactions-layout">
         <Card className="finance-record-panel">
           <SectionHeader
