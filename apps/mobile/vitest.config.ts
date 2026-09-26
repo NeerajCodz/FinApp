@@ -8,6 +8,7 @@ export default defineConfig({
       '**/*.test.ts',
       '**/*.test.tsx',
     ],
+    exclude: ['../../tests/web/**/*.test.ts'],
     environment: 'node',
     globals: true,
   },
