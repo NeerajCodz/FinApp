@@ -6,8 +6,8 @@ import { useLocalGroupRange, useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TransactionRow } from '@/components/finance';
-import { Button, IconButton, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 export default function GroupExpensesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,8 +41,14 @@ export default function GroupExpensesScreen() {
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Typography variant="title" style={{ flex: 1 }}>Expenses</Typography>
-        <IconButton label="Add group expense" variant="ghost" onPress={() => router.push(`/group/${id}/expenses/new` as never)}>
+        <Typography variant="title" style={{ flex: 1 }}>
+          Expenses
+        </Typography>
+        <IconButton
+          label="Add group expense"
+          variant="ghost"
+          onPress={() => router.push(`/group/${id}/expenses/new` as never)}
+        >
           <Plus size={22} color={tokens.foreground} />
         </IconButton>
       </View>
@@ -69,7 +75,11 @@ export default function GroupExpensesScreen() {
           <Typography variant="small" style={{ textAlign: 'center' }}>
             Add the first expense and choose who shared it.
           </Typography>
-          <Button size="sm" variant="outline" onPress={() => router.push(`/group/${id}/expenses/new` as never)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={() => router.push(`/group/${id}/expenses/new` as never)}
+          >
             Add expense
           </Button>
         </View>

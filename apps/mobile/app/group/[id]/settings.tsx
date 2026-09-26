@@ -16,9 +16,9 @@ import {
   Input,
   Separator,
   Typography,
-} from '@/components/ui';
+} from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@finapp/ui/native';
 
 export default function GroupSettingsScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();

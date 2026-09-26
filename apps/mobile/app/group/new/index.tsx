@@ -9,8 +9,8 @@ import { commitLocalWrite } from '@/local/commands';
 import { normalizeContactPhone, type DeviceContact } from '@/lib/contacts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PeopleRail } from '@/components/finance/PeopleRail';
-import { Button, IconButton, Input, Label, Separator, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Input, Label, Separator, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 function normalizeHandle(value: string) {
   return value.replace(/^@+/, '').trim().toLowerCase();

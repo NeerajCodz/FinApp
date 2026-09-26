@@ -4,8 +4,16 @@ import { ArrowLeft, ArrowLeftRight, UsersThree } from '@/lib/icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money, TransactionRow } from '@/components/finance';
-import { Avatar, Button, Empty, IconButton, SectionHeader, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import {
+  Avatar,
+  Button,
+  Empty,
+  IconButton,
+  SectionHeader,
+  Text,
+  Typography,
+} from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import {
   useLocalGroupRange,
   useLocalRecords,
@@ -89,7 +97,9 @@ export default function PersonTimelineScreen() {
     (member) => member.username?.replace(/^@+/, '').toLowerCase() === handle.toLowerCase(),
   );
   const groupIds = new Set(matchingMembers.map((member) => String(member.groupId ?? '')));
-  const sharedGroups = (groups ?? []).filter((group) => groupIds.has(String(group.id ?? group._id)));
+  const sharedGroups = (groups ?? []).filter((group) =>
+    groupIds.has(String(group.id ?? group._id)),
+  );
   const startAt = React.useMemo(() => Date.now() - 90 * 24 * 60 * 60 * 1000, []);
   const endAt = React.useMemo(() => Date.now() + 1, []);
   return (
@@ -135,7 +145,11 @@ export default function PersonTimelineScreen() {
           }}
         >
           <Typography variant="label">Shared balance</Typography>
-          <Money amountMinor={0n} currency={String(sharedGroups[0]?.currency ?? 'INR')} size="display" />
+          <Money
+            amountMinor={0n}
+            currency={String(sharedGroups[0]?.currency ?? 'INR')}
+            size="display"
+          />
           <Typography variant="caption">Across shared groups</Typography>
         </View>
       </View>
