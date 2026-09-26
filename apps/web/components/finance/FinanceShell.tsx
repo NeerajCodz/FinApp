@@ -5,13 +5,16 @@ import { usePathname } from 'next/navigation';
 import {
   Activity,
   ArrowLeftRight,
+  Bell,
   CalendarClock,
   ChartNoAxesCombined,
   CircleUserRound,
   Ellipsis,
   Landmark,
+  Plus,
   Tags,
   Target,
+  UsersRound,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
@@ -20,13 +23,16 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 type NavItem = { href: string; label: string; icon: typeof ChartNoAxesCombined };
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Overview', icon: ChartNoAxesCombined },
-  { href: '/transactions', label: 'Activity', icon: ArrowLeftRight },
+  { href: '/activity', label: 'Activity', icon: ArrowLeftRight },
   { href: '/accounts', label: 'Accounts', icon: Landmark },
   { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
+  { href: '/groups', label: 'Groups', icon: UsersRound },
   { href: '/categories', label: 'Categories', icon: Tags },
   { href: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
+  { href: '/add', label: 'Add', icon: Plus },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 
 export function FinanceShell({ children }: { children: ReactNode }) {
@@ -51,7 +57,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         : status.pending > 0
           ? 'Saved locally'
           : 'All changes synced';
-  const profileHref = userId ? '/settings' : '/sign-in';
+  const profileHref = userId ? '/profile' : '/sign-in';
 
   return (
     <div className="finance-app">
@@ -83,7 +89,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         <div className="finance-sidebar-bottom">
           <Link
             href={profileHref}
-            className={`finance-nav-link${pathname === '/settings' ? ' active' : ''}`}
+            className={`finance-nav-link${pathname === '/settings' || pathname.startsWith('/settings/') || pathname === '/profile' ? ' active' : ''}`}
           >
             <CircleUserRound size={18} aria-hidden="true" />
             <span>{userId ? 'Preferences' : 'Sign in'}</span>
@@ -124,7 +130,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
             {state}
           </span>
           <Link
-            className={`finance-mobile-profile${pathname === '/settings' ? ' active' : ''}`}
+            className={`finance-mobile-profile${pathname === '/settings' || pathname.startsWith('/settings/') || pathname === '/profile' ? ' active' : ''}`}
             href={profileHref}
             aria-label={userId ? 'Preferences' : 'Sign in'}
           >
