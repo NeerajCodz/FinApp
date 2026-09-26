@@ -24,6 +24,17 @@ export function canReadGroup(actorId: string, group: Group, members: readonly Me
   if (group.archivedAt !== undefined) throw new DomainError('GROUP_ARCHIVED');
   requireMember(actorId, members);
 }
+export function renameGroup(
+  actorId: string,
+  group: Group,
+  members: readonly Membership[],
+  name: string,
+): Group {
+  requireAdmin(actorId, group.ownerId, members);
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new DomainError('INVALID_GROUP');
+  return { ...group, name: trimmedName };
+}
 
 export function changeMemberRole(
   actorId: string,
@@ -34,5 +45,6 @@ export function changeMemberRole(
 ): Membership[] {
   requireAdmin(actorId, group.ownerId, members);
   if (role === 'owner') throw new DomainError('INSUFFICIENT_PERMISSION');
+  if (!members.some((member) => member.userId === userId)) throw new DomainError('NOT_MEMBER');
   return members.map((member) => (member.userId === userId ? { ...member, role } : member));
 }

@@ -5,6 +5,7 @@ export const domainErrorCodes = [
   'TRANSACTION_CHANGED',
   'INSUFFICIENT_PERMISSION',
   'INVALID_CURRENCY',
+  'INVALID_GROUP',
   'DUPLICATE_MUTATION',
   'GROUP_ARCHIVED',
 ] as const;

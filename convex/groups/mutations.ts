@@ -8,7 +8,7 @@ import {
   type GroupRole,
   type Membership,
 } from '../shared/permissions';
-import { changeMemberRole, createGroup, type Group } from './domain';
+import { changeMemberRole, createGroup, renameGroup, type Group } from './domain';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
 import { allocateParticipants } from '../splits/domain';
@@ -47,7 +47,12 @@ export const create = mutation({
     await requireIdentity(ctx);
     const owner = await requireUser(ctx);
     if (!owner) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, owner._id, args.clientMutationId, 'group.create');
+    const replay = await replayMutationResult(
+      ctx,
+      owner._id,
+      args.clientMutationId,
+      'group.create',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('groups', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
@@ -117,13 +122,27 @@ export const create = mutation({
     }
     const [group, memberships, invites] = await Promise.all([
       ctx.db.get(groupId),
-      ctx.db.query('groupMembers').withIndex('by_group', (query) => query.eq('groupId', groupId)).collect(),
-      ctx.db.query('groupInvites').withIndex('by_group', (query) => query.eq('groupId', groupId)).collect(),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (query) => query.eq('groupId', groupId))
+        .collect(),
+      ctx.db
+        .query('groupInvites')
+        .withIndex('by_group', (query) => query.eq('groupId', groupId))
+        .collect(),
     ]);
     const scopes = memberships.map((membership) => membership.userId);
     await publishMutationResult(
-      ctx, owner._id, args.clientMutationId, 'group.create', groupId,
-      'groups', String(groupId), now, group, scopes,
+      ctx,
+      owner._id,
+      args.clientMutationId,
+      'group.create',
+      groupId,
+      'groups',
+      String(groupId),
+      now,
+      group,
+      scopes,
     );
     for (const scopeUserId of scopes) {
       for (const member of memberships)
@@ -132,11 +151,150 @@ export const create = mutation({
     for (const invite of invites)
       await recordSyncChange(ctx, owner._id, 'groupInvites', String(invite._id), now, invite);
     for (const member of memberships) {
-      if (member.userId !== owner._id) await createNotification(ctx, member.userId,
-        `group:${groupId}:joined`, 'group', 'group', String(groupId),
-        `Added to ${name}`, 'A new shared group is ready.');
+      if (member.userId !== owner._id)
+        await createNotification(
+          ctx,
+          member.userId,
+          `group:${groupId}:joined`,
+          'group',
+          'group',
+          String(groupId),
+          `Added to ${name}`,
+          'A new shared group is ready.',
+        );
     }
     return groupId;
+  },
+});
+
+export const updateSettings = mutation({
+  args: {
+    groupId: v.id('groups'),
+    name: v.string(),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'group.update',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('groups', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const [group, memberships] = await Promise.all([
+      ctx.db.get(args.groupId),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+        .collect(),
+    ]);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const roles: Membership[] = memberships.map((member) => ({
+      userId: String(member.userId),
+      role: member.role,
+    }));
+    const updated = renameGroup(
+      actor._id,
+      {
+        id: String(group._id),
+        ownerId: String(group.ownerId),
+        name: group.name,
+        currency: group.currency,
+        archivedAt: group.archivedAt,
+      },
+      roles,
+      args.name,
+    );
+    const updatedAt = Date.now();
+    await ctx.db.patch(args.groupId, { name: updated.name, updatedAt });
+    await publishMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'group.update',
+      args.groupId,
+      'groups',
+      String(args.groupId),
+      updatedAt,
+      { ...group, name: updated.name, updatedAt },
+      memberships.map((member) => member.userId),
+    );
+    return args.groupId;
+  },
+});
+
+export const setMemberRole = mutation({
+  args: {
+    groupId: v.id('groups'),
+    memberUserId: v.id('users'),
+    role: v.union(v.literal('admin'), v.literal('member')),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'group.setMemberRole',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('groupMembers', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const [group, memberships] = await Promise.all([
+      ctx.db.get(args.groupId),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+        .collect(),
+    ]);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const roles: Membership[] = memberships.map((member) => ({
+      userId: String(member.userId),
+      role: member.role,
+    }));
+    changeMemberRole(
+      actor._id,
+      {
+        id: String(group._id),
+        ownerId: String(group.ownerId),
+        name: group.name,
+        currency: group.currency,
+        archivedAt: group.archivedAt,
+      },
+      roles,
+      String(args.memberUserId),
+      args.role,
+    );
+    const target = memberships.find(
+      (member) => String(member.userId) === String(args.memberUserId),
+    );
+    if (!target) throw new Error('NOT_MEMBER');
+    const updatedAt = Date.now();
+    await ctx.db.patch(target._id, { role: args.role });
+    const document = { ...target, role: args.role };
+    await publishMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'group.setMemberRole',
+      target._id,
+      'groupMembers',
+      String(target._id),
+      updatedAt,
+      document,
+      memberships.map((member) => member.userId),
+    );
+    return target._id;
   },
 });
 
@@ -148,18 +306,30 @@ export const addExpense = mutation({
     amountMinor: v.int64(),
     currency: v.string(),
     occurredAt: v.number(),
-    participants: v.array(v.object({
-      userId: v.id('users'),
-      amountMinor: v.int64(),
-      method: v.union(v.literal('equal'), v.literal('exact'), v.literal('percentage'), v.literal('shares')),
-      basisValue: v.optional(v.string()),
-    })),
+    participants: v.array(
+      v.object({
+        userId: v.id('users'),
+        amountMinor: v.int64(),
+        method: v.union(
+          v.literal('equal'),
+          v.literal('exact'),
+          v.literal('percentage'),
+          v.literal('shares'),
+        ),
+        basisValue: v.optional(v.string()),
+      }),
+    ),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'group.addExpense');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.addExpense',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('transactions', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
@@ -173,7 +343,11 @@ export const addExpense = mutation({
     if (account.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
     const currency = args.currency.toUpperCase();
     assertCurrency(currency);
-    if (currency !== group.currency || currency !== account.currency || account.archivedAt !== undefined)
+    if (
+      currency !== group.currency ||
+      currency !== account.currency ||
+      account.archivedAt !== undefined
+    )
       throw new Error('CURRENCY_MISMATCH');
     const membership = await ctx.db
       .query('groupMembers')
@@ -183,11 +357,19 @@ export const addExpense = mutation({
       .unique();
     if (!membership) throw new Error('NOT_MEMBER');
     const method = args.participants[0]?.method;
-    if (!method ||
+    if (
+      !method ||
       new Set(args.participants.map((item) => item.userId)).size !== args.participants.length ||
-      args.participants.some((item) => item.method !== method || item.amountMinor < 0n ||
-        (method === 'equal' ? item.basisValue !== undefined : !/^\d+$/.test(item.basisValue ?? ''))) ||
-      args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor)
+      args.participants.some(
+        (item) =>
+          item.method !== method ||
+          item.amountMinor < 0n ||
+          (method === 'equal'
+            ? item.basisValue !== undefined
+            : !/^\d+$/.test(item.basisValue ?? '')),
+      ) ||
+      args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor
+    )
       throw new Error('INVALID_SPLIT');
     const allocation = allocateParticipants(
       args.amountMinor,
@@ -195,7 +377,9 @@ export const addExpense = mutation({
       method,
       method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
     );
-    if (allocation.some((item, index) => item.amountMinor !== args.participants[index]?.amountMinor))
+    if (
+      allocation.some((item, index) => item.amountMinor !== args.participants[index]?.amountMinor)
+    )
       throw new Error('INVALID_SPLIT');
     for (const participant of args.participants) {
       const participantMembership = await ctx.db
@@ -237,28 +421,62 @@ export const addExpense = mutation({
     await ctx.db.patch(args.groupId, { updatedAt: now });
     const [transaction, payers, participants, groupMembers] = await Promise.all([
       ctx.db.get(transactionId),
-      ctx.db.query('expensePayers').withIndex('by_transaction', (query) => query.eq('transactionId', transactionId)).collect(),
-      ctx.db.query('expenseParticipants').withIndex('by_transaction', (query) => query.eq('transactionId', transactionId)).collect(),
-      ctx.db.query('groupMembers').withIndex('by_group', (query) => query.eq('groupId', args.groupId)).collect(),
+      ctx.db
+        .query('expensePayers')
+        .withIndex('by_transaction', (query) => query.eq('transactionId', transactionId))
+        .collect(),
+      ctx.db
+        .query('expenseParticipants')
+        .withIndex('by_transaction', (query) => query.eq('transactionId', transactionId))
+        .collect(),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+        .collect(),
     ]);
     const scopes = groupMembers.map((member) => member.userId);
     await publishMutationResult(
-      ctx, user._id, args.clientMutationId, 'group.addExpense', transactionId,
-      'transactions', String(transactionId), now, transaction, scopes,
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.addExpense',
+      transactionId,
+      'transactions',
+      String(transactionId),
+      now,
+      transaction,
+      scopes,
     );
     for (const scopeUserId of scopes) {
       for (const payer of payers)
         await recordSyncChange(ctx, scopeUserId, 'expensePayers', String(payer._id), now, payer);
       for (const participant of participants)
-        await recordSyncChange(ctx, scopeUserId, 'expenseParticipants', String(participant._id), now, participant);
+        await recordSyncChange(
+          ctx,
+          scopeUserId,
+          'expenseParticipants',
+          String(participant._id),
+          now,
+          participant,
+        );
       await recordSyncChange(ctx, scopeUserId, 'groups', String(args.groupId), now, {
-        ...group, updatedAt: now, _id: args.groupId,
+        ...group,
+        updatedAt: now,
+        _id: args.groupId,
       });
     }
     for (const participant of args.participants) {
-      if (participant.userId !== user._id) await createNotification(ctx, participant.userId,
-        `split:${transactionId}`, 'group', 'group', String(args.groupId),
-        `New expense in ${group.name}`, args.title.trim());
+      if (participant.userId !== user._id)
+        await createNotification(
+          ctx,
+          participant.userId,
+          `split:${transactionId}`,
+          'group',
+          'group',
+          String(args.groupId),
+          `New expense in ${group.name}`,
+          args.title.trim(),
+        );
     }
     return transactionId;
   },
