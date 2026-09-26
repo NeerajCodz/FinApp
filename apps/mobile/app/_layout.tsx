@@ -8,8 +8,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
-import { Button, View } from '@/components/ui';
+import { ThemeProvider, useTheme } from '@finapp/ui/native';
+import { Button, View } from '@finapp/ui/native';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
@@ -36,19 +36,36 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     let active = true;
-    void readValidatedLocalUserId().then((id) => {
-      if (active) setCachedIdentity(id);
-    }).catch(() => {
-      // Secure storage errors remain behind the account gate rather than exposing private routes.
-    });
-    return () => { active = false; };
+    void readValidatedLocalUserId()
+      .then((id) => {
+        if (active) setCachedIdentity(id);
+      })
+      .catch(() => {
+        // Secure storage errors remain behind the account gate rather than exposing private routes.
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   React.useEffect(() => {
-    if (!isLoading && !isAuthenticated && !localUserId && !isAuthRoute &&
-        (connection.isWebSocketConnected || cachedIdentity === null))
+    if (
+      !isLoading &&
+      !isAuthenticated &&
+      !localUserId &&
+      !isAuthRoute &&
+      (connection.isWebSocketConnected || cachedIdentity === null)
+    )
       router.replace('/(auth)/welcome');
-  }, [cachedIdentity, connection.isWebSocketConnected, isAuthRoute, isAuthenticated, isLoading, localUserId, router]);
+  }, [
+    cachedIdentity,
+    connection.isWebSocketConnected,
+    isAuthRoute,
+    isAuthenticated,
+    isLoading,
+    localUserId,
+    router,
+  ]);
   React.useEffect(() => {
     if (!privateRoute) {
       setAuthTimedOut(false);

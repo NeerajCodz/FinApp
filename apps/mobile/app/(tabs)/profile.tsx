@@ -8,7 +8,16 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { currencies } from '@convex/shared/validators';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Avatar, Button, IconButton, Input, Label, Sheet, Text, Typography } from '@/components/ui';
+import {
+  Avatar,
+  Button,
+  IconButton,
+  Input,
+  Label,
+  Sheet,
+  Text,
+  Typography,
+} from '@finapp/ui/native';
 import {
   ArrowRight,
   Bell,
@@ -27,8 +36,8 @@ import {
   UsersThree,
   Wallet,
 } from '@/lib/icons';
-import { useTheme } from '@/providers/ThemeProvider';
-import { layoutTokens } from '@/lib/theme/tokens';
+import { useTheme } from '@finapp/ui/native';
+import { layoutTokens } from '@finapp/ui/tokens';
 import { clearValidatedLocalUserId } from '@/local/identity';
 
 type Editor = 'username' | 'phone' | null;
@@ -176,16 +185,9 @@ export default function ProfileScreen() {
     const nextProfile: ProfileRecord = { ...currentProfile, ...update };
     if (update.phone !== undefined && update.phone !== profile?.phone)
       nextProfile.phoneVerificationTime = undefined;
-    await commitLocalWrite(
-      userId,
-      'profile',
-      'user.update',
-      nextProfile,
-      update,
-      {
-        recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
-      },
-    );
+    await commitLocalWrite(userId, 'profile', 'user.update', nextProfile, update, {
+      recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
+    });
   }
 
   function openEditor(next: Editor) {
@@ -194,11 +196,12 @@ export default function ProfileScreen() {
     setDraft(next === 'username' ? (profile?.username ?? '') : (profile?.phone ?? ''));
   }
   async function saveEditor() {
-    const update = editor === 'username'
-      ? { username: normalizeHandle(draft) }
-      : editor === 'phone'
-        ? { phone: draft }
-        : null;
+    const update =
+      editor === 'username'
+        ? { username: normalizeHandle(draft) }
+        : editor === 'phone'
+          ? { phone: draft }
+          : null;
     if (!update) return;
     setSaveError('');
     try {
@@ -456,7 +459,9 @@ export default function ProfileScreen() {
                 ? `Current number: ${profile.phone} · ${profile.phoneVerificationTime ? 'Verified' : 'Unverified'}. Contacts require a manually verified number.`
                 : 'Use an international format. Contacts require a manually verified number.'}
           </Typography>
-          {!!saveError && <Typography style={{ color: tokens.destructive }}>{saveError}</Typography>}
+          {!!saveError && (
+            <Typography style={{ color: tokens.destructive }}>{saveError}</Typography>
+          )}
           <Button size="lg" onPress={saveEditor} disabled={editorDisabled}>
             <Check
               size={18}

@@ -3,8 +3,8 @@ import { TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Slot, router, usePathname } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { ClockCounterClockwise, House, Plus, UserCircle, UsersThree } from '@/lib/icons';
-import { Button, Separator, Sheet, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { quickAddActions } from '@/lib/navigation/quick-add';
 

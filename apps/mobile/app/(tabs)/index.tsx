@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { CalendarDays, ClockCounterClockwise, ReceiptText, ShieldCheck, TriangleAlert, UsersThree } from '@/lib/icons';
+import {
+  CalendarDays,
+  ClockCounterClockwise,
+  ReceiptText,
+  ShieldCheck,
+  TriangleAlert,
+  UsersThree,
+} from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SpendingLineChart } from '@/components/charts/BarChart';
 import {
@@ -21,9 +28,9 @@ import {
   Sheet,
   Text,
   Typography,
-} from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
-import { layoutTokens } from '@/lib/theme/tokens';
+} from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
+import { layoutTokens } from '@finapp/ui/tokens';
 import { formatMinor } from '@/lib/money';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
@@ -124,7 +131,9 @@ export default function HomeScreen() {
         spentMinor += transaction.amountMinor;
         const bucket = Math.min(
           7,
-          Math.floor(((transaction.occurredAt - range.startAt) / (range.endAt - range.startAt)) * 8),
+          Math.floor(
+            ((transaction.occurredAt - range.startAt) / (range.endAt - range.startAt)) * 8,
+          ),
         );
         chart[bucket] = (chart[bucket] ?? 0) + Number(transaction.amountMinor) / 100;
       }
@@ -132,7 +141,10 @@ export default function HomeScreen() {
     return { chart, incomeMinor, spentMinor };
   }, [currency, range, transactionRange.data]);
   const recentTransactions = useMemo(
-    () => [...(transactions ?? [])].sort((left, right) => right.occurredAt - left.occurredAt).slice(0, 4),
+    () =>
+      [...(transactions ?? [])]
+        .sort((left, right) => right.occurredAt - left.occurredAt)
+        .slice(0, 4),
     [transactions],
   );
   const currencyAccounts = accounts?.filter((account) => account.currency === currency) ?? [];
@@ -195,7 +207,9 @@ export default function HomeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        >
           <Typography variant="label">Overview</Typography>
           <IconButton
             label={syncAccessibilityLabel}
@@ -262,7 +276,11 @@ export default function HomeScreen() {
               <Typography variant="small" style={{ textAlign: 'center', maxWidth: 290 }}>
                 Create a category to organize transactions.
               </Typography>
-              <Button size="sm" variant="outline" onPress={() => router.push('/category/new' as never)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => router.push('/category/new' as never)}
+              >
                 Add category
               </Button>
             </View>
@@ -272,7 +290,9 @@ export default function HomeScreen() {
                 <Button
                   key={String(category.id ?? category._id)}
                   variant="ghost"
-                  onPress={() => router.push(`/category/${String(category.id ?? category._id)}` as never)}
+                  onPress={() =>
+                    router.push(`/category/${String(category.id ?? category._id)}` as never)
+                  }
                   accessibilityLabel={`Open ${category.name} category`}
                   style={{
                     width: '100%',
@@ -287,7 +307,11 @@ export default function HomeScreen() {
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                     <CategoryIcon label={category.name} icon={category.icon} />
-                    <Typography variant="bodyLarge" numberOfLines={2} style={{ color: tokens.foreground, flex: 1 }}>
+                    <Typography
+                      variant="bodyLarge"
+                      numberOfLines={2}
+                      style={{ color: tokens.foreground, flex: 1 }}
+                    >
                       {category.name}
                     </Typography>
                   </View>
@@ -324,12 +348,23 @@ export default function HomeScreen() {
               );
             })
           ) : (
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 8 }}>
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 16,
+                gap: 8,
+              }}
+            >
               <UsersThree size={22} color={tokens.foregroundMuted} />
               <Text style={{ color: tokens.foregroundMuted, textAlign: 'center' }}>
                 Create a group to split money with people you know.
               </Text>
-              <Button size="sm" variant="outline" onPress={() => router.push('/group/new' as never)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => router.push('/group/new' as never)}
+              >
                 Create group
               </Button>
             </View>
@@ -370,13 +405,24 @@ export default function HomeScreen() {
               );
             })
           ) : (
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 8 }}>
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 18,
+                gap: 8,
+              }}
+            >
               <ReceiptText size={22} color={tokens.foregroundMuted} />
               <Typography variant="bodyLarge">No transactions yet</Typography>
               <Typography variant="small" style={{ textAlign: 'center', maxWidth: 290 }}>
                 Record an expense or income to start your ledger.
               </Typography>
-              <Button size="sm" variant="outline" onPress={() => router.push('/transaction/new' as never)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => router.push('/transaction/new' as never)}
+              >
                 Add transaction
               </Button>
             </View>
@@ -538,7 +584,9 @@ export default function HomeScreen() {
               })}
             </ScrollView>
           )}
-          {!!syncError && <Typography style={{ color: tokens.destructive }}>{syncError}</Typography>}
+          {!!syncError && (
+            <Typography style={{ color: tokens.destructive }}>{syncError}</Typography>
+          )}
           <Button size="lg" disabled={isSyncing} onPress={() => void retryNow()}>
             Retry now
           </Button>

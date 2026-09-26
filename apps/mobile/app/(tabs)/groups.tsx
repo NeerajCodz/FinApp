@@ -6,9 +6,9 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { Plus, UsersThree } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupCard, PeopleRail } from '@/components/finance';
-import { Button, Empty, IconButton, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
-import { layoutTokens } from '@/lib/theme/tokens';
+import { Button, Empty, IconButton, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
+import { layoutTokens } from '@finapp/ui/tokens';
 
 export default function GroupsScreen() {
   const { tokens } = useTheme();
@@ -39,7 +39,9 @@ export default function GroupsScreen() {
       <View style={{ gap: 6 }}>
         <Typography variant="label">Shared ledgers</Typography>
         <Typography variant="small">
-          {groups ? `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}` : 'Your groups will appear here when available.'}
+          {groups
+            ? `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`
+            : 'Your groups will appear here when available.'}
         </Typography>
       </View>
       <PeopleRail
@@ -69,14 +71,26 @@ export default function GroupsScreen() {
             title="Groups unavailable"
             description="Your saved groups could not be loaded."
             icon={<UsersThree size={28} color={tokens.foregroundMuted} />}
-            action={<Button size="sm" variant="outline" onPress={groupState.retry}>Retry</Button>}
+            action={
+              <Button size="sm" variant="outline" onPress={groupState.retry}>
+                Retry
+              </Button>
+            }
           />
         ) : (
           <Empty
             title="No groups yet"
             description="Create one for a trip, home, or any expense shared with people."
             icon={<UsersThree size={28} color={tokens.foregroundMuted} />}
-            action={<Button size="sm" variant="outline" onPress={() => router.push('/group/new' as never)}>Create group</Button>}
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => router.push('/group/new' as never)}
+              >
+                Create group
+              </Button>
+            }
           />
         )}
       </View>
