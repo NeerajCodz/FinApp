@@ -66,7 +66,12 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'account.create');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.create',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('accounts', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
@@ -100,7 +105,12 @@ export const rename = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'account.rename');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.rename',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('accounts', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
@@ -115,8 +125,15 @@ export const rename = mutation({
     await ctx.db.patch(args.accountId, { name, updatedAt });
     const updated = { ...account, name, updatedAt };
     await publishMutationResult(
-      ctx, user._id, args.clientMutationId, 'account.rename', args.accountId,
-      'accounts', String(args.accountId), updatedAt, { ...updated, _id: args.accountId },
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.rename',
+      args.accountId,
+      'accounts',
+      String(args.accountId),
+      updatedAt,
+      { ...updated, _id: args.accountId },
     );
     return args.accountId;
   },
@@ -127,7 +144,12 @@ export const archive = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'account.archive');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.archive',
+    );
     if (replay.found) {
       const previousId = ctx.db.normalizeId('accounts', String(replay.result));
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
@@ -144,8 +166,15 @@ export const archive = mutation({
       await recordSyncChange(ctx, user._id, 'users', String(user._id), now, userUpdated);
     }
     await publishMutationResult(
-      ctx, user._id, args.clientMutationId, 'account.archive', args.accountId, 'accounts',
-      String(args.accountId), now, { ...account, archivedAt: now, updatedAt: now, _id: args.accountId },
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.archive',
+      args.accountId,
+      'accounts',
+      String(args.accountId),
+      now,
+      { ...account, archivedAt: now, updatedAt: now, _id: args.accountId },
     );
     return args.accountId;
   },

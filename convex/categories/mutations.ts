@@ -15,7 +15,12 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
-    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'category.create');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'category.create',
+    );
     if (replay.found) return replay.result as Id<'categories'>;
     const name = args.name.trim();
     if (!name) throw new Error('INVALID_CATEGORY');
@@ -188,8 +193,7 @@ export const archive = mutation({
     );
     if (replay.found) return replay.result as typeof args.categoryId;
     const category = await ctx.db.get(args.categoryId);
-    if (!category || category.ownerId !== user._id)
-      throw new Error('INSUFFICIENT_PERMISSION');
+    if (!category || category.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
     const now = Date.now();
     await ctx.db.patch(args.categoryId, { archivedAt: now, updatedAt: now });
     const updated = await ctx.db.get(args.categoryId);
@@ -208,25 +212,28 @@ export const archive = mutation({
     if (
       user.defaultExpenseCategoryId === args.categoryId ||
       user.defaultIncomeCategoryId === args.categoryId
-    )
-      {
-        const updatedUser = {
-          ...user,
-          ...(user.defaultExpenseCategoryId === args.categoryId ? { defaultExpenseCategoryId: undefined } : {}),
-          ...(user.defaultIncomeCategoryId === args.categoryId ? { defaultIncomeCategoryId: undefined } : {}),
-          updatedAt: now,
-        };
-        await ctx.db.patch(user._id, {
-          ...(user.defaultExpenseCategoryId === args.categoryId
-            ? { defaultExpenseCategoryId: undefined }
-            : {}),
-          ...(user.defaultIncomeCategoryId === args.categoryId
-            ? { defaultIncomeCategoryId: undefined }
-            : {}),
-          updatedAt: now,
-        });
-        await recordSyncChange(ctx, user._id, 'users', String(user._id), now, updatedUser);
-      }
+    ) {
+      const updatedUser = {
+        ...user,
+        ...(user.defaultExpenseCategoryId === args.categoryId
+          ? { defaultExpenseCategoryId: undefined }
+          : {}),
+        ...(user.defaultIncomeCategoryId === args.categoryId
+          ? { defaultIncomeCategoryId: undefined }
+          : {}),
+        updatedAt: now,
+      };
+      await ctx.db.patch(user._id, {
+        ...(user.defaultExpenseCategoryId === args.categoryId
+          ? { defaultExpenseCategoryId: undefined }
+          : {}),
+        ...(user.defaultIncomeCategoryId === args.categoryId
+          ? { defaultIncomeCategoryId: undefined }
+          : {}),
+        updatedAt: now,
+      });
+      await recordSyncChange(ctx, user._id, 'users', String(user._id), now, updatedUser);
+    }
     return args.categoryId;
   },
 });
