@@ -18,8 +18,8 @@ import {
   Separator,
   Sheet,
   Typography,
-} from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+} from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 const ACCOUNT_TYPES = {
   cash: 'Cash',
@@ -247,7 +247,8 @@ export default function AccountDetailScreen() {
               <Typography variant="small">
                 {account.type === 'other' && account.customType
                   ? account.customType
-                  : ACCOUNT_TYPES[account.type] ?? 'Account'} · {account.currency}
+                  : (ACCOUNT_TYPES[account.type] ?? 'Account')}{' '}
+                · {account.currency}
               </Typography>
               <Typography variant="caption">
                 {account.isIncludedInTotal
@@ -296,7 +297,12 @@ export default function AccountDetailScreen() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: id } } as never)}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/transaction/new',
+                        params: { accountId: id },
+                      } as never)
+                    }
                   >
                     Add transaction
                   </Button>
@@ -306,7 +312,9 @@ export default function AccountDetailScreen() {
                   {accountTransactions.map((transaction, index) => {
                     const category = categories.get(transaction.categoryId ?? '');
                     return (
-                      <React.Fragment key={transaction._id ?? transaction.id ?? transaction.cloudId}>
+                      <React.Fragment
+                        key={transaction._id ?? transaction.id ?? transaction.cloudId}
+                      >
                         <TransactionRow
                           title={
                             transaction.type === 'transfer'
@@ -314,7 +322,9 @@ export default function AccountDetailScreen() {
                               : transaction.title
                           }
                           category={typeof category?.name === 'string' ? category.name : undefined}
-                          categoryIcon={typeof category?.icon === 'string' ? category.icon : undefined}
+                          categoryIcon={
+                            typeof category?.icon === 'string' ? category.icon : undefined
+                          }
                           amountMinor={transaction.amountMinor}
                           currency={transaction.currency}
                           type={
@@ -324,8 +334,13 @@ export default function AccountDetailScreen() {
                                 : 'income'
                               : transaction.type
                           }
-                          semanticType={transaction.groupId ? 'split' :
-                            transaction.type === 'transfer' ? 'transfer' : undefined}
+                          semanticType={
+                            transaction.groupId
+                              ? 'split'
+                              : transaction.type === 'transfer'
+                                ? 'transfer'
+                                : undefined
+                          }
                           date={new Date(transaction.occurredAt).toLocaleDateString()}
                           onPress={() =>
                             router.push(

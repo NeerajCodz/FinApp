@@ -7,10 +7,10 @@ import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, IconButton, Input, Label, Sheet, Text, Typography } from '@/components/ui';
+import { Button, IconButton, Input, Label, Sheet, Text, Typography } from '@finapp/ui/native';
 import { CurrencyInput } from '@/components/finance';
 import { parseMinor } from '@/lib/money';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@finapp/ui/native';
 
 type ProfileRecord = LocalRecord & {
   defaultCurrency?: string;
@@ -110,7 +110,12 @@ export default function NewAccountScreen() {
             gap: 24,
           }}
         >
-          <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+          <IconButton
+            label="Go back"
+            variant="ghost"
+            style={{ alignSelf: 'flex-start' }}
+            onPress={() => router.back()}
+          >
             <ArrowLeft size={21} color={tokens.foreground} />
           </IconButton>
           <View style={{ gap: 10 }}>
@@ -147,7 +152,9 @@ export default function NewAccountScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Account type"
-                accessibilityValue={{ text: ACCOUNT_TYPES.find((option) => option.value === type)?.label }}
+                accessibilityValue={{
+                  text: ACCOUNT_TYPES.find((option) => option.value === type)?.label,
+                }}
                 accessibilityHint="Opens account type choices"
                 onPress={() => setTypeOpen(true)}
                 style={{
@@ -163,7 +170,11 @@ export default function NewAccountScreen() {
                 }}
               >
                 <Text>{ACCOUNT_TYPES.find((option) => option.value === type)?.label}</Text>
-                <CaretRight size={18} color={tokens.foregroundMuted} style={{ transform: [{ rotate: '90deg' }] }} />
+                <CaretRight
+                  size={18}
+                  color={tokens.foregroundMuted}
+                  style={{ transform: [{ rotate: '90deg' }] }}
+                />
               </Pressable>
             </View>
             {type === 'other' && (
@@ -208,7 +219,12 @@ export default function NewAccountScreen() {
           {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
           <Button
             size="lg"
-            disabled={!name.trim() || pending || !profile?.defaultCurrency || (type === 'other' && !customType.trim())}
+            disabled={
+              !name.trim() ||
+              pending ||
+              !profile?.defaultCurrency ||
+              (type === 'other' && !customType.trim())
+            }
             onPress={save}
           >
             {pending ? 'Saving…' : 'Save account'}

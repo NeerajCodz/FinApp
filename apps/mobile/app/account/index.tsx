@@ -17,8 +17,8 @@ import { displayAccountName } from '@/lib/ledger';
 import type { LocalRecord } from '@/local/repository';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Money } from '@/components/finance';
-import { Button, Card, IconButton, Separator, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, Card, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 
 const ACCOUNT_TYPES = {
   cash: 'Cash',
@@ -187,7 +187,9 @@ export default function AccountsScreen() {
           >
             <Wallet size={26} color={tokens.primary} />
           </View>
-          <Typography variant="heading" style={{ textAlign: 'center' }}>Start with an account</Typography>
+          <Typography variant="heading" style={{ textAlign: 'center' }}>
+            Start with an account
+          </Typography>
           <Text style={{ color: tokens.foregroundMuted, maxWidth: 300, textAlign: 'center' }}>
             Add cash, a bank account, or a card to keep balances and activity in one place.
           </Text>
@@ -318,7 +320,8 @@ export default function AccountsScreen() {
                       <Typography variant="caption">
                         {account.type === 'other' && account.customType
                           ? account.customType
-                          : ACCOUNT_TYPES[account.type] ?? 'Account'} · {account.currency}
+                          : (ACCOUNT_TYPES[account.type] ?? 'Account')}{' '}
+                        · {account.currency}
                       </Typography>
                     </View>
                     <View style={{ flexShrink: 0, alignItems: 'flex-end', gap: 4 }}>

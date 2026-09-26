@@ -5,8 +5,8 @@ import { ArrowLeft } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon } from '@/components/finance';
 import { CategoryEmojiPicker } from '@/components/finance/CategoryEmojiPicker';
-import { Button, IconButton, Input, Label, Text, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
 
@@ -72,7 +72,12 @@ export default function NewCategoryScreen() {
           flexGrow: 1,
         }}
       >
-        <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+        <IconButton
+          label="Go back"
+          variant="ghost"
+          style={{ alignSelf: 'flex-start' }}
+          onPress={() => router.back()}
+        >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
 

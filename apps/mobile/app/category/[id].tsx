@@ -15,8 +15,8 @@ import {
   Separator,
   Sheet,
   Typography,
-} from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+} from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -81,8 +81,7 @@ export default function CategoryDetailScreen() {
   if (transactionRecordsState.error) throw transactionRecordsState.error;
 
   const selectedCategory = categoryState.data?.find(
-    (item) =>
-      item.archivedAt === undefined && (item.id === id || item._id === id),
+    (item) => item.archivedAt === undefined && (item.id === id || item._id === id),
   );
   const categoryLocalId = selectedCategory?.id ?? selectedCategory?._id;
   const categoryPayloadId = selectedCategory?._id ?? selectedCategory?.id;
@@ -91,8 +90,7 @@ export default function CategoryDetailScreen() {
       (value): value is string => typeof value === 'string',
     ),
   );
-  const profile =
-    profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
+  const profile = profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
   const currency = selectedCategory?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
   const categoryTransactions = (transactionRecordsState.data ?? [])
     .filter(
@@ -253,8 +251,7 @@ export default function CategoryDetailScreen() {
         { transactionType, categoryId: nextCategoryId },
         {
           recordId: profile.id ?? profile._id,
-          dependencies:
-            nextCategoryId?.startsWith('local-') ? [`category:${nextCategoryId}`] : [],
+          dependencies: nextCategoryId?.startsWith('local-') ? [`category:${nextCategoryId}`] : [],
         },
       );
     } catch (cause) {
@@ -320,12 +317,8 @@ export default function CategoryDetailScreen() {
                     entityType: 'profile',
                     record: {
                       ...profile,
-                      ...(defaultExpenseCategoryId
-                        ? { defaultExpenseCategoryId: undefined }
-                        : {}),
-                      ...(defaultIncomeCategoryId
-                        ? { defaultIncomeCategoryId: undefined }
-                        : {}),
+                      ...(defaultExpenseCategoryId ? { defaultExpenseCategoryId: undefined } : {}),
+                      ...(defaultIncomeCategoryId ? { defaultIncomeCategoryId: undefined } : {}),
                     },
                   },
                 ]
@@ -532,7 +525,11 @@ export default function CategoryDetailScreen() {
                   title="No transactions in this category."
                   description="Choose this category when you add an expense or income to see it here."
                   action={
-                    <Button size="sm" variant="outline" onPress={() => router.push('/transaction/new' as never)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onPress={() => router.push('/transaction/new' as never)}
+                    >
                       Add transaction
                     </Button>
                   }
@@ -605,7 +602,12 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 24,
       }}
     >
-      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+      <IconButton
+        label="Go back"
+        variant="ghost"
+        style={{ alignSelf: 'flex-start' }}
+        onPress={() => router.back()}
+      >
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Empty

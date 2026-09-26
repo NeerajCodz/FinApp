@@ -5,8 +5,8 @@ import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryIcon } from '@/components/finance';
 import { Money } from '@/components/finance';
-import { Button, Empty, IconButton, Separator, Typography } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { Button, Empty, IconButton, Separator, Typography } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -92,8 +92,7 @@ export default function CategoriesScreen() {
       monthCurrency: category.limitCurrency ?? profile?.defaultCurrency ?? null,
     };
   });
-  const loading =
-    categoryState.loading || profileState.loading || transactionState.loading;
+  const loading = categoryState.loading || profileState.loading || transactionState.loading;
 
   return (
     <ScrollView
@@ -146,9 +145,7 @@ export default function CategoriesScreen() {
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${category.name} category`}
-                  onPress={() =>
-                    router.push(`/category/${category.id ?? category._id}` as never)
-                  }
+                  onPress={() => router.push(`/category/${category.id ?? category._id}` as never)}
                   activeOpacity={0.7}
                   style={{
                     minHeight: 72,
@@ -216,7 +213,12 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
         gap: 24,
       }}
     >
-      <IconButton label="Go back" variant="ghost" style={{ alignSelf: 'flex-start' }} onPress={() => router.back()}>
+      <IconButton
+        label="Go back"
+        variant="ghost"
+        style={{ alignSelf: 'flex-start' }}
+        onPress={() => router.back()}
+      >
         <ArrowLeft size={21} color={tokens.foreground} />
       </IconButton>
       <Empty
