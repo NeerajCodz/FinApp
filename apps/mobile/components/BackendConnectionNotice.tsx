@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import type { ThemeTokens } from '../lib/theme/tokens';
+import type { ThemeTokens } from '@finapp/ui/tokens';
 
 type BackendConnectionNoticeProps = {
   isConnected: boolean;
