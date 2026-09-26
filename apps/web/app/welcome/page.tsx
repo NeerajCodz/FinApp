@@ -10,12 +10,12 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 export default function WelcomePage() {
   const auth = useConvexAuth();
-  const { userId } = useBrowserSync();
+  const { userId, identityReady } = useBrowserSync();
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!auth.isLoading && auth.isAuthenticated && userId) router.replace('/dashboard');
-  }, [auth.isAuthenticated, auth.isLoading, router, userId]);
+    if (identityReady && userId) router.replace('/dashboard');
+  }, [identityReady, router, userId]);
 
   if (auth.isAuthenticated && !userId) {
     return (

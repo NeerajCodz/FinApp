@@ -283,8 +283,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const isConnected = online && connection.isWebSocketConnected;
   const authenticatedUserId = typeof currentProfile?._id === 'string' ? currentProfile._id : null;
   const userId = authenticatedUserId ?? (!isConnected ? storedUserId : null);
-  const identityReady =
-    localIdentityReady && !auth.isLoading && (!auth.isAuthenticated || currentProfile !== undefined);
+  const identityReady = localIdentityReady;
   const validatedOnline = Boolean(auth.isAuthenticated && isConnected && authenticatedUserId);
   const scopedStatus = statusUserId === userId ? status : emptyStatus;
 
