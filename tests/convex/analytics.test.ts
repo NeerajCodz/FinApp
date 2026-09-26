@@ -87,8 +87,12 @@ describe('analytics domains', () => {
     expect(result.incomeMinor).toBe(5000n);
     expect(result.buckets.reduce((sum, bucket) => sum + bucket.amountMinor, 0n)).toBe(1200n);
     expect(result.categoryBreakdown).toEqual([{ id: 'food', label: 'Food', amountMinor: 1200n }]);
-    expect(result.accountBreakdown).toEqual([{ id: '__unassigned_account__', label: 'Unassigned account', amountMinor: 1200n }]);
-    expect(result.merchantBreakdown).toEqual([{ id: 'Unspecified merchant', label: 'Unspecified merchant', amountMinor: 1200n }]);
+    expect(result.accountBreakdown).toEqual([
+      { id: '__unassigned_account__', label: 'Unassigned account', amountMinor: 1200n },
+    ]);
+    expect(result.merchantBreakdown).toEqual([
+      { id: 'Unspecified merchant', label: 'Unspecified merchant', amountMinor: 1200n },
+    ]);
   });
 
   it('splits calendar year totals into real monthly buckets', () => {
@@ -163,28 +167,100 @@ describe('analytics domains', () => {
   });
 
   it('buckets both series on local dates with half-open bounds and exact bigint rankings', () => {
-    const { startAt, endAt } = getAnalyticsRange('month', Date.UTC(2024, 2, 15), 'America/New_York');
+    const { startAt, endAt } = getAnalyticsRange(
+      'month',
+      Date.UTC(2024, 2, 15),
+      'America/New_York',
+    );
     const huge = 90071992547409930n;
     const result = aggregateAnalytics(
       [
-        { type: 'expense', amountMinor: huge, currency: 'USD', categoryId: 'legacy-food', accountId: 'cloud-card', merchant: ' Market ', occurredAt: startAt, status: 'posted' },
-        { type: 'income', amountMinor: huge + 1n, currency: 'USD', occurredAt: Date.UTC(2024, 2, 10, 6), status: 'posted' },
-        { type: 'expense', amountMinor: 9n, currency: 'USD', categoryId: 'unknown', accountId: 'unknown', merchant: ' ', occurredAt: Date.UTC(2024, 2, 11, 3, 30), status: 'posted' },
-        { type: 'expense', amountMinor: 4n, currency: 'USD', categoryId: 'food', accountId: 'card', merchant: 'Market', occurredAt: endAt - 1, status: 'posted' },
+        {
+          type: 'expense',
+          amountMinor: huge,
+          currency: 'USD',
+          categoryId: 'legacy-food',
+          accountId: 'cloud-card',
+          merchant: ' Market ',
+          occurredAt: startAt,
+          status: 'posted',
+        },
+        {
+          type: 'income',
+          amountMinor: huge + 1n,
+          currency: 'USD',
+          occurredAt: Date.UTC(2024, 2, 10, 6),
+          status: 'posted',
+        },
+        {
+          type: 'expense',
+          amountMinor: 9n,
+          currency: 'USD',
+          categoryId: 'unknown',
+          accountId: 'unknown',
+          merchant: ' ',
+          occurredAt: Date.UTC(2024, 2, 11, 3, 30),
+          status: 'posted',
+        },
+        {
+          type: 'expense',
+          amountMinor: 4n,
+          currency: 'USD',
+          categoryId: 'food',
+          accountId: 'card',
+          merchant: 'Market',
+          occurredAt: endAt - 1,
+          status: 'posted',
+        },
         { type: 'expense', amountMinor: 88n, currency: 'USD', occurredAt: endAt, status: 'posted' },
-        { type: 'income', amountMinor: 90n, currency: 'EUR', occurredAt: startAt, status: 'posted' },
-        { type: 'transfer', amountMinor: 99n, currency: 'USD', occurredAt: startAt, status: 'posted' },
-        { type: 'expense', amountMinor: 99n, currency: 'USD', occurredAt: startAt, status: 'pending' },
-        { type: 'expense', amountMinor: 99n, currency: 'USD', occurredAt: startAt, status: 'posted', deletedAt: endAt },
+        {
+          type: 'income',
+          amountMinor: 90n,
+          currency: 'EUR',
+          occurredAt: startAt,
+          status: 'posted',
+        },
+        {
+          type: 'transfer',
+          amountMinor: 99n,
+          currency: 'USD',
+          occurredAt: startAt,
+          status: 'posted',
+        },
+        {
+          type: 'expense',
+          amountMinor: 99n,
+          currency: 'USD',
+          occurredAt: startAt,
+          status: 'pending',
+        },
+        {
+          type: 'expense',
+          amountMinor: 99n,
+          currency: 'USD',
+          occurredAt: startAt,
+          status: 'posted',
+          deletedAt: endAt,
+        },
       ],
       [{ id: 'food', name: 'Food', aliases: ['legacy-food'] }],
-      'USD', 'month', startAt, endAt, 'America/New_York',
+      'USD',
+      'month',
+      startAt,
+      endAt,
+      'America/New_York',
       [{ id: 'card', name: 'Card', aliases: ['cloud-card'] }],
     );
     expect(result.spentMinor).toBe(huge + 13n);
     expect(result.incomeMinor).toBe(huge + 1n);
     expect(result.buckets).toHaveLength(31);
-    expect(result.buckets[0]).toEqual({ startAt, endAt: Date.UTC(2024, 2, 2, 5), label: 'Mar 1', amountMinor: huge, incomeMinor: 0n });
+    expect(result.buckets[0]).toEqual({
+      startAt,
+      endAt: Date.UTC(2024, 2, 2, 5),
+      label: 'Mar 1',
+      amountMinor: huge,
+      incomeMinor: 0n,
+    });
     expect(result.buckets[9]?.incomeMinor).toBe(huge + 1n);
     expect(result.buckets[9]?.endAt - result.buckets[9]!.startAt).toBe(23 * 3600000);
     expect(result.buckets[30]?.amountMinor).toBe(4n);
@@ -205,12 +281,51 @@ describe('analytics domains', () => {
 
   it('labels every week day and year month with actual local boundaries', () => {
     const week = getAnalyticsRange('week', Date.UTC(2024, 0, 4), 'Asia/Kolkata');
-    const days = aggregateAnalytics([], [], 'INR', 'week', week.startAt, week.endAt, 'Asia/Kolkata').buckets;
-    expect(days.map((bucket) => bucket.label)).toEqual(['Mon, Jan 1', 'Tue, Jan 2', 'Wed, Jan 3', 'Thu, Jan 4', 'Fri, Jan 5', 'Sat, Jan 6', 'Sun, Jan 7']);
-    expect(days.every((bucket, index) => bucket.endAt === (days[index + 1]?.startAt ?? week.endAt))).toBe(true);
+    const days = aggregateAnalytics(
+      [],
+      [],
+      'INR',
+      'week',
+      week.startAt,
+      week.endAt,
+      'Asia/Kolkata',
+    ).buckets;
+    expect(days.map((bucket) => bucket.label)).toEqual([
+      'Mon, Jan 1',
+      'Tue, Jan 2',
+      'Wed, Jan 3',
+      'Thu, Jan 4',
+      'Fri, Jan 5',
+      'Sat, Jan 6',
+      'Sun, Jan 7',
+    ]);
+    expect(
+      days.every((bucket, index) => bucket.endAt === (days[index + 1]?.startAt ?? week.endAt)),
+    ).toBe(true);
     const year = getAnalyticsRange('year', Date.UTC(2024, 1, 1), 'Asia/Kolkata');
-    const months = aggregateAnalytics([], [], 'INR', 'year', year.startAt, year.endAt, 'Asia/Kolkata').buckets;
-    expect(months.map((bucket) => bucket.label)).toEqual(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+    const months = aggregateAnalytics(
+      [],
+      [],
+      'INR',
+      'year',
+      year.startAt,
+      year.endAt,
+      'Asia/Kolkata',
+    ).buckets;
+    expect(months.map((bucket) => bucket.label)).toEqual([
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]);
     expect(months[1]?.endAt - months[1]!.startAt).toBe(29 * day);
   });
 
