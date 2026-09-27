@@ -1,12 +1,22 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowRight, Bell, Coins, Download, Palette, RefreshCw, ShieldCheck } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Bell, Coins, Eye, Palette, RefreshCw, ShieldCheck } from 'lucide-react';
+import { IconButton, Separator, Typography, useTheme } from '@finapp/ui/web';
+import { SettingsRow } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
+import { useLocalRecords } from '@/lib/offline/hooks';
+import type { LocalRecord } from '@/lib/offline/repository';
+
+type Profile = LocalRecord & { defaultCurrency?: string };
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { userId, syncWindow } = useBrowserSync();
+  const { appearance, tokens } = useTheme();
+  const { records: profiles } = useLocalRecords<Profile>('profile');
+  const profile = profiles[0];
   if (!userId)
     return (
       <FinanceSignedOut
@@ -16,70 +26,69 @@ export default function SettingsPage() {
       />
     );
 
-  const items = [
-    {
-      label: 'Appearance',
-      description: 'Choose dark, light, or system theme.',
-      href: '/settings/appearance',
-      icon: Palette,
-    },
-    {
-      label: 'Currency',
-      description: 'Set the default currency for new records.',
-      href: '/settings/currency',
-      icon: Coins,
-    },
-    {
-      label: 'Notifications',
-      description: 'Choose which updates appear in your inbox.',
-      href: '/settings/notifications',
-      icon: Bell,
-    },
-    {
-      label: 'Security',
-      description: 'Manage sign-in verification and this browser’s screen lock.',
-      href: '/settings/security',
-      icon: ShieldCheck,
-    },
-    {
-      label: 'Local sync',
-      description: syncWindow === 'all' ? 'All history' : `${syncWindow} days`,
-      href: '/settings/sync',
-      icon: RefreshCw,
-    },
-    {
-      label: 'Privacy and export',
-      description: 'Review browser storage and export controls.',
-      href: '/settings/privacy',
-      icon: Download,
-    },
-  ];
-
+  const syncWindowLabel = syncWindow === 'all' ? 'All history' : `${syncWindow} days`;
   return (
     <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <h1>Settings</h1>
-          <p className="finance-muted">
-            Choose how Finapp looks, stores money, and protects your data.
-          </p>
-        </div>
-        <Link className="finance-secondary-action" href="/profile">
-          Back to profile
-        </Link>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/profile')}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">Settings</Typography>
       </header>
-      <nav className="finance-settings-list" aria-label="Settings">
-        {items.map(({ label, description, href, icon: Icon }) => (
-          <Link className="finance-settings-row" href={href} key={href}>
-            <Icon size={19} aria-hidden="true" />
-            <span>
-              <strong>{label}</strong>
-              <small>{description}</small>
-            </span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </Link>
-        ))}
-      </nav>
+
+      <section>
+        <Typography variant="label" style={{ display: 'block', marginBottom: 8 }}>
+          General
+        </Typography>
+        <SettingsRow
+          label="Appearance"
+          value={`${appearance.charAt(0).toUpperCase()}${appearance.slice(1)}`}
+          leadingIcon={<Palette size={19} color={tokens.primary} />}
+          onPress={() => router.push('/settings/appearance')}
+        />
+        <Separator />
+        <SettingsRow
+          label="Currency"
+          value={profile?.defaultCurrency ?? 'INR'}
+          leadingIcon={<Coins size={19} color={tokens.primary} />}
+          onPress={() => router.push('/settings/currency')}
+        />
+      </section>
+
+      <section>
+        <Typography variant="label" style={{ display: 'block', marginBottom: 8 }}>
+          Preferences
+        </Typography>
+        <SettingsRow
+          label="Notifications"
+          leadingIcon={<Bell size={19} color={tokens.primary} />}
+          onPress={() => router.push('/settings/notifications')}
+        />
+        <Separator />
+        <SettingsRow
+          label="Security"
+          leadingIcon={<ShieldCheck size={19} color={tokens.primary} />}
+          onPress={() => router.push('/settings/security')}
+        />
+      </section>
+
+      <section>
+        <Typography variant="label" style={{ display: 'block', marginBottom: 8 }}>
+          Data
+        </Typography>
+        <SettingsRow
+          label="Local sync"
+          value={syncWindowLabel}
+          leadingIcon={<RefreshCw size={19} color={tokens.primary} />}
+          onPress={() => router.push('/settings/sync')}
+        />
+        <Separator />
+        <SettingsRow
+          label="Privacy and export"
+          leadingIcon={<Eye size={19} color={tokens.primary} />}
+          onPress={() => router.push('/settings/privacy')}
+        />
+      </section>
     </div>
   );
 }

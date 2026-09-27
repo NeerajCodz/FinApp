@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Download, Eye, ShieldCheck } from 'lucide-react';
-import { Button, Card, SectionHeader } from '@finapp/ui/web';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { Button, IconButton, Separator, Text, Typography, useTheme } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -12,6 +12,8 @@ import { downloadFinanceBackup } from '@/lib/browser/export';
 
 export default function PrivacySettingsPage() {
   const { userId } = useBrowserSync();
+  const router = useRouter();
+  const { tokens } = useTheme();
   const [exporting, setExporting] = React.useState(false);
   const [message, setMessage] = React.useState('');
   const accounts = useLocalRecords<LocalRecord>('account');
@@ -25,6 +27,12 @@ export default function PrivacySettingsPage() {
     categories.loading ||
     groups.loading ||
     settlements.loading;
+  const dataError =
+    accounts.error ??
+    transactions.error ??
+    categories.error ??
+    groups.error ??
+    settlements.error;
   if (!userId)
     return (
       <FinanceSignedOut
@@ -35,7 +43,7 @@ export default function PrivacySettingsPage() {
     );
 
   function exportData() {
-    if (loading || exporting) return;
+    if (loading || dataError || exporting) return;
     setExporting(true);
     setMessage('');
     try {
@@ -56,73 +64,61 @@ export default function PrivacySettingsPage() {
 
   return (
     <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">DATA CONTROLS</p>
-          <h1>Privacy and export</h1>
-          <p className="finance-muted">
-            Review the browser copy, export controls, and account deletion route.
-          </p>
-        </div>
-        <Link className="finance-secondary-action" href="/settings">
-          <ArrowLeft size={15} aria-hidden="true" /> Settings
-        </Link>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">Privacy</Typography>
       </header>
 
-      <Card className="finance-settings-card">
-        <SectionHeader
-          title="Browser storage"
-          action={<ShieldCheck size={18} aria-hidden="true" />}
-        />
-        <p>
-          Financial records and pending changes are stored in user-scoped IndexedDB in this browser
-          profile. The browser copy is not separately encrypted by Finapp. Anyone who can use this
-          browser profile may be able to access it. A passkey screen lock gates the interface only;
-          it does not encrypt this browser copy.
-        </p>
-      </Card>
+      <section style={{ display: 'grid', gap: 12 }}>
+        <Typography variant="heading">Your financial values stay private.</Typography>
+        <Text style={{ maxWidth: 320 }}>
+          Ordinary telemetry never includes balances, amounts, account names, or transaction notes.
+        </Text>
+      </section>
 
-      <Card className="finance-settings-card">
-        <SectionHeader
-          title="Locally available records"
-          action={<Eye size={18} aria-hidden="true" />}
-        />
+      <Separator />
+
+      <section style={{ display: 'grid', gap: 12 }}>
+        <Typography variant="label">Your data</Typography>
+        <Text style={{ maxWidth: 310 }}>
+          Export portable CSV files for accounts, transactions, categories, groups, and settlements.
+        </Text>
+        <Text style={{ maxWidth: 340 }}>
+          The browser copy is stored in this browser profile and is not separately encrypted by
+          Finapp. Anyone who can use this profile may be able to access it.
+        </Text>
         {loading ? (
-          <p className="finance-form-note" role="status">
-            Counting saved data…
-          </p>
+          <Text role="status">Counting saved data…</Text>
+        ) : dataError ? (
+          <Text role="alert">Saved data could not be read. Reload before exporting.</Text>
         ) : (
-          <p className="finance-settings-count">
+          <Text>
             {accounts.records.length} accounts · {transactions.records.length} transactions ·{' '}
             {categories.records.length} categories · {groups.records.length} groups ·{' '}
             {settlements.records.length} settlements
-          </p>
+          </Text>
         )}
-        <p>
-          Exports are created only after you request them and contain data currently available to
-          this browser.
-        </p>
-        <Button onPress={exportData} disabled={loading || exporting}>
-          <Download size={15} aria-hidden="true" />{' '}
-          {exporting ? 'Preparing export…' : 'Export data'}
+        <Button
+          variant="outline"
+          disabled={loading || !!dataError || exporting}
+          onPress={exportData}
+          style={{ justifySelf: 'start' }}
+        >
+          {exporting ? 'Preparing export' : 'Export data'}
         </Button>
-        {message && (
-          <p className="finance-settings-message" role="status">
-            {message}
-          </p>
-        )}
-      </Card>
+        {message && <Text role="status">{message}</Text>}
+      </section>
 
-      <Card className="finance-settings-card">
-        <SectionHeader
-          title="Account deletion"
-          action={<ShieldCheck size={18} aria-hidden="true" />}
-        />
-        <p>
-          Permanent deletion remains support-mediated. Contact support from your verified email to
-          request account deletion.
-        </p>
-      </Card>
+      <section style={{ display: 'grid', gap: 10 }}>
+        <Typography variant="label" style={{ color: tokens.destructive }}>
+          Account deletion
+        </Typography>
+        <Text style={{ maxWidth: 310 }}>
+          Contact support from your verified email to request permanent deletion.
+        </Text>
+      </section>
     </div>
   );
 }

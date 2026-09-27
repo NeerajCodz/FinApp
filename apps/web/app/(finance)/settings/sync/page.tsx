@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check } from 'lucide-react';
-import { Button, Card, SectionHeader } from '@finapp/ui/web';
+import { Button, IconButton, Text, Typography } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import type { LocalSyncWindow } from '@/lib/offline/repository';
@@ -18,6 +18,7 @@ const syncWindowOptions: { value: LocalSyncWindow; label: string }[] = [
 ];
 
 export default function SyncSettingsPage() {
+  const router = useRouter();
   const { userId, syncWindow, setSyncWindow } = useBrowserSync();
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -46,54 +47,40 @@ export default function SyncSettingsPage() {
 
   return (
     <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">DATA CONTROLS</p>
-          <h1>Local sync</h1>
-        </div>
-        <Link className="finance-secondary-action" href="/settings">
-          <ArrowLeft size={15} aria-hidden="true" /> Settings
-        </Link>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">Local sync</Typography>
       </header>
-      <Card className="finance-record-panel" style={{ display: 'grid', gap: 12 }}>
-        <SectionHeader title="Initial download window" />
-        <p className="finance-form-note">
+      <section style={{ display: 'grid', gap: 8 }}>
+        <Typography variant="label">Initial download window</Typography>
+        <Text style={{ maxWidth: 340 }}>
           Choose how much recent history syncs automatically. Changing this setting backfills cloud
           data; it never removes older history already downloaded to this device.
-        </p>
-        <div
-          className="finance-sync-window-options"
-          role="radiogroup"
-          aria-label="Initial download window"
-        >
-          {syncWindowOptions.map((option) => {
-            const selected = syncWindow === option.value;
-            return (
-              <Button
-                key={String(option.value)}
-                variant={selected ? 'primary' : 'outline'}
-                disabled={saving}
-                role="radio"
-                aria-checked={selected}
-                onPress={() => void selectWindow(option.value)}
-              >
-                <span>{option.label}</span>
-                {selected && <Check size={18} aria-hidden="true" />}
-              </Button>
-            );
-          })}
-        </div>
-        {!!error && (
-          <p className="finance-form-error" role="alert">
-            {error}
-          </p>
-        )}
-        {saving && (
-          <p className="finance-form-note" role="status">
-            Saving and scheduling backfill…
-          </p>
-        )}
-      </Card>
+        </Text>
+      </section>
+      <div style={{ display: 'grid', gap: 8 }} role="radiogroup" aria-label="Initial download window">
+        {syncWindowOptions.map((option) => {
+          const selected = syncWindow === option.value;
+          return (
+            <Button
+              key={String(option.value)}
+              variant={selected ? 'primary' : 'outline'}
+              disabled={saving}
+              role="radio"
+              aria-checked={selected}
+              onPress={() => void selectWindow(option.value)}
+              style={{ minHeight: 54, justifyContent: 'space-between' }}
+            >
+              <span>{option.label}</span>
+              {selected && <Check size={18} aria-hidden="true" />}
+            </Button>
+          );
+        })}
+      </div>
+      {!!error && <Text role="alert">{error}</Text>}
+      {saving && <Text role="status">Saving and scheduling backfill…</Text>}
     </div>
   );
 }

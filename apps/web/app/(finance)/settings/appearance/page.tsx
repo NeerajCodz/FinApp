@@ -1,20 +1,20 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check } from 'lucide-react';
-import { Button, Card, SectionHeader } from '@finapp/ui/web';
+import { Button, IconButton, Text, Typography, useTheme } from '@finapp/ui/web';
 import type { Appearance } from '@finapp/ui/web';
-import { useTheme } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
-const options: { value: Appearance; label: string; detail: string }[] = [
-  { value: 'dark', label: 'Dark', detail: 'Use the dark palette.' },
-  { value: 'system', label: 'System', detail: 'Follow your device setting.' },
-  { value: 'light', label: 'Light', detail: 'Use the light palette.' },
+const options: { value: Appearance; label: string }[] = [
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
 ];
 
 export default function AppearanceSettingsPage() {
+  const router = useRouter();
   const { userId } = useBrowserSync();
   const { appearance, setAppearance } = useTheme();
   if (!userId)
@@ -27,41 +27,35 @@ export default function AppearanceSettingsPage() {
     );
   return (
     <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">PREFERENCES</p>
-          <h1>Appearance</h1>
-          <p className="finance-muted">Theme changes are saved in this browser.</p>
-        </div>
-        <Link className="finance-secondary-action" href="/settings">
-          <ArrowLeft size={15} aria-hidden="true" /> Settings
-        </Link>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">Appearance</Typography>
       </header>
-      <Card className="finance-record-panel" style={{ display: 'grid', gap: 12 }}>
-        <SectionHeader title="Theme" />
-        <p className="finance-form-note">
-          System follows the current device preference. Your selection is stored as
-          finapp.appearance.mode.v1.
-        </p>
-        {options.map((option) => {
-          const selected = appearance === option.value;
-          return (
-            <Button
-              key={option.value}
-              variant={selected ? 'secondary' : 'outline'}
-              aria-pressed={selected}
-              onPress={() => setAppearance(option.value)}
-              style={{ minHeight: 58, justifyContent: 'space-between', textAlign: 'left' }}
-            >
-              <span style={{ display: 'grid', gap: 4, textAlign: 'left' }}>
-                <strong>{option.label}</strong>
-                <small>{option.detail}</small>
-              </span>
-              {selected && <Check size={17} aria-hidden="true" />}
-            </Button>
-          );
-        })}
-      </Card>
+      <section style={{ display: 'grid', gap: 12 }}>
+        <Typography variant="label">Theme</Typography>
+        <Text style={{ maxWidth: 300 }}>
+          Choose the app theme. System follows your device setting.
+        </Text>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {options.map((option) => {
+            const selected = appearance === option.value;
+            return (
+              <Button
+                key={option.value}
+                variant={selected ? 'primary' : 'outline'}
+                aria-pressed={selected}
+                onPress={() => setAppearance(option.value)}
+                style={{ justifyContent: 'space-between', minHeight: 56 }}
+              >
+                <span>{option.label}</span>
+                {selected && <Check size={18} aria-hidden="true" />}
+              </Button>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
