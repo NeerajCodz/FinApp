@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { formatMinor } from '@convex/shared/money';
 import { calculateBilateralBalance } from '@convex/splits/domain';
 import { ArrowLeft, ArrowLeftRight, ArrowRight, UsersRound } from 'lucide-react';
-import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Avatar, Card, Empty, SectionHeader, Separator } from '@finapp/ui/web';
+import { Money, TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
@@ -218,44 +218,65 @@ export default function PersonPage() {
     !participantsError &&
     !settlementsLoading &&
     !settlementsError;
-  const displayName =
-    person?.displayName ?? matchingMember?.displayName ?? matchingMember?.name ?? `@${handle}`;
-  const recent = expenses.slice(0, 12);
+  const recent = expenses;
   const searchPending = !person && !matchingMember && searchResult === undefined;
   const routeToSettle = personId ?? handle;
 
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link className="finance-secondary-action" href="/groups">
-            <ArrowLeft size={15} /> Groups
-          </Link>
-          <p className="finance-kicker">SHARED CONTACT</p>
-          <h1>Person</h1>
-          <p className="finance-muted">
-            {displayName} · @{handle}
-          </p>
-        </div>
-        <div className="finance-page-actions">
-          <Link
-            className="finance-primary-link"
-            href={
-              sharedGroups.length === 1
-                ? `/split/new?groupId=${encodeURIComponent(idOf(sharedGroups[0]!))}`
-                : '/split/new'
-            }
-          >
-            <UsersRound size={15} /> Split <ArrowRight size={15} />
-          </Link>
-          <Link
-            className="finance-secondary-action"
-            href={`/settle/${encodeURIComponent(routeToSettle)}`}
-          >
-            <ArrowLeftRight size={15} /> Settle
-          </Link>
-        </div>
+        <Link className="finance-secondary-action" href="/groups" aria-label="Go back">
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ margin: 0 }}>Person</h1>
       </header>
+      <Card className="finance-record-panel">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <Avatar initials={handle.slice(0, 2).toUpperCase()} label={`@${handle}`} size={60} />
+          <div style={{ display: 'grid', gap: 3 }}>
+            <strong style={{ fontSize: '1.25rem' }}>@{handle}</strong>
+            <small>Shared money timeline</small>
+          </div>
+        </div>
+        <Separator />
+        <div style={{ display: 'grid', gap: 5 }}>
+          {balanceAvailable ? (
+            <Money
+              amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
+              currency={String(sharedGroups[0]?.currency ?? 'INR')}
+              size="display"
+            />
+          ) : (
+            <p className="finance-muted">
+              Balance unavailable until saved group ranges are complete.
+            </p>
+          )}
+          <small>
+            {balanceAvailable
+              ? bilateralBalance === 0n
+                ? 'Even across shared groups'
+                : bilateralBalance > 0n
+                  ? 'They owe you across shared groups'
+                  : 'You owe across shared groups'
+              : 'Across shared groups'}
+          </small>
+        </div>
+      </Card>
+      <div className="finance-page-actions">
+        <Link
+          className="finance-primary-link"
+          href={
+            sharedGroups.length === 1
+              ? `/split/new?groupId=${encodeURIComponent(idOf(sharedGroups[0]!))}`
+              : '/split/new'
+          }
+        >
+          <UsersRound size={17} /> Split
+        </Link>
+        <Link className="finance-secondary-action" href={`/settle/${encodeURIComponent(routeToSettle)}`}>
+          <ArrowLeftRight size={17} /> Settle
+        </Link>
+      </div>
       {rangeState === 'loading' && sharedGroups.length > 0 && (
         <p className="finance-form-note" role="status">
           Loading shared group ranges…
@@ -281,113 +302,36 @@ export default function PersonPage() {
           description={`No visible username matches @${handle}. Only public usernames returned by server search are used.`}
         />
       )}
-      <div className="finance-accounts-layout">
-        <Card className="finance-record-panel">
-          <SectionHeader
-            title="Shared balance"
-            action={
-              <Badge
-                variant={
-                  !balanceAvailable
-                    ? 'neutral'
-                    : bilateralBalance === 0n
-                      ? 'neutral'
-                      : bilateralBalance > 0n
-                        ? 'success'
-                        : 'danger'
-                }
-              >
-                {!balanceAvailable
-                  ? 'Unavailable'
-                  : bilateralBalance === 0n
-                    ? 'Even'
-                    : bilateralBalance > 0n
-                      ? 'They owe you'
-                      : 'You owe'}
-              </Badge>
-            }
-          />
-          <strong className="finance-record-amount">
-            {balanceAvailable
-              ? formatMinor(
-                  bilateralBalance < 0n ? -bilateralBalance : bilateralBalance,
-                  sharedGroups[0]?.currency ?? 'INR',
-                )
-              : '—'}
-          </strong>
-          <p className="finance-muted">
-            {balanceAvailable
-              ? 'This snapshot includes direct participant allocations and repayments found in your saved shared groups.'
-              : 'A balance is available after every shared group range is fully saved.'}
-          </p>
-        </Card>
-        <Card className="finance-record-panel">
-          <SectionHeader title="Shared groups" action={<UsersRound size={17} />} />
-          {sharedGroups.length ? (
-            <ul className="finance-record-list">
-              {sharedGroups.map((group) => (
-                <li key={idOf(group)}>
-                  <span className="finance-record-copy">
-                    <strong>{group.name ?? 'Shared group'}</strong>
-                    <small>{group.currency ?? 'INR'} · saved on this device</small>
-                  </span>
-                  <Link
-                    className="finance-secondary-action"
-                    href={`/group/${encodeURIComponent(idOf(group))}`}
-                  >
-                    Open <ArrowRight size={15} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty
-              title="No shared groups cached"
-              description="This page uses saved memberships. Reconnect and open your groups to refresh the local membership list."
-            />
-          )}
-        </Card>
-      </div>
-      <Card className="finance-record-panel">
-        <SectionHeader
-          title="Between you"
-          action={<Badge variant="neutral">Last 90 days · {recent.length}</Badge>}
-        />
+      <section style={{ display: 'grid', gap: 12 }}>
+        <SectionHeader title="Between you" />
         {recent.length ? (
-          <ul className="finance-record-list">
+          <div className="finance-record-list">
             {recent.map((expense) => {
               const group = sharedGroups.find((item) =>
                 aliases(item).includes(String(expense.groupId)),
               );
               return (
-                <li key={idOf(expense)}>
-                  <span className="finance-record-copy">
-                    <strong>{expense.title ?? 'Group expense'}</strong>
-                    <small>
-                      {group?.name ?? 'Shared group'} ·{' '}
-                      {new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
-                    </small>
-                  </span>
-                  <strong className="finance-record-amount">
-                    {formatMinor(
-                      asMinor(expense.amountMinor),
-                      expense.currency ?? group?.currency ?? 'INR',
-                    )}
-                  </strong>
-                </li>
+                <TransactionRow
+                  key={idOf(expense)}
+                  title={expense.title ?? 'Group expense'}
+                  category="Shared expense"
+                  account={group?.name ?? 'Group'}
+                  amountMinor={asMinor(expense.amountMinor)}
+                  currency={expense.currency ?? group?.currency ?? 'INR'}
+                  type="expense"
+                  semanticType="split"
+                  date={new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
+                />
               );
             })}
-          </ul>
+          </div>
         ) : (
           <Empty
-            title="Nothing shared yet"
-            description="Expenses in groups where both people are members appear here after their date ranges are saved."
+            title="Nothing shared yet."
+            description="Expenses between you will appear here, grouped across your shared groups."
           />
         )}
-      </Card>
-      <Link className="finance-secondary-action" href="/groups">
-        Browse groups <ArrowRight size={15} />
-      </Link>
+      </section>
     </div>
   );
 }
