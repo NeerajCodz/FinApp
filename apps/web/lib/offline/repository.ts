@@ -1049,6 +1049,23 @@ export async function retryFailed(userId: string): Promise<void> {
   notify(userId);
 }
 
+export async function retryFailedEntry(userId: string, localId: string): Promise<void> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('outbox', 'readwrite');
+  const done = transactionComplete(transaction);
+  const store = transaction.objectStore('outbox');
+  const request = store.get(localId);
+  request.onsuccess = () => {
+    const entry = request.result as OutboxEntry | undefined;
+    if (entry?.userId === userId && entry.status === 'failed') {
+      store.put({ ...entry, status: 'pending', nextRetryAt: undefined, lastError: undefined });
+    }
+  };
+  await done;
+  notify(userId);
+}
+
 export function nextRetryDelay(retryCount: number): number {
   const index = Number.isFinite(retryCount) ? Math.max(0, Math.ceil(retryCount) - 1) : 0;
   return retryDelays[Math.min(index, retryDelays.length - 1)] ?? retryDelays[0];

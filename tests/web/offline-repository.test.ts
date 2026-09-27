@@ -40,6 +40,56 @@ describe('browser offline repository', () => {
     expect(await repository.readLocal(userB, 'transaction')).toEqual([]);
     expect(await repository.listOutbox(userB)).toEqual([]);
   });
+
+  it('retries only the selected failed outbox entry and clears its error', async () => {
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'transaction.create',
+      { id: 'txn-retry-target' },
+      { title: 'Target' },
+      { clientMutationId: 'retry-target' },
+    );
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'transaction.create',
+      { id: 'txn-retry-sibling' },
+      { title: 'Sibling' },
+      { clientMutationId: 'retry-sibling' },
+    );
+
+    await repository.updateOutboxStatus(
+      userA,
+      'local-retry-target',
+      'failed',
+      2,
+      Date.now() + 60_000,
+      'Temporary network failure.',
+    );
+    await repository.updateOutboxStatus(
+      userA,
+      'local-retry-sibling',
+      'failed',
+      1,
+      Date.now() + 60_000,
+      'Keep this failure.',
+    );
+
+    await repository.retryFailedEntry(userA, 'local-retry-target');
+
+    const entries = await repository.listOutbox(userA);
+    expect(entries.find((entry) => entry.localId === 'local-retry-target')).toMatchObject({
+      status: 'pending',
+      retryCount: 2,
+      nextRetryAt: undefined,
+      lastError: undefined,
+    });
+    expect(entries.find((entry) => entry.localId === 'local-retry-sibling')).toMatchObject({
+      status: 'failed',
+      lastError: 'Keep this failure.',
+    });
+  });
   it('persists split payer and participant records with the transaction', async () => {
     const transactionId = 'split-local';
     const participants = [
