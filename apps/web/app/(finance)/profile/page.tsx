@@ -17,12 +17,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Avatar, Button, Card, Input, SectionHeader } from '@finapp/ui/web';
-import {
-  normalizePhone,
-  normalizeUsername,
-  validateProfileUpdate,
-  type ProfileUpdate,
-} from '@convex/users/domain';
+import type { ProfileUpdate } from '@convex/users/domain';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -63,7 +58,7 @@ const preferences = [
 
 const privacyLinks = [
   { label: 'Export data', href: '/settings/privacy', icon: ReceiptText },
-  { label: 'Privacy and export', href: '/settings/privacy', icon: ShieldCheck },
+  { label: 'Privacy', href: '/settings/privacy', icon: ShieldCheck },
 ];
 
 export default function ProfilePage() {
@@ -105,9 +100,8 @@ export default function ProfilePage() {
     try {
       const update: ProfileUpdate =
         editor === 'username'
-          ? { username: normalizeUsername(draft) }
-          : { phone: normalizePhone(draft) };
-      validateProfileUpdate(update);
+          ? { username: draft.replace(/^@+/, '').toLowerCase() }
+          : { phone: draft };
       await save(update);
       setEditor(null);
       setMessage('Saved on this device. It will sync when connected.');

@@ -10,7 +10,6 @@ import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { normalizePhone, validateProfileUpdate } from '@convex/users/domain';
 
 type Profile = LocalRecord & {
   displayName?: string;
@@ -65,16 +64,12 @@ export default function OnboardingPage() {
   const profile = profiles[0];
   const router = useRouter();
   const [step, setStep] = React.useState(0);
-  const [currency, setCurrency] = React.useState<Currency>(() =>
-    currencies.some((item) => item === (profile?.defaultCurrency ?? ''))
-      ? (profile!.defaultCurrency as Currency)
-      : Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US')
-        ? 'USD'
-        : 'INR',
+  const [currency, setCurrency] = React.useState<Currency>(
+    Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US') ? 'USD' : 'INR',
   );
   const [currencySearch, setCurrencySearch] = React.useState('');
-  const [username, setUsername] = React.useState(profile?.username ?? '');
-  const [phone, setPhone] = React.useState(profile?.phone ?? '');
+  const [username, setUsername] = React.useState('');
+  const [phone, setPhone] = React.useState('');
   const [accountName, setAccountName] = React.useState('');
   const [mode, setMode] = React.useState<'personal' | 'shared'>('personal');
   const [error, setError] = React.useState('');
@@ -84,17 +79,6 @@ export default function OnboardingPage() {
   const currencyOptions = currencies.filter((code) =>
     `${currencyCountries[code]} ${code} ${currencyLabel(code)}`.toLowerCase().includes(query),
   );
-  React.useEffect(() => {
-    if (profile?.defaultCurrency && currencies.some((item) => item === profile.defaultCurrency)) {
-      setCurrency(profile.defaultCurrency as Currency);
-    }
-  }, [profile?.defaultCurrency]);
-  React.useEffect(() => {
-    if (!username && profile?.username) setUsername(profile.username);
-  }, [profile?.username, username]);
-  React.useEffect(() => {
-    if (!phone && profile?.phone) setPhone(profile.phone);
-  }, [phone, profile?.phone]);
   const canContinue = step !== 1 || /^[a-z0-9_]{3,32}$/.test(handle);
 
   function advance() {
@@ -111,16 +95,6 @@ export default function OnboardingPage() {
     if (!userId || !auth.isAuthenticated || saving) return;
     setSaving(true);
     setError('');
-    const normalizedPhone = normalizePhone(phone);
-    if (normalizedPhone) {
-      try {
-        validateProfileUpdate({ phone: normalizedPhone });
-      } catch {
-        setError('Enter a valid international phone number or leave it blank.');
-        setSaving(false);
-        return;
-      }
-    }
     try {
       const displayName = String(profile?.displayName ?? 'Your profile');
       const timezone =
@@ -130,7 +104,7 @@ export default function OnboardingPage() {
         username: handle,
         defaultCurrency: currency,
         timezone,
-        phone: normalizedPhone || undefined,
+        phone: phone.trim() || undefined,
       };
       const profileId = String(profile?.id ?? profile?._id ?? userId);
       await commitLocalWrite(
