@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { exportTables } from '../../../../convex/export/domain';
 import { exportCsv } from './csv';
-
 export type ExportTables = {
   transactions: Record<string, unknown>[];
   accounts: Record<string, unknown>[];
@@ -12,7 +12,12 @@ export type ExportTables = {
 export async function writeExportBundle(tables: ExportTables): Promise<string> {
   const directory = `${FileSystem.documentDirectory ?? ''}finapp-export/`;
   await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
-  for (const [name, rows] of Object.entries(tables))
-    await FileSystem.writeAsStringAsync(`${directory}${name}.csv`, exportCsv(rows));
+  const safeTables = exportTables(tables);
+  const tableOrder = ['accounts', 'transactions', 'categories', 'groups', 'settlements'] as const;
+  for (const name of tableOrder)
+    await FileSystem.writeAsStringAsync(
+      `${directory}${name}.csv`,
+      exportCsv(safeTables[name] ?? []),
+    );
   return directory;
 }

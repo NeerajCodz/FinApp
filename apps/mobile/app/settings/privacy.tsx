@@ -5,23 +5,36 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toast } from '@/lib/toast';
 import { writeExportBundle } from '@/lib/export';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import type { LocalRecord } from '@/local/repository';
 import { Button, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
-
 export default function PrivacySettingsScreen() {
   const [exporting, setExporting] = useState(false);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const { userId } = useLocalSync();
+  const transactions = useLocalRecords<LocalRecord>(userId, 'transaction');
+  const accounts = useLocalRecords<LocalRecord>(userId, 'account');
+  const categories = useLocalRecords<LocalRecord>(userId, 'category');
+  const groups = useLocalRecords<LocalRecord>(userId, 'group');
+  const settlements = useLocalRecords<LocalRecord>(userId, 'settlement');
+  const records = [transactions, accounts, categories, groups, settlements];
+  const ready =
+    !!userId &&
+    records.every((state) => !state.loading && !state.error && state.data !== undefined);
 
   async function exportData() {
+    if (exporting || !ready) return;
     setExporting(true);
     try {
       await writeExportBundle({
-        transactions: [],
-        accounts: [],
-        categories: [],
-        groups: [],
-        settlements: [],
+        transactions: transactions.data!,
+        accounts: accounts.data!,
+        categories: categories.data!,
+        groups: groups.data!,
+        settlements: settlements.data!,
       });
       toast.success('Export ready');
     } catch {
@@ -64,7 +77,7 @@ export default function PrivacySettingsScreen() {
         </Text>
         <Button
           variant="outline"
-          disabled={exporting}
+          disabled={!ready || exporting}
           onPress={exportData}
           style={{ alignSelf: 'flex-start' }}
         >
