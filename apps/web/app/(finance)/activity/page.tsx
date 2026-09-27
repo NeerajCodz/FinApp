@@ -181,6 +181,23 @@ export default function ActivityPage() {
     transactionState.records,
     userId,
   ]);
+  const dateSections = React.useMemo(() => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const sections = new Map<string, Transaction[]>();
+    for (const record of rows) {
+      const date = formatter.format(Number(record.occurredAt ?? 0));
+      const section = sections.get(date) ?? [];
+      section.push(record);
+      sections.set(date, section);
+    }
+    return [...sections];
+  }, [rows, timeZone]);
 
   if (!userId)
     return (
@@ -199,11 +216,14 @@ export default function ActivityPage() {
     !accountState.loading &&
     !categoryState.loading &&
     !profileState.loading;
-  const spent = rows
+  const currencyRows = rows.filter(
+    (record) => record.status === 'posted' && (record.currency ?? currency) === currency,
+  );
+  const spent = currencyRows
     .filter((record) => record.type === 'expense')
     .reduce((sum, record) => sum + asMinor(record.amountMinor), 0n);
-  const income = rows
-    .filter((record) => record.type === 'income' || record.type === 'refund')
+  const income = currencyRows
+    .filter((record) => record.type === 'income')
     .reduce((sum, record) => sum + asMinor(record.amountMinor), 0n);
   const currencyFormat = (amount: bigint, selectedCurrency: string) => {
     try {
@@ -283,20 +303,26 @@ export default function ActivityPage() {
               </select>
             </label>
           )}
-          <label className="finance-form-field" style={{ marginLeft: 'auto', minWidth: 180 }}>
-            <span>Activity type</span>
-            <select
-              aria-label="Activity type filter"
-              value={filter}
-              onChange={(event) => setFilter(event.currentTarget.value as ActivityFilter)}
-            >
-              {filters.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div
+            role="group"
+            aria-label="Activity type filter"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}
+          >
+            <span className="finance-muted" style={{ marginRight: 4 }}>
+              Activity type
+            </span>
+            {filters.map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                variant={filter === option ? 'secondary' : 'outline'}
+                aria-pressed={filter === option}
+                onPress={() => setFilter(option)}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
           <span className="finance-muted">
@@ -356,58 +382,78 @@ export default function ActivityPage() {
       ) : (
         <Card className="finance-record-panel">
           <SectionHeader title="Recent activity" action={<span>{rows.length} records</span>} />
-          <ul className="finance-record-list" style={{ marginTop: 18 }}>
-            {rows.map((transaction) => {
-              const id = String(transaction.id ?? transaction._id ?? '');
-              const isIncome = transaction.type === 'income' || transaction.type === 'refund';
-              const isTransfer = transaction.type === 'transfer';
-              const category = categoryById.get(transaction.categoryId ?? '');
-              const account = accountById.get(transaction.accountId ?? '');
-              const date = transaction.occurredAt
-                ? new Date(transaction.occurredAt).toLocaleDateString('en', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    timeZone,
-                  })
-                : 'Saved offline';
-              return (
-                <li key={id} style={{ listStyle: 'none' }}>
-                  <Link
-                    className="finance-record-item"
-                    href={`/transaction/${encodeURIComponent(id)}`}
-                    style={{ color: 'inherit', textDecoration: 'none' }}
-                  >
-                    <div>
-                      <strong>{transaction.title || transaction.merchant || 'Transaction'}</strong>
-                      <small>
-                        {date} · {transaction.type ?? 'expense'}
-                        {category?.name ? ` · ${category.name}` : ''}
-                        {account?.name ? ` · ${account.name}` : ''}
-                        {transaction.groupId ? ' · Shared' : ''}
-                      </small>
-                    </div>
-                    <strong className={isIncome ? 'finance-positive' : ''}>
-                      {isTransfer ? '↔ ' : isIncome ? '+' : '−'}
-                      {currencyFormat(
-                        asMinor(transaction.amountMinor),
-                        transaction.currency ?? currency,
-                      )}
-                    </strong>
-                    <span aria-hidden="true">
-                      {isTransfer ? (
-                        <Repeat2 size={17} />
-                      ) : isIncome ? (
-                        <ArrowDownLeft size={17} />
-                      ) : (
-                        <ArrowUpRight size={17} />
-                      )}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div style={{ display: 'grid', gap: 20, marginTop: 18 }}>
+            {dateSections.map(([date, records]) => (
+              <section key={date} aria-label={date}>
+                <h2
+                  style={{
+                    margin: '0 0 8px',
+                    color: 'var(--finance-muted)',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {date}
+                </h2>
+                <ul className="finance-record-list">
+                  {records.map((transaction) => {
+                    const id = String(transaction.id ?? transaction._id ?? '');
+                    const isIncome = transaction.type === 'income' || transaction.type === 'refund';
+                    const isTransfer = transaction.type === 'transfer';
+                    const category = categoryById.get(transaction.categoryId ?? '');
+                    const account = accountById.get(transaction.accountId ?? '');
+                    const date = transaction.occurredAt
+                      ? new Date(transaction.occurredAt).toLocaleDateString('en', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          timeZone,
+                        })
+                      : 'Saved offline';
+                    return (
+                      <li key={id} style={{ listStyle: 'none' }}>
+                        <Link
+                          className="finance-record-item"
+                          href={`/transaction/${encodeURIComponent(id)}`}
+                          style={{ color: 'inherit', textDecoration: 'none' }}
+                        >
+                          <div>
+                            <strong>
+                              {transaction.title || transaction.merchant || 'Transaction'}
+                            </strong>
+                            <small>
+                              {date} · {transaction.type ?? 'expense'}
+                              {category?.name ? ` · ${category.name}` : ''}
+                              {account?.name ? ` · ${account.name}` : ''}
+                              {transaction.groupId ? ' · Shared' : ''}
+                            </small>
+                          </div>
+                          <strong className={isIncome ? 'finance-positive' : ''}>
+                            {isTransfer ? '↔ ' : isIncome ? '+' : '−'}
+                            {currencyFormat(
+                              asMinor(transaction.amountMinor),
+                              transaction.currency ?? currency,
+                            )}
+                          </strong>
+                          <span aria-hidden="true">
+                            {isTransfer ? (
+                              <Repeat2 size={17} />
+                            ) : isIncome ? (
+                              <ArrowDownLeft size={17} />
+                            ) : (
+                              <ArrowUpRight size={17} />
+                            )}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         </Card>
       )}
       {rangeError && !isConnected && (

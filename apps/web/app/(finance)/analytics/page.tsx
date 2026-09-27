@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ChartNoAxesCombined, ReceiptText } from 'lucide-react';
+import { ArrowRight, ChartNoAxesCombined, ReceiptText, Tags } from 'lucide-react';
 import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import {
   aggregateAnalytics,
@@ -16,7 +16,7 @@ import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type Profile = LocalRecord & { defaultCurrency?: string; timezone?: string };
-type Category = LocalRecord & { name?: string };
+type Category = LocalRecord & { name?: string; icon?: string };
 type Account = LocalRecord & { name?: string };
 type Transaction = LocalRecord & {
   type?: string;
@@ -24,6 +24,7 @@ type Transaction = LocalRecord & {
   currency?: string;
   categoryId?: string;
   accountId?: string;
+  groupId?: string;
   merchant?: string;
   title?: string;
   occurredAt?: number;
@@ -123,6 +124,13 @@ export default function AnalyticsPage() {
       })),
     [categories],
   );
+  const categoryIcons = React.useMemo(
+    () =>
+      new Map(
+        categories.map((category) => [String(category.id ?? category._id ?? ''), category.icon]),
+      ),
+    [categories],
+  );
   const accountEntities = React.useMemo(
     () =>
       accounts.map((account) => ({
@@ -148,7 +156,7 @@ export default function AnalyticsPage() {
           {
             type,
             amountMinor: amountAsBigInt(record.amountMinor),
-            currency: String(record.currency ?? ''),
+            currency: String(record.currency ?? currency),
             ...(typeof record.categoryId === 'string' ? { categoryId: record.categoryId } : {}),
             ...(typeof record.accountId === 'string' ? { accountId: record.accountId } : {}),
             ...(typeof record.merchant === 'string' ? { merchant: record.merchant } : {}),
@@ -160,7 +168,7 @@ export default function AnalyticsPage() {
           },
         ];
       }),
-    [transactions],
+    [transactions, currency],
   );
   const result = React.useMemo(() => {
     if (!range) return null;
@@ -194,6 +202,7 @@ export default function AnalyticsPage() {
         spend: bigint;
         income: bigint;
         transfer: bigint;
+        split: bigint;
         other: bigint;
       }>(
         (totals, record) => {
@@ -201,20 +210,22 @@ export default function AnalyticsPage() {
           if (
             record.status !== 'posted' ||
             record.deletedAt !== undefined ||
-            record.currency !== currency ||
+            (record.currency ?? currency) !== currency ||
             !range ||
             occurredAt < range.startAt ||
             occurredAt >= range.endAt
           )
             return totals;
           const amountMinor = amountAsBigInt(record.amountMinor);
-          if (record.type === 'expense') totals.spend += amountMinor;
-          else if (record.type === 'income') totals.income += amountMinor;
+          if (record.type === 'expense') {
+            if (record.groupId) totals.split += amountMinor;
+            else totals.spend += amountMinor;
+          } else if (record.type === 'income') totals.income += amountMinor;
           else if (record.type === 'transfer') totals.transfer += amountMinor;
           else totals.other += amountMinor;
           return totals;
         },
-        { spend: 0n, income: 0n, transfer: 0n, other: 0n },
+        { spend: 0n, income: 0n, transfer: 0n, split: 0n, other: 0n },
       ),
     [transactions, currency, range],
   );
@@ -227,6 +238,7 @@ export default function AnalyticsPage() {
       color: 'var(--finance-lime)',
     },
     { key: 'transfer', label: 'Transfer', amountMinor: flowTotals.transfer, color: '#9eb4ff' },
+    { key: 'split', label: 'Split', amountMinor: flowTotals.split, color: '#c7a2ff' },
     { key: 'other', label: 'Other', amountMinor: flowTotals.other, color: '#a8ad9e' },
   ];
   const comparison = previous
@@ -258,7 +270,7 @@ export default function AnalyticsPage() {
                 record.type === 'expense' &&
                 record.status === 'posted' &&
                 record.deletedAt === undefined &&
-                record.currency === currency &&
+                (record.currency ?? currency) === currency &&
                 occurredAt >= range.startAt &&
                 occurredAt < range.endAt
               );
@@ -298,7 +310,7 @@ export default function AnalyticsPage() {
               transaction.occurredAt < range.endAt &&
               transaction.status === 'posted' &&
               transaction.deletedAt === undefined &&
-              transaction.currency === currency,
+              (transaction.currency ?? currency) === currency,
           )
         : [],
     [analyticsTransactions, range, currency],
@@ -573,7 +585,7 @@ export default function AnalyticsPage() {
                 />
               )}
               <p className="finance-form-note">
-                Transfers are tracked separately from spending and income.
+                Split expenses are shown separately by type and included in total spending.
               </p>
             </Card>
             <div className="finance-dashboard-grid">
@@ -604,6 +616,9 @@ export default function AnalyticsPage() {
                             textDecoration: 'none',
                           }}
                         >
+                          <span className="finance-record-symbol" aria-hidden="true">
+                            {categoryIcons.get(item.id) ?? <Tags size={17} />}
+                          </span>
                           <div>
                             <strong>{item.label}</strong>
                             <small>{spendingShare(item.amountMinor)}% of spending</small>

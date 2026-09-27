@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, ChartNoAxesCombined } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChartNoAxesCombined, Tags } from 'lucide-react';
 import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import {
   aggregateAnalytics,
@@ -132,6 +132,12 @@ export default function AnalyticsBreakdownPage() {
   const categories = categoryRecords.filter((item) => userId && belongsToUser(item, userId));
   const accounts = accountRecords.filter((item) => userId && belongsToUser(item, userId));
   const transactions = transactionRecords.filter((item) => userId && belongsToUser(item, userId));
+  const categoryIcon =
+    dimension === 'category'
+      ? categories.find((item) => query?.key && aliasesOf(item).includes(query.key))?.icon
+      : undefined;
+  const hasCategoryIcon =
+    dimension === 'category' && typeof categoryIcon === 'string' && categoryIcon.length > 0;
   const categoryEntities = categories.map((item) => ({
     id: idOf(item),
     name: item.name ?? 'Category',
@@ -156,7 +162,7 @@ export default function AnalyticsBreakdownPage() {
       {
         type,
         amountMinor: asMinor(record.amountMinor),
-        currency: String(record.currency ?? ''),
+        currency: String(record.currency ?? currency),
         ...(typeof record.categoryId === 'string' ? { categoryId: record.categoryId } : {}),
         ...(typeof record.accountId === 'string' ? { accountId: record.accountId } : {}),
         ...(typeof record.merchant === 'string' ? { merchant: record.merchant } : {}),
@@ -296,7 +302,7 @@ export default function AnalyticsBreakdownPage() {
       </Link>
       <PageHeading
         eyebrow={`ANALYTICS · ${query.period.toUpperCase()}`}
-        title={result.item.label}
+        title={hasCategoryIcon ? `${categoryIcon} ${result.item.label}` : result.item.label}
         description={`${title} · ${new Date(startAt).toLocaleDateString()} – ${new Date(endAt).toLocaleDateString()}`}
       />
       <p className="finance-muted" role="status">
@@ -354,8 +360,14 @@ export default function AnalyticsBreakdownPage() {
                       textDecoration: 'none',
                     }}
                   >
-                    <span className="finance-record-symbol">
-                      <ChartNoAxesCombined size={17} />
+                    <span className="finance-record-symbol" aria-hidden="true">
+                      {hasCategoryIcon ? (
+                        categoryIcon
+                      ) : dimension === 'category' ? (
+                        <Tags size={17} />
+                      ) : (
+                        <ChartNoAxesCombined size={17} />
+                      )}
                     </span>
                     <span className="finance-record-copy" style={{ flex: 1 }}>
                       <strong>{record.title ?? record.merchant ?? 'Expense'}</strong>
