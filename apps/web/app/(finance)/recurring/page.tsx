@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowRight, CalendarClock, Plus } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -30,7 +30,7 @@ type Rule = LocalRecord & {
 const frequencies = ['daily', 'weekly', 'monthly', 'yearly'] as const;
 
 export default function RecurringPage() {
-  const { userId } = useBrowserSync();
+  const { userId, isConnected } = useBrowserSync();
   const {
     records: rules,
     loading: rulesLoading,
@@ -131,6 +131,12 @@ export default function RecurringPage() {
     }
     return at;
   };
+  const enabledCount = ordered.filter((rule) => rule.enabled).length;
+  const nextDueAt = ordered
+    .filter((rule) => rule.enabled)
+    .map(dueDate)
+    .filter((at) => at > now)
+    .sort((left, right) => left - right)[0];
 
   async function createRule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -236,8 +242,19 @@ export default function RecurringPage() {
             Upcoming expenses stay visible. Nothing is ever recorded automatically.
           </p>
         </div>
-        <Badge variant="neutral">{rules.filter((rule) => rule.enabled).length} active</Badge>
       </header>
+      {ordered.length > 0 && (
+        <Card className="finance-record-panel">
+          <SectionHeader title="Reminder schedule" />
+          <p>
+            {enabledCount} active · {ordered.length - enabledCount} paused
+          </p>
+          {nextDueAt && (
+            <p className="finance-muted">Next due {new Date(nextDueAt).toLocaleDateString()}</p>
+          )}
+          {!isConnected && <p className="finance-muted">Offline · showing saved reminders</p>}
+        </Card>
+      )}
       {dueRules.length > 0 && (
         <Card className="finance-record-panel" role="status" aria-live="polite">
           <SectionHeader
@@ -281,7 +298,7 @@ export default function RecurringPage() {
                 onPress={() => setAdding((value) => !value)}
                 aria-expanded={adding}
               >
-                <Plus size={16} /> {adding ? 'Close form' : 'Add reminder'}
+                <Plus size={16} /> {adding ? 'Cancel' : 'Add reminder'}
               </Button>
             }
           />
@@ -336,7 +353,7 @@ export default function RecurringPage() {
                         <strong>{rule.name ?? 'Reminder'}</strong>
                         <small>
                           {rule.enabled
-                            ? `${rule.frequency ?? 'monthly'} · ${at > now ? new Date(at).toLocaleDateString() : 'Date needs attention'}`
+                            ? `${rule.frequency ?? 'monthly'} · ${at > now ? new Date(at).toLocaleDateString() : 'due'}`
                             : 'Paused'}{' '}
                           · Reminder only
                         </small>
@@ -372,6 +389,9 @@ export default function RecurringPage() {
               })}
             </ul>
           )}
+          {!isConnected && !rulesLoading && (
+            <p className="finance-form-note">Offline · showing saved rules</p>
+          )}
         </Card>
         {adding && (
           <Card className="finance-record-panel">
@@ -405,7 +425,12 @@ export default function RecurringPage() {
                 </select>
               </label>
               {activeAccounts.length === 0 && !accountsLoading && (
-                <p className="finance-muted">Create an active account before adding a reminder.</p>
+                <p className="finance-muted">
+                  Create an active account before adding a reminder.{' '}
+                  <Link className="finance-inline-link" href="/account/new">
+                    Create account
+                  </Link>
+                </p>
               )}
               <FinanceInput
                 label={`Amount${selectedAccount ? ` · ${selectedAccount.currency ?? 'INR'}` : ''}`}
@@ -415,7 +440,7 @@ export default function RecurringPage() {
                 required
               />
               <label className="finance-form-field">
-                <span>Repeat</span>
+                <span>Repeat from tomorrow</span>
                 <select
                   value={frequency}
                   onChange={(event) =>

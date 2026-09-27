@@ -64,7 +64,8 @@ export default function GoalDetailPage() {
   const saved = history.reduce((sum, entry) => sum + toMinor(entry.amountMinor), 0n);
   const target = toMinor(goal?.targetAmountMinor);
   const currency = goal?.currency ?? 'INR';
-  const percent = target > 0n ? Math.min(100, Number((saved * 100n) / target)) : 0;
+  const percent = target > 0n ? Number((saved * 100n) / target) : 0;
+  const progress = Math.min(100, Math.max(0, percent));
 
   async function contribute(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -153,8 +154,15 @@ export default function GoalDetailPage() {
             <SectionHeader title="Saved so far" action={<Target size={18} aria-hidden="true" />} />
             <strong>{formatMinor(saved, currency)}</strong>
             <span className="finance-metric-foot">of {formatMinor(target, currency)} target</span>
-            <div className="finance-plan-track" aria-label={`${percent}% of goal reached`}>
-              <span style={{ width: `${percent}%` }} />
+            <div
+              className="finance-plan-track"
+              role="progressbar"
+              aria-label={`${percent}% of goal reached`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress}
+            >
+              <span style={{ width: `${progress}%` }} />
             </div>
           </Card>
           <Card className="finance-form-panel">

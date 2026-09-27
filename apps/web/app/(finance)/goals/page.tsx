@@ -11,6 +11,8 @@ import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { FinanceInput } from '@/components/finance/FinanceInput';
 
 type Account = LocalRecord & { currency?: string; archivedAt?: number };
+type Profile = LocalRecord & { defaultCurrency?: string };
+type Settings = LocalRecord & { currency?: string };
 type Goal = LocalRecord & {
   name?: string;
   targetAmountMinor?: bigint | number | string;
@@ -32,48 +34,87 @@ const toMinor = (value: unknown): bigint => {
   if (typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value);
   return 0n;
 };
-const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
+const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? record.cloudId ?? '');
 
 export default function GoalsPage() {
-  const { userId } = useBrowserSync();
-  const { records: goals, loading } = useLocalRecords<Goal>('goal');
-  const { records: contributions } = useLocalRecords<Contribution>('goalContribution');
-  const { records: accounts } = useLocalRecords<Account>('account');
+  const { userId, isConnected } = useBrowserSync();
+  const {
+    records: goals,
+    loading: goalsLoading,
+    error: goalsError,
+  } = useLocalRecords<Goal>('goal');
+  const {
+    records: contributions,
+    loading: contributionsLoading,
+    error: contributionsError,
+  } = useLocalRecords<Contribution>('goalContribution');
+  const { records: accounts, loading: accountsLoading } = useLocalRecords<Account>('account');
+  const {
+    records: profiles,
+    loading: profilesLoading,
+    error: profilesError,
+  } = useLocalRecords<Profile>('profile');
+  const {
+    records: settings,
+    loading: settingsLoading,
+    error: settingsError,
+  } = useLocalRecords<Settings>('settings');
   const [name, setName] = React.useState('');
   const [target, setTarget] = React.useState('');
-  const [currency, setCurrency] = React.useState('INR');
+  const [currency, setCurrency] = React.useState('');
   const [targetDate, setTargetDate] = React.useState('');
-  const [selectedGoalId, setSelectedGoalId] = React.useState('');
-  const [contributionAmount, setContributionAmount] = React.useState('');
+  const [adding, setAdding] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
-  const activeGoals = goals.filter((goal) => goal.archivedAt === undefined);
-
+  const preferredCurrency =
+    profiles[0]?.defaultCurrency ?? settings[0]?.currency ?? accounts[0]?.currency;
   React.useEffect(() => {
-    if (!currency && accounts[0]?.currency) setCurrency(accounts[0].currency);
-  }, [accounts, currency]);
-  React.useEffect(() => {
-    if (!selectedGoalId && activeGoals[0]) setSelectedGoalId(idOf(activeGoals[0]));
-  }, [activeGoals, selectedGoalId]);
+    if (!currency && preferredCurrency) setCurrency(preferredCurrency);
+  }, [currency, preferredCurrency]);
+  const selectedCurrency = currency || preferredCurrency || 'INR';
+  const activeGoals = goals
+    .filter((goal) => goal.archivedAt === undefined)
+    .sort(
+      (left, right) =>
+        Number(Boolean(left.completedAt)) - Number(Boolean(right.completedAt)) ||
+        (left.name ?? '').localeCompare(right.name ?? ''),
+    );
+  const goalRows = activeGoals.map((goal) => {
+    const goalAliases = [goal.id, goal._id, goal.cloudId].filter(
+      (value): value is string => typeof value === 'string',
+    );
+    const saved = contributions
+      .filter((entry) => typeof entry.goalId === 'string' && goalAliases.includes(entry.goalId))
+      .reduce((sum, entry) => sum + toMinor(entry.amountMinor), 0n);
+    const goalCurrency = goal.currency ?? selectedCurrency;
+    const targetMinor = toMinor(goal.targetAmountMinor);
+    const percent = targetMinor > 0n ? Number((saved * 100n) / targetMinor) : 0;
+    return { goal, saved, targetMinor, currency: goalCurrency, percent };
+  });
+  const currencies = new Set(goalRows.map((row) => row.currency));
+  const totalSaved =
+    currencies.size === 1 ? goalRows.reduce((sum, row) => sum + row.saved, 0n) : null;
+  const loading =
+    goalsLoading || contributionsLoading || accountsLoading || profilesLoading || settingsLoading;
+  const loadError = goalsError ?? contributionsError ?? profilesError ?? settingsError;
 
   async function createGoal(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userId) {
-      setError('Sign in while online before creating a goal.');
-      return;
-    }
+    if (!userId || saving) return;
     setSaving(true);
     setError(null);
     try {
-      const targetAmountMinor = parseMinor(target, currency);
+      const targetAmountMinor = parseMinor(target, selectedCurrency);
+      if (targetAmountMinor <= 0n) throw new Error('Enter a positive target amount.');
       const date = targetDate ? new Date(`${targetDate}T12:00:00`).getTime() : undefined;
-      if (date !== undefined && date <= Date.now()) throw new Error('INVALID_GOAL_DATE');
+      if (date !== undefined && (!Number.isFinite(date) || date <= Date.now()))
+        throw new Error('Choose a target date in the future.');
       const now = Date.now();
       const record: LocalRecord = {
         ownerId: userId,
         name: name.trim(),
         targetAmountMinor,
-        currency,
+        currency: selectedCurrency,
         ...(date !== undefined ? { targetDate: date } : {}),
         createdAt: now,
         updatedAt: now,
@@ -81,58 +122,15 @@ export default function GoalsPage() {
       await commitLocalWrite(userId, 'goal', 'goal.create', record, {
         name: name.trim(),
         targetAmountMinor,
-        currency,
+        currency: selectedCurrency,
         ...(date !== undefined ? { targetDate: date } : {}),
       });
       setName('');
       setTarget('');
       setTargetDate('');
+      setAdding(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this goal.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function contribute(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!userId) {
-      setError('Sign in while online before adding a contribution.');
-      return;
-    }
-    const goal = activeGoals.find((entry) => idOf(entry) === selectedGoalId);
-    if (!goal) {
-      setError('Choose an active goal.');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const amountMinor = parseMinor(contributionAmount, goal.currency ?? currency);
-      const now = Date.now();
-      const record: LocalRecord = {
-        goalId: selectedGoalId,
-        ownerId: userId,
-        amountMinor,
-        currency: goal.currency ?? currency,
-        occurredAt: now,
-        createdAt: now,
-      };
-      const dependency = goal.cloudId || goal._id ? [] : [`goal:${selectedGoalId}`];
-      await commitLocalWrite(
-        userId,
-        'goalContribution',
-        'goal.contribute',
-        record,
-        {
-          goalId: selectedGoalId,
-          amountMinor,
-        },
-        { dependencies: dependency },
-      );
-      setContributionAmount('');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save this contribution.');
     } finally {
       setSaving(false);
     }
@@ -159,144 +157,186 @@ export default function GoalsPage() {
           <p className="finance-kicker">A FUTURE YOU CAN SEE</p>
           <h1>Goals</h1>
           <p className="finance-muted">
-            Small contributions count. Every update is saved locally first.
+            Contributions build progress without changing your account balance.
           </p>
         </div>
-        <Badge variant="neutral">{activeGoals.length} active</Badge>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+          <Badge variant="neutral">{activeGoals.length} active</Badge>
+          {!adding ? (
+            <Button type="button" variant="outline" onPress={() => setAdding(true)}>
+              <Plus size={16} /> Add goal
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" onPress={() => setAdding(false)}>
+              Cancel
+            </Button>
+          )}
+        </div>
       </header>
-      {error && (
+      {(error || loadError) && (
         <p className="finance-form-error" role="alert">
-          {error}
+          {error ?? `Saved goals could not be opened: ${loadError}`}
         </p>
       )}
-      <div className="finance-accounts-layout">
+      {!loading && !loadError && goalRows.length > 0 && (
+        <Card className="finance-metric-card finance-balance-card">
+          <span className="finance-metric-label">
+            SAVED TOWARD {goalRows.length} {goalRows.length === 1 ? 'GOAL' : 'GOALS'}
+          </span>
+          <strong>
+            {totalSaved !== null
+              ? formatMinor(totalSaved, goalRows[0]?.currency ?? selectedCurrency)
+              : `Across ${currencies.size} currencies`}
+          </strong>
+          <span className="finance-metric-foot">
+            Contributions recorded separately from your account balance.
+          </span>
+        </Card>
+      )}
+      <div
+        className="finance-accounts-layout"
+        style={!adding ? { gridTemplateColumns: 'minmax(0, 1fr)' } : undefined}
+      >
         <Card className="finance-record-panel">
           <SectionHeader title="Your goals" action={<span>{activeGoals.length} total</span>} />
           {loading ? (
-            <p className="finance-muted">Opening your local goals…</p>
-          ) : activeGoals.length === 0 ? (
+            <p className="finance-muted" role="status">
+              Opening your local goals…
+            </p>
+          ) : loadError ? (
+            <p className="finance-form-error" role="alert">
+              Saved goals could not be opened: {loadError}
+            </p>
+          ) : goalRows.length === 0 ? (
             <Empty
-              title="Make a little room for something good"
-              description="Set a target and contribute whenever it feels right."
+              title="No goals yet"
+              description="Set a target and track each contribution in one place."
               icon={<Target size={20} />}
+              action={
+                !adding ? (
+                  <Button type="button" size="sm" onPress={() => setAdding(true)}>
+                    Create a goal
+                  </Button>
+                ) : undefined
+              }
             />
           ) : (
             <ul className="finance-plan-cards">
-              {activeGoals.map((goal) => {
-                const contributed = contributions
-                  .filter((entry) => entry.goalId === idOf(goal))
-                  .reduce((sum, entry) => sum + toMinor(entry.amountMinor), 0n);
-                const targetMinor = toMinor(goal.targetAmountMinor);
-                const progress =
-                  targetMinor > 0n ? Math.min(100, Number((contributed * 100n) / targetMinor)) : 0;
+              {goalRows.map(({ goal, saved, targetMinor, currency: goalCurrency, percent }) => {
+                const progress = Math.min(100, Math.max(0, percent));
+                const id = idOf(goal);
                 return (
-                  <li className="finance-plan-card" key={idOf(goal)}>
-                    <div className="finance-budget-heading">
-                      <span>
-                        <Link href={`/goal/${encodeURIComponent(idOf(goal))}`}>
-                          {goal.name ?? 'Savings goal'}
-                        </Link>
-                        <small>
-                          {goal.targetDate
-                            ? `Target ${new Date(goal.targetDate).toLocaleDateString('en', { month: 'short', year: 'numeric' })}`
-                            : 'No target date'}
-                        </small>
-                      </span>
-                      <strong>{progress}%</strong>
-                    </div>
-                    <div className="finance-plan-track">
-                      <span style={{ width: `${progress}%` }} />
-                    </div>
-                    <p className="finance-goal-total">
-                      {formatMinor(contributed, goal.currency ?? 'INR')}{' '}
-                      <span>of {formatMinor(targetMinor, goal.currency ?? 'INR')}</span>
-                    </p>
+                  <li className="finance-plan-card" key={id}>
+                    <Link
+                      href={`/goals/${encodeURIComponent(id)}`}
+                      style={{
+                        display: 'grid',
+                        width: '100%',
+                        gap: 10,
+                        color: 'inherit',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <div className="finance-budget-heading">
+                        <span>
+                          <strong>{goal.name ?? 'Savings goal'}</strong>
+                          <small>
+                            {percent >= 100
+                              ? 'Target reached'
+                              : goal.targetDate
+                                ? `Target ${new Date(goal.targetDate).toLocaleDateString()}`
+                                : 'No target date'}
+                          </small>
+                        </span>
+                        <strong>{formatMinor(saved, goalCurrency)}</strong>
+                      </div>
+                      <div
+                        className="finance-plan-track"
+                        role="progressbar"
+                        aria-label={`${goal.name ?? 'Goal'} progress`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progress}
+                      >
+                        <span style={{ width: `${progress}%` }} />
+                      </div>
+                      <p className="finance-goal-total">
+                        {percent}% of {formatMinor(targetMinor, goalCurrency)}
+                      </p>
+                    </Link>
                   </li>
                 );
               })}
             </ul>
           )}
-          {activeGoals.length > 0 && (
-            <form className="finance-form finance-contribution-form" onSubmit={contribute}>
-              <SectionHeader title="Add a contribution" />
-              <label className="finance-form-field">
-                <span>Goal</span>
-                <select
-                  value={selectedGoalId}
-                  onChange={(event) => setSelectedGoalId(event.currentTarget.value)}
-                >
-                  {activeGoals.map((goal) => (
-                    <option key={idOf(goal)} value={idOf(goal)}>
-                      {goal.name ?? 'Goal'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <FinanceInput
-                label="Contribution amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={contributionAmount}
-                onChangeText={setContributionAmount}
-                required
-              />
-
-              <Button type="submit" disabled={saving || !contributionAmount}>
-                {saving ? 'Saving locally…' : 'Add contribution'} <ArrowRight size={15} />
-              </Button>
-            </form>
+          {!isConnected && !loading && (
+            <p className="finance-form-note">Offline · showing saved goals</p>
           )}
         </Card>
-        <Card className="finance-form-panel">
-          <SectionHeader title="Start a new goal" action={<Plus size={17} />} />
-          <form className="finance-form" onSubmit={createGoal}>
-            <FinanceInput
-              label="Goal name"
-              value={name}
-              onChangeText={setName}
-              placeholder="A weekend away"
-              required
-              maxLength={80}
-            />
-            <FinanceInput
-              label={`Target amount (${currency})`}
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={target}
-              onChangeText={setTarget}
-              required
-            />
-            <Select
-              label="Currency"
-              options={[
-                ...new Set([
-                  ...accounts.map((account) => account.currency ?? 'INR'),
-                  'INR',
-                  'USD',
-                  'EUR',
-                  'GBP',
-                ]),
-              ]}
-              value={currency}
-              onChange={setCurrency}
-            />
-            <FinanceInput
-              label="Target date"
-              type="date"
-              value={targetDate}
-              onChangeText={setTargetDate}
-            />
-
-            <Button type="submit" disabled={saving || !name.trim() || !target}>
-              {saving ? 'Saving locally…' : 'Save goal'} <ArrowRight size={15} />
-            </Button>
-            <p className="finance-form-note">
-              Targets live on this device and sync automatically when you reconnect.
-            </p>
-          </form>
-        </Card>
+        {adding && (
+          <Card className="finance-form-panel">
+            <SectionHeader title="New goal" />
+            <form className="finance-form" onSubmit={createGoal}>
+              <FinanceInput
+                label="Goal name"
+                value={name}
+                onChangeText={setName}
+                placeholder="What are you saving for?"
+                required
+                maxLength={80}
+              />
+              <FinanceInput
+                label={`Target amount · ${selectedCurrency}`}
+                type="number"
+                min="0.01"
+                step={selectedCurrency === 'JPY' || selectedCurrency === 'KRW' ? '1' : '0.01'}
+                value={target}
+                onChangeText={setTarget}
+                required
+              />
+              <Select
+                label="Currency"
+                options={[
+                  ...new Set([
+                    selectedCurrency,
+                    ...accounts.map((account) => account.currency ?? 'INR'),
+                    'INR',
+                    'USD',
+                    'EUR',
+                    'GBP',
+                  ]),
+                ]}
+                value={selectedCurrency}
+                onChange={setCurrency}
+              />
+              <FinanceInput
+                label="Target date"
+                type="date"
+                value={targetDate}
+                onChangeText={setTargetDate}
+              />
+              {error && (
+                <p className="finance-form-error" role="alert">
+                  {error}
+                </p>
+              )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                <Button type="button" variant="outline" onPress={() => setAdding(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={saving || loading || !name.trim() || !target.trim()}
+                >
+                  {saving ? 'Saving…' : 'Save goal'} <ArrowRight size={15} />
+                </Button>
+              </div>
+              <p className="finance-form-note">
+                Targets are saved locally first and sync when a connection is available.
+              </p>
+            </form>
+          </Card>
+        )}
       </div>
     </div>
   );
