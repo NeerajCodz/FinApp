@@ -47,7 +47,7 @@ export default function NewPersonalCategoryPage() {
         name: trimmedName,
         ...(trimmedIcon ? { icon: trimmedIcon } : {}),
       });
-      router.push(`/category/${encodeURIComponent(id)}`);
+      router.replace(`/category/${encodeURIComponent(id)}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create this category.');
     } finally {

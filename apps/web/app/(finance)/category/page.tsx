@@ -4,10 +4,11 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowRight, Plus, Tags } from 'lucide-react';
 import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-import { belongsToUser, idOf, PageHeading, SignInGate } from '../_personal';
+import { asMinor, aliasesOf, belongsToUser, idOf, PageHeading, SignInGate } from '../_personal';
 
 type Category = LocalRecord & {
   name?: string;
@@ -15,12 +16,57 @@ type Category = LocalRecord & {
   sortOrder?: number;
   archivedAt?: number;
   isSystem?: boolean;
+  monthlyLimitMinor?: bigint | number | string;
+  limitCurrency?: string;
+};
+type Profile = LocalRecord & { defaultCurrency?: string };
+type Transaction = LocalRecord & {
+  categoryId?: string;
+  amountMinor?: bigint | number | string;
+  currency?: string;
+  type?: string;
+  status?: string;
+  occurredAt?: number;
+  deletedAt?: number;
 };
 
 export default function PersonalCategoriesPage() {
-  const { userId } = useBrowserSync();
+  const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
   const { records, loading, error } = useLocalRecords<Category>('category');
+  const {
+    records: profiles,
+    loading: profileLoading,
+    error: profileError,
+  } = useLocalRecords<Profile>('profile');
+  const {
+    records: transactions,
+    loading: transactionLoading,
+    error: transactionError,
+  } = useLocalRecords<Transaction>('transaction');
   const [showArchived, setShowArchived] = React.useState(false);
+  const [rangeError, setRangeError] = React.useState('');
+  const monthRange = React.useMemo(() => {
+    const now = new Date();
+    return {
+      startAt: Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+      endAt: Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
+    };
+  }, []);
+  React.useEffect(() => {
+    if (!userId || !isConnected) return;
+    let active = true;
+    setRangeError('');
+    void fetchTransactionRange(monthRange.startAt, monthRange.endAt).catch((cause: unknown) => {
+      if (active)
+        setRangeError(
+          cause instanceof Error ? cause.message : 'Could not refresh monthly category activity.',
+        );
+    });
+    return () => {
+      active = false;
+    };
+  }, [fetchTransactionRange, isConnected, monthRange, userId]);
+  const profile = profiles[0];
   const categories = records
     .filter((record) => userId && belongsToUser(record, userId))
     .sort(
@@ -28,6 +74,30 @@ export default function PersonalCategoriesPage() {
         Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) ||
         (left.name ?? '').localeCompare(right.name ?? ''),
     );
+  const categoryById = new Map<string, Category>();
+  for (const category of categories) {
+    for (const id of aliasesOf(category)) categoryById.set(id, category);
+  }
+  const monthlyTotals = new Map<string, { spent: bigint; received: bigint }>();
+  for (const transaction of transactions) {
+    const occurredAt = Number(transaction.occurredAt ?? 0);
+    if (
+      transaction.status !== 'posted' ||
+      transaction.deletedAt !== undefined ||
+      (transaction.type !== 'expense' && transaction.type !== 'income') ||
+      occurredAt < monthRange.startAt ||
+      occurredAt >= monthRange.endAt
+    )
+      continue;
+    const category = categoryById.get(String(transaction.categoryId ?? ''));
+    const currency = category?.limitCurrency ?? profile?.defaultCurrency;
+    if (!category || !currency || transaction.currency !== currency) continue;
+    const id = idOf(category);
+    const total = monthlyTotals.get(id) ?? { spent: 0n, received: 0n };
+    if (transaction.type === 'expense') total.spent += asMinor(transaction.amountMinor);
+    else total.received += asMinor(transaction.amountMinor);
+    monthlyTotals.set(id, total);
+  }
   const shown = categories.filter((record) => showArchived === (record.archivedAt !== undefined));
   if (!userId)
     return (
@@ -42,6 +112,16 @@ export default function PersonalCategoriesPage() {
         title="Categories"
         description="Keep category names and icons consistent across your local and synced transaction history."
       />
+      {(profileError || transactionError) && (
+        <p className="finance-form-error" role="alert">
+          Monthly category activity could not be opened: {profileError ?? transactionError}
+        </p>
+      )}
+      {rangeError && (
+        <p className="finance-muted" role="status">
+          Range refresh unavailable. Showing monthly activity already saved in this browser.
+        </p>
+      )}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <Badge variant="neutral">
           {categories.filter((item) => item.archivedAt === undefined).length} active
@@ -66,7 +146,7 @@ export default function PersonalCategoriesPage() {
             </Link>
           }
         />
-        {loading ? (
+        {loading || profileLoading || transactionLoading ? (
           <p className="finance-muted" role="status">
             Opening your local categories…
           </p>
@@ -93,31 +173,42 @@ export default function PersonalCategoriesPage() {
           />
         ) : (
           <ul className="finance-record-list">
-            {shown.map((category) => (
-              <li key={idOf(category)}>
-                <span className="finance-record-symbol" aria-hidden="true">
-                  {category.icon ?? <Tags size={17} />}
-                </span>
-                <span className="finance-record-copy">
-                  <strong>
-                    <Link href={`/category/${encodeURIComponent(idOf(category))}`}>
-                      {category.name ?? 'Category'}
-                    </Link>
-                  </strong>
-                  <small>
-                    {category.isSystem ? 'System category' : 'Personal category'}
-                    {category.archivedAt !== undefined ? ' · archived' : ''}
-                  </small>
-                </span>
-                <ArrowRight size={15} aria-hidden="true" />
-              </li>
-            ))}
+            {shown.map((category) => {
+              const currency = category.limitCurrency ?? profile?.defaultCurrency;
+              const totals = monthlyTotals.get(idOf(category)) ?? { spent: 0n, received: 0n };
+              return (
+                <li key={idOf(category)}>
+                  <span className="finance-record-symbol" aria-hidden="true">
+                    {category.icon ?? <Tags size={17} />}
+                  </span>
+                  <span className="finance-record-copy">
+                    <strong>
+                      <Link href={`/category/${encodeURIComponent(idOf(category))}`}>
+                        {category.name ?? 'Category'}
+                      </Link>
+                    </strong>
+                    <small>
+                      {category.isSystem ? 'System category' : 'Personal category'}
+                      {category.archivedAt !== undefined ? ' · archived' : ''}
+                    </small>
+                    <small>Monthly activity{currency ? ` · ${currency}` : ''}</small>
+                    {currency && (
+                      <small>
+                        Spent {formatMinor(totals.spent, currency)} · received{' '}
+                        {formatMinor(totals.received, currency)}
+                        {category.monthlyLimitMinor !== undefined
+                          ? ` · limit ${formatMinor(asMinor(category.monthlyLimitMinor), currency)}`
+                          : ''}
+                      </small>
+                    )}
+                  </span>
+                  <ArrowRight size={15} aria-hidden="true" />
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
-      <Link className="finance-secondary-action" href="/categories">
-        Open categories overview <ArrowRight size={15} />
-      </Link>
     </div>
   );
 }
