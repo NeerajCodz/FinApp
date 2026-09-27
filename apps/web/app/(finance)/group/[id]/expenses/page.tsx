@@ -3,9 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Plus, ReceiptText } from 'lucide-react';
-import { formatMinor } from '@convex/shared/money';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
+import { Button, Empty } from '@finapp/ui/web';
+import { TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered } from '@/lib/offline/repository';
@@ -144,22 +144,23 @@ export default function GroupExpensesPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link className="finance-secondary-action" href={`/group/${encodeURIComponent(groupId)}`}>
-            <ArrowLeft size={15} /> {group.name ?? 'Group'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link
+            className="finance-secondary-action"
+            href={`/group/${encodeURIComponent(groupId)}`}
+            aria-label="Go back"
+          >
+            <ArrowLeft size={18} />
           </Link>
-          <p className="finance-kicker">SHARED LEDGER</p>
-          <h1>Expenses</h1>
-          <p className="finance-muted">
-            The last 90 days are requested from the group range. Saved expenses remain available
-            offline.
-          </p>
+          <h1 style={{ margin: 0 }}>Expenses</h1>
         </div>
         <Link
-          className="finance-primary-link"
+          className="finance-secondary-action"
           href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
+          aria-label="Add group expense"
+          title="Add group expense"
         >
-          <Plus size={15} /> Add expense
+          <Plus size={20} />
         </Link>
       </header>
       {rangeStatus === 'loading' && (
@@ -179,50 +180,43 @@ export default function GroupExpensesPage() {
         <p className="finance-muted" role="status">
           Opening locally saved expenses…
         </p>
+      ) : expenses.length ? (
+        <div className="finance-record-list">
+          {expenses.map((expense) => {
+            const expenseId = idOf(expense);
+            return (
+              <Link
+                key={expenseId}
+                href={`/transaction/${encodeURIComponent(expenseId)}`}
+                style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
+              >
+                <TransactionRow
+                  title={expense.title ?? 'Group expense'}
+                  category="Group expense"
+                  account={group.name ?? 'Group'}
+                  amountMinor={asMinor(expense.amountMinor)}
+                  currency={expense.currency ?? group.currency ?? 'INR'}
+                  type="expense"
+                  semanticType="split"
+                  date={new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
+                />
+              </Link>
+            );
+          })}
+        </div>
       ) : (
-        <Card className="finance-record-panel">
-          <SectionHeader
-            title="Shared expenses"
-            action={<Badge variant="neutral">{expenses.length}</Badge>}
-          />
-          {expenses.length ? (
-            <ul className="finance-record-list">
-              {expenses.map((expense) => (
-                <li key={idOf(expense)}>
-                  <span className="finance-record-symbol">
-                    <ReceiptText size={17} />
-                  </span>
-                  <span className="finance-record-copy">
-                    <strong>{expense.title ?? 'Group expense'}</strong>
-                    <small>
-                      {new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()} ·
-                      Group expense
-                    </small>
-                  </span>
-                  <strong className="finance-record-amount">
-                    {formatMinor(
-                      asMinor(expense.amountMinor),
-                      expense.currency ?? group.currency ?? 'INR',
-                    )}
-                  </strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty
-              title="No group expenses"
-              description="Add the first expense and choose who shared it."
-              action={
-                <Link
-                  className="finance-secondary-action"
-                  href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
-                >
-                  Add expense <ArrowRight size={15} />
-                </Link>
-              }
-            />
-          )}
-        </Card>
+        <Empty
+          title="No group expenses"
+          description="Add the first expense and choose who shared it."
+          action={
+            <Link
+              className="finance-secondary-action"
+              href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
+            >
+              Add expense <ArrowRight size={15} />
+            </Link>
+          }
+        />
       )}
       {rangeStatus === 'error' && isConnected && (
         <Button

@@ -2,18 +2,12 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import {
-  ArrowLeft,
-  ArrowLeftRight,
-  ArrowRight,
-  ClipboardList,
-  Plus,
-  Settings2,
-} from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, ArrowLeftRight, ArrowRight, Plus, Settings2 } from 'lucide-react';
 import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
-import { Avatar, Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Avatar, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered } from '@/lib/offline/repository';
@@ -67,6 +61,7 @@ const recordIds = (record: LocalRecord) =>
 const recordId = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function GroupHomePage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const groupId = params.id;
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
@@ -232,21 +227,21 @@ export default function GroupHomePage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link className="finance-secondary-action" href="/groups">
-            <ArrowLeft size={15} /> All groups
-          </Link>
-          <p className="finance-kicker">SHARED GROUP · {group.currency ?? 'INR'}</p>
-          <h1>{group.name ?? 'Shared group'}</h1>
-          <p className="finance-muted">Group currency is fixed to {group.currency ?? 'INR'}.</p>
-        </div>
+        <Link
+          className="finance-secondary-action"
+          href="/groups"
+          aria-label="Go back to groups"
+        >
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ flex: 1, margin: 0 }}>{group.name ?? 'Group'}</h1>
         <Link
           className="finance-secondary-action"
           href={`/group/${encodeURIComponent(localGroupId)}/settings`}
           aria-label="Group settings"
           title="Group settings"
         >
-          <Settings2 size={18} /> Settings
+          <Settings2 size={18} />
         </Link>
       </header>
       {(rangeStatus === 'loading' || rangeStatus === 'uncached' || rangeStatus === 'error') && (
@@ -283,32 +278,7 @@ export default function GroupHomePage() {
         </p>
       )}
       <Card className="finance-record-panel">
-        <SectionHeader
-          title="Your balance"
-          action={
-            <Badge
-              variant={
-                ledgerUnavailable
-                  ? rangeStatus === 'loading'
-                    ? 'neutral'
-                    : 'danger'
-                  : myBalance === 0n
-                    ? 'neutral'
-                    : myBalance > 0n
-                      ? 'success'
-                      : 'danger'
-              }
-            >
-              {ledgerUnavailable
-                ? 'Unavailable'
-                : myBalance === 0n
-                  ? 'You are settled'
-                  : myBalance > 0n
-                    ? 'Owed to you'
-                    : 'You owe'}
-            </Badge>
-          }
-        />
+        <SectionHeader title="Your balance" />
         <strong className="finance-record-amount">
           {ledgerUnavailable
             ? rangeStatus === 'loading' && !ledgerError
@@ -322,7 +292,7 @@ export default function GroupHomePage() {
               ? 'Loading all-time balance…'
               : 'Complete group balances are unavailable. No partial value is shown.'
             : myBalance === 0n
-              ? 'You are settled.'
+              ? 'You are settled'
               : myBalance > 0n
                 ? 'Owed to you'
                 : 'You owe'}
@@ -350,75 +320,105 @@ export default function GroupHomePage() {
       >
         <Plus size={17} /> Add expense
       </Link>
-      <div className="finance-accounts-layout">
-        <Card className="finance-record-panel">
-          <SectionHeader
-            title="People"
-            action={<Badge variant="neutral">{memberNames.length}</Badge>}
-          />
+      <section style={{ display: 'grid', gap: 24 }}>
+        <section>
+          <SectionHeader title="People" />
           {memberNames.length ? (
-            <ul className="finance-record-list">
-              {memberNames.map((member) => (
-                <li key={member.id}>
-                  <Avatar
-                    initials={member.name
-                      .split(/\s+/)
-                      .map((part) => part[0] ?? '')
-                      .join('')
-                      .slice(0, 2)}
-                    label={member.name}
-                    size={42}
-                  />
-                  <span className="finance-record-copy">
-                    <strong>{member.name}</strong>
+            <div
+              style={{
+                display: 'flex',
+                gap: 16,
+                overflowX: 'auto',
+                paddingBlock: 12,
+              }}
+            >
+              {memberNames.map((member) => {
+                const profileHref =
+                  member.id !== userId && member.username
+                    ? `/person/${encodeURIComponent(member.username.replace(/^@+/, ''))}`
+                    : undefined;
+                const item = (
+                  <>
+                    <Avatar
+                      initials={member.name
+                        .split(/\s+/)
+                        .map((part) => part[0] ?? '')
+                        .join('')
+                        .slice(0, 2)}
+                      label={member.name}
+                      size={48}
+                    />
+                    <small>
+                      {member.username
+                        ? `@${member.username.replace(/^@+/, '')}`
+                        : member.name}
+                    </small>
+                  </>
+                );
+                return profileHref ? (
+                  <Link
+                    key={member.id}
+                    href={profileHref}
+                    aria-label={`Open @${member.username}`}
+                    style={{
+                      display: 'grid',
+                      width: 96,
+                      flex: '0 0 96px',
+                      justifyItems: 'center',
+                      gap: 7,
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {item}
+                  </Link>
+                ) : (
+                  <span
+                    key={member.id}
+                    style={{
+                      display: 'grid',
+                      width: 96,
+                      flex: '0 0 96px',
+                      justifyItems: 'center',
+                      gap: 7,
+                    }}
+                  >
+                    {item}
                   </span>
-                  {member.id !== userId && member.username && (
-                    <Link
-                      className="finance-secondary-action"
-                      href={`/person/${encodeURIComponent(member.username.replace(/^@+/, ''))}`}
-                    >
-                      Profile
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ul>
+                );
+              })}
+            </div>
           ) : (
             <Empty
               title="No members saved"
               description="Members invited to this group will appear here."
             />
           )}
-        </Card>
-        <Card className="finance-record-panel">
+        </section>
+        <section>
           <SectionHeader title="Recent" />
           {recent.length ? (
-            <ul className="finance-record-list">
-              {recent.map((expense) => (
-                <li key={recordId(expense)}>
-                  <span className="finance-record-symbol">
-                    <ClipboardList size={17} />
-                  </span>
-                  <span className="finance-record-copy">
-                    <strong>
-                      <Link
-                        href={`/transaction/${encodeURIComponent(recordId(expense))}`}
-                        style={{ color: 'inherit', textDecoration: 'none' }}
-                      >
-                        {expense.title ?? 'Group expense'}
-                      </Link>
-                    </strong>
-                    <small>
-                      {formatDate(expense.occurredAt)} ·{' '}
-                      {expense.status === 'pending' ? 'Pending sync' : 'Shared expense'}
-                    </small>
-                  </span>
-                  <strong className="finance-record-amount">
-                    {formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}
-                  </strong>
-                </li>
-              ))}
-            </ul>
+            <div className="finance-record-list">
+              {recent.map((expense) => {
+                const transactionId = recordId(expense);
+                return (
+                  <TransactionRow
+                    key={transactionId}
+                    title={expense.title ?? 'Group expense'}
+                    category="Group expense"
+                    account={group.name ?? 'Group'}
+                    amountMinor={asMinor(expense.amountMinor)}
+                    currency={group.currency ?? 'INR'}
+                    type="expense"
+                    semanticType="split"
+                    date={formatDate(expense.occurredAt)}
+                    onPress={() =>
+                      router.push(`/transaction/${encodeURIComponent(transactionId)}`)
+                    }
+                  />
+                );
+              })}
+            </div>
           ) : (
             <Empty
               title="No shared expenses"
@@ -433,8 +433,8 @@ export default function GroupHomePage() {
               }
             />
           )}
-        </Card>
-      </div>
+        </section>
+      </section>
     </div>
   );
 }

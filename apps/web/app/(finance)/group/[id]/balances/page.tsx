@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { projectGroupBalances } from '@convex/splits/domain';
-import { formatMinor } from '@convex/shared/money';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Money } from '@finapp/ui/finance';
+import { Button, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered } from '@/lib/offline/repository';
@@ -184,24 +184,21 @@ export default function GroupBalancesPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link className="finance-secondary-action" href={`/group/${encodeURIComponent(groupId)}`}>
-            <ArrowLeft size={15} /> {group.name ?? 'Group'}
-          </Link>
-          <p className="finance-kicker">GROUP LEDGER · {group.currency ?? 'INR'}</p>
-          <h1>Balances</h1>
-          <p className="finance-muted">
-            Balances use shared expenses and repayments. A repayment only records money already
-            paid.
-          </p>
-        </div>
+        <Link
+          className="finance-secondary-action"
+          href={`/group/${encodeURIComponent(groupId)}`}
+          aria-label="Go back"
+        >
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ margin: 0 }}>Balances</h1>
       </header>
-      {(rangeState === 'loading' || rangeState === 'uncached' || rangeState === 'error') && (
+      {(rangeState === 'uncached' || rangeState === 'error') && (
         <p
           className={rangeState === 'error' ? 'finance-form-error' : 'finance-form-note'}
           role={rangeState === 'error' ? 'alert' : 'status'}
         >
-          {rangeState === 'loading' ? 'Loading all-time group range…' : rangeError}
+          {rangeError}
         </p>
       )}
       {rangeState === 'error' && isConnected && (
@@ -221,87 +218,63 @@ export default function GroupBalancesPage() {
             );
           }}
         >
-          Retry all-time range
+          Retry
         </Button>
       )}
-      {ledgerError && (
-        <p className="finance-form-error" role="alert">
-          Some expense allocations are missing: {ledgerError}. Reconnect to refresh the group range.
-        </p>
-      )}
-      <Card className="finance-record-panel">
-        <SectionHeader
-          title={`Your balance · ${group.name ?? 'Group'}`}
-          action={
-            <Badge
-              variant={
-                ledgerUnavailable
-                  ? rangeState === 'loading'
-                    ? 'neutral'
-                    : 'danger'
-                  : myBalance === 0n
-                    ? 'neutral'
-                    : myBalance > 0n
-                      ? 'success'
-                      : 'danger'
-              }
-            >
-              {ledgerUnavailable
-                ? 'Unavailable'
-                : myBalance === 0n
-                  ? 'You are settled'
-                  : myBalance > 0n
-                    ? 'Owed to you'
-                    : 'You owe'}
-            </Badge>
-          }
-        />
-        <strong className="finance-record-amount">
-          {ledgerUnavailable
-            ? rangeState === 'loading'
-              ? 'Loading…'
-              : 'Balance unavailable'
-            : formatMinor(myBalance, group.currency ?? 'INR')}
-        </strong>
-      </Card>
-      <Card className="finance-record-panel">
-        <SectionHeader title="Members" />
-        {settled ? (
-          <Empty title="All settled" description="Every member has a zero balance." />
-        ) : names.size ? (
-          <ul className="finance-record-list">
-            {[...names.entries()].map(([memberId, name]) => {
-              const amount = balances[memberId] ?? 0n;
-              return (
-                <li key={memberId}>
-                  <span className="finance-record-copy">
-                    <strong>{name}</strong>
-                    <small>
-                      {ledgerUnavailable
-                        ? 'Balance unavailable'
-                        : amount === 0n
-                          ? 'Settled'
-                          : amount > 0n
-                            ? 'Is owed'
-                            : 'Owes'}
-                    </small>
-                  </span>
-                  <strong className="finance-record-amount">
-                    {ledgerUnavailable
-                      ? 'Unavailable'
-                      : formatMinor(amount, group.currency ?? 'INR')}
-                  </strong>
-                </li>
-              );
-            })}
-          </ul>
+      {ledgerUnavailable ? (
+        rangeState === 'loading' ? (
+          <p className="finance-muted" role="status">
+            Loading all-time balances…
+          </p>
         ) : (
           <Empty
-            title="No group members saved"
-            description="Membership appears here when group data is available on this device."
+            title="Balances unavailable"
+            description={
+              ledgerError
+                ? `The complete group ledger could not be loaded. No partial balance is shown. ${ledgerError}`
+                : rangeError ||
+                  'The complete group ledger could not be loaded. No partial balance is shown.'
+            }
           />
-        )}
-      </Card>
+        )
+      ) : (
+        <>
+          <section style={{ display: 'grid', gap: 8 }}>
+            <strong>Your balance · {group.name ?? 'Group'}</strong>
+            <Money
+              amountMinor={myBalance}
+              currency={group.currency ?? 'INR'}
+              size="display"
+            />
+            <p className="finance-muted">
+              {myBalance > 0n ? 'Owed to you' : myBalance < 0n ? 'You owe' : 'You are settled'}
+            </p>
+          </section>
+          {settled ? (
+            <Empty title="All settled" description="Every member has a zero balance." />
+          ) : (
+            <section style={{ display: 'grid', gap: 16 }}>
+              <SectionHeader title="Members" />
+              <ul className="finance-record-list">
+                {[...names.entries()].map(([memberId, name]) => {
+                  const amount = balances[memberId] ?? 0n;
+                  return (
+                    <li key={memberId}>
+                      <span className="finance-record-copy">
+                        <strong>{name}</strong>
+                        <small>
+                          {amount === 0n ? 'Settled' : amount > 0n ? 'Is owed' : 'Owes'}
+                        </small>
+                      </span>
+                      <Money amountMinor={amount} currency={group.currency ?? 'INR'} />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }

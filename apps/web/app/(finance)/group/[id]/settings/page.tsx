@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, Pencil } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Avatar, Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -182,18 +182,14 @@ export default function GroupSettingsPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link
-            className="finance-secondary-action"
-            href={`/group/${encodeURIComponent(currentGroupId)}`}
-          >
-            <ArrowLeft size={15} /> {group.name ?? 'Group'}
-          </Link>
-          <p className="finance-kicker">GROUP SETTINGS</p>
-          <h1>Group settings</h1>
-          <p className="finance-muted">Manage the group name and member access.</p>
-        </div>
-        <Badge variant={currentRole === 'Member' ? 'neutral' : 'success'}>{currentRole}</Badge>
+        <Link
+          className="finance-secondary-action"
+          href={`/group/${encodeURIComponent(currentGroupId)}`}
+          aria-label="Go back"
+        >
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ margin: 0 }}>Group settings</h1>
       </header>
       {(error || groupsError || membersError) && (
         <p className="finance-form-error" role="alert">
@@ -218,10 +214,7 @@ export default function GroupSettingsPage() {
         </div>
       </Card>
       <Card className="finance-form-panel">
-        <SectionHeader
-          title="General"
-          action={<Badge variant="neutral">{group.currency ?? 'INR'}</Badge>}
-        />
+        <SectionHeader title="General" />
         {editing ? (
           <form className="finance-form" onSubmit={saveName}>
             <FinanceInput
@@ -233,7 +226,8 @@ export default function GroupSettingsPage() {
               disabled={!canManage}
             />
             <p className="finance-form-note">
-              Kept fixed so existing split amounts stay consistent.
+              Currency · {group.currency ?? 'INR'}. Kept fixed so existing split amounts stay
+              consistent.
             </p>
             <div className="finance-page-actions">
               <Button type="submit" disabled={!canManage || saving === 'name'}>
@@ -253,15 +247,19 @@ export default function GroupSettingsPage() {
           <div className="finance-record-copy">
             <strong>Group name</strong>
             <small>{group.name ?? 'Shared group'}</small>
+            <small>Currency · {group.currency ?? 'INR'}</small>
+            <small>Kept fixed so existing split amounts stay consistent.</small>
             {canManage && (
               <Button
-                variant="outline"
+                size="icon"
+                variant="ghost"
+                aria-label="Edit group name"
                 onPress={() => {
                   setName(group.name ?? '');
                   setEditing(true);
                 }}
               >
-                <Pencil size={15} /> Rename group
+                <Pencil size={18} />
               </Button>
             )}
           </div>
@@ -282,18 +280,23 @@ export default function GroupSettingsPage() {
               const memberUserId = String(member.userId ?? member.memberId ?? localId(member));
               const isOwner = member.role === 'owner' || group.ownerId === memberUserId;
               const role = member.role ?? (group.ownerId === memberUserId ? 'owner' : 'member');
+              const memberName = String(
+                member.displayName ?? member.name ?? member.username ?? 'Member',
+              );
               return (
                 <li key={localId(member) || memberUserId}>
+                  <Avatar
+                    initials={memberName
+                      .split(/\s+/)
+                      .map((part) => part[0] ?? '')
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()}
+                    label={memberName}
+                    size={42}
+                  />
                   <span className="finance-record-copy">
-                    <strong>
-                      {memberUserId === userId
-                        ? 'You'
-                        : (member.displayName ??
-                          member.name ??
-                          (member.username
-                            ? `@${member.username}`
-                            : `Member ${memberUserId.slice(-6)}`))}
-                    </strong>
+                    <strong>{memberName}</strong>
                     <small>
                       {isOwner ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Member'}
                     </small>
