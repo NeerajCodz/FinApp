@@ -123,15 +123,14 @@ export function FinanceShell({ children }: { children: ReactNode }) {
     pathname.startsWith('/profile/') ||
     pathname === '/settings' ||
     pathname.startsWith('/settings/');
+  const guestHome = !userId && pathname === '/dashboard';
 
   return (
     <QuickAddContext.Provider value={openQuickAdd}>
-      <div className="finance-app">
+      <div className={`finance-app${guestHome ? ' finance-guest-home' : ''}`}>
         <aside className="finance-sidebar" aria-label="Finapp">
           <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-            <span className="finance-brand-mark" aria-hidden="true">
-              F
-            </span>
+            <span className="finance-brand-mark" aria-hidden="true" />
             <span>finapp</span>
           </Link>
           <p className="finance-sidebar-label">YOUR MONEY</p>
@@ -185,9 +184,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         <div className="finance-main">
           <header className="finance-mobile-header">
             <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-              <span className="finance-brand-mark" aria-hidden="true">
-                F
-              </span>
+              <span className="finance-brand-mark" aria-hidden="true" />
               <span>finapp</span>
             </Link>
             <span className="finance-mobile-status">
