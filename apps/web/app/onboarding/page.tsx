@@ -7,7 +7,6 @@ import { useConvexAuth } from 'convex/react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button, Input, Label } from '@finapp/ui/web';
 import { currencies } from '@convex/shared/validators';
-import { AuthFrame } from '@/components/auth/AuthFrame';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -184,28 +183,55 @@ export default function OnboardingPage() {
 
   if (auth.isLoading || (auth.isAuthenticated && !userId)) {
     return (
-      <AuthFrame
-        eyebrow="SETTING UP YOUR SPACE"
-        title="Almost there."
-        description="Connecting your private workspace."
-        footer={<span>Your profile stays yours.</span>}
-      >
-        <p role="status" aria-live="polite">
-          Preparing your account…
-        </p>
-      </AuthFrame>
+      <main className="auth-layout">
+        <section className="auth-content" aria-labelledby="auth-title">
+          <div className="auth-topline">
+            <Link href="/" className="brand auth-brand" aria-label="Finapp home">
+              <span className="brand-mark" aria-hidden="true">
+                F
+              </span>
+              <span>finapp</span>
+            </Link>
+          </div>
+          <div className="auth-card">
+            <span className="auth-eyebrow">SETTING UP YOUR SPACE</span>
+            <h1 id="auth-title">Almost there.</h1>
+            <p className="auth-description">Connecting your private workspace.</p>
+            <p role="status" aria-live="polite">
+              Preparing your account…
+            </p>
+          </div>
+          <span className="auth-legal">Your profile stays yours.</span>
+        </section>
+      </main>
     );
   }
   if (!auth.isAuthenticated || !userId) {
     return (
-      <AuthFrame
-        eyebrow="ACCOUNT SETUP"
-        title="Sign in to continue."
-        description="Your account session is needed to finish setup."
-        footer={<Link href="/sign-in">Return to sign in</Link>}
-      >
-        <p role="alert">This setup link is only available after verifying your account.</p>
-      </AuthFrame>
+      <main className="auth-layout">
+        <section className="auth-content" aria-labelledby="auth-title">
+          <div className="auth-topline">
+            <Link href="/" className="brand auth-brand" aria-label="Finapp home">
+              <span className="brand-mark" aria-hidden="true">
+                F
+              </span>
+              <span>finapp</span>
+            </Link>
+          </div>
+          <div className="auth-card">
+            <span className="auth-eyebrow">ACCOUNT SETUP</span>
+            <h1 id="auth-title">Sign in to continue.</h1>
+            <p className="auth-description">Your account session is needed to finish setup.</p>
+            <p role="alert">This setup link is only available after verifying your account.</p>
+            <Link className="auth-back-link" href="/sign-in">
+              Return to sign in
+            </Link>
+          </div>
+          <span className="auth-legal">
+            Your account stays yours. <Link href="/privacy">Read our privacy notes</Link>
+          </span>
+        </section>
+      </main>
     );
   }
 
@@ -229,173 +255,197 @@ export default function OnboardingPage() {
     ['How will you use Finapp?', 'Start personal-only or keep shared expenses ready from day one.'],
   ];
   return (
-    <AuthFrame
-      eyebrow={`YOUR FINAPP · ${step + 1} / ${totalSteps}`}
-      title={copy[step][0]}
-      description={copy[step][1]}
-      footer={
-        <span>
-          Already know your way around? <Link href="/dashboard">Go to your overview</Link>
-        </span>
-      }
-    >
-      <div
-        className="auth-progress"
-        role="progressbar"
-        aria-label="Onboarding progress"
-        aria-valuemin={1}
-        aria-valuemax={totalSteps}
-        aria-valuenow={step + 1}
-      >
-        <span style={{ width: `${((step + 1) / totalSteps) * 100}%` }} />
-      </div>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          advance();
-        }}
-        noValidate
-        className="auth-form"
-      >
-        {step === 0 && (
-          <div className="auth-field">
-            <Label htmlFor="currency-search">Country — currency</Label>
-            <Input
-              id="currency-search"
-              autoComplete="off"
-              placeholder="Search India, INR, rupee…"
-              value={currencySearch}
-              onChangeText={setCurrencySearch}
-            />
-            <div
-              className="auth-currency-list"
-              role="listbox"
-              aria-label="Choose country and currency"
-            >
-              {currencyOptions.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  role="option"
-                  aria-selected={currency === item}
-                  className={currency === item ? 'is-selected' : ''}
-                  onClick={() => setCurrency(item)}
-                >
-                  {currencyCountries[item]} — {item}
-                </button>
-              ))}
-              {!currencyOptions.length && <p>No matching country or currency.</p>}
-            </div>
-            <span className="auth-helper">
-              Selected currency: {currencyCountries[currency]} — {currency}
+    <main className="auth-layout">
+      <section className="auth-content" aria-labelledby="auth-title">
+        <div className="auth-topline">
+          <Link href="/" className="brand auth-brand" aria-label="Finapp home">
+            <span className="brand-mark" aria-hidden="true">
+              F
             </span>
-          </div>
-        )}
-        {step === 1 && (
-          <div className="auth-field">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect="off"
-              placeholder="@neeraj"
-              value={username}
-              onChangeText={setUsername}
-              error={!!error}
-            />
-            {handle && <span className="auth-helper auth-handle">You will share as @{handle}</span>}
-          </div>
-        )}
-        {step === 2 && (
-          <div className="auth-field">
-            <Label htmlFor="phone">Phone number · optional</Label>
-            <Input
-              id="phone"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="+91 98765 43210"
-              value={phone}
-              onChangeText={setPhone}
-              error={!!error}
-            />
-          </div>
-        )}
-        {step === 3 && (
-          <div className="auth-field">
-            <Label htmlFor="account-name">Account name · optional</Label>
-            <Input
-              id="account-name"
-              autoComplete="off"
-              placeholder="HDFC, Cash, Savings"
-              value={accountName}
-              onChangeText={setAccountName}
-            />
-          </div>
-        )}
-        {step === 4 && (
-          <div className="auth-choice" role="radiogroup" aria-label="How will you use Finapp?">
-            {(['personal', 'shared'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={mode === value}
-                className={mode === value ? 'is-selected' : ''}
-                onClick={() => setMode(value)}
-              >
-                {value === 'personal' ? 'Personal' : 'Personal + groups'}
-              </button>
-            ))}
-            <p>
-              {mode === 'shared'
-                ? 'Groups and split tools will stay close at hand.'
-                : 'Shared finance remains available whenever you need it.'}
-            </p>
-          </div>
-        )}
-        {error && (
-          <p className="auth-error" role="alert" aria-live="polite">
-            {error}
-          </p>
-        )}
-        <div className="auth-step-actions">
-          {step > 0 ? (
-            <Button
-              type="button"
-              variant="ghost"
-              onPress={() => {
-                setError('');
-                setStep((current) => current - 1);
-              }}
-            >
-              <ArrowLeft size={16} /> Back
-            </Button>
-          ) : (
-            <Button type="button" variant="ghost" onPress={() => router.back()}>
-              <ArrowLeft size={16} /> Back
-            </Button>
-          )}
-          {(step === 2 || step === 3) && (
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={saving}
-              onPress={() => {
-                setError('');
-                setStep((current) => current + 1);
-              }}
-            >
-              Skip for now
-            </Button>
-          )}
-          <Button type="submit" size="lg" disabled={saving || !canContinue} aria-busy={saving}>
-            {saving ? 'Saving…' : step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}{' '}
-            <ArrowRight size={16} />
-          </Button>
+            <span>finapp</span>
+          </Link>
+          <span className="auth-eyebrow">
+            YOUR FINAPP · {step + 1} / {totalSteps}
+          </span>
         </div>
-      </form>
-    </AuthFrame>
+        <div
+          className="auth-progress"
+          role="progressbar"
+          aria-label="Onboarding progress"
+          aria-valuemin={1}
+          aria-valuemax={totalSteps}
+          aria-valuenow={step + 1}
+        >
+          <span style={{ width: `${((step + 1) / totalSteps) * 100}%` }} />
+        </div>
+        <div className="auth-card">
+          <h1 id="auth-title">{copy[step][0]}</h1>
+          <p className="auth-description">{copy[step][1]}</p>
+          <div className="auth-form">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                advance();
+              }}
+              noValidate
+              className="auth-form"
+            >
+              {step === 0 && (
+                <div className="auth-field">
+                  <Label htmlFor="currency-search">Country — currency</Label>
+                  <Input
+                    id="currency-search"
+                    autoComplete="off"
+                    placeholder="Search India, INR, rupee…"
+                    value={currencySearch}
+                    onChangeText={setCurrencySearch}
+                  />
+                  <div
+                    className="auth-currency-list"
+                    role="listbox"
+                    aria-label="Choose country and currency"
+                  >
+                    {currencyOptions.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        role="option"
+                        aria-selected={currency === item}
+                        className={currency === item ? 'is-selected' : ''}
+                        onClick={() => setCurrency(item)}
+                      >
+                        {currencyCountries[item]} — {item}
+                      </button>
+                    ))}
+                    {!currencyOptions.length && <p>No matching country or currency.</p>}
+                  </div>
+                  <span className="auth-helper">
+                    Selected currency: {currencyCountries[currency]} — {currency}
+                  </span>
+                </div>
+              )}
+              {step === 1 && (
+                <div className="auth-field">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    placeholder="@neeraj"
+                    value={username}
+                    onChangeText={setUsername}
+                    error={!!error}
+                  />
+                  {handle && (
+                    <span className="auth-helper auth-handle">You will share as @{handle}</span>
+                  )}
+                </div>
+              )}
+              {step === 2 && (
+                <div className="auth-field">
+                  <Label htmlFor="phone">Phone number · optional</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+91 98765 43210"
+                    value={phone}
+                    onChangeText={setPhone}
+                    error={!!error}
+                  />
+                </div>
+              )}
+              {step === 3 && (
+                <div className="auth-field">
+                  <Label htmlFor="account-name">Account name · optional</Label>
+                  <Input
+                    id="account-name"
+                    autoComplete="off"
+                    placeholder="HDFC, Cash, Savings"
+                    value={accountName}
+                    onChangeText={setAccountName}
+                  />
+                </div>
+              )}
+              {step === 4 && (
+                <div
+                  className="auth-choice"
+                  role="radiogroup"
+                  aria-label="How will you use Finapp?"
+                >
+                  {(['personal', 'shared'] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={mode === value}
+                      className={mode === value ? 'is-selected' : ''}
+                      onClick={() => setMode(value)}
+                    >
+                      {value === 'personal' ? 'Personal' : 'Personal + groups'}
+                    </button>
+                  ))}
+                  <p>
+                    {mode === 'shared'
+                      ? 'Groups and split tools will stay close at hand.'
+                      : 'Shared finance remains available whenever you need it.'}
+                  </p>
+                </div>
+              )}
+              {error && (
+                <p className="auth-error" role="alert" aria-live="polite">
+                  {error}
+                </p>
+              )}
+              <div className="auth-step-actions">
+                {step > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onPress={() => {
+                      setError('');
+                      setStep((current) => current - 1);
+                    }}
+                  >
+                    <ArrowLeft size={16} /> Back
+                  </Button>
+                ) : (
+                  <Button type="button" variant="ghost" onPress={() => router.back()}>
+                    <ArrowLeft size={16} /> Back
+                  </Button>
+                )}
+                {(step === 2 || step === 3) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={saving}
+                    onPress={() => {
+                      setError('');
+                      setStep((current) => current + 1);
+                    }}
+                  >
+                    Skip for now
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={saving || !canContinue}
+                  aria-busy={saving}
+                >
+                  {saving ? 'Saving…' : step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}{' '}
+                  <ArrowRight size={16} />
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <span className="auth-legal">
+          Your account stays yours. <Link href="/privacy">Read our privacy notes</Link>
+        </span>
+      </section>
+    </main>
   );
 }

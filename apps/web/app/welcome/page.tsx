@@ -4,6 +4,8 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
 import { Button } from '@finapp/ui/web';
+import Image from 'next/image';
+import appIcon from '../../../mobile/assets/icon.png';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 export default function WelcomePage() {
@@ -29,8 +31,14 @@ export default function WelcomePage() {
     <main className="auth-welcome">
       <p className="auth-eyebrow">PRIVATE MONEY, CLEARLY</p>
       <section className="auth-welcome-center" aria-labelledby="welcome-title">
-        <div className="auth-welcome-mark" aria-hidden="true">
-          F
+        <div className="auth-welcome-mark">
+          <Image
+            src={appIcon}
+            alt="Finapp app icon"
+            width={176}
+            height={176}
+            style={{ width: '100%', height: '100%', transform: 'scale(2.12)' }}
+          />
         </div>
         <h1 id="welcome-title">finapp</h1>
         <p>Your money. Your people. One clear place.</p>

@@ -146,6 +146,17 @@
   display: grid;
   gap: 8px;
 }
+.auth-two-factor-option {
+  display: grid;
+  gap: 4px;
+}
+.auth-two-factor-option p {
+  margin: 0;
+  padding-left: 32px;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
 .auth-field .finapp-label,
 .auth-label {
   color: var(--finapp-foreground-muted);
@@ -318,49 +329,37 @@
   min-height: 100dvh;
   flex-direction: column;
   justify-content: space-between;
-  padding: clamp(20px, 4vw, 56px);
-  background:
-    radial-gradient(
-      ellipse at 50% 42%,
-      color-mix(in srgb, var(--finapp-primary) 7%, transparent),
-      transparent 38%
-    ),
-    var(--finapp-background);
+  padding: 20px;
+  background: var(--finapp-background);
 }
 .auth-welcome-center {
   display: grid;
   justify-items: center;
   align-content: center;
   flex: 1;
-  padding: 28px 0;
+  padding: 28px 0 56px;
   text-align: center;
 }
 .auth-welcome-mark {
-  display: grid;
-  width: clamp(112px, 16vw, 176px);
-  aspect-ratio: 1;
-  place-items: center;
-  margin-bottom: 22px;
-  border: 1px solid var(--finapp-border-subtle);
+  width: 176px;
+  height: 176px;
+  overflow: hidden;
+  margin-bottom: 30px;
   border-radius: 50%;
-  background: var(--finapp-surface-raised);
-  color: var(--finapp-primary);
-  font-size: clamp(3.8rem, 8vw, 6rem);
-  font-weight: 600;
-  letter-spacing: -0.1em;
+  background: var(--finapp-background);
 }
 .auth-welcome-center h1 {
   margin: 0;
-  font-size: clamp(3.4rem, 8vw, 5rem);
+  font-size: 52px;
   font-weight: 600;
-  letter-spacing: -0.09em;
-  line-height: 1;
+  letter-spacing: -2.2px;
+  line-height: 58px;
 }
 .auth-welcome-center p {
-  max-width: 18rem;
+  max-width: 290px;
   margin: 12px 0 0;
   color: var(--finapp-foreground-muted);
-  font-size: 1.05rem;
+  font-size: 1rem;
   line-height: 1.5;
 }
 .auth-welcome-actions {
@@ -378,6 +377,16 @@
   color: var(--finapp-foreground-subtle);
   font-size: 0.72rem;
   text-align: center;
+}
+
+@media (min-width: 701px) {
+  body:has(.auth-welcome) {
+    background: var(--finapp-background);
+  }
+  .auth-welcome {
+    width: min(100%, 430px);
+    margin-inline: auto;
+  }
 }
 .auth-progress {
   height: 2px;
@@ -515,5 +524,37 @@
   }
   .auth-mobile-brand {
     display: inline-flex;
+  }
+}
+
+@media (min-width: 701px) {
+  body:has(.auth-layout) {
+    background: var(--finapp-background);
+  }
+  .auth-layout {
+    display: block;
+    width: min(100%, 430px);
+    min-height: 100svh;
+    margin-inline: auto;
+  }
+  .auth-story {
+    display: none;
+  }
+  .auth-content {
+    width: 100%;
+    min-height: 100svh;
+    padding: 22px 20px 20px;
+  }
+  .auth-topline {
+    justify-content: space-between;
+  }
+  .auth-mobile-brand {
+    display: inline-flex;
+  }
+  .auth-card {
+    margin: 42px auto;
+  }
+  .auth-card h1 {
+    font-size: clamp(2.45rem, 10vw, 3.2rem);
   }
 }
