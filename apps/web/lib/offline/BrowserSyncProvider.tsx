@@ -500,6 +500,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
             cursor = page.settlements.continueCursor;
           }
         };
+        await Promise.all([fetchTransactions(), fetchSettlements()]);
         await Promise.all(
           [groupId, ...(cloudGroupId === groupId ? [] : [cloudGroupId])].map((coveredGroupId) =>
             recordGroupRangeCoverage(userId, coveredGroupId, startAt, endAt),
