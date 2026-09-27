@@ -1,25 +1,27 @@
 'use client';
 
-import Link from 'next/link';
-import Image from 'next/image';
-import appIcon from '../../../../mobile/assets/icon.png';
+import { useConvexAuth } from 'convex/react';
 import React from 'react';
+import { useRouter } from 'next/navigation';
+import { History, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Separator, useTheme } from '@finapp/ui/web';
 import {
-  ArrowRight,
-  Car,
-  Landmark,
-  Plus,
-  ReceiptText,
-  ShieldCheck,
-  ShoppingBag,
-  Utensils,
-  UsersRound,
-} from 'lucide-react';
-import { Card, Empty, SectionHeader } from '@finapp/ui/web';
+  BalanceHero,
+  MetricPair,
+  PeopleRail,
+  type TransactionType,
+} from '@finapp/ui/finance';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
+import { CategorySection } from '@/components/finance/dashboard/CategorySection';
+import { DashboardHeader } from '@/components/finance/dashboard/DashboardHeader';
+import { GroupsSection } from '@/components/finance/dashboard/GroupsSection';
+import { LocalSyncSheet } from '@/components/finance/dashboard/LocalSyncSheet';
+import { RecentSection } from '@/components/finance/dashboard/RecentSection';
+import { SpendingPeriodSheet } from '@/components/finance/dashboard/SpendingPeriodSheet';
+import { SpendingSection } from '@/components/finance/dashboard/SpendingSection';
 
 type Account = LocalRecord & {
   name?: string;
@@ -43,7 +45,11 @@ type Transaction = LocalRecord & {
 };
 type Category = LocalRecord & { name?: string; icon?: string };
 type Group = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
-type Profile = LocalRecord & { defaultCurrency?: string };
+type Profile = LocalRecord & {
+  defaultCurrency?: string;
+  phone?: string;
+  phoneVerificationTime?: number;
+};
 
 function asMinor(value: unknown): bigint {
   if (typeof value === 'bigint') return value;
@@ -56,44 +62,48 @@ function recordId(record: LocalRecord): string {
   return String(record.id ?? record._id ?? '');
 }
 
-function CategoryMark({
-  label,
-  icon,
-  size = 17,
-}: {
-  label?: string;
-  icon?: string;
-  size?: number;
-}) {
-  const normalized = (label ?? '').toLowerCase();
-  const Icon =
-    normalized.includes('food') || normalized.includes('coffee')
-      ? Utensils
-      : normalized.includes('transport') || normalized.includes('uber')
-        ? Car
-        : normalized.includes('shop')
-          ? ShoppingBag
-          : normalized.includes('bank') || normalized.includes('account')
-            ? Landmark
-            : ReceiptText;
-  return icon ? <span aria-hidden="true">{icon}</span> : <Icon size={size} aria-hidden="true" />;
-}
 
 export default function DashboardPage() {
-  const { userId } = useBrowserSync();
+  const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
+  const { tokens } = useTheme();
+  const {
+    identityReady,
+    userId,
+    isConnected,
+    isSyncing,
+    syncError,
+    status,
+    failedEntries,
+    conflicts,
+    retryNow,
+    retryEntry,
+    resolveConflict,
+  } = useBrowserSync();
   const { records: accounts, loading: accountsLoading } = useLocalRecords<Account>('account');
   const { records: transactions, loading: transactionsLoading } =
     useLocalRecords<Transaction>('transaction');
   const { records: categories, loading: categoriesLoading } = useLocalRecords<Category>('category');
   const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
-  const { records: profiles } = useLocalRecords<Profile>('profile');
+  const { records: profiles, loading: profilesLoading } = useLocalRecords<Profile>('profile');
   const [now, setNow] = React.useState<number | null>(null);
   const [period, setPeriod] = React.useState('This month');
+  const [periodOpen, setPeriodOpen] = React.useState(false);
   const [customDate, setCustomDate] = React.useState('');
+  const [appliedDate, setAppliedDate] = React.useState<Date | null>(null);
+  const [dateError, setDateError] = React.useState('');
+  const [syncOpen, setSyncOpen] = React.useState(false);
 
   React.useEffect(() => setNow(Date.now()), []);
+  React.useEffect(() => {
+    if (identityReady && !userId && !authLoading && !isAuthenticated) {
+      router.replace('/welcome');
+    }
+  }, [authLoading, identityReady, isAuthenticated, router, userId]);
 
   const currency = profiles[0]?.defaultCurrency ?? 'INR';
+  const profile = profiles[0];
+  const phoneVerified = Boolean(profile?.phone && profile.phoneVerificationTime !== undefined);
   const currencyAccounts = accounts.filter((account) => account.currency === currency);
   const accountIds = new Set(
     currencyAccounts.flatMap((account) =>
@@ -113,8 +123,9 @@ export default function DashboardPage() {
         transaction.status !== 'posted' ||
         transaction.deletedAt !== undefined ||
         transaction.currency !== currency
-      )
+      ) {
         return delta;
+      }
       const amount = asMinor(transaction.amountMinor);
       const sourceDelta = accountIds.has(transaction.accountId ?? '')
         ? transaction.type === 'expense' || transaction.type === 'transfer'
@@ -131,27 +142,29 @@ export default function DashboardPage() {
     }, 0n);
   const range = React.useMemo(() => {
     if (now === null) return { startAt: 0, endAt: 0 };
-    const start = new Date(now);
+    const start =
+      period === 'Custom date' && appliedDate ? new Date(appliedDate) : new Date(now);
     if (period === 'Today') {
       start.setHours(0, 0, 0, 0);
     } else if (period === 'This week') {
       start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
       start.setHours(0, 0, 0, 0);
-    } else if (period === 'Custom date' && customDate) {
-      const [year, month, day] = customDate.split('-').map(Number);
-      start.setFullYear(year ?? start.getFullYear(), (month ?? 1) - 1, day ?? 1);
+    } else if (period === 'Custom date' && appliedDate) {
       start.setHours(0, 0, 0, 0);
     } else {
       start.setDate(1);
       start.setHours(0, 0, 0, 0);
     }
     const end = new Date(start);
-    if (period === 'Today' || (period === 'Custom date' && customDate))
+    if (period === 'Today' || (period === 'Custom date' && appliedDate)) {
       end.setDate(end.getDate() + 1);
-    else if (period === 'This week') end.setDate(end.getDate() + 7);
-    else end.setMonth(end.getMonth() + 1);
+    } else if (period === 'This week') {
+      end.setDate(end.getDate() + 7);
+    } else {
+      end.setMonth(end.getMonth() + 1);
+    }
     return { startAt: start.getTime(), endAt: end.getTime() };
-  }, [customDate, now, period]);
+  }, [appliedDate, now, period]);
   const summary = React.useMemo(() => {
     if (now === null) return undefined;
     const chart = Array<number>(8).fill(0);
@@ -159,7 +172,7 @@ export default function DashboardPage() {
     let spentMinor = 0n;
     for (const transaction of transactions) {
       if (
-        (transaction.status !== undefined && transaction.status !== 'posted') ||
+        transaction.status !== 'posted' ||
         transaction.deletedAt !== undefined ||
         transaction.currency !== currency ||
         typeof transaction.occurredAt !== 'number' ||
@@ -178,317 +191,155 @@ export default function DashboardPage() {
             ((transaction.occurredAt - range.startAt) / (range.endAt - range.startAt)) * 8,
           ),
         );
-        chart[bucket] = (chart[bucket] ?? 0) + Number(amount);
+        chart[bucket] = (chart[bucket] ?? 0) + Number(amount) / 100;
       }
     }
     return { chart, incomeMinor, spentMinor };
   }, [currency, now, range.endAt, range.startAt, transactions]);
   const recent = [...transactions]
-    .filter(
-      (transaction) =>
-        transaction.deletedAt === undefined &&
-        (transaction.status === undefined || transaction.status === 'posted'),
-    )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
     .slice(0, 4);
-  const chartMax = Math.max(...(summary?.chart ?? []), 1);
-  const chartStart = range.startAt ? new Date(range.startAt) : null;
-  const chartEnd = range.endAt ? new Date(range.endAt - 1) : null;
-  if (!userId) {
-    return (
-      <section className="finance-guest-welcome" aria-labelledby="finance-guest-title">
-        <p className="finance-kicker">PRIVATE MONEY, CLEARLY</p>
-        <div className="finance-guest-welcome-center">
-          <div className="finance-guest-welcome-mark">
-            <Image
-              src={appIcon}
-              alt="Finapp app icon"
-              width={176}
-              height={176}
-              style={{ width: '100%', height: '100%', transform: 'scale(2.12)' }}
-            />
-          </div>
-          <h1 id="finance-guest-title">finapp</h1>
-          <p>Your money. Your people. One clear place.</p>
-        </div>
-        <div className="finance-guest-welcome-actions">
-          <Link className="finance-guest-create" href="/sign-up">
-            Create account
-          </Link>
-          <Link className="finance-guest-login" href="/sign-in">
-            Log in
-          </Link>
-          <p>Private by default. Built for everyday money.</p>
-        </div>
-      </section>
-    );
-  }
+  const hasSyncIssue = status.failed > 0 || status.conflicts > 0;
+  const SyncIcon = hasSyncIssue
+    ? TriangleAlert
+    : !isConnected || isSyncing || status.pending > 0
+      ? History
+      : ShieldCheck;
+  const syncIconColor = hasSyncIssue
+    ? tokens.destructive
+    : isConnected
+      ? tokens.primary
+      : tokens.foregroundMuted;
+  const syncAccessibilityLabel = `Local sync, ${isConnected ? 'online' : 'offline'}, ${status.pending} pending, ${status.failed} failed, ${status.conflicts} conflicts`;
+
+  if (!userId) return null;
+
+  const openGroupCreation = () => router.push('/group/new');
+  const categoryItems = categories.map((category) => ({
+    id: recordId(category),
+    name: category.name ?? 'Category',
+    icon: category.icon,
+  }));
+  const groupItems = groups.map((group) => ({
+    id: recordId(group),
+    name: group.name ?? 'Shared group',
+    currency: group.currency ?? currency,
+  }));
+  const recentItems = recent.map((transaction) => {
+    const id = recordId(transaction);
+    const category = categories.find((item) => recordId(item) === transaction.categoryId);
+    return {
+      id,
+      title: transaction.title ?? 'Transaction',
+      category: category?.name,
+      categoryIcon: typeof category?.icon === 'string' ? category.icon : undefined,
+      amountMinor: asMinor(transaction.amountMinor),
+      currency: transaction.currency ?? currency,
+      type: (transaction.type ?? 'expense') as TransactionType,
+      semanticType: transaction.groupId ? ('split' as const) : undefined,
+      date:
+        typeof transaction.occurredAt === 'number'
+          ? new Date(transaction.occurredAt).toLocaleDateString()
+          : 'Saved offline',
+    };
+  });
 
   return (
-    <div className="finance-page finance-home-page">
-      <header className="finance-page-heading finance-home-heading">
-        <div>
-          <p className="finance-kicker">OVERVIEW</p>
-          <h1>Overview</h1>
-        </div>
-        <Link className="finance-icon-link" href="/settings/sync" aria-label="Local sync settings">
-          <ShieldCheck size={20} aria-hidden="true" />
-        </Link>
-      </header>
-
-      <Card className="finance-home-balance">
-        <span className="finance-metric-label">TOTAL BALANCE</span>
-        <strong>{accountsLoading ? '—' : formatMinor(totalBalance, currency)}</strong>
-        <span className="finance-metric-foot">
-          Across {currencyAccounts.length} {currencyAccounts.length === 1 ? 'account' : 'accounts'}
-        </span>
-      </Card>
-
-      <section className="finance-home-metric-pair" aria-label="Income and spending">
-        <Card>
-          <span className="finance-metric-label">INCOME</span>
-          <strong>{formatMinor(summary?.incomeMinor ?? 0n, currency)}</strong>
-        </Card>
-        <Card>
-          <span className="finance-metric-label">SPENT</span>
-          <strong>{formatMinor(summary?.spentMinor ?? 0n, currency)}</strong>
-        </Card>
-      </section>
-
-      <section className="finance-home-section">
-        <SectionHeader
-          title="Spending"
-          action={
-            <div className="finance-home-period">
-              <label className="finance-sr-only" htmlFor="finance-home-period">
-                Spending period
-              </label>
-              <select
-                id="finance-home-period"
-                value={period}
-                onChange={(event) => setPeriod(event.target.value)}
-              >
-                <option>Today</option>
-                <option>This week</option>
-                <option>This month</option>
-                <option>Custom date</option>
-              </select>
-              {period === 'Custom date' && (
-                <input
-                  className="finance-home-date"
-                  type="date"
-                  aria-label="Choose spending date"
-                  value={customDate}
-                  onChange={(event) => setCustomDate(event.target.value)}
-                />
-              )}
-            </div>
+    <div className="finance-home-page" style={{ display: 'grid', gap: 36 }}>
+      <DashboardHeader
+        syncLabel={syncAccessibilityLabel}
+        syncIcon={<SyncIcon size={20} color={syncIconColor} />}
+        onOpenSync={() => setSyncOpen(true)}
+      />
+      <BalanceHero amountMinor={accountsLoading ? 0n : totalBalance} currency={currency} />
+      <MetricPair
+        left={{ label: 'Income', value: formatMinor(summary?.incomeMinor ?? 0n, currency) }}
+        right={{ label: 'Spent', value: formatMinor(summary?.spentMinor ?? 0n, currency) }}
+      />
+      <SpendingSection
+        period={period}
+        values={summary?.chart}
+        startAt={range.startAt}
+        endAt={range.endAt}
+        loading={now === null}
+        onChoosePeriod={() => setPeriodOpen(true)}
+      />
+      <CategorySection
+        categories={categoryItems}
+        loading={categoriesLoading}
+        onSeeAll={() => router.push('/category')}
+        onOpen={(id) => router.push(`/category/${encodeURIComponent(id)}`)}
+        onCreate={() => router.push('/category/new')}
+      />
+      <Separator />
+      <PeopleRail
+        phoneVerified={phoneVerified}
+        checking={profilesLoading}
+        onChoose={openGroupCreation}
+      />
+      <GroupsSection
+        groups={groupItems}
+        loading={groupsLoading}
+        currency={currency}
+        onSeeAll={() => router.push('/groups')}
+        onOpen={(id) => router.push(`/group/${encodeURIComponent(id)}`)}
+        onCreate={openGroupCreation}
+      />
+      <Separator />
+      <RecentSection
+        transactions={recentItems}
+        loading={transactionsLoading}
+        onSeeAll={() => router.push('/activity')}
+        onOpen={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+        onCreate={() => router.push('/transaction/new')}
+      />
+      <SpendingPeriodSheet
+        visible={periodOpen}
+        period={period}
+        customDate={customDate}
+        dateError={dateError}
+        onClose={() => setPeriodOpen(false)}
+        onSelectPeriod={(option) => {
+          setPeriod(option);
+          if (option !== 'Custom date') setPeriodOpen(false);
+        }}
+        onDateChange={setCustomDate}
+        onApplyDate={() => {
+          const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(customDate.trim());
+          const selected = match
+            ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+            : null;
+          if (
+            !selected ||
+            selected.getFullYear() !== Number(match?.[1]) ||
+            selected.getMonth() + 1 !== Number(match?.[2]) ||
+            selected.getDate() !== Number(match?.[3])
+          ) {
+            setDateError('Enter a valid date as YYYY-MM-DD.');
+            return;
           }
-        />
-        <Card className="finance-chart-panel">
-          {summary ? (
-            <div
-              className="finance-chart"
-              role="img"
-              aria-label={`Spending chart for ${period.toLowerCase()}`}
-            >
-              {summary.chart.map((value, index) => (
-                <div className="finance-chart-column" key={index}>
-                  <span className="finance-chart-value">
-                    {value > 0 ? formatMinor(BigInt(Math.round(value)), currency) : ''}
-                  </span>
-                  <div className="finance-chart-track">
-                    <span
-                      style={{
-                        height: `${Math.max(value > 0 ? 8 : 0, Math.round((value / chartMax) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="finance-chart-label">
-                    {index === 0
-                      ? chartStart?.toLocaleDateString(undefined, {
-                          day: 'numeric',
-                          month: 'short',
-                        })
-                      : index === 7
-                        ? chartEnd?.toLocaleDateString(undefined, {
-                            day: 'numeric',
-                            month: 'short',
-                          })
-                        : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="finance-muted" role="status">
-              Loading spending…
-            </p>
-          )}
-        </Card>
-      </section>
-
-      <section className="finance-home-section">
-        <SectionHeader
-          title="Categories"
-          action={
-            <Link className="finance-secondary-action" href="/category">
-              See all <ArrowRight size={15} aria-hidden="true" />
-            </Link>
-          }
-        />
-        {categoriesLoading ? (
-          <p className="finance-muted" role="status">
-            Loading categories…
-          </p>
-        ) : categories.length === 0 ? (
-          <Empty
-            title="No categories yet"
-            description="Create a category to organize transactions."
-            action={
-              <Link className="finance-secondary-action" href="/category/new">
-                Add category <ArrowRight size={15} aria-hidden="true" />
-              </Link>
-            }
-          />
-        ) : (
-          <ul className="finance-home-list">
-            {categories.slice(0, 4).map((category) => {
-              const id = recordId(category);
-              return (
-                <li key={id}>
-                  <Link href={`/category/${encodeURIComponent(id)}`}>
-                    <span className="finance-account-mark" aria-hidden="true">
-                      <CategoryMark label={category.name} />
-                    </span>
-                    <strong>{category.name ?? 'Category'}</strong>
-                    <ArrowRight size={15} aria-hidden="true" />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section className="finance-home-people" aria-labelledby="finance-home-people-title">
-        <div>
-          <p className="finance-kicker">PEOPLE TO SPLIT WITH</p>
-          <h2 id="finance-home-people-title">Money works better together.</h2>
-        </div>
-        <Link className="finance-icon-link" href="/group/new" aria-label="Invite people">
-          <Plus size={20} aria-hidden="true" />
-        </Link>
-      </section>
-
-      <section className="finance-home-section">
-        <SectionHeader
-          title="Groups"
-          action={
-            <Link className="finance-secondary-action" href="/groups">
-              See all <ArrowRight size={15} aria-hidden="true" />
-            </Link>
-          }
-        />
-        {groupsLoading ? (
-          <p className="finance-muted" role="status">
-            Loading groups…
-          </p>
-        ) : groups.filter((group) => group.archivedAt === undefined).length ? (
-          <ul className="finance-home-list">
-            {groups
-              .filter((group) => group.archivedAt === undefined)
-              .slice(0, 2)
-              .map((group) => {
-                const id = recordId(group);
-                return (
-                  <li key={id}>
-                    <Link href={`/group/${encodeURIComponent(id)}`}>
-                      <span className="finance-account-mark" aria-hidden="true">
-                        <UsersRound size={17} />
-                      </span>
-                      <strong>{group.name ?? 'Shared group'}</strong>
-                      <span>{group.currency ?? currency}</span>
-                      <ArrowRight size={15} aria-hidden="true" />
-                    </Link>
-                  </li>
-                );
-              })}
-          </ul>
-        ) : (
-          <Empty
-            title="No groups yet"
-            description="Create a group to split money with people you know."
-            action={
-              <Link className="finance-secondary-action" href="/group/new">
-                Create group <ArrowRight size={15} aria-hidden="true" />
-              </Link>
-            }
-          />
-        )}
-      </section>
-
-      <section className="finance-home-section">
-        <SectionHeader
-          title="Recent"
-          action={
-            <Link className="finance-secondary-action" href="/activity">
-              All <ArrowRight size={15} aria-hidden="true" />
-            </Link>
-          }
-        />
-        {transactionsLoading ? (
-          <p className="finance-muted" role="status">
-            Loading activity…
-          </p>
-        ) : recent.length === 0 ? (
-          <Empty
-            title="No transactions yet"
-            description="Record an expense or income to start your ledger."
-            action={
-              <Link className="finance-secondary-action" href="/transaction/new">
-                Add transaction <ArrowRight size={15} aria-hidden="true" />
-              </Link>
-            }
-          />
-        ) : (
-          <ul className="finance-transaction-list">
-            {recent.map((transaction) => {
-              const id = recordId(transaction);
-              const amount = asMinor(transaction.amountMinor);
-              const category = categories.find((item) => recordId(item) === transaction.categoryId);
-              const isIncome = transaction.type === 'income' || transaction.type === 'refund';
-              return (
-                <li key={id}>
-                  <span className={`finance-transaction-icon${isIncome ? ' income' : ''}`}>
-                    <CategoryMark label={category?.name} icon={category?.icon} size={16} />
-                  </span>
-                  <Link
-                    className="finance-transaction-description"
-                    href={`/transaction/${encodeURIComponent(id)}`}
-                  >
-                    <strong>{transaction.title ?? 'Transaction'}</strong>
-                    <small>
-                      {category?.name ? `${category.name} · ` : ''}
-                      {transaction.occurredAt
-                        ? new Date(transaction.occurredAt).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                          })
-                        : 'Saved offline'}
-                      {transaction.groupId ? ' · Shared' : ''}
-                    </small>
-                  </Link>
-                  <strong className={isIncome ? 'finance-positive' : ''}>
-                    {isIncome ? '+' : '−'}
-                    {formatMinor(amount, transaction.currency ?? currency)}
-                  </strong>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+          setAppliedDate(selected);
+          setDateError('');
+          setPeriodOpen(false);
+        }}
+      />
+      <LocalSyncSheet
+        visible={syncOpen}
+        isConnected={isConnected}
+        isSyncing={isSyncing}
+        status={status}
+        failedEntries={failedEntries}
+        conflicts={conflicts}
+        syncError={syncError}
+        onClose={() => setSyncOpen(false)}
+        onRetry={() => void retryNow()}
+        onRetryEntry={(localId) => void retryEntry(localId)}
+        onResolveConflict={(conflictId, winner) => void resolveConflict(conflictId, winner)}
+        onOpenSettings={() => {
+          setSyncOpen(false);
+          router.push('/settings/sync');
+        }}
+      />
     </div>
   );
 }

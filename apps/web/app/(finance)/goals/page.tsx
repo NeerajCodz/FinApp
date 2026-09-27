@@ -2,13 +2,13 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Plus, Target } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight, ChevronRight, Plus, Wallet } from 'lucide-react';
+import { Button, IconButton, Input, Progress, Typography } from '@finapp/ui/web';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceInput } from '@/components/finance/FinanceInput';
+import { Money } from '@finapp/ui/finance';
 
 type Profile = LocalRecord & { defaultCurrency?: string };
 type Settings = LocalRecord & { currency?: string };
@@ -135,187 +135,216 @@ export default function GoalsPage() {
     );
 
   return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">A FUTURE YOU CAN SEE</p>
-          <h1>Goals</h1>
-          <p className="finance-muted">
-            Contributions build progress without changing your account balance.
-          </p>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-          <Badge variant="neutral">{activeGoals.length} active</Badge>
-          {!adding ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading || !selectedCurrency}
-              onPress={() => setAdding(true)}
-            >
-              <Plus size={16} /> Add goal
-            </Button>
-          ) : (
-            <Button type="button" variant="outline" onPress={() => setAdding(false)}>
-              Cancel
-            </Button>
-          )}
-        </div>
+    <div className="finance-page" style={{ gap: 24 }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton
+          label="Go back"
+          variant="ghost"
+          onPress={() => window.history.back()}
+        >
+          <ArrowLeft size={21} />
+        </IconButton>
+        <Typography variant="title" style={{ flex: 1 }}>
+          Goals
+        </Typography>
+        {!loading && !adding && (
+          <IconButton label="Add goal" variant="ghost" onPress={() => setAdding(true)}>
+            <Plus size={21} />
+          </IconButton>
+        )}
       </header>
-      {!loading && !selectedCurrency && (
-        <p className="finance-form-note">
-          Choose a default currency in settings before creating a goal.{' '}
-          <Link className="finance-inline-link" href="/settings/currency">
-            Set default currency
-          </Link>
-        </p>
-      )}
-      {(error || loadError) && (
-        <p className="finance-form-error" role="alert">
-          {error ?? `Saved goals could not be opened: ${loadError}`}
-        </p>
-      )}
-      {!loading && !loadError && goalRows.length > 0 && (
-        <Card className="finance-metric-card finance-balance-card">
-          <span className="finance-metric-label">
-            SAVED TOWARD {goalRows.length} {goalRows.length === 1 ? 'GOAL' : 'GOALS'}
-          </span>
-          <strong>
-            {totalSaved !== null
-              ? formatMinor(totalSaved, goalRows[0]?.currency ?? selectedCurrency)
-              : `Across ${currencies.size} currencies`}
-          </strong>
-          <span className="finance-metric-foot">
-            Contributions recorded separately from your account balance.
-          </span>
-        </Card>
-      )}
-      <div
-        className="finance-accounts-layout"
-        style={!adding ? { gridTemplateColumns: 'minmax(0, 1fr)' } : undefined}
-      >
-        <Card className="finance-record-panel">
-          <SectionHeader title="Your goals" action={<span>{activeGoals.length} total</span>} />
-          {loading ? (
-            <p className="finance-muted" role="status">
-              Opening your local goals…
-            </p>
-          ) : loadError ? (
-            <p className="finance-form-error" role="alert">
-              Saved goals could not be opened: {loadError}
-            </p>
-          ) : goalRows.length === 0 ? (
-            <Empty
-              title="No goals yet"
-              description="Set a target and track each contribution in one place."
-              icon={<Target size={20} />}
-              action={
-                !adding && selectedCurrency ? (
-                  <Button type="button" size="sm" onPress={() => setAdding(true)}>
-                    Create a goal
-                  </Button>
-                ) : undefined
-              }
+      {!loading && goalRows.length > 0 && (
+        <section style={{ display: 'grid', gap: 8 }}>
+          <Typography variant="label">
+            Saved toward {goalRows.length} {goalRows.length === 1 ? 'goal' : 'goals'}
+          </Typography>
+          {totalSaved !== null ? (
+            <Money
+              amountMinor={totalSaved}
+              currency={goalRows[0]?.currency ?? selectedCurrency}
+              size="display"
             />
           ) : (
-            <ul className="finance-plan-cards">
-              {goalRows.map(({ goal, saved, targetMinor, currency: goalCurrency, percent }) => {
-                const progress = Math.min(100, Math.max(0, percent));
-                const id = idOf(goal);
-                return (
-                  <li className="finance-plan-card" key={id}>
-                    <Link
-                      href={`/goals/${encodeURIComponent(id)}`}
-                      style={{
-                        display: 'grid',
-                        width: '100%',
-                        gap: 10,
-                        color: 'inherit',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      <div className="finance-budget-heading">
-                        <span>
-                          <strong>{goal.name ?? 'Savings goal'}</strong>
-                          <small>
-                            {percent >= 100
-                              ? 'Target reached'
-                              : goal.targetDate
-                                ? `Target ${new Date(goal.targetDate).toLocaleDateString()}`
-                                : 'No target date'}
-                          </small>
-                        </span>
-                        <strong>{formatMinor(saved, goalCurrency)}</strong>
-                      </div>
-                      <div
-                        className="finance-plan-track"
-                        role="progressbar"
-                        aria-label={`${goal.name ?? 'Goal'} progress`}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={progress}
-                      >
-                        <span style={{ width: `${progress}%` }} />
-                      </div>
-                      <p className="finance-goal-total">
-                        {percent}% of {formatMinor(targetMinor, goalCurrency)}
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <Typography variant="heading">Across {currencies.size} currencies</Typography>
           )}
-          {!isConnected && !loading && (
-            <p className="finance-form-note">Offline · showing saved goals</p>
+          <Typography variant="small">
+            Contributions recorded separately from your account balance.
+          </Typography>
+        </section>
+      )}
+      {loadError && (
+        <div role="alert" style={{ display: 'grid', gap: 10 }}>
+          <Typography variant="body">Saved goals could not be loaded.</Typography>
+          <Button variant="outline" onPress={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      )}
+      {loading && !loadError && (
+        <Typography variant="small" role="status">
+          Loading saved goals…
+        </Typography>
+      )}
+      {!loading && !loadError && goalRows.length === 0 && (
+        <section
+          style={{
+            display: 'grid',
+            flex: 1,
+            minHeight: 300,
+            alignContent: 'center',
+            justifyItems: 'center',
+            gap: 12,
+            paddingInline: 24,
+            textAlign: 'center',
+          }}
+        >
+          <span
+            style={{
+              display: 'grid',
+              width: 76,
+              height: 76,
+              borderRadius: 24,
+              background: 'var(--finapp-surface-raised)',
+              color: 'var(--finapp-primary)',
+              placeItems: 'center',
+            }}
+          >
+            <Wallet size={32} />
+          </span>
+          <Typography variant="heading">No goals yet</Typography>
+          <Typography variant="body" style={{ maxWidth: 280 }}>
+            Set a target and track each contribution in one place.
+          </Typography>
+          {!adding && selectedCurrency && (
+            <Button onPress={() => setAdding(true)}>Create a goal</Button>
           )}
-        </Card>
-        {adding && (
-          <Card className="finance-form-panel">
-            <SectionHeader title="New goal" />
-            <form className="finance-form" onSubmit={createGoal}>
-              <FinanceInput
-                label="Goal name"
-                value={name}
-                onChangeText={setName}
-                placeholder="What are you saving for?"
-                required
-                maxLength={80}
-              />
-              <FinanceInput
-                label={`Target amount · ${selectedCurrency || 'currency unavailable'}`}
-                type="number"
-                min="0.01"
-                step={selectedCurrency === 'JPY' || selectedCurrency === 'KRW' ? '1' : '0.01'}
-                value={target}
-                onChangeText={setTarget}
-                required
-              />
-              {error && (
-                <p className="finance-form-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                <Button type="button" variant="outline" onPress={() => setAdding(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    saving || loading || !selectedCurrency || !name.trim() || !target.trim()
-                  }
-                >
-                  {saving ? 'Saving…' : 'Save goal'} <ArrowRight size={15} />
-                </Button>
-              </div>
-              <p className="finance-form-note">
-                Targets are saved locally first and sync when a connection is available.
-              </p>
-            </form>
-          </Card>
-        )}
-      </div>
+          {!selectedCurrency && (
+            <Typography variant="small">
+              Choose a default currency in settings before creating a goal.
+            </Typography>
+          )}
+          {!selectedCurrency && (
+            <Button
+              variant="outline"
+              onPress={() => {
+                window.location.href = '/settings/currency';
+              }}
+            >
+              Set default currency
+            </Button>
+          )}
+          {!isConnected && (
+            <Typography variant="small">Offline · showing saved goals</Typography>
+          )}
+        </section>
+      )}
+      {!loading && goalRows.length > 0 && (
+        <section style={{ display: 'grid', gap: 6 }}>
+          <Typography variant="label">Your goals</Typography>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {goalRows.map(({ goal, saved, targetMinor, currency, percent }) => {
+              const progress = Math.min(100, Math.max(0, percent));
+              const id = idOf(goal);
+              return (
+                <li key={id}>
+                  <Link
+                    href={`/goals/${encodeURIComponent(id)}`}
+                    aria-label={`${goal.name ?? 'Savings goal'}, ${percent}% of target saved`}
+                    style={{
+                      display: 'grid',
+                      gap: 9,
+                      paddingBlock: 16,
+                      borderBottom: '1px solid var(--finapp-border-subtle)',
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ display: 'grid', flex: 1, gap: 4 }}>
+                        <Typography variant="bodyLarge">
+                          {goal.name ?? 'Savings goal'}
+                        </Typography>
+                        <Typography variant="small">
+                          {percent >= 100
+                            ? 'Target reached'
+                            : goal.targetDate
+                              ? `Target ${new Date(goal.targetDate).toLocaleDateString()}`
+                              : 'No target date'}
+                        </Typography>
+                      </span>
+                      <Money amountMinor={saved} currency={currency} />
+                      <ChevronRight size={17} />
+                    </div>
+                    <Progress value={progress} color="var(--finapp-primary)" />
+                    <Typography variant="caption">
+                      {percent}% of {formatMinor(targetMinor, currency)}
+                    </Typography>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+      {adding && (
+        <section
+          style={{
+            display: 'grid',
+            gap: 14,
+            paddingTop: 16,
+            borderTop: '1px solid var(--finapp-border-subtle)',
+          }}
+        >
+          <Typography variant="heading">New goal</Typography>
+          <form onSubmit={createGoal} style={{ display: 'grid', gap: 14 }}>
+            <Input
+              aria-label="Goal name"
+              placeholder="What are you saving for?"
+              value={name}
+              onChangeText={setName}
+              required
+            />
+            <Input
+              aria-label="Target amount"
+              placeholder={`Target amount · ${selectedCurrency || 'Loading currency…'}`}
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              step={selectedCurrency === 'JPY' || selectedCurrency === 'KRW' ? '1' : '0.01'}
+              value={target}
+              onChangeText={setTarget}
+              required
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Button
+                type="button"
+                variant="outline"
+                style={{ flex: 1 }}
+                onPress={() => {
+                  setAdding(false);
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                style={{ flex: 1 }}
+                disabled={
+                  saving || loading || !selectedCurrency || !name.trim() || !target.trim()
+                }
+              >
+                {saving ? 'Saving…' : 'Save goal'}
+              </Button>
+            </div>
+          </form>
+        </section>
+      )}
+      {!!error && (
+        <div role="alert" style={{ color: 'var(--finapp-destructive)' }}>
+          <Typography variant="small">{error}</Typography>
+        </div>
+      )}
     </div>
   );
 }
