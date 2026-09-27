@@ -6,7 +6,12 @@ import { ArrowLeft, Check, RefreshCw, ShieldAlert } from 'lucide-react';
 import { Badge, Button, Card, SectionHeader } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
-import { readConflicts, resolveConflict, type LocalConflict } from '@/lib/offline/repository';
+import {
+  readConflicts,
+  resolveConflict,
+  type LocalConflict,
+  type LocalSyncWindow,
+} from '@/lib/offline/repository';
 
 function summarize(record: Record<string, unknown>): string {
   const display = [record.title, record.name, record.displayName, record.type].find(
@@ -24,13 +29,23 @@ function summarize(record: Record<string, unknown>): string {
 function dateLabel(timestamp: number | null): string {
   return timestamp ? new Date(timestamp).toLocaleString() : 'Not synced yet';
 }
+const syncWindowOptions: { value: LocalSyncWindow; label: string }[] = [
+  { value: 7, label: '7 days' },
+  { value: 30, label: '30 days' },
+  { value: 90, label: '90 days' },
+  { value: 180, label: '180 days' },
+  { value: 365, label: '365 days' },
+  { value: 'all', label: 'All history' },
+];
 
 export default function SyncSettingsPage() {
-  const { userId, isConnected, isSyncing, syncError, status, retryNow } = useBrowserSync();
+  const { userId, isConnected, isSyncing, syncError, status, syncWindow, setSyncWindow, retryNow } =
+    useBrowserSync();
   const [conflicts, setConflicts] = React.useState<LocalConflict[]>([]);
   const [conflictsLoading, setConflictsLoading] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState('');
+  const [windowSaving, setWindowSaving] = React.useState(false);
 
   const refreshConflicts = React.useCallback(async () => {
     if (!userId) {
@@ -74,6 +89,23 @@ export default function SyncSettingsPage() {
       setMessage(cause instanceof Error ? cause.message : 'Could not retry sync.');
     } finally {
       setBusy(false);
+    }
+  }
+  async function changeWindow(days: LocalSyncWindow) {
+    if (days === syncWindow || busy || windowSaving || isSyncing) return;
+    setWindowSaving(true);
+    setMessage('');
+    try {
+      await setSyncWindow(days);
+      setMessage(
+        isConnected
+          ? 'Download window updated; history backfill is queued.'
+          : 'Download window saved. History will backfill when this browser reconnects.',
+      );
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Could not update the download window.');
+    } finally {
+      setWindowSaving(false);
     }
   }
 
@@ -145,6 +177,40 @@ export default function SyncSettingsPage() {
           <span className="finance-metric-foot">A browser copy is not a backup.</span>
         </Card>
       </div>
+      <Card className="finance-record-panel" style={{ display: 'grid', gap: 12 }}>
+        <SectionHeader title="Initial download window" />
+        <p className="finance-form-note">
+          Choose how much recent history syncs automatically. Changing this setting backfills cloud
+          data; it never removes older history already downloaded to this device.
+        </p>
+        <div
+          className="finance-sync-window-options"
+          role="radiogroup"
+          aria-label="Initial download window"
+        >
+          {syncWindowOptions.map((option) => {
+            const selected = syncWindow === option.value;
+            return (
+              <Button
+                key={String(option.value)}
+                variant={selected ? 'primary' : 'outline'}
+                disabled={busy || windowSaving || isSyncing}
+                role="radio"
+                aria-checked={selected}
+                onPress={() => void changeWindow(option.value)}
+              >
+                <span>{option.label}</span>
+                {selected && <Check size={18} aria-hidden="true" />}
+              </Button>
+            );
+          })}
+        </div>
+        {windowSaving && (
+          <p className="finance-form-note" role="status">
+            Saving and scheduling backfill…
+          </p>
+        )}
+      </Card>
 
       {syncError && (
         <p className="finance-form-error" role="alert">

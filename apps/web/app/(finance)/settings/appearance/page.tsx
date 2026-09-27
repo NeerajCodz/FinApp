@@ -9,9 +9,9 @@ import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 const options: { value: Appearance; label: string; detail: string }[] = [
-  { value: 'dark', label: 'Dark', detail: 'Keep the dark Finapp canvas.' },
+  { value: 'dark', label: 'Dark', detail: 'Use the dark palette.' },
+  { value: 'system', label: 'System', detail: 'Follow your device setting.' },
   { value: 'light', label: 'Light', detail: 'Use the light palette.' },
-  { value: 'system', label: 'System', detail: 'Follow this device’s appearance setting.' },
 ];
 
 export default function AppearanceSettingsPage() {

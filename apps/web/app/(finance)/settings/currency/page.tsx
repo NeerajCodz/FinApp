@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { Card, SectionHeader } from '@finapp/ui/web';
+import { Button, Card, SectionHeader } from '@finapp/ui/web';
 import { currencies } from '@convex/shared/validators';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -11,6 +11,14 @@ import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
 type Profile = LocalRecord & { displayName?: string; defaultCurrency?: string };
+
+function currencyLabel(currency: string) {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'currency' }).of(currency) ?? currency;
+  } catch {
+    return currency;
+  }
+}
 
 export default function CurrencySettingsPage() {
   const { userId } = useBrowserSync();
@@ -82,21 +90,30 @@ export default function CurrencySettingsPage() {
             The saved currency could not be loaded. Reload the profile before changing it.
           </p>
         ) : (
-          <label className="finance-form-field">
-            <span>Currency for new records</span>
-            <select
-              value={selected}
-              aria-label="Default currency"
-              disabled={saving}
-              onChange={(event) => void changeCurrency(event.currentTarget.value)}
-            >
+          <>
+            <p className="finance-form-note">
+              Used for new accounts, budgets, groups, and transactions. Changing this does not
+              rewrite historical entries.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {currencies.map((currency) => (
-                <option key={currency} value={currency}>
+                <Button
+                  key={currency}
+                  size="sm"
+                  variant={selected === currency ? 'primary' : 'outline'}
+                  disabled={saving}
+                  aria-pressed={selected === currency}
+                  onPress={() => void changeCurrency(currency)}
+                  style={{ minWidth: '5.5rem', flex: '1 0 5.5rem' }}
+                >
                   {currency}
-                </option>
+                </Button>
               ))}
-            </select>
-          </label>
+            </div>
+            <p className="finance-form-note">
+              Selected: {currencyLabel(selected)} · {selected}
+            </p>
+          </>
         )}
         {message && (
           <p className="finance-settings-message" role="status">

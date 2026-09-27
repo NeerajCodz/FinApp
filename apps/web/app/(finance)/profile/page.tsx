@@ -1,5 +1,7 @@
 'use client';
 
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import Link from 'next/link';
 import {
@@ -8,7 +10,10 @@ import {
   ChartNoAxesCombined,
   CircleUserRound,
   Coins,
-  Settings2,
+  LogOut,
+  Palette,
+  ReceiptText,
+  ShieldCheck,
   Wallet,
 } from 'lucide-react';
 import { Avatar, Button, Card, Input, SectionHeader } from '@finapp/ui/web';
@@ -34,35 +39,42 @@ type Profile = LocalRecord & {
 type Editor = 'username' | 'phone' | null;
 
 const links = [
-  { label: 'Accounts', description: 'Balances and activity', href: '/accounts', icon: Wallet },
+  { label: 'Accounts', description: 'Balances and activity', href: '/account', icon: Wallet },
+  {
+    label: 'Categories',
+    description: 'Spending structure',
+    href: '/category',
+    icon: ReceiptText,
+  },
   {
     label: 'Groups',
     description: 'Shared money with people',
     href: '/groups',
     icon: CircleUserRound,
   },
-  { label: 'Budgets', description: 'Limits and progress', href: '/budgets', icon: Coins },
+  { label: 'Budget', description: 'Limits and progress', href: '/budget', icon: Coins },
   {
     label: 'Analytics',
     description: 'Patterns over time',
     href: '/analytics',
     icon: ChartNoAxesCombined,
   },
-  {
-    label: 'Notifications',
-    description: 'Inbox and preferences',
-    href: '/notifications',
-    icon: Bell,
-  },
-  {
-    label: 'Settings',
-    description: 'Appearance, sync, and privacy',
-    href: '/settings',
-    icon: Settings2,
-  },
+];
+
+const preferences = [
+  { label: 'Appearance', href: '/settings/appearance', icon: Palette },
+  { label: 'Notifications', href: '/settings/notifications', icon: Bell },
+  { label: 'Security', href: '/settings/security', icon: ShieldCheck },
+];
+
+const privacyLinks = [
+  { label: 'Export data', href: '/settings/privacy', icon: ReceiptText },
+  { label: 'Privacy and export', href: '/settings/privacy', icon: ShieldCheck },
 ];
 
 export default function ProfilePage() {
+  const { signOut } = useAuthActions();
+  const router = useRouter();
   const { userId } = useBrowserSync();
   const { records, loading, error } = useLocalRecords<Profile>('profile');
   const profile = records[0];
@@ -116,6 +128,11 @@ export default function ProfilePage() {
     setMessage('');
     setEditor(value);
     setDraft(value === 'username' ? (profile?.username ?? '') : (profile?.phone ?? ''));
+  }
+
+  async function leave() {
+    await signOut();
+    router.replace('/welcome');
   }
 
   return (
@@ -261,6 +278,42 @@ export default function ProfilePage() {
           ))}
         </div>
       </section>
+
+      <section aria-labelledby="profile-preferences-title" style={{ display: 'grid', gap: 12 }}>
+        <h2 id="profile-preferences-title" style={{ margin: 0, fontSize: '1rem' }}>
+          Preferences
+        </h2>
+        <div className="finance-settings-grid">
+          {preferences.map(({ label, href, icon: Icon }) => (
+            <Card key={label} className="finance-settings-card">
+              <SectionHeader title={label} action={<Icon size={18} aria-hidden="true" />} />
+              <Link className="finance-inline-link" href={href}>
+                Open {label.toLowerCase()} <ArrowRight size={15} aria-hidden="true" />
+              </Link>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="profile-data-title" style={{ display: 'grid', gap: 12 }}>
+        <h2 id="profile-data-title" style={{ margin: 0, fontSize: '1rem' }}>
+          Data and privacy
+        </h2>
+        <div className="finance-settings-grid">
+          {privacyLinks.map(({ label, href, icon: Icon }) => (
+            <Card key={label} className="finance-settings-card">
+              <SectionHeader title={label} action={<Icon size={18} aria-hidden="true" />} />
+              <Link className="finance-inline-link" href={href}>
+                Open {label.toLowerCase()} <ArrowRight size={15} aria-hidden="true" />
+              </Link>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <Button variant="secondary" onPress={() => void leave()}>
+        <LogOut size={16} aria-hidden="true" /> Sign out
+      </Button>
     </div>
   );
 }

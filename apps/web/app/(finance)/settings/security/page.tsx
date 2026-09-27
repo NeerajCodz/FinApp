@@ -103,11 +103,8 @@ export default function SecuritySettingsPage() {
           controls.
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/settings/privacy">
-            Privacy and data
-          </Link>
-          <Button variant="outline" onPress={() => window.location.assign('/privacy')}>
-            Read privacy notes
+          <Button variant="outline" onPress={() => window.location.assign('/settings/privacy')}>
+            Privacy and export
           </Button>
         </div>
       </Card>

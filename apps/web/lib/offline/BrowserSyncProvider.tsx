@@ -9,6 +9,7 @@ import type {
   LocalEntity,
   LocalRecord,
   LocalSyncStatus,
+  LocalSyncWindow,
   OutboxEntry,
   SyncReceipt,
 } from './repository';
@@ -17,6 +18,10 @@ import {
   getLocalSyncStatus,
   getMappedCloudId,
   getSyncCursor,
+  getSyncWindow,
+  hasPendingSyncWindowBackfill,
+  markSyncWindowBackfillCompleted,
+  setSyncWindow as persistSyncWindow,
   hasCompletedBootstrap,
   listOutbox,
   markBootstrapCompleted,
@@ -73,6 +78,14 @@ const emptyStatus: LocalSyncStatus = {
   lastSyncedAt: null,
 };
 
+function syncWindowRange(days: LocalSyncWindow, now = Date.now()) {
+  const endAt = now + 1;
+  return {
+    startAt: days === 'all' ? 0 : endAt - days * 86_400_000,
+    endAt,
+  };
+}
+
 type BrowserSyncContextValue = {
   userId: string | null;
   identityReady: boolean;
@@ -80,6 +93,8 @@ type BrowserSyncContextValue = {
   isSyncing: boolean;
   syncError: string | null;
   status: LocalSyncStatus;
+  syncWindow: LocalSyncWindow;
+  setSyncWindow: (days: LocalSyncWindow) => Promise<void>;
   retryNow: () => Promise<void>;
   fetchTransactionRange: (startAt: number, endAt: number) => Promise<void>;
   fetchGroupRange: (groupId: string, startAt: number, endAt: number) => Promise<void>;
@@ -275,9 +290,11 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const [online, setOnline] = React.useState(false);
   const [status, setStatus] = React.useState(emptyStatus);
   const [statusUserId, setStatusUserId] = React.useState<string | null>(null);
+  const [syncWindow, setSyncWindowState] = React.useState<LocalSyncWindow>(30);
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const running = React.useRef(false);
+  const syncWindowChangeDuringFlush = React.useRef(false);
   const retryTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const rangeFetches = React.useRef(new Map<string, Promise<void>>());
   const isConnected = online && connection.isWebSocketConnected;
@@ -368,73 +385,6 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     [convex],
   );
 
-  const bootstrap = React.useCallback(
-    async (targetUserId: string) => {
-      const identity = await convex.query(api.sync.queries.bootstrapIdentity, {});
-      await upsert(targetUserId, 'profile', [identity.profile as LocalRecord]);
-      if (identity.settings)
-        await upsert(targetUserId, 'settings', [identity.settings as LocalRecord]);
-
-      for (const section of bootstrapSections) {
-        let cursor: string | null = null;
-        while (true) {
-          const page: SectionBootstrapPage = await convex.query(api.sync.queries.bootstrapSection, {
-            section,
-            paginationOpts: { numItems: 100, cursor },
-          });
-          if (page.section === 'accounts') {
-            await upsert(targetUserId, 'account', page.page as LocalRecord[]);
-            await upsert(targetUserId, 'accountMember', page.related as LocalRecord[]);
-          } else if (page.section === 'groupMemberships') {
-            await Promise.all([
-              upsert(targetUserId, 'group', page.related.groups as LocalRecord[]),
-              upsert(targetUserId, 'groupMember', page.related.members as LocalRecord[]),
-              upsert(targetUserId, 'groupInvite', page.related.invites as LocalRecord[]),
-              upsert(targetUserId, 'transaction', page.related.expenses as LocalRecord[]),
-              upsert(targetUserId, 'settlement', page.related.settlements as LocalRecord[]),
-            ]);
-          } else {
-            const entityType =
-              section === 'categories'
-                ? 'category'
-                : section === 'budgets'
-                  ? 'budget'
-                  : section === 'goals'
-                    ? 'goal'
-                    : section === 'goalContributions'
-                      ? 'goalContribution'
-                      : section === 'recurringRules'
-                        ? 'recurringRule'
-                        : 'notification';
-            await upsert(targetUserId, entityType, page.page as LocalRecord[]);
-          }
-          if (page.isDone) break;
-          if (!page.continueCursor || page.continueCursor === cursor)
-            throw new Error('INVALID_SYNC_CURSOR');
-          cursor = page.continueCursor;
-        }
-      }
-
-      let cursor: string | null = null;
-      while (true) {
-        const page: TransactionBootstrapPage = await convex.query(
-          api.sync.queries.bootstrapTransactions,
-          {
-            windowDays: 30,
-            paginationOpts: { numItems: 100, cursor },
-          },
-        );
-        await persistTransactionPage(targetUserId, page);
-        if (page.isDone) break;
-        if (!page.continueCursor || page.continueCursor === cursor)
-          throw new Error('INVALID_SYNC_CURSOR');
-        cursor = page.continueCursor;
-      }
-      await pullChanges(targetUserId);
-      await markBootstrapCompleted(targetUserId);
-    },
-    [convex, pullChanges],
-  );
   const fetchTransactionRange = React.useCallback(
     (startAt: number, endAt: number): Promise<void> => {
       if (!userId || !validatedOnline)
@@ -561,6 +511,88 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     [convex, userId, validatedOnline],
   );
 
+  const fetchGroupHistoryRange = React.useCallback(
+    async (targetUserId: string, startAt: number, endAt: number) => {
+      const groups = await readLocal<LocalRecord>(targetUserId, 'group');
+      for (const group of groups) {
+        const groupId = String(group.cloudId ?? group._id ?? '');
+        if (groupId && !groupId.startsWith('local-'))
+          await fetchGroupRange(groupId, startAt, endAt);
+      }
+    },
+    [fetchGroupRange],
+  );
+  const bootstrap = React.useCallback(
+    async (targetUserId: string) => {
+      const syncWindow = await getSyncWindow(targetUserId);
+      const { startAt, endAt } = syncWindowRange(syncWindow);
+      const identity = await convex.query(api.sync.queries.bootstrapIdentity, {});
+      await upsert(targetUserId, 'profile', [identity.profile as LocalRecord]);
+      if (identity.settings)
+        await upsert(targetUserId, 'settings', [identity.settings as LocalRecord]);
+
+      for (const section of bootstrapSections) {
+        let cursor: string | null = null;
+        while (true) {
+          const page: SectionBootstrapPage = await convex.query(api.sync.queries.bootstrapSection, {
+            section,
+            paginationOpts: { numItems: 100, cursor },
+          });
+          if (page.section === 'accounts') {
+            await upsert(targetUserId, 'account', page.page as LocalRecord[]);
+            await upsert(targetUserId, 'accountMember', page.related as LocalRecord[]);
+          } else if (page.section === 'groupMemberships') {
+            await Promise.all([
+              upsert(targetUserId, 'group', page.related.groups as LocalRecord[]),
+              upsert(targetUserId, 'groupMember', page.related.members as LocalRecord[]),
+              upsert(targetUserId, 'groupInvite', page.related.invites as LocalRecord[]),
+              upsert(targetUserId, 'transaction', page.related.expenses as LocalRecord[]),
+              upsert(targetUserId, 'settlement', page.related.settlements as LocalRecord[]),
+            ]);
+          } else {
+            const entityType =
+              section === 'categories'
+                ? 'category'
+                : section === 'budgets'
+                  ? 'budget'
+                  : section === 'goals'
+                    ? 'goal'
+                    : section === 'goalContributions'
+                      ? 'goalContribution'
+                      : section === 'recurringRules'
+                        ? 'recurringRule'
+                        : 'notification';
+            await upsert(targetUserId, entityType, page.page as LocalRecord[]);
+          }
+          if (page.isDone) break;
+          if (!page.continueCursor || page.continueCursor === cursor)
+            throw new Error('INVALID_SYNC_CURSOR');
+          cursor = page.continueCursor;
+        }
+      }
+
+      let cursor: string | null = null;
+      while (true) {
+        const page: TransactionBootstrapPage = await convex.query(
+          api.sync.queries.bootstrapTransactions,
+          {
+            windowDays: syncWindow === 'all' ? -1 : syncWindow,
+            paginationOpts: { numItems: 100, cursor },
+          },
+        );
+        await persistTransactionPage(targetUserId, page);
+        if (page.isDone) break;
+        if (!page.continueCursor || page.continueCursor === cursor)
+          throw new Error('INVALID_SYNC_CURSOR');
+        cursor = page.continueCursor;
+      }
+      await fetchGroupHistoryRange(targetUserId, startAt, endAt);
+      await markBootstrapCompleted(targetUserId);
+      await markSyncWindowBackfillCompleted(targetUserId, syncWindow);
+    },
+    [convex, fetchGroupHistoryRange, pullChanges],
+  );
+
   const runOutboxEntry = React.useCallback(
     async (targetUserId: string, entry: OutboxEntry): Promise<SyncReceipt> => {
       await sendMutation(convex, targetUserId, entry);
@@ -585,6 +617,13 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     setSyncError(null);
     try {
       if (!(await hasCompletedBootstrap(userId))) await bootstrap(userId);
+      if (await hasPendingSyncWindowBackfill(userId)) {
+        const days = await getSyncWindow(userId);
+        const { startAt, endAt } = syncWindowRange(days);
+        await fetchTransactionRange(startAt, endAt);
+        await fetchGroupHistoryRange(userId, startAt, endAt);
+        await markSyncWindowBackfillCompleted(userId, days);
+      }
       await pullChanges(userId);
       await syncOutbox(userId, (entry) => runOutboxEntry(userId, entry));
       await pullChanges(userId);
@@ -602,10 +641,21 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : 'SYNC_FAILED');
     } finally {
+      const shouldRefetchWindow = syncWindowChangeDuringFlush.current;
+      syncWindowChangeDuringFlush.current = false;
       running.current = false;
       setIsSyncing(false);
+      if (shouldRefetchWindow && validatedOnline) queueMicrotask(() => void flush());
     }
-  }, [bootstrap, pullChanges, runOutboxEntry, userId, validatedOnline]);
+  }, [
+    bootstrap,
+    fetchGroupHistoryRange,
+    fetchTransactionRange,
+    pullChanges,
+    runOutboxEntry,
+    userId,
+    validatedOnline,
+  ]);
 
   React.useEffect(() => {
     if (validatedOnline) void flush();
@@ -618,16 +668,18 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   React.useEffect(() => {
     if (!userId) {
       setStatus(emptyStatus);
+      setSyncWindowState(30);
       setStatusUserId(null);
       return;
     }
     let active = true;
     const refresh = () => {
-      void getLocalSyncStatus(userId)
-        .then((next) => {
+      void Promise.all([getLocalSyncStatus(userId), getSyncWindow(userId)])
+        .then(([next, nextWindow]) => {
           if (active) {
             setStatus(next);
             setStatusUserId(userId);
+            setSyncWindowState(nextWindow);
           }
         })
         .catch((error: unknown) => {
@@ -661,6 +713,18 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     await retryFailed(userId);
     await flush();
   }, [flush, userId]);
+  const updateSyncWindow = React.useCallback(
+    async (days: LocalSyncWindow) => {
+      if (!userId) throw new Error('AUTH_REQUIRED');
+      await persistSyncWindow(userId, days);
+      setSyncWindowState(days);
+      if (validatedOnline) {
+        if (running.current) syncWindowChangeDuringFlush.current = true;
+        else await flush();
+      }
+    },
+    [flush, userId, validatedOnline],
+  );
 
   const value = React.useMemo<BrowserSyncContextValue>(
     () => ({
@@ -670,6 +734,8 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       isSyncing,
       syncError: statusUserId === userId ? syncError : null,
       status: scopedStatus,
+      syncWindow,
+      setSyncWindow: updateSyncWindow,
       retryNow,
       fetchTransactionRange,
       fetchGroupRange,
@@ -686,6 +752,8 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       scopedStatus,
       statusUserId,
       syncError,
+      syncWindow,
+      updateSyncWindow,
       userId,
     ],
   );

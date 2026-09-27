@@ -21,10 +21,22 @@ const options: { type: NotificationType; label: string; detail: string }[] = [
   { type: 'budget', label: 'Budget limits', detail: 'When spending crosses 80% or 100%.' },
   { type: 'goal', label: 'Goals', detail: 'When a savings target is reached.' },
   { type: 'recurring', label: 'Recurring reminders', detail: 'Due dates for reminder-only rules.' },
-  { type: 'group', label: 'Groups and splits', detail: 'Group membership and shared expenses.' },
-  { type: 'settlement', label: 'Settlements', detail: 'Repayments recorded by group members.' },
-  { type: 'security', label: 'Security', detail: 'Account security and recovery updates.' },
-  { type: 'sync', label: 'Sync problems', detail: 'Changes that need attention in this browser.' },
+  { type: 'group', label: 'Groups & splits', detail: 'When you join a group or share an expense.' },
+  {
+    type: 'settlement',
+    label: 'Settlements',
+    detail: 'When another group member records a settlement.',
+  },
+  {
+    type: 'security',
+    label: 'Security',
+    detail: 'When a verified email recovery code is used for this device’s app passcode.',
+  },
+  {
+    type: 'sync',
+    label: 'Sync problems',
+    detail: 'Changes that need your attention on this device.',
+  },
 ];
 
 export default function NotificationSettingsPage() {

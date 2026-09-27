@@ -31,7 +31,7 @@ const labels: Record<NotificationType, string> = {
   transaction: 'Transactions',
   budget: 'Budget limits',
   goal: 'Goals',
-  recurring: 'Recurring reminders',
+  recurring: 'Recurring',
   group: 'Groups & splits',
   settlement: 'Settlements',
   security: 'Security',
@@ -39,6 +39,21 @@ const labels: Record<NotificationType, string> = {
 };
 function idOf(record: LocalRecord): string {
   return String(record.id ?? record._id ?? '');
+}
+
+function notificationDayLabel(timestamp: number) {
+  const date = new Date(timestamp);
+  const dateLabel = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return `Today · ${dateLabel}`;
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday · ${dateLabel}`;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 export default function NotificationsPage() {
@@ -69,6 +84,20 @@ export default function NotificationsPage() {
       (!unreadOnly || event.readAt === undefined) &&
       (typeFilter === 'all' || event.type === typeFilter),
   );
+  const days = React.useMemo(() => {
+    const grouped = new Map<string, NotificationRecord[]>();
+    for (const event of visible) {
+      const key = new Date(Number(event.createdAt ?? 0)).toDateString();
+      const day = grouped.get(key) ?? [];
+      day.push(event);
+      grouped.set(key, day);
+    }
+    return [...grouped].map(([key, day]) => ({
+      key,
+      label: notificationDayLabel(Number(day[0]?.createdAt ?? 0)),
+      events: day,
+    }));
+  }, [visible]);
   const unread = events.filter((event) => event.readAt === undefined).length;
 
   if (!userId)
@@ -107,12 +136,12 @@ export default function NotificationsPage() {
     }
   }
 
-  async function markVisibleRead() {
+  async function markAllRead() {
     if (!userId || busy) return;
     setBusy(true);
     setErrorMessage('');
     try {
-      for (const event of visible) {
+      for (const event of events) {
         if (event.readAt !== undefined) continue;
         const id = idOf(event);
         if (!id) continue;
@@ -202,10 +231,10 @@ export default function NotificationsPage() {
           <Button
             size="sm"
             variant="outline"
-            disabled={!visible.some((event) => event.readAt === undefined) || busy}
-            onPress={() => void markVisibleRead()}
+            disabled={!events.some((event) => event.readAt === undefined) || busy}
+            onPress={() => void markAllRead()}
           >
-            <Check size={15} aria-hidden="true" /> Mark visible read
+            <Check size={15} aria-hidden="true" /> Mark all read
           </Button>
         </div>
       </Card>
@@ -244,58 +273,90 @@ export default function NotificationsPage() {
           icon={<Bell size={20} aria-hidden="true" />}
         />
       ) : (
-        <section aria-label="Notification updates" style={{ display: 'grid', gap: 10 }}>
-          {visible.map((event) => {
-            const id = idOf(event);
-            const destination = notificationRoute({
-              type: String(event.type ?? ''),
-              ...(typeof event.entityType === 'string' ? { entityType: event.entityType } : {}),
-              ...(typeof event.entityId === 'string' ? { entityId: event.entityId } : {}),
-            });
-            return (
-              <Card key={id} className="finance-record-item" style={{ alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-                    <strong>{event.title ?? 'Finapp update'}</strong>
-                    {event.readAt === undefined && <Badge variant="success">Unread</Badge>}
-                  </div>
-                  <small>{event.body ?? 'Open Finapp to review this update.'}</small>
-                  <small>
-                    {labels[event.type as NotificationType] ?? 'Update'} ·{' '}
-                    {event.createdAt ? new Date(event.createdAt).toLocaleString() : 'Recently'}
-                  </small>
-                </div>
-                <div
-                  style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}
-                >
-                  {destination !== '/notifications' && (
-                    <Link
-                      className="finance-inline-link"
-                      href={destination}
-                      onClick={(clickEvent) => {
-                        clickEvent.preventDefault();
-                        void markRead(event).then((marked) => {
-                          if (marked) router.push(destination);
-                        });
-                      }}
+        <section aria-label="Notification updates" style={{ display: 'grid', gap: 22 }}>
+          {days.map(({ key, label, events: dayEvents }) => (
+            <section key={key} aria-label={label} style={{ display: 'grid', gap: 10 }}>
+              <h2 style={{ margin: 0, fontSize: '0.95rem' }}>
+                {label} · {dayEvents.length} updates
+              </h2>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {dayEvents.map((event) => {
+                  const id = idOf(event);
+                  const destination = notificationRoute({
+                    type: String(event.type ?? ''),
+                    ...(typeof event.entityType === 'string'
+                      ? { entityType: event.entityType }
+                      : {}),
+                    ...(typeof event.entityId === 'string' ? { entityId: event.entityId } : {}),
+                  });
+                  return (
+                    <Card
+                      key={id}
+                      className="finance-record-item"
+                      style={{ alignItems: 'flex-start' }}
                     >
-                      Open <ArrowRight size={14} aria-hidden="true" />
-                    </Link>
-                  )}
-                  {event.readAt === undefined && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onPress={() => void markRead(event)}
-                    >
-                      Mark read
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                        >
+                          <strong>{event.title ?? 'Finapp update'}</strong>
+                          {event.readAt === undefined && <Badge variant="success">Unread</Badge>}
+                        </div>
+                        <small>{event.body ?? 'Open Finapp to review this update.'}</small>
+                        <small>
+                          {labels[event.type as NotificationType] ?? 'Update'} ·{' '}
+                          {event.createdAt
+                            ? new Date(event.createdAt).toLocaleTimeString([], {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })
+                            : 'Recently'}
+                        </small>
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 8,
+                          justifyContent: 'flex-end',
+                        }}
+                      >
+                        {destination !== '/notifications' && (
+                          <Link
+                            className="finance-inline-link"
+                            href={destination}
+                            onClick={(clickEvent) => {
+                              clickEvent.preventDefault();
+                              void markRead(event).then((marked) => {
+                                if (marked) router.push(destination);
+                              });
+                            }}
+                          >
+                            Open <ArrowRight size={14} aria-hidden="true" />
+                          </Link>
+                        )}
+                        {event.readAt === undefined && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onPress={() => void markRead(event)}
+                          >
+                            Mark read
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </section>
       )}
       {!isConnected && (

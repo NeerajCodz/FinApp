@@ -26,7 +26,7 @@ type Group = LocalRecord;
 type Settlement = LocalRecord;
 
 export default function SettingsPage() {
-  const { userId, status } = useBrowserSync();
+  const { userId, status, syncWindow } = useBrowserSync();
   const { records: accounts } = useLocalRecords<Account>('account');
   const { records: transactions } = useLocalRecords<Transaction>('transaction');
   const { records: categories } = useLocalRecords<Category>('category');
@@ -187,53 +187,72 @@ export default function SettingsPage() {
           </p>
         </div>
       </header>
-      <section aria-label="Settings subsections" style={{ display: 'grid', gap: 12 }}>
-        <h2 style={{ margin: 0, fontSize: '1rem' }}>More settings</h2>
-        <nav className="finance-settings-grid" aria-label="Settings subsections">
-          {[
-            {
-              label: 'Appearance',
-              detail: 'Choose dark, light, or system theme.',
-              href: '/settings/appearance',
-            },
-            {
-              label: 'Currency',
-              detail: 'Set the default currency for new records.',
-              href: '/settings/currency',
-            },
-            {
-              label: 'Security',
-              detail: 'Review this browser’s passkey screen lock.',
-              href: '/settings/security',
-            },
-            {
-              label: 'Local sync',
-              detail: 'Retry changes and resolve saved conflicts.',
-              href: '/settings/sync',
-            },
-            {
-              label: 'Privacy and data',
-              detail: 'Review browser storage and export controls.',
-              href: '/settings/privacy',
-            },
-            {
-              label: 'Notification preferences',
-              detail: 'Choose which updates reach your inbox.',
-              href: '/settings/notifications',
-            },
-          ].map((item) => (
-            <Card key={item.href} className="finance-settings-card">
-              <h3 style={{ margin: 0, color: 'var(--finance-text)', fontSize: '0.95rem' }}>
-                {item.label}
-              </h3>
-              <p>{item.detail}</p>
-              <Link className="finance-inline-link" href={item.href}>
-                Open {item.label} <ArrowRight size={15} aria-hidden="true" />
-              </Link>
-            </Card>
-          ))}
-        </nav>
-      </section>
+      <div className="finance-settings-grid">
+        {[
+          {
+            title: 'General',
+            items: [
+              {
+                label: 'Appearance',
+                detail: 'Choose dark, light, or system theme.',
+                href: '/settings/appearance',
+              },
+              {
+                label: 'Currency',
+                detail: 'Set the default currency for new records.',
+                href: '/settings/currency',
+              },
+            ],
+          },
+          {
+            title: 'Preferences',
+            items: [
+              {
+                label: 'Notifications',
+                detail: 'Choose which updates appear in your inbox.',
+                href: '/settings/notifications',
+              },
+              {
+                label: 'Security',
+                detail: 'Manage this browser’s screen lock.',
+                href: '/settings/security',
+              },
+            ],
+          },
+          {
+            title: 'Data',
+            items: [
+              {
+                label: 'Local sync',
+                detail: syncWindow === 'all' ? 'All history' : `${syncWindow} days`,
+                href: '/settings/sync',
+              },
+              {
+                label: 'Privacy and export',
+                detail: 'Review browser storage and export controls.',
+                href: '/settings/privacy',
+              },
+            ],
+          },
+        ].map((group) => (
+          <section key={group.title} aria-label={group.title} style={{ display: 'grid', gap: 10 }}>
+            <h2 style={{ margin: 0, color: 'var(--finance-text)', fontSize: '1rem' }}>
+              {group.title}
+            </h2>
+            {group.items.map((item) => (
+              <Card key={item.href} className="finance-settings-card">
+                <h3 style={{ margin: 0, color: 'var(--finance-text)', fontSize: '0.95rem' }}>
+                  {item.label}
+                </h3>
+                <p>{item.detail}</p>
+                <Link className="finance-inline-link" href={item.href}>
+                  Open {item.label} <ArrowRight size={15} aria-hidden="true" />
+                </Link>
+              </Card>
+            ))}
+          </section>
+        ))}
+      </div>
       <div className="finance-settings-grid">
         <Card className="finance-settings-card">
           <SectionHeader
@@ -361,7 +380,7 @@ export default function SettingsPage() {
           </p>
           <p>
             Removing this copy does not delete synced data from your account. See the{' '}
-            <Link href="/privacy">privacy notes</Link>.
+            <Link href="/settings/privacy">privacy and export</Link>.
           </p>
           <Button variant="secondary" onPress={removeLocalCopy} disabled={busy}>
             <Trash2 size={15} /> Remove offline copy

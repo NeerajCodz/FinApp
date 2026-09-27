@@ -231,16 +231,12 @@ export default function PersonPage() {
             <ArrowLeft size={15} /> Groups
           </Link>
           <p className="finance-kicker">SHARED CONTACT</p>
-          <h1>{displayName}</h1>
-          <p className="finance-muted">@{handle}</p>
+          <h1>Person</h1>
+          <p className="finance-muted">
+            {displayName} · @{handle}
+          </p>
         </div>
         <div className="finance-page-actions">
-          <Link
-            className="finance-secondary-action"
-            href={`/settle/${encodeURIComponent(routeToSettle)}`}
-          >
-            <ArrowLeftRight size={15} /> Settle
-          </Link>
           <Link
             className="finance-primary-link"
             href={
@@ -249,7 +245,13 @@ export default function PersonPage() {
                 : '/split/new'
             }
           >
-            Split an expense <ArrowRight size={15} />
+            <UsersRound size={15} /> Split <ArrowRight size={15} />
+          </Link>
+          <Link
+            className="finance-secondary-action"
+            href={`/settle/${encodeURIComponent(routeToSettle)}`}
+          >
+            <ArrowLeftRight size={15} /> Settle
           </Link>
         </div>
       </header>
@@ -281,7 +283,7 @@ export default function PersonPage() {
       <div className="finance-accounts-layout">
         <Card className="finance-record-panel">
           <SectionHeader
-            title="Bilateral ledger snapshot"
+            title="Shared balance"
             action={
               <Badge
                 variant={
@@ -336,7 +338,7 @@ export default function PersonPage() {
       </div>
       <Card className="finance-record-panel">
         <SectionHeader
-          title="Shared activity"
+          title="Between you"
           action={<Badge variant="neutral">Last 90 days · {recent.length}</Badge>}
         />
         {recent.length ? (

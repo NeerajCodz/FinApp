@@ -50,6 +50,8 @@ export type CloudChange = {
   deletedAt?: number;
   document?: LocalRecord;
 };
+export type LocalSyncWindow = 7 | 30 | 90 | 180 | 365 | 'all';
+const syncWindows: readonly LocalSyncWindow[] = [7, 30, 90, 180, 365, 'all'];
 export type LocalSyncStatus = {
   pending: number;
   syncing: number;
@@ -82,6 +84,8 @@ type SyncState = {
   revision: string;
   lastSyncedAt: number | null;
   bootstrapComplete: boolean;
+  syncWindow?: LocalSyncWindow;
+  pendingSyncWindowBackfill?: boolean;
 };
 type ConflictRow = {
   conflictId: string;
@@ -797,6 +801,73 @@ export async function getSyncCursor(userId: string): Promise<string | null> {
     SyncState | undefined;
   await done;
   return state?.cursor ?? null;
+}
+export async function getSyncWindow(userId: string): Promise<LocalSyncWindow> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readonly');
+  const done = transactionComplete(transaction);
+  const state = (await requestResultFor(transaction.objectStore('syncState').get(userId))) as
+    SyncState | undefined;
+  await done;
+  const value = state?.syncWindow;
+  return value !== undefined && syncWindows.includes(value) ? value : 30;
+}
+
+export async function setSyncWindow(userId: string, days: LocalSyncWindow): Promise<void> {
+  requireUser(userId);
+  if (!syncWindows.includes(days)) throw new Error('INVALID_SYNC_WINDOW');
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readwrite');
+  const done = transactionComplete(transaction);
+  const store = transaction.objectStore('syncState');
+  const request = store.get(userId);
+  request.onsuccess = () => {
+    const state = request.result as SyncState | undefined;
+    store.put({
+      ...state,
+      userId,
+      cursor: state?.cursor ?? null,
+      revision: state?.revision ?? '0',
+      lastSyncedAt: state?.lastSyncedAt ?? null,
+      bootstrapComplete: state?.bootstrapComplete ?? false,
+      syncWindow: days,
+      pendingSyncWindowBackfill:
+        state?.pendingSyncWindowBackfill || (state?.syncWindow ?? 30) !== days,
+    });
+  };
+  await done;
+  notify(userId);
+}
+
+export async function hasPendingSyncWindowBackfill(userId: string): Promise<boolean> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readonly');
+  const done = transactionComplete(transaction);
+  const state = (await requestResultFor(transaction.objectStore('syncState').get(userId))) as
+    SyncState | undefined;
+  await done;
+  return state?.pendingSyncWindowBackfill ?? false;
+}
+
+export async function markSyncWindowBackfillCompleted(
+  userId: string,
+  expectedWindow: LocalSyncWindow,
+): Promise<void> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readwrite');
+  const done = transactionComplete(transaction);
+  const store = transaction.objectStore('syncState');
+  const request = store.get(userId);
+  request.onsuccess = () => {
+    const state = request.result as SyncState | undefined;
+    if (state && (state.syncWindow ?? 30) === expectedWindow)
+      store.put({ ...state, pendingSyncWindowBackfill: false });
+  };
+  await done;
+  notify(userId);
 }
 
 export async function hasCompletedBootstrap(userId: string): Promise<boolean> {
