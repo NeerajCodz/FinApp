@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Landmark } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Landmark, ReceiptText } from 'lucide-react';
 import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -16,9 +16,9 @@ import {
   belongsToUser,
   idOf,
   matchesId,
+  localDependency,
   PageHeading,
   SignInGate,
-  syncedId,
 } from '../../_personal';
 
 type Account = LocalRecord & {
@@ -31,15 +31,21 @@ type Account = LocalRecord & {
   archivedAt?: number;
   createdAt?: number;
   updatedAt?: number;
+  icon?: string;
+  color?: string;
   isIncludedInTotal?: boolean;
 };
+type Category = LocalRecord & { name?: string; icon?: string };
 type Transaction = LocalRecord & {
   accountId?: string;
   transferAccountId?: string;
+  categoryId?: string;
+  groupId?: string;
   type?: string;
   amountMinor?: bigint | number | string;
   currency?: string;
   title?: string;
+  note?: string;
   occurredAt?: number;
   status?: string;
   deletedAt?: number;
@@ -48,9 +54,18 @@ type Transaction = LocalRecord & {
 export default function PersonalAccountDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { userId } = useBrowserSync();
+  const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
+  const timelineRange = React.useMemo(() => {
+    const endAt = Date.now() + 1;
+    return { startAt: endAt - 30 * 86_400_000, endAt };
+  }, []);
   const { records, loading, error } = useLocalRecords<Account>('account');
-  const { records: transactions } = useLocalRecords<Transaction>('transaction');
+  const {
+    records: transactions,
+    loading: transactionLoading,
+    error: transactionError,
+  } = useLocalRecords<Transaction>('transaction');
+  const { records: categories } = useLocalRecords<Category>('category');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const account = records.find(
     (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
@@ -58,9 +73,26 @@ export default function PersonalAccountDetailPage() {
   const [name, setName] = React.useState('');
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
+  const [rangeError, setRangeError] = React.useState('');
   React.useEffect(() => setName(account?.name ?? ''), [account?.name, routeId]);
+  React.useEffect(() => {
+    if (!userId || !isConnected) return;
+    let active = true;
+    setRangeError('');
+    void fetchTransactionRange(timelineRange.startAt, timelineRange.endAt).catch(
+      (cause: unknown) => {
+        if (active)
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Could not refresh recent activity.',
+          );
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [fetchTransactionRange, isConnected, timelineRange, userId]);
   const ids = new Set(account ? aliasesOf(account) : []);
-  const activity = transactions
+  const matchingActivity = transactions
     .filter(
       (item) =>
         item.status === 'posted' &&
@@ -68,7 +100,13 @@ export default function PersonalAccountDetailPage() {
         (ids.has(String(item.accountId ?? '')) || ids.has(String(item.transferAccountId ?? ''))),
     )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
-  const optimisticDelta = activity.reduce((delta, transaction) => {
+  const activity = matchingActivity
+    .filter((item) => {
+      const occurredAt = Number(item.occurredAt ?? 0);
+      return occurredAt >= timelineRange.startAt && occurredAt < timelineRange.endAt;
+    })
+    .slice(0, 50);
+  const optimisticDelta = matchingActivity.reduce((delta, transaction) => {
     if (typeof transaction.clientUpdatedAt !== 'number') return delta;
     const amount = asMinor(transaction.amountMinor);
     const source = ids.has(String(transaction.accountId ?? ''))
@@ -82,16 +120,15 @@ export default function PersonalAccountDetailPage() {
         : 0n;
     return delta + source + destination;
   }, 0n);
+  const localId = account ? idOf(account) : '';
+  const accountId = account ? String(account._id ?? account.cloudId ?? account.id ?? '') : '';
+  const accountDependency = account ? localDependency('account', account) : null;
 
   async function updateName(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!userId || !account || pending) return;
-    const accountId = syncedId(account);
-    const localId = idOf(account);
     if (!accountId) {
-      setFormError(
-        'This account is awaiting sync. Rename becomes available once it has a cloud ID.',
-      );
+      setFormError('This account has no saved identifier and cannot be renamed.');
       return;
     }
     const trimmed = name.trim();
@@ -110,6 +147,7 @@ export default function PersonalAccountDetailPage() {
         { accountId, name: trimmed },
         {
           recordId: localId,
+          dependencies: accountDependency ? [accountDependency] : [],
           baseUpdatedAt: typeof account.updatedAt === 'number' ? account.updatedAt : undefined,
         },
       );
@@ -122,11 +160,8 @@ export default function PersonalAccountDetailPage() {
 
   async function archive() {
     if (!userId || !account || pending) return;
-    const accountId = syncedId(account);
     if (!accountId) {
-      setFormError(
-        'This account is awaiting sync. Archive becomes available once it has a cloud ID.',
-      );
+      setFormError('This account has no saved identifier and cannot be archived.');
       return;
     }
     if (!window.confirm('Archive this account? It will remain in your archived account list.'))
@@ -141,11 +176,12 @@ export default function PersonalAccountDetailPage() {
         { ...account, archivedAt: Date.now() },
         { accountId },
         {
-          recordId: idOf(account),
+          recordId: localId,
+          dependencies: accountDependency ? [accountDependency] : [],
           baseUpdatedAt: typeof account.updatedAt === 'number' ? account.updatedAt : undefined,
         },
       );
-      router.push('/account');
+      router.replace('/account');
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Could not archive this account.');
     } finally {
@@ -159,7 +195,7 @@ export default function PersonalAccountDetailPage() {
         Sign in to open account details in this browser workspace.
       </SignInGate>
     );
-  if (loading)
+  if (loading || transactionLoading)
     return (
       <div className="finance-page">
         <p className="finance-muted" role="status">
@@ -223,7 +259,7 @@ export default function PersonalAccountDetailPage() {
             </div>
             <div>
               <dt className="finance-muted">Included in total</dt>
-              <dd>{account.isIncludedInTotal === false ? 'No' : 'Yes'}</dd>
+              <dd>{account.isIncludedInTotal === true ? 'Yes' : 'No'}</dd>
             </div>
             <div>
               <dt className="finance-muted">Added</dt>
@@ -233,6 +269,24 @@ export default function PersonalAccountDetailPage() {
                   : 'Date unavailable'}
               </dd>
             </div>
+            {account.type === 'other' && account.customType && (
+              <div>
+                <dt className="finance-muted">Custom type</dt>
+                <dd>{account.customType}</dd>
+              </div>
+            )}
+            {account.icon && (
+              <div>
+                <dt className="finance-muted">Icon</dt>
+                <dd>{account.icon}</dd>
+              </div>
+            )}
+            {account.color && (
+              <div>
+                <dt className="finance-muted">Color</dt>
+                <dd>{account.color}</dd>
+              </div>
+            )}
           </dl>
         </Card>
       </div>
@@ -252,26 +306,16 @@ export default function PersonalAccountDetailPage() {
                 {formError}
               </p>
             )}
-            <Button type="submit" disabled={pending || !name.trim() || !syncedId(account)}>
+            <Button type="submit" disabled={pending || !name.trim()}>
               {pending ? 'Saving…' : 'Save name'} <ArrowRight size={15} />
             </Button>
             <p className="finance-form-note">
               Account type, currency, and recorded transactions are not editable.
             </p>
           </form>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending || !syncedId(account)}
-            onPress={() => void archive()}
-          >
+          <Button type="button" variant="outline" disabled={pending} onPress={() => void archive()}>
             Archive account
           </Button>
-          {!syncedId(account) && (
-            <p className="finance-muted">
-              Wait for this account to sync before renaming or archiving it.
-            </p>
-          )}
         </Card>
       ) : (
         <Card className="finance-record-panel">
@@ -282,37 +326,94 @@ export default function PersonalAccountDetailPage() {
       )}
       <Card className="finance-record-panel">
         <SectionHeader
-          title="Saved activity"
-          action={<span>{activity.length} local records</span>}
+          title="Recent activity"
+          action={<span>{activity.length} in the last 30 days</span>}
         />
+        {transactionError && (
+          <p className="finance-form-error" role="alert">
+            Saved activity could not be refreshed: {transactionError}
+          </p>
+        )}
+        {rangeError && (
+          <p className="finance-muted" role="status">
+            Recent activity refresh unavailable. Showing records already saved in this browser.
+          </p>
+        )}
         {activity.length === 0 ? (
           <Empty
-            title="No saved activity"
-            description="Transactions linked to this account will appear here."
+            title={transactionLoading ? 'Loading recent activity' : 'No posted activity yet'}
+            description={
+              transactionLoading
+                ? 'Opening transactions saved to this browser.'
+                : 'Record a transaction to see it here.'
+            }
+            icon={<ReceiptText size={20} />}
+            action={
+              !transactionLoading ? (
+                <Link
+                  className="finance-inline-link"
+                  href={`/transaction/new?accountId=${encodeURIComponent(routeId ?? '')}`}
+                >
+                  Add transaction
+                </Link>
+              ) : undefined
+            }
           />
         ) : (
           <ul className="finance-record-list">
-            {activity.slice(0, 12).map((transaction) => (
-              <li key={idOf(transaction)}>
-                <span className="finance-record-copy">
-                  <strong>{transaction.title ?? transaction.type ?? 'Transaction'}</strong>
-                  <small>
-                    {transaction.occurredAt
-                      ? new Date(transaction.occurredAt).toLocaleDateString()
-                      : 'Date unavailable'}{' '}
-                    · {transaction.type ?? 'activity'}
-                  </small>
-                </span>
-                <strong>
-                  {formatMinor(asMinor(transaction.amountMinor), transaction.currency ?? currency)}
-                </strong>
-              </li>
-            ))}
+            {activity.map((transaction) => {
+              const isTransfer = transaction.type === 'transfer';
+              const isOutgoing = ids.has(String(transaction.accountId ?? ''));
+              const category = categories.find((item) =>
+                aliasesOf(item).includes(String(transaction.categoryId ?? '')),
+              );
+              const title = isTransfer
+                ? `${isOutgoing ? 'Transfer out' : 'Transfer in'} · ${transaction.title ?? 'Transfer'}`
+                : (transaction.title ?? transaction.type ?? 'Transaction');
+              const amountPrefix = isTransfer
+                ? isOutgoing
+                  ? '−'
+                  : '+'
+                : transaction.type === 'income' || transaction.type === 'refund'
+                  ? '+'
+                  : '−';
+              return (
+                <li key={idOf(transaction)}>
+                  <span className="finance-record-symbol">
+                    {category?.icon || (category?.name ?? title).slice(0, 1)}
+                  </span>
+                  <Link
+                    className="finance-record-copy"
+                    href={`/transaction/${encodeURIComponent(idOf(transaction))}`}
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                  >
+                    <strong>{title}</strong>
+                    <small>
+                      {transaction.occurredAt
+                        ? new Date(transaction.occurredAt).toLocaleDateString()
+                        : 'Date unavailable'}{' '}
+                      · {transaction.groupId ? 'Split' : (transaction.type ?? 'Activity')}
+                      {category?.name ? ` · ${category.name}` : ''}
+                    </small>
+                  </Link>
+                  <strong className="finance-record-amount">
+                    {amountPrefix}
+                    {formatMinor(
+                      asMinor(transaction.amountMinor),
+                      transaction.currency ?? currency,
+                    )}
+                  </strong>
+                </li>
+              );
+            })}
           </ul>
         )}
+        {activity.length === 50 && (
+          <p className="finance-form-note">Showing the 50 most recent posted transactions.</p>
+        )}
         <p className="finance-form-note">
-          This list includes browser-cached records; older account history may not be downloaded
-          yet.
+          Recent activity covers the last 30 days. Saved transactions remain available in the
+          browser when offline.
         </p>
       </Card>
     </div>

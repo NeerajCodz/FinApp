@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Landmark, Plus } from 'lucide-react';
+import { Banknote, CircleDollarSign, CreditCard, Landmark, Plus, Wallet } from 'lucide-react';
 import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -34,10 +34,48 @@ export default function PersonalAccountsPage() {
   const { records: accountRecords, loading, error } = useLocalRecords<Account>('account');
   const { records: transactionRecords } = useLocalRecords<Transaction>('transaction');
   const [showArchived, setShowArchived] = React.useState(false);
-  const accounts = accountRecords.filter((record) => userId && belongsToUser(record, userId));
-  const displayed = accounts
+  const accountRows = accountRecords
+    .filter((record) => userId && belongsToUser(record, userId))
+    .map((account) => {
+      const ids = new Set(aliasesOf(account));
+      const optimisticDelta = transactionRecords.reduce((delta, transaction) => {
+        if (
+          !ids.size ||
+          transaction.status !== 'posted' ||
+          transaction.deletedAt !== undefined ||
+          typeof transaction.clientUpdatedAt !== 'number'
+        )
+          return delta;
+        const amount = asMinor(transaction.amountMinor);
+        const source = ids.has(String(transaction.accountId ?? ''))
+          ? transaction.type === 'expense' || transaction.type === 'transfer'
+            ? -amount
+            : amount
+          : 0n;
+        const destination =
+          transaction.type === 'transfer' && ids.has(String(transaction.transferAccountId ?? ''))
+            ? amount
+            : 0n;
+        return delta + source + destination;
+      }, 0n);
+      return {
+        ...account,
+        accountKey: idOf(account),
+        currentBalance:
+          asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta,
+      };
+    });
+  const activeAccounts = accountRows.filter((account) => account.archivedAt === undefined);
+  const displayed = accountRows
     .filter((account) => showArchived === (account.archivedAt !== undefined))
     .sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''));
+  const totalsByCurrency = new Map<string, bigint>();
+  for (const account of activeAccounts) {
+    if (account.isIncludedInTotal !== true) continue;
+    const currency = account.currency ?? 'INR';
+    totalsByCurrency.set(currency, (totalsByCurrency.get(currency) ?? 0n) + account.currentBalance);
+  }
+  const totals = [...totalsByCurrency].sort(([left], [right]) => left.localeCompare(right));
 
   if (!userId)
     return (
@@ -57,9 +95,7 @@ export default function PersonalAccountsPage() {
         className="finance-page-actions"
         style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}
       >
-        <Badge variant="neutral">
-          {accounts.filter((item) => item.archivedAt === undefined).length} active
-        </Badge>
+        <Badge variant="neutral">{activeAccounts.length} active</Badge>
         <Button
           type="button"
           variant={showArchived ? 'secondary' : 'outline'}
@@ -71,6 +107,43 @@ export default function PersonalAccountsPage() {
           New account <Plus size={16} />
         </Link>
       </div>
+      {!showArchived && activeAccounts.length > 0 && (
+        <Card className="finance-record-panel">
+          <SectionHeader title="Account overview" />
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
+              gap: 18,
+            }}
+          >
+            <div>
+              <span className="finance-muted">Active accounts</span>
+              <strong style={{ display: 'block', fontSize: '1.35rem' }}>
+                {activeAccounts.length}
+              </strong>
+            </div>
+            <div>
+              <span className="finance-muted">Included balances</span>
+              {totals.length > 0 ? (
+                totals.map(([currency, amount]) => (
+                  <strong
+                    className="finance-record-amount"
+                    key={currency}
+                    style={{ display: 'block' }}
+                  >
+                    {formatMinor(amount, currency)}
+                  </strong>
+                ))
+              ) : (
+                <span className="finance-muted" style={{ display: 'block' }}>
+                  No balances are included in your total.
+                </span>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
       <Card className="finance-record-panel">
         <SectionHeader
           title={showArchived ? 'Archived accounts' : 'Your accounts'}
@@ -108,38 +181,24 @@ export default function PersonalAccountsPage() {
         ) : (
           <ul className="finance-record-list">
             {displayed.map((account) => {
-              const ids = new Set(aliasesOf(account));
-              const optimisticDelta = transactionRecords.reduce((delta, transaction) => {
-                if (
-                  !ids.size ||
-                  transaction.status !== 'posted' ||
-                  transaction.deletedAt !== undefined ||
-                  typeof transaction.clientUpdatedAt !== 'number'
-                )
-                  return delta;
-                const amount = asMinor(transaction.amountMinor);
-                const source = ids.has(String(transaction.accountId ?? ''))
-                  ? transaction.type === 'expense' || transaction.type === 'transfer'
-                    ? -amount
-                    : amount
-                  : 0n;
-                const destination =
-                  transaction.type === 'transfer' &&
-                  ids.has(String(transaction.transferAccountId ?? ''))
-                    ? amount
-                    : 0n;
-                return delta + source + destination;
-              }, 0n);
-              const balance =
-                asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta;
+              const TypeIcon =
+                account.type === 'cash'
+                  ? Banknote
+                  : account.type === 'bank'
+                    ? Landmark
+                    : account.type === 'card'
+                      ? CreditCard
+                      : account.type === 'loan'
+                        ? CircleDollarSign
+                        : Wallet;
               return (
-                <li key={idOf(account)}>
+                <li key={account.accountKey}>
                   <span className="finance-record-symbol">
-                    <Landmark size={17} />
+                    <TypeIcon size={17} />
                   </span>
                   <span className="finance-record-copy">
                     <strong>
-                      <Link href={`/account/${encodeURIComponent(idOf(account))}`}>
+                      <Link href={`/account/${encodeURIComponent(account.accountKey)}`}>
                         {account.name ?? 'Account'}
                       </Link>
                     </strong>
@@ -149,11 +208,13 @@ export default function PersonalAccountsPage() {
                       )}{' '}
                       · {account.currency ?? 'INR'}
                       {account.archivedAt !== undefined ? ' · archived' : ''}
-                      {account.isIncludedInTotal === false ? ' · excluded from total' : ''}
+                      {account.isIncludedInTotal === true
+                        ? ' · included in total'
+                        : ' · excluded from total'}
                     </small>
                   </span>
                   <strong className="finance-record-amount">
-                    {formatMinor(balance, account.currency ?? 'INR')}
+                    {formatMinor(account.currentBalance, account.currency ?? 'INR')}
                   </strong>
                 </li>
               );
@@ -165,9 +226,6 @@ export default function PersonalAccountsPage() {
         Balances include saved local transaction changes. A newly signed-in browser may not have all
         account history downloaded.
       </p>
-      <Link className="finance-secondary-action" href="/accounts">
-        Open the accounts overview <ArrowRight size={15} />
-      </Link>
     </div>
   );
 }

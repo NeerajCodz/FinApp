@@ -20,7 +20,7 @@ const accountTypes = [
   ['Card', 'card'],
   ['Wallet', 'wallet'],
   ['Loan', 'loan'],
-  ['Other', 'other'],
+  ['Custom', 'other'],
 ] as const;
 const maxInt64 = 9_223_372_036_854_775_807n;
 
@@ -37,7 +37,7 @@ export default function NewPersonalAccountPage() {
   const [type, setType] = React.useState<(typeof accountTypes)[number][1]>('bank');
   const [customType, setCustomType] = React.useState('');
   const [currency, setCurrency] = React.useState('INR');
-  const [openingBalance, setOpeningBalance] = React.useState('0');
+  const [openingBalance, setOpeningBalance] = React.useState('');
   const [included, setIncluded] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -177,7 +177,6 @@ export default function NewPersonalAccountPage() {
               step={currency === 'JPY' || currency === 'KRW' ? '1' : '0.01'}
               value={openingBalance}
               onChangeText={setOpeningBalance}
-              required
             />
             <label className="finance-checkbox-row">
               <input
