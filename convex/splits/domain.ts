@@ -171,3 +171,79 @@ export function projectGroupBalances(
     throw new Error('INCOMPLETE_GROUP_SETTLEMENTS');
   return { currency, balances: calculateNetBalances(payers, participants, settlements), expenses };
 }
+
+function recordList(value: unknown): GroupLedgerRecord[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (record): record is GroupLedgerRecord =>
+          typeof record === 'object' && record !== null && !Array.isArray(record),
+      )
+    : [];
+}
+
+function minorAmount(value: unknown): bigint {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value);
+  return 0n;
+}
+
+export function calculateBilateralBalance(
+  currentUserId: string,
+  personId: string,
+  groups: readonly GroupLedgerRecord[],
+  transactions: readonly GroupLedgerRecord[],
+  payerRecords: readonly GroupLedgerRecord[],
+  participantRecords: readonly GroupLedgerRecord[],
+  settlementRecords: readonly GroupLedgerRecord[],
+): bigint {
+  const groupIds = new Set(groups.flatMap((group) => [...groupRecordIds(group)]));
+  let balance = 0n;
+  const expenses = transactions.filter(
+    (transaction) =>
+      belongsToGroup(transaction, 'groupId', groupIds) &&
+      transaction.type === 'expense' &&
+      transaction.status === 'posted' &&
+      transaction.deletedAt === undefined,
+  );
+  for (const expense of expenses) {
+    const transactionIds = groupRecordIds(expense);
+    const payerRows = payerRecords.filter((record) =>
+      belongsToGroup(record, 'transactionId', transactionIds),
+    );
+    const participantRows = participantRecords.filter((record) =>
+      belongsToGroup(record, 'transactionId', transactionIds),
+    );
+    const payers = payerRows.length
+      ? payerRows
+      : expense.payerUserId
+        ? [
+            {
+              userId: expense.payerUserId,
+              amountMinor: expense.payerAmountMinor ?? expense.amountMinor,
+            },
+          ]
+        : [];
+    const participants = participantRows.length
+      ? participantRows
+      : recordList(expense.participants);
+    for (const payer of payers) {
+      const payerId = String(payer.userId ?? payer.memberId ?? '');
+      for (const participant of participants) {
+        const participantId = String(participant.userId ?? participant.memberId ?? '');
+        const amount = minorAmount(participant.amountMinor);
+        if (payerId === currentUserId && participantId === personId) balance += amount;
+        else if (payerId === personId && participantId === currentUserId) balance -= amount;
+      }
+    }
+  }
+  for (const settlement of settlementRecords) {
+    if (!belongsToGroup(settlement, 'groupId', groupIds) || settlement.deletedAt !== undefined)
+      continue;
+    if (settlement.fromUserId === currentUserId && settlement.toUserId === personId)
+      balance += minorAmount(settlement.amountMinor);
+    else if (settlement.fromUserId === personId && settlement.toUserId === currentUserId)
+      balance -= minorAmount(settlement.amountMinor);
+  }
+  return balance;
+}

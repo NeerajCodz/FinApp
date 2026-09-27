@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { formatMinor } from '@convex/shared/money';
+import { calculateBilateralBalance } from '@convex/splits/domain';
 import { ArrowLeft, ArrowLeftRight, ArrowRight, UsersRound } from 'lucide-react';
 import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -64,12 +65,36 @@ export default function PersonPage() {
     api.users.queries.search,
     userId && handle.length >= 2 ? { query: handle } : 'skip',
   ) as UserSearchResult[] | undefined;
-  const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
-  const { records: members } = useLocalRecords<Member>('groupMember');
-  const { records: transactions } = useLocalRecords<Entry>('transaction');
-  const { records: payers } = useLocalRecords<Entry>('expensePayer');
-  const { records: participants } = useLocalRecords<Entry>('expenseParticipant');
-  const { records: settlements } = useLocalRecords<Entry>('settlement');
+  const {
+    records: groups,
+    loading: groupsLoading,
+    error: groupsError,
+  } = useLocalRecords<Group>('group');
+  const {
+    records: members,
+    loading: membersLoading,
+    error: membersError,
+  } = useLocalRecords<Member>('groupMember');
+  const {
+    records: transactions,
+    loading: transactionsLoading,
+    error: transactionsError,
+  } = useLocalRecords<Entry>('transaction');
+  const {
+    records: payers,
+    loading: payersLoading,
+    error: payersError,
+  } = useLocalRecords<Entry>('expensePayer');
+  const {
+    records: participants,
+    loading: participantsLoading,
+    error: participantsError,
+  } = useLocalRecords<Entry>('expenseParticipant');
+  const {
+    records: settlements,
+    loading: settlementsLoading,
+    error: settlementsError,
+  } = useLocalRecords<Entry>('settlement');
   const [rangeState, setRangeState] = React.useState<'loading' | 'loaded' | 'uncached' | 'error'>(
     'loading',
   );
@@ -167,56 +192,32 @@ export default function PersonPage() {
         item.deletedAt === undefined,
     )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
-  let bilateralBalance = 0n;
-  if (personId && userId) {
-    for (const expense of expenses) {
-      const expenseIds = aliases(expense);
-      const payerRows = payers.filter(
-        (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-      );
-      const participantRows = participants.filter(
-        (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-      );
-      const expensePayers: Array<{ userId?: string; memberId?: string; amountMinor?: unknown }> =
-        payerRows.length
-          ? payerRows
-          : expense.payerUserId
-            ? [
-                {
-                  userId: expense.payerUserId,
-                  amountMinor: expense.payerAmountMinor ?? expense.amountMinor,
-                },
-              ]
-            : [];
-      const expenseParticipants: Array<{
-        userId?: string;
-        memberId?: string;
-        amountMinor?: unknown;
-      }> = participantRows.length ? participantRows : (expense.participants ?? []);
-      for (const payer of expensePayers) {
-        const payerId = String(payer.userId ?? payer.memberId ?? '');
-        for (const share of expenseParticipants) {
-          const participantId = String(share.userId ?? share.memberId ?? '');
-          if (payerId === userId && participantId === personId)
-            bilateralBalance += asMinor(share.amountMinor);
-          else if (payerId === personId && participantId === userId)
-            bilateralBalance -= asMinor(share.amountMinor);
-        }
-      }
-    }
-    for (const repayment of settlements) {
-      if (
-        typeof repayment.groupId !== 'string' ||
-        !groupIdAliases.has(repayment.groupId) ||
-        repayment.deletedAt !== undefined
+  const bilateralBalance = personId
+    ? calculateBilateralBalance(
+        userId,
+        personId,
+        sharedGroups,
+        transactions,
+        payers,
+        participants,
+        settlements,
       )
-        continue;
-      if (repayment.fromUserId === userId && repayment.toUserId === personId)
-        bilateralBalance += asMinor(repayment.amountMinor);
-      else if (repayment.fromUserId === personId && repayment.toUserId === userId)
-        bilateralBalance -= asMinor(repayment.amountMinor);
-    }
-  }
+    : 0n;
+  const balanceAvailable =
+    rangeState === 'loaded' &&
+    Boolean(personId) &&
+    !groupsLoading &&
+    !groupsError &&
+    !membersLoading &&
+    !membersError &&
+    !transactionsLoading &&
+    !transactionsError &&
+    !payersLoading &&
+    !payersError &&
+    !participantsLoading &&
+    !participantsError &&
+    !settlementsLoading &&
+    !settlementsError;
   const displayName =
     person?.displayName ?? matchingMember?.displayName ?? matchingMember?.name ?? `@${handle}`;
   const recent = expenses.slice(0, 12);
@@ -287,26 +288,37 @@ export default function PersonPage() {
             action={
               <Badge
                 variant={
-                  bilateralBalance === 0n ? 'neutral' : bilateralBalance > 0n ? 'success' : 'danger'
+                  !balanceAvailable
+                    ? 'neutral'
+                    : bilateralBalance === 0n
+                      ? 'neutral'
+                      : bilateralBalance > 0n
+                        ? 'success'
+                        : 'danger'
                 }
               >
-                {bilateralBalance === 0n
-                  ? 'Even'
-                  : bilateralBalance > 0n
-                    ? 'They owe you'
-                    : 'You owe'}
+                {!balanceAvailable
+                  ? 'Unavailable'
+                  : bilateralBalance === 0n
+                    ? 'Even'
+                    : bilateralBalance > 0n
+                      ? 'They owe you'
+                      : 'You owe'}
               </Badge>
             }
           />
           <strong className="finance-record-amount">
-            {formatMinor(
-              bilateralBalance < 0n ? -bilateralBalance : bilateralBalance,
-              sharedGroups[0]?.currency ?? 'INR',
-            )}
+            {balanceAvailable
+              ? formatMinor(
+                  bilateralBalance < 0n ? -bilateralBalance : bilateralBalance,
+                  sharedGroups[0]?.currency ?? 'INR',
+                )
+              : '—'}
           </strong>
           <p className="finance-muted">
-            This snapshot includes direct participant allocations and repayments found in your saved
-            shared groups.
+            {balanceAvailable
+              ? 'This snapshot includes direct participant allocations and repayments found in your saved shared groups.'
+              : 'A balance is available after every shared group range is fully saved.'}
           </p>
         </Card>
         <Card className="finance-record-panel">

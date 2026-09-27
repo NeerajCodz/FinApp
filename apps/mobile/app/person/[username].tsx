@@ -19,6 +19,7 @@ import {
   useLocalRecords,
   type FetchCloudGroupRangePage,
 } from '@/hooks/useLocalRecords';
+import { calculateBilateralBalance } from '../../../../convex/splits/domain';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
@@ -27,6 +28,8 @@ type GroupMemberRecord = LocalRecord & {
   id?: string;
   _id?: string;
   groupId?: string;
+  userId?: string;
+  memberId?: string;
   username?: string;
 };
 type TimelineRecord = LocalRecord & {
@@ -45,22 +48,35 @@ function GroupTimeline({
   startAt,
   endAt,
   fetchGroupRange,
+  onRangeStatus,
 }: {
   userId: string | null;
   group: GroupRecord;
   startAt: number;
   endAt: number;
   fetchGroupRange: FetchCloudGroupRangePage;
+  onRangeStatus: (groupId: string, covered: boolean) => void;
 }) {
   const groupId = String(group.id ?? group._id ?? '');
-  const { transactions } = useLocalGroupRange<TimelineRecord>(
+  const { transactions, covered } = useLocalGroupRange<TimelineRecord>(
     userId,
     groupId,
     startAt,
     endAt,
     fetchGroupRange,
   );
-  const expenses = transactions?.filter((record) => String(record.groupId) === groupId) ?? [];
+  React.useEffect(() => {
+    onRangeStatus(groupId, covered);
+  }, [covered, groupId, onRangeStatus]);
+  const groupAliases = new Set(
+    [group.id, group._id, group.cloudId].filter(
+      (value): value is string => typeof value === 'string',
+    ),
+  );
+  const expenses =
+    transactions?.filter(
+      (record) => typeof record.groupId === 'string' && groupAliases.has(record.groupId),
+    ) ?? [];
   return expenses.length > 0 ? (
     <>
       {expenses.map((transaction) => (
@@ -92,16 +108,58 @@ export default function PersonTimelineScreen() {
   const { userId, fetchGroupRange } = useLocalSync();
   const { data: groups } = useLocalRecords<GroupRecord>(userId, 'group');
   const { data: allMembers } = useLocalRecords<GroupMemberRecord>(userId, 'groupMember');
+  const transactionsState = useLocalRecords<LocalRecord & { groupId?: string }>(
+    userId,
+    'transaction',
+  );
+  const payerState = useLocalRecords<LocalRecord & { transactionId?: string }>(
+    userId,
+    'expensePayer',
+  );
+  const participantState = useLocalRecords<LocalRecord & { transactionId?: string }>(
+    userId,
+    'expenseParticipant',
+  );
+  const settlementState = useLocalRecords<LocalRecord & { groupId?: string }>(userId, 'settlement');
+  const ledger = [transactionsState, payerState, participantState, settlementState] as const;
   const handle = username?.replace(/^@+/, '') ?? 'person';
   const matchingMembers = (allMembers ?? []).filter(
     (member) => member.username?.replace(/^@+/, '').toLowerCase() === handle.toLowerCase(),
   );
-  const groupIds = new Set(matchingMembers.map((member) => String(member.groupId ?? '')));
-  const sharedGroups = (groups ?? []).filter((group) =>
-    groupIds.has(String(group.id ?? group._id)),
+  const personId = String(matchingMembers[0]?.userId ?? matchingMembers[0]?.memberId ?? '');
+  const groupIds = new Set(
+    matchingMembers.map((member) => String(member.groupId ?? '')).filter(Boolean),
   );
+  const sharedGroups = (groups ?? []).filter((group) =>
+    [group.id, group._id, group.cloudId].some((id) => typeof id === 'string' && groupIds.has(id)),
+  );
+  const [rangeStates, setRangeStates] = React.useState<Record<string, boolean>>({});
+  const reportRangeStatus = React.useCallback((groupId: string, covered: boolean) => {
+    setRangeStates((previous) =>
+      previous[groupId] === covered ? previous : { ...previous, [groupId]: covered },
+    );
+  }, []);
   const startAt = React.useMemo(() => Date.now() - 90 * 24 * 60 * 60 * 1000, []);
   const endAt = React.useMemo(() => Date.now() + 1, []);
+  const recordsReady = ledger.every(
+    (state) => state.data !== undefined && !state.loading && !state.error,
+  );
+  const rangesCovered = sharedGroups.every(
+    (group) => rangeStates[String(group.id ?? group._id ?? '')] === true,
+  );
+  const balanceAvailable =
+    Boolean(userId && personId && groups && allMembers) && recordsReady && rangesCovered;
+  const bilateralBalance = balanceAvailable
+    ? calculateBilateralBalance(
+        userId!,
+        personId,
+        sharedGroups,
+        ledger[0].data ?? [],
+        ledger[1].data ?? [],
+        ledger[2].data ?? [],
+        ledger[3].data ?? [],
+      )
+    : 0n;
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -144,13 +202,26 @@ export default function PersonTimelineScreen() {
             gap: 5,
           }}
         >
-          <Typography variant="label">Shared balance</Typography>
-          <Money
-            amountMinor={0n}
-            currency={String(sharedGroups[0]?.currency ?? 'INR')}
-            size="display"
-          />
-          <Typography variant="caption">Across shared groups</Typography>
+          {balanceAvailable ? (
+            <Money
+              amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
+              currency={String(sharedGroups[0]?.currency ?? 'INR')}
+              size="display"
+            />
+          ) : (
+            <Typography variant="small">
+              Balance unavailable until saved group ranges are complete.
+            </Typography>
+          )}
+          <Typography variant="caption">
+            {balanceAvailable
+              ? bilateralBalance === 0n
+                ? 'Even across shared groups'
+                : bilateralBalance > 0n
+                  ? 'They owe you across shared groups'
+                  : 'You owe across shared groups'
+              : 'Across shared groups'}
+          </Typography>
         </View>
       </View>
 
@@ -198,6 +269,7 @@ export default function PersonTimelineScreen() {
               startAt={startAt}
               endAt={endAt}
               fetchGroupRange={fetchGroupRange}
+              onRangeStatus={reportRangeStatus}
             />
           ))
         ) : (
