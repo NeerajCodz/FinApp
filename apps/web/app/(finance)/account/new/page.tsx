@@ -1,17 +1,16 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button, Card } from '@finapp/ui/web';
-import { parseMinor } from '@convex/shared/money';
+import { ArrowLeft, Check, ChevronDown, Landmark } from 'lucide-react';
+import { Button, IconButton, Input, Label, Sheet, Typography } from '@finapp/ui/web';
+import { CurrencyInput } from '@finapp/ui/finance';
 import { currencies } from '@convex/shared/validators';
+import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceInput } from '@/components/finance/FinanceInput';
-import { PageHeading, SignInGate } from '../../_personal';
+import { SignInGate } from '../../_personal';
 
 type Profile = LocalRecord & { defaultCurrency?: string };
 const accountTypes = [
@@ -36,30 +35,27 @@ export default function NewPersonalAccountPage() {
   const [name, setName] = React.useState('');
   const [type, setType] = React.useState<(typeof accountTypes)[number][1]>('bank');
   const [customType, setCustomType] = React.useState('');
-  const [currency, setCurrency] = React.useState('INR');
+  const currency = profile?.defaultCurrency ?? '';
   const [openingBalance, setOpeningBalance] = React.useState('');
-  const [included, setIncluded] = React.useState(true);
+  const [typeOpen, setTypeOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    if (
-      profile?.defaultCurrency &&
-      currencies.includes(profile.defaultCurrency as (typeof currencies)[number])
-    )
-      setCurrency(profile.defaultCurrency);
-  }, [profile?.defaultCurrency]);
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!userId || saving) return;
     const trimmedName = name.trim();
-    const custom = customType.trim();
     if (!trimmedName) {
       setError('Enter an account name.');
       return;
     }
+    const custom = customType.trim();
+    if (!profile?.defaultCurrency) {
+      setError('Set your default currency before creating an account.');
+      return;
+    }
     if (type === 'other' && !custom) {
-      setError('Name the custom account type.');
+      setError('Name your custom account type.');
       return;
     }
     if (!(currencies as readonly string[]).includes(currency)) {
@@ -81,7 +77,7 @@ export default function NewPersonalAccountPage() {
         currency,
         openingBalanceMinor,
         balanceMinor: openingBalanceMinor,
-        isIncludedInTotal: included,
+        isIncludedInTotal: true,
         createdAt: now,
         updatedAt: now,
       };
@@ -91,7 +87,7 @@ export default function NewPersonalAccountPage() {
         ...(type === 'other' ? { customType: custom } : {}),
         currency,
         openingBalanceMinor,
-        isIncludedInTotal: included,
+        isIncludedInTotal: true,
       });
       router.push(`/account/${encodeURIComponent(id)}`);
     } catch (cause) {
@@ -109,97 +105,155 @@ export default function NewPersonalAccountPage() {
     );
 
   return (
-    <div className="finance-page">
-      <Link className="finance-secondary-action" href="/account">
-        <ArrowLeft size={15} /> Back to accounts
-      </Link>
-      <PageHeading
-        eyebrow="NEW ACCOUNT"
-        title="Add an account"
-        description="Set the account’s opening balance and currency. Its currency stays fixed for recorded transactions."
-      />
-      <Card className="finance-form-panel">
+    <div className="finance-page" style={{ gap: 24, minHeight: '70vh' }}>
+      <IconButton
+        label="Go back"
+        variant="ghost"
+        style={{ alignSelf: 'flex-start' }}
+        onPress={() => router.back()}
+      >
+        <ArrowLeft size={21} aria-hidden="true" />
+      </IconButton>
+
+      <header style={{ display: 'grid', gap: 10 }}>
+        <span
+          aria-hidden="true"
+          style={{
+            width: 44,
+            height: 44,
+            display: 'grid',
+            placeItems: 'center',
+            borderRadius: 14,
+            background: 'var(--finapp-surface-raised)',
+          }}
+        >
+          <Landmark size={21} color="var(--finapp-foreground)" />
+        </span>
+        <Typography variant="title">Add an account</Typography>
+        <Typography variant="small" style={{ maxWidth: 320 }}>
+          Name where you keep money, then choose how it appears in your accounts.
+        </Typography>
+      </header>
+
+      <form onSubmit={create} style={{ display: 'grid', flex: 1, gap: 18 }}>
+        <div style={{ display: 'grid', gap: 6 }}>
+          <Label htmlFor="account-name">Name</Label>
+          <Input
+            id="account-name"
+            accessibilityLabel="Account name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Everyday account"
+            maxLength={80}
+            required
+          />
+        </div>
+        <div style={{ display: 'grid', gap: 6 }}>
+          <Label htmlFor="account-type">Type</Label>
+          <Button
+            id="account-type"
+            type="button"
+            variant="outline"
+            aria-label="Account type"
+            aria-haspopup="dialog"
+            aria-expanded={typeOpen}
+            onPress={() => setTypeOpen(true)}
+            style={{
+              minHeight: 50,
+              justifyContent: 'space-between',
+              borderRadius: 14,
+              paddingInline: 16,
+            }}
+          >
+            <span>{accountTypes.find((option) => option[1] === type)?.[0]}</span>
+            <ChevronDown size={18} aria-hidden="true" />
+          </Button>
+        </div>
+        {type === 'other' && (
+          <div style={{ display: 'grid', gap: 6 }}>
+            <Label htmlFor="account-custom-type">Custom type</Label>
+            <Input
+              id="account-custom-type"
+              accessibilityLabel="Custom account type"
+              value={customType}
+              onChangeText={setCustomType}
+              placeholder="e.g. Investment"
+              maxLength={40}
+              required
+            />
+          </div>
+        )}
         {profileLoading ? (
-          <p className="finance-muted" role="status">
-            Loading your profile…
-          </p>
+          <Typography variant="small" role="status">
+            Loading your default currency…
+          </Typography>
         ) : profileError ? (
           <p className="finance-form-error" role="alert">
             Profile data could not be opened: {profileError}
           </p>
-        ) : (
-          <form className="finance-form" onSubmit={create}>
-            <FinanceInput
-              label="Account name"
-              value={name}
-              onChangeText={setName}
-              placeholder="Everyday account"
-              required
-              maxLength={80}
-            />
-            <label className="finance-form-field">
-              <span>Type</span>
-              <select
-                value={type}
-                onChange={(event) => setType(event.currentTarget.value as typeof type)}
-              >
-                {accountTypes.map(([label, value]) => (
-                  <option value={value} key={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {type === 'other' && (
-              <FinanceInput
-                label="Custom type"
-                value={customType}
-                onChangeText={setCustomType}
-                placeholder="Savings jar"
-                maxLength={40}
-                required
-              />
-            )}
-            <label className="finance-form-field">
-              <span>Currency</span>
-              <select value={currency} onChange={(event) => setCurrency(event.currentTarget.value)}>
-                {currencies.map((item) => (
-                  <option value={item} key={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <FinanceInput
-              label={`Opening balance (${currency})`}
-              type="number"
-              min="0"
-              step={currency === 'JPY' || currency === 'KRW' ? '1' : '0.01'}
+        ) : currency ? (
+          <div style={{ display: 'grid', gap: 6 }}>
+            <Label>Opening balance · {currency}</Label>
+            <CurrencyInput
+              currency={currency}
               value={openingBalance}
               onChangeText={setOpeningBalance}
             />
-            <label className="finance-checkbox-row">
-              <input
-                type="checkbox"
-                checked={included}
-                onChange={(event) => setIncluded(event.currentTarget.checked)}
-              />
-              <span>Include in total balance</span>
-            </label>
-            {error && (
-              <p className="finance-form-error" role="alert">
-                {error}
-              </p>
-            )}
-            <Button type="submit" disabled={saving || !name.trim()}>
-              {saving ? 'Saving locally…' : 'Create account'} <ArrowRight size={15} />
-            </Button>
-            <p className="finance-form-note">
-              The account is saved locally with a queued sync operation.
-            </p>
-          </form>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            onPress={() => router.push('/settings/currency')}
+          >
+            Set your default currency
+          </Button>
         )}
-      </Card>
+        <div style={{ flex: 1 }} />
+        {error && (
+          <p className="finance-form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <Button
+          type="submit"
+          size="lg"
+          style={{ width: '100%' }}
+          disabled={
+            saving ||
+            !name.trim() ||
+            !currency ||
+            !profile?.defaultCurrency ||
+            (type === 'other' && !customType.trim())
+          }
+        >
+          {saving ? 'Saving…' : 'Save account'}
+        </Button>
+      </form>
+
+      <Sheet visible={typeOpen} title="Account type" onClose={() => setTypeOpen(false)}>
+        <div style={{ display: 'grid', gap: 4 }}>
+          {accountTypes.map(([label, value]) => (
+            <Button
+              key={value}
+              type="button"
+              variant={type === value ? 'secondary' : 'ghost'}
+              role="radio"
+              aria-checked={type === value}
+              aria-label={label}
+              onPress={() => {
+                setType(value);
+                setTypeOpen(false);
+                setError(null);
+              }}
+              style={{ minHeight: 48, justifyContent: 'space-between', paddingInline: 12 }}
+            >
+              <span>{label}</span>
+              {type === value && <Check size={19} color="var(--finapp-primary)" />}
+            </Button>
+          ))}
+        </div>
+      </Sheet>
     </div>
   );
 }
