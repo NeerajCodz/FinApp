@@ -2,8 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ChartNoAxesCombined, ReceiptText, Tags } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, ArrowRight, ReceiptText } from 'lucide-react';
+import { Button, Card, Empty, IconButton, SectionHeader, Tabs, Text, Typography, useTheme } from '@finapp/ui/web';
+import { BreakdownDonut, CashFlowChart } from '@finapp/ui/analytics';
+import { TransactionRow } from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
   getAnalyticsRange,
@@ -45,6 +48,8 @@ function idAliases(record: LocalRecord): string[] {
 
 export default function AnalyticsPage() {
   const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
+  const router = useRouter();
+  const { tokens } = useTheme();
   const {
     records: transactions,
     loading: transactionsLoading,
@@ -230,36 +235,25 @@ export default function AnalyticsPage() {
     [transactions, currency, range],
   );
   const flowRows = [
-    { key: 'spend', label: 'Spend', amountMinor: flowTotals.spend, color: '#ff9d8f' },
-    {
-      key: 'income',
-      label: 'Income',
-      amountMinor: flowTotals.income,
-      color: 'var(--finance-lime)',
-    },
-    { key: 'transfer', label: 'Transfer', amountMinor: flowTotals.transfer, color: '#9eb4ff' },
-    { key: 'split', label: 'Split', amountMinor: flowTotals.split, color: '#c7a2ff' },
-    { key: 'other', label: 'Other', amountMinor: flowTotals.other, color: '#a8ad9e' },
+    { key: 'spend', label: 'Spend', amountMinor: flowTotals.spend, color: tokens.expense },
+    { key: 'income', label: 'Income', amountMinor: flowTotals.income, color: tokens.income },
+    { key: 'transfer', label: 'Transfer', amountMinor: flowTotals.transfer, color: tokens.transfer },
+    { key: 'split', label: 'Split', amountMinor: flowTotals.split, color: tokens.split },
+    { key: 'other', label: 'Other', amountMinor: flowTotals.other, color: tokens.settlement },
   ];
   const comparison = previous
     ? previous.spentMinor === 0n
       ? result?.spentMinor === 0n
         ? 'No spending in either period'
         : 'No spending in the previous period'
-      : result?.spentMinor === previous.spentMinor
-        ? 'No change from previous period'
-        : `${result && result.spentMinor > previous.spentMinor ? 'Up' : 'Down'} ${Number(
-            ((result
-              ? result.spentMinor >= previous.spentMinor
-                ? result.spentMinor - previous.spentMinor
-                : previous.spentMinor - result.spentMinor
-              : 0n) *
-              100n) /
-              previous.spentMinor,
-          )}% vs previous period`
+      : `${result && result.spentMinor >= previous.spentMinor ? 'Up' : 'Down'} ${Number(
+          ((result && result.spentMinor >= previous.spentMinor
+            ? result.spentMinor - previous.spentMinor
+            : previous.spentMinor - (result?.spentMinor ?? 0n)) *
+            100n) /
+            previous.spentMinor,
+        )}% vs previous period`
     : '';
-  const spendingShare = (amountMinor: bigint) =>
-    result && result.spentMinor > 0n ? Number((amountMinor * 1000n) / result.spentMinor) / 10 : 0;
   const largestExpenses = React.useMemo(
     () =>
       range
@@ -315,12 +309,6 @@ export default function AnalyticsPage() {
         : [],
     [analyticsTransactions, range, currency],
   );
-  const chartScale =
-    result?.buckets.reduce((largest, bucket) => {
-      const bucketTotal =
-        bucket.amountMinor > bucket.incomeMinor ? bucket.amountMinor : bucket.incomeMinor;
-      return bucketTotal > largest ? bucketTotal : largest;
-    }, 0n) ?? 0n;
 
   if (!userId)
     return (
@@ -333,104 +321,103 @@ export default function AnalyticsPage() {
         </Link>
       </section>
     );
-
   return (
     <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">A CLEARER VIEW OF YOUR MONEY</p>
-          <h1>Analytics</h1>
-          <p className="finance-muted">
-            Calculated for the selected period and profile time zone. Offline results may omit
-            history not cached in this browser.
-          </p>
-        </div>
-        <Badge variant="neutral">{transactions.length} local records</Badge>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">Analytics</Typography>
       </header>
-      <div className="finance-form-actions" role="group" aria-label="Analytics period">
-        {(['week', 'month', 'year'] as const).map((option) => (
-          <Button
-            key={option}
-            type="button"
-            variant={period === option ? 'secondary' : 'outline'}
-            aria-pressed={period === option}
-            onPress={() => setPeriod(option)}
-          >
-            {option === 'week' ? 'Week' : option === 'month' ? 'Month' : 'Year'}
-          </Button>
-        ))}
-      </div>
-      <p className="finance-muted" role="status">
+      <Tabs
+        value={period}
+        onChange={(value) => setPeriod(value as AnalyticsPeriod)}
+        label="Analytics period"
+        tabs={[
+          { label: 'Week', value: 'week' },
+          { label: 'Month', value: 'month' },
+          { label: 'Year', value: 'year' },
+        ]}
+      />
+      <Text role="status">
         {rangeLoading
-          ? 'Loading transactions for this period…'
+          ? 'Refreshing transactions…'
           : rangeError
-            ? rangeError
+            ? 'Showing saved data. Refresh failed; totals may be incomplete.'
             : isConnected && loadedRange === rangeKey
               ? 'The selected server date range has been loaded.'
               : 'Showing browser-cached transactions for this period.'}
-      </p>
+      </Text>
+      {rangeError && (
+        <Button variant="outline" onPress={() => window.location.reload()}>
+          Retry
+        </Button>
+      )}
       {allError && (
-        <p className="finance-form-error" role="alert">
-          Local finance data could not be loaded: {allError}
-        </p>
+        <div role="alert" style={{ display: 'grid', gap: 10 }}>
+          <Text style={{ color: tokens.destructive }}>
+            Local finance data could not be loaded: {allError}
+          </Text>
+          <Button variant="outline" onPress={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
       )}
       {loading ? (
-        <Card className="finance-record-panel">
-          <p className="finance-muted" role="status">
-            Calculating from your local records…
-          </p>
-        </Card>
-      ) : allError ? (
-        <Card className="finance-record-panel">
-          <p className="finance-muted">Reload this page to retry opening browser data.</p>
-        </Card>
-      ) : (
+        <Typography variant="heading" accessibilityLabel="Loading analytics">
+          Loading analytics…
+        </Typography>
+      ) : allError ? null : (
         result && (
           <>
-            <section style={{ display: 'grid', gap: 12 }}>
-              <SectionHeader
-                title="Money in motion"
-                action={
-                  <span>
-                    {period} · {currency}
-                  </span>
-                }
-              />
-              <div className="finance-metric-grid">
-                <Card className="finance-metric-card">
-                  <span className="finance-metric-label">SPENT</span>
-                  <strong style={{ color: '#ff9d8f' }}>
-                    {formatMinor(result.spentMinor, currency)}
-                  </strong>
-                  <span className="finance-metric-foot">Posted expenses this {period}</span>
-                </Card>
-                <Card className="finance-metric-card">
-                  <span className="finance-metric-label">INCOME</span>
-                  <strong style={{ color: 'var(--finance-lime)' }}>
+            <section style={{ display: 'grid', gap: 8 }}>
+              <Typography variant="caption">
+                {period.toUpperCase()} · {currency}
+              </Typography>
+              <Typography variant="display">Money in motion.</Typography>
+              <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                <Typography variant="label">Spent</Typography>
+                <Typography
+                  variant="display"
+                  style={{ color: tokens.expense, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {formatMinor(result.spentMinor, currency)}
+                </Typography>
+                <Typography variant="caption">{comparison}</Typography>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, marginTop: 12 }}>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <Typography variant="caption">Income</Typography>
+                  <Typography
+                    variant="bodyLarge"
+                    style={{ color: tokens.income, fontVariantNumeric: 'tabular-nums' }}
+                  >
                     {formatMinor(result.incomeMinor, currency)}
-                  </strong>
-                  <span className="finance-metric-foot">Posted income this {period}</span>
-                </Card>
-                <Card className="finance-metric-card">
-                  <span className="finance-metric-label">NET</span>
-                  <strong
+                  </Typography>
+                </div>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <Typography variant="caption">Net</Typography>
+                  <Typography
+                    variant="heading"
                     style={{
                       color:
-                        result.incomeMinor >= result.spentMinor ? 'var(--finance-lime)' : '#ff9d8f',
+                        result.incomeMinor >= result.spentMinor
+                          ? tokens.income
+                          : tokens.expense,
+                      fontVariantNumeric: 'tabular-nums',
                     }}
                   >
                     {formatMinor(result.incomeMinor - result.spentMinor, currency)}
-                  </strong>
-                  <span className="finance-metric-foot">Income minus spending</span>
-                </Card>
+                  </Typography>
+                </div>
               </div>
-              <p className="finance-muted">{comparison}</p>
             </section>
+
             {rangeTransactions.length === 0 && (
               <Empty
                 title="No activity in this period"
                 description="Record a transaction to start seeing trends."
-                icon={<ReceiptText size={20} />}
+                icon={<ReceiptText size={20} aria-hidden="true" />}
                 action={
                   <Link className="finance-inline-link" href="/transaction/new">
                     Add transaction
@@ -438,289 +425,169 @@ export default function AnalyticsPage() {
                 }
               />
             )}
-            <Card className="finance-chart-panel">
-              <SectionHeader
-                title="Cash flow"
-                action={<span>{rangeTransactions.length} posted entries</span>}
-              />
-              {result.buckets.every(
-                (bucket) => bucket.amountMinor === 0n && bucket.incomeMinor === 0n,
-              ) ? (
-                <Empty
-                  title="No cash flow to chart"
-                  description="Cash flow bars will appear when expenses or income are posted."
-                  icon={<ChartNoAxesCombined size={20} />}
-                />
-              ) : (
-                <ol
-                  aria-label="Cash flow by date"
-                  style={{ display: 'grid', gap: 14, margin: 0, padding: 0, listStyle: 'none' }}
-                >
-                  {result.buckets.map((bucket) => {
-                    const expenseWidth =
-                      chartScale > 0n ? Number((bucket.amountMinor * 100n) / chartScale) : 0;
-                    const incomeWidth =
-                      chartScale > 0n ? Number((bucket.incomeMinor * 100n) / chartScale) : 0;
-                    return (
-                      <li key={`${bucket.startAt}-${bucket.label}`}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            justifyContent: 'space-between',
-                            gap: 5,
-                            marginBottom: 6,
-                            color: 'var(--finance-muted)',
-                            fontSize: '0.75rem',
-                          }}
-                        >
-                          <span>{bucket.label}</span>
-                          <span>
-                            {formatMinor(bucket.amountMinor, currency)} spent ·{' '}
-                            {formatMinor(bucket.incomeMinor, currency)} income
-                          </span>
-                        </div>
-                        <div
-                          role="img"
-                          aria-label={`${bucket.label}: ${formatMinor(bucket.amountMinor, currency)} expenses and ${formatMinor(bucket.incomeMinor, currency)} income`}
-                          style={{ display: 'grid', gap: 4 }}
-                        >
-                          <span
-                            style={{
-                              display: 'block',
-                              width: `${expenseWidth}%`,
-                              minWidth: bucket.amountMinor > 0n ? 3 : 0,
-                              height: 7,
-                              borderRadius: 99,
-                              background: '#ff9d8f',
-                            }}
-                          />
-                          <span
-                            style={{
-                              display: 'block',
-                              width: `${incomeWidth}%`,
-                              minWidth: bucket.incomeMinor > 0n ? 3 : 0,
-                              height: 7,
-                              borderRadius: 99,
-                              background: 'var(--finance-lime)',
-                            }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-              <p className="finance-metric-foot" style={{ gap: 15, marginTop: 16 }}>
-                <span>
-                  <i
-                    aria-hidden="true"
-                    style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      marginRight: 6,
-                      borderRadius: '50%',
-                      background: '#ff9d8f',
-                    }}
-                  />
-                  Expenses
-                </span>
-                <span>
-                  <i
-                    aria-hidden="true"
-                    style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      marginRight: 6,
-                      borderRadius: '50%',
-                      background: 'var(--finance-lime)',
-                    }}
-                  />
-                  Income
-                </span>
-              </p>
-            </Card>
-            <Card className="finance-record-panel">
+
+            <section style={{ display: 'grid', gap: 16 }}>
+              <SectionHeader title="Cash flow" />
+              <CashFlowChart buckets={result.buckets} currency={currency} />
+            </section>
+
+            <section style={{ display: 'grid', gap: 12 }}>
               <SectionHeader title="By transaction type" />
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
-                {flowRows.map((item) => (
-                  <span
-                    key={item.key}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}
-                  >
-                    <i
-                      aria-hidden="true"
-                      style={{
-                        display: 'inline-block',
-                        height: 8,
-                        borderRadius: '50%',
-                        background: item.color,
-                      }}
-                    />
-                    {item.label}
-                  </span>
-                ))}
-              </div>
-              {flowRows.some((item) => item.amountMinor > 0n) ? (
-                <ul className="finance-record-list">
-                  {flowRows
-                    .filter((item) => item.amountMinor > 0n)
-                    .map((item) => (
-                      <li className="finance-record-item" key={item.key}>
-                        <div>
-                          <strong>{item.label}</strong>
+              <Card
+                variant="subtle"
+                style={{
+                  display: 'grid',
+                  gap: 14,
+                  padding: 16,
+                  borderRadius: 18,
+                  border: `1px solid ${tokens.borderSubtle}`,
+                }}
+              >
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+                  {flowRows.map((item) => (
+                    <span
+                      key={item.key}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: 4,
+                          background: item.color,
+                        }}
+                      />
+                      <Typography variant="caption">{item.label}</Typography>
+                    </span>
+                  ))}
+                </div>
+                {flowRows.some((item) => item.amountMinor > 0n) ? (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {flowRows
+                      .filter((item) => item.amountMinor > 0n)
+                      .map((item) => (
+                        <div
+                          key={item.key}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              background: item.color,
+                            }}
+                          />
+                          <Typography variant="small" style={{ flex: 1 }}>
+                            {item.label}
+                          </Typography>
+                          <Typography
+                            variant="small"
+                            style={{ color: item.color, fontVariantNumeric: 'tabular-nums' }}
+                          >
+                            {formatMinor(item.amountMinor, currency)}
+                          </Typography>
                         </div>
-                        <strong style={{ color: item.color }}>
-                          {formatMinor(item.amountMinor, currency)}
-                        </strong>
-                      </li>
-                    ))}
-                </ul>
-              ) : (
-                <Empty
-                  title="No activity by type"
-                  description="Posted activity by type will appear here."
-                />
-              )}
-              <p className="finance-form-note">
-                Split expenses are shown separately by type and included in total spending.
-              </p>
-            </Card>
-            <div className="finance-dashboard-grid">
-              <Card className="finance-accounts-panel">
-                <SectionHeader
-                  title="Spending by category"
-                  action={<span>{result.categoryBreakdown.length} categories</span>}
-                />
-                {result.categoryBreakdown.length === 0 ? (
+                      ))}
+                  </div>
+                ) : (
+                  <Text>No posted activity by type in this period.</Text>
+                )}
+                <Typography variant="caption">
+                  Split expenses are included in total spent above.
+                </Typography>
+              </Card>
+            </section>
+
+            <section style={{ display: 'grid', gap: 16 }}>
+              <Typography variant="bodyLarge">Spending by category</Typography>
+              <BreakdownDonut
+                items={result.categoryBreakdown}
+                totalMinor={result.spentMinor}
+                currency={currency}
+                iconForCategory={(id) => {
+                  const icon = categoryIcons.get(id);
+                  return typeof icon === 'string' ? icon : undefined;
+                }}
+                onSelectItem={(item) => router.push(breakdownHref('category', item.id))}
+              />
+            </section>
+
+            {(
+              [
+                ['account', 'By account', result.accountBreakdown],
+                ['merchant', 'By merchant', result.merchantBreakdown],
+              ] as const
+            ).map(([dimension, title, items]) => (
+              <section key={dimension} style={{ display: 'grid', gap: 12 }}>
+                <SectionHeader title={title} />
+                {items.length === 0 ? (
                   <Empty
                     title="No expenses to break down"
-                    description="Posted expenses with a matching currency will appear here."
+                    description="Posted expenses in this period will appear here."
                   />
                 ) : (
-                  <ul className="finance-record-list" aria-label="Spending totals by category">
-                    {result.categoryBreakdown.slice(0, 8).map((item) => (
-                      <li className="finance-record-item" key={item.id}>
-                        <Link
-                          href={breakdownHref('category', item.id)}
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    {items.map((item, index) => {
+                      const share =
+                        result.spentMinor > 0n
+                          ? Number((item.amountMinor * 1000n) / result.spentMinor) / 10
+                          : 0;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-label={`${item.label}, ${formatMinor(item.amountMinor, currency)}, ${share}% of spending`}
+                          onClick={() => router.push(breakdownHref(dimension, item.id))}
                           style={{
                             display: 'flex',
-                            minWidth: 0,
-                            flex: 1,
                             alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 14,
+                            gap: 12,
+                            minHeight: 56,
+                            width: '100%',
+                            border: 0,
+                            padding: 0,
+                            background: 'transparent',
                             color: 'inherit',
-                            textDecoration: 'none',
+                            font: 'inherit',
+                            textAlign: 'left',
+                            cursor: 'pointer',
                           }}
                         >
-                          <span className="finance-record-symbol" aria-hidden="true">
-                            {categoryIcons.get(item.id) ?? <Tags size={17} />}
+                          <Typography
+                            variant="caption"
+                            style={{ width: 20, color: tokens.primary }}
+                          >
+                            {String(index + 1).padStart(2, '0')}
+                          </Typography>
+                          <Typography variant="small" style={{ flex: 1 }}>
+                            {item.label}
+                          </Typography>
+                          <span style={{ display: 'grid', justifyItems: 'end' }}>
+                            <Typography variant="small">
+                              {formatMinor(item.amountMinor, currency)}
+                            </Typography>
+                            <Typography variant="caption">{share}%</Typography>
                           </span>
-                          <div>
-                            <strong>{item.label}</strong>
-                            <small>{spendingShare(item.amountMinor)}% of spending</small>
-                          </div>
-                          <strong>
-                            {formatMinor(item.amountMinor, currency)} <ArrowRight size={14} />
-                          </strong>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </Card>
-              <Card className="finance-accounts-panel">
-                <SectionHeader
-                  title="By account"
-                  action={<span>{result.accountBreakdown.length} accounts</span>}
-                />
-                {result.accountBreakdown.length === 0 ? (
-                  <Empty
-                    title="No account breakdown yet"
-                    description="Account-level expense totals appear with posted local activity."
-                  />
-                ) : (
-                  <ul className="finance-record-list" aria-label="Spending totals by account">
-                    {result.accountBreakdown.slice(0, 8).map((item) => (
-                      <li className="finance-record-item" key={item.id}>
-                        <Link
-                          href={breakdownHref('account', item.id)}
-                          style={{
-                            display: 'flex',
-                            minWidth: 0,
-                            flex: 1,
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 14,
-                            color: 'inherit',
-                            textDecoration: 'none',
-                          }}
-                        >
-                          <div>
-                            <strong>{item.label}</strong>
-                            <small>{spendingShare(item.amountMinor)}% of spending</small>
-                          </div>
-                          <strong>
-                            {formatMinor(item.amountMinor, currency)} <ArrowRight size={14} />
-                          </strong>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
-            </div>
-            <Card className="finance-accounts-panel">
-              <SectionHeader
-                title="By merchant"
-                action={<span>{result.merchantBreakdown.length} merchants</span>}
-              />
-              {result.merchantBreakdown.length === 0 ? (
-                <Empty
-                  title="No merchant breakdown yet"
-                  description="Merchant totals appear with posted expense activity."
-                />
-              ) : (
-                <ul className="finance-record-list" aria-label="Spending totals by merchant">
-                  {result.merchantBreakdown.slice(0, 8).map((item) => (
-                    <li className="finance-record-item" key={item.id}>
-                      <Link
-                        href={breakdownHref('merchant', item.id)}
-                        style={{
-                          display: 'flex',
-                          minWidth: 0,
-                          flex: 1,
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 14,
-                          color: 'inherit',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <div>
-                          <strong>{item.label}</strong>
-                          <small>{spendingShare(item.amountMinor)}% of spending</small>
-                        </div>
-                        <strong>
-                          {formatMinor(item.amountMinor, currency)} <ArrowRight size={14} />
-                        </strong>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-            <Card className="finance-record-panel">
+              </section>
+            ))}
+
+            <section style={{ display: 'grid', gap: 6 }}>
               <SectionHeader title="Compared with last period" />
-              <strong>{comparison}</strong>
-              <p className="finance-muted">
+              <Typography variant="heading">{comparison}</Typography>
+              <Text>
                 Previously spent {formatMinor(previous?.spentMinor ?? 0n, currency)}
-              </p>
-            </Card>
-            <Card className="finance-record-panel">
+              </Text>
+            </section>
+
+            <section style={{ display: 'grid', gap: 12 }}>
               <SectionHeader title="Largest expenses" />
               {largestExpenses.length === 0 ? (
                 <Empty
@@ -728,52 +595,53 @@ export default function AnalyticsPage() {
                   description="Your largest posted expenses in this period will appear here."
                 />
               ) : (
-                <ul className="finance-record-list">
-                  {largestExpenses.map((record) => {
-                    const id = idAliases(record)[0];
-                    const content = (
-                      <>
-                        <span className="finance-record-copy">
-                          <strong>{record.title || record.merchant || 'Expense'}</strong>
-                          <small>
-                            {record.occurredAt
-                              ? new Date(record.occurredAt).toLocaleDateString()
-                              : 'Date unavailable'}
-                          </small>
-                        </span>
-                        <strong>{formatMinor(amountAsBigInt(record.amountMinor), currency)}</strong>
-                      </>
-                    );
-                    return (
-                      <li className="finance-record-item" key={id ?? record.occurredAt}>
-                        {id ? (
-                          <Link
-                            href={`/transaction/${encodeURIComponent(id)}`}
-                            style={{
-                              display: 'flex',
-                              minWidth: 0,
-                              flex: 1,
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 14,
-                              color: 'inherit',
-                              textDecoration: 'none',
-                            }}
-                          >
-                            {content}
-                          </Link>
-                        ) : (
-                          content
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                largestExpenses.map((record) => {
+                  const id = idAliases(record)[0];
+                  const category = categories.find((item) =>
+                    idAliases(item).includes(String(record.categoryId ?? '')),
+                  );
+                  const account = accounts.find((item) =>
+                    idAliases(item).includes(String(record.accountId ?? '')),
+                  );
+                  return (
+                    <TransactionRow
+                      key={id ?? record.occurredAt}
+                      title={record.title || record.merchant || 'Transaction'}
+                      merchant={record.merchant}
+                      category={typeof category?.name === 'string' ? category.name : undefined}
+                      categoryIcon={
+                        typeof category?.icon === 'string' ? category.icon : undefined
+                      }
+                      account={typeof account?.name === 'string' ? account.name : undefined}
+                      date={
+                        typeof record.occurredAt === 'number'
+                          ? new Intl.DateTimeFormat('en-US', {
+                              day: 'numeric',
+                              month: 'short',
+                              timeZone,
+                            }).format(record.occurredAt)
+                          : undefined
+                      }
+                      status={record.status}
+                      amountMinor={amountAsBigInt(record.amountMinor)}
+                      currency={String(record.currency ?? currency)}
+                      type="expense"
+                      semanticType={typeof record.groupId === 'string' ? 'split' : undefined}
+                      onPress={
+                        id
+                          ? () => router.push(`/transaction/${encodeURIComponent(id)}`)
+                          : undefined
+                      }
+                    />
+                  );
+                })
               )}
-            </Card>
+            </section>
           </>
         )
       )}
     </div>
   );
 }
+
+
