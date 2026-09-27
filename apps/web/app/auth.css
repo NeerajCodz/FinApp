@@ -84,7 +84,8 @@
   min-width: 0;
   flex-direction: column;
   justify-content: space-between;
-  padding: 30px clamp(28px, 6vw, 92px) 24px;
+  padding: calc(30px + env(safe-area-inset-top)) clamp(28px, 6vw, 92px)
+    calc(24px + env(safe-area-inset-bottom));
 }
 .auth-topline {
   display: flex;
@@ -294,8 +295,8 @@
     display: none;
   }
   .auth-content {
-    min-height: 100vh;
-    padding: 22px 22px 20px;
+    min-height: 100dvh;
+    padding: calc(22px + env(safe-area-inset-top)) 22px calc(20px + env(safe-area-inset-bottom));
   }
   .auth-topline {
     justify-content: space-between;
@@ -329,7 +330,7 @@
   min-height: 100dvh;
   flex-direction: column;
   justify-content: space-between;
-  padding: 20px;
+  padding: calc(20px + env(safe-area-inset-top)) 20px calc(16px + env(safe-area-inset-bottom));
   background: var(--finapp-background);
 }
 .auth-welcome-center {
@@ -485,7 +486,7 @@
 }
 @media (max-width: 700px) {
   .auth-welcome {
-    padding: 22px;
+    padding: calc(20px + env(safe-area-inset-top)) 22px calc(16px + env(safe-area-inset-bottom));
   }
   .auth-card {
     margin-block: 28px;
@@ -543,7 +544,7 @@
   .auth-content {
     width: 100%;
     min-height: 100svh;
-    padding: 22px 20px 20px;
+    padding: calc(22px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   }
   .auth-topline {
     justify-content: space-between;

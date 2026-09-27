@@ -8,12 +8,12 @@ import {
   Eye,
   LockKey,
   Palette,
-} from '@/lib/icons';
+} from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { SettingsRow } from '@/components/finance';
+import { SettingsRow } from '@finapp/ui/finance';
 import { IconButton, Separator, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 

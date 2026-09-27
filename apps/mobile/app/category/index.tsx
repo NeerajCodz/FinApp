@@ -1,10 +1,10 @@
 import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, CaretRight, Plus } from '@/lib/icons';
+import { ArrowLeft, CaretRight, Plus } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon } from '@/components/finance';
-import { Money } from '@/components/finance';
+import { CategoryIcon } from '@finapp/ui/finance';
+import { Money } from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Separator, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';

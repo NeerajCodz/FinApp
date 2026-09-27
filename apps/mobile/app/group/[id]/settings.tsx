@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, NotePencil, UsersThree } from '@/lib/icons';
+import { ArrowLeft, NotePencil, UsersThree } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalRecords } from '@/hooks/useLocalRecords';

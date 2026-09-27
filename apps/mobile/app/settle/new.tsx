@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SettlementEditor } from '@/components/finance';
+import { SettlementEditor } from '@finapp/ui/finance';
 import { Button, IconButton, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords } from '@/hooks/useLocalRecords';

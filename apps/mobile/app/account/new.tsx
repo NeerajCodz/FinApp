@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { ArrowLeft, CaretRight, Check, Landmark } from '@/lib/icons';
+import { ArrowLeft, CaretRight, Check, Landmark } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -8,7 +8,7 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Input, Label, Sheet, Text, Typography } from '@finapp/ui/native';
-import { CurrencyInput } from '@/components/finance';
+import { CurrencyInput } from '@finapp/ui/finance';
 import { parseMinor } from '@/lib/money';
 import { useTheme } from '@finapp/ui/native';
 

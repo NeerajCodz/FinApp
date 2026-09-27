@@ -1,9 +1,9 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money } from '@/components/finance';
+import { Money } from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useGroupLedger } from '@/hooks/useGroupLedger';

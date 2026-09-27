@@ -8,17 +8,17 @@ import {
   ShieldCheck,
   TriangleAlert,
   UsersThree,
-} from '@/lib/icons';
+} from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SpendingLineChart } from '@/components/charts/BarChart';
+import { SpendingLineChart } from '@finapp/ui/analytics';
 import {
   BalanceHero,
   CategoryIcon,
   MetricPair,
-  PeopleRail,
   SettingsRow,
   TransactionRow,
-} from '@/components/finance';
+} from '@finapp/ui/finance';
+import { PeopleRail } from '@/components/finance/PeopleRail';
 import {
   Button,
   IconButton,

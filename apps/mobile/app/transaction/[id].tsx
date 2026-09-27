@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowRight, ReceiptText } from '@/lib/icons';
+import { ArrowLeft, ArrowRight, ReceiptText } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon, Money, SemanticMarker, SettingsRow } from '@/components/finance';
+import { CategoryIcon, Money, SemanticMarker, SettingsRow } from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords } from '@/hooks/useLocalRecords';

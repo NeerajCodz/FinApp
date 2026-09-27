@@ -3,8 +3,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } fr
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
-import { ArrowLeft, ArrowRight, ReceiptText, UsersThree } from '@/lib/icons';
-import { CategoryIcon, CurrencyInput, SettingsRow } from '@/components/finance';
+import { ArrowLeft, ArrowRight, ReceiptText, UsersThree } from '@finapp/ui/icons/native';
+import { CategoryIcon, CurrencyInput, SettingsRow } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

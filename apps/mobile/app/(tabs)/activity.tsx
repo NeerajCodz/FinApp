@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { MagnifyingGlass, X } from '@/lib/icons';
+import { MagnifyingGlass, X } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DateSection, MetricPair, TransactionRow } from '@/components/finance';
+import { DateSection, MetricPair, TransactionRow } from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Input, Tabs, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';

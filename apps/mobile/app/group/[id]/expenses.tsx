@@ -1,11 +1,11 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, Plus, ReceiptText } from '@/lib/icons';
+import { ArrowLeft, Plus, ReceiptText } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLocalGroupRange, useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TransactionRow } from '@/components/finance';
+import { TransactionRow } from '@finapp/ui/finance';
 import { Button, IconButton, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 

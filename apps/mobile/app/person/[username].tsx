@@ -1,9 +1,9 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowLeftRight, UsersThree } from '@/lib/icons';
+import { ArrowLeft, ArrowLeftRight, UsersThree } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money, TransactionRow } from '@/components/finance';
+import { Money, TransactionRow } from '@finapp/ui/finance';
 import {
   Avatar,
   Button,

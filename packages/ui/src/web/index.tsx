@@ -9,6 +9,7 @@ export { Input, Label, Badge, Avatar, SectionHeader, Separator, Progress, type I
 export { Checkbox, RadioGroup, Switch, Tabs, Select } from './choices';
 export { Popover, Sheet, Dialog, AlertDialog, Drawer } from './overlay';
 export { Textarea, InputOTP, type TextareaProps } from './text-entry';
+export { DropdownMenu, Calendar, Skeleton, Empty, ScrollArea, Slider } from './display';
 export { Collapsible, Accordion, Command, Toast, Toggle, View } from './misc';
 export type { ThemeTokens } from '../tokens';
 export function Tooltip({

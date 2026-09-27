@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button, Input, Label } from '@finapp/ui/web';
+import { Button, Input, Label, Sheet, Tabs } from '@finapp/ui/web';
 import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -58,12 +58,13 @@ function currencyLabel(currency: string) {
 }
 
 export default function OnboardingPage() {
+  const [step, setStep] = React.useState(0);
   const auth = useConvexAuth();
   const { userId } = useBrowserSync();
   const { records: profiles } = useLocalRecords<Profile>('profile');
   const profile = profiles[0];
   const router = useRouter();
-  const [step, setStep] = React.useState(0);
+  const [currencyOpen, setCurrencyOpen] = React.useState(false);
   const [currency, setCurrency] = React.useState<Currency>(
     Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US') ? 'USD' : 'INR',
   );
@@ -232,6 +233,21 @@ export default function OnboardingPage() {
     <main className="auth-layout">
       <section className="auth-content" aria-labelledby="auth-title">
         <div className="auth-topline">
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Go back"
+            onPress={() => {
+              if (step > 0) {
+                setError('');
+                setStep((current) => current - 1);
+              } else {
+                router.back();
+              }
+            }}
+          >
+            <ArrowLeft size={16} />
+          </Button>
           <Link href="/" className="brand auth-brand" aria-label="Finapp home">
             <span className="brand-mark" aria-hidden="true">
               F
@@ -266,36 +282,17 @@ export default function OnboardingPage() {
             >
               {step === 0 && (
                 <div className="auth-field">
-                  <Label htmlFor="currency-search">Country — currency</Label>
-                  <Input
-                    id="currency-search"
-                    autoComplete="off"
-                    placeholder="Search India, INR, rupee…"
-                    value={currencySearch}
-                    onChangeText={setCurrencySearch}
-                  />
-                  <div
-                    className="auth-currency-list"
-                    role="listbox"
+                  <Label>Country — currency</Label>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="outline"
                     aria-label="Choose country and currency"
+                    onPress={() => setCurrencyOpen(true)}
                   >
-                    {currencyOptions.map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        role="option"
-                        aria-selected={currency === item}
-                        className={currency === item ? 'is-selected' : ''}
-                        onClick={() => setCurrency(item)}
-                      >
-                        {currencyCountries[item]} — {item}
-                      </button>
-                    ))}
-                    {!currencyOptions.length && <p>No matching country or currency.</p>}
-                  </div>
-                  <span className="auth-helper">
-                    Selected currency: {currencyCountries[currency]} — {currency}
-                  </span>
+                    {currencyCountries[currency]} — {currency}
+                  </Button>
+                  <span className="auth-helper">SELECTED CURRENCY</span>
                 </div>
               )}
               {step === 1 && (
@@ -344,23 +341,16 @@ export default function OnboardingPage() {
                 </div>
               )}
               {step === 4 && (
-                <div
-                  className="auth-choice"
-                  role="radiogroup"
-                  aria-label="How will you use Finapp?"
-                >
-                  {(['personal', 'shared'] as const).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      role="radio"
-                      aria-checked={mode === value}
-                      className={mode === value ? 'is-selected' : ''}
-                      onClick={() => setMode(value)}
-                    >
-                      {value === 'personal' ? 'Personal' : 'Personal + groups'}
-                    </button>
-                  ))}
+                <div className="auth-choice">
+                  <Tabs
+                    label="How will you use Finapp?"
+                    value={mode}
+                    onChange={(value) => setMode(value as 'personal' | 'shared')}
+                    tabs={[
+                      { label: 'Personal', value: 'personal' },
+                      { label: 'Personal + groups', value: 'shared' },
+                    ]}
+                  />
                   <p>
                     {mode === 'shared'
                       ? 'Groups and split tools will stay close at hand.'
@@ -374,22 +364,15 @@ export default function OnboardingPage() {
                 </p>
               )}
               <div className="auth-step-actions">
-                {step > 0 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onPress={() => {
-                      setError('');
-                      setStep((current) => current - 1);
-                    }}
-                  >
-                    <ArrowLeft size={16} /> Back
-                  </Button>
-                ) : (
-                  <Button type="button" variant="ghost" onPress={() => router.back()}>
-                    <ArrowLeft size={16} /> Back
-                  </Button>
-                )}
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={saving || !canContinue}
+                  aria-busy={saving}
+                >
+                  {saving ? 'Saving…' : step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}{' '}
+                  <ArrowRight size={16} />
+                </Button>
                 {(step === 2 || step === 3) && (
                   <Button
                     type="button"
@@ -403,22 +386,45 @@ export default function OnboardingPage() {
                     Skip for now
                   </Button>
                 )}
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={saving || !canContinue}
-                  aria-busy={saving}
-                >
-                  {saving ? 'Saving…' : step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}{' '}
-                  <ArrowRight size={16} />
-                </Button>
               </div>
             </form>
+            <Sheet
+              visible={currencyOpen}
+              title="Choose country and currency"
+              onClose={() => {
+                setCurrencyOpen(false);
+                setCurrencySearch('');
+              }}
+            >
+              <Input
+                autoComplete="off"
+                aria-label="Search countries and currencies"
+                placeholder="Search India, INR, rupee…"
+                value={currencySearch}
+                onChangeText={setCurrencySearch}
+              />
+              <div className="auth-currency-list" role="listbox" aria-label="Choose country and currency">
+                {currencyOptions.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    role="option"
+                    aria-selected={currency === item}
+                    className={currency === item ? 'is-selected' : ''}
+                    onClick={() => {
+                      setCurrency(item);
+                      setCurrencyOpen(false);
+                      setCurrencySearch('');
+                    }}
+                  >
+                    {currencyCountries[item]} — {item}
+                  </button>
+                ))}
+                {!currencyOptions.length && <p>No matching country or currency.</p>}
+              </div>
+            </Sheet>
           </div>
         </div>
-        <span className="auth-legal">
-          Your account stays yours. <Link href="/privacy">Read our privacy notes</Link>
-        </span>
       </section>
     </main>
   );

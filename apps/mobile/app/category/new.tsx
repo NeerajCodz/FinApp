@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon } from '@/components/finance';
-import { CategoryEmojiPicker } from '@/components/finance/CategoryEmojiPicker';
+import { CategoryEmojiPicker, CategoryIcon } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';

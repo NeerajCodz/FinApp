@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { allocateParticipants } from '@convex/splits/domain';
-import { CurrencyInput, SemanticMarker } from '@/components/finance';
+import { CurrencyInput, SemanticMarker } from '@finapp/ui/finance';
 import {
   Button,
   IconButton,

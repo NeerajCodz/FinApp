@@ -35,7 +35,7 @@ import {
   ShieldCheck,
   UsersThree,
   Wallet,
-} from '@/lib/icons';
+} from '@finapp/ui/icons/native';
 import { useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
 import { clearValidatedLocalUserId } from '@/local/identity';

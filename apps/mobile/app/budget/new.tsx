@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon, CurrencyInput } from '@/components/finance';
+import { CategoryIcon, CurrencyInput } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Label, Tabs, Text, Typography } from '@finapp/ui/native';
 import { parseMinor } from '@/lib/money';
 import { useTheme } from '@finapp/ui/native';

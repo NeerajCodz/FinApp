@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ChartLineUp } from '@/lib/icons';
+import { ArrowLeft, ChartLineUp } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon, Money, TransactionRow } from '@/components/finance';
+import { CategoryIcon, Money, TransactionRow } from '@finapp/ui/finance';
 import { Button, Card, IconButton, Progress, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
