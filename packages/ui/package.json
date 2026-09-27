@@ -7,7 +7,8 @@
     "./web": "./src/web/index.tsx",
     "./web/styles.css": "./src/web/styles.css",
     "./tokens": "./src/tokens.ts",
-    "./quick-add": "./src/quick-add.ts"
+    "./quick-add": "./src/quick-add.ts",
+    "./category-emoji": "./src/category-emoji.ts"
   },
   "sideEffects": [
     "./src/web/styles.css"

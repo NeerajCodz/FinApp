@@ -26,8 +26,6 @@ type Account = LocalRecord & {
   currency?: string;
   balanceMinor?: bigint | number | string;
   openingBalanceMinor?: bigint | number | string;
-  archivedAt?: number;
-  isIncludedInTotal?: boolean;
 };
 type Transaction = LocalRecord & {
   title?: string;
@@ -37,8 +35,11 @@ type Transaction = LocalRecord & {
   occurredAt?: number;
   categoryId?: string;
   groupId?: string;
+  accountId?: string;
+  transferAccountId?: string;
   status?: string;
   deletedAt?: number;
+  clientUpdatedAt?: number;
 };
 type Category = LocalRecord & { name?: string; icon?: string };
 type Group = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
@@ -55,7 +56,15 @@ function recordId(record: LocalRecord): string {
   return String(record.id ?? record._id ?? '');
 }
 
-function CategoryMark({ label, size = 17 }: { label?: string; size?: number }) {
+function CategoryMark({
+  label,
+  icon,
+  size = 17,
+}: {
+  label?: string;
+  icon?: string;
+  size?: number;
+}) {
   const normalized = (label ?? '').toLowerCase();
   const Icon =
     normalized.includes('food') || normalized.includes('coffee')
@@ -67,7 +76,11 @@ function CategoryMark({ label, size = 17 }: { label?: string; size?: number }) {
           : normalized.includes('bank') || normalized.includes('account')
             ? Landmark
             : ReceiptText;
-  return <Icon size={size} aria-hidden="true" />;
+  return icon ? (
+    <span aria-hidden="true">{icon}</span>
+  ) : (
+    <Icon size={size} aria-hidden="true" />
+  );
 }
 
 export default function DashboardPage() {
@@ -84,19 +97,43 @@ export default function DashboardPage() {
 
   React.useEffect(() => setNow(Date.now()), []);
 
-  const currency =
-    profiles[0]?.defaultCurrency ??
-    accounts.find((account) => account.archivedAt === undefined)?.currency ??
-    'INR';
-  const activeAccounts = accounts.filter(
-    (account) => account.archivedAt === undefined && account.currency === currency,
+  const currency = profiles[0]?.defaultCurrency ?? 'INR';
+  const currencyAccounts = accounts.filter((account) => account.currency === currency);
+  const accountIds = new Set(
+    currencyAccounts.flatMap((account) =>
+      [account.id, account._id, account.cloudId].filter(
+        (value): value is string => typeof value === 'string',
+      ),
+    ),
   );
-  const totalBalance = activeAccounts
-    .filter((account) => account.isIncludedInTotal !== false)
-    .reduce(
-      (sum, account) => sum + asMinor(account.balanceMinor ?? account.openingBalanceMinor),
+  const totalBalance =
+    currencyAccounts.reduce(
+      (total, account) =>
+        total + asMinor(account.balanceMinor ?? account.openingBalanceMinor),
       0n,
-    );
+    ) +
+    transactions.reduce((delta, transaction) => {
+      if (
+        typeof transaction.clientUpdatedAt !== 'number' ||
+        transaction.status !== 'posted' ||
+        transaction.deletedAt !== undefined ||
+        transaction.currency !== currency
+      )
+        return delta;
+      const amount = asMinor(transaction.amountMinor);
+      const sourceDelta = accountIds.has(transaction.accountId ?? '')
+        ? transaction.type === 'expense' || transaction.type === 'transfer'
+          ? -amount
+          : amount
+        : 0n;
+      const destinationDelta =
+        transaction.type === 'transfer' &&
+        transaction.transferAccountId &&
+        accountIds.has(transaction.transferAccountId)
+          ? amount
+          : 0n;
+      return delta + sourceDelta + destinationDelta;
+    }, 0n);
   const range = React.useMemo(() => {
     if (now === null) return { startAt: 0, endAt: 0 };
     const start = new Date(now);
@@ -208,7 +245,7 @@ export default function DashboardPage() {
         <span className="finance-metric-label">TOTAL BALANCE</span>
         <strong>{accountsLoading ? '—' : formatMinor(totalBalance, currency)}</strong>
         <span className="finance-metric-foot">
-          Across {activeAccounts.length} {activeAccounts.length === 1 ? 'account' : 'accounts'}
+          Across {currencyAccounts.length} {currencyAccounts.length === 1 ? 'account' : 'accounts'}
         </span>
       </Card>
 
@@ -429,7 +466,7 @@ export default function DashboardPage() {
               return (
                 <li key={id}>
                   <span className={`finance-transaction-icon${isIncome ? ' income' : ''}`}>
-                    <CategoryMark label={category?.name} size={16} />
+                    <CategoryMark label={category?.name} icon={category?.icon} size={16} />
                   </span>
                   <Link
                     className="finance-transaction-description"
