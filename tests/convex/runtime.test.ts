@@ -1,10 +1,13 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { Scrypt } from 'lucia';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
 
+vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+afterAll(() => vi.unstubAllEnvs());
 const modules = import.meta.glob('../../convex/**/*.ts');
 const identity = { subject: 'runtime-user', email: 'runtime@example.com', name: 'Runtime User' };
 
