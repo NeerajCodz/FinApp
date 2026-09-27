@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowRight } from '@/lib/icons';
+import { ArrowLeft, ArrowRight } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { BrandMark } from '@/components/finance';
+import { BrandMark } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 

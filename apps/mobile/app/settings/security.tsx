@@ -3,7 +3,7 @@ import { Platform, ScrollView, View } from 'react-native';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import * as Haptics from 'expo-haptics';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
