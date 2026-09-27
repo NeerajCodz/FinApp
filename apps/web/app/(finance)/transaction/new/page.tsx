@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, UsersRound } from 'lucide-react';
 import { Button, Card } from '@finapp/ui/web';
 import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -427,6 +427,16 @@ export default function NewPersonalTransactionPage() {
               placeholder="Groceries, salary, or transfer note"
               maxLength={120}
             />
+            {type === 'expense' && (
+              <Link
+                className="finance-secondary-action"
+                href="/split/new"
+                style={{ justifyContent: 'flex-start' }}
+              >
+                <UsersRound size={18} /> Split this expense
+                <span className="finance-muted">Choose people and shares</span>
+              </Link>
+            )}
             <FinanceInput
               label="Date"
               type="date"

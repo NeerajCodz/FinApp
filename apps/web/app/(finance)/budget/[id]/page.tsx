@@ -9,15 +9,7 @@ import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import {
-  asMinor,
-  belongsToUser,
-  idOf,
-  matchesId,
-  PageHeading,
-  SignInGate,
-  syncedId,
-} from '../../_personal';
+import { asMinor, belongsToUser, idOf, matchesId, PageHeading, SignInGate } from '../../_personal';
 
 type Budget = LocalRecord & {
   name?: string;
@@ -133,11 +125,9 @@ export default function PersonalBudgetDetailPage() {
 
   async function archive() {
     if (!userId || !budget || pending) return;
-    const budgetId = syncedId(budget);
+    const budgetId = String(budget._id ?? budget.cloudId ?? budget.id ?? '');
     if (!budgetId) {
-      setFormError(
-        'This budget is awaiting sync. Archive becomes available once it has a cloud ID.',
-      );
+      setFormError('This budget has no saved identifier and cannot be archived.');
       return;
     }
     if (!window.confirm('Archive this budget? Its saved history will remain available.')) return;
@@ -151,7 +141,8 @@ export default function PersonalBudgetDetailPage() {
         { ...budget, archivedAt: Date.now() },
         { budgetId },
         {
-          recordId: idOf(budget),
+          recordId: String(budget.id ?? budget._id ?? budget.cloudId ?? ''),
+          dependencies: budget.cloudId || budget._id ? [] : [`budget:${budgetId}`],
           baseUpdatedAt: typeof budget.updatedAt === 'number' ? budget.updatedAt : undefined,
         },
       );
@@ -300,19 +291,9 @@ export default function PersonalBudgetDetailPage() {
               {formError}
             </p>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending || !syncedId(budget)}
-            onPress={() => void archive()}
-          >
+          <Button type="button" variant="outline" disabled={pending} onPress={() => void archive()}>
             {pending ? 'Archiving…' : 'Archive budget'} <ArrowRight size={15} />
           </Button>
-          {!syncedId(budget) && (
-            <p className="finance-form-note">
-              This budget is waiting to sync before it can be archived.
-            </p>
-          )}
         </Card>
       ) : (
         <Card className="finance-record-panel">

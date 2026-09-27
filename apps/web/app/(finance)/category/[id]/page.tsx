@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Tags } from 'lucide-react';
-import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Button, Card, Empty, SectionHeader, Sheet } from '@finapp/ui/web';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -48,6 +48,56 @@ type Transaction = LocalRecord & {
   deletedAt?: number;
 };
 const maxInt64 = 9_223_372_036_854_775_807n;
+const categoryEmojiOptions = [
+  ['🍎', 'apple fruit groceries food'],
+  ['🥑', 'avocado fruit groceries food'],
+  ['🍞', 'bread bakery groceries food'],
+  ['🥦', 'vegetables groceries food'],
+  ['☕', 'coffee cafe drink food'],
+  ['🍽️', 'dining restaurant food'],
+  ['🍕', 'pizza restaurant food'],
+  ['🛒', 'groceries shopping food'],
+  ['🚕', 'taxi cab transport travel'],
+  ['🚆', 'train transport travel'],
+  ['✈️', 'flight airplane travel'],
+  ['🚗', 'car fuel transport'],
+  ['⛽', 'fuel petrol transport'],
+  ['🏠', 'home rent house bills'],
+  ['💡', 'electricity power bills home'],
+  ['📱', 'phone mobile bills'],
+  ['🌐', 'internet broadband bills'],
+  ['🛍️', 'shopping clothes retail'],
+  ['👕', 'clothes fashion shopping'],
+  ['💄', 'beauty skincare shopping'],
+  ['🎬', 'movies cinema entertainment'],
+  ['🎮', 'games gaming entertainment'],
+  ['🎵', 'music entertainment'],
+  ['🎟️', 'events tickets entertainment'],
+  ['🏋️', 'gym fitness health'],
+  ['💊', 'medicine pharmacy health'],
+  ['🩺', 'doctor healthcare health'],
+  ['📚', 'books education learning'],
+  ['🎓', 'education tuition school'],
+  ['🐾', 'pet animal vet'],
+  ['🐶', 'dog pet animal'],
+  ['🐱', 'cat pet animal'],
+  ['👶', 'child family'],
+  ['🎁', 'gift present'],
+  ['💳', 'card payment finance'],
+  ['🏦', 'bank finance'],
+  ['💰', 'savings money income'],
+  ['💵', 'cash money income'],
+  ['💼', 'salary work income'],
+  ['📈', 'investment growth income'],
+  ['🧾', 'receipt tax bills'],
+  ['🧹', 'cleaning home'],
+  ['🔧', 'repair maintenance home'],
+  ['🌱', 'garden home'],
+  ['🏖️', 'holiday vacation travel'],
+  ['💝', 'charity donation'],
+  ['🧘', 'wellness health'],
+  ['✨', 'other favorite'],
+] as const;
 
 export default function PersonalCategoryDetailPage() {
   const params = useParams<{ id: string }>();
@@ -72,10 +122,15 @@ export default function PersonalCategoryDetailPage() {
   const currency = category?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
   const [name, setName] = React.useState('');
   const [icon, setIcon] = React.useState('');
+  const [emojiPickerOpen, setEmojiPickerOpen] = React.useState(false);
+  const [emojiQuery, setEmojiQuery] = React.useState('');
   const [limitInput, setLimitInput] = React.useState('');
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [rangeError, setRangeError] = React.useState('');
+  const filteredEmojis = categoryEmojiOptions.filter(([, terms]) =>
+    terms.includes(emojiQuery.trim().toLowerCase()),
+  );
   const monthRange = React.useMemo(() => {
     const now = new Date();
     return {
@@ -388,6 +443,97 @@ export default function PersonalCategoryDetailPage() {
                 maxLength={32}
                 placeholder="Optional"
               />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                aria-expanded={emojiPickerOpen}
+                aria-controls="category-detail-emoji-options"
+                onPress={() => {
+                  setEmojiPickerOpen(true);
+                  setEmojiQuery('');
+                }}
+              >
+                {icon ? `${icon} Change emoji` : 'Choose emoji'}
+              </Button>
+              <Sheet
+                visible={emojiPickerOpen}
+                title="Choose a category emoji"
+                onClose={() => {
+                  setEmojiPickerOpen(false);
+                  setEmojiQuery('');
+                }}
+              >
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <label className="finance-form-field">
+                    <span>Search emoji</span>
+                    <input
+                      type="search"
+                      aria-label="Search emoji"
+                      placeholder="Search food, travel, bills…"
+                      value={emojiQuery}
+                      onChange={(event) => setEmojiQuery(event.currentTarget.value)}
+                    />
+                  </label>
+                  <div
+                    id="category-detail-emoji-options"
+                    role="group"
+                    aria-label="Category emoji options"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+                      gap: 7,
+                      maxHeight: 216,
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {filteredEmojis.map(([emoji, terms]) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        aria-label={`${emoji} ${terms.split(' ')[0]}`}
+                        aria-pressed={icon === emoji}
+                        title={terms}
+                        disabled={pending}
+                        onClick={() => {
+                          setIcon(emoji);
+                          setEmojiPickerOpen(false);
+                          setEmojiQuery('');
+                          void mutate('category.setIcon', { icon: emoji }, { icon: emoji });
+                        }}
+                        style={{
+                          minHeight: 42,
+                          borderRadius: 12,
+                          border: '1px solid var(--finance-line)',
+                          background: icon === emoji ? 'var(--finance-panel-raise)' : 'transparent',
+                          fontSize: 22,
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  {filteredEmojis.length === 0 && (
+                    <p className="finance-muted">No emoji match that search.</p>
+                  )}
+                  {icon && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={pending}
+                      onPress={() => {
+                        setIcon('');
+                        setEmojiPickerOpen(false);
+                        setEmojiQuery('');
+                        void mutate('category.setIcon', { icon: undefined }, { icon: null });
+                      }}
+                    >
+                      Use automatic icon
+                    </Button>
+                  )}
+                </div>
+              </Sheet>
               <Button type="submit" disabled={pending}>
                 {pending ? 'Saving…' : 'Save icon'}
               </Button>
