@@ -41,6 +41,7 @@ type Transaction = LocalRecord & {
   status?: string;
   deletedAt?: number;
   title?: string;
+  merchant?: string;
 };
 type Account = LocalRecord & { name?: string };
 type Category = LocalRecord & { name?: string };
@@ -216,52 +217,78 @@ export default function PersonalBudgetDetailPage() {
         title={budget.name ?? 'Budget'}
         description={`${scope} · ${currency}${budget.archivedAt !== undefined ? ' · Archived' : ''}`}
       />
-      <Card className="finance-metric-card finance-balance-card">
-        <span className="finance-metric-label">POSTED EXPENSES · {currency}</span>
-        <strong>{formatMinor(spent, currency)}</strong>
-        <span className="finance-metric-foot">
-          of {formatMinor(limit, currency)} · {progress}% used
-        </span>
-        <div className="finance-plan-track">
-          <span style={{ width: `${progress}%` }} />
-        </div>
-        <p className="finance-muted">
-          {remaining >= 0n
-            ? `${formatMinor(remaining, currency)} remaining`
-            : `${formatMinor(-remaining, currency)} over limit`}
-        </p>
-        <p className="finance-plan-dates">
-          {new Date(startAt).toLocaleDateString()} – {new Date(endAt).toLocaleDateString()}
-        </p>
-      </Card>
-      <Card className="finance-record-panel">
-        <SectionHeader title="Scope and dates" action={<CalendarDays size={17} />} />
-        <ul className="finance-record-list">
-          <li>
-            <span className="finance-record-copy">
-              <strong>Scope</strong>
-              <small>{scope}</small>
+      <div className="finance-dashboard-grid">
+        <Card className="finance-metric-card finance-balance-card">
+          <SectionHeader title="Budget progress" action={<span>{currency}</span>} />
+          <span className="finance-metric-label">SPENT THIS PERIOD</span>
+          <strong>{formatMinor(spent, currency)}</strong>
+          <span className="finance-metric-foot">
+            of {formatMinor(limit, currency)} · {progress}% used
+          </span>
+          <div
+            className="finance-plan-track"
+            role="progressbar"
+            aria-label="Budget usage"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+          >
+            <span style={{ width: `${progress}%` }} />
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <span>
+              <small className="finance-metric-label">Limit</small>
+              <br />
+              {formatMinor(limit, currency)}
             </span>
-            <span>{budget.period ?? 'monthly'}</span>
-          </li>
-          <li>
-            <span className="finance-record-copy">
-              <strong>Date range</strong>
-              <small>
-                {new Date(startAt).toLocaleDateString()} through{' '}
-                {new Date(endAt).toLocaleDateString()}
+            <span style={{ textAlign: 'right' }}>
+              <small className="finance-metric-label">
+                {remaining < 0n ? 'Over limit' : 'Still available'}
               </small>
+              <br />
+              {formatMinor(remaining < 0n ? -remaining : remaining, currency)}
             </span>
-          </li>
-          <li>
-            <span className="finance-record-copy">
-              <strong>Limit</strong>
-              <small>{currency}</small>
-            </span>
-            <strong>{formatMinor(limit, currency)}</strong>
-          </li>
-        </ul>
-      </Card>
+          </div>
+          <p className="finance-plan-dates">
+            {new Date(startAt).toLocaleDateString()} – {new Date(endAt).toLocaleDateString()}
+          </p>
+        </Card>
+        <Card className="finance-record-panel">
+          <SectionHeader title="Scope and dates" action={<CalendarDays size={17} />} />
+          <ul className="finance-record-list">
+            <li>
+              <span className="finance-record-copy">
+                <strong>Scope</strong>
+                <small>{scope}</small>
+              </span>
+              <span>{budget.period ?? 'monthly'}</span>
+            </li>
+            <li>
+              <span className="finance-record-copy">
+                <strong>Date range</strong>
+                <small>
+                  {new Date(startAt).toLocaleDateString()} through{' '}
+                  {new Date(endAt).toLocaleDateString()}
+                </small>
+              </span>
+            </li>
+            <li>
+              <span className="finance-record-copy">
+                <strong>Limit</strong>
+                <small>{currency}</small>
+              </span>
+              <strong>{formatMinor(limit, currency)}</strong>
+            </li>
+          </ul>
+        </Card>
+      </div>
       {budget.archivedAt === undefined ? (
         <Card className="finance-record-panel">
           <SectionHeader title="Archive budget" />
@@ -296,8 +323,8 @@ export default function PersonalBudgetDetailPage() {
       )}
       <Card className="finance-record-panel">
         <SectionHeader
-          title="Matching expenses"
-          action={<span>{matching.length} local records</span>}
+          title="Recent expenses"
+          action={<span>Posted transactions counted toward this budget</span>}
         />
         {transactionLoading ? (
           <p className="finance-muted" role="status">
@@ -309,24 +336,43 @@ export default function PersonalBudgetDetailPage() {
           </p>
         ) : matching.length === 0 ? (
           <Empty
-            title="No matching expenses"
-            description="Posted expenses in this scope and date range appear here."
+            title="No expenses counted yet"
+            description="Matching posted expenses will appear here."
           />
         ) : (
           <ul className="finance-record-list">
-            {matching.slice(0, 12).map((item) => (
-              <li key={idOf(item)}>
-                <span className="finance-record-copy">
-                  <strong>{item.title ?? 'Expense'}</strong>
-                  <small>
-                    {item.occurredAt
-                      ? new Date(item.occurredAt).toLocaleDateString()
-                      : 'Date unavailable'}
-                  </small>
-                </span>
-                <strong>{formatMinor(asMinor(item.amountMinor), item.currency ?? currency)}</strong>
-              </li>
-            ))}
+            {matching.slice(0, 5).map((item) => {
+              const transactionId = idOf(item);
+              return (
+                <li key={transactionId}>
+                  <Link
+                    href={`/transaction/${encodeURIComponent(transactionId)}`}
+                    style={{
+                      display: 'flex',
+                      minWidth: 0,
+                      flex: 1,
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 14,
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span className="finance-record-copy">
+                      <strong>{item.title ?? item.merchant ?? 'Expense'}</strong>
+                      <small>
+                        {item.occurredAt
+                          ? new Date(item.occurredAt).toLocaleDateString()
+                          : 'Date unavailable'}
+                      </small>
+                    </span>
+                    <strong>
+                      {formatMinor(asMinor(item.amountMinor), item.currency ?? currency)}
+                    </strong>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
         <p className="finance-form-note">

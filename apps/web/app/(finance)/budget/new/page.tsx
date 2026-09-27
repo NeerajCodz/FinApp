@@ -163,8 +163,8 @@ export default function NewPersonalBudgetPage() {
       </Link>
       <PageHeading
         eyebrow="NEW BUDGET"
-        title="Set a spending limit"
-        description="Choose the date range and optional category or account scope. The selected account determines its required currency."
+        title="New budget"
+        description="Track real expenses against a limit you choose. Choose a period and optional category or account scope."
       />
       <Card className="finance-form-panel">
         {loading ? (
@@ -231,6 +231,34 @@ export default function NewPersonalBudgetPage() {
                 </select>
               </label>
             )}
+            {(period === 'category' && categories.length === 0) ||
+            (period === 'account' && accounts.length === 0) ? (
+              <p className="finance-muted">
+                {period === 'category' ? (
+                  <>
+                    Create a category before setting a category budget.{' '}
+                    <Link className="finance-inline-link" href="/category/new">
+                      Create category
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    Create an account before setting an account budget.{' '}
+                    <Link className="finance-inline-link" href="/account/new">
+                      Create account
+                    </Link>
+                  </>
+                )}
+              </p>
+            ) : null}
+            {!currency && period !== 'account' && (
+              <p className="finance-muted">
+                Set a default currency before creating this budget.{' '}
+                <Link className="finance-inline-link" href="/settings/currency">
+                  Set default currency
+                </Link>
+              </p>
+            )}
             {currency && (
               <FinanceInput
                 label={`Limit (${currency})`}
@@ -277,7 +305,7 @@ export default function NewPersonalBudgetPage() {
               type="submit"
               disabled={saving || loading || !name.trim() || !amount || !currency}
             >
-              {saving ? 'Saving locally…' : 'Create budget'} <ArrowRight size={15} />
+              {saving ? 'Saving…' : 'Save budget'} <ArrowRight size={15} />
             </Button>
             <p className="finance-form-note">
               Budgets compare posted expenses in this date range. They never move money between
