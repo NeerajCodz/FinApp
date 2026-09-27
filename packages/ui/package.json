@@ -6,7 +6,21 @@
     "./native": "./src/native/index.tsx",
     "./web": "./src/web/index.tsx",
     "./web/styles.css": "./src/web/styles.css",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./quick-add": "./src/quick-add.ts",
+    "./category-emoji": "./src/category-emoji.ts",
+    "./finance": {
+      "react-native": "./src/finance/native/index.ts",
+      "browser": "./src/finance/web/index.ts",
+      "default": "./src/finance/web/index.ts"
+    },
+    "./analytics": {
+      "react-native": "./src/analytics/native/index.ts",
+      "browser": "./src/analytics/web/index.ts",
+      "default": "./src/analytics/web/index.ts"
+    },
+    "./icons/native": "./src/icons/native.tsx",
+    "./finance/money": "./src/finance/money.ts"
   },
   "sideEffects": [
     "./src/web/styles.css"

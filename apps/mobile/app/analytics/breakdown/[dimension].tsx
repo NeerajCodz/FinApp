@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import {
   aggregateAnalytics,
   getAnalyticsRange,
@@ -12,7 +12,7 @@ import {
   validateAnalyticsRange,
   type AnalyticsPeriod,
 } from '@convex/analytics/domain';
-import { CategoryIcon, TransactionRow } from '@/components/finance';
+import { CategoryIcon, TransactionRow } from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';

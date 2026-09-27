@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowRight } from '@/lib/icons';
+import { ArrowLeft, ArrowRight } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { BrandMark } from '@/components/finance';
-import { Button, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
+import { BrandMark } from '@finapp/ui/finance';
+import { Button, Checkbox, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 
 export default function SignUpScreen() {
   const [email, setEmail] = useState('');
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { signIn } = useAuthActions();
@@ -23,6 +24,7 @@ export default function SignUpScreen() {
     const form = new FormData();
     form.append('email', email.trim().toLowerCase());
     form.append('password', password);
+    form.append('twoFactorEnabled', String(twoFactorEnabled));
     form.append('flow', 'signUp');
     try {
       const result = await signIn('password', form);
@@ -105,6 +107,16 @@ export default function SignUpScreen() {
               />
               <Typography variant="caption" style={{ marginTop: 8 }}>
                 Use at least eight characters.
+              </Typography>
+            </View>
+            <View style={{ gap: 4 }}>
+              <Checkbox
+                checked={twoFactorEnabled}
+                onChange={setTwoFactorEnabled}
+                label="Use email two-factor sign-in"
+              />
+              <Typography variant="caption">
+                Optional. Require a code sent to your email after your password.
               </Typography>
             </View>
             {!!error && (

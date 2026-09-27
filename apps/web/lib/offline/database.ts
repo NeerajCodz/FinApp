@@ -1,7 +1,8 @@
 export const WEB_DATABASE_NAME = 'finapp-web-local';
-const WEB_DATABASE_VERSION = 2;
+const WEB_DATABASE_VERSION = 3;
 
-export type StoreName = 'records' | 'outbox' | 'idMappings' | 'syncState' | 'conflicts';
+export type StoreName =
+  'records' | 'outbox' | 'idMappings' | 'syncState' | 'conflicts' | 'rangeCoverage';
 
 let databasePromise: Promise<IDBDatabase> | undefined;
 
@@ -52,6 +53,10 @@ export async function openWebDatabase(): Promise<IDBDatabase> {
     }
     if (!database.objectStoreNames.contains('syncState'))
       database.createObjectStore('syncState', { keyPath: 'userId' });
+    if (!database.objectStoreNames.contains('rangeCoverage')) {
+      const rangeCoverage = database.createObjectStore('rangeCoverage', { keyPath: 'key' });
+      rangeCoverage.createIndex('by-user-scope', ['userId', 'scope']);
+    }
     const upgrade = request.transaction;
     const conflicts = database.objectStoreNames.contains('conflicts')
       ? upgrade?.objectStore('conflicts')

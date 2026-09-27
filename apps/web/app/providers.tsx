@@ -6,17 +6,28 @@ import { ConvexReactClient } from 'convex/react';
 import { ThemeProvider } from '@finapp/ui/web';
 import { BrowserSyncProvider } from '@/lib/offline/BrowserSyncProvider';
 
-const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
 
 export function Providers({ children }: { children: ReactNode }) {
-  const client = useMemo(() => (convexUrl ? new ConvexReactClient(convexUrl) : null), []);
+  const client = useMemo(() => {
+    if (!convexUrl) return null;
+    try {
+      const url = new URL(convexUrl);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+      return new ConvexReactClient(convexUrl);
+    } catch {
+      return null;
+    }
+  }, []);
 
   if (!client) {
     return (
       <ThemeProvider>
         <main className="configuration-error" role="alert">
           <h1>Finapp needs a Convex deployment URL.</h1>
-          <p>Set NEXT_PUBLIC_CONVEX_URL to your Convex HTTP endpoint and restart the web app.</p>
+          <p>
+            Set NEXT_PUBLIC_CONVEX_URL to a valid Convex HTTP endpoint in the app environment.
+          </p>
         </main>
       </ThemeProvider>
     );

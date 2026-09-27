@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { Card, SectionHeader } from '@finapp/ui/web';
+import { Button, IconButton, Text, Typography } from '@finapp/ui/web';
 import { currencies } from '@convex/shared/validators';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -12,8 +12,17 @@ import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
 type Profile = LocalRecord & { displayName?: string; defaultCurrency?: string };
 
+function currencyLabel(currency: string) {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'currency' }).of(currency) ?? currency;
+  } catch {
+    return currency;
+  }
+}
+
 export default function CurrencySettingsPage() {
   const { userId } = useBrowserSync();
+  const router = useRouter();
   const { records, loading, error } = useLocalRecords<Profile>('profile');
   const profile = records[0];
   const selected = profile?.defaultCurrency ?? 'INR';
@@ -59,51 +68,48 @@ export default function CurrencySettingsPage() {
 
   return (
     <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">PREFERENCES</p>
-          <h1>Currency</h1>
-          <p className="finance-muted">
-            Used for new accounts and entries. Existing records keep their original currency.
-          </p>
-        </div>
-        <Link className="finance-secondary-action" href="/settings">
-          <ArrowLeft size={15} aria-hidden="true" /> Settings
-        </Link>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">Currency</Typography>
       </header>
-      <Card className="finance-record-panel" style={{ display: 'grid', gap: 14 }}>
-        <SectionHeader title="Default currency" action={<span>{selected}</span>} />
+      <section style={{ display: 'grid', gap: 12 }}>
+        <Typography variant="label">Default currency</Typography>
+        <Text style={{ maxWidth: 320 }}>
+          Used for new accounts, budgets, groups, and transactions. Changing this does not rewrite
+          historical entries.
+        </Text>
         {loading ? (
-          <p className="finance-muted" role="status">
-            Loading your profile…
-          </p>
+          <Text role="status">Loading your profile…</Text>
         ) : error ? (
-          <p className="finance-form-error" role="alert">
+          <Text role="alert">
             The saved currency could not be loaded. Reload the profile before changing it.
-          </p>
+          </Text>
         ) : (
-          <label className="finance-form-field">
-            <span>Currency for new records</span>
-            <select
-              value={selected}
-              aria-label="Default currency"
-              disabled={saving}
-              onChange={(event) => void changeCurrency(event.currentTarget.value)}
-            >
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {currencies.map((currency) => (
-                <option key={currency} value={currency}>
+                <Button
+                  key={currency}
+                  size="sm"
+                  variant={selected === currency ? 'primary' : 'outline'}
+                  disabled={saving}
+                  aria-pressed={selected === currency}
+                  onPress={() => void changeCurrency(currency)}
+                  style={{ width: '31%', minHeight: 44 }}
+                >
                   {currency}
-                </option>
+                </Button>
               ))}
-            </select>
-          </label>
+            </div>
+            <Typography variant="caption">
+              Selected: {currencyLabel(selected)} · {selected}
+            </Typography>
+          </>
         )}
-        {message && (
-          <p className="finance-settings-message" role="status">
-            {message}
-          </p>
-        )}
-      </Card>
+        {message && <Text role="status">{message}</Text>}
+      </section>
     </div>
   );
 }

@@ -52,16 +52,20 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
         active = false;
       };
     }
-    const refreshLock = () => {
+    const refreshLock = (relock = true) => {
       if (!active) return;
       try {
         setPasskeyEnabled(hasWebAuthnLock(userId));
         setPasscodeStatus(getPasscodeLockStatus(userId));
-        setPhase(hasBrowserLock(userId) ? 'locked' : 'open');
+        if (hasBrowserLock(userId))
+          setPhase((previous) => (relock || previous !== 'open' ? 'locked' : 'open'));
+        else setPhase('open');
       } catch {
         setPhase('storage-error');
       }
     };
+    const refreshAfterConfiguration = () => refreshLock(false);
+    const refreshFromExternalChange = () => refreshLock();
     const relock = () => {
       if (!active) return;
       try {
@@ -74,16 +78,15 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
       if (document.visibilityState === 'hidden') relock();
     };
     refreshLock();
-    window.addEventListener(webAuthnLockChangedEvent, refreshLock);
-    window.addEventListener('storage', refreshLock);
-    window.addEventListener('focus', refreshLock);
-    window.addEventListener('blur', relock);
+    window.addEventListener(webAuthnLockChangedEvent, refreshAfterConfiguration);
+    window.addEventListener('storage', refreshFromExternalChange);
+    window.addEventListener('focus', refreshFromExternalChange);
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       active = false;
-      window.removeEventListener(webAuthnLockChangedEvent, refreshLock);
-      window.removeEventListener('storage', refreshLock);
-      window.removeEventListener('focus', refreshLock);
+      window.removeEventListener(webAuthnLockChangedEvent, refreshAfterConfiguration);
+      window.removeEventListener('storage', refreshFromExternalChange);
+      window.removeEventListener('focus', refreshFromExternalChange);
       window.removeEventListener('blur', relock);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };

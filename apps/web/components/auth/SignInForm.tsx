@@ -32,6 +32,14 @@ export function SignInForm({ initialIdentifier }: { initialIdentifier: string })
         form.set('flow', 'verification-required');
         await signIn('password', form);
         router.replace(`/verify?email=${encodeURIComponent(result.email)}&next=dashboard`);
+      } else if (result.status === 'two-factor-disabled') {
+        const form = new FormData();
+        form.set('email', identifier.trim());
+        form.set('password', password);
+        form.set('flow', 'signIn');
+        const signInResult = await signIn('password', form);
+        if (!signInResult.signingIn) throw new Error('Unable to sign in. Try again.');
+        router.replace('/dashboard');
       } else {
         router.replace(`/two-factor?challengeId=${encodeURIComponent(result.challengeId)}`);
       }

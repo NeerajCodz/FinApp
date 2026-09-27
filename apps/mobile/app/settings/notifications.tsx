@@ -1,6 +1,6 @@
 import React from 'react';
 import { Linking, ScrollView, View } from 'react-native';
-import { ArrowLeft, Bell } from '@/lib/icons';
+import { ArrowLeft, Bell } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Separator, Switch, Text, Typography } from '@finapp/ui/native';

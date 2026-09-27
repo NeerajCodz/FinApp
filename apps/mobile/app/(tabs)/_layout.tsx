@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Slot, router, usePathname } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { ClockCounterClockwise, House, Plus, UserCircle, UsersThree } from '@/lib/icons';
+import { ClockCounterClockwise, House, Plus, UserCircle, UsersThree } from '@finapp/ui/icons/native';
 import { Button, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { quickAddActions } from '@/lib/navigation/quick-add';
+import { quickAddActions } from '@finapp/ui/quick-add';
 
 const SIGNATURE_BAR_HEIGHT = 96;
 
@@ -16,14 +16,6 @@ const navItems = [
   { label: 'Groups', route: '/(tabs)/groups', match: '/groups', icon: UsersThree },
   { label: 'Profile', route: '/(tabs)/profile', match: '/profile', icon: UserCircle },
 ] as const;
-
-const quickAddDescriptions: Record<(typeof quickAddActions)[number]['label'], string> = {
-  Expense: 'Money you spent',
-  Income: 'Money you received',
-  Transfer: 'Move between accounts',
-  'Split expense': 'Share with people',
-  Settlement: 'Pay someone back',
-};
 
 type NavItem = (typeof navItems)[number];
 
@@ -196,7 +188,7 @@ export default function TabsLayout() {
               >
                 <View style={{ gap: 3 }}>
                   <Typography variant="bodyLarge">{action.label}</Typography>
-                  <Typography variant="small">{quickAddDescriptions[action.label]}</Typography>
+                  <Typography variant="small">{action.description}</Typography>
                 </View>
               </Button>
               {index < quickAddActions.length - 1 && <Separator />}

@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BudgetProgress, CategoryIcon, Money, TransactionRow } from '@/components/finance';
+import {
+  BudgetProgress,
+  CategoryEmojiPicker,
+  CategoryIcon,
+  Money,
+  TransactionRow,
+} from '@finapp/ui/finance';
 import { parseMinor } from '@/lib/money';
-import { CategoryEmojiPicker } from '@/components/finance/CategoryEmojiPicker';
 import {
   Button,
   Empty,

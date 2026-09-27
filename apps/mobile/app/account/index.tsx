@@ -9,14 +9,14 @@ import {
   Plus,
   ReceiptText,
   Wallet,
-} from '@/lib/icons';
+} from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { displayAccountName } from '@/lib/ledger';
 import type { LocalRecord } from '@/local/repository';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money } from '@/components/finance';
+import { Money } from '@finapp/ui/finance';
 import { Button, Card, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 

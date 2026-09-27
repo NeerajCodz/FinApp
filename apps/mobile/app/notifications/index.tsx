@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
-import { ArrowLeft, Bell, CaretRight, Gear } from '@/lib/icons';
+import { ArrowLeft, Bell, CaretRight, Gear } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {

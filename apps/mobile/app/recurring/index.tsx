@@ -1,11 +1,11 @@
 import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
-import { ArrowLeft, CalendarDays, Plus } from '@/lib/icons';
+import { ArrowLeft, CalendarDays, Plus } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import { Button, IconButton, Input, Text, Typography } from '@finapp/ui/native';
-import { Money } from '@/components/finance';
+import { Money } from '@finapp/ui/finance';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';

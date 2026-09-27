@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowRight } from '@/lib/icons';
+import { ArrowLeft, ArrowRight } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { BrandMark } from '@/components/finance';
+import { BrandMark } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 
@@ -41,6 +41,14 @@ export default function SignInScreen() {
           pathname: '/(auth)/verify',
           params: { email: result.email, next: 'tabs' },
         });
+      } else if (result.status === 'two-factor-disabled') {
+        const form = new FormData();
+        form.append('email', identifier.trim());
+        form.append('password', password);
+        form.append('flow', 'signIn');
+        const signInResult = await signIn('password', form);
+        if (!signInResult.signingIn) throw new Error('Unable to sign in');
+        router.replace('/(tabs)');
       } else {
         router.replace({
           pathname: '/(auth)/two-factor',

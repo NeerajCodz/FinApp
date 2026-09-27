@@ -3,21 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, CalendarDays } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { formatMinor } from '@convex/shared/money';
+import { CategoryIcon, Money, TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import {
-  asMinor,
-  belongsToUser,
-  idOf,
-  matchesId,
-  PageHeading,
-  SignInGate,
-  syncedId,
-} from '../../_personal';
+import { asMinor, belongsToUser, idOf, matchesId, SignInGate } from '../../_personal';
 
 type Budget = LocalRecord & {
   name?: string;
@@ -41,9 +33,10 @@ type Transaction = LocalRecord & {
   status?: string;
   deletedAt?: number;
   title?: string;
+  merchant?: string;
 };
 type Account = LocalRecord & { name?: string };
-type Category = LocalRecord & { name?: string };
+type Category = LocalRecord & { name?: string; icon?: string };
 
 export default function PersonalBudgetDetailPage() {
   const params = useParams<{ id: string }>();
@@ -59,7 +52,11 @@ export default function PersonalBudgetDetailPage() {
   const { records: categories } = useLocalRecords<Category>('category');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const budget = budgets.find(
-    (item) => userId && belongsToUser(item, userId) && matchesId(item, routeId),
+    (item) =>
+      userId &&
+      belongsToUser(item, userId) &&
+      matchesId(item, routeId) &&
+      item.archivedAt === undefined,
   );
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -128,18 +125,15 @@ export default function PersonalBudgetDetailPage() {
   const spent = matching.reduce((sum, item) => sum + asMinor(item.amountMinor), 0n);
   const limit = asMinor(budget?.amountMinor);
   const remaining = limit - spent;
-  const progress = limit > 0n ? Math.min(100, Number((spent * 100n) / limit)) : 0;
+  const progress = limit > 0n ? Math.min(100, Number((spent * 10_000n) / limit) / 100) : 0;
 
   async function archive() {
     if (!userId || !budget || pending) return;
-    const budgetId = syncedId(budget);
+    const budgetId = String(budget._id ?? budget.cloudId ?? budget.id ?? '');
     if (!budgetId) {
-      setFormError(
-        'This budget is awaiting sync. Archive becomes available once it has a cloud ID.',
-      );
+      setFormError('This budget has no saved identifier and cannot be archived.');
       return;
     }
-    if (!window.confirm('Archive this budget? Its saved history will remain available.')) return;
     setPending(true);
     setFormError(null);
     try {
@@ -150,7 +144,8 @@ export default function PersonalBudgetDetailPage() {
         { ...budget, archivedAt: Date.now() },
         { budgetId },
         {
-          recordId: idOf(budget),
+          recordId: String(budget.id ?? budget._id ?? budget.cloudId ?? ''),
+          dependencies: budget.cloudId || budget._id ? [] : [`budget:${budgetId}`],
           baseUpdatedAt: typeof budget.updatedAt === 'number' ? budget.updatedAt : undefined,
         },
       );
@@ -189,7 +184,7 @@ export default function PersonalBudgetDetailPage() {
       <div className="finance-page">
         <Empty
           title="Budget unavailable"
-          description="This budget is not in the current user's local records."
+          description="It may have been archived or removed. Your other budgets are still available."
           action={
             <Link className="finance-inline-link" href="/budget">
               Back to budgets
@@ -200,104 +195,84 @@ export default function PersonalBudgetDetailPage() {
     );
   const scope =
     budget.period === 'category'
-      ? (category?.name ?? 'Category')
+      ? (category?.name ?? 'Category budget')
       : budget.period === 'account'
-        ? (account?.name ?? 'Account')
+        ? (account?.name ?? 'Account budget')
         : budget.period === 'custom'
-          ? 'Custom dates'
+          ? 'Custom period'
           : 'Monthly';
+  const dateOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const dateRange = `${new Date(startAt).toLocaleDateString(undefined, dateOptions)} – ${new Date(
+    endAt,
+  ).toLocaleDateString(undefined, dateOptions)}`;
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/budget">
-        <ArrowLeft size={15} /> Back to budgets
-      </Link>
-      <PageHeading
-        eyebrow="BUDGET DETAIL"
-        title={budget.name ?? 'Budget'}
-        description={`${scope} · ${currency}${budget.archivedAt !== undefined ? ' · Archived' : ''}`}
-      />
-      <Card className="finance-metric-card finance-balance-card">
-        <span className="finance-metric-label">POSTED EXPENSES · {currency}</span>
-        <strong>{formatMinor(spent, currency)}</strong>
-        <span className="finance-metric-foot">
-          of {formatMinor(limit, currency)} · {progress}% used
-        </span>
-        <div className="finance-plan-track">
-          <span style={{ width: `${progress}%` }} />
+      <header className="finance-page-heading">
+        <Link className="finance-secondary-action" href="/budget" aria-label="Go back">
+          <ArrowLeft size={18} />
+        </Link>
+        <div style={{ minWidth: 0 }}>
+          <h1>{budget.name ?? 'Budget'}</h1>
+          <p className="finance-muted">{scope} · {dateRange}</p>
         </div>
-        <p className="finance-muted">
-          {remaining >= 0n
-            ? `${formatMinor(remaining, currency)} remaining`
-            : `${formatMinor(-remaining, currency)} over limit`}
-        </p>
-        <p className="finance-plan-dates">
-          {new Date(startAt).toLocaleDateString()} – {new Date(endAt).toLocaleDateString()}
-        </p>
-      </Card>
-      <Card className="finance-record-panel">
-        <SectionHeader title="Scope and dates" action={<CalendarDays size={17} />} />
-        <ul className="finance-record-list">
-          <li>
-            <span className="finance-record-copy">
-              <strong>Scope</strong>
-              <small>{scope}</small>
+      </header>
+        <Card className="finance-metric-card finance-balance-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {category && (
+              <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />
+            )}
+            <span style={{ display: 'grid', flex: 1, gap: 3 }}>
+              <strong>Budget progress</strong>
+              <small>{Math.round(progress)}% used</small>
             </span>
-            <span>{budget.period ?? 'monthly'}</span>
-          </li>
-          <li>
-            <span className="finance-record-copy">
-              <strong>Date range</strong>
-              <small>
-                {new Date(startAt).toLocaleDateString()} through{' '}
-                {new Date(endAt).toLocaleDateString()}
-              </small>
+            <small>{currency}</small>
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <span className="finance-metric-foot">Spent this period</span>
+            <Money amountMinor={spent} currency={currency} size="display" />
+            <span className="finance-metric-foot">
+              of <Money amountMinor={limit} currency={currency} />
             </span>
-          </li>
-          <li>
-            <span className="finance-record-copy">
-              <strong>Limit</strong>
-              <small>{currency}</small>
-            </span>
-            <strong>{formatMinor(limit, currency)}</strong>
-          </li>
-        </ul>
-      </Card>
-      {budget.archivedAt === undefined ? (
-        <Card className="finance-record-panel">
-          <SectionHeader title="Archive budget" />
-          <p className="finance-muted">
-            Archiving removes this budget from active tracking without deleting its record.
-          </p>
-          {formError && (
-            <p className="finance-form-error" role="alert">
-              {formError}
-            </p>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending || !syncedId(budget)}
-            onPress={() => void archive()}
+          </div>
+          <div
+            className="finance-plan-track"
+            role="progressbar"
+            aria-label="Budget usage"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
           >
-            {pending ? 'Archiving…' : 'Archive budget'} <ArrowRight size={15} />
-          </Button>
-          {!syncedId(budget) && (
-            <p className="finance-form-note">
-              This budget is waiting to sync before it can be archived.
-            </p>
-          )}
+            <span style={{ width: `${progress}%` }} />
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <span>
+              <small className="finance-metric-label">Limit</small>
+              <br />
+              <Money amountMinor={limit} currency={currency} />
+            </span>
+            <span style={{ textAlign: 'right' }}>
+              <small className="finance-metric-label">
+                {remaining < 0n ? 'Over limit' : 'Still available'}
+              </small>
+              <br />
+              <Money
+                amountMinor={remaining < 0n ? -remaining : remaining}
+                currency={currency}
+              />
+            </span>
+          </div>
         </Card>
-      ) : (
-        <Card className="finance-record-panel">
-          <p className="finance-muted">
-            This budget is archived and will not be changed by new transactions.
-          </p>
-        </Card>
-      )}
       <Card className="finance-record-panel">
         <SectionHeader
-          title="Matching expenses"
-          action={<span>{matching.length} local records</span>}
+          title="Recent expenses"
+          action={<span>Posted transactions counted toward this budget</span>}
         />
         {transactionLoading ? (
           <p className="finance-muted" role="status">
@@ -309,24 +284,39 @@ export default function PersonalBudgetDetailPage() {
           </p>
         ) : matching.length === 0 ? (
           <Empty
-            title="No matching expenses"
-            description="Posted expenses in this scope and date range appear here."
+            title="No expenses counted yet"
+            description="Matching posted expenses will appear here."
           />
         ) : (
           <ul className="finance-record-list">
-            {matching.slice(0, 12).map((item) => (
-              <li key={idOf(item)}>
-                <span className="finance-record-copy">
-                  <strong>{item.title ?? 'Expense'}</strong>
-                  <small>
-                    {item.occurredAt
-                      ? new Date(item.occurredAt).toLocaleDateString()
-                      : 'Date unavailable'}
-                  </small>
-                </span>
-                <strong>{formatMinor(asMinor(item.amountMinor), item.currency ?? currency)}</strong>
-              </li>
-            ))}
+            {matching.slice(0, 5).map((item) => {
+              const transactionId = idOf(item);
+              const expenseCategory = categories.find((entry) =>
+                aliases(entry).has(String(item.categoryId ?? '')),
+              );
+              const expenseAccount = accounts.find((entry) =>
+                aliases(entry).has(String(item.accountId ?? '')),
+              );
+              return (
+                <li key={transactionId}>
+                  <TransactionRow
+                    title={item.title ?? item.merchant ?? 'Expense'}
+                    merchant={item.merchant}
+                    category={expenseCategory?.name ?? 'Expense'}
+                    account={expenseAccount?.name}
+                    amountMinor={asMinor(item.amountMinor)}
+                    currency={item.currency ?? currency}
+                    type="expense"
+                    date={
+                      item.occurredAt
+                        ? new Date(item.occurredAt).toLocaleDateString()
+                        : 'Date unavailable'
+                    }
+                    onPress={() => router.push(`/transaction/${encodeURIComponent(transactionId)}`)}
+                  />
+                </li>
+              );
+            })}
           </ul>
         )}
         <p className="finance-form-note">
@@ -338,6 +328,14 @@ export default function PersonalBudgetDetailPage() {
           </p>
         )}
       </Card>
+      {formError && (
+        <p className="finance-form-error" role="alert">
+          {formError}
+        </p>
+      )}
+      <Button type="button" variant="outline" disabled={pending} onPress={() => void archive()}>
+        {pending ? 'Archiving…' : 'Archive budget'}
+      </Button>
     </div>
   );
 }

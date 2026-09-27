@@ -19,6 +19,12 @@ import { createNotification } from './notifications/mutations';
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const passwordProvider = Password({
+  profile: (params) => ({
+    email: params.email as string,
+    ...(params.flow === 'signUp'
+      ? { signupTwoFactorEnabled: params.twoFactorEnabled === 'true' }
+      : {}),
+  }),
   verify: resendOtpProvider('resend-email-verification', 'verify'),
   reset: resendOtpProvider('resend-password-reset', 'reset'),
   validatePasswordRequirements: (password) => {
@@ -56,6 +62,11 @@ export const requestEmailTwoFactor = action({
     });
     if (!account.emailVerified) {
       return { status: 'verification-required' as const, email: normalizedParams.email as string };
+    }
+    if (
+      !(await ctx.runQuery(internal.users.queries.twoFactorEnabledForUser, { userId: user._id }))
+    ) {
+      return { status: 'two-factor-disabled' as const, email: normalizedParams.email as string };
     }
     const challengeId = randomChallengeId();
     const code = generateOtp();
@@ -98,7 +109,12 @@ async function normalizedPasswordParams(
 
 const usernameAuthorize: PasswordOptions['authorize'] = async (params, ctx) => {
   if (params.flow === 'signIn') {
-    throw new Error('Use the email second-factor sign-in flow.');
+    const normalizedParams = await normalizedPasswordParams(params, ctx);
+    const twoFactorEnabled = await ctx.runQuery(internal.users.queries.twoFactorEnabledForEmail, {
+      email: normalizedParams.email as string,
+    });
+    if (twoFactorEnabled) throw new Error('Use the email second-factor sign-in flow.');
+    return passwordOptions.authorize(normalizedParams, ctx);
   }
 
   if (params.flow === 'verification-required') {

@@ -24,6 +24,12 @@ jobs:
         run: docker compose config --quiet
       - run: bun run expo:doctor
       - name: Convex validation
-        run: bunx convex codegen
+        run: |
+          if [ -n "$CONVEX_DEPLOYMENT" ]; then
+            bunx convex codegen
+          else
+            echo "CONVEX_DEPLOYMENT is unset; running local dry-run codegen only."
+            bunx convex codegen --system-udfs --dry-run --typecheck disable
+          fi
         env:
           CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}

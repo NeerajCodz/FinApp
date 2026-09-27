@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Bell } from 'lucide-react';
-import { Button, Card, SectionHeader, Switch } from '@finapp/ui/web';
+import { Button, IconButton, Separator, Switch, Text, Typography, useTheme } from '@finapp/ui/web';
 import {
   defaultNotificationPreferences,
   normalizeNotificationPreferences,
@@ -21,15 +21,29 @@ const options: { type: NotificationType; label: string; detail: string }[] = [
   { type: 'budget', label: 'Budget limits', detail: 'When spending crosses 80% or 100%.' },
   { type: 'goal', label: 'Goals', detail: 'When a savings target is reached.' },
   { type: 'recurring', label: 'Recurring reminders', detail: 'Due dates for reminder-only rules.' },
-  { type: 'group', label: 'Groups and splits', detail: 'Group membership and shared expenses.' },
-  { type: 'settlement', label: 'Settlements', detail: 'Repayments recorded by group members.' },
-  { type: 'security', label: 'Security', detail: 'Account security and recovery updates.' },
-  { type: 'sync', label: 'Sync problems', detail: 'Changes that need attention in this browser.' },
+  { type: 'group', label: 'Groups & splits', detail: 'When you join a group or share an expense.' },
+  {
+    type: 'settlement',
+    label: 'Settlements',
+    detail: 'When another group member records a settlement.',
+  },
+  {
+    type: 'security',
+    label: 'Security',
+    detail: 'When a verified email recovery code is used for this device’s app passcode.',
+  },
+  {
+    type: 'sync',
+    label: 'Sync problems',
+    detail: 'Changes that need your attention on this device.',
+  },
 ];
 
 export default function NotificationSettingsPage() {
+  const router = useRouter();
   const { userId, isConnected } = useBrowserSync();
   const { records, loading, error } = useLocalRecords<SettingsRecord>('settings');
+  const { tokens } = useTheme();
   const setting = records[0];
   const [preferences, setPreferences] = React.useState<NotificationPreferences | null>(null);
   const [permission, setPermission] = React.useState<NotificationPermission | 'unsupported' | null>(
@@ -100,108 +114,89 @@ export default function NotificationSettingsPage() {
 
   const selectedPreferences = preferences ?? defaultNotificationPreferences;
   return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">PREFERENCES</p>
-          <h1>Notifications</h1>
-          <p className="finance-muted">Choose which account updates appear in your inbox.</p>
-        </div>
-        <Link className="finance-secondary-action" href="/settings">
-          <ArrowLeft size={15} aria-hidden="true" /> Settings
-        </Link>
+    <div className="finance-page" style={{ gap: 24 }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">Notifications</Typography>
       </header>
 
-      {loading ? (
-        <p className="finance-muted" role="status">
-          Loading saved preferences…
-        </p>
-      ) : error ? (
-        <div role="alert">
-          <p className="finance-form-error">Notification preferences could not be loaded.</p>
-          <Button variant="outline" onPress={() => window.location.reload()}>
-            Reload preferences
-          </Button>
+      <section style={{ display: 'grid', gap: 8 }}>
+        <Typography variant="heading">In-app activity</Typography>
+        <Text>
+          Choose what enters your inbox. Changes save on this device first and sync when connected.
+        </Text>
+      </section>
+
+      {loading && <Typography variant="small">Loading preferences…</Typography>}
+      {error && (
+        <Button variant="outline" onPress={() => window.location.reload()}>
+          Retry loading preferences
+        </Button>
+      )}
+      {!loading && !error && !setting && (
+        <Text>Connect once to load your account settings.</Text>
+      )}
+      {!loading && !error && setting && (
+        <div>
+          {options.map((option, index) => (
+            <div key={option.type}>
+              {index > 0 && <Separator />}
+              <Switch
+                label={option.label}
+                value={selectedPreferences[option.type]}
+                disabled={saving}
+                onValueChange={(value) => void change(option.type, value)}
+              />
+              <Typography variant="small" style={{ display: 'block', marginTop: -4, marginBottom: 12 }}>
+                {option.detail}
+              </Typography>
+            </div>
+          ))}
         </div>
-      ) : !setting ? (
-        <Card className="finance-record-panel">
-          <p className="finance-form-note">
-            Connect once to load account settings before changing notification preferences.
-          </p>
-        </Card>
-      ) : (
-        <Card className="finance-record-panel" style={{ display: 'grid', gap: 14 }}>
-          <SectionHeader title="In-app activity" action={<Bell size={17} aria-hidden="true" />} />
-          <p className="finance-form-note">
-            Changes save to this browser first, then sync when connected.
-          </p>
-          <div>
-            {options.map((option, index) => (
-              <div
-                key={option.type}
-                style={{
-                  borderTop: index === 0 ? '1px solid var(--finance-line)' : undefined,
-                  borderBottom: '1px solid var(--finance-line)',
-                  padding: '12px 0',
-                }}
-              >
-                <Switch
-                  label={option.label}
-                  value={selectedPreferences[option.type]}
-                  disabled={saving}
-                  onValueChange={(value) => void change(option.type, value)}
-                />
-                <p className="finance-form-note" style={{ marginTop: 4 }}>
-                  {option.detail}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
       )}
 
-      <Card className="finance-settings-card">
-        <SectionHeader title="Browser delivery" action={<Bell size={17} aria-hidden="true" />} />
-        <p>
-          Browser permission is requested only after you choose the button. Notifications are not
-          promised after this tab closes; recurring rules remain reminders and never create
-          transactions.
-        </p>
-        <p className="finance-settings-count">Permission: {permission ?? 'checking'}</p>
-        {permission === 'default' && (
-          <Button variant="outline" onPress={() => void requestPermission()}>
-            Allow browser notifications
-          </Button>
+      <section
+        style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: `1px solid ${tokens.border}` }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Bell size={19} color={tokens.primary} aria-hidden="true" />
+          <Typography variant="heading">Device reminders</Typography>
+        </div>
+        <Text>
+          Only recurring due dates can alert this device. Other activity stays in the in-app inbox;
+          push delivery is not configured.
+        </Text>
+        {permission === null && (
+          <Typography variant="small">Checking device permission…</Typography>
         )}
         {permission === 'granted' && (
-          <p className="finance-settings-count">Permission granted for browser notifications.</p>
+          <Typography variant="small">Device reminders allowed.</Typography>
+        )}
+        {permission === 'default' && (
+          <Button variant="outline" onPress={() => void requestPermission()}>
+            Allow device reminders
+          </Button>
         )}
         {permission === 'denied' && (
-          <p className="finance-form-note">
+          <Text>
             Permission is blocked. Change it in this site’s browser settings to allow delivery.
-          </p>
+          </Text>
         )}
         {permission === 'unsupported' && (
-          <p className="finance-form-note">
+          <Text>
             This browser does not support the Notification API. Your in-app inbox remains available.
-          </p>
+          </Text>
         )}
-      </Card>
-      {saving && (
-        <p className="finance-muted" role="status">
-          Saving preferences…
-        </p>
-      )}
-      {message && (
-        <p className="finance-settings-message" role="status">
-          {message}
-        </p>
-      )}
-      {!isConnected && (
-        <p className="finance-data-footnote">
-          Offline · saved preferences remain available and will sync when connected.
-        </p>
-      )}
+        {!isConnected && (
+          <Typography variant="small">
+            Offline: your inbox and preferences remain available.
+          </Typography>
+        )}
+      </section>
+      {saving && <Typography variant="small">Saving…</Typography>}
+      {message && <Text role="status">{message}</Text>}
     </div>
   );
 }

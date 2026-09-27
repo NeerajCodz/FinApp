@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { ArrowLeft, Check, UsersThree } from '@/lib/icons';
+import { ArrowLeft, Check, UsersThree } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';

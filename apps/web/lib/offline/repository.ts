@@ -50,6 +50,8 @@ export type CloudChange = {
   deletedAt?: number;
   document?: LocalRecord;
 };
+export type LocalSyncWindow = 7 | 30 | 90 | 180 | 365 | 'all';
+const syncWindows: readonly LocalSyncWindow[] = [7, 30, 90, 180, 365, 'all'];
 export type LocalSyncStatus = {
   pending: number;
   syncing: number;
@@ -82,6 +84,8 @@ type SyncState = {
   revision: string;
   lastSyncedAt: number | null;
   bootstrapComplete: boolean;
+  syncWindow?: LocalSyncWindow;
+  pendingSyncWindowBackfill?: boolean;
 };
 type ConflictRow = {
   conflictId: string;
@@ -95,6 +99,14 @@ type ConflictRow = {
   createdAt: number;
   resolvedAt: number | null;
 };
+type RangeCoverageRow = {
+  key: string;
+  userId: string;
+  scope: string;
+  startAt: number;
+  endAt: number;
+  completedAt: number;
+};
 
 const subscribers = new Map<string, Set<() => void>>();
 const retryDelays = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000] as const;
@@ -103,12 +115,32 @@ function requireUser(userId: string): void {
   if (!userId) throw new Error('AUTH_REQUIRED');
 }
 
+function assertDateRange(startAt: number, endAt: number): void {
+  if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
+    throw new Error('INVALID_DATE_RANGE');
+}
+
 function recordKey(userId: string, entityType: LocalEntity, id: string): string {
   return `${userId}\u0000${entityType}\u0000${id}`;
 }
 
 function mappingKey(userId: string, entityType: LocalEntity, localId: string): string {
   return `${userId}\u0000${entityType}\u0000${localId}`;
+}
+function relatedRecordId(entityType: LocalEntity, record: LocalRecord): string {
+  const id = record.id ?? record._id;
+  if (typeof id === 'string' && id) return id;
+  const keyFields: Partial<Record<LocalEntity, readonly string[]>> = {
+    accountMember: ['accountId', 'memberId'],
+    groupMember: ['groupId', 'memberId'],
+    expensePayer: ['transactionId', 'memberId'],
+    expenseParticipant: ['transactionId', 'memberId'],
+    transactionTag: ['transactionId', 'tag'],
+  };
+  const fields = keyFields[entityType];
+  if (fields?.every((field) => record[field] != null))
+    return fields.map((field) => String(record[field])).join(':');
+  throw new Error('LOCAL_RECORD_ID_REQUIRED');
 }
 
 let crossTabChannel: BroadcastChannel | undefined;
@@ -209,6 +241,7 @@ export async function commitLocalWrite(
     dependencies?: readonly string[];
     baseUpdatedAt?: number;
     deviceId?: string;
+    relatedRecords?: readonly { entityType: LocalEntity; record: LocalRecord }[];
   } = {},
 ): Promise<string> {
   requireUser(userId);
@@ -235,7 +268,27 @@ export async function commitLocalWrite(
   const db = await openWebDatabase();
   const transaction = db.transaction(['records', 'outbox'], 'readwrite');
   const done = transactionComplete(transaction);
-  transaction.objectStore('records').put({
+  const records = transaction.objectStore('records');
+  for (const related of options.relatedRecords ?? []) {
+    const relatedId = relatedRecordId(related.entityType, related.record);
+    const relatedRecord = {
+      ...related.record,
+      id: relatedId,
+      updatedAt: now,
+      clientUpdatedAt: now,
+    };
+    records.put({
+      key: recordKey(userId, related.entityType, relatedId),
+      userId,
+      entityType: related.entityType,
+      id: relatedId,
+      cloudId: typeof related.record.cloudId === 'string' ? related.record.cloudId : undefined,
+      updatedAt: now,
+      clientUpdatedAt: now,
+      record: relatedRecord,
+    } satisfies RecordRow);
+  }
+  records.put({
     key: recordKey(userId, entityType, id),
     userId,
     entityType,
@@ -627,11 +680,58 @@ export async function applyCloudChanges(
   notify(userId);
 }
 
+export async function recordGroupRangeCoverage(
+  userId: string,
+  groupId: string,
+  startAt: number,
+  endAt: number,
+): Promise<void> {
+  requireUser(userId);
+  if (!groupId) throw new Error('GROUP_ID_REQUIRED');
+  assertDateRange(startAt, endAt);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('rangeCoverage', 'readwrite');
+  const done = transactionComplete(transaction);
+  const scope = `group:${groupId}`;
+  transaction.objectStore('rangeCoverage').put({
+    key: `${userId}\u0000${scope}\u0000${startAt}\u0000${endAt}`,
+    userId,
+    scope,
+    startAt,
+    endAt,
+    completedAt: Date.now(),
+  } satisfies RangeCoverageRow);
+  await done;
+  notify(userId);
+}
+
+export async function isGroupRangeCovered(
+  userId: string,
+  groupId: string,
+  startAt: number,
+  endAt: number,
+): Promise<boolean> {
+  requireUser(userId);
+  if (!groupId) throw new Error('GROUP_ID_REQUIRED');
+  assertDateRange(startAt, endAt);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('rangeCoverage', 'readonly');
+  const done = transactionComplete(transaction);
+  const scope = `group:${groupId}`;
+  const rows = (await requestResultFor(
+    transaction
+      .objectStore('rangeCoverage')
+      .index('by-user-scope')
+      .getAll(IDBKeyRange.only([userId, scope])),
+  )) as RangeCoverageRow[];
+  await done;
+  return rows.some((row) => row.startAt <= startAt && row.endAt >= endAt);
+}
 export async function clearLocalData(userId: string): Promise<void> {
   requireUser(userId);
   const db = await openWebDatabase();
   const transaction = db.transaction(
-    ['records', 'outbox', 'idMappings', 'syncState', 'conflicts'],
+    ['records', 'outbox', 'idMappings', 'syncState', 'conflicts', 'rangeCoverage'],
     'readwrite',
   );
   const done = transactionComplete(transaction);
@@ -672,6 +772,17 @@ export async function clearLocalData(userId: string): Promise<void> {
   const conflictCursor = conflicts.index('by-user').openCursor(IDBKeyRange.only(userId));
   conflictCursor.onsuccess = () => {
     const cursor = conflictCursor.result;
+    if (cursor) {
+      cursor.delete();
+      cursor.continue();
+    }
+  };
+  const rangeCoverage = transaction.objectStore('rangeCoverage');
+  const coverageCursor = rangeCoverage
+    .index('by-user-scope')
+    .openCursor(IDBKeyRange.bound([userId, ''], [userId, '\uffff']));
+  coverageCursor.onsuccess = () => {
+    const cursor = coverageCursor.result;
     if (cursor) {
       cursor.delete();
       cursor.continue();
@@ -798,6 +909,73 @@ export async function getSyncCursor(userId: string): Promise<string | null> {
   await done;
   return state?.cursor ?? null;
 }
+export async function getSyncWindow(userId: string): Promise<LocalSyncWindow> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readonly');
+  const done = transactionComplete(transaction);
+  const state = (await requestResultFor(transaction.objectStore('syncState').get(userId))) as
+    SyncState | undefined;
+  await done;
+  const value = state?.syncWindow;
+  return value !== undefined && syncWindows.includes(value) ? value : 30;
+}
+
+export async function setSyncWindow(userId: string, days: LocalSyncWindow): Promise<void> {
+  requireUser(userId);
+  if (!syncWindows.includes(days)) throw new Error('INVALID_SYNC_WINDOW');
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readwrite');
+  const done = transactionComplete(transaction);
+  const store = transaction.objectStore('syncState');
+  const request = store.get(userId);
+  request.onsuccess = () => {
+    const state = request.result as SyncState | undefined;
+    store.put({
+      ...state,
+      userId,
+      cursor: state?.cursor ?? null,
+      revision: state?.revision ?? '0',
+      lastSyncedAt: state?.lastSyncedAt ?? null,
+      bootstrapComplete: state?.bootstrapComplete ?? false,
+      syncWindow: days,
+      pendingSyncWindowBackfill:
+        state?.pendingSyncWindowBackfill || (state?.syncWindow ?? 30) !== days,
+    });
+  };
+  await done;
+  notify(userId);
+}
+
+export async function hasPendingSyncWindowBackfill(userId: string): Promise<boolean> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readonly');
+  const done = transactionComplete(transaction);
+  const state = (await requestResultFor(transaction.objectStore('syncState').get(userId))) as
+    SyncState | undefined;
+  await done;
+  return state?.pendingSyncWindowBackfill ?? false;
+}
+
+export async function markSyncWindowBackfillCompleted(
+  userId: string,
+  expectedWindow: LocalSyncWindow,
+): Promise<void> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('syncState', 'readwrite');
+  const done = transactionComplete(transaction);
+  const store = transaction.objectStore('syncState');
+  const request = store.get(userId);
+  request.onsuccess = () => {
+    const state = request.result as SyncState | undefined;
+    if (state && (state.syncWindow ?? 30) === expectedWindow)
+      store.put({ ...state, pendingSyncWindowBackfill: false });
+  };
+  await done;
+  notify(userId);
+}
 
 export async function hasCompletedBootstrap(userId: string): Promise<boolean> {
   requireUser(userId);
@@ -866,6 +1044,23 @@ export async function retryFailed(userId: string): Promise<void> {
   request.onsuccess = () => {
     for (const entry of request.result as OutboxEntry[])
       store.put({ ...entry, status: 'pending', nextRetryAt: undefined, lastError: undefined });
+  };
+  await done;
+  notify(userId);
+}
+
+export async function retryFailedEntry(userId: string, localId: string): Promise<void> {
+  requireUser(userId);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('outbox', 'readwrite');
+  const done = transactionComplete(transaction);
+  const store = transaction.objectStore('outbox');
+  const request = store.get(localId);
+  request.onsuccess = () => {
+    const entry = request.result as OutboxEntry | undefined;
+    if (entry?.userId === userId && entry.status === 'failed') {
+      store.put({ ...entry, status: 'pending', nextRetryAt: undefined, lastError: undefined });
+    }
   };
   await done;
   notify(userId);

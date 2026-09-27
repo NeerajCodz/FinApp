@@ -4,14 +4,12 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
-import { ArrowRight } from 'lucide-react';
-import { Button, Input, Label } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Button, Input, Label, Sheet, Tabs } from '@finapp/ui/web';
 import { currencies } from '@convex/shared/validators';
-import { AuthFrame } from '@/components/auth/AuthFrame';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { normalizePhone, validateProfileUpdate } from '@convex/users/domain';
 
 type Profile = LocalRecord & {
   displayName?: string;
@@ -20,88 +18,111 @@ type Profile = LocalRecord & {
   timezone?: string;
   phone?: string;
 };
+type Currency = (typeof currencies)[number];
+const totalSteps = 5;
+const currencyCountries: Record<Currency, string> = {
+  INR: 'India',
+  USD: 'United States',
+  EUR: 'Eurozone',
+  GBP: 'United Kingdom',
+  JPY: 'Japan',
+  AUD: 'Australia',
+  CAD: 'Canada',
+  CHF: 'Switzerland',
+  CNY: 'China',
+  HKD: 'Hong Kong',
+  SGD: 'Singapore',
+  AED: 'United Arab Emirates',
+  SAR: 'Saudi Arabia',
+  NZD: 'New Zealand',
+  SEK: 'Sweden',
+  NOK: 'Norway',
+  DKK: 'Denmark',
+  ZAR: 'South Africa',
+  BRL: 'Brazil',
+  MXN: 'Mexico',
+  KRW: 'South Korea',
+  TRY: 'Türkiye',
+  THB: 'Thailand',
+  PLN: 'Poland',
+  IDR: 'Indonesia',
+  MYR: 'Malaysia',
+};
+
+function currencyLabel(currency: string) {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'currency' }).of(currency) ?? currency;
+  } catch {
+    return currency;
+  }
+}
 
 export default function OnboardingPage() {
+  const [step, setStep] = React.useState(0);
   const auth = useConvexAuth();
   const { userId } = useBrowserSync();
   const { records: profiles } = useLocalRecords<Profile>('profile');
   const profile = profiles[0];
   const router = useRouter();
-  const [displayName, setDisplayName] = React.useState('');
+  const [currencyOpen, setCurrencyOpen] = React.useState(false);
+  const [currency, setCurrency] = React.useState<Currency>(
+    Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US') ? 'USD' : 'INR',
+  );
+  const [currencySearch, setCurrencySearch] = React.useState('');
   const [username, setUsername] = React.useState('');
-  const [defaultCurrency, setDefaultCurrency] = React.useState<(typeof currencies)[number]>('INR');
-  const [timezone, setTimezone] = React.useState('UTC');
   const [phone, setPhone] = React.useState('');
   const [accountName, setAccountName] = React.useState('');
   const [mode, setMode] = React.useState<'personal' | 'shared'>('personal');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const handle = username.replace(/^@+/, '').toLowerCase();
+  const query = currencySearch.trim().toLowerCase();
+  const currencyOptions = currencies.filter((code) =>
+    `${currencyCountries[code]} ${code} ${currencyLabel(code)}`.toLowerCase().includes(query),
+  );
+  const canContinue = step !== 1 || /^[a-z0-9_]{3,32}$/.test(handle);
 
-  React.useEffect(() => {
-    if (!displayName && profile?.displayName) setDisplayName(profile.displayName);
-  }, [displayName, profile?.displayName]);
-  React.useEffect(() => {
-    if (!username && profile?.username) setUsername(profile.username);
-  }, [profile?.username, username]);
-  React.useEffect(() => {
-    if (
-      profile?.defaultCurrency &&
-      currencies.some((currency) => currency === profile.defaultCurrency)
-    )
-      setDefaultCurrency(profile.defaultCurrency as (typeof currencies)[number]);
-  }, [profile?.defaultCurrency]);
-  React.useEffect(() => {
-    setTimezone(profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
-  }, [profile?.timezone]);
-  React.useEffect(() => {
-    if (!phone && profile?.phone) setPhone(profile.phone);
-  }, [phone, profile?.phone]);
-
-  async function finish(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalized = displayName.trim();
-    const normalizedUsername = username.trim().replace(/^@+/, '');
-    const normalizedTimezone = timezone.trim();
-    const normalizedPhone = normalizePhone(phone);
-    const normalizedAccountName = accountName.trim();
-    if (!normalized || !normalizedTimezone) {
-      setError('Enter your name and time zone to continue.');
-      return;
-    }
-    if (normalizedUsername && !/^[a-z0-9_]{3,32}$/i.test(normalizedUsername)) {
+  function advance() {
+    setError('');
+    if (!canContinue) {
       setError('Usernames must be 3–32 letters, numbers, or underscores.');
       return;
     }
-    if (normalizedPhone) {
-      try {
-        validateProfileUpdate({ phone: normalizedPhone });
-      } catch {
-        setError('Enter a valid international phone number or leave it blank.');
-        return;
-      }
-    }
+    if (step < totalSteps - 1) setStep((current) => current + 1);
+    else void finish();
+  }
+
+  async function finish() {
     if (!userId || !auth.isAuthenticated || saving) return;
     setSaving(true);
     setError('');
     try {
-      const profileId = String(profile?.id ?? profile?._id ?? crypto.randomUUID());
+      const displayName = String(profile?.displayName ?? 'Your profile');
+      const timezone =
+        profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       const update = {
-        displayName: normalized,
-        defaultCurrency,
-        timezone: normalizedTimezone,
-        ...(normalizedUsername ? { username: normalizedUsername } : {}),
-        ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+        displayName,
+        username: handle,
+        defaultCurrency: currency,
+        timezone,
+        phone: phone.trim() || undefined,
       };
-      const record: LocalRecord = {
-        ...(profile ?? {}),
-        id: profileId,
-        ownerId: userId,
-        ...update,
-      };
-      await commitLocalWrite(userId, 'profile', 'user.update', record, update, {
-        recordId: profileId,
-      });
-      if (normalizedAccountName) {
+      const profileId = String(profile?.id ?? profile?._id ?? userId);
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.update',
+        {
+          ...(profile ?? {}),
+          id: profileId,
+          ownerId: userId,
+          ...update,
+        },
+        update,
+        { recordId: profileId },
+      );
+      const trimmedAccountName = accountName.trim();
+      if (trimmedAccountName) {
         const now = Date.now();
         await commitLocalWrite(
           userId,
@@ -109,9 +130,9 @@ export default function OnboardingPage() {
           'account.create',
           {
             ownerId: userId,
-            name: normalizedAccountName,
+            name: trimmedAccountName,
             type: 'cash',
-            currency: defaultCurrency,
+            currency,
             openingBalanceMinor: 0n,
             balanceMinor: 0n,
             isIncludedInTotal: true,
@@ -119,9 +140,9 @@ export default function OnboardingPage() {
             updatedAt: now,
           },
           {
-            name: normalizedAccountName,
+            name: trimmedAccountName,
             type: 'cash',
-            currency: defaultCurrency,
+            currency,
             openingBalanceMinor: 0n,
             isIncludedInTotal: true,
           },
@@ -137,143 +158,274 @@ export default function OnboardingPage() {
 
   if (auth.isLoading || (auth.isAuthenticated && !userId)) {
     return (
-      <AuthFrame
-        eyebrow="SETTING UP YOUR SPACE"
-        title="Almost there."
-        description="Connecting your private workspace."
-        footer={<span>Your profile stays yours.</span>}
-      >
-        <p role="status" aria-live="polite">
-          Preparing your account…
-        </p>
-      </AuthFrame>
+      <main className="auth-layout">
+        <section className="auth-content" aria-labelledby="auth-title">
+          <div className="auth-topline">
+            <Link href="/" className="brand auth-brand" aria-label="Finapp home">
+              <span className="brand-mark" aria-hidden="true">
+                F
+              </span>
+              <span>finapp</span>
+            </Link>
+          </div>
+          <div className="auth-card">
+            <span className="auth-eyebrow">SETTING UP YOUR SPACE</span>
+            <h1 id="auth-title">Almost there.</h1>
+            <p className="auth-description">Connecting your private workspace.</p>
+            <p role="status" aria-live="polite">
+              Preparing your account…
+            </p>
+          </div>
+          <span className="auth-legal">Your profile stays yours.</span>
+        </section>
+      </main>
     );
   }
-
   if (!auth.isAuthenticated || !userId) {
     return (
-      <AuthFrame
-        eyebrow="ACCOUNT SETUP"
-        title="Sign in to continue."
-        description="Your account session is needed to finish setup."
-        footer={<Link href="/sign-in">Return to sign in</Link>}
-      >
-        <p role="alert">This setup link is only available after verifying your account.</p>
-      </AuthFrame>
+      <main className="auth-layout">
+        <section className="auth-content" aria-labelledby="auth-title">
+          <div className="auth-topline">
+            <Link href="/" className="brand auth-brand" aria-label="Finapp home">
+              <span className="brand-mark" aria-hidden="true">
+                F
+              </span>
+              <span>finapp</span>
+            </Link>
+          </div>
+          <div className="auth-card">
+            <span className="auth-eyebrow">ACCOUNT SETUP</span>
+            <h1 id="auth-title">Sign in to continue.</h1>
+            <p className="auth-description">Your account session is needed to finish setup.</p>
+            <p role="alert">This setup link is only available after verifying your account.</p>
+            <Link className="auth-back-link" href="/sign-in">
+              Return to sign in
+            </Link>
+          </div>
+          <span className="auth-legal">
+            Your account stays yours. <Link href="/privacy">Read our privacy notes</Link>
+          </span>
+        </section>
+      </main>
     );
   }
 
+  const copy = [
+    [
+      'Your money, your format.',
+      'Choose the country and currency you use every day. You can change it later.',
+    ],
+    [
+      'Choose your username.',
+      'Your @handle makes sharing groups and split expenses instant. Use letters, numbers, or underscores.',
+    ],
+    [
+      'Add a phone number.',
+      'Optional. It helps people find you when sharing a split or inviting you to a group.',
+    ],
+    [
+      'Add your first account.',
+      'Optional for now. A simple name is enough to make your balance useful.',
+    ],
+    ['How will you use Finapp?', 'Start personal-only or keep shared expenses ready from day one.'],
+  ];
   return (
-    <AuthFrame
-      eyebrow="MAKE IT YOURS"
-      title="Set up your profile."
-      description="Set your profile, optional phone and first account, and choose whether to start with shared groups."
-      footer={
-        <span>
-          Already know your way around? <Link href="/dashboard">Go to your overview</Link>
-        </span>
-      }
-    >
-      <form onSubmit={finish} noValidate className="auth-form">
-        <div className="auth-field">
-          <Label htmlFor="display-name">Your name</Label>
-          <Input
-            id="display-name"
-            autoComplete="name"
-            maxLength={80}
-            value={displayName}
-            onChangeText={setDisplayName}
-            required
-          />
-        </div>
-        <div className="auth-field">
-          <Label htmlFor="username">Username (optional)</Label>
-          <Input
-            id="username"
-            autoComplete="username"
-            maxLength={32}
-            value={username}
-            onChangeText={setUsername}
-            placeholder="your_name"
-          />
-        </div>
-        <div className="auth-field">
-          <Label htmlFor="phone">Phone number (optional)</Label>
-          <Input
-            id="phone"
-            type="tel"
-            autoComplete="tel"
-            inputMode="tel"
-            maxLength={24}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="+14155550123"
-          />
-        </div>
-        <div className="auth-field">
-          <Label htmlFor="first-account">First account (optional)</Label>
-          <Input
-            id="first-account"
-            autoComplete="off"
-            maxLength={80}
-            value={accountName}
-            onChangeText={setAccountName}
-            placeholder="Cash, checking, savings"
-          />
-        </div>
-        <div className="auth-field">
-          <Label htmlFor="default-currency">Default currency</Label>
-          <select
-            id="default-currency"
-            className="finapp-input finapp-select"
-            value={defaultCurrency}
-            onChange={(event) =>
-              setDefaultCurrency(event.currentTarget.value as (typeof currencies)[number])
-            }
+    <main className="auth-layout">
+      <section className="auth-content" aria-labelledby="auth-title">
+        <div className="auth-topline">
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Go back"
+            onPress={() => {
+              if (step > 0) {
+                setError('');
+                setStep((current) => current - 1);
+              } else {
+                router.back();
+              }
+            }}
           >
-            {currencies.map((currency) => (
-              <option key={currency} value={currency}>
-                {currency}
-              </option>
-            ))}
-          </select>
+            <ArrowLeft size={16} />
+          </Button>
+          <Link href="/" className="brand auth-brand" aria-label="Finapp home">
+            <span className="brand-mark" aria-hidden="true">
+              F
+            </span>
+            <span>finapp</span>
+          </Link>
+          <span className="auth-eyebrow">
+            YOUR FINAPP · {step + 1} / {totalSteps}
+          </span>
         </div>
-        <div className="auth-field">
-          <Label htmlFor="time-zone">Time zone</Label>
-          <Input
-            id="time-zone"
-            maxLength={100}
-            value={timezone}
-            onChangeText={setTimezone}
-            required
-          />
-        </div>
-        <div className="auth-field">
-          <Label htmlFor="workspace-mode">How do you want to start?</Label>
-          <select
-            id="workspace-mode"
-            className="finapp-input finapp-select"
-            value={mode}
-            onChange={(event) => setMode(event.currentTarget.value as typeof mode)}
-          >
-            <option value="personal">Personal finances</option>
-            <option value="shared">Personal + groups</option>
-          </select>
-        </div>
-        {error && (
-          <p className="auth-error" role="alert" aria-live="polite">
-            {error}
-          </p>
-        )}
-        <Button
-          type="submit"
-          size="lg"
-          disabled={saving || !displayName.trim() || !timezone.trim()}
-          aria-busy={saving}
+        <div
+          className="auth-progress"
+          role="progressbar"
+          aria-label="Onboarding progress"
+          aria-valuemin={1}
+          aria-valuemax={totalSteps}
+          aria-valuenow={step + 1}
         >
-          {saving ? 'Saving your space…' : 'Continue'} <ArrowRight size={16} />
-        </Button>
-      </form>
-    </AuthFrame>
+          <span style={{ width: `${((step + 1) / totalSteps) * 100}%` }} />
+        </div>
+        <div className="auth-card">
+          <h1 id="auth-title">{copy[step][0]}</h1>
+          <p className="auth-description">{copy[step][1]}</p>
+          <div className="auth-form">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                advance();
+              }}
+              noValidate
+              className="auth-form"
+            >
+              {step === 0 && (
+                <div className="auth-field">
+                  <Label>Country — currency</Label>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="outline"
+                    aria-label="Choose country and currency"
+                    onPress={() => setCurrencyOpen(true)}
+                  >
+                    {currencyCountries[currency]} — {currency}
+                  </Button>
+                  <span className="auth-helper">SELECTED CURRENCY</span>
+                </div>
+              )}
+              {step === 1 && (
+                <div className="auth-field">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    placeholder="@neeraj"
+                    value={username}
+                    onChangeText={setUsername}
+                    error={!!error}
+                  />
+                  {handle && (
+                    <span className="auth-helper auth-handle">You will share as @{handle}</span>
+                  )}
+                </div>
+              )}
+              {step === 2 && (
+                <div className="auth-field">
+                  <Label htmlFor="phone">Phone number · optional</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+91 98765 43210"
+                    value={phone}
+                    onChangeText={setPhone}
+                    error={!!error}
+                  />
+                </div>
+              )}
+              {step === 3 && (
+                <div className="auth-field">
+                  <Label htmlFor="account-name">Account name · optional</Label>
+                  <Input
+                    id="account-name"
+                    autoComplete="off"
+                    placeholder="HDFC, Cash, Savings"
+                    value={accountName}
+                    onChangeText={setAccountName}
+                  />
+                </div>
+              )}
+              {step === 4 && (
+                <div className="auth-choice">
+                  <Tabs
+                    label="How will you use Finapp?"
+                    value={mode}
+                    onChange={(value) => setMode(value as 'personal' | 'shared')}
+                    tabs={[
+                      { label: 'Personal', value: 'personal' },
+                      { label: 'Personal + groups', value: 'shared' },
+                    ]}
+                  />
+                  <p>
+                    {mode === 'shared'
+                      ? 'Groups and split tools will stay close at hand.'
+                      : 'Shared finance remains available whenever you need it.'}
+                  </p>
+                </div>
+              )}
+              {error && (
+                <p className="auth-error" role="alert" aria-live="polite">
+                  {error}
+                </p>
+              )}
+              <div className="auth-step-actions">
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={saving || !canContinue}
+                  aria-busy={saving}
+                >
+                  {saving ? 'Saving…' : step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}{' '}
+                  <ArrowRight size={16} />
+                </Button>
+                {(step === 2 || step === 3) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={saving}
+                    onPress={() => {
+                      setError('');
+                      setStep((current) => current + 1);
+                    }}
+                  >
+                    Skip for now
+                  </Button>
+                )}
+              </div>
+            </form>
+            <Sheet
+              visible={currencyOpen}
+              title="Choose country and currency"
+              onClose={() => {
+                setCurrencyOpen(false);
+                setCurrencySearch('');
+              }}
+            >
+              <Input
+                autoComplete="off"
+                aria-label="Search countries and currencies"
+                placeholder="Search India, INR, rupee…"
+                value={currencySearch}
+                onChangeText={setCurrencySearch}
+              />
+              <div className="auth-currency-list" role="listbox" aria-label="Choose country and currency">
+                {currencyOptions.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    role="option"
+                    aria-selected={currency === item}
+                    className={currency === item ? 'is-selected' : ''}
+                    onClick={() => {
+                      setCurrency(item);
+                      setCurrencyOpen(false);
+                      setCurrencySearch('');
+                    }}
+                  >
+                    {currencyCountries[item]} — {item}
+                  </button>
+                ))}
+                {!currencyOptions.length && <p>No matching country or currency.</p>}
+              </div>
+            </Sheet>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

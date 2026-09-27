@@ -1,10 +1,10 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, ChartNoAxesCombined } from 'lucide-react';
-import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { Button, Empty, IconButton, Text, Typography } from '@finapp/ui/web';
+import { CategoryIcon, TransactionRow } from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
   getAnalyticsRange,
@@ -24,7 +24,6 @@ import {
   asMinor,
   belongsToUser,
   idOf,
-  PageHeading,
   SignInGate,
 } from '../../../_personal';
 
@@ -46,6 +45,7 @@ type Transaction = LocalRecord & {
 type Query = { key: string; period: string; startAt: string; endAt: string };
 
 export default function AnalyticsBreakdownPage() {
+  const router = useRouter();
   const params = useParams<{ dimension: string }>();
   const dimension = Array.isArray(params.dimension) ? params.dimension[0] : params.dimension;
   const { userId, fetchTransactionRange, isConnected } = useBrowserSync();
@@ -132,6 +132,10 @@ export default function AnalyticsBreakdownPage() {
   const categories = categoryRecords.filter((item) => userId && belongsToUser(item, userId));
   const accounts = accountRecords.filter((item) => userId && belongsToUser(item, userId));
   const transactions = transactionRecords.filter((item) => userId && belongsToUser(item, userId));
+  const categoryIcon =
+    dimension === 'category'
+      ? categories.find((item) => query?.key && aliasesOf(item).includes(query.key))?.icon
+      : undefined;
   const categoryEntities = categories.map((item) => ({
     id: idOf(item),
     name: item.name ?? 'Category',
@@ -156,7 +160,7 @@ export default function AnalyticsBreakdownPage() {
       {
         type,
         amountMinor: asMinor(record.amountMinor),
-        currency: String(record.currency ?? ''),
+        currency: String(record.currency ?? currency),
         ...(typeof record.categoryId === 'string' ? { categoryId: record.categoryId } : {}),
         ...(typeof record.accountId === 'string' ? { accountId: record.accountId } : {}),
         ...(typeof record.merchant === 'string' ? { merchant: record.merchant } : {}),
@@ -236,14 +240,10 @@ export default function AnalyticsBreakdownPage() {
   const dataError = profileError ?? categoryError ?? accountError ?? transactionError;
   const loading =
     query === null || profileLoading || categoryLoading || accountLoading || transactionLoading;
-  const title =
-    dimension === 'category'
-      ? 'Category breakdown'
-      : dimension === 'account'
-        ? 'Account breakdown'
-        : dimension === 'merchant'
-          ? 'Merchant breakdown'
-          : 'Breakdown';
+  const sharePercent =
+    result?.item && result.spentMinor > 0n
+      ? Number((result.item.amountMinor * 1000n) / result.spentMinor) / 10
+      : 0;
 
   if (!userId)
     return (
@@ -251,115 +251,138 @@ export default function AnalyticsBreakdownPage() {
         Sign in to inspect a breakdown from finance data saved in this browser.
       </SignInGate>
     );
-  if (loading)
-    return (
-      <div className="finance-page">
-        <p className="finance-muted" role="status">
-          Opening the selected date range…
-        </p>
-      </div>
-    );
-  if (dataError)
-    return (
-      <div className="finance-page">
-        <p className="finance-form-error" role="alert">
-          Analytics data could not be opened: {dataError}
-        </p>
-        <Link className="finance-secondary-action" href="/analytics">
-          <ArrowLeft size={15} /> Back to analytics
-        </Link>
-      </div>
-    );
-  if (!valid || !result?.item)
-    return (
-      <div className="finance-page">
-        <Empty
-          title="Breakdown unavailable"
-          description="This dimension, item, or date range is invalid or no longer available in the current user's local records."
-          icon={<ChartNoAxesCombined size={20} />}
-          action={
-            <Link className="finance-inline-link" href="/analytics">
-              Back to analytics
-            </Link>
-          }
-        />
-      </div>
-    );
+
+  const dimensionTitle =
+    dimension === 'category' ? 'Category' : dimension === 'account' ? 'Account' : 'Merchant';
+  const unavailable =
+    !valid ||
+    (!profileLoading && !profile) ||
+    (result && !result.item && !rangeLoading && !rangeError);
+
   return (
-    <div className="finance-page">
-      <Link className="finance-secondary-action" href="/analytics">
-        <ArrowLeft size={15} /> Back to analytics
-      </Link>
-      <PageHeading
-        eyebrow={`ANALYTICS · ${query.period.toUpperCase()}`}
-        title={result.item.label}
-        description={`${title} · ${new Date(startAt).toLocaleDateString()} – ${new Date(endAt).toLocaleDateString()}`}
-      />
-      <p className="finance-muted" role="status">
-        {rangeLoading
-          ? 'Loading the selected transaction range…'
-          : rangeError
-            ? `${rangeError} Results may be incomplete.`
-            : serverRangeLoaded
-              ? 'The selected server date range was loaded; local unsynced records are included.'
-              : 'Showing browser-cached records for this date range. Older uncached transactions may be missing.'}
-      </p>
-      <div className="finance-dashboard-grid">
-        <Card className="finance-metric-card finance-balance-card">
-          <span className="finance-metric-label">TOTAL SPENDING · {currency}</span>
-          <strong>{formatMinor(result.item.amountMinor, currency)}</strong>
-          <span className="finance-metric-foot">{result.rows.length} matching cached expenses</span>
-        </Card>
-        <Card className="finance-metric-card">
-          <span className="finance-metric-label">ALL SPENDING · {currency}</span>
-          <strong>{formatMinor(result.spentMinor, currency)}</strong>
-          <span className="finance-metric-foot">Across the selected period</span>
-        </Card>
-      </div>
-      <Card className="finance-record-panel">
-        <SectionHeader
-          title="Matching expenses"
-          action={<Badge variant="neutral">{result.rows.length} saved</Badge>}
-        />
-        {result.rows.length === 0 ? (
+    <div className="finance-page" style={{ gap: 24 }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title">{dimensionTitle}</Typography>
+      </header>
+
+      {unavailable ? (
+        <div style={{ display: 'grid', gap: 12 }}>
           <Empty
-            title="No cached matching expenses"
-            description="This breakdown has no matching posted expenses in the records currently available here."
+            title="Breakdown unavailable"
+            description="This selection or date range is no longer available."
           />
-        ) : (
-          <ul className="finance-record-list">
-            {result.rows.map((record) => (
-              <li key={idOf(record)}>
-                <span className="finance-record-symbol">
-                  <ChartNoAxesCombined size={17} />
-                </span>
-                <span className="finance-record-copy">
-                  <strong>
-                    <Link href={`/transaction/${encodeURIComponent(idOf(record))}`}>
-                      {record.title ?? record.merchant ?? 'Expense'}
-                    </Link>
-                  </strong>
-                  <small>
-                    {record.occurredAt
-                      ? new Date(record.occurredAt).toLocaleDateString()
-                      : 'Date unavailable'}{' '}
-                    · {record.type}
-                  </small>
-                </span>
-                <strong>
-                  {formatMinor(asMinor(record.amountMinor), record.currency ?? currency)}{' '}
-                  <ArrowRight size={14} aria-hidden="true" />
-                </strong>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-      <p className="finance-form-note">
-        Breakdown totals use the shared analytics domain and only transactions available in the
-        browser's local cache or fetched date range. The app does not claim that uncached history is
-        complete.
-      </p>
+          <Button onPress={() => router.replace('/analytics')}>Back to analytics</Button>
+        </div>
+      ) : dataError ? (
+        <div role="alert" style={{ display: 'grid', gap: 12 }}>
+          <Text>Analytics data could not be opened: {dataError}</Text>
+          <Button variant="outline" onPress={() => window.location.reload()}>
+            Retry
+          </Button>
+          <Button variant="outline" onPress={() => router.replace('/analytics')}>
+            Back to analytics
+          </Button>
+        </div>
+      ) : (
+        <>
+          {rangeError && (
+            <div role="alert" style={{ display: 'grid', gap: 10 }}>
+              <Text>
+                {result?.item
+                  ? 'Showing saved data. Refresh failed; share may be incomplete.'
+                  : 'Breakdown data is unavailable.'}
+              </Text>
+              <Button variant="outline" onPress={() => window.location.reload()}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {rangeLoading && (
+            <Typography variant="caption">Refreshing transactions…</Typography>
+          )}
+          {loading ? (
+            <Typography variant="heading">Loading breakdown…</Typography>
+          ) : result?.item ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {dimension === 'category' && (
+                  <CategoryIcon
+                    label={result.item.label}
+                    icon={typeof categoryIcon === 'string' ? categoryIcon : undefined}
+                  />
+                )}
+                <Typography variant="heading" style={{ flex: 1 }}>
+                  {result.item.label}
+                </Typography>
+              </div>
+              <Typography variant="heading">
+                {formatMinor(result.item.amountMinor, currency)}
+              </Typography>
+              <Typography variant="caption">
+                {sharePercent}% of spending · {query?.period}
+              </Typography>
+              {result.rows.length === 0 ? (
+                <Empty
+                  title="No matching transactions"
+                  description={
+                    serverRangeLoaded
+                      ? 'No posted expenses match this breakdown.'
+                      : 'No matching saved rows. Refresh to confirm the full period.'
+                  }
+                />
+              ) : (
+                result.rows.map((record) => {
+                  const id = idOf(record);
+                  const category = categories.find((item) =>
+                    aliasesOf(item).includes(String(record.categoryId ?? '')),
+                  );
+                  const account = accounts.find((item) =>
+                    aliasesOf(item).includes(String(record.accountId ?? '')),
+                  );
+                  return (
+                    <TransactionRow
+                      key={id}
+                      title={record.title ?? record.merchant ?? 'Expense'}
+                      merchant={record.merchant}
+                      category={category?.name}
+                      categoryIcon={category?.icon}
+                      account={account?.name}
+                      date={
+                        typeof record.occurredAt === 'number'
+                          ? new Intl.DateTimeFormat('en-US', {
+                              day: 'numeric',
+                              month: 'short',
+                              timeZone,
+                            }).format(record.occurredAt)
+                          : undefined
+                      }
+                      status={record.status}
+                      amountMinor={asMinor(record.amountMinor)}
+                      currency={currency}
+                      type="expense"
+                      semanticType={typeof record.groupId === 'string' ? 'split' : undefined}
+                      onPress={() => router.push(`/transaction/${encodeURIComponent(id)}`)}
+                    />
+                  );
+                })
+              )}
+            </>
+          ) : rangeError ? (
+            <Empty
+              title="Breakdown unavailable"
+              description="The selected transactions could not be loaded."
+              action={
+                <Button onPress={() => router.replace('/analytics')}>Back to analytics</Button>
+              }
+            />
+          ) : (
+            <Typography variant="heading">Loading breakdown…</Typography>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ReceiptText } from '@/lib/icons';
+import { ArrowLeft, ReceiptText } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money, TransactionRow } from '@/components/finance';
+import { Money, TransactionRow } from '@finapp/ui/finance';
 import { displayAccountName, recordIndex } from '@/lib/ledger';
 import {
   Button,

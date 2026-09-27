@@ -3,13 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button, Card } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight, ReceiptText, UsersRound } from 'lucide-react';
+import { Button, Input, Sheet, Typography } from '@finapp/ui/web';
+import { CategoryIcon, CurrencyInput, SettingsRow } from '@finapp/ui/finance';
 import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceInput } from '@/components/finance/FinanceInput';
 import {
   aliasesOf,
   belongsToUser,
@@ -17,18 +17,18 @@ import {
   idOf,
   localDependency,
   matchesId,
-  PageHeading,
   SignInGate,
 } from '../../_personal';
 
 type TransactionType = 'expense' | 'income' | 'transfer';
 type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
-type Category = LocalRecord & { name?: string; archivedAt?: number };
+type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
 type Profile = LocalRecord & {
   defaultCurrency?: string;
-  defaultAccountId?: string;
-  defaultExpenseCategoryId?: string;
-  defaultIncomeCategoryId?: string;
+  defaultAccountId?: string | null;
+  defaultExpenseCategoryId?: string | null;
+  defaultIncomeCategoryId?: string | null;
+  updatedAt?: number;
 };
 const transactionTypes: TransactionType[] = ['expense', 'income', 'transfer'];
 const maxInt64 = 9_223_372_036_854_775_807n;
@@ -54,7 +54,11 @@ export default function NewPersonalTransactionPage() {
   const [amount, setAmount] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [occurredOn, setOccurredOn] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [savingDefault, setSavingDefault] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [picker, setPicker] = React.useState<'category' | 'account' | 'destination' | 'date' | null>(
+    null,
+  );
   const [error, setError] = React.useState<string | null>(null);
   const appliedQuery = React.useRef(false);
   const queryOverrides = React.useRef({ account: false, category: false });
@@ -68,6 +72,19 @@ export default function NewPersonalTransactionPage() {
   const source = accounts.find((item) => matchesId(item, accountId));
   const destination = accounts.find((item) => matchesId(item, destinationId));
   const category = categories.find((item) => matchesId(item, categoryId));
+  const defaultCategoryField =
+    type === 'income' ? 'defaultIncomeCategoryId' : 'defaultExpenseCategoryId';
+  const isDefaultAccount = Boolean(
+    source &&
+    typeof profile?.defaultAccountId === 'string' &&
+    aliasesOf(source).includes(profile.defaultAccountId),
+  );
+  const isDefaultCategory = Boolean(
+    type !== 'transfer' &&
+    category &&
+    typeof profile?.[defaultCategoryField] === 'string' &&
+    aliasesOf(category).includes(profile[defaultCategoryField]!),
+  );
 
   React.useEffect(() => {
     if (appliedQuery.current || typeof window === 'undefined') return;
@@ -118,6 +135,50 @@ export default function NewPersonalTransactionPage() {
     type,
   ]);
 
+  async function toggleDefault(selection: 'account' | 'category') {
+    if (!userId || !profile || savingDefault) return;
+    const selected = selection === 'account' ? source : category;
+    if (!selected || (selection === 'category' && type === 'transfer')) return;
+    const isDefault = selection === 'account' ? isDefaultAccount : isDefaultCategory;
+    const id = isDefault ? null : idOf(selected);
+    const dependency = localDependency(selection, selected);
+    setSavingDefault(true);
+    setError(null);
+    try {
+      if (selection === 'account') {
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultAccount',
+          { ...profile, defaultAccountId: id },
+          { accountId: id },
+          {
+            recordId: idOf(profile),
+            dependencies: id && dependency ? [dependency] : [],
+            baseUpdatedAt: typeof profile.updatedAt === 'number' ? profile.updatedAt : undefined,
+          },
+        );
+      } else {
+        const transactionType = type as 'expense' | 'income';
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultCategory',
+          { ...profile, [defaultCategoryField]: id },
+          { transactionType, categoryId: id },
+          {
+            recordId: idOf(profile),
+            dependencies: id && dependency ? [dependency] : [],
+            baseUpdatedAt: typeof profile.updatedAt === 'number' ? profile.updatedAt : undefined,
+          },
+        );
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update this default.');
+    } finally {
+      setSavingDefault(false);
+    }
+  }
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!userId) {
@@ -138,10 +199,6 @@ export default function NewPersonalTransactionPage() {
       }
       if (destination.currency !== source.currency) {
         setError('Transfers need accounts with the same currency.');
-        return;
-      }
-      if (destination.name === source.name) {
-        setError('Choose a destination account with a different name.');
         return;
       }
     }
@@ -222,150 +279,348 @@ export default function NewPersonalTransactionPage() {
         Sign in to create a transaction in your user-scoped browser ledger.
       </SignInGate>
     );
-  const loading = accountLoading || categoryLoading;
   const dataError = accountError ?? categoryError;
+  let amountValid = false;
+  try {
+    const amountMinor = parseMinor(
+      amount,
+      source?.currency ?? profile?.defaultCurrency ?? 'INR',
+    );
+    amountValid = amountMinor > 0n && amountMinor <= maxInt64;
+  } catch {}
   return (
-    <div className="finance-page">
-      <Link className="finance-secondary-action" href="/transactions">
-        <ArrowLeft size={15} /> Back to activity
-      </Link>
-      <PageHeading
-        eyebrow="NEW TRANSACTION"
-        title="Record a transaction"
-        description="Choose an expense, income, or transfer. Saved transactions stay in the local ledger and sync through the outbox."
-      />
-      <Card className="finance-form-panel">
-        {loading ? (
-          <p className="finance-muted" role="status">
-            Loading available accounts and categories…
-          </p>
-        ) : dataError ? (
-          <p className="finance-form-error" role="alert">
-            Transaction options could not be opened: {dataError}
-          </p>
-        ) : accounts.length === 0 ? (
-          <div className="finance-form">
-            <p className="finance-muted">Create an account before recording activity.</p>
-            <Link className="finance-primary-link" href="/account/new">
-              Add account <ArrowRight size={15} />
-            </Link>
+    <div className="finance-page" style={{ gap: 24 }}>
+      <header style={{ display: 'flex', alignItems: 'center' }}>
+        <Link className="finance-secondary-action" href="/activity" aria-label="Cancel">
+          <ArrowLeft size={21} aria-hidden="true" />
+        </Link>
+        <Typography variant="bodyLarge" style={{ flex: 1, textAlign: 'center' }}>
+          Add {type}
+        </Typography>
+        <span aria-hidden="true" style={{ width: 44 }} />
+      </header>
+      <form className="finance-form" onSubmit={create} style={{ display: 'grid', gap: 28 }}>
+        <div style={{ minHeight: 150, display: 'grid', placeItems: 'center' }}>
+          <CurrencyInput
+            currency={source?.currency ?? profile?.defaultCurrency ?? 'INR'}
+            value={amount}
+            onChangeText={setAmount}
+          />
+        </div>
+          <div
+            role="group"
+            aria-label="Transaction type"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 4,
+              padding: 4,
+              borderRadius: 12,
+              background: 'var(--finapp-surface-raised)',
+            }}
+          >
+                  {transactionTypes.map((item) => (
+                    <Button
+                      key={item}
+                      type="button"
+                      size="sm"
+                      variant={type === item ? 'primary' : 'ghost'}
+                      aria-pressed={type === item}
+                      onPress={() => {
+                        setType(item);
+                        setCategoryId('');
+                      }}
+                      style={{
+                        minHeight: 42,
+                        borderRadius: 10,
+                        backgroundColor:
+                          type === item
+                            ? `var(--finapp-${item === 'transfer' ? 'warning' : item})`
+                            : 'transparent',
+                        color: type === item ? '#000' : undefined,
+                      }}
+                    >
+                      {item.charAt(0).toUpperCase() + item.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+                <div>
+                  {type !== 'transfer' && (
+                    <>
+                      <SettingsRow
+                        label="Category"
+                        leadingIcon={
+                          <CategoryIcon label={category?.name ?? 'Category'} icon={category?.icon} />
+                        }
+                        value={
+                          category?.name ??
+                          (categoryLoading ? 'Loading categories…' : 'Choose a category')
+                        }
+                        onPress={() => setPicker('category')}
+                      />
+                      <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+                    </>
+                  )}
+                  <SettingsRow
+                    label={type === 'transfer' ? 'From account' : 'Account'}
+                    value={source?.name ?? (accountLoading ? 'Loading accounts…' : 'Choose an account')}
+                    onPress={() => setPicker('account')}
+                  />
+                  {type === 'transfer' && (
+                    <>
+                      <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+                      <SettingsRow
+                        label="To account"
+                        value={destination?.name ?? 'Choose destination'}
+                        onPress={() => setPicker('destination')}
+                      />
+                    </>
+                  )}
+                  <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+                  <SettingsRow
+                    label="Date"
+                    value={new Date(`${occurredOn}T12:00:00`).toLocaleDateString(undefined, {
+                      dateStyle: 'medium',
+                    })}
+                    onPress={() => setPicker('date')}
+                  />
+                </div>
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <label className="finance-form-field">
+                    <span>Note</span>
+                    <Input
+                      accessibilityLabel="Transaction note"
+                      placeholder="What was this for?"
+                      value={description}
+                      onChangeText={setDescription}
+                      maxLength={120}
+                    />
+                  </label>
+                  {type === 'expense' && (
+                    <Link
+                      className="finance-secondary-action"
+                      href="/split/new"
+                      style={{ justifyContent: 'space-between', minHeight: 68, paddingInline: 16 }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            display: 'grid',
+                            placeItems: 'center',
+                            width: 38,
+                            height: 38,
+                            borderRadius: 12,
+                          }}
+                        >
+                          <UsersRound size={19} />
+                        </span>
+                        <span style={{ display: 'grid', gap: 2 }}>
+                          <strong>Split this expense</strong>
+                          <span className="finance-muted">Choose people and shares</span>
+                        </span>
+                      </span>
+                      <ArrowRight size={18} />
+                    </Link>
+                  )}
+                </div>
+                {!accountLoading && accounts.length === 0 && (
+                  <p className="finance-muted">
+                    <Link className="finance-inline-link" href="/account/new">
+                      Add an account before recording a transaction.
+                    </Link>
+                  </p>
+                )}
+                {!categoryLoading && type !== 'transfer' && categories.length === 0 && (
+                  <p className="finance-muted">
+                    <Link className="finance-inline-link" href="/category/new">
+                      Add a category before recording a transaction.
+                    </Link>
+                  </p>
+                )}
+                {dataError && (
+                  <p className="finance-form-error" role="alert">
+                    Transaction options could not be opened: {dataError}
+                  </p>
+                )}
+                {error && (
+                  <p className="finance-form-error" role="alert">
+                    {error}
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={
+                    saving ||
+                    !amountValid ||
+                    !source ||
+                    (type === 'transfer' ? !destination : !category)
+                  }
+                >
+                  <ReceiptText size={18} /> {saving ? 'Saving…' : `Save ${type}`}
+                </Button>
+      </form>
+      <Sheet
+        visible={picker !== null}
+        onClose={() => setPicker(null)}
+        title={
+          picker === 'date'
+            ? 'Choose date'
+            : picker === 'category'
+              ? 'Choose category'
+              : picker === 'destination'
+                ? 'Choose destination'
+                : 'Choose account'
+        }
+      >
+        {picker === 'date' ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <Input
+              type="date"
+              accessibilityLabel="Choose date"
+              value={occurredOn}
+              onChangeText={(value) => {
+                setOccurredOn(value);
+                setPicker(null);
+              }}
+            />
           </div>
         ) : (
-          <form className="finance-form" onSubmit={create}>
-            <label className="finance-form-field">
-              <span>Type</span>
-              <select
-                value={type}
-                onChange={(event) => setType(event.currentTarget.value as TransactionType)}
-              >
-                <option value="expense">Expense</option>
-                <option value="income">Income</option>
-                <option value="transfer">Transfer</option>
-              </select>
-            </label>
-            <FinanceInput
-              label={`Amount (${source?.currency ?? 'INR'})`}
-              type="number"
-              min="0.01"
-              step={source?.currency === 'JPY' || source?.currency === 'KRW' ? '1' : '0.01'}
-              value={amount}
-              onChangeText={setAmount}
-              required
-            />
-            <label className="finance-form-field">
-              <span>{type === 'transfer' ? 'From account' : 'Account'}</span>
-              <select
-                value={accountId}
-                onChange={(event) => {
-                  setAccountId(event.currentTarget.value);
-                  setDestinationId('');
-                }}
-                required
-              >
-                <option value="">Choose an account</option>
-                {accounts.map((item) => (
-                  <option key={idOf(item)} value={idOf(item)}>
-                    {item.name ?? 'Account'} · {item.currency ?? 'INR'}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {type === 'transfer' ? (
-              <label className="finance-form-field">
-                <span>To account</span>
-                <select
-                  value={destinationId}
-                  onChange={(event) => setDestinationId(event.currentTarget.value)}
-                  required
-                >
-                  <option value="">Choose destination</option>
-                  {accounts
-                    .filter((item) => idOf(item) !== idOf(source ?? {}))
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+              {picker === 'category'
+                ? categories.map((item) => (
+                    <React.Fragment key={idOf(item)}>
+                      <SettingsRow
+                        label={item.name ?? 'Category'}
+                        leadingIcon={
+                          <CategoryIcon label={item.name ?? 'Category'} icon={item.icon} />
+                        }
+                        value={category && aliasesOf(category).some((id) => aliasesOf(item).includes(id))
+                          ? 'Selected'
+                          : undefined}
+                        onPress={() => {
+                          setCategoryId(idOf(item));
+                          setPicker(null);
+                        }}
+                      />
+                      <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+                    </React.Fragment>
+                  ))
+                : accounts
+                    .filter(
+                      (item) =>
+                        picker !== 'destination' ||
+                        (!!source &&
+                          item.currency === source.currency &&
+                          !aliasesOf(item).some((alias) => aliasesOf(source).includes(alias))),
+                    )
                     .map((item) => (
-                      <option key={idOf(item)} value={idOf(item)}>
-                        {item.name ?? 'Account'} · {item.currency ?? 'INR'}
-                      </option>
+                      <React.Fragment key={idOf(item)}>
+                        <SettingsRow
+                          label={item.name ?? 'Account'}
+                          value={`${item.currency ?? 'INR'}${
+                            (picker === 'destination' ? destination : source) &&
+                            aliasesOf(picker === 'destination' ? destination! : source!).some((id) =>
+                              aliasesOf(item).includes(id),
+                            )
+                              ? ' · Selected'
+                              : ''
+                          }`}
+                          onPress={() => {
+                            if (picker === 'destination') setDestinationId(idOf(item));
+                            else {
+                              setAccountId(idOf(item));
+                              setDestinationId('');
+                            }
+                            setPicker(null);
+                          }}
+                        />
+                        <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+                      </React.Fragment>
                     ))}
-                </select>
-              </label>
-            ) : (
-              <label className="finance-form-field">
-                <span>Category</span>
-                <select
-                  value={categoryId}
-                  onChange={(event) => setCategoryId(event.currentTarget.value)}
-                  required
-                >
-                  <option value="">Choose a category</option>
-                  {categories.map((item) => (
-                    <option key={idOf(item)} value={idOf(item)}>
-                      {item.name ?? 'Category'}
-                    </option>
-                  ))}
-                </select>
-                {categories.length === 0 && (
-                  <small>
-                    <Link className="finance-inline-link" href="/category/new">
-                      Create a category first
-                    </Link>
-                  </small>
+              {(picker === 'category' ? categoryLoading : accountLoading) && (
+                <Typography variant="small">
+                  Loading {picker === 'category' ? 'categories' : 'accounts'}…
+                </Typography>
+              )}
+              {picker === 'category' && !categoryLoading && categories.length === 0 && (
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 8, padding: 18 }}>
+                  <CategoryIcon label="Category" />
+                  <Typography variant="bodyLarge">No categories yet</Typography>
+                  <Typography variant="small">
+                    Create a category to organize this transaction.
+                  </Typography>
+                </div>
+              )}
+              {picker !== 'category' && !accountLoading &&
+                (picker === 'destination'
+                  ? accounts.filter(
+                      (item) =>
+                        !!source &&
+                        item.currency === source.currency &&
+                        !aliasesOf(item).some((alias) => aliasesOf(source).includes(alias)),
+                    ).length === 0
+                  : accounts.length === 0) && (
+                  <div style={{ display: 'grid', justifyItems: 'center', gap: 8, padding: 18 }}>
+                    <Typography variant="bodyLarge">No accounts yet</Typography>
+                    <Typography variant="small">
+                      Add an account before recording this transaction.
+                    </Typography>
+                  </div>
                 )}
-              </label>
+            </div>
+            {picker === 'category' && (
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setPicker(null);
+                  router.push(categories.length === 0 ? '/category/new' : '/category');
+                }}
+              >
+                {categories.length === 0 ? 'Create category' : 'Manage categories'}
+              </Button>
             )}
-            <FinanceInput
-              label="Description (optional)"
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Groceries, salary, or transfer note"
-              maxLength={120}
-            />
-            <FinanceInput
-              label="Date"
-              type="date"
-              value={occurredOn}
-              onChangeText={setOccurredOn}
-              required
-            />
-            {error && (
-              <p className="finance-form-error" role="alert">
-                {error}
-              </p>
+            {picker === 'account' && (
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setPicker(null);
+                  router.push('/account/new');
+                }}
+              >
+                Add account
+              </Button>
             )}
-            <Button
-              type="submit"
-              disabled={
-                saving || !amount || !source || (type === 'transfer' ? !destination : !category)
-              }
-            >
-              {saving ? 'Saving locally…' : 'Save transaction'} <ArrowRight size={15} />
-            </Button>
-            <p className="finance-form-note">
-              This form creates only expenses, income, and transfers. It does not edit or remove
-              existing transactions.
-            </p>
-          </form>
+            {(picker === 'category' || picker === 'account') && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {(picker === 'account' ? source : category) &&
+                  !(picker === 'account' ? isDefaultAccount : isDefaultCategory) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={savingDefault || !profile}
+                      onPress={() => void toggleDefault(picker)}
+                    >
+                      {savingDefault ? 'Saving…' : 'Set as default'}
+                    </Button>
+                  )}
+                {(picker === 'account' ? isDefaultAccount : isDefaultCategory) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={savingDefault || !profile}
+                    onPress={() => void toggleDefault(picker)}
+                  >
+                    Clear default
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         )}
-      </Card>
+      </Sheet>
     </div>
   );
 }

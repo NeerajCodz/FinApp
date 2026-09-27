@@ -4,41 +4,99 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
+  ArrowDownLeft,
   ArrowLeftRight,
+  ArrowRight,
+  ArrowUpRight,
   Bell,
   CalendarClock,
   ChartNoAxesCombined,
   CircleUserRound,
-  Ellipsis,
+  HandCoins,
+  History,
+  House,
   Landmark,
   Plus,
   Tags,
   Target,
   UsersRound,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Button, Sheet } from '@finapp/ui/web';
+import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
-type NavItem = { href: string; label: string; icon: typeof ChartNoAxesCombined };
+type NavItem = { href: string; label: string; icon: LucideIcon };
 const navigation: NavItem[] = [
-  { href: '/dashboard', label: 'Overview', icon: ChartNoAxesCombined },
-  { href: '/activity', label: 'Activity', icon: ArrowLeftRight },
-  { href: '/accounts', label: 'Accounts', icon: Landmark },
-  { href: '/budgets', label: 'Budgets', icon: Activity },
+  { href: '/dashboard', label: 'Home', icon: House },
+  { href: '/activity', label: 'Activity', icon: History },
+  { href: '/account', label: 'Accounts', icon: Landmark },
+  { href: '/budget', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/groups', label: 'Groups', icon: UsersRound },
-  { href: '/categories', label: 'Categories', icon: Tags },
+  { href: '/category', label: 'Categories', icon: Tags },
   { href: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
-  { href: '/add', label: 'Add', icon: Plus },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
+const mobileNavigation = [
+  { href: '/dashboard', label: 'Home', icon: House },
+  { href: '/activity', label: 'Activity', icon: History },
+  { href: '/groups', label: 'Groups', icon: UsersRound },
+  { href: '/profile', label: 'Profile', icon: CircleUserRound },
+] satisfies NavItem[];
+type QuickAddLabel = (typeof quickAddActions)[number]['label'];
+const quickAddIcons: Record<QuickAddLabel, LucideIcon> = {
+  Expense: ArrowUpRight,
+  Income: ArrowDownLeft,
+  Transfer: ArrowLeftRight,
+  'Split expense': UsersRound,
+  Settlement: HandCoins,
+};
+const QuickAddContext = createContext<(() => void) | null>(null);
+
+export function useQuickAdd() {
+  const openQuickAdd = useContext(QuickAddContext);
+  if (!openQuickAdd) throw new Error('useQuickAdd must be used inside FinanceShell.');
+  return openQuickAdd;
+}
+
+function QuickAddActions({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="finance-quick-add-list">
+      {quickAddActions.map((action) => {
+        const Icon = quickAddIcons[action.label];
+        return (
+          <Link
+            key={action.label}
+            href={action.route}
+            className="finance-quick-add-option"
+            onClick={onClose}
+          >
+            <span className="finance-quick-add-icon">
+              <Icon size={19} aria-hidden="true" />
+            </span>
+            <span className="finance-quick-add-copy">
+              <span>{action.label}</span>
+              <small>{action.description}</small>
+            </span>
+            <ArrowRight className="finance-quick-add-arrow" size={17} aria-hidden="true" />
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
 
 export function FinanceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { userId, isConnected, isSyncing, syncError, status, retryNow } = useBrowserSync();
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const lastNotifiedError = useRef<string | null>(null);
+  const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
+  const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
   useEffect(() => {
     if (!syncError || !('Notification' in window) || Notification.permission !== 'granted') return;
     if (lastNotifiedError.current === syncError) return;
@@ -58,176 +116,146 @@ export function FinanceShell({ children }: { children: ReactNode }) {
           ? 'Saved locally'
           : 'All changes synced';
   const profileHref = userId ? '/profile' : '/sign-in';
+  const isActive = (href: string) =>
+    pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
+  const isProfileActive =
+    pathname === '/profile' ||
+    pathname.startsWith('/profile/') ||
+    pathname === '/settings' ||
+    pathname.startsWith('/settings/');
+  const guestHome = !userId && pathname === '/dashboard';
 
   return (
-    <div className="finance-app">
-      <aside className="finance-sidebar" aria-label="Finapp">
-        <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-          <span className="finance-brand-mark" aria-hidden="true">
-            F
-          </span>
-          <span>finapp</span>
-        </Link>
-        <p className="finance-sidebar-label">YOUR MONEY</p>
-        <nav className="finance-nav" aria-label="Main navigation">
-          {navigation.map(({ href, label, icon: Icon }) => {
-            const active =
-              pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`finance-nav-link${active ? ' active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>{label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="finance-sidebar-bottom">
-          <Link
-            href={profileHref}
-            className={`finance-nav-link${pathname === '/settings' || pathname.startsWith('/settings/') || pathname === '/profile' ? ' active' : ''}`}
-          >
-            <CircleUserRound size={18} aria-hidden="true" />
-            <span>{userId ? 'Preferences' : 'Sign in'}</span>
-          </Link>
-          <div className="finance-sync-state" role="status" aria-live="polite">
-            <span
-              className={`sync-dot${isConnected ? ' connected' : ''}${status.failed || status.conflicts ? ' attention' : ''}`}
-            />
-            <span>{state}</span>
-            {status.pending + status.failed + status.conflicts > 0 && (
-              <span className="sync-count">
-                {status.pending + status.failed + status.conflicts}
-              </span>
-            )}
-          </div>
-          {syncError && (
-            <p className="finance-sync-error" role="alert">
-              {syncError}
-            </p>
-          )}
-          {(status.failed > 0 || status.conflicts > 0) && (
-            <button className="finance-retry" type="button" onClick={() => void retryNow()}>
-              Retry sync
-            </button>
-          )}
-        </div>
-      </aside>
-      <div className="finance-main">
-        <header className="finance-mobile-header">
+    <QuickAddContext.Provider value={openQuickAdd}>
+      <div className={`finance-app${guestHome ? ' finance-guest-home' : ''}`}>
+        <aside className="finance-sidebar" aria-label="Finapp">
           <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-            <span className="finance-brand-mark" aria-hidden="true">
-              F
-            </span>
+            <span className="finance-brand-mark" aria-hidden="true" />
             <span>finapp</span>
           </Link>
-          <span className="finance-mobile-status">
-            <span className={`sync-dot${isConnected ? ' connected' : ''}`} />
-            {state}
-          </span>
-          <Link
-            className={`finance-mobile-profile${pathname === '/settings' || pathname.startsWith('/settings/') || pathname === '/profile' ? ' active' : ''}`}
-            href={profileHref}
-            aria-label={userId ? 'Preferences' : 'Sign in'}
-          >
-            <CircleUserRound size={19} aria-hidden="true" />
-          </Link>
-        </header>
-        <main className="finance-content">{children}</main>
-        <nav className="finance-mobile-nav" aria-label="Main navigation">
-          {navigation.slice(0, 4).map(({ href, label, icon: Icon }) => {
-            const active =
-              pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-label={label}
-                aria-current={active ? 'page' : undefined}
-                className={active ? 'active' : ''}
-              >
-                <Icon size={19} />
-                <span>{label}</span>
-              </Link>
-            );
-          })}
-          <details style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-            <summary
-              aria-label="More finance pages"
-              style={{
-                display: 'flex',
-                minWidth: 44,
-                minHeight: 48,
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                borderRadius: 12,
-                color: navigation
-                  .slice(4)
-                  .some(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
-                  ? 'var(--finance-lime)'
-                  : 'var(--finance-dim)',
-                fontSize: '0.62rem',
-                listStyle: 'none',
-                cursor: 'pointer',
-              }}
+          <p className="finance-sidebar-label">YOUR MONEY</p>
+          <nav className="finance-nav" aria-label="Main navigation">
+            {navigation.map(({ href, label, icon: Icon }) => {
+              const active = isActive(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`finance-nav-link${active ? ' active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="finance-sidebar-bottom">
+            <Link
+              href={profileHref}
+              className={`finance-nav-link${isProfileActive ? ' active' : ''}`}
             >
-              <Ellipsis size={19} aria-hidden="true" />
-              <span>More</span>
-            </summary>
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                bottom: 'calc(100% + 12px)',
-                display: 'grid',
-                width: 190,
-                gap: 4,
-                border: '1px solid var(--finance-line)',
-                borderRadius: 13,
-                padding: 8,
-                background: '#10130f',
-                boxShadow: '0 12px 30px #0008',
-              }}
-            >
-              {navigation.slice(4).map(({ href, label }) => {
-                const active =
-                  pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    aria-current={active ? 'page' : undefined}
-                    onClick={(event) => {
-                      event.currentTarget.closest('details')?.removeAttribute('open');
-                    }}
-                    style={{
-                      flexDirection: 'row',
-                      gap: 10,
-                      minHeight: 42,
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: 9,
-                      padding: '0 11px',
-                      background: active ? '#1a2116' : 'transparent',
-                      color: active ? 'var(--finance-lime)' : 'inherit',
-                      fontSize: '0.78rem',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    {label}
-                  </Link>
-                );
-              })}
+              <CircleUserRound size={18} aria-hidden="true" />
+              <span>{userId ? 'Profile' : 'Sign in'}</span>
+            </Link>
+            <div className="finance-sync-state" role="status" aria-live="polite">
+              <span
+                className={`sync-dot${isConnected ? ' connected' : ''}${status.failed || status.conflicts ? ' attention' : ''}`}
+              />
+              <span>{state}</span>
+              {status.pending + status.failed + status.conflicts > 0 && (
+                <span className="sync-count">
+                  {status.pending + status.failed + status.conflicts}
+                </span>
+              )}
             </div>
-          </details>
-        </nav>
+            {syncError && (
+              <p className="finance-sync-error" role="alert">
+                {syncError}
+              </p>
+            )}
+            {(status.failed > 0 || status.conflicts > 0) && (
+              <button className="finance-retry" type="button" onClick={() => void retryNow()}>
+                Retry sync
+              </button>
+            )}
+          </div>
+        </aside>
+        <div className="finance-main">
+          <header className="finance-mobile-header">
+            <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
+              <span className="finance-brand-mark" aria-hidden="true" />
+              <span>finapp</span>
+            </Link>
+            <span className="finance-mobile-status">
+              <span className={`sync-dot${isConnected ? ' connected' : ''}`} />
+              {state}
+            </span>
+          </header>
+          <main className="finance-content">{children}</main>
+          <nav className="finance-mobile-nav" aria-label="Main navigation">
+            <svg
+              className="finance-mobile-nav-shape"
+              viewBox="0 0 390 96"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M 0 24 L 121 24 C 138 24 136 52 153 60 C 167 66 177 68 195 68 C 213 68 223 66 237 60 C 254 52 252 24 269 24 L 390 24 L 390 96 L 0 96 Z"
+                fill="var(--finance-background)"
+                stroke="var(--finance-line)"
+                strokeWidth="1"
+              />
+            </svg>
+            {mobileNavigation.slice(0, 2).map(({ href, label, icon: Icon }) => {
+              const active = isActive(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-label={label}
+                  aria-current={active ? 'page' : undefined}
+                  className={active ? 'active' : ''}
+                >
+                  <Icon size={22} aria-hidden="true" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+            <Button
+              className="finance-mobile-add"
+              size="icon"
+              aria-label="Add"
+              onPress={openQuickAdd}
+            >
+              <Plus size={25} strokeWidth={2.2} aria-hidden="true" />
+            </Button>
+            {mobileNavigation.slice(2).map(({ href, label, icon: Icon }) => {
+              const active =
+                href === '/profile' ? isProfileActive || pathname === profileHref : isActive(href);
+              return (
+                <Link
+                  key={href}
+                  href={href === '/profile' ? profileHref : href}
+                  aria-label={label}
+                  aria-current={active ? 'page' : undefined}
+                  className={active ? 'active' : ''}
+                >
+                  <Icon size={22} aria-hidden="true" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
       </div>
-    </div>
+      <Button className="finance-desktop-add" size="icon" aria-label="Add" onPress={openQuickAdd}>
+        <Plus size={24} strokeWidth={2.2} aria-hidden="true" />
+      </Button>
+      <Sheet visible={quickAddOpen} onClose={closeQuickAdd} title="Add">
+        <QuickAddActions onClose={closeQuickAdd} />
+      </Sheet>
+    </QuickAddContext.Provider>
   );
 }

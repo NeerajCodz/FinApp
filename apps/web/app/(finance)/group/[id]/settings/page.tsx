@@ -3,8 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowRight, Check, Pencil, UsersRound } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight, Check, Pencil } from 'lucide-react';
+import { Avatar, Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -64,6 +64,25 @@ export default function GroupSettingsPage() {
       ) ||
       (!group.ownerId && !groupMembers.length)),
   );
+  const currentRole =
+    group?.ownerId === userId || (!group?.ownerId && !groupMembers.length)
+      ? 'Owner'
+      : groupMembers.some(
+            (member) => (member.userId ?? member.memberId) === userId && member.role === 'admin',
+          )
+        ? 'Admin'
+        : 'Member';
+  const memberRows: Member[] = groupMembers.length
+    ? groupMembers
+    : [
+        {
+          id: `${currentGroupId}:owner`,
+          groupId: currentGroupId,
+          userId: String(group?.ownerId ?? userId ?? ''),
+          displayName: 'You',
+          role: 'owner',
+        },
+      ];
 
   async function saveName(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -163,28 +182,39 @@ export default function GroupSettingsPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link
-            className="finance-secondary-action"
-            href={`/group/${encodeURIComponent(currentGroupId)}`}
-          >
-            ‹ {group.name ?? 'Group'}
-          </Link>
-          <p className="finance-kicker">GROUP ADMINISTRATION</p>
-          <h1>Settings</h1>
-          <p className="finance-muted">Currency remains fixed to INR for the life of this group.</p>
-        </div>
-        <Badge variant={canManage ? 'success' : 'neutral'}>
-          {canManage ? 'Manager' : 'Member'}
-        </Badge>
+        <Link
+          className="finance-secondary-action"
+          href={`/group/${encodeURIComponent(currentGroupId)}`}
+          aria-label="Go back"
+        >
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ margin: 0 }}>Group settings</h1>
       </header>
       {(error || groupsError || membersError) && (
         <p className="finance-form-error" role="alert">
           {error || groupsError || membersError}
         </p>
       )}
+      <Card className="finance-record-panel">
+        <SectionHeader
+          title={group.name ?? 'Group'}
+          action={
+            <Badge variant="neutral">
+              {group.archivedAt === undefined ? 'Active group' : 'Archived group'}
+            </Badge>
+          }
+        />
+        <p className="finance-muted">
+          {groupMembers.length || 1} {(groupMembers.length || 1) === 1 ? 'member' : 'members'}
+        </p>
+        <div className="finance-page-actions">
+          <span className="finance-form-note">Your access</span>
+          <Badge variant={currentRole === 'Member' ? 'neutral' : 'success'}>{currentRole}</Badge>
+        </div>
+      </Card>
       <Card className="finance-form-panel">
-        <SectionHeader title="Group identity" action={<Badge variant="neutral">INR</Badge>} />
+        <SectionHeader title="General" />
         {editing ? (
           <form className="finance-form" onSubmit={saveName}>
             <FinanceInput
@@ -195,61 +225,80 @@ export default function GroupSettingsPage() {
               required
               disabled={!canManage}
             />
-            <p className="finance-form-note">Group currency cannot be changed.</p>
+            <p className="finance-form-note">
+              Currency · {group.currency ?? 'INR'}. Kept fixed so existing split amounts stay
+              consistent.
+            </p>
             <div className="finance-page-actions">
               <Button type="submit" disabled={!canManage || saving === 'name'}>
                 {saving === 'name' ? 'Saving…' : 'Save name'} <Check size={15} />
               </Button>
-              <Button type="button" variant="outline" onPress={() => setEditing(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={saving === 'name'}
+                onPress={() => setEditing(false)}
+              >
                 Cancel
               </Button>
             </div>
           </form>
         ) : (
           <div className="finance-record-copy">
-            <strong>{group.name ?? 'Shared group'}</strong>
-            <small>Currency · Indian rupee (INR)</small>
+            <strong>Group name</strong>
+            <small>{group.name ?? 'Shared group'}</small>
+            <small>Currency · {group.currency ?? 'INR'}</small>
+            <small>Kept fixed so existing split amounts stay consistent.</small>
             {canManage && (
               <Button
-                variant="outline"
+                size="icon"
+                variant="ghost"
+                aria-label="Edit group name"
                 onPress={() => {
                   setName(group.name ?? '');
                   setEditing(true);
                 }}
               >
-                <Pencil size={15} /> Rename group
+                <Pencil size={18} />
               </Button>
             )}
           </div>
         )}
       </Card>
       <Card className="finance-record-panel">
-        <SectionHeader title="Members" action={<UsersRound size={17} />} />
+        <SectionHeader
+          title="Members"
+          action={<Badge variant="neutral">{groupMembers.length || 1} total</Badge>}
+        />
         {membersLoading ? (
           <p className="finance-muted" role="status">
             Loading saved membership…
           </p>
-        ) : groupMembers.length ? (
+        ) : memberRows.length ? (
           <ul className="finance-record-list">
-            {groupMembers.map((member) => {
+            {memberRows.map((member) => {
               const memberUserId = String(member.userId ?? member.memberId ?? localId(member));
               const isOwner = member.role === 'owner' || group.ownerId === memberUserId;
               const role = member.role ?? (group.ownerId === memberUserId ? 'owner' : 'member');
+              const memberName = String(
+                member.displayName ?? member.name ?? member.username ?? 'Member',
+              );
               return (
-                <li key={localId(member)}>
+                <li key={localId(member) || memberUserId}>
+                  <Avatar
+                    initials={memberName
+                      .split(/\s+/)
+                      .map((part) => part[0] ?? '')
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()}
+                    label={memberName}
+                    size={42}
+                  />
                   <span className="finance-record-copy">
-                    <strong>
-                      {memberUserId === userId
-                        ? 'You'
-                        : (member.displayName ??
-                          member.name ??
-                          (member.username
-                            ? `@${member.username}`
-                            : `Member ${memberUserId.slice(-6)}`))}
-                    </strong>
+                    <strong>{memberName}</strong>
                     <small>
-                      {member.username ? `@${member.username} · ` : ''}
-                      {role}
+                      {isOwner ? 'Group owner' : role === 'admin' ? 'Group admin' : 'Member'}
                     </small>
                   </span>
                   {canManage && !isOwner && (
@@ -276,6 +325,12 @@ export default function GroupSettingsPage() {
             description="Member details appear after the group range or initial sync completes."
           />
         )}
+        <p className="finance-form-note">
+          Owners and admins can rename the group and promote or remove admins.
+        </p>
+        <p className="finance-form-note">
+          Changes are saved on this device and sync when connected.
+        </p>
       </Card>
     </div>
   );

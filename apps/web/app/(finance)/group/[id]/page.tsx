@@ -2,13 +2,15 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeftRight, ArrowRight, ClipboardList, Settings2 } from 'lucide-react';
-import { calculateNetBalances } from '@convex/splits/domain';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, ArrowLeftRight, ArrowRight, Plus, Settings2 } from 'lucide-react';
+import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
-import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Avatar, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
+import { isGroupRangeCovered } from '@/lib/offline/repository';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type Group = LocalRecord & {
@@ -59,6 +61,7 @@ const recordIds = (record: LocalRecord) =>
 const recordId = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function GroupHomePage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const groupId = params.id;
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
@@ -80,18 +83,35 @@ export default function GroupHomePage() {
   const groupIds = group ? recordIds(group) : [groupId];
   const localGroupId = group ? recordId(group) : groupId;
   const groupReady = Boolean(group);
+  const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
 
   React.useEffect(() => {
     if (!userId || !group) return;
-    if (!isConnected) {
-      setRangeStatus('uncached');
-      setRangeError('Offline. Showing saved records; the all-time range may be incomplete.');
-      return;
-    }
     let active = true;
+    if (!isConnected) {
+      void isGroupRangeCovered(userId, localGroupId, 0, rangeEndAt).then(
+        (covered) => {
+          if (!active) return;
+          setRangeStatus(covered ? 'loaded' : 'uncached');
+          setRangeError(
+            covered ? '' : 'Offline. Showing saved records; the all-time range may be incomplete.',
+          );
+        },
+        (cause: unknown) => {
+          if (!active) return;
+          setRangeStatus('error');
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Saved range coverage could not be checked.',
+          );
+        },
+      );
+      return () => {
+        active = false;
+      };
+    }
     setRangeStatus('loading');
     setRangeError('');
-    void fetchGroupRange(localGroupId, 0, Date.now() + 1).then(
+    void fetchGroupRange(localGroupId, 0, rangeEndAt).then(
       () => {
         if (active) setRangeStatus('loaded');
       },
@@ -107,7 +127,7 @@ export default function GroupHomePage() {
     return () => {
       active = false;
     };
-  }, [fetchGroupRange, groupReady, isConnected, localGroupId, userId]);
+  }, [fetchGroupRange, groupReady, isConnected, localGroupId, rangeEndAt, userId]);
 
   if (!userId)
     return (
@@ -166,82 +186,24 @@ export default function GroupHomePage() {
     const transactionIds = recordIds(expense);
     return transactionIds.length > 0;
   });
-  const eligibleTransactionIds = new Set(activeExpenses.flatMap(recordIds));
-  const payerRows = payers.filter(
-    (item) =>
-      typeof item.transactionId === 'string' && eligibleTransactionIds.has(item.transactionId),
-  );
-  const participantRows = participants.filter(
-    (item) =>
-      typeof item.transactionId === 'string' && eligibleTransactionIds.has(item.transactionId),
-  );
-  let incompleteAllocation = false;
-  const payerAmounts: Array<{ userId: string; amountMinor: bigint }> = [];
-  const participantAmounts: Array<{ userId: string; amountMinor: bigint }> = [];
-  for (const expense of activeExpenses) {
-    const expenseIds = recordIds(expense);
-    const relatedPayers = payerRows.filter(
-      (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-    );
-    const relatedParticipants = participantRows.filter(
-      (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-    );
-    const expensePayers = relatedPayers.length
-      ? relatedPayers.map((item) => ({
-          userId: String(item.userId ?? item.memberId ?? ''),
-          amountMinor: asMinor(item.amountMinor),
-        }))
-      : expense.payerUserId
-        ? [
-            {
-              userId: expense.payerUserId,
-              amountMinor: asMinor(expense.payerAmountMinor ?? expense.amountMinor),
-            },
-          ]
-        : [];
-    const expenseParticipants = relatedParticipants.length
-      ? relatedParticipants.map((item) => ({
-          userId: String(item.userId ?? item.memberId ?? ''),
-          amountMinor: asMinor(item.amountMinor),
-        }))
-      : (expense.participants ?? []).map((item) => ({
-          userId: item.userId,
-          amountMinor: asMinor(item.amountMinor),
-        }));
-    const expected = asMinor(expense.amountMinor);
-    if (
-      !expensePayers.length ||
-      !expenseParticipants.length ||
-      expensePayers.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected ||
-      expenseParticipants.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected
-    )
-      incompleteAllocation = true;
-    payerAmounts.push(...expensePayers);
-    participantAmounts.push(...expenseParticipants);
-  }
-  const settlementRows = settlements
-    .filter(
-      (item) =>
-        typeof item.groupId === 'string' &&
-        groupIds.includes(item.groupId) &&
-        item.currency === (group.currency ?? 'INR') &&
-        item.deletedAt === undefined,
-    )
-    .map((item) => ({
-      fromUserId: String(item.fromUserId ?? ''),
-      toUserId: String(item.toUserId ?? ''),
-      amountMinor: asMinor(item.amountMinor),
-    }));
+  const rangeComplete = rangeStatus === 'loaded';
   let balanceByUser: Record<string, bigint> = {};
-  let ledgerError = incompleteAllocation ? 'INCOMPLETE_GROUP_SPLITS' : '';
-  if (!incompleteAllocation) {
+  let ledgerError = '';
+  if (rangeComplete) {
     try {
-      balanceByUser = calculateNetBalances(payerAmounts, participantAmounts, settlementRows);
+      balanceByUser = projectGroupBalances(
+        group,
+        transactions,
+        payers,
+        participants,
+        settlements,
+      ).balances;
     } catch (cause) {
       ledgerError = cause instanceof Error ? cause.message : 'The group balance is incomplete.';
     }
   }
-  const myBalance = userId ? (balanceByUser[userId] ?? 0n) : 0n;
+  const ledgerUnavailable = !rangeComplete || Boolean(ledgerError);
+  const myBalance = ledgerUnavailable ? 0n : userId ? (balanceByUser[userId] ?? 0n) : 0n;
   const recent = [...activeExpenses]
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
     .slice(0, 5);
@@ -257,37 +219,30 @@ export default function GroupHomePage() {
               ? `@${member.username}`
               : `Member ${String(member.userId ?? '').slice(-6)}`)),
     ),
-    balance: balanceByUser[String(member.userId ?? member.memberId ?? '')] ?? 0n,
   }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
-    memberNames.unshift({ id: userId, username: undefined, name: 'You', balance: myBalance });
+    memberNames.unshift({ id: userId, username: undefined, name: 'You' });
   const formatDate = (value: unknown) => new Date(Number(value ?? Date.now())).toLocaleDateString();
 
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link className="finance-secondary-action" href="/groups">
-            ‹ All groups
-          </Link>
-          <p className="finance-kicker">SHARED GROUP · INR</p>
-          <h1>{group.name ?? 'Shared group'}</h1>
-          <p className="finance-muted">Group currency is fixed to Indian rupees.</p>
-        </div>
-        <div className="finance-page-actions">
-          <Link
-            className="finance-secondary-action"
-            href={`/group/${encodeURIComponent(localGroupId)}/settings`}
-          >
-            <Settings2 size={15} /> Settings
-          </Link>
-          <Link
-            className="finance-primary-link"
-            href={`/group/${encodeURIComponent(localGroupId)}/expenses/new`}
-          >
-            Add expense <ArrowRight size={15} />
-          </Link>
-        </div>
+        <Link
+          className="finance-secondary-action"
+          href="/groups"
+          aria-label="Go back to groups"
+        >
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ flex: 1, margin: 0 }}>{group.name ?? 'Group'}</h1>
+        <Link
+          className="finance-secondary-action"
+          href={`/group/${encodeURIComponent(localGroupId)}/settings`}
+          aria-label="Group settings"
+          title="Group settings"
+        >
+          <Settings2 size={18} />
+        </Link>
       </header>
       {(rangeStatus === 'loading' || rangeStatus === 'uncached' || rangeStatus === 'error') && (
         <p
@@ -297,150 +252,189 @@ export default function GroupHomePage() {
           {rangeStatus === 'loading' ? 'Loading the all-time group range…' : rangeError}
         </p>
       )}
+      {rangeStatus === 'error' && isConnected && (
+        <Button
+          variant="outline"
+          onPress={() => {
+            setRangeStatus('loading');
+            setRangeError('');
+            void fetchGroupRange(localGroupId, 0, Date.now() + 1).then(
+              () => setRangeStatus('loaded'),
+              (cause: unknown) => {
+                setRangeStatus('error');
+                setRangeError(
+                  cause instanceof Error ? cause.message : 'The group range could not be loaded.',
+                );
+              },
+            );
+          }}
+        >
+          Retry range
+        </Button>
+      )}
       {ledgerError && (
         <p className="finance-form-error" role="alert">
-          Balance details need a complete expense allocation: {ledgerError}
+          Complete group balances are unavailable. No partial value is shown. {ledgerError}
         </p>
       )}
-      <div className="finance-accounts-layout">
-        <Card className="finance-record-panel">
-          <SectionHeader
-            title="Your balance"
-            action={
-              <Badge
-                variant={
-                  ledgerError
-                    ? 'danger'
-                    : myBalance === 0n
-                      ? 'neutral'
-                      : myBalance > 0n
-                        ? 'success'
-                        : 'danger'
-                }
-              >
-                {ledgerError
-                  ? 'Unavailable'
-                  : myBalance === 0n
-                    ? 'Settled'
-                    : myBalance > 0n
-                      ? 'You are owed'
-                      : 'You owe'}
-              </Badge>
-            }
-          />
-          <strong className="finance-record-amount">
-            {ledgerError
-              ? 'Balance unavailable'
-              : formatMinor(myBalance < 0n ? -myBalance : myBalance, group.currency ?? 'INR')}
-          </strong>
-          <p className="finance-muted">
-            {ledgerError
-              ? 'Complete allocations are not available on this device yet.'
-              : myBalance === 0n
-                ? 'Your group balance is even.'
-                : 'A positive balance means members owe you; a negative balance means you owe the group.'}
-          </p>
-          <div className="finance-page-actions">
-            <Link
-              className="finance-secondary-action"
-              href={`/group/${encodeURIComponent(localGroupId)}/balances`}
-            >
-              View balances <ArrowRight size={15} />
-            </Link>
+      <Card className="finance-record-panel">
+        <SectionHeader title="Your balance" />
+        <strong className="finance-record-amount">
+          {ledgerUnavailable
+            ? rangeStatus === 'loading' && !ledgerError
+              ? 'Loading…'
+              : 'Balance unavailable'
+            : formatMinor(myBalance, group.currency ?? 'INR')}
+        </strong>
+        <p className="finance-muted">
+          {ledgerUnavailable
+            ? rangeStatus === 'loading' && !ledgerError
+              ? 'Loading all-time balance…'
+              : 'Complete group balances are unavailable. No partial value is shown.'
+            : myBalance === 0n
+              ? 'You are settled'
+              : myBalance > 0n
+                ? 'Owed to you'
+                : 'You owe'}
+        </p>
+        <div className="finance-page-actions">
+          <Link
+            className="finance-secondary-action"
+            href={`/group/${encodeURIComponent(localGroupId)}/balances`}
+          >
+            View member balances <ArrowRight size={15} />
+          </Link>
+          {myBalance !== 0n && (
             <Link
               className="finance-secondary-action"
               href={`/settle/new?groupId=${encodeURIComponent(localGroupId)}`}
             >
-              Record repayment <ArrowLeftRight size={15} />
+              Record a settlement <ArrowLeftRight size={15} />
             </Link>
-          </div>
-        </Card>
-        <Card className="finance-record-panel">
-          <SectionHeader
-            title="Members"
-            action={<Badge variant="neutral">{memberNames.length}</Badge>}
-          />
-          {memberNames.length ? (
-            <ul className="finance-record-list">
-              {memberNames.map((member) => (
-                <li key={member.id}>
-                  <span className="finance-record-copy">
-                    <strong>{member.name}</strong>
-                    <small>
-                      {ledgerError
-                        ? 'Balance unavailable'
-                        : member.balance === 0n
-                          ? 'Even'
-                          : member.balance > 0n
-                            ? `Owed ${formatMinor(member.balance, group.currency ?? 'INR')}`
-                            : `Owes ${formatMinor(-member.balance, group.currency ?? 'INR')}`}
-                    </small>
-                  </span>
-                  {member.id !== userId && member.username && (
-                    <Link
-                      className="finance-secondary-action"
-                      href={`/person/${encodeURIComponent(member.username.replace(/^@+/, ''))}`}
-                    >
-                      Profile
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="finance-muted">
-              Member details will appear after group membership syncs.
-            </p>
           )}
-        </Card>
-      </div>
-      <Card className="finance-record-panel">
-        <SectionHeader
-          title="Recent shared expenses"
-          action={
-            <Link
-              className="finance-secondary-action"
-              href={`/group/${encodeURIComponent(localGroupId)}/expenses`}
-            >
-              All expenses <ArrowRight size={15} />
-            </Link>
-          }
-        />
-        {recent.length ? (
-          <ul className="finance-record-list">
-            {recent.map((expense) => (
-              <li key={recordId(expense)}>
-                <span className="finance-record-symbol">
-                  <ClipboardList size={17} />
-                </span>
-                <span className="finance-record-copy">
-                  <strong>{expense.title ?? 'Group expense'}</strong>
-                  <small>
-                    {formatDate(expense.occurredAt)} ·{' '}
-                    {expense.status === 'pending' ? 'Pending sync' : 'Shared expense'}
-                  </small>
-                </span>
-                <strong className="finance-record-amount">
-                  {formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}
-                </strong>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <Empty
-            title="No shared expenses yet"
-            description="Add an expense and choose the members who shared it."
-            action={
-              <Link
-                className="finance-secondary-action"
-                href={`/group/${encodeURIComponent(localGroupId)}/expenses/new`}
-              >
-                Add the first expense <ArrowRight size={15} />
-              </Link>
-            }
-          />
-        )}
+        </div>
       </Card>
+      <Link
+        className="finance-primary-link"
+        href={`/group/${encodeURIComponent(localGroupId)}/expenses/new`}
+      >
+        <Plus size={17} /> Add expense
+      </Link>
+      <section style={{ display: 'grid', gap: 24 }}>
+        <section>
+          <SectionHeader title="People" />
+          {memberNames.length ? (
+            <div
+              style={{
+                display: 'flex',
+                gap: 16,
+                overflowX: 'auto',
+                paddingBlock: 12,
+              }}
+            >
+              {memberNames.map((member) => {
+                const profileHref =
+                  member.id !== userId && member.username
+                    ? `/person/${encodeURIComponent(member.username.replace(/^@+/, ''))}`
+                    : undefined;
+                const item = (
+                  <>
+                    <Avatar
+                      initials={member.name
+                        .split(/\s+/)
+                        .map((part) => part[0] ?? '')
+                        .join('')
+                        .slice(0, 2)}
+                      label={member.name}
+                      size={48}
+                    />
+                    <small>
+                      {member.username
+                        ? `@${member.username.replace(/^@+/, '')}`
+                        : member.name}
+                    </small>
+                  </>
+                );
+                return profileHref ? (
+                  <Link
+                    key={member.id}
+                    href={profileHref}
+                    aria-label={`Open @${member.username}`}
+                    style={{
+                      display: 'grid',
+                      width: 96,
+                      flex: '0 0 96px',
+                      justifyItems: 'center',
+                      gap: 7,
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {item}
+                  </Link>
+                ) : (
+                  <span
+                    key={member.id}
+                    style={{
+                      display: 'grid',
+                      width: 96,
+                      flex: '0 0 96px',
+                      justifyItems: 'center',
+                      gap: 7,
+                    }}
+                  >
+                    {item}
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <Empty
+              title="No members saved"
+              description="Members invited to this group will appear here."
+            />
+          )}
+        </section>
+        <section>
+          <SectionHeader title="Recent" />
+          {recent.length ? (
+            <div className="finance-record-list">
+              {recent.map((expense) => {
+                const transactionId = recordId(expense);
+                return (
+                  <TransactionRow
+                    key={transactionId}
+                    title={expense.title ?? 'Group expense'}
+                    category="Group expense"
+                    account={group.name ?? 'Group'}
+                    amountMinor={asMinor(expense.amountMinor)}
+                    currency={group.currency ?? 'INR'}
+                    type="expense"
+                    semanticType="split"
+                    date={formatDate(expense.occurredAt)}
+                    onPress={() =>
+                      router.push(`/transaction/${encodeURIComponent(transactionId)}`)
+                    }
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <Empty
+              title="No shared expenses"
+              description="Add an expense to start your group history."
+              action={
+                <Link
+                  className="finance-secondary-action"
+                  href={`/group/${encodeURIComponent(localGroupId)}/expenses/new`}
+                >
+                  Add expense <ArrowRight size={15} />
+                </Link>
+              }
+            />
+          )}
+        </section>
+      </section>
     </div>
   );
 }

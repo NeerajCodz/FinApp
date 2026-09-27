@@ -3,11 +3,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Plus, ReceiptText } from 'lucide-react';
-import { formatMinor } from '@convex/shared/money';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
+import { Button, Empty } from '@finapp/ui/web';
+import { TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
+import { isGroupRangeCovered } from '@/lib/offline/repository';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type Group = LocalRecord & { name?: string; currency?: string };
@@ -34,13 +35,13 @@ const aliases = (record: LocalRecord) =>
     (value): value is string => typeof value === 'string',
   );
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
-const endAt = Date.now() + 1;
-const startAt = endAt - 90 * 24 * 60 * 60 * 1000;
 
 export default function GroupExpensesPage() {
   const params = useParams<{ id: string }>();
   const routeId = params.id;
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
+  const startAt = React.useMemo(() => Date.now() - 90 * 24 * 60 * 60 * 1000, []);
+  const endAt = React.useMemo(() => Date.now() + 1, []);
   const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
   const { records: transactions, loading: transactionsLoading } =
     useLocalRecords<Expense>('transaction');
@@ -54,14 +55,30 @@ export default function GroupExpensesPage() {
 
   React.useEffect(() => {
     if (!userId || !group) return;
-    if (!isConnected) {
-      setRangeStatus('uncached');
-      setRangeError(
-        'Offline. Saved expenses remain visible, but this 90-day range may not be complete.',
-      );
-      return;
-    }
     let active = true;
+    if (!isConnected) {
+      void isGroupRangeCovered(userId, groupId, startAt, endAt).then(
+        (covered) => {
+          if (!active) return;
+          setRangeStatus(covered ? 'loaded' : 'uncached');
+          setRangeError(
+            covered
+              ? ''
+              : 'Offline. Saved expenses remain visible, but this 90-day range may not be complete.',
+          );
+        },
+        (cause: unknown) => {
+          if (!active) return;
+          setRangeStatus('error');
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Saved range coverage could not be checked.',
+          );
+        },
+      );
+      return () => {
+        active = false;
+      };
+    }
     setRangeStatus('loading');
     setRangeError('');
     void fetchGroupRange(groupId, startAt, endAt).then(
@@ -80,7 +97,7 @@ export default function GroupExpensesPage() {
     return () => {
       active = false;
     };
-  }, [fetchGroupRange, groupReady, groupId, isConnected, userId]);
+  }, [fetchGroupRange, groupReady, groupId, isConnected, startAt, endAt, userId]);
 
   if (!userId)
     return (
@@ -120,30 +137,30 @@ export default function GroupExpensesPage() {
       (item) =>
         typeof item.groupId === 'string' &&
         groupIds.includes(item.groupId) &&
-        item.type === 'expense' &&
-        item.deletedAt === undefined &&
-        item.currency === (group.currency ?? 'INR'),
+        Number(item.occurredAt ?? 0) >= startAt &&
+        Number(item.occurredAt ?? 0) < endAt,
     )
-    .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
+    .sort((left, right) => Number(left.occurredAt ?? 0) - Number(right.occurredAt ?? 0));
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link className="finance-secondary-action" href={`/group/${encodeURIComponent(groupId)}`}>
-            ‹ {group.name ?? 'Group'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link
+            className="finance-secondary-action"
+            href={`/group/${encodeURIComponent(groupId)}`}
+            aria-label="Go back"
+          >
+            <ArrowLeft size={18} />
           </Link>
-          <p className="finance-kicker">SHARED LEDGER</p>
-          <h1>Expenses</h1>
-          <p className="finance-muted">
-            The last 90 days are requested from the group range. Saved expenses remain available
-            offline.
-          </p>
+          <h1 style={{ margin: 0 }}>Expenses</h1>
         </div>
         <Link
-          className="finance-primary-link"
+          className="finance-secondary-action"
           href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
+          aria-label="Add group expense"
+          title="Add group expense"
         >
-          Add expense <Plus size={15} />
+          <Plus size={20} />
         </Link>
       </header>
       {rangeStatus === 'loading' && (
@@ -163,47 +180,43 @@ export default function GroupExpensesPage() {
         <p className="finance-muted" role="status">
           Opening locally saved expenses…
         </p>
+      ) : expenses.length ? (
+        <div className="finance-record-list">
+          {expenses.map((expense) => {
+            const expenseId = idOf(expense);
+            return (
+              <Link
+                key={expenseId}
+                href={`/transaction/${encodeURIComponent(expenseId)}`}
+                style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
+              >
+                <TransactionRow
+                  title={expense.title ?? 'Group expense'}
+                  category="Group expense"
+                  account={group.name ?? 'Group'}
+                  amountMinor={asMinor(expense.amountMinor)}
+                  currency={expense.currency ?? group.currency ?? 'INR'}
+                  type="expense"
+                  semanticType="split"
+                  date={new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
+                />
+              </Link>
+            );
+          })}
+        </div>
       ) : (
-        <Card className="finance-record-panel">
-          <SectionHeader
-            title="Shared expenses"
-            action={<Badge variant="neutral">{expenses.length}</Badge>}
-          />
-          {expenses.length ? (
-            <ul className="finance-record-list">
-              {expenses.map((expense) => (
-                <li key={idOf(expense)}>
-                  <span className="finance-record-symbol">
-                    <ReceiptText size={17} />
-                  </span>
-                  <span className="finance-record-copy">
-                    <strong>{expense.title ?? 'Group expense'}</strong>
-                    <small>
-                      {new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()} ·{' '}
-                      {expense.status === 'pending' ? 'Pending sync' : 'Expense'}
-                    </small>
-                  </span>
-                  <strong className="finance-record-amount">
-                    {formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}
-                  </strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Empty
-              title="No group expenses"
-              description="Add the first expense and choose how it is shared."
-              action={
-                <Link
-                  className="finance-secondary-action"
-                  href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
-                >
-                  Add expense <ArrowRight size={15} />
-                </Link>
-              }
-            />
-          )}
-        </Card>
+        <Empty
+          title="No group expenses"
+          description="Add the first expense and choose who shared it."
+          action={
+            <Link
+              className="finance-secondary-action"
+              href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
+            >
+              Add expense <ArrowRight size={15} />
+            </Link>
+          }
+        />
       )}
       {rangeStatus === 'error' && isConnected && (
         <Button

@@ -1,24 +1,21 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Landmark } from 'lucide-react';
-import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { formatMinor } from '@convex/shared/money';
+import { useRouter, useParams } from 'next/navigation';
+import { ArrowLeft, ReceiptText } from 'lucide-react';
+import { Button, Empty, IconButton, Input, Label, Separator, Sheet, Typography } from '@finapp/ui/web';
+import { Money, TransactionRow, type TransactionType } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceInput } from '@/components/finance/FinanceInput';
 import {
   aliasesOf,
   asMinor,
   belongsToUser,
   idOf,
   matchesId,
-  PageHeading,
+  localDependency,
   SignInGate,
-  syncedId,
 } from '../../_personal';
 
 type Account = LocalRecord & {
@@ -31,36 +28,79 @@ type Account = LocalRecord & {
   archivedAt?: number;
   createdAt?: number;
   updatedAt?: number;
+  icon?: string;
+  color?: string;
   isIncludedInTotal?: boolean;
 };
+type Category = LocalRecord & { name?: string; icon?: string };
 type Transaction = LocalRecord & {
   accountId?: string;
   transferAccountId?: string;
+  categoryId?: string;
+  groupId?: string;
   type?: string;
   amountMinor?: bigint | number | string;
   currency?: string;
   title?: string;
+  note?: string;
   occurredAt?: number;
   status?: string;
   deletedAt?: number;
 };
 
+const ACCOUNT_TYPES = {
+  cash: 'Cash',
+  bank: 'Bank',
+  card: 'Card',
+  wallet: 'Wallet',
+  loan: 'Loan',
+  other: 'Other',
+} as const;
 export default function PersonalAccountDetailPage() {
+
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { userId } = useBrowserSync();
+  const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
+  const timelineRange = React.useMemo(() => {
+    const endAt = Date.now() + 1;
+    return { startAt: endAt - 30 * 86_400_000, endAt };
+  }, []);
   const { records, loading, error } = useLocalRecords<Account>('account');
-  const { records: transactions } = useLocalRecords<Transaction>('transaction');
+  const {
+    records: transactions,
+    loading: transactionLoading,
+    error: transactionError,
+  } = useLocalRecords<Transaction>('transaction');
+  const { records: categories } = useLocalRecords<Category>('category');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const account = records.find(
     (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
   );
   const [name, setName] = React.useState('');
   const [pending, setPending] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
+  const [confirmingArchive, setConfirmingArchive] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
+  const [rangeError, setRangeError] = React.useState('');
   React.useEffect(() => setName(account?.name ?? ''), [account?.name, routeId]);
+  React.useEffect(() => {
+    if (!userId || !isConnected) return;
+    let active = true;
+    setRangeError('');
+    void fetchTransactionRange(timelineRange.startAt, timelineRange.endAt).catch(
+      (cause: unknown) => {
+        if (active)
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Could not refresh recent activity.',
+          );
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [fetchTransactionRange, isConnected, timelineRange, userId]);
   const ids = new Set(account ? aliasesOf(account) : []);
-  const activity = transactions
+  const matchingActivity = transactions
     .filter(
       (item) =>
         item.status === 'posted' &&
@@ -68,7 +108,13 @@ export default function PersonalAccountDetailPage() {
         (ids.has(String(item.accountId ?? '')) || ids.has(String(item.transferAccountId ?? ''))),
     )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
-  const optimisticDelta = activity.reduce((delta, transaction) => {
+  const activity = matchingActivity
+    .filter((item) => {
+      const occurredAt = Number(item.occurredAt ?? 0);
+      return occurredAt >= timelineRange.startAt && occurredAt < timelineRange.endAt;
+    })
+    .slice(0, 50);
+  const optimisticDelta = matchingActivity.reduce((delta, transaction) => {
     if (typeof transaction.clientUpdatedAt !== 'number') return delta;
     const amount = asMinor(transaction.amountMinor);
     const source = ids.has(String(transaction.accountId ?? ''))
@@ -82,16 +128,25 @@ export default function PersonalAccountDetailPage() {
         : 0n;
     return delta + source + destination;
   }, 0n);
+  const localId = account ? idOf(account) : '';
+  const accountId = account ? String(account._id ?? account.cloudId ?? account.id ?? '') : '';
+  const accountDependency = account ? localDependency('account', account) : null;
+  const pageHeader = (
+    <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+        <ArrowLeft size={21} aria-hidden="true" />
+      </IconButton>
+      <Typography variant="heading" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {account?.name ?? 'Account'}
+      </Typography>
+    </header>
+  );
 
   async function updateName(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!userId || !account || pending) return;
-    const accountId = syncedId(account);
-    const localId = idOf(account);
     if (!accountId) {
-      setFormError(
-        'This account is awaiting sync. Rename becomes available once it has a cloud ID.',
-      );
+      setFormError('This account has no saved identifier and cannot be renamed.');
       return;
     }
     const trimmed = name.trim();
@@ -110,9 +165,11 @@ export default function PersonalAccountDetailPage() {
         { accountId, name: trimmed },
         {
           recordId: localId,
+          dependencies: accountDependency ? [accountDependency] : [],
           baseUpdatedAt: typeof account.updatedAt === 'number' ? account.updatedAt : undefined,
         },
       );
+      setEditing(false);
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Could not rename this account.');
     } finally {
@@ -122,15 +179,10 @@ export default function PersonalAccountDetailPage() {
 
   async function archive() {
     if (!userId || !account || pending) return;
-    const accountId = syncedId(account);
     if (!accountId) {
-      setFormError(
-        'This account is awaiting sync. Archive becomes available once it has a cloud ID.',
-      );
+      setFormError('This account has no saved identifier and cannot be archived.');
       return;
     }
-    if (!window.confirm('Archive this account? It will remain in your archived account list.'))
-      return;
     setPending(true);
     setFormError(null);
     try {
@@ -141,11 +193,13 @@ export default function PersonalAccountDetailPage() {
         { ...account, archivedAt: Date.now() },
         { accountId },
         {
-          recordId: idOf(account),
+          recordId: localId,
+          dependencies: accountDependency ? [accountDependency] : [],
           baseUpdatedAt: typeof account.updatedAt === 'number' ? account.updatedAt : undefined,
         },
       );
-      router.push('/account');
+      setConfirmingArchive(false);
+      router.replace('/account');
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Could not archive this account.');
     } finally {
@@ -159,17 +213,17 @@ export default function PersonalAccountDetailPage() {
         Sign in to open account details in this browser workspace.
       </SignInGate>
     );
-  if (loading)
+  if (loading || transactionLoading)
     return (
-      <div className="finance-page">
-        <p className="finance-muted" role="status">
-          Opening account…
-        </p>
+      <div className="finance-page" style={{ gap: 28 }}>
+        {pageHeader}
+        <Typography variant="small">Loading account…</Typography>
       </div>
     );
   if (error)
     return (
-      <div className="finance-page">
+      <div className="finance-page" style={{ gap: 28 }}>
+        {pageHeader}
         <p className="finance-form-error" role="alert">
           Account data could not be opened: {error}
         </p>
@@ -177,144 +231,211 @@ export default function PersonalAccountDetailPage() {
     );
   if (!account)
     return (
-      <div className="finance-page">
+      <div className="finance-page" style={{ gap: 28 }}>
+        {pageHeader}
         <Empty
-          title="Account unavailable"
-          description="This account is not in the current user's local records."
-          action={
-            <Link className="finance-inline-link" href="/account">
-              Back to accounts
-            </Link>
-          }
+          title="Account unavailable."
+          description="This account could not be found or is no longer available."
         />
       </div>
     );
   const currency = account.currency ?? 'INR';
   const balance = asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta;
+  const accountType =
+    account.type === 'other' && account.customType
+      ? account.customType
+      : account.type && account.type in ACCOUNT_TYPES
+        ? ACCOUNT_TYPES[account.type as keyof typeof ACCOUNT_TYPES]
+        : 'Account';
+
   return (
-    <div className="finance-page">
-      <Link className="finance-secondary-action" href="/account">
-        <ArrowLeft size={15} /> Back to accounts
-      </Link>
-      <PageHeading
-        eyebrow="ACCOUNT DETAIL"
-        title={account.name ?? 'Account'}
-        description={`${(account.customType ?? account.type ?? 'Account').replace(/^./, (value) => value.toUpperCase())} · ${currency}${account.archivedAt !== undefined ? ' · Archived' : ''}`}
-      />
-      <div className="finance-dashboard-grid">
-        <Card className="finance-metric-card finance-balance-card">
-          <span className="finance-metric-label">CURRENT BALANCE · {currency}</span>
-          <strong>{formatMinor(balance, currency)}</strong>
-          <span className="finance-metric-foot">Opening balance plus locally saved activity</span>
-        </Card>
-        <Card className="finance-form-panel">
-          <SectionHeader title="Account details" action={<Landmark size={17} />} />
-          <dl
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: 14,
-              margin: 0,
-            }}
-          >
-            <div>
-              <dt className="finance-muted">Currency</dt>
-              <dd>{currency}</dd>
-            </div>
-            <div>
-              <dt className="finance-muted">Included in total</dt>
-              <dd>{account.isIncludedInTotal === false ? 'No' : 'Yes'}</dd>
-            </div>
-            <div>
-              <dt className="finance-muted">Added</dt>
-              <dd>
-                {typeof account.createdAt === 'number'
-                  ? new Date(account.createdAt).toLocaleDateString()
-                  : 'Date unavailable'}
-              </dd>
-            </div>
-          </dl>
-        </Card>
-      </div>
-      {account.archivedAt === undefined ? (
-        <Card className="finance-form-panel">
-          <SectionHeader title="Manage account" />
-          <form className="finance-form" onSubmit={updateName}>
-            <FinanceInput
-              label="Account name"
-              value={name}
-              onChangeText={setName}
-              maxLength={80}
-              required
-            />
-            {formError && (
-              <p className="finance-form-error" role="alert">
-                {formError}
-              </p>
-            )}
-            <Button type="submit" disabled={pending || !name.trim() || !syncedId(account)}>
-              {pending ? 'Saving…' : 'Save name'} <ArrowRight size={15} />
+    <div className="finance-page" style={{ gap: 28 }}>
+      {pageHeader}
+
+      <section style={{ display: 'grid', gap: 8 }}>
+        <Money amountMinor={balance} currency={currency} size="display" />
+        <Typography variant="caption">Current balance · {currency}</Typography>
+      </section>
+
+      <section style={{ display: 'grid', gap: 8 }}>
+        <Typography variant="title">{account.name ?? 'Account'}</Typography>
+        <Typography variant="small">
+          {accountType} · {currency}
+        </Typography>
+        <Typography variant="caption">
+          {account.isIncludedInTotal
+            ? 'Included in total balance'
+            : 'Excluded from total balance'}
+        </Typography>
+        {account.icon ? <Typography variant="caption">Icon: {account.icon}</Typography> : null}
+        {account.color ? <Typography variant="caption">Color: {account.color}</Typography> : null}
+        {typeof account.createdAt === 'number' && Number.isFinite(account.createdAt) ? (
+          <Typography variant="caption">
+            Added {new Date(account.createdAt).toLocaleDateString()}
+          </Typography>
+        ) : null}
+        {account.archivedAt === undefined ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+            <Button
+              size="sm"
+              variant="outline"
+              onPress={() => {
+                setName(account.name ?? '');
+                setFormError(null);
+                setEditing(true);
+              }}
+            >
+              Rename
             </Button>
-            <p className="finance-form-note">
-              Account type, currency, and recorded transactions are not editable.
-            </p>
-          </form>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending || !syncedId(account)}
-            onPress={() => void archive()}
-          >
-            Archive account
-          </Button>
-          {!syncedId(account) && (
-            <p className="finance-muted">
-              Wait for this account to sync before renaming or archiving it.
+            <Button
+              size="sm"
+              variant="destructive"
+              onPress={() => {
+                setFormError(null);
+                setConfirmingArchive(true);
+              }}
+            >
+              Archive
+            </Button>
+          </div>
+        ) : null}
+      </section>
+
+      {formError && (
+        <p className="finance-form-error" role="alert">
+          {formError}
+        </p>
+      )}
+
+      {account.archivedAt !== undefined && (
+        <Typography variant="small">
+          Archived accounts remain available for reference and cannot receive new transactions.
+        </Typography>
+      )}
+
+      <section style={{ display: 'grid', gap: 10 }}>
+        <Typography variant="heading">Recent activity</Typography>
+        {transactionError && (
+          <p className="finance-form-error" role="alert">
+            Saved activity could not be refreshed: {transactionError}
+          </p>
+        )}
+        {rangeError && (
+          <Typography variant="small" role="status">
+            Recent activity refresh unavailable. Showing records already saved in this browser.
+          </Typography>
+        )}
+        {activity.length === 0 ? (
+          <div style={{ display: 'grid', justifyItems: 'center', gap: 10, paddingBlock: 24 }}>
+            <ReceiptText size={28} aria-hidden="true" />
+            <Typography variant="bodyLarge">No posted activity yet</Typography>
+            <Typography variant="small" style={{ textAlign: 'center' }}>
+              Record a transaction to see it here.
+            </Typography>
+            <Button
+              size="sm"
+              variant="outline"
+              onPress={() =>
+                router.push(`/transaction/new?accountId=${encodeURIComponent(routeId ?? '')}`)
+              }
+            >
+              Add transaction
+            </Button>
+          </div>
+        ) : (
+          <div>
+            {activity.map((transaction, index) => {
+              const isTransfer = transaction.type === 'transfer';
+              const isOutgoing = ids.has(String(transaction.accountId ?? ''));
+              const category = categories.find((item) =>
+                aliasesOf(item).includes(String(transaction.categoryId ?? '')),
+              );
+              const id = idOf(transaction);
+              const rowType = isTransfer
+                ? isOutgoing
+                  ? 'expense'
+                  : 'income'
+                : (transaction.type as TransactionType);
+              const rowTitle = isTransfer
+                ? `${isOutgoing ? 'Transfer out' : 'Transfer in'} · ${transaction.title ?? 'Transfer'}`
+                : (transaction.title ?? transaction.type ?? 'Transaction');
+              return (
+                <React.Fragment key={id}>
+                  <TransactionRow
+                    title={rowTitle}
+                    category={category?.name}
+                    categoryIcon={category?.icon}
+                    date={
+                      transaction.occurredAt
+                        ? new Date(transaction.occurredAt).toLocaleDateString()
+                        : 'Date unavailable'
+                    }
+                    status={transaction.status}
+                    amountMinor={asMinor(transaction.amountMinor)}
+                    currency={transaction.currency ?? currency}
+                    type={rowType}
+                    semanticType={
+                      transaction.groupId ? 'split' : isTransfer ? 'transfer' : undefined
+                    }
+                    onPress={() => router.push(`/transaction/${encodeURIComponent(id)}`)}
+                  />
+                  {index < activity.length - 1 && <Separator />}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <Sheet visible={editing} title="Rename account" onClose={() => setEditing(false)}>
+        <form onSubmit={updateName} style={{ display: 'grid', gap: 12 }}>
+          <Label htmlFor="account-name">Account name</Label>
+          <Input
+            id="account-name"
+            accessibilityLabel="Account name"
+            value={name}
+            onChangeText={setName}
+            maxLength={80}
+            autoFocus
+            required
+          />
+          {formError && (
+            <p className="finance-form-error" role="alert">
+              {formError}
             </p>
           )}
-        </Card>
-      ) : (
-        <Card className="finance-record-panel">
-          <p className="finance-muted">
-            Archived accounts remain available for reference and cannot receive new transactions.
-          </p>
-        </Card>
-      )}
-      <Card className="finance-record-panel">
-        <SectionHeader
-          title="Saved activity"
-          action={<span>{activity.length} local records</span>}
-        />
-        {activity.length === 0 ? (
-          <Empty
-            title="No saved activity"
-            description="Transactions linked to this account will appear here."
-          />
-        ) : (
-          <ul className="finance-record-list">
-            {activity.slice(0, 12).map((transaction) => (
-              <li key={idOf(transaction)}>
-                <span className="finance-record-copy">
-                  <strong>{transaction.title ?? transaction.type ?? 'Transaction'}</strong>
-                  <small>
-                    {transaction.occurredAt
-                      ? new Date(transaction.occurredAt).toLocaleDateString()
-                      : 'Date unavailable'}{' '}
-                    · {transaction.type ?? 'activity'}
-                  </small>
-                </span>
-                <strong>
-                  {formatMinor(asMinor(transaction.amountMinor), transaction.currency ?? currency)}
-                </strong>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="finance-form-note">
-          This list includes browser-cached records; older account history may not be downloaded
-          yet.
-        </p>
-      </Card>
+          <Button type="submit" disabled={pending || !name.trim()}>
+            {pending ? 'Saving…' : 'Save name'}
+          </Button>
+          <Button type="button" variant="outline" onPress={() => setEditing(false)}>
+            Cancel
+          </Button>
+        </form>
+      </Sheet>
+
+      <Sheet
+        visible={confirmingArchive}
+        title="Archive account?"
+        onClose={() => setConfirmingArchive(false)}
+      >
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Typography variant="small">
+            Past transactions and balances remain in your history. This account will no longer be
+            available for new activity.
+          </Typography>
+          {formError && (
+            <p className="finance-form-error" role="alert">
+              {formError}
+            </p>
+          )}
+          <Button variant="destructive" disabled={pending} onPress={() => void archive()}>
+            {pending ? 'Archiving…' : `Archive ${account.name ?? 'account'}`}
+          </Button>
+          <Button variant="outline" onPress={() => setConfirmingArchive(false)}>
+            Cancel
+          </Button>
+        </div>
+      </Sheet>
     </div>
   );
 }

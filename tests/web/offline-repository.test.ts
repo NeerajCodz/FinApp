@@ -41,6 +41,103 @@ describe('browser offline repository', () => {
     expect(await repository.listOutbox(userB)).toEqual([]);
   });
 
+  it('retries only the selected failed outbox entry and clears its error', async () => {
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'transaction.create',
+      { id: 'txn-retry-target' },
+      { title: 'Target' },
+      { clientMutationId: 'retry-target' },
+    );
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'transaction.create',
+      { id: 'txn-retry-sibling' },
+      { title: 'Sibling' },
+      { clientMutationId: 'retry-sibling' },
+    );
+
+    await repository.updateOutboxStatus(
+      userA,
+      'local-retry-target',
+      'failed',
+      2,
+      Date.now() + 60_000,
+      'Temporary network failure.',
+    );
+    await repository.updateOutboxStatus(
+      userA,
+      'local-retry-sibling',
+      'failed',
+      1,
+      Date.now() + 60_000,
+      'Keep this failure.',
+    );
+
+    await repository.retryFailedEntry(userA, 'local-retry-target');
+
+    const entries = await repository.listOutbox(userA);
+    expect(entries.find((entry) => entry.localId === 'local-retry-target')).toMatchObject({
+      status: 'pending',
+      retryCount: 2,
+      nextRetryAt: undefined,
+      lastError: undefined,
+    });
+    expect(entries.find((entry) => entry.localId === 'local-retry-sibling')).toMatchObject({
+      status: 'failed',
+      lastError: 'Keep this failure.',
+    });
+  });
+  it('persists split payer and participant records with the transaction', async () => {
+    const transactionId = 'split-local';
+    const participants = [
+      { userId: userA, amountMinor: 1_000n, method: 'exact' },
+      { userId: userB, amountMinor: 1_000n, method: 'exact' },
+    ];
+
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'group.addExpense',
+      { id: transactionId, groupId: 'group-local', amountMinor: 2_000n, type: 'expense' },
+      { groupId: 'group-local', amountMinor: 2_000n, participants },
+      {
+        clientMutationId: 'split-mutation',
+        relatedRecords: [
+          {
+            entityType: 'expensePayer',
+            record: {
+              transactionId,
+              userId: userA,
+              memberId: userA,
+              amountMinor: 2_000n,
+            },
+          },
+          ...participants.map((participant) => ({
+            entityType: 'expenseParticipant' as const,
+            record: {
+              transactionId,
+              userId: participant.userId,
+              memberId: participant.userId,
+              amountMinor: participant.amountMinor,
+              method: participant.method,
+            },
+          })),
+        ],
+      },
+    );
+
+    expect(
+      await repository.getLocalRecord(userA, 'expensePayer', `${transactionId}:${userA}`),
+    ).toMatchObject({ transactionId, memberId: userA, amountMinor: 2_000n });
+    expect(
+      await repository.getLocalRecord(userA, 'expenseParticipant', `${transactionId}:${userB}`),
+    ).toMatchObject({ transactionId, memberId: userB, amountMinor: 1_000n, method: 'exact' });
+    expect(await repository.listOutbox(userA)).toHaveLength(1);
+  });
+
   it('round-trips bigint values without coercing numeric-looking strings', async () => {
     const id = await repository.commitLocalWrite(
       userA,
@@ -283,6 +380,18 @@ describe('browser offline repository', () => {
     expect(await repository.getMappedCloudId(userB, 'account', accountB)).toBe('cloud-account-b');
   });
 
+  it('tracks complete group ranges per user and removes coverage with local data', async () => {
+    await repository.recordGroupRangeCoverage(userA, 'group-a', 0, 1_000);
+
+    await expect(repository.isGroupRangeCovered(userA, 'group-a', 100, 900)).resolves.toBe(true);
+    await expect(repository.isGroupRangeCovered(userA, 'group-a', -1, 1_000)).resolves.toBe(false);
+    await expect(repository.isGroupRangeCovered(userA, 'group-b', 100, 900)).resolves.toBe(false);
+    await expect(repository.isGroupRangeCovered(userB, 'group-a', 100, 900)).resolves.toBe(false);
+
+    await repository.clearLocalData(userA);
+
+    await expect(repository.isGroupRangeCovered(userA, 'group-a', 100, 900)).resolves.toBe(false);
+  });
   it('upgrades a version-one database without losing user data', async () => {
     const request = indexedDB.open(WEB_DATABASE_NAME, 1);
     const oldDatabase = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -324,7 +433,8 @@ describe('browser offline repository', () => {
       { id: 'account-v1', name: 'Kept through upgrade' },
     ]);
     const upgraded = await openWebDatabase();
-    expect(upgraded.version).toBe(2);
+    expect(upgraded.version).toBe(3);
+    expect(Array.from(upgraded.objectStoreNames)).toContain('rangeCoverage');
     expect(
       Array.from(upgraded.transaction('conflicts').objectStore('conflicts').indexNames),
     ).toEqual(['by-user']);

@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, UsersRound } from 'lucide-react';
-import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, Plus, UsersRound } from 'lucide-react';
+import { Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { GroupCard, PeopleRail } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
@@ -13,17 +15,16 @@ type Group = LocalRecord & {
   ownerId?: string;
   archivedAt?: number;
 };
-type Member = LocalRecord & { groupId?: string; userId?: string; role?: string };
-const ids = (record: LocalRecord) =>
-  [record.id, record._id, record.cloudId].filter(
-    (value): value is string => typeof value === 'string',
-  );
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function GroupsPage() {
+  const router = useRouter();
   const { userId } = useBrowserSync();
   const { records, loading, error } = useLocalRecords<Group>('group');
-  const { records: memberships } = useLocalRecords<Member>('groupMember');
+  const { records: profiles } = useLocalRecords<LocalRecord>('profile');
+  const phoneVerified = Boolean(
+    profiles[0]?.phone && profiles[0]?.phoneVerificationTime !== undefined,
+  );
 
   if (!userId)
     return (
@@ -37,83 +38,75 @@ export default function GroupsPage() {
       </section>
     );
 
-  const groups = records.filter((group) => group.archivedAt === undefined);
+  const groups = records;
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">SHARED FINANCES</p>
-          <h1>Groups</h1>
-          <p className="finance-muted">
-            Shared expenses and balances stay available from this browser.
-          </p>
-        </div>
-        <Link className="finance-primary-link" href="/group/new">
-          Create group <ArrowRight size={16} />
+        <h1>Groups</h1>
+        <Link className="finance-secondary-action" href="/group/new" aria-label="Create group">
+          <Plus size={20} />
         </Link>
       </header>
+      <section style={{ display: 'grid', gap: 6 }}>
+        <strong>Shared ledgers</strong>
+        <p className="finance-muted">
+          {loading || error
+            ? 'Your groups will appear here when available.'
+            : `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`}
+        </p>
+      </section>
+      <PeopleRail
+        title="People to split with"
+        phoneVerified={phoneVerified}
+        onChoose={() => router.push('/group/new')}
+      />
+
       {error && (
         <p className="finance-form-error" role="alert">
           Saved groups could not be read: {error}
         </p>
       )}
       <Card className="finance-record-panel">
-        <SectionHeader
-          title="Your groups"
-          action={<Badge variant="neutral">{groups.length} active</Badge>}
-        />
+        <SectionHeader title="Your groups" />
         {loading ? (
           <p className="finance-muted" role="status">
-            Opening saved groups…
+            Loading groups…
           </p>
+        ) : error ? (
+          <Empty
+            title="Groups unavailable"
+            description="Your saved groups could not be loaded."
+            icon={<UsersRound size={20} />}
+          />
         ) : groups.length === 0 ? (
           <Empty
-            title="No shared groups yet"
-            description="Create a group to share expenses and keep a clear record of who paid."
+            title="No groups yet"
+            description="Create one for a trip, home, or any expense shared with people."
             icon={<UsersRound size={20} />}
             action={
               <Link className="finance-secondary-action" href="/group/new">
-                Create your first group <ArrowRight size={15} />
+                Create group <ArrowRight size={15} />
               </Link>
             }
           />
         ) : (
           <ul className="finance-record-list">
             {groups.map((group) => {
-              const groupIds = ids(group);
-              const memberCount =
-                memberships.filter(
-                  (member) =>
-                    typeof member.groupId === 'string' && groupIds.includes(member.groupId),
-                ).length || (group.ownerId ? 1 : 0);
               const id = idOf(group);
               return (
                 <li key={id}>
-                  <span className="finance-record-symbol">
-                    <UsersRound size={17} />
-                  </span>
-                  <span className="finance-record-copy">
-                    <strong>{group.name ?? 'Shared group'}</strong>
-                    <small>
-                      {memberCount} {memberCount === 1 ? 'member' : 'members'} ·{' '}
-                      {group.currency ?? 'INR'}
-                      {group.ownerId === userId ? ' · owner' : ''}
-                    </small>
-                  </span>
-                  <Link
-                    className="finance-secondary-action"
-                    href={`/group/${encodeURIComponent(id)}`}
-                  >
-                    Open <ArrowRight size={15} />
-                  </Link>
+                  <GroupCard
+                    name={group.name ?? 'Group'}
+                    meta={`${group.currency ?? 'INR'} · shared ledger`}
+                    balance="View balance"
+                    meaning="Calculated from the complete group ledger"
+                    onPress={() => router.push(`/group/${encodeURIComponent(id)}`)}
+                  />
                 </li>
               );
             })}
           </ul>
         )}
-        <Link className="finance-secondary-action" href="/settle/new">
-          Record a repayment <ArrowRight size={15} />
-        </Link>
       </Card>
     </div>
   );

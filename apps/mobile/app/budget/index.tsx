@@ -1,9 +1,9 @@
 import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
-import { ArrowLeft, CaretRight, ChartLineUp, Plus } from '@/lib/icons';
+import { ArrowLeft, CaretRight, ChartLineUp, Plus } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon, Money } from '@/components/finance';
+import { CategoryIcon, Money } from '@finapp/ui/finance';
 import { Button, IconButton, Progress, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';

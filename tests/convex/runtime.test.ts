@@ -1,10 +1,13 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { Scrypt } from 'lucia';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
 
+vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+afterAll(() => vi.unstubAllEnvs());
 const modules = import.meta.glob('../../convex/**/*.ts');
 const identity = { subject: 'runtime-user', email: 'runtime@example.com', name: 'Runtime User' };
 
@@ -93,6 +96,158 @@ describe('Convex public runtime functions', () => {
     ).resolves.toBe('login-user@example.com');
   });
 
+  it('skips email OTP and accepts password sign-in by default', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        email: 'password-only@example.com',
+        emailVerificationTime: 1,
+        name: 'Password Only User',
+        username: 'passwordonly',
+      }),
+    );
+    const secret = await new Scrypt().hash('runtime-test-password');
+    await t.run((ctx) =>
+      ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: 'password-only@example.com',
+        secret,
+        emailVerified: '1',
+      }),
+    );
+    const authenticated = t.withIdentity({
+      subject: `${userId}|session-id`,
+      email: 'password-only@example.com',
+      name: 'Password Only User',
+    });
+    const previousPrivateKey = process.env.JWT_PRIVATE_KEY;
+    const previousSiteUrl = process.env.CONVEX_SITE_URL;
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    process.env.JWT_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    process.env.CONVEX_SITE_URL = 'https://unit-test.convex.site';
+    const sendEmail = vi.fn();
+    vi.stubGlobal('fetch', sendEmail);
+    try {
+      await expect(authenticated.query(api.users.queries.securityPreferences, {})).resolves.toEqual(
+        { twoFactorEnabled: false },
+      );
+      await expect(
+        t.action(api.auth.requestEmailTwoFactor, {
+          identifier: '@PASSWORDONLY',
+          password: 'runtime-test-password',
+        }),
+      ).resolves.toEqual({
+        status: 'two-factor-disabled',
+        email: 'password-only@example.com',
+      });
+      expect(sendEmail).not.toHaveBeenCalled();
+
+      const result = await t.action(api.auth.signIn, {
+        provider: 'password',
+        params: {
+          email: '@PASSWORDONLY',
+          password: 'runtime-test-password',
+          flow: 'signIn',
+        },
+      });
+      expect(result.tokens).toBeTruthy();
+
+      await expect(
+        authenticated.mutation(api.users.mutations.setTwoFactorEnabled, { enabled: true }),
+      ).resolves.toEqual({ twoFactorEnabled: true });
+      await expect(authenticated.query(api.users.queries.securityPreferences, {})).resolves.toEqual(
+        { twoFactorEnabled: true },
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousPrivateKey === undefined) delete process.env.JWT_PRIVATE_KEY;
+      else process.env.JWT_PRIVATE_KEY = previousPrivateKey;
+      if (previousSiteUrl === undefined) delete process.env.CONVEX_SITE_URL;
+      else process.env.CONVEX_SITE_URL = previousSiteUrl;
+    }
+  });
+
+  it('enables email two-factor only when opted into during signup', async () => {
+    const t = convexTest(schema, modules);
+    const previousPrivateKey = process.env.JWT_PRIVATE_KEY;
+    const previousSiteUrl = process.env.CONVEX_SITE_URL;
+    const previousSite = process.env.SITE_URL;
+    const previousResendKey = process.env.AUTH_RESEND_KEY;
+    const previousEmailFrom = process.env.AUTH_EMAIL_FROM;
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    process.env.JWT_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    process.env.CONVEX_SITE_URL = 'https://unit-test.convex.site';
+    process.env.SITE_URL = 'http://localhost:3018';
+    process.env.AUTH_RESEND_KEY = 're_test_key';
+    process.env.AUTH_EMAIL_FROM = 'Finapp <mail@example.com>';
+    const resendFetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', resendFetch);
+    const defaultEmail = 'signup-default@example.com';
+    const optedInEmail = 'signup-opted-in@example.com';
+    try {
+      for (const [email, optedIn] of [
+        [defaultEmail, false],
+        [optedInEmail, true],
+      ] as const) {
+        const params = {
+          email,
+          password: 'runtime-test-password',
+          flow: 'signUp',
+          ...(optedIn ? { twoFactorEnabled: 'true' } : {}),
+        };
+        await t.action(api.auth.signIn, { provider: 'password', params });
+      }
+
+      await t.run(async (ctx) => {
+        for (const email of [defaultEmail, optedInEmail]) {
+          const user = await ctx.db
+            .query('users')
+            .withIndex('email', (query) => query.eq('email', email))
+            .unique();
+          if (!user) throw new Error(`Missing signup user ${email}`);
+          const account = await ctx.db
+            .query('authAccounts')
+            .withIndex('userIdAndProvider', (query) =>
+              query.eq('userId', user._id).eq('provider', 'password'),
+            )
+            .unique();
+          if (!account) throw new Error(`Missing password account ${email}`);
+          await ctx.db.patch(user._id, { emailVerificationTime: Date.now() });
+          await ctx.db.patch(account._id, { emailVerified: email });
+        }
+      });
+
+      const emailCountAfterSignup = resendFetch.mock.calls.length;
+      await expect(
+        t.action(api.auth.requestEmailTwoFactor, {
+          identifier: defaultEmail,
+          password: 'runtime-test-password',
+        }),
+      ).resolves.toMatchObject({ status: 'two-factor-disabled' });
+      expect(resendFetch).toHaveBeenCalledTimes(emailCountAfterSignup);
+
+      const challenge = await t.action(api.auth.requestEmailTwoFactor, {
+        identifier: optedInEmail,
+        password: 'runtime-test-password',
+      });
+      expect(challenge.status).toBe('code-sent');
+      expect(resendFetch).toHaveBeenCalledTimes(emailCountAfterSignup + 1);
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousPrivateKey === undefined) delete process.env.JWT_PRIVATE_KEY;
+      else process.env.JWT_PRIVATE_KEY = previousPrivateKey;
+      if (previousSiteUrl === undefined) delete process.env.CONVEX_SITE_URL;
+      else process.env.CONVEX_SITE_URL = previousSiteUrl;
+      if (previousSite === undefined) delete process.env.SITE_URL;
+      else process.env.SITE_URL = previousSite;
+      if (previousResendKey === undefined) delete process.env.AUTH_RESEND_KEY;
+      else process.env.AUTH_RESEND_KEY = previousResendKey;
+      if (previousEmailFrom === undefined) delete process.env.AUTH_EMAIL_FROM;
+      else process.env.AUTH_EMAIL_FROM = previousEmailFrom;
+    }
+  });
+
   it('requires a single-use email second factor for password sign-in', async () => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) =>
@@ -101,6 +256,21 @@ describe('Convex public runtime functions', () => {
         emailVerificationTime: 1,
         name: 'Login User',
         username: 'neeraj',
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert('userSettings', {
+        userId,
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        twoFactorEnabled: true,
+        updatedAt: Date.now(),
       }),
     );
     const secret = await new Scrypt().hash('runtime-test-password');

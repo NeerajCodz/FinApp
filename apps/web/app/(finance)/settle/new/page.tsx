@@ -2,15 +2,14 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { calculateNetBalances } from '@convex/splits/domain';
-import { formatMinor, parseMinor } from '@convex/shared/money';
-import { ArrowLeft, ArrowRight, ArrowLeftRight } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader, Select } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Button, Card, RadioGroup } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceInput } from '@/components/finance/FinanceInput';
+import { SettlementEditor } from '@finapp/ui/finance';
 
 type Group = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
 type Member = LocalRecord & {
@@ -58,7 +57,26 @@ const aliases = (record: LocalRecord) =>
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function NewSettlementPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="finance-page">
+          <p className="finance-muted" role="status">
+            Opening settlement form…
+          </p>
+        </div>
+      }
+    >
+      <NewSettlementForm />
+    </React.Suspense>
+  );
+}
+
+function NewSettlementForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedGroupId = searchParams.get('groupId') ?? '';
+  const requestedMemberId = searchParams.get('member') ?? '';
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
   const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
   const { records: accounts, loading: accountsLoading } = useLocalRecords<Account>('account');
@@ -71,7 +89,6 @@ export default function NewSettlementPage() {
   const [groupId, setGroupId] = React.useState('');
   const [memberId, setMemberId] = React.useState('');
   const [accountId, setAccountId] = React.useState('');
-  const [amount, setAmount] = React.useState('');
   const [rangeStatus, setRangeStatus] = React.useState<'loading' | 'loaded' | 'uncached' | 'error'>(
     'loading',
   );
@@ -80,10 +97,10 @@ export default function NewSettlementPage() {
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     if (!userId) return;
-    const params = new URLSearchParams(window.location.search);
-    setGroupId(params.get('groupId') ?? '');
-    setMemberId(params.get('member') ?? '');
-  }, [userId]);
+    setGroupId(requestedGroupId);
+    setMemberId(requestedMemberId);
+    setAccountId('');
+  }, [requestedGroupId, requestedMemberId, userId]);
   const activeGroups = groups.filter((item) => item.archivedAt === undefined);
   React.useEffect(() => {
     if (!groupId && activeGroups.length === 1) setGroupId(idOf(activeGroups[0]!));
@@ -263,53 +280,39 @@ export default function NewSettlementPage() {
   const chosenAccount =
     accountOptions.find((item) => aliases(item).includes(accountId)) ??
     (accountOptions.length === 1 ? accountOptions[0] : undefined);
-  let amountMinor: bigint | null = null;
-  let amountError = '';
-  if (amount.trim()) {
-    try {
-      amountMinor = parseMinor(amount, currency);
-      if (amountMinor <= 0n) throw new Error('Enter an amount greater than zero.');
-      if (amountMinor > maximum)
-        throw new Error(`Repayment cannot exceed ${formatMinor(maximum, currency || 'INR')}.`);
-    } catch (cause) {
-      amountError = cause instanceof Error ? cause.message : 'Enter a valid amount.';
-    }
-  }
   const unavailable = !group
     ? groupsLoading
-      ? 'Loading saved groups…'
-      : 'Choose a saved group.'
-    : currency !== 'INR'
-      ? 'Groups use Indian rupees. This group cannot accept a repayment in another currency.'
-      : rangeStatus === 'error'
-        ? 'Retry the all-time range before recording a settlement.'
-        : rangeStatus === 'loading'
-          ? 'Loading all-time balances…'
-          : rangeStatus === 'uncached'
-            ? 'The all-time range is uncached. Reconnect before recording a repayment.'
-            : ledgerError
-              ? 'Complete group allocations are required to confirm the debt.'
-              : !availableMembers.length
-                ? 'There is no outstanding bilateral balance to settle.'
-                : !chosenMember
-                  ? 'Choose the member involved in this repayment.'
-                  : accountsLoading
-                    ? 'Loading accounts…'
-                    : !chosenAccount
-                      ? `Choose an active account in ${currency}.`
-                      : undefined;
+      ? 'Loading groups…'
+      : groupId
+        ? 'This group is not available on this device.'
+        : 'Choose a group first.'
+    : rangeStatus === 'error'
+      ? 'The full group ledger is unavailable. Retry before recording a settlement.'
+      : rangeStatus === 'loading'
+        ? 'Loading all-time group balances…'
+        : rangeStatus === 'uncached'
+          ? 'The all-time range is uncached. Reconnect before recording a settlement.'
+          : ledgerError
+            ? 'Complete group allocations are required to confirm the debt.'
+            : !availableMembers.length
+              ? 'There is no outstanding balance to settle with a member.'
+              : !chosenMember
+                ? 'Choose the member involved in this payment.'
+                : accountsLoading
+                  ? 'Loading your accounts…'
+                  : !chosenAccount
+                    ? 'Choose an active account in the group currency.'
+                    : undefined;
 
-  async function saveSettlement(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveSettlement(amountMinor: bigint) {
     if (
       !userId ||
       !group ||
       !currentGroupId ||
       !chosenMember ||
       !chosenAccount ||
-      amountMinor === null ||
+      amountMinor <= 0n ||
       unavailable ||
-      amountError ||
       saving
     )
       return;
@@ -359,7 +362,7 @@ export default function NewSettlementPage() {
       );
       router.replace(`/group/${encodeURIComponent(currentGroupId)}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save this repayment.');
+      setError(cause instanceof Error ? cause.message : 'Could not save settlement.');
     } finally {
       setSaving(false);
     }
@@ -379,20 +382,14 @@ export default function NewSettlementPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link
-            className="finance-secondary-action"
-            href={group ? `/group/${encodeURIComponent(currentGroupId)}/balances` : '/groups'}
-          >
-            <ArrowLeft size={15} /> Back
-          </Link>
-          <p className="finance-kicker">GROUP REPAYMENT</p>
-          <h1>Settle up</h1>
-          <p className="finance-muted">
-            Record an amount already paid. This does not move money from the linked account.
-          </p>
-        </div>
-        <Badge variant="neutral">Repayment only</Badge>
+        <Link
+          className="finance-secondary-action"
+          href={group ? `/group/${encodeURIComponent(currentGroupId)}/balances` : '/groups'}
+          aria-label="Go back"
+        >
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ margin: 0 }}>Settle up</h1>
       </header>
       {rangeStatus === 'loading' && group && (
         <p className="finance-form-note" role="status">
@@ -427,126 +424,71 @@ export default function NewSettlementPage() {
           Retry all-time range
         </Button>
       )}
-      <div className="finance-accounts-layout">
+      <div
+        className="finance-accounts-layout"
+        style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}
+      >
         <Card className="finance-form-panel">
-          <SectionHeader title="Repayment details" action={<ArrowLeftRight size={17} />} />
-          <form className="finance-form" onSubmit={saveSettlement}>
-            <Select
-              label="Group"
-              options={activeGroups.map(
-                (item) => `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
-              )}
-              value={group ? `${group.name ?? 'Group'} · ${currency}` : ''}
+          <div className="finance-form">
+            <RadioGroup
+              label="GROUP"
+              options={activeGroups.map((item) => ({
+                value: idOf(item),
+                label: `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
+              }))}
+              value={group ? idOf(group) : ''}
               onChange={(value) => {
-                const selected = activeGroups.find(
-                  (item) => `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}` === value,
-                );
-                if (selected) {
-                  setGroupId(idOf(selected));
-                  setMemberId('');
-                  setAccountId('');
-                  setAmount('');
-                }
+                setGroupId(value);
+                setMemberId('');
+                setAccountId('');
               }}
             />
+            {!activeGroups.length && (
+              <p className="finance-form-note">
+                No saved group is available. Create or join a group first.
+              </p>
+            )}
             {availableMembers.length > 0 && (
-              <Select
-                label={direction === 'pay' ? 'You paid' : 'They paid you'}
-                options={availableMembers.map((member) => member.name)}
-                value={chosenMember?.name ?? ''}
+              <RadioGroup
+                label={direction === 'pay' ? 'YOU PAID' : 'PAID YOU'}
+                options={availableMembers.map((member) => ({
+                  value: member.id,
+                  label: member.name,
+                }))}
+                value={chosenMember?.id}
                 onChange={(value) => {
-                  const selected = availableMembers.find((member) => member.name === value);
-                  if (selected) {
-                    setMemberId(selected.id);
-                    setAmount('');
-                  }
+                  setMemberId(value);
                 }}
               />
             )}
             {accountOptions.length > 0 && (
-              <Select
-                label={`Linked account · ${currency}`}
-                options={accountOptions.map((item) => String(item.name ?? 'Account'))}
-                value={chosenAccount?.name ?? ''}
-                onChange={(value) => {
-                  const selected = accountOptions.find((item) => item.name === value);
-                  if (selected) setAccountId(idOf(selected));
-                }}
-              />
+              <>
+                <RadioGroup
+                  label={`LINKED ACCOUNT · ${currency}`}
+                  options={accountOptions.map((item) => ({
+                    value: idOf(item),
+                    label: String(item.name ?? 'Account'),
+                  }))}
+                  value={chosenAccount ? idOf(chosenAccount) : ''}
+                  onChange={setAccountId}
+                />
+                <p className="finance-form-note">
+                  For recordkeeping only. No money is moved from this account.
+                </p>
+              </>
             )}
-            <FinanceInput
-              label={`Amount · maximum ${formatMinor(maximum, currency || 'INR')}`}
-              type="number"
-              inputMode="decimal"
-              min="0.01"
-              step="0.01"
-              value={amount}
-              onChangeText={setAmount}
-              disabled={!chosenMember || maximum <= 0n}
-              required
+            <SettlementEditor
+              key={`${currentGroupId}:${chosenMember?.id ?? ''}`}
+              memberName={chosenMember?.name ?? 'a group member'}
+              currency={currency || 'INR'}
+              direction={direction}
+              maxAmountMinor={maximum}
+              disabledReason={unavailable}
+              saving={saving}
+              error={error}
+              onSave={(amountMinor) => void saveSettlement(amountMinor)}
             />
-            {chosenMember && (
-              <p className="finance-form-note">
-                {direction === 'pay'
-                  ? `You owe ${chosenMember.name}`
-                  : `${chosenMember.name} owes you`}
-                . Maximum allowed is the smaller of both current net balances:{' '}
-                {formatMinor(maximum, currency)}.
-              </p>
-            )}
-            {unavailable && (
-              <p className="finance-form-note" role="status">
-                {unavailable}
-              </p>
-            )}
-            {amountError && (
-              <p className="finance-form-error" role="alert">
-                {amountError}
-              </p>
-            )}
-            {error && (
-              <p className="finance-form-error" role="alert">
-                {error}
-              </p>
-            )}
-            <Button
-              type="submit"
-              disabled={Boolean(
-                unavailable ||
-                amountError ||
-                !amount.trim() ||
-                saving ||
-                !chosenMember ||
-                !chosenAccount,
-              )}
-            >
-              {saving ? 'Saving repayment…' : 'Record repayment'} <ArrowRight size={15} />
-            </Button>
-            <p className="finance-form-note">
-              Saved as a settlement only. No transaction or account balance change is created.
-            </p>
-          </form>
-        </Card>
-        <Card className="finance-record-panel">
-          <SectionHeader title="Debt guard" />
-          <p className="finance-muted">
-            The amount is bounded by both sides of the current bilateral debt. The server also
-            checks the ledger when the outbox replays.
-          </p>
-          {group && (
-            <Link
-              className="finance-secondary-action"
-              href={`/group/${encodeURIComponent(currentGroupId)}/balances`}
-            >
-              Review all balances <ArrowRight size={15} />
-            </Link>
-          )}
-          {!group && !groupsLoading && (
-            <Empty
-              title="No saved group selected"
-              description="Choose a group with an outstanding balance."
-            />
-          )}
+          </div>
         </Card>
       </div>
     </div>

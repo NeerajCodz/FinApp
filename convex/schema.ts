@@ -30,6 +30,7 @@ export default defineSchema({
     createdAt: v.optional(timestamp),
     updatedAt: v.optional(timestamp),
     deletedAt: optionalTime,
+    signupTwoFactorEnabled: v.optional(v.boolean()),
   })
     .index('email', ['email'])
     .index('by_identityId', ['identityId'])
@@ -44,6 +45,7 @@ export default defineSchema({
     appearance: v.union(v.literal('system'), v.literal('light'), v.literal('dark')),
     notificationPreferences: v.any(),
     appLockPreferences: v.any(),
+    twoFactorEnabled: v.optional(v.boolean()),
     updatedAt: timestamp,
   }).index('by_user', ['userId']),
   devices: defineTable({

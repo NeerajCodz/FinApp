@@ -7,11 +7,11 @@ import {
   type AnalyticsBreakdownItem,
   type AnalyticsPeriod,
 } from '@convex/analytics/domain';
-import { ArrowLeft, ReceiptText } from '@/lib/icons';
+import { ArrowLeft, ReceiptText } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { BreakdownDonut, CashFlowChart } from '@/components/charts/BarChart';
-import { TransactionRow } from '@/components/finance';
+import { BreakdownDonut, CashFlowChart } from '@finapp/ui/analytics';
+import { TransactionRow } from '@finapp/ui/finance';
 import {
   Button,
   Empty,

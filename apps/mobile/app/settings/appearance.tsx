@@ -1,5 +1,5 @@
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, Check } from '@/lib/icons';
+import { ArrowLeft, Check } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Button, IconButton, Text, Typography } from '@finapp/ui/native';

@@ -3,12 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button, Card } from '@finapp/ui/web';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@finapp/ui/web';
+import { CategoryEmojiPicker, CategoryIcon } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { FinanceInput } from '@/components/finance/FinanceInput';
-import { PageHeading, SignInGate } from '../../_personal';
+import { SignInGate } from '../../_personal';
+
 
 export default function NewPersonalCategoryPage() {
   const router = useRouter();
@@ -47,7 +49,7 @@ export default function NewPersonalCategoryPage() {
         name: trimmedName,
         ...(trimmedIcon ? { icon: trimmedIcon } : {}),
       });
-      router.push(`/category/${encodeURIComponent(id)}`);
+      router.replace(`/category/${encodeURIComponent(id)}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create this category.');
     } finally {
@@ -62,44 +64,44 @@ export default function NewPersonalCategoryPage() {
     );
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/category">
-        <ArrowLeft size={15} /> Back to categories
+      <Link className="finance-secondary-action" href="/category" aria-label="Go back">
+        <ArrowLeft size={19} />
       </Link>
-      <PageHeading
-        eyebrow="NEW CATEGORY"
-        title="Create a category"
-        description="Choose a concise name and optional text or emoji icon. Categories are archived, not deleted."
-      />
-      <Card className="finance-form-panel">
+      <div style={{ display: 'grid', gap: 30, flex: 1, alignContent: 'center' }}>
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <CategoryIcon label={name.trim() || 'Category'} icon={icon || undefined} />
+            <h1 style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 24 }}>
+              {name.trim() || 'New category'}
+            </h1>
+          </div>
+          <p className="finance-muted" style={{ maxWidth: 300, margin: 0 }}>
+            Give your money a place to belong.
+          </p>
+          <CategoryEmojiPicker
+            value={icon || undefined}
+            onChange={(emoji) => setIcon(emoji ?? '')}
+          />
+        </section>
         <form className="finance-form" onSubmit={create}>
           <FinanceInput
-            label="Category name"
+            label="Name"
             value={name}
             onChangeText={setName}
-            placeholder="Home, travel, groceries…"
+            placeholder="Groceries"
             maxLength={80}
             required
           />
-          <FinanceInput
-            label="Icon (optional)"
-            value={icon}
-            onChangeText={setIcon}
-            placeholder="For example, 🏠"
-            maxLength={32}
-          />
-          <p className="finance-form-note">
-            Icons are stored as category metadata; no image upload is used.
-          </p>
           {error && (
             <p className="finance-form-error" role="alert">
               {error}
             </p>
           )}
           <Button type="submit" disabled={saving || !name.trim()}>
-            {saving ? 'Saving locally…' : 'Create category'} <ArrowRight size={15} />
+            {saving ? 'Saving…' : 'Create category'}
           </Button>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }

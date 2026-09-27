@@ -2,9 +2,9 @@ import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
-import { ArrowLeft, Gear, Plus, ReceiptText, UsersThree } from '@/lib/icons';
+import { ArrowLeft, Gear, Plus, ReceiptText, UsersThree } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money, TransactionRow } from '@/components/finance';
+import { Money, TransactionRow } from '@finapp/ui/finance';
 import {
   Avatar,
   Button,
