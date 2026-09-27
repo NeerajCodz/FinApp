@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { ArrowLeft } from 'lucide-react';
 import { Button, InputOTP } from '@finapp/ui/web';
-import { AuthFrame } from '@/components/auth/AuthFrame';
 
 export default function TwoFactorPage() {
   const router = useRouter();
@@ -41,37 +41,59 @@ export default function TwoFactorPage() {
   }
 
   return (
-    <AuthFrame
-      eyebrow="SIGN-IN VERIFICATION"
-      title="One last step."
-      description="Enter the six-digit sign-in code sent to the email on your account. It expires in 10 minutes."
-      footer={<span />}
-    >
-      <form onSubmit={submit} noValidate className="auth-form">
-        <div className="auth-field">
-          <span className="auth-label">Six-digit code</span>
-          <InputOTP value={code} onChangeText={setCode} />
+    <main className="auth-layout">
+      <section className="auth-content" aria-labelledby="auth-title">
+        <div className="auth-topline">
+          <Link href="/" className="brand auth-brand" aria-label="Finapp home">
+            <span className="brand-mark" aria-hidden="true">
+              F
+            </span>
+            <span>finapp</span>
+          </Link>
+          <Link href="/sign-in" className="auth-home-link">
+            Back
+          </Link>
         </div>
-        {error && (
-          <p className="auth-error" role="alert" aria-live="polite">
-            {error}
+        <div className="auth-card">
+          <span className="auth-eyebrow">SIGN-IN VERIFICATION</span>
+          <h1 id="auth-title">One last step.</h1>
+          <p className="auth-description">
+            Enter the six-digit sign-in code sent to the email on your account. It expires in 10
+            minutes.
           </p>
-        )}
-        <p className="auth-helper">
-          Didn’t get a code? Return to sign in and request another code.
-        </p>
-        <Button
-          type="submit"
-          size="lg"
-          disabled={pending || code.length !== 6 || !challengeId}
-          aria-busy={pending}
-        >
-          {pending ? 'Verifying…' : 'Verify and sign in'}
-        </Button>
-        <a className="auth-back-link" href="/sign-in">
-          <ArrowLeft size={15} /> Return to sign in
-        </a>
-      </form>
-    </AuthFrame>
+          <div className="auth-form">
+            <form onSubmit={submit} noValidate className="auth-form">
+              <div className="auth-field">
+                <span className="auth-label">Six-digit code</span>
+                <InputOTP value={code} onChangeText={setCode} />
+              </div>
+              {error && (
+                <p className="auth-error" role="alert" aria-live="polite">
+                  {error}
+                </p>
+              )}
+              <div className="auth-field">
+                <span className="auth-label">Didn’t get a code?</span>
+                <p className="auth-helper">Return to sign in and request another code.</p>
+              </div>
+              <Button
+                type="submit"
+                size="lg"
+                disabled={pending || code.length !== 6 || !challengeId}
+                aria-busy={pending}
+              >
+                {pending ? 'Verifying…' : 'Verify and sign in'}
+              </Button>
+              <Link className="auth-back-link" href="/sign-in">
+                <ArrowLeft size={15} /> Return to sign in
+              </Link>
+            </form>
+          </div>
+        </div>
+        <span className="auth-legal">
+          Your account stays yours. <Link href="/privacy">Read our privacy notes</Link>
+        </span>
+      </section>
+    </main>
   );
 }
