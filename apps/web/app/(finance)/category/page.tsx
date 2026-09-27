@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowRight, Plus, Tags } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -43,7 +43,6 @@ export default function PersonalCategoriesPage() {
     loading: transactionLoading,
     error: transactionError,
   } = useLocalRecords<Transaction>('transaction');
-  const [showArchived, setShowArchived] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
   const monthRange = React.useMemo(() => {
     const now = new Date();
@@ -68,7 +67,10 @@ export default function PersonalCategoriesPage() {
   }, [fetchTransactionRange, isConnected, monthRange, userId]);
   const profile = profiles[0];
   const categories = records
-    .filter((record) => userId && belongsToUser(record, userId))
+    .filter(
+      (record) =>
+        userId && belongsToUser(record, userId) && record.archivedAt === undefined,
+    )
     .sort(
       (left, right) =>
         Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) ||
@@ -98,7 +100,6 @@ export default function PersonalCategoriesPage() {
     else total.received += asMinor(transaction.amountMinor);
     monthlyTotals.set(id, total);
   }
-  const shown = categories.filter((record) => showArchived === (record.archivedAt !== undefined));
   if (!userId)
     return (
       <SignInGate eyebrow="CATEGORIES" title="Make every expense clearer.">
@@ -123,23 +124,14 @@ export default function PersonalCategoriesPage() {
         </p>
       )}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Badge variant="neutral">
-          {categories.filter((item) => item.archivedAt === undefined).length} active
-        </Badge>
-        <Button
-          type="button"
-          variant={showArchived ? 'secondary' : 'outline'}
-          onPress={() => setShowArchived((value) => !value)}
-        >
-          {showArchived ? 'Show active' : 'Show archived'}
-        </Button>
+        <Badge variant="neutral">{categories.length} active</Badge>
         <Link className="finance-primary-link" href="/category/new">
           New category <Plus size={16} />
         </Link>
       </div>
       <Card className="finance-record-panel">
         <SectionHeader
-          title={showArchived ? 'Archived categories' : 'Your categories'}
+          title="Your categories"
           action={
             <Link href="/category/new" aria-label="Add category">
               <Plus size={17} />
@@ -154,26 +146,20 @@ export default function PersonalCategoriesPage() {
           <p className="finance-form-error" role="alert">
             Category data could not be opened: {error}
           </p>
-        ) : shown.length === 0 ? (
+        ) : categories.length === 0 ? (
           <Empty
-            title={showArchived ? 'No archived categories' : 'No categories yet'}
-            description={
-              showArchived
-                ? 'Archived categories stay available for old records.'
-                : 'Add a category to organize transactions and set an optional monthly limit.'
-            }
+            title="No categories yet"
+            description="Add a category to organize transactions and set an optional monthly limit."
             icon={<Tags size={20} />}
             action={
-              !showArchived ? (
-                <Link className="finance-inline-link" href="/category/new">
-                  Create a category
-                </Link>
-              ) : undefined
+              <Link className="finance-inline-link" href="/category/new">
+                Create a category
+              </Link>
             }
           />
         ) : (
           <ul className="finance-record-list">
-            {shown.map((category) => {
+            {categories.map((category) => {
               const currency = category.limitCurrency ?? profile?.defaultCurrency;
               const totals = monthlyTotals.get(idOf(category)) ?? { spent: 0n, received: 0n };
               return (
@@ -189,7 +175,6 @@ export default function PersonalCategoriesPage() {
                     </strong>
                     <small>
                       {category.isSystem ? 'System category' : 'Personal category'}
-                      {category.archivedAt !== undefined ? ' · archived' : ''}
                     </small>
                     <small>Monthly activity{currency ? ` · ${currency}` : ''}</small>
                     {currency && (

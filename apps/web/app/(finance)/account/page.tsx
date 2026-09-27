@@ -1,9 +1,8 @@
 'use client';
 
-import React from 'react';
 import Link from 'next/link';
 import { Banknote, CircleDollarSign, CreditCard, Landmark, Plus, Wallet } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -33,9 +32,11 @@ export default function PersonalAccountsPage() {
   const { userId } = useBrowserSync();
   const { records: accountRecords, loading, error } = useLocalRecords<Account>('account');
   const { records: transactionRecords } = useLocalRecords<Transaction>('transaction');
-  const [showArchived, setShowArchived] = React.useState(false);
   const accountRows = accountRecords
-    .filter((record) => userId && belongsToUser(record, userId))
+    .filter(
+      (record) =>
+        userId && belongsToUser(record, userId) && record.archivedAt === undefined,
+    )
     .map((account) => {
       const ids = new Set(aliasesOf(account));
       const optimisticDelta = transactionRecords.reduce((delta, transaction) => {
@@ -65,10 +66,10 @@ export default function PersonalAccountsPage() {
           asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta,
       };
     });
-  const activeAccounts = accountRows.filter((account) => account.archivedAt === undefined);
-  const displayed = accountRows
-    .filter((account) => showArchived === (account.archivedAt !== undefined))
-    .sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''));
+  const activeAccounts = accountRows;
+  const displayed = accountRows.sort((left, right) =>
+    (left.name ?? '').localeCompare(right.name ?? ''),
+  );
   const totalsByCurrency = new Map<string, bigint>();
   for (const account of activeAccounts) {
     if (account.isIncludedInTotal !== true) continue;
@@ -96,18 +97,11 @@ export default function PersonalAccountsPage() {
         style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}
       >
         <Badge variant="neutral">{activeAccounts.length} active</Badge>
-        <Button
-          type="button"
-          variant={showArchived ? 'secondary' : 'outline'}
-          onPress={() => setShowArchived((value) => !value)}
-        >
-          {showArchived ? 'Show active' : 'Show archived'}
-        </Button>
         <Link className="finance-primary-link" href="/account/new">
           New account <Plus size={16} />
         </Link>
       </div>
-      {!showArchived && activeAccounts.length > 0 && (
+      {activeAccounts.length > 0 && (
         <Card className="finance-record-panel">
           <SectionHeader title="Account overview" />
           <div
@@ -146,7 +140,7 @@ export default function PersonalAccountsPage() {
       )}
       <Card className="finance-record-panel">
         <SectionHeader
-          title={showArchived ? 'Archived accounts' : 'Your accounts'}
+          title="Your accounts"
           action={
             <Link href="/account/new" aria-label="Add account">
               <Plus size={17} />
@@ -163,19 +157,13 @@ export default function PersonalAccountsPage() {
           </p>
         ) : displayed.length === 0 ? (
           <Empty
-            title={showArchived ? 'No archived accounts' : 'A good place to begin'}
-            description={
-              showArchived
-                ? 'Archived accounts remain available here for reference.'
-                : 'Add a bank, card, wallet, loan, or cash account to start tracking balances.'
-            }
+            title="A good place to begin"
+            description="Add a bank, card, wallet, loan, or cash account to start tracking balances."
             icon={<Landmark size={20} />}
             action={
-              !showArchived ? (
-                <Link className="finance-inline-link" href="/account/new">
-                  Create an account
-                </Link>
-              ) : undefined
+              <Link className="finance-inline-link" href="/account/new">
+                Create an account
+              </Link>
             }
           />
         ) : (
@@ -207,7 +195,6 @@ export default function PersonalAccountsPage() {
                         value.toUpperCase(),
                       )}{' '}
                       · {account.currency ?? 'INR'}
-                      {account.archivedAt !== undefined ? ' · archived' : ''}
                       {account.isIncludedInTotal === true
                         ? ' · included in total'
                         : ' · excluded from total'}
