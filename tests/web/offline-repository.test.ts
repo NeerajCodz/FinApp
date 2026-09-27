@@ -40,6 +40,53 @@ describe('browser offline repository', () => {
     expect(await repository.readLocal(userB, 'transaction')).toEqual([]);
     expect(await repository.listOutbox(userB)).toEqual([]);
   });
+  it('persists split payer and participant records with the transaction', async () => {
+    const transactionId = 'split-local';
+    const participants = [
+      { userId: userA, amountMinor: 1_000n, method: 'exact' },
+      { userId: userB, amountMinor: 1_000n, method: 'exact' },
+    ];
+
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'group.addExpense',
+      { id: transactionId, groupId: 'group-local', amountMinor: 2_000n, type: 'expense' },
+      { groupId: 'group-local', amountMinor: 2_000n, participants },
+      {
+        clientMutationId: 'split-mutation',
+        relatedRecords: [
+          {
+            entityType: 'expensePayer',
+            record: {
+              transactionId,
+              userId: userA,
+              memberId: userA,
+              amountMinor: 2_000n,
+            },
+          },
+          ...participants.map((participant) => ({
+            entityType: 'expenseParticipant' as const,
+            record: {
+              transactionId,
+              userId: participant.userId,
+              memberId: participant.userId,
+              amountMinor: participant.amountMinor,
+              method: participant.method,
+            },
+          })),
+        ],
+      },
+    );
+
+    expect(
+      await repository.getLocalRecord(userA, 'expensePayer', `${transactionId}:${userA}`),
+    ).toMatchObject({ transactionId, memberId: userA, amountMinor: 2_000n });
+    expect(
+      await repository.getLocalRecord(userA, 'expenseParticipant', `${transactionId}:${userB}`),
+    ).toMatchObject({ transactionId, memberId: userB, amountMinor: 1_000n, method: 'exact' });
+    expect(await repository.listOutbox(userA)).toHaveLength(1);
+  });
 
   it('round-trips bigint values without coercing numeric-looking strings', async () => {
     const id = await repository.commitLocalWrite(

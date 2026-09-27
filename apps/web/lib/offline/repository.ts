@@ -127,6 +127,21 @@ function recordKey(userId: string, entityType: LocalEntity, id: string): string 
 function mappingKey(userId: string, entityType: LocalEntity, localId: string): string {
   return `${userId}\u0000${entityType}\u0000${localId}`;
 }
+function relatedRecordId(entityType: LocalEntity, record: LocalRecord): string {
+  const id = record.id ?? record._id;
+  if (typeof id === 'string' && id) return id;
+  const keyFields: Partial<Record<LocalEntity, readonly string[]>> = {
+    accountMember: ['accountId', 'memberId'],
+    groupMember: ['groupId', 'memberId'],
+    expensePayer: ['transactionId', 'memberId'],
+    expenseParticipant: ['transactionId', 'memberId'],
+    transactionTag: ['transactionId', 'tag'],
+  };
+  const fields = keyFields[entityType];
+  if (fields?.every((field) => record[field] != null))
+    return fields.map((field) => String(record[field])).join(':');
+  throw new Error('LOCAL_RECORD_ID_REQUIRED');
+}
 
 let crossTabChannel: BroadcastChannel | undefined;
 
@@ -226,6 +241,7 @@ export async function commitLocalWrite(
     dependencies?: readonly string[];
     baseUpdatedAt?: number;
     deviceId?: string;
+    relatedRecords?: readonly { entityType: LocalEntity; record: LocalRecord }[];
   } = {},
 ): Promise<string> {
   requireUser(userId);
@@ -252,7 +268,27 @@ export async function commitLocalWrite(
   const db = await openWebDatabase();
   const transaction = db.transaction(['records', 'outbox'], 'readwrite');
   const done = transactionComplete(transaction);
-  transaction.objectStore('records').put({
+  const records = transaction.objectStore('records');
+  for (const related of options.relatedRecords ?? []) {
+    const relatedId = relatedRecordId(related.entityType, related.record);
+    const relatedRecord = {
+      ...related.record,
+      id: relatedId,
+      updatedAt: now,
+      clientUpdatedAt: now,
+    };
+    records.put({
+      key: recordKey(userId, related.entityType, relatedId),
+      userId,
+      entityType: related.entityType,
+      id: relatedId,
+      cloudId: typeof related.record.cloudId === 'string' ? related.record.cloudId : undefined,
+      updatedAt: now,
+      clientUpdatedAt: now,
+      record: relatedRecord,
+    } satisfies RecordRow);
+  }
+  records.put({
     key: recordKey(userId, entityType, id),
     userId,
     entityType,

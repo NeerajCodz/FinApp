@@ -215,9 +215,6 @@ function NewSplitForm() {
           createdAt: now,
           type: 'expense',
           status: 'posted',
-          payerUserId: userId,
-          payerAmountMinor: totalMinor,
-          participants,
         },
         {
           groupId: groupRecordId,
@@ -234,6 +231,28 @@ function NewSplitForm() {
           dependencies: [
             ...(groupRecordId.startsWith('local-') ? [`group:${groupRecordId}`] : []),
             ...(accountRecordId.startsWith('local-') ? [`account:${accountRecordId}`] : []),
+          ],
+          relatedRecords: [
+            {
+              entityType: 'expensePayer',
+              record: {
+                transactionId,
+                userId,
+                memberId: userId,
+                amountMinor: totalMinor,
+              },
+            },
+            ...participants.map((participant) => ({
+              entityType: 'expenseParticipant' as const,
+              record: {
+                transactionId,
+                userId: participant.userId,
+                memberId: participant.userId,
+                amountMinor: participant.amountMinor,
+                method,
+                basisValue: participant.basisValue,
+              },
+            })),
           ],
         },
       );

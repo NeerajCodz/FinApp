@@ -203,7 +203,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
             >
               <path
                 d="M 0 24 L 121 24 C 138 24 136 52 153 60 C 167 66 177 68 195 68 C 213 68 223 66 237 60 C 254 52 252 24 269 24 L 390 24 L 390 96 L 0 96 Z"
-                fill="#080808"
+                fill="var(--finance-background)"
                 stroke="var(--finance-line)"
                 strokeWidth="1"
               />
