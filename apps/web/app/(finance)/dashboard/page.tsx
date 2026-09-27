@@ -76,11 +76,7 @@ function CategoryMark({
           : normalized.includes('bank') || normalized.includes('account')
             ? Landmark
             : ReceiptText;
-  return icon ? (
-    <span aria-hidden="true">{icon}</span>
-  ) : (
-    <Icon size={size} aria-hidden="true" />
-  );
+  return icon ? <span aria-hidden="true">{icon}</span> : <Icon size={size} aria-hidden="true" />;
 }
 
 export default function DashboardPage() {
@@ -108,8 +104,7 @@ export default function DashboardPage() {
   );
   const totalBalance =
     currencyAccounts.reduce(
-      (total, account) =>
-        total + asMinor(account.balanceMinor ?? account.openingBalanceMinor),
+      (total, account) => total + asMinor(account.balanceMinor ?? account.openingBalanceMinor),
       0n,
     ) +
     transactions.reduce((delta, transaction) => {

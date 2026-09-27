@@ -33,10 +33,7 @@ export default function PersonalAccountsPage() {
   const { records: accountRecords, loading, error } = useLocalRecords<Account>('account');
   const { records: transactionRecords } = useLocalRecords<Transaction>('transaction');
   const accountRows = accountRecords
-    .filter(
-      (record) =>
-        userId && belongsToUser(record, userId) && record.archivedAt === undefined,
-    )
+    .filter((record) => userId && belongsToUser(record, userId) && record.archivedAt === undefined)
     .map((account) => {
       const ids = new Set(aliasesOf(account));
       const optimisticDelta = transactionRecords.reduce((delta, transaction) => {

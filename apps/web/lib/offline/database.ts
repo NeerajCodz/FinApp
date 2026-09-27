@@ -2,12 +2,7 @@ export const WEB_DATABASE_NAME = 'finapp-web-local';
 const WEB_DATABASE_VERSION = 3;
 
 export type StoreName =
-  | 'records'
-  | 'outbox'
-  | 'idMappings'
-  | 'syncState'
-  | 'conflicts'
-  | 'rangeCoverage';
+  'records' | 'outbox' | 'idMappings' | 'syncState' | 'conflicts' | 'rangeCoverage';
 
 let databasePromise: Promise<IDBDatabase> | undefined;
 

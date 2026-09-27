@@ -97,4 +97,3 @@ export default function SyncSettingsPage() {
     </div>
   );
 }
-

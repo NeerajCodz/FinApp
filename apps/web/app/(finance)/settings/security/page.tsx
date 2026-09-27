@@ -193,10 +193,7 @@ export default function SecuritySettingsPage() {
         </p>
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            <Button
-              disabled={!available || lockBusy}
-              onPress={() => void configurePasskey()}
-            >
+            <Button disabled={!available || lockBusy} onPress={() => void configurePasskey()}>
               {lockBusy ? 'Working…' : webAuthnEnabled ? 'Change passkey' : 'Enable passkey'}
             </Button>
             {webAuthnEnabled && (

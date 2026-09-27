@@ -338,8 +338,8 @@ describe('browser offline repository', () => {
     const upgraded = await openWebDatabase();
     expect(upgraded.version).toBe(3);
     expect(Array.from(upgraded.objectStoreNames)).toContain('rangeCoverage');
-    expect(Array.from(upgraded.transaction('conflicts').objectStore('conflicts').indexNames)).toEqual([
-      'by-user',
-    ]);
+    expect(
+      Array.from(upgraded.transaction('conflicts').objectStore('conflicts').indexNames),
+    ).toEqual(['by-user']);
   });
 });

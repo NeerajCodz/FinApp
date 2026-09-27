@@ -38,7 +38,10 @@ describe('Web group balance projection', () => {
   });
 
   it('withholds balances when a split is incomplete instead of using embedded guesses', () => {
-    const embeddedOnlyExpense = { ...expense, participants: [{ userId: 'bob', amountMinor: 100n }] };
+    const embeddedOnlyExpense = {
+      ...expense,
+      participants: [{ userId: 'bob', amountMinor: 100n }],
+    };
 
     expect(() =>
       projectGroupBalances(group, [embeddedOnlyExpense], payers, [], settlements),

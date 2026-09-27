@@ -4,7 +4,6 @@ import { Button, Input, Sheet, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { categoryEmojiOptions as EMOJI } from '@finapp/ui/category-emoji';
 
-
 export function CategoryEmojiPicker({
   value,
   onChange,

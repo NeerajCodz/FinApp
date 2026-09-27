@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { CalendarDays, Plus } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -42,10 +42,7 @@ export default function PersonalBudgetsPage() {
   const { records: categoryRecords } = useLocalRecords<Category>('category');
   const [rangeError, setRangeError] = React.useState('');
   const budgets = budgetRecords
-    .filter(
-      (item) =>
-        userId && belongsToUser(item, userId) && item.archivedAt === undefined,
-    )
+    .filter((item) => userId && belongsToUser(item, userId) && item.archivedAt === undefined)
     .sort(
       (left, right) =>
         Number(left.startAt ?? 0) - Number(right.startAt ?? 0) ||

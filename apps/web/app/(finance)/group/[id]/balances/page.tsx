@@ -179,9 +179,8 @@ export default function GroupBalancesPage() {
     ]),
   );
   const ledgerUnavailable = !rangeComplete || Boolean(ledgerError);
-  const myBalance = ledgerUnavailable ? 0n : balances[userId] ?? 0n;
-  const settled =
-    !ledgerUnavailable && Object.values(balances).every((amount) => amount === 0n);
+  const myBalance = ledgerUnavailable ? 0n : (balances[userId] ?? 0n);
+  const settled = !ledgerUnavailable && Object.values(balances).every((amount) => amount === 0n);
   return (
     <div className="finance-page">
       <header className="finance-page-heading">

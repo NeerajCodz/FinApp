@@ -67,10 +67,7 @@ export default function PersonalCategoriesPage() {
   }, [fetchTransactionRange, isConnected, monthRange, userId]);
   const profile = profiles[0];
   const categories = records
-    .filter(
-      (record) =>
-        userId && belongsToUser(record, userId) && record.archivedAt === undefined,
-    )
+    .filter((record) => userId && belongsToUser(record, userId) && record.archivedAt === undefined)
     .sort(
       (left, right) =>
         Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) ||
@@ -173,9 +170,7 @@ export default function PersonalCategoriesPage() {
                         {category.name ?? 'Category'}
                       </Link>
                     </strong>
-                    <small>
-                      {category.isSystem ? 'System category' : 'Personal category'}
-                    </small>
+                    <small>{category.isSystem ? 'System category' : 'Personal category'}</small>
                     <small>Monthly activity{currency ? ` · ${currency}` : ''}</small>
                     {currency && (
                       <small>

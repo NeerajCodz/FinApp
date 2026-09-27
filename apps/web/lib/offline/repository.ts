@@ -683,9 +683,10 @@ export async function isGroupRangeCovered(
   const done = transactionComplete(transaction);
   const scope = `group:${groupId}`;
   const rows = (await requestResultFor(
-    transaction.objectStore('rangeCoverage').index('by-user-scope').getAll(
-      IDBKeyRange.only([userId, scope]),
-    ),
+    transaction
+      .objectStore('rangeCoverage')
+      .index('by-user-scope')
+      .getAll(IDBKeyRange.only([userId, scope])),
   )) as RangeCoverageRow[];
   await done;
   return rows.some((row) => row.startAt <= startAt && row.endAt >= endAt);
