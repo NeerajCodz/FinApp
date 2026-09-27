@@ -3,6 +3,8 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { ArrowRight, Fingerprint, ShieldCheck } from 'lucide-react';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { Button, Card, SectionHeader } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -14,10 +16,35 @@ import {
 
 export default function SecuritySettingsPage() {
   const { userId } = useBrowserSync();
+  const securityPreferences = useQuery(api.users.queries.securityPreferences, userId ? {} : 'skip');
+  const setTwoFactorEnabled = useMutation(api.users.mutations.setTwoFactorEnabled);
   const [available, setAvailable] = React.useState(false);
   const [enabled, setEnabled] = React.useState(false);
   const [passcodeEnabled, setPasscodeEnabled] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [twoFactorPending, setTwoFactorPending] = React.useState(false);
+  const [twoFactorMessage, setTwoFactorMessage] = React.useState('');
+
+  async function toggleTwoFactor() {
+    if (!securityPreferences || twoFactorPending) return;
+    const next = !securityPreferences.twoFactorEnabled;
+    setTwoFactorPending(true);
+    setTwoFactorMessage('');
+    try {
+      await setTwoFactorEnabled({ enabled: next });
+      setTwoFactorMessage(
+        next
+          ? 'Email verification is required after password sign-in.'
+          : 'Password sign-in no longer sends a verification email.',
+      );
+    } catch (cause) {
+      setTwoFactorMessage(
+        cause instanceof Error ? cause.message : 'Could not update two-factor sign-in.',
+      );
+    } finally {
+      setTwoFactorPending(false);
+    }
+  }
 
   React.useEffect(() => {
     let active = true;
@@ -92,6 +119,35 @@ export default function SecuritySettingsPage() {
         <Link className="finance-inline-link" href="/settings">
           Manage the browser lock in Settings <ArrowRight size={15} aria-hidden="true" />
         </Link>
+      </Card>
+      <Card className="finance-settings-card">
+        <SectionHeader
+          title="Two-factor sign-in"
+          action={<ShieldCheck size={18} aria-hidden="true" />}
+        />
+        <p>
+          {securityPreferences?.twoFactorEnabled
+            ? 'A six-digit email code is required after your password.'
+            : 'Password sign-in is used by default. No extra email code is sent.'}
+        </p>
+        <Button
+          variant={securityPreferences?.twoFactorEnabled ? 'outline' : 'primary'}
+          disabled={
+            securityPreferences === undefined || securityPreferences === null || twoFactorPending
+          }
+          onPress={() => void toggleTwoFactor()}
+        >
+          {twoFactorPending
+            ? 'Saving…'
+            : securityPreferences?.twoFactorEnabled
+              ? 'Turn off two-factor sign-in'
+              : 'Enable two-factor sign-in'}
+        </Button>
+        {twoFactorMessage && (
+          <p className="finance-muted" role="status">
+            {twoFactorMessage}
+          </p>
+        )}
       </Card>
       <Card className="finance-settings-card">
         <SectionHeader

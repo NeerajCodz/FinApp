@@ -1,5 +1,7 @@
 import React from 'react';
 import { Platform, ScrollView, View } from 'react-native';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import * as Haptics from 'expo-haptics';
 import { ArrowLeft } from '@/lib/icons';
 import { router } from 'expo-router';
@@ -12,14 +14,40 @@ import { PasscodeInput } from '@/lib/security/PasscodeInput';
 
 export default function SecuritySettingsScreen() {
   const { lock, ready, changeLock } = useAppLock();
+  const securityPreferences = useQuery(api.users.queries.securityPreferences, {});
+  const setTwoFactorEnabled = useMutation(api.users.mutations.setTwoFactorEnabled);
   const [available, setAvailable] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [code, setCode] = React.useState('');
   const [confirmation, setConfirmation] = React.useState('');
   const [error, setError] = React.useState('');
+  const [twoFactorPending, setTwoFactorPending] = React.useState(false);
+  const [twoFactorMessage, setTwoFactorMessage] = React.useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+
+  async function toggleTwoFactor() {
+    if (!securityPreferences || twoFactorPending) return;
+    const next = !securityPreferences.twoFactorEnabled;
+    setTwoFactorPending(true);
+    setTwoFactorMessage('');
+    try {
+      await setTwoFactorEnabled({ enabled: next });
+      void Haptics.selectionAsync();
+      setTwoFactorMessage(
+        next
+          ? 'Email verification is required after password sign-in.'
+          : 'Password sign-in no longer sends a verification email.',
+      );
+    } catch (cause) {
+      setTwoFactorMessage(
+        cause instanceof Error ? cause.message : 'Could not update two-factor sign-in.',
+      );
+    } finally {
+      setTwoFactorPending(false);
+    }
+  }
 
   React.useEffect(() => {
     let active = true;
@@ -81,6 +109,31 @@ export default function SecuritySettingsScreen() {
               ? 'App passcode is on.'
               : 'App lock is off.'}
         </Text>
+        <Separator />
+        <View style={{ gap: 10 }}>
+          <Typography variant="label">Two-factor sign-in</Typography>
+          <Text style={{ color: tokens.foregroundMuted }}>
+            {securityPreferences?.twoFactorEnabled
+              ? 'A six-digit email code is required after your password.'
+              : 'Password sign-in is used by default. No extra email code is sent.'}
+          </Text>
+          <Button
+            variant={securityPreferences?.twoFactorEnabled ? 'outline' : 'primary'}
+            disabled={
+              securityPreferences === undefined || securityPreferences === null || twoFactorPending
+            }
+            onPress={() => void toggleTwoFactor()}
+          >
+            {twoFactorPending
+              ? 'Saving…'
+              : securityPreferences?.twoFactorEnabled
+                ? 'Turn off two-factor sign-in'
+                : 'Enable two-factor sign-in'}
+          </Button>
+          {!!twoFactorMessage && (
+            <Text style={{ color: tokens.foregroundMuted }}>{twoFactorMessage}</Text>
+          )}
+        </View>
         <Separator />
         <View style={{ gap: 10 }}>
           <Typography variant="label">Device biometrics</Typography>

@@ -136,6 +136,42 @@ export async function updateSettings(ctx: UserMutationContext, settings: Partial
   return settings;
 }
 
+export const setTwoFactorEnabled = mutation({
+  args: { enabled: v.boolean() },
+  handler: async (ctx, { enabled }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    if (enabled && user.emailVerificationTime === undefined) {
+      throw new Error('EMAIL_NOT_VERIFIED');
+    }
+
+    const settings = await ctx.db
+      .query('userSettings')
+      .withIndex('by_user', (query) => query.eq('userId', user._id))
+      .unique();
+    const updatedAt = Date.now();
+    if (settings) {
+      await ctx.db.patch(settings._id, { twoFactorEnabled: enabled, updatedAt });
+    } else {
+      await ctx.db.insert('userSettings', {
+        userId: user._id,
+        currency: user.defaultCurrency ?? 'INR',
+        timezone: user.timezone ?? 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        twoFactorEnabled: enabled,
+        updatedAt,
+      });
+    }
+    await ctx.db.patch(user._id, { updatedAt });
+    return { twoFactorEnabled: enabled };
+  },
+});
+
 export async function requestAccountDeletion(ctx: UserMutationContext) {
   const user = await requireUser(ctx);
   if (!user) throw new Error('AUTH_REQUIRED');

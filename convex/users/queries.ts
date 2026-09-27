@@ -20,6 +20,46 @@ export const current = query({
   handler: async (ctx) => getOptionalUser(ctx),
 });
 
+export const twoFactorEnabledForUser = internalQuery({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    const settings = await ctx.db
+      .query('userSettings')
+      .withIndex('by_user', (query) => query.eq('userId', userId))
+      .unique();
+    return settings?.twoFactorEnabled ?? false;
+  },
+});
+
+export const twoFactorEnabledForEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('email', (query) => query.eq('email', email.toLowerCase()))
+      .unique();
+    if (!user || user.deletedAt !== undefined) return false;
+    const settings = await ctx.db
+      .query('userSettings')
+      .withIndex('by_user', (query) => query.eq('userId', user._id))
+      .unique();
+    return settings?.twoFactorEnabled ?? false;
+  },
+});
+
+export const securityPreferences = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return null;
+    const settings = await ctx.db
+      .query('userSettings')
+      .withIndex('by_user', (query) => query.eq('userId', user._id))
+      .unique();
+    return { twoFactorEnabled: settings?.twoFactorEnabled ?? false };
+  },
+});
+
 export const search = query({
   args: { query: v.string() },
   handler: async (ctx, args) => {

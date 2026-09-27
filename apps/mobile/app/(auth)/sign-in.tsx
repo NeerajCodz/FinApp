@@ -41,6 +41,14 @@ export default function SignInScreen() {
           pathname: '/(auth)/verify',
           params: { email: result.email, next: 'tabs' },
         });
+      } else if (result.status === 'two-factor-disabled') {
+        const form = new FormData();
+        form.append('email', identifier.trim());
+        form.append('password', password);
+        form.append('flow', 'signIn');
+        const signInResult = await signIn('password', form);
+        if (!signInResult.signingIn) throw new Error('Unable to sign in');
+        router.replace('/(tabs)');
       } else {
         router.replace({
           pathname: '/(auth)/two-factor',

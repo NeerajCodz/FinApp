@@ -74,6 +74,7 @@ export async function requireUser(ctx: MutationCtx): Promise<Doc<'users'> | null
     appearance: 'system',
     notificationPreferences: {},
     appLockPreferences: { enabled: false, fallback: 'device-pin' },
+    twoFactorEnabled: false,
     updatedAt: now,
   });
   return ctx.db.get(userId);
