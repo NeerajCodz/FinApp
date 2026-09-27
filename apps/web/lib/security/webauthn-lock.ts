@@ -253,6 +253,18 @@ export async function unlockWithWebAuthn(userId: string): Promise<void> {
   window.localStorage.removeItem(throttleKey(userId));
 }
 
+export function removeWebAuthnLock(userId: string): void {
+  window.localStorage.removeItem(lockKey(userId));
+  if (!hasPasscodeLock(userId)) window.localStorage.removeItem(throttleKey(userId));
+  window.dispatchEvent(new Event(webAuthnLockChangedEvent));
+}
+
+export function removePasscodeLock(userId: string): void {
+  window.localStorage.removeItem(passcodeKey(userId));
+  if (!hasWebAuthnLock(userId)) window.localStorage.removeItem(throttleKey(userId));
+  window.dispatchEvent(new Event(webAuthnLockChangedEvent));
+}
+
 export function disableWebAuthnLock(userId: string): void {
   window.localStorage.removeItem(lockKey(userId));
   window.localStorage.removeItem(passcodeKey(userId));
