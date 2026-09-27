@@ -6,7 +6,8 @@
     "./native": "./src/native/index.tsx",
     "./web": "./src/web/index.tsx",
     "./web/styles.css": "./src/web/styles.css",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./quick-add": "./src/quick-add.ts"
   },
   "sideEffects": [
     "./src/web/styles.css"

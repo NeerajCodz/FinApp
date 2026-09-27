@@ -142,7 +142,7 @@ export default function DashboardPage() {
           <h1>Overview</h1>
           <p className="finance-muted">A clear view of what’s moving, and what’s next.</p>
         </div>
-        <Link href="/transactions" className="finance-primary-link">
+        <Link href="/transaction/new" className="finance-primary-link">
           <Plus size={17} /> Add transaction
         </Link>
       </header>
@@ -211,7 +211,7 @@ export default function DashboardPage() {
           <SectionHeader
             title="Your accounts"
             action={
-              <Link href="/accounts">
+              <Link href="/account">
                 Manage <ArrowRight size={14} />
               </Link>
             }
@@ -223,7 +223,7 @@ export default function DashboardPage() {
               title="Start with an account"
               description="Add the places your money lives. Your balance stays on this device until it can sync."
               action={
-                <Link href="/accounts" className="finance-inline-link">
+                <Link href="/account" className="finance-inline-link">
                   Add an account
                 </Link>
               }
@@ -257,7 +257,7 @@ export default function DashboardPage() {
           <SectionHeader
             title="Recent activity"
             action={
-              <Link href="/transactions">
+              <Link href="/activity">
                 All activity <ArrowRight size={14} />
               </Link>
             }
@@ -269,7 +269,7 @@ export default function DashboardPage() {
               title="Nothing to report yet"
               description="Your transactions will appear here after you add them or finish syncing."
               action={
-                <Link href="/transactions" className="finance-inline-link">
+                <Link href="/transaction/new" className="finance-inline-link">
                   Add a transaction
                 </Link>
               }
@@ -352,7 +352,7 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
-          <Link className="finance-secondary-action" href="/budgets">
+          <Link className="finance-secondary-action" href="/budget">
             Explore budgets <ArrowRight size={15} />
           </Link>
         </Card>
