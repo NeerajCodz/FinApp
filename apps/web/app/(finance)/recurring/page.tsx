@@ -2,8 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, CalendarClock, Plus } from 'lucide-react';
-import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, ArrowRight, CalendarClock, CalendarDays, Plus } from 'lucide-react';
+import { Button, Card, Empty, IconButton, SectionHeader, Text, Typography, useTheme } from '@finapp/ui/web';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -31,6 +32,8 @@ const frequencies = ['daily', 'weekly', 'monthly', 'yearly'] as const;
 
 export default function RecurringPage() {
   const { userId, isConnected } = useBrowserSync();
+  const router = useRouter();
+  const { tokens } = useTheme();
   const {
     records: rules,
     loading: rulesLoading,
@@ -233,38 +236,77 @@ export default function RecurringPage() {
   const loadError = rulesError ?? accountsError;
 
   return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">A REMINDER, NOT A TRANSACTION</p>
-          <h1>Recurring</h1>
-          <p className="finance-muted">
-            Upcoming expenses stay visible. Nothing is ever recorded automatically.
-          </p>
-        </div>
+    <div className="finance-page" style={{ gap: 24 }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title" style={{ flex: 1 }}>
+          Recurring
+        </Typography>
+        {ordered.length > 0 && !adding && (
+          <IconButton
+            label="Add recurring reminder"
+            variant="ghost"
+            onPress={() => setAdding(true)}
+          >
+            <Plus size={21} aria-hidden="true" />
+          </IconButton>
+        )}
       </header>
-      {ordered.length > 0 && (
-        <Card className="finance-record-panel">
-          <SectionHeader title="Reminder schedule" />
-          <p>
-            {enabledCount} active · {ordered.length - enabledCount} paused
-          </p>
-          {nextDueAt && (
-            <p className="finance-muted">Next due {new Date(nextDueAt).toLocaleDateString()}</p>
-          )}
-          {!isConnected && <p className="finance-muted">Offline · showing saved reminders</p>}
-        </Card>
+
+      <Text style={{ maxWidth: 340 }}>
+        Reminder-only rules keep upcoming expenses visible. They never create a transaction
+        automatically.
+      </Text>
+
+      {(rulesLoading || accountsLoading) && (
+        <Typography variant="small">Loading saved reminders…</Typography>
       )}
+      {loadError && (
+        <div role="alert" style={{ display: 'grid', gap: 10 }}>
+          <Text style={{ color: tokens.destructive }}>Saved recurring rules could not be loaded.</Text>
+          <Button
+            variant="outline"
+            onPress={() => {
+              window.location.reload();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+      {!!error && (
+        <Text role="alert" style={{ color: tokens.destructive }}>
+          {error}
+        </Text>
+      )}
+
+      {ordered.length > 0 && (
+        <section style={{ display: 'grid', gap: 6 }}>
+          <Typography variant="label">
+            {enabledCount} active · {ordered.length - enabledCount} paused
+          </Typography>
+          {nextDueAt && (
+            <Typography variant="heading">
+              Next due {new Date(nextDueAt).toLocaleDateString()}
+            </Typography>
+          )}
+        </section>
+      )}
+
       {dueRules.length > 0 && (
-        <Card className="finance-record-panel" role="status" aria-live="polite">
-          <SectionHeader
-            title="Reminder due"
-            action={<CalendarClock size={18} aria-hidden="true" />}
-          />
-          <p>
+        <Card
+          className="finance-record-panel"
+          role="status"
+          aria-live="polite"
+          style={{ display: 'grid', gap: 10 }}
+        >
+          <SectionHeader title="Reminder due" action={<CalendarClock size={18} aria-hidden="true" />} />
+          <Text>
             {dueRules.length} scheduled {dueRules.length === 1 ? 'reminder is' : 'reminders are'}{' '}
             due. Finapp never records a transaction automatically.
-          </p>
+          </Text>
           <ul>
             {dueRules.map((rule) => (
               <li key={String(rule.id ?? rule._id ?? '')}>
@@ -273,201 +315,183 @@ export default function RecurringPage() {
               </li>
             ))}
           </ul>
-          <p className="finance-muted">
+          <Text>
             This in-app reminder remains available if browser notifications are unavailable or
             permission has not been granted. Notifications are delivered only while Finapp is open.
-          </p>
+          </Text>
           <Link className="finance-inline-link" href="/settings/notifications">
-            Notification controls <ArrowRight size={15} />
+            Notification controls <ArrowRight size={15} aria-hidden="true" />
           </Link>
         </Card>
       )}
-      {(error || loadError) && (
-        <p className="finance-form-error" role="alert">
-          {error ?? `Saved reminders could not be loaded: ${loadError}`}
-        </p>
+
+      {!rulesLoading && !accountsLoading && !loadError && ordered.length === 0 && (
+        <Empty
+          title="Nothing scheduled"
+          description="Add a reminder for a repeating expense. You decide when to record it."
+          icon={<CalendarDays size={20} aria-hidden="true" />}
+          action={!adding && <Button onPress={() => setAdding(true)}>Add reminder</Button>}
+        />
       )}
-      <div className="finance-accounts-layout">
-        <Card className="finance-record-panel">
-          <SectionHeader
-            title="Upcoming reminders"
-            action={
-              <Button
-                type="button"
-                variant="outline"
-                onPress={() => setAdding((value) => !value)}
-                aria-expanded={adding}
-              >
-                <Plus size={16} /> {adding ? 'Cancel' : 'Add reminder'}
-              </Button>
-            }
-          />
-          {rulesLoading || accountsLoading ? (
-            <p className="finance-muted" role="status">
-              Opening saved reminders…
-            </p>
-          ) : loadError ? (
-            <p className="finance-muted">Reload this page to retry local storage.</p>
-          ) : ordered.length === 0 ? (
-            <Empty
-              title="Nothing scheduled yet"
-              description="Create a reminder for a repeating bill, then decide when to enter each transaction."
-              icon={<CalendarClock size={20} />}
-            />
-          ) : (
-            <ul
-              className="finance-record-list"
-              style={{ margin: 0, padding: 0, listStyle: 'none' }}
-            >
-              {ordered.map((rule) => {
-                const id = String(rule.id ?? rule._id ?? '');
-                const at = dueDate(rule);
-                const money = rule.template?.amountMinor;
-                let formattedAmount = '';
-                if (money !== undefined && rule.template?.currency) {
-                  try {
-                    formattedAmount = formatMinor(
-                      typeof money === 'bigint' ? money : BigInt(money),
-                      rule.template.currency,
-                    );
-                  } catch {
-                    formattedAmount = '';
-                  }
-                }
-                return (
-                  <li
-                    className="finance-plan-card"
-                    style={{ display: 'grid', alignItems: 'stretch' }}
-                    key={id}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                      }}
-                    >
-                      <span>
-                        <strong>{rule.name ?? 'Reminder'}</strong>
-                        <small>
-                          {rule.enabled
-                            ? `${rule.frequency ?? 'monthly'} · ${at > now ? new Date(at).toLocaleDateString() : 'due'}`
-                            : 'Paused'}{' '}
-                          · Reminder only
-                        </small>
-                      </span>
-                      <strong>{formattedAmount}</strong>
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                      }}
-                    >
-                      <span className="finance-muted">
-                        {rule.autoCreate
-                          ? 'Automatic recording disabled'
-                          : 'Will not create a transaction'}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={saving}
-                        aria-label={`${rule.enabled ? 'Pause' : 'Resume'} ${rule.name ?? 'reminder'}`}
-                        onPress={() => void setEnabled(rule)}
-                      >
-                        {rule.enabled ? 'Pause' : 'Resume'}
-                      </Button>
-                    </div>
-                  </li>
+
+      {ordered.length > 0 && (
+        <section>
+          {ordered.map((rule) => {
+            const id = String(rule.id ?? rule._id ?? '');
+            const at = dueDate(rule);
+            const money = rule.template?.amountMinor;
+            let formattedAmount = '';
+            if (money !== undefined && rule.template?.currency) {
+              try {
+                formattedAmount = formatMinor(
+                  typeof money === 'bigint' ? money : BigInt(money),
+                  rule.template.currency,
                 );
-              })}
-            </ul>
-          )}
-          {!isConnected && !rulesLoading && (
-            <p className="finance-form-note">Offline · showing saved rules</p>
-          )}
-        </Card>
-        {adding && (
-          <Card className="finance-record-panel">
-            <SectionHeader title="New reminder" />
-            <form className="finance-form" onSubmit={createRule}>
-              <FinanceInput
-                label="Reminder name"
-                value={name}
-                onChangeText={setName}
-                placeholder="Rent"
-                maxLength={80}
-                required
-              />
-              <label className="finance-form-field">
-                <span>Active account</span>
-                <select
-                  value={accountId}
-                  onChange={(event) => setAccountId(event.currentTarget.value)}
-                  required
-                  aria-label="Account for reminder"
+              } catch {
+                formattedAmount = '';
+              }
+            }
+            return (
+              <div
+                key={id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '16px 0',
+                  borderBottom: `1px solid ${tokens.borderSubtle}`,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: 'grid',
+                    width: 42,
+                    height: 42,
+                    flex: '0 0 42px',
+                    placeItems: 'center',
+                    borderRadius: 14,
+                    background: tokens.surfaceRaised,
+                  }}
                 >
-                  <option value="">Choose an account</option>
-                  {activeAccounts.map((account) => (
-                    <option
-                      key={String(account.id ?? account._id)}
-                      value={String(account.id ?? account._id)}
-                    >
-                      {account.name ?? 'Account'} · {account.currency ?? 'INR'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {activeAccounts.length === 0 && !accountsLoading && (
-                <p className="finance-muted">
-                  Create an active account before adding a reminder.{' '}
-                  <Link className="finance-inline-link" href="/account/new">
-                    Create account
-                  </Link>
-                </p>
-              )}
-              <FinanceInput
-                label={`Amount${selectedAccount ? ` · ${selectedAccount.currency ?? 'INR'}` : ''}`}
-                value={amount}
-                onChangeText={setAmount}
-                inputMode="decimal"
-                required
-              />
-              <label className="finance-form-field">
-                <span>Repeat from tomorrow</span>
-                <select
-                  value={frequency}
-                  onChange={(event) =>
-                    setFrequency(event.currentTarget.value as (typeof frequencies)[number])
-                  }
-                  aria-label="Repeat frequency"
+                  <CalendarDays size={20} color={tokens.primary} />
+                </span>
+                <span style={{ display: 'grid', flex: 1, minWidth: 0, gap: 4 }}>
+                  <Typography variant="bodyLarge">{rule.name ?? 'Reminder'}</Typography>
+                  <Typography variant="small">
+                    {rule.enabled
+                      ? `${rule.frequency ?? 'monthly'} · ${at > now ? new Date(at).toLocaleDateString() : 'due'}`
+                      : 'Paused'}{' '}
+                    · Reminder only
+                  </Typography>
+                  {formattedAmount && <Typography variant="small">{formattedAmount}</Typography>}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={saving}
+                  aria-label={`${rule.enabled ? 'Pause' : 'Resume'} ${rule.name ?? 'reminder'}`}
+                  onPress={() => void setEnabled(rule)}
                 >
-                  {frequencies.map((option) => (
-                    <option key={option} value={option}>
-                      {option[0].toUpperCase() + option.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="finance-muted">
-                First reminder is tomorrow. You decide when to record the expense.
-              </p>
+                  {rule.enabled ? 'Pause' : 'Resume'}
+                </Button>
+              </div>
+            );
+          })}
+        </section>
+      )}
+      {!isConnected && !rulesLoading && (
+        <Typography variant="small">Offline · showing saved rules</Typography>
+      )}
+
+      {adding && (
+        <section
+          style={{
+            display: 'grid',
+            gap: 14,
+            paddingTop: 16,
+            borderTop: `1px solid ${tokens.borderSubtle}`,
+          }}
+        >
+          <Typography variant="heading">New reminder</Typography>
+          <form className="finance-form" onSubmit={createRule} style={{ gap: 14 }}>
+            <FinanceInput
+              label="Expense name"
+              value={name}
+              onChangeText={setName}
+              placeholder="Expense name"
+              maxLength={80}
+              required
+            />
+            <Typography variant="label">Account</Typography>
+            {activeAccounts.length === 0 && !accountsLoading && (
+              <Text>
+                Create an account first.{' '}
+                <Link className="finance-inline-link" href="/account/new">
+                  Add an account
+                </Link>
+              </Text>
+            )}
+            {activeAccounts.map((account) => {
+              const id = String(account.id ?? account._id ?? '');
+              return (
+                <Button
+                  key={id}
+                  size="sm"
+                  variant={accountId === id ? 'secondary' : 'outline'}
+                  aria-pressed={accountId === id}
+                  onPress={() => setAccountId(id)}
+                  style={{ justifyContent: 'flex-start' }}
+                >
+                  {account.name ?? 'Account'} · {account.currency ?? 'INR'}
+                </Button>
+              );
+            })}
+            <FinanceInput
+              label={selectedAccount ? `Amount · ${selectedAccount.currency ?? 'INR'}` : 'Amount'}
+              value={amount}
+              onChangeText={setAmount}
+              inputMode="decimal"
+              required
+            />
+            <Typography variant="label">Repeat from tomorrow</Typography>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {frequencies.map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  variant={option === frequency ? 'secondary' : 'outline'}
+                  aria-pressed={option === frequency}
+                  onPress={() => setFrequency(option)}
+                >
+                  {option}
+                </Button>
+              ))}
+            </div>
+            <Text>First reminder is tomorrow. You decide when to record the expense.</Text>
+            <div style={{ display: 'flex', gap: 10 }}>
               <Button
+                style={{ flex: 1 }}
+                variant="outline"
+                disabled={saving}
+                onPress={() => {
+                  setAdding(false);
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                style={{ flex: 1 }}
                 type="submit"
-                disabled={saving || !name.trim() || !amount.trim() || !selectedAccount}
+                disabled={saving || !selectedAccount || !name.trim() || !amount.trim()}
               >
                 {saving ? 'Saving…' : 'Save reminder'}
               </Button>
-            </form>
-          </Card>
-        )}
-      </div>
+            </div>
+          </form>
+        </section>
+      )}
     </div>
   );
 }
