@@ -37,9 +37,6 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "convexUrl": "https://secret-kiwi-640.convex.cloud",
-      "convexSiteUrl": "https://secret-kiwi-640.convex.site",
-      "metroUrl": "http://10.0.2.2:2609",
       "router": {},
       "eas": {
         "projectId": "4b1aa903-c0f5-480f-a7ff-7f3ce4ff27ee"
