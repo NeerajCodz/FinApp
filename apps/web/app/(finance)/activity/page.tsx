@@ -1,22 +1,27 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
-import { ArrowDownLeft, ArrowUpRight, Repeat2, Search, X } from 'lucide-react';
-import { Button, Card, Empty, Input, SectionHeader } from '@finapp/ui/web';
+import { useRouter } from 'next/navigation';
+import { Search, X } from 'lucide-react';
+import { Button, Empty, IconButton, Input, Tabs, Typography } from '@finapp/ui/web';
+import { DateSection, MetricPair, TransactionRow, type TransactionType } from '@finapp/ui/finance';
+import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import {
   filterActivity,
   type ActivityFilter,
   type ActivityKind,
   type ActivityRow,
 } from '@convex/activity/domain';
-import { getAnalyticsRange, type AnalyticsPeriod } from '@convex/analytics/domain';
+import {
+  aggregateAnalytics,
+  getAnalyticsRange,
+  type AnalyticsPeriod,
+  type AnalyticsTransaction,
+} from '@convex/analytics/domain';
 import { formatMinor } from '@convex/shared/money';
-import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-import { useQuickAdd } from '@/components/finance/FinanceShell';
 
 type Transaction = LocalRecord & {
   type?: string;
@@ -31,7 +36,7 @@ type Transaction = LocalRecord & {
   status?: string;
   deletedAt?: number;
 };
-type NamedRecord = LocalRecord & { name?: string; archivedAt?: number };
+type NamedRecord = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
 type Profile = LocalRecord & { defaultCurrency?: string; timezone?: string };
 
 const filters: ActivityFilter[] = ['All', 'Expenses', 'Income', 'Transfers', 'Groups'];
@@ -48,8 +53,20 @@ function asMinor(value: unknown): bigint {
   return 0n;
 }
 
+function analyticsEntities(records: NamedRecord[]) {
+  return records.flatMap((record) => {
+    const aliases = [...new Set([record.id, record._id, record.cloudId].filter(
+      (id): id is string => typeof id === 'string' && id.length > 0,
+    ))];
+    const id = aliases[0];
+    return id && typeof record.name === 'string'
+      ? [{ id, name: record.name, aliases }]
+      : [];
+  });
+}
+
 export default function ActivityPage() {
-  const openQuickAdd = useQuickAdd();
+  const router = useRouter();
   const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
   const transactionState = useLocalRecords<Transaction>('transaction');
   const accountState = useLocalRecords<NamedRecord>('account');
@@ -115,12 +132,11 @@ export default function ActivityPage() {
     const records = new Map<string, Transaction>();
     const activity: ActivityRow[] = [];
     for (const record of transactionState.records) {
-      const id = String(record.id ?? record._id ?? '');
+      const id = String(record.id ?? record._id ?? record.cloudId ?? '');
       const occurredAt = Number(record.occurredAt ?? 0);
       if (
         !id ||
         record.deletedAt !== undefined ||
-        (record.status !== undefined && record.status !== 'posted') ||
         occurredAt < range.startAt ||
         occurredAt >= range.endAt ||
         !['expense', 'income', 'transfer', 'refund', 'adjustment'].includes(record.type ?? '')
@@ -191,71 +207,94 @@ export default function ActivityPage() {
     return [...sections];
   }, [rows, timeZone]);
 
-  if (!userId)
-    return (
-      <FinanceSignedOut
-        section="ACTIVITY"
-        title="Keep the details close."
-        description="Sign in to open your activity. After your first sign-in, this browser keeps a local copy for offline access and syncs when connected."
-      />
-    );
 
   const error =
     transactionState.error ?? accountState.error ?? categoryState.error ?? profileState.error;
   const ready =
     referenceAt !== null &&
+    !!profile &&
     !transactionState.loading &&
     !accountState.loading &&
     !categoryState.loading &&
     !profileState.loading;
-  const currencyRows = rows.filter(
-    (record) => record.status === 'posted' && (record.currency ?? currency) === currency,
-  );
-  const spent = currencyRows
-    .filter((record) => record.type === 'expense')
-    .reduce((sum, record) => sum + asMinor(record.amountMinor), 0n);
-  const income = currencyRows
-    .filter((record) => record.type === 'income')
-    .reduce((sum, record) => sum + asMinor(record.amountMinor), 0n);
-  const currencyFormat = (amount: bigint, selectedCurrency: string) => {
-    try {
-      return formatMinor(amount, selectedCurrency);
-    } catch {
-      return `${selectedCurrency} ${amount}`;
-    }
-  };
+  const totals = React.useMemo(() => {
+    const analyticsTransactions = rows.flatMap((record): AnalyticsTransaction[] => {
+      const type = record.type;
+      if (
+        type !== 'expense' &&
+        type !== 'income' &&
+        type !== 'transfer' &&
+        type !== 'refund' &&
+        type !== 'adjustment'
+      )
+        return [];
+      return [
+        {
+          type,
+          amountMinor: asMinor(record.amountMinor),
+          currency: String(record.currency ?? currency),
+          ...(typeof record.categoryId === 'string' ? { categoryId: record.categoryId } : {}),
+          ...(typeof record.accountId === 'string' ? { accountId: record.accountId } : {}),
+          ...(typeof record.merchant === 'string' ? { merchant: record.merchant } : {}),
+          ...(typeof record.title === 'string' ? { title: record.title } : {}),
+          occurredAt: typeof record.occurredAt === 'number' ? record.occurredAt : 0,
+          status:
+            record.status === 'pending' || record.status === 'voided' ? record.status : 'posted',
+          ...(typeof record.deletedAt === 'number' ? { deletedAt: record.deletedAt } : {}),
+        },
+      ];
+    });
+    return aggregateAnalytics(
+      analyticsTransactions,
+      analyticsEntities(categoryState.records),
+      currency,
+      period,
+      range.startAt,
+      range.endAt,
+      timeZone,
+      analyticsEntities(accountState.records),
+    );
+  }, [
+    accountState.records,
+    categoryState.records,
+    currency,
+    period,
+    range.endAt,
+    range.startAt,
+    rows,
+    timeZone,
+  ]);
+  if (!userId)
+    return (
+      <FinanceSignedOut
+        section="ACTIVITY"
+        title="Activity unavailable"
+        description="Sign in to see your ledger."
+      />
+    );
 
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
         {searching ? (
-          <div
-            style={{
-              display: 'flex',
-              flex: 1,
-              minWidth: 0,
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
+          <div style={{ display: 'flex', flex: 1, minWidth: 0, alignItems: 'center', gap: 8 }}>
             <Input
               autoFocus
-              aria-label="Search transactions"
+              accessibilityLabel="Search transactions"
               onChangeText={setQuery}
               placeholder="Title, merchant, category, amount…"
               value={query}
             />
-            <Button
-              size="icon"
+            <IconButton
+              label="Close search"
               variant="ghost"
-              aria-label="Close search"
               onPress={() => {
                 setQuery('');
                 setSearching(false);
               }}
             >
               <X size={20} aria-hidden="true" />
-            </Button>
+            </IconButton>
           </div>
         ) : (
           <div
@@ -266,176 +305,111 @@ export default function ActivityPage() {
               justifyContent: 'space-between',
             }}
           >
-            <h1>Activity</h1>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Search activity"
-              onPress={() => setSearching(true)}
-            >
+            <Typography variant="title">Activity</Typography>
+            <IconButton label="Search activity" variant="ghost" onPress={() => setSearching(true)}>
               <Search size={21} aria-hidden="true" />
-            </Button>
+            </IconButton>
           </div>
         )}
       </header>
-      <Card className="finance-record-panel" style={{ display: 'grid', gap: 16 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          <span className="finance-muted" style={{ marginRight: 4 }}>
-            Period
-          </span>
-          {periods.map((option) => (
-            <Button
-              key={option.value}
-              variant={period === option.value ? 'secondary' : 'outline'}
-              size="sm"
-              aria-pressed={period === option.value}
-              onPress={() => setPeriod(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-          <div
-            role="group"
-            aria-label="Activity type filter"
-            style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}
-          >
-            <span className="finance-muted" style={{ marginRight: 4 }}>
-              Activity type
-            </span>
-            {filters.map((option) => (
-              <Button
-                key={option}
-                size="sm"
-                variant={filter === option ? 'secondary' : 'outline'}
-                aria-pressed={filter === option}
-                onPress={() => setFilter(option)}
-              >
-                {option}
-              </Button>
-            ))}
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
-          <span className="finance-muted">
-            Money out <strong>{currencyFormat(spent, currency)}</strong>
-          </span>
-          <span className="finance-muted">
-            Money in <strong>{currencyFormat(income, currency)}</strong>
-          </span>
-          <span className="finance-muted">{rows.length} matching records</span>
-        </div>
-      </Card>
+      <Tabs
+        label="Activity period"
+        value={period}
+        onChange={(value) => setPeriod(value as AnalyticsPeriod)}
+        tabs={periods}
+      />
+      {ready && (
+        <section style={{ display: 'grid', gap: 12 }}>
+          <Typography variant="label">
+            {period} · {currency}
+          </Typography>
+          <MetricPair
+            left={{ label: 'Spent', value: formatMinor(totals.spentMinor, currency) }}
+            right={{ label: 'Income', value: formatMinor(totals.incomeMinor, currency) }}
+          />
+          <Typography variant="caption">
+            Totals include posted transactions in {currency} only.
+          </Typography>
+        </section>
+      )}
+      <div style={{ overflowX: 'auto' }}>
+        <Tabs
+          label="Activity type filter"
+          value={filter}
+          onChange={(value) => setFilter(value as ActivityFilter)}
+          tabs={filters.map((value) => ({ label: value, value }))}
+        />
+      </div>
 
       {(rangeLoading || rangeError || error) && (
         <p className="finance-muted" role={error || rangeError ? 'alert' : 'status'}>
-          {rangeLoading ? 'Refreshing this period… ' : ''}
+          {rangeLoading ? 'Refreshing activity… ' : ''}
           {rangeError || (error ? 'Some saved records could not be loaded.' : '')}
         </p>
       )}
       {error && (
         <Button variant="outline" onPress={() => window.location.reload()}>
-          Reload saved activity
+          Retry
         </Button>
       )}
-      {!ready ? (
-        <p className="finance-muted" role="status">
-          Opening your saved activity…
-        </p>
-      ) : rows.length === 0 ? (
+      {!profileState.loading && !profile ? (
+        <FinanceSignedOut
+          section="ACTIVITY"
+          title="Activity unavailable"
+          description="Sign in to see your ledger."
+        />
+      ) : !ready && !error ? (
+        <Typography variant="heading">Loading activity…</Typography>
+      ) : ready && dateSections.length === 0 && !rangeError ? (
         <Empty
-          title={query ? 'No search matches' : 'No activity in this period'}
+          title={query ? 'No search matches' : 'No activity this period'}
           description={
             query
-              ? 'Try a different title, merchant, category, account, or amount.'
-              : 'Transactions you add or sync will appear here.'
-          }
-          action={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="finance-inline-link"
-              onPress={openQuickAdd}
-            >
-              Add to your ledger
-            </Button>
+              ? 'Try a merchant, title, category, account, or amount.'
+              : 'No transactions match this period and filter.'
           }
         />
+      ) : ready && dateSections.length === 0 ? (
+        <Typography variant="small">
+          No matching saved rows. Refresh to confirm the full period.
+        </Typography>
       ) : (
-        <Card className="finance-record-panel">
-          <SectionHeader title="Recent activity" action={<span>{rows.length} records</span>} />
-          <div style={{ display: 'grid', gap: 20, marginTop: 18 }}>
-            {dateSections.map(([date, records]) => (
-              <section key={date} aria-label={date}>
-                <h2
-                  style={{
-                    margin: '0 0 8px',
-                    color: 'var(--finance-muted)',
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {date}
-                </h2>
-                <ul className="finance-record-list">
-                  {records.map((transaction) => {
-                    const id = String(transaction.id ?? transaction._id ?? '');
-                    const isIncome = transaction.type === 'income' || transaction.type === 'refund';
-                    const isTransfer = transaction.type === 'transfer';
-                    const category = categoryById.get(transaction.categoryId ?? '');
-                    const account = accountById.get(transaction.accountId ?? '');
-                    const date = transaction.occurredAt
-                      ? new Date(transaction.occurredAt).toLocaleDateString('en', {
-                          month: 'short',
+        ready &&
+        dateSections.map(([date, records]) => (
+          <DateSection key={date} title={date}>
+            {records.map((transaction) => {
+              const id = String(transaction.id ?? transaction._id ?? transaction.cloudId ?? '');
+              const category = categoryById.get(transaction.categoryId ?? '');
+              const account = accountById.get(transaction.accountId ?? '');
+              const type = transaction.type as TransactionType;
+              return (
+                <TransactionRow
+                  key={id}
+                  title={transaction.title || transaction.merchant || 'Transaction'}
+                  merchant={transaction.merchant}
+                  category={category?.name}
+                  categoryIcon={category?.icon}
+                  account={account?.name}
+                  date={
+                    transaction.occurredAt
+                      ? new Intl.DateTimeFormat('en-US', {
                           day: 'numeric',
-                          year: 'numeric',
+                          month: 'short',
                           timeZone,
-                        })
-                      : 'Saved offline';
-                    return (
-                      <li key={id} style={{ listStyle: 'none' }}>
-                        <Link
-                          className="finance-record-item"
-                          href={`/transaction/${encodeURIComponent(id)}`}
-                          style={{ color: 'inherit', textDecoration: 'none' }}
-                        >
-                          <div>
-                            <strong>
-                              {transaction.title || transaction.merchant || 'Transaction'}
-                            </strong>
-                            <small>
-                              {date} · {transaction.type ?? 'expense'}
-                              {category?.name ? ` · ${category.name}` : ''}
-                              {account?.name ? ` · ${account.name}` : ''}
-                              {transaction.groupId ? ' · Shared' : ''}
-                            </small>
-                          </div>
-                          <strong className={isIncome ? 'finance-positive' : ''}>
-                            {isTransfer ? '↔ ' : isIncome ? '+' : '−'}
-                            {currencyFormat(
-                              asMinor(transaction.amountMinor),
-                              transaction.currency ?? currency,
-                            )}
-                          </strong>
-                          <span aria-hidden="true">
-                            {isTransfer ? (
-                              <Repeat2 size={17} />
-                            ) : isIncome ? (
-                              <ArrowDownLeft size={17} />
-                            ) : (
-                              <ArrowUpRight size={17} />
-                            )}
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            ))}
-          </div>
-        </Card>
+                        }).format(transaction.occurredAt)
+                      : 'Saved offline'
+                  }
+                  status={transaction.status}
+                  amountMinor={asMinor(transaction.amountMinor)}
+                  currency={transaction.currency ?? currency}
+                  type={type}
+                  semanticType={transaction.groupId ? 'split' : undefined}
+                  onPress={() => router.push(`/transaction/${encodeURIComponent(id)}`)}
+                />
+              );
+            })}
+          </DateSection>
+        ))
       )}
       {rangeError && !isConnected && (
         <p className="finance-data-footnote">
