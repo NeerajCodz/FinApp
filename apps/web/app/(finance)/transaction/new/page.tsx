@@ -455,7 +455,7 @@ export default function NewPersonalTransactionPage() {
                 saving || !amount || !source || (type === 'transfer' ? !destination : !category)
               }
             >
-              {saving ? 'Saving locally…' : 'Save transaction'} <ArrowRight size={15} />
+              {saving ? 'Saving locally…' : `Save ${type}`} <ArrowRight size={15} />
             </Button>
             <p className="finance-form-note">
               This form creates only expenses, income, and transfers. It does not edit or remove

@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowDownLeft, ArrowUpRight, Repeat2 } from 'lucide-react';
-import { Badge, Button, Card, Empty, Input, SectionHeader } from '@finapp/ui/web';
+import { ArrowDownLeft, ArrowUpRight, Repeat2, Search, X } from 'lucide-react';
+import { Button, Card, Empty, Input, SectionHeader } from '@finapp/ui/web';
 import {
   filterActivity,
   type ActivityFilter,
@@ -17,10 +17,6 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
 import { useQuickAdd } from '@/components/finance/FinanceShell';
-import {
-  transactionHistoryRange,
-  type TransactionHistoryWindow,
-} from '@/lib/browser/history-window';
 
 type Transaction = LocalRecord & {
   type?: string;
@@ -60,10 +56,9 @@ export default function ActivityPage() {
   const categoryState = useLocalRecords<NamedRecord>('category');
   const profileState = useLocalRecords<Profile>('profile');
   const [period, setPeriod] = React.useState<AnalyticsPeriod>('month');
-  const [customHistory, setCustomHistory] = React.useState(false);
-  const [historyWindow, setHistoryWindow] = React.useState<TransactionHistoryWindow>('30');
   const [filter, setFilter] = React.useState<ActivityFilter>('All');
   const [query, setQuery] = React.useState('');
+  const [searching, setSearching] = React.useState(false);
   const [rangeLoading, setRangeLoading] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
   const [referenceAt, setReferenceAt] = React.useState<number | null>(null);
@@ -72,11 +67,8 @@ export default function ActivityPage() {
   const timeZone = profile?.timezone ?? 'UTC';
   const currency = profile?.defaultCurrency ?? 'INR';
   const range = React.useMemo(
-    () =>
-      customHistory
-        ? transactionHistoryRange(historyWindow, referenceAt ?? 0)
-        : getAnalyticsRange(period, referenceAt ?? 0, timeZone),
-    [customHistory, historyWindow, period, referenceAt, timeZone],
+    () => getAnalyticsRange(period, referenceAt ?? 0, timeZone),
+    [period, referenceAt, timeZone],
   );
 
   React.useEffect(() => {
@@ -236,28 +228,57 @@ export default function ActivityPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">EVERY MOVE, CLEARLY</p>
-          <h1>Activity</h1>
-          <p className="finance-muted">
-            Search and filter transactions saved in your local ledger.
-          </p>
-        </div>
-        <Badge variant={isConnected ? 'success' : 'neutral'}>
-          {isConnected ? 'Online' : 'Offline'}
-        </Badge>
+        {searching ? (
+          <div
+            style={{
+              display: 'flex',
+              flex: 1,
+              minWidth: 0,
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Input
+              autoFocus
+              aria-label="Search transactions"
+              onChangeText={setQuery}
+              placeholder="Title, merchant, category, amount…"
+              value={query}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Close search"
+              onPress={() => {
+                setQuery('');
+                setSearching(false);
+              }}
+            >
+              <X size={20} aria-hidden="true" />
+            </Button>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              width: '100%',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <h1>Activity</h1>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Search activity"
+              onPress={() => setSearching(true)}
+            >
+              <Search size={21} aria-hidden="true" />
+            </Button>
+          </div>
+        )}
       </header>
-
       <Card className="finance-record-panel" style={{ display: 'grid', gap: 16 }}>
-        <label className="finance-form-field">
-          <span>Search title, merchant, category, account, or amount</span>
-          <Input
-            aria-label="Search activity"
-            onChangeText={setQuery}
-            placeholder="Coffee, groceries, 25.00…"
-            value={query}
-          />
-        </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <span className="finance-muted" style={{ marginRight: 4 }}>
             Period
@@ -265,44 +286,14 @@ export default function ActivityPage() {
           {periods.map((option) => (
             <Button
               key={option.value}
-              variant={!customHistory && period === option.value ? 'secondary' : 'outline'}
+              variant={period === option.value ? 'secondary' : 'outline'}
               size="sm"
-              aria-pressed={!customHistory && period === option.value}
-              onPress={() => {
-                setCustomHistory(false);
-                setPeriod(option.value);
-              }}
+              aria-pressed={period === option.value}
+              onPress={() => setPeriod(option.value)}
             >
               {option.label}
             </Button>
           ))}
-          <Button
-            variant={customHistory ? 'secondary' : 'outline'}
-            size="sm"
-            aria-pressed={customHistory}
-            onPress={() => setCustomHistory(true)}
-          >
-            History
-          </Button>
-          {customHistory && (
-            <label className="finance-form-field" style={{ minWidth: 180 }}>
-              <span>Activity history</span>
-              <select
-                aria-label="Activity history window"
-                value={historyWindow}
-                onChange={(event) =>
-                  setHistoryWindow(event.currentTarget.value as TransactionHistoryWindow)
-                }
-              >
-                <option value="7">Last 7 days</option>
-                <option value="30">Last 30 days</option>
-                <option value="90">Last 90 days</option>
-                <option value="180">Last 180 days</option>
-                <option value="365">Last year</option>
-                <option value="all">All history</option>
-              </select>
-            </label>
-          )}
           <div
             role="group"
             aria-label="Activity type filter"
@@ -337,11 +328,7 @@ export default function ActivityPage() {
 
       {(rangeLoading || rangeError || error) && (
         <p className="finance-muted" role={error || rangeError ? 'alert' : 'status'}>
-          {rangeLoading
-            ? customHistory
-              ? 'Refreshing this history window… '
-              : 'Refreshing this period… '
-            : ''}
+          {rangeLoading ? 'Refreshing this period… ' : ''}
           {rangeError || (error ? 'Some saved records could not be loaded.' : '')}
         </p>
       )}
@@ -356,13 +343,7 @@ export default function ActivityPage() {
         </p>
       ) : rows.length === 0 ? (
         <Empty
-          title={
-            query
-              ? 'No search matches'
-              : customHistory
-                ? 'No activity in this history window'
-                : 'No activity in this period'
-          }
+          title={query ? 'No search matches' : 'No activity in this period'}
           description={
             query
               ? 'Try a different title, merchant, category, account, or amount.'
