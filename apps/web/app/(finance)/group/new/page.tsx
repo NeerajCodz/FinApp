@@ -4,9 +4,10 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from 'convex/react';
-import { ArrowLeft, ArrowRight, ContactRound, Plus, UsersRound, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, X } from 'lucide-react';
 import { api } from '@convex/_generated/api';
-import { Badge, Button, Card, SectionHeader } from '@finapp/ui/web';
+import { Button, Card } from '@finapp/ui/web';
+import { PeopleRail } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -147,198 +148,164 @@ export default function NewGroupPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">SHARED FINANCES</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link className="finance-secondary-action" href="/groups" aria-label="Go back">
+            <ArrowLeft size={18} />
+          </Link>
           <h1>New group</h1>
-          <p className="finance-muted">
-            Name the group, then add people by @username or from selected phone contacts.
-          </p>
         </div>
-        <Link className="finance-secondary-action" href="/groups">
-          <ArrowLeft size={15} /> All groups
-        </Link>
       </header>
-      <div className="finance-accounts-layout">
-        <Card className="finance-form-panel">
-          <SectionHeader title="Name the group." action={<Badge variant="neutral">INR</Badge>} />
-          <p className="finance-form-note">
-            Unknown people receive a pending invite. The group currency stays fixed to INR.
-          </p>
-          <form className="finance-form" onSubmit={createGroup}>
-            <FinanceInput
-              label="Group name"
-              value={name}
-              onChangeText={setName}
-              placeholder="Weekend in Jaipur"
-              maxLength={80}
-              required
-            />
-            <div className="finance-form-field">
-              <span>Currency</span>
+      <section style={{ display: 'grid', gap: 8 }}>
+        <h2>Name the group.</h2>
+        <p className="finance-muted">
+          Add people by @username or from your phone contacts. Unknown people receive a pending
+          invite.
+        </p>
+      </section>
+      <Card className="finance-form-panel">
+        <form className="finance-form" onSubmit={createGroup}>
+          <FinanceInput
+            label="Group name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Goa Trip"
+            maxLength={80}
+            required
+          />
+          <PeopleRail
+            title="From your contacts"
+            phoneVerified={phoneVerified}
+            loading={contactBusy}
+            onChoose={pickerAvailable ? chooseContacts : undefined}
+          />
+          <div className="finance-form-field">
+            <span>Phone number to invite</span>
+            <div className="finance-form-row">
               <input
-                value="INR · Indian rupee"
-                readOnly
-                aria-label="Group currency, fixed to Indian rupees"
+                aria-label="Phone number to invite"
+                type="tel"
+                inputMode="tel"
+                value={phoneInput}
+                onChange={(event) => setPhoneInput(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addPhone();
+                  }
+                }}
+                placeholder="+91 98765 43210"
+                disabled={!phoneVerified}
               />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!phoneVerified || !phoneInput.trim()}
+                onPress={() => addPhone()}
+              >
+                <Plus size={15} /> Add
+              </Button>
             </div>
-            <section className="finance-form-field" aria-labelledby="group-people">
-              <span id="group-people">People · optional</span>
-              <div className="finance-form-row">
-                <input
-                  aria-label="Username to invite"
-                  value={usernameInput}
-                  onChange={(event) => setUsernameInput(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      addUsername();
-                    }
-                  }}
-                  placeholder="@username"
-                  autoComplete="off"
-                />
-                <Button type="button" variant="outline" onPress={() => addUsername()}>
-                  <Plus size={15} /> Add
-                </Button>
-              </div>
-              {query.length >= 2 && (
-                <div className="finance-record-copy" aria-live="polite">
-                  {suggestions?.length ? (
-                    suggestions.slice(0, 5).map((person) => (
-                      <Button
-                        key={person.id}
-                        size="sm"
-                        variant="ghost"
-                        onPress={() => person.username && addUsername(person.username)}
-                      >
-                        {person.displayName ?? 'Finapp user'} · @{person.username}
-                      </Button>
-                    ))
-                  ) : suggestions ? (
-                    <small>No username matches yet.</small>
-                  ) : (
-                    <small>Search results load when you are online.</small>
-                  )}
-                </div>
-              )}
-              {!!usernames.length && (
-                <ul className="finance-record-list">
-                  {usernames.map((handle) => (
-                    <li key={handle}>
-                      <span className="finance-record-copy">
-                        <strong>@{handle}</strong>
-                        <small>Username invite</small>
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={`Remove @${handle}`}
-                        onPress={() =>
-                          setUsernames((current) => current.filter((item) => item !== handle))
-                        }
-                      >
-                        <X size={16} />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            <section className="finance-form-field" aria-labelledby="phone-invites">
-              <span id="phone-invites">From your contacts</span>
+            {!pickerAvailable && (
               <p className="finance-form-note">
-                {phoneVerified
-                  ? 'Your phone is verified. Add a normalized international number or pick specific contacts.'
-                  : 'Phone invites unlock after you add and manually verify a phone number in your profile.'}
-              </p>
-              <div className="finance-form-row">
-                <input
-                  aria-label="Phone number to invite"
-                  type="tel"
-                  inputMode="tel"
-                  value={phoneInput}
-                  onChange={(event) => setPhoneInput(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      addPhone();
-                    }
-                  }}
-                  placeholder="+91 98765 43210"
-                  disabled={!phoneVerified}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!phoneVerified || !phoneInput.trim()}
-                  onPress={() => addPhone()}
-                >
-                  <Plus size={15} /> Add
-                </Button>
-              </div>
-              {pickerAvailable && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!phoneVerified || contactBusy}
-                  onPress={chooseContacts}
-                >
-                  <ContactRound size={16} /> {contactBusy ? 'Opening picker…' : 'Choose contacts'}
-                </Button>
-              )}
-              {!pickerAvailable && (
-                <p className="finance-form-note">
-                  Contact Picker is unavailable in this browser. Use the manual phone field above.
-                </p>
-              )}
-              {!!phones.length && (
-                <ul className="finance-record-list">
-                  {phones.map((phone) => (
-                    <li key={phone}>
-                      <span className="finance-record-copy">
-                        <strong>{phone}</strong>
-                        <small>Selected invite number</small>
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={`Remove ${phone}`}
-                        onPress={() =>
-                          setPhones((current) => current.filter((item) => item !== phone))
-                        }
-                      >
-                        <X size={16} />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            {error && (
-              <p className="finance-form-error" role="alert">
-                {error}
+                Contact Picker is unavailable in this browser. Use the manual phone field above.
               </p>
             )}
-            <Button type="submit" disabled={busy || !name.trim()}>
-              {busy ? 'Saving locally…' : 'Create group'} <ArrowRight size={15} />
-            </Button>
-            <p className="finance-form-note">
-              Only the invitees you add are included. The browser never reads or uploads the full
-              address book.
+            {!!phones.length && (
+              <ul className="finance-record-list">
+                {phones.map((phone) => (
+                  <li key={phone}>
+                    <span className="finance-record-copy">
+                      <strong>{phone}</strong>
+                      <small>Selected invite number</small>
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Remove ${phone}`}
+                      onPress={() =>
+                        setPhones((current) => current.filter((item) => item !== phone))
+                      }
+                    >
+                      <X size={16} />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <section className="finance-form-field" aria-labelledby="group-people">
+            <span id="group-people">People · optional</span>
+            <div className="finance-form-row">
+              <input
+                aria-label="Username to invite"
+                value={usernameInput}
+                onChange={(event) => setUsernameInput(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addUsername();
+                  }
+                }}
+                placeholder="@username"
+                autoComplete="off"
+              />
+              <Button type="button" variant="outline" onPress={() => addUsername()}>
+                <Plus size={15} /> Add
+              </Button>
+            </div>
+            {query.length >= 2 && (
+              <div className="finance-record-copy" aria-live="polite">
+                {suggestions?.length ? (
+                  suggestions.slice(0, 5).map((person) => (
+                    <Button
+                      key={person.id}
+                      size="sm"
+                      variant="ghost"
+                      onPress={() => person.username && addUsername(person.username)}
+                    >
+                      {person.displayName ?? 'Finapp user'} · @{person.username}
+                    </Button>
+                  ))
+                ) : suggestions ? (
+                  <small>No username matches yet.</small>
+                ) : (
+                  <small>Search results load when you are online.</small>
+                )}
+              </div>
+            )}
+            {!!usernames.length && (
+              <ul className="finance-record-list">
+                {usernames.map((handle) => (
+                  <li key={handle}>
+                    <span className="finance-record-copy">
+                      <strong>@{handle}</strong>
+                      <small>Username invite</small>
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Remove @${handle}`}
+                      onPress={() =>
+                        setUsernames((current) => current.filter((item) => item !== handle))
+                      }
+                    >
+                      <X size={16} />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          {error && (
+            <p className="finance-form-error" role="alert">
+              {error}
             </p>
-          </form>
-        </Card>
-        <Card className="finance-record-panel">
-          <SectionHeader title="A shared space" action={<UsersRound size={17} />} />
-          <p className="finance-muted">
-            Create expenses from the group ledger. Each expense records the person who paid and the
-            exact allocation for every participant.
-          </p>
-          <p className="finance-form-note">
-            The group uses INR and cannot be changed to another currency later.
-          </p>
-        </Card>
-      </div>
+          )}
+          <Button type="submit" disabled={busy || !name.trim()}>
+            {busy ? 'Saving locally…' : 'Create group'}
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }
