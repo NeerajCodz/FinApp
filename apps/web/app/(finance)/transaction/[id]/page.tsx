@@ -28,30 +28,47 @@ type Transaction = LocalRecord & {
   accountId?: string;
   categoryId?: string;
   transferAccountId?: string;
+  groupId?: string;
   occurredAt?: number;
   status?: string;
   deletedAt?: number;
   merchant?: string;
 };
 type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
-type Category = LocalRecord & { name?: string; archivedAt?: number };
+type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
+type Profile = LocalRecord & { timezone?: string };
 
 export default function PersonalTransactionDetailPage() {
   const params = useParams<{ id: string }>();
   const { userId } = useBrowserSync();
   const {
     records: transactionRecords,
-    loading,
-    error,
+    loading: transactionLoading,
+    error: transactionError,
   } = useLocalRecords<Transaction>('transaction');
-  const { records: accountRecords } = useLocalRecords<Account>('account');
-  const { records: categoryRecords } = useLocalRecords<Category>('category');
+  const {
+    records: accountRecords,
+    loading: accountLoading,
+    error: accountError,
+  } = useLocalRecords<Account>('account');
+  const {
+    records: categoryRecords,
+    loading: categoryLoading,
+    error: categoryError,
+  } = useLocalRecords<Category>('category');
+  const {
+    records: profiles,
+    loading: profileLoading,
+    error: profileError,
+  } = useLocalRecords<Profile>('profile');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const transaction = transactionRecords.find(
     (item) => userId && belongsToUser(item, userId) && matchesId(item, routeId),
   );
   const accounts = accountRecords.filter((item) => userId && belongsToUser(item, userId));
   const categories = categoryRecords.filter((item) => userId && belongsToUser(item, userId));
+  const profile = profiles[0];
+  const timeZone = typeof profile?.timezone === 'string' ? profile.timezone : 'UTC';
   function findAlias<T extends LocalRecord>(records: T[], id: string | undefined): T | undefined {
     return records.find((record) => typeof id === 'string' && aliasesOf(record).includes(id));
   }
@@ -88,7 +105,7 @@ export default function PersonalTransactionDetailPage() {
         Sign in to review a transaction from this browser’s local finance data.
       </SignInGate>
     );
-  if (loading)
+  if (transactionLoading || accountLoading || categoryLoading || profileLoading)
     return (
       <div className="finance-page">
         <p className="finance-muted" role="status">
@@ -96,22 +113,23 @@ export default function PersonalTransactionDetailPage() {
         </p>
       </div>
     );
-  if (error)
+  if (transactionError || accountError || categoryError || profileError)
     return (
       <div className="finance-page">
         <p className="finance-form-error" role="alert">
-          Transaction data could not be opened: {error}
+          Transaction data could not be opened:{' '}
+          {transactionError ?? accountError ?? categoryError ?? profileError}
         </p>
       </div>
     );
-  if (!transaction)
+  if (!transaction || transaction.deletedAt !== undefined)
     return (
       <div className="finance-page">
         <Empty
           title="Transaction unavailable"
-          description="This record is not in the current user's local transaction data."
+          description="This transaction was removed or is no longer saved on this device."
           action={
-            <Link className="finance-inline-link" href="/transactions">
+            <Link className="finance-inline-link" href="/activity">
               Back to activity
             </Link>
           }
@@ -122,13 +140,13 @@ export default function PersonalTransactionDetailPage() {
   const isIncome = transaction.type === 'income' || transaction.type === 'refund';
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/transactions">
+      <Link className="finance-secondary-action" href="/activity">
         <ArrowLeft size={15} /> Back to activity
       </Link>
       <PageHeading
         eyebrow="TRANSACTION DETAIL"
-        title={transaction.title ?? transaction.type ?? 'Transaction'}
-        description={`${transaction.type ?? 'Activity'} · ${transaction.occurredAt ? new Date(transaction.occurredAt).toLocaleString() : 'Date unavailable'}${transaction.status ? ` · ${transaction.status}` : ''}`}
+        title={transaction.title || 'Transaction'}
+        description={`${transaction.groupId ? 'Split · ' : ''}${transaction.type ?? 'Activity'} · ${transaction.occurredAt ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short', timeZone }).format(transaction.occurredAt) : 'Date unavailable'}${transaction.status ? ` · ${transaction.status.toUpperCase()}` : ''}`}
       />
       <Card className="finance-metric-card finance-balance-card">
         <span className="finance-metric-label">
@@ -139,11 +157,9 @@ export default function PersonalTransactionDetailPage() {
           {formatMinor(asMinor(transaction.amountMinor), currency)}
         </strong>
         <span className="finance-metric-foot">
-          {transaction.deletedAt !== undefined
-            ? 'Deleted record'
-            : transaction.clientUpdatedAt
-              ? 'Stored in this browser; sync status may change'
-              : 'Saved transaction record'}
+          {transaction.clientUpdatedAt
+            ? 'Stored in this browser; sync status may change'
+            : 'Saved transaction record'}
         </span>
       </Card>
       <Card className="finance-record-panel">
@@ -158,11 +174,16 @@ export default function PersonalTransactionDetailPage() {
         >
           <div>
             <dt className="finance-muted">Account</dt>
-            <dd>{account?.name ?? 'Unavailable in local account data'}</dd>
+            <dd>{account?.name ?? 'Unassigned account'}</dd>
           </div>
           <div>
             <dt className="finance-muted">Category</dt>
             <dd>
+              {category?.icon && (
+                <span aria-hidden="true" style={{ marginRight: 8 }}>
+                  {category.icon}
+                </span>
+              )}
               {category?.name ??
                 (transaction.categoryId ? 'Unavailable in local category data' : 'Uncategorized')}
             </dd>
@@ -170,7 +191,7 @@ export default function PersonalTransactionDetailPage() {
           {transaction.type === 'transfer' && (
             <div>
               <dt className="finance-muted">Destination</dt>
-              <dd>{destination?.name ?? 'Unavailable in local account data'}</dd>
+              <dd>{destination?.name ?? 'Unassigned account'}</dd>
             </div>
           )}
           <div>
@@ -183,12 +204,10 @@ export default function PersonalTransactionDetailPage() {
               <dd>{transaction.merchant}</dd>
             </div>
           )}
-          {transaction.note && (
-            <div>
-              <dt className="finance-muted">Note</dt>
-              <dd>{transaction.note}</dd>
-            </div>
-          )}
+          <div>
+            <dt className="finance-muted">Note</dt>
+            <dd>{transaction.note?.trim() || 'None'}</dd>
+          </div>
         </dl>
       </Card>
       {duplicable ? (

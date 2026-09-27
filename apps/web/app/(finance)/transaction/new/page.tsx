@@ -26,9 +26,10 @@ type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: nu
 type Category = LocalRecord & { name?: string; archivedAt?: number };
 type Profile = LocalRecord & {
   defaultCurrency?: string;
-  defaultAccountId?: string;
-  defaultExpenseCategoryId?: string;
-  defaultIncomeCategoryId?: string;
+  defaultAccountId?: string | null;
+  defaultExpenseCategoryId?: string | null;
+  defaultIncomeCategoryId?: string | null;
+  updatedAt?: number;
 };
 const transactionTypes: TransactionType[] = ['expense', 'income', 'transfer'];
 const maxInt64 = 9_223_372_036_854_775_807n;
@@ -54,6 +55,7 @@ export default function NewPersonalTransactionPage() {
   const [amount, setAmount] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [occurredOn, setOccurredOn] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [savingDefault, setSavingDefault] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const appliedQuery = React.useRef(false);
@@ -68,6 +70,19 @@ export default function NewPersonalTransactionPage() {
   const source = accounts.find((item) => matchesId(item, accountId));
   const destination = accounts.find((item) => matchesId(item, destinationId));
   const category = categories.find((item) => matchesId(item, categoryId));
+  const defaultCategoryField =
+    type === 'income' ? 'defaultIncomeCategoryId' : 'defaultExpenseCategoryId';
+  const isDefaultAccount = Boolean(
+    source &&
+    typeof profile?.defaultAccountId === 'string' &&
+    aliasesOf(source).includes(profile.defaultAccountId),
+  );
+  const isDefaultCategory = Boolean(
+    type !== 'transfer' &&
+    category &&
+    typeof profile?.[defaultCategoryField] === 'string' &&
+    aliasesOf(category).includes(profile[defaultCategoryField]!),
+  );
 
   React.useEffect(() => {
     if (appliedQuery.current || typeof window === 'undefined') return;
@@ -118,6 +133,50 @@ export default function NewPersonalTransactionPage() {
     type,
   ]);
 
+  async function toggleDefault(selection: 'account' | 'category') {
+    if (!userId || !profile || savingDefault) return;
+    const selected = selection === 'account' ? source : category;
+    if (!selected || (selection === 'category' && type === 'transfer')) return;
+    const isDefault = selection === 'account' ? isDefaultAccount : isDefaultCategory;
+    const id = isDefault ? null : idOf(selected);
+    const dependency = localDependency(selection, selected);
+    setSavingDefault(true);
+    setError(null);
+    try {
+      if (selection === 'account') {
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultAccount',
+          { ...profile, defaultAccountId: id },
+          { accountId: id },
+          {
+            recordId: idOf(profile),
+            dependencies: id && dependency ? [dependency] : [],
+            baseUpdatedAt: typeof profile.updatedAt === 'number' ? profile.updatedAt : undefined,
+          },
+        );
+      } else {
+        const transactionType = type as 'expense' | 'income';
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultCategory',
+          { ...profile, [defaultCategoryField]: id },
+          { transactionType, categoryId: id },
+          {
+            recordId: idOf(profile),
+            dependencies: id && dependency ? [dependency] : [],
+            baseUpdatedAt: typeof profile.updatedAt === 'number' ? profile.updatedAt : undefined,
+          },
+        );
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update this default.');
+    } finally {
+      setSavingDefault(false);
+    }
+  }
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!userId) {
@@ -138,10 +197,6 @@ export default function NewPersonalTransactionPage() {
       }
       if (destination.currency !== source.currency) {
         setError('Transfers need accounts with the same currency.');
-        return;
-      }
-      if (destination.name === source.name) {
-        setError('Choose a destination account with a different name.');
         return;
       }
     }
@@ -226,7 +281,7 @@ export default function NewPersonalTransactionPage() {
   const dataError = accountError ?? categoryError;
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/transactions">
+      <Link className="finance-secondary-action" href="/activity">
         <ArrowLeft size={15} /> Back to activity
       </Link>
       <PageHeading
@@ -290,6 +345,19 @@ export default function NewPersonalTransactionPage() {
                 ))}
               </select>
             </label>
+            <Button
+              type="button"
+              variant={isDefaultAccount ? 'secondary' : 'outline'}
+              disabled={!source || !profile || savingDefault}
+              aria-pressed={isDefaultAccount}
+              onPress={() => void toggleDefault('account')}
+            >
+              {savingDefault
+                ? 'Saving default…'
+                : isDefaultAccount
+                  ? 'Clear default account'
+                  : 'Set as default account'}
+            </Button>
             {type === 'transfer' ? (
               <label className="finance-form-field">
                 <span>To account</span>
@@ -300,7 +368,12 @@ export default function NewPersonalTransactionPage() {
                 >
                   <option value="">Choose destination</option>
                   {accounts
-                    .filter((item) => idOf(item) !== idOf(source ?? {}))
+                    .filter(
+                      (item) =>
+                        !!source &&
+                        item.currency === source.currency &&
+                        !aliasesOf(item).some((alias) => aliasesOf(source).includes(alias)),
+                    )
                     .map((item) => (
                       <option key={idOf(item)} value={idOf(item)}>
                         {item.name ?? 'Account'} · {item.currency ?? 'INR'}
@@ -331,6 +404,21 @@ export default function NewPersonalTransactionPage() {
                   </small>
                 )}
               </label>
+            )}
+            {type !== 'transfer' && (
+              <Button
+                type="button"
+                variant={isDefaultCategory ? 'secondary' : 'outline'}
+                disabled={!category || !profile || savingDefault}
+                aria-pressed={isDefaultCategory}
+                onPress={() => void toggleDefault('category')}
+              >
+                {savingDefault
+                  ? 'Saving default…'
+                  : isDefaultCategory
+                    ? `Clear default ${type} category`
+                    : `Set default ${type} category`}
+              </Button>
             )}
             <FinanceInput
               label="Description (optional)"
