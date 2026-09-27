@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ChartNoAxesCombined } from 'lucide-react';
+import { ArrowRight, ChartNoAxesCombined, ReceiptText } from 'lucide-react';
 import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import {
   aggregateAnalytics,
@@ -78,7 +78,13 @@ export default function AnalyticsPage() {
     [period, referenceAt, timeZone],
   );
   const queryRange = React.useMemo(
-    () => (range ? { startAt: range.startAt, endAt: Math.min(range.endAt, Date.now() + 1) } : null),
+    () =>
+      range
+        ? {
+            startAt: range.previousStartAt,
+            endAt: range.endAt,
+          }
+        : null,
     [range],
   );
   const rangeKey = queryRange ? `${queryRange.startAt}:${queryRange.endAt}` : '';
@@ -110,24 +116,20 @@ export default function AnalyticsPage() {
   }, [fetchTransactionRange, isConnected, queryRange, rangeKey, userId]);
   const categoryEntities = React.useMemo(
     () =>
-      categories
-        .filter((category) => category.archivedAt === undefined)
-        .map((category) => ({
-          id: String(category.id ?? category._id ?? ''),
-          name: String(category.name ?? 'Category'),
-          aliases: idAliases(category),
-        })),
+      categories.map((category) => ({
+        id: String(category.id ?? category._id ?? ''),
+        name: String(category.name ?? 'Category'),
+        aliases: idAliases(category),
+      })),
     [categories],
   );
   const accountEntities = React.useMemo(
     () =>
-      accounts
-        .filter((account) => account.archivedAt === undefined)
-        .map((account) => ({
-          id: String(account.id ?? account._id ?? ''),
-          name: String(account.name ?? 'Account'),
-          aliases: idAliases(account),
-        })),
+      accounts.map((account) => ({
+        id: String(account.id ?? account._id ?? ''),
+        name: String(account.name ?? 'Account'),
+        aliases: idAliases(account),
+      })),
     [accounts],
   );
   const analyticsTransactions = React.useMemo(
@@ -173,6 +175,113 @@ export default function AnalyticsPage() {
       accountEntities,
     );
   }, [analyticsTransactions, categoryEntities, currency, period, range, timeZone, accountEntities]);
+  const previous = React.useMemo(() => {
+    if (!range) return null;
+    return aggregateAnalytics(
+      analyticsTransactions,
+      categoryEntities,
+      currency,
+      period,
+      range.previousStartAt,
+      range.startAt,
+      timeZone,
+      accountEntities,
+    );
+  }, [analyticsTransactions, categoryEntities, currency, period, range, timeZone, accountEntities]);
+  const flowTotals = React.useMemo(
+    () =>
+      transactions.reduce<{
+        spend: bigint;
+        income: bigint;
+        transfer: bigint;
+        other: bigint;
+      }>(
+        (totals, record) => {
+          const occurredAt = Number(record.occurredAt ?? 0);
+          if (
+            record.status !== 'posted' ||
+            record.deletedAt !== undefined ||
+            record.currency !== currency ||
+            !range ||
+            occurredAt < range.startAt ||
+            occurredAt >= range.endAt
+          )
+            return totals;
+          const amountMinor = amountAsBigInt(record.amountMinor);
+          if (record.type === 'expense') totals.spend += amountMinor;
+          else if (record.type === 'income') totals.income += amountMinor;
+          else if (record.type === 'transfer') totals.transfer += amountMinor;
+          else totals.other += amountMinor;
+          return totals;
+        },
+        { spend: 0n, income: 0n, transfer: 0n, other: 0n },
+      ),
+    [transactions, currency, range],
+  );
+  const flowRows = [
+    { key: 'spend', label: 'Spend', amountMinor: flowTotals.spend, color: '#ff9d8f' },
+    {
+      key: 'income',
+      label: 'Income',
+      amountMinor: flowTotals.income,
+      color: 'var(--finance-lime)',
+    },
+    { key: 'transfer', label: 'Transfer', amountMinor: flowTotals.transfer, color: '#9eb4ff' },
+    { key: 'other', label: 'Other', amountMinor: flowTotals.other, color: '#a8ad9e' },
+  ];
+  const comparison = previous
+    ? previous.spentMinor === 0n
+      ? result?.spentMinor === 0n
+        ? 'No spending in either period'
+        : 'No spending in the previous period'
+      : result?.spentMinor === previous.spentMinor
+        ? 'No change from previous period'
+        : `${result && result.spentMinor > previous.spentMinor ? 'Up' : 'Down'} ${Number(
+            ((result
+              ? result.spentMinor >= previous.spentMinor
+                ? result.spentMinor - previous.spentMinor
+                : previous.spentMinor - result.spentMinor
+              : 0n) *
+              100n) /
+              previous.spentMinor,
+          )}% vs previous period`
+    : '';
+  const spendingShare = (amountMinor: bigint) =>
+    result && result.spentMinor > 0n ? Number((amountMinor * 1000n) / result.spentMinor) / 10 : 0;
+  const largestExpenses = React.useMemo(
+    () =>
+      range
+        ? transactions
+            .filter((record) => {
+              const occurredAt = Number(record.occurredAt ?? 0);
+              return (
+                record.type === 'expense' &&
+                record.status === 'posted' &&
+                record.deletedAt === undefined &&
+                record.currency === currency &&
+                occurredAt >= range.startAt &&
+                occurredAt < range.endAt
+              );
+            })
+            .sort((left, right) => {
+              const leftAmount = amountAsBigInt(left.amountMinor);
+              const rightAmount = amountAsBigInt(right.amountMinor);
+              return leftAmount > rightAmount ? -1 : leftAmount < rightAmount ? 1 : 0;
+            })
+            .slice(0, 5)
+        : [],
+    [transactions, range, currency],
+  );
+  const breakdownHref = (dimension: 'category' | 'account' | 'merchant', key: string) => {
+    if (!range) return '/analytics';
+    const params = new URLSearchParams({
+      key,
+      period,
+      startAt: String(range.startAt),
+      endAt: String(range.endAt),
+    });
+    return `/analytics/breakdown/${dimension}?${params.toString()}`;
+  };
   const allError = transactionsError ?? categoriesError ?? accountsError ?? profileError;
   const loading =
     referenceAt === null ||
@@ -235,7 +344,7 @@ export default function AnalyticsPage() {
             aria-pressed={period === option}
             onPress={() => setPeriod(option)}
           >
-            {option === 'week' ? 'This week' : option === 'month' ? 'This month' : 'This year'}
+            {option === 'week' ? 'Week' : option === 'month' ? 'Month' : 'Year'}
           </Button>
         ))}
       </div>
@@ -266,29 +375,68 @@ export default function AnalyticsPage() {
       ) : (
         result && (
           <>
-            <div className="finance-dashboard-grid">
-              <Card className="finance-metric-card finance-balance-card">
-                <span className="finance-metric-label">MONEY IN · {currency}</span>
-                <strong>{formatMinor(result.incomeMinor, currency)}</strong>
-                <span className="finance-metric-foot">Posted income this {period}</span>
-              </Card>
-              <Card className="finance-metric-card">
-                <span className="finance-metric-label">MONEY OUT · {currency}</span>
-                <strong>{formatMinor(result.spentMinor, currency)}</strong>
-                <span className="finance-metric-foot">Posted expenses this {period}</span>
-              </Card>
-            </div>
+            <section style={{ display: 'grid', gap: 12 }}>
+              <SectionHeader
+                title="Money in motion"
+                action={
+                  <span>
+                    {period} · {currency}
+                  </span>
+                }
+              />
+              <div className="finance-metric-grid">
+                <Card className="finance-metric-card">
+                  <span className="finance-metric-label">SPENT</span>
+                  <strong style={{ color: '#ff9d8f' }}>
+                    {formatMinor(result.spentMinor, currency)}
+                  </strong>
+                  <span className="finance-metric-foot">Posted expenses this {period}</span>
+                </Card>
+                <Card className="finance-metric-card">
+                  <span className="finance-metric-label">INCOME</span>
+                  <strong style={{ color: 'var(--finance-lime)' }}>
+                    {formatMinor(result.incomeMinor, currency)}
+                  </strong>
+                  <span className="finance-metric-foot">Posted income this {period}</span>
+                </Card>
+                <Card className="finance-metric-card">
+                  <span className="finance-metric-label">NET</span>
+                  <strong
+                    style={{
+                      color:
+                        result.incomeMinor >= result.spentMinor ? 'var(--finance-lime)' : '#ff9d8f',
+                    }}
+                  >
+                    {formatMinor(result.incomeMinor - result.spentMinor, currency)}
+                  </strong>
+                  <span className="finance-metric-foot">Income minus spending</span>
+                </Card>
+              </div>
+              <p className="finance-muted">{comparison}</p>
+            </section>
+            {rangeTransactions.length === 0 && (
+              <Empty
+                title="No activity in this period"
+                description="Record a transaction to start seeing trends."
+                icon={<ReceiptText size={20} />}
+                action={
+                  <Link className="finance-inline-link" href="/transaction/new">
+                    Add transaction
+                  </Link>
+                }
+              />
+            )}
             <Card className="finance-chart-panel">
               <SectionHeader
-                title="Cash flow by period"
+                title="Cash flow"
                 action={<span>{rangeTransactions.length} posted entries</span>}
               />
               {result.buckets.every(
                 (bucket) => bucket.amountMinor === 0n && bucket.incomeMinor === 0n,
               ) ? (
                 <Empty
-                  title="No posted activity in this period"
-                  description="Once expenses or income are saved locally, the timeline will appear here."
+                  title="No cash flow to chart"
+                  description="Cash flow bars will appear when expenses or income are posted."
                   icon={<ChartNoAxesCombined size={20} />}
                 />
               ) : (
@@ -382,6 +530,52 @@ export default function AnalyticsPage() {
                 </span>
               </p>
             </Card>
+            <Card className="finance-record-panel">
+              <SectionHeader title="By transaction type" />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+                {flowRows.map((item) => (
+                  <span
+                    key={item.key}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}
+                  >
+                    <i
+                      aria-hidden="true"
+                      style={{
+                        display: 'inline-block',
+                        height: 8,
+                        borderRadius: '50%',
+                        background: item.color,
+                      }}
+                    />
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+              {flowRows.some((item) => item.amountMinor > 0n) ? (
+                <ul className="finance-record-list">
+                  {flowRows
+                    .filter((item) => item.amountMinor > 0n)
+                    .map((item) => (
+                      <li className="finance-record-item" key={item.key}>
+                        <div>
+                          <strong>{item.label}</strong>
+                        </div>
+                        <strong style={{ color: item.color }}>
+                          {formatMinor(item.amountMinor, currency)}
+                        </strong>
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <Empty
+                  title="No activity by type"
+                  description="Posted activity by type will appear here."
+                />
+              )}
+              <p className="finance-form-note">
+                Transfers are tracked separately from spending and income.
+              </p>
+            </Card>
             <div className="finance-dashboard-grid">
               <Card className="finance-accounts-panel">
                 <SectionHeader
@@ -397,11 +591,27 @@ export default function AnalyticsPage() {
                   <ul className="finance-record-list" aria-label="Spending totals by category">
                     {result.categoryBreakdown.slice(0, 8).map((item) => (
                       <li className="finance-record-item" key={item.id}>
-                        <div>
-                          <strong>{item.label}</strong>
-                          <small>Expense total</small>
-                        </div>
-                        <strong>{formatMinor(item.amountMinor, currency)}</strong>
+                        <Link
+                          href={breakdownHref('category', item.id)}
+                          style={{
+                            display: 'flex',
+                            minWidth: 0,
+                            flex: 1,
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 14,
+                            color: 'inherit',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          <div>
+                            <strong>{item.label}</strong>
+                            <small>{spendingShare(item.amountMinor)}% of spending</small>
+                          </div>
+                          <strong>
+                            {formatMinor(item.amountMinor, currency)} <ArrowRight size={14} />
+                          </strong>
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -421,17 +631,131 @@ export default function AnalyticsPage() {
                   <ul className="finance-record-list" aria-label="Spending totals by account">
                     {result.accountBreakdown.slice(0, 8).map((item) => (
                       <li className="finance-record-item" key={item.id}>
-                        <div>
-                          <strong>{item.label}</strong>
-                          <small>Expense total</small>
-                        </div>
-                        <strong>{formatMinor(item.amountMinor, currency)}</strong>
+                        <Link
+                          href={breakdownHref('account', item.id)}
+                          style={{
+                            display: 'flex',
+                            minWidth: 0,
+                            flex: 1,
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 14,
+                            color: 'inherit',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          <div>
+                            <strong>{item.label}</strong>
+                            <small>{spendingShare(item.amountMinor)}% of spending</small>
+                          </div>
+                          <strong>
+                            {formatMinor(item.amountMinor, currency)} <ArrowRight size={14} />
+                          </strong>
+                        </Link>
                       </li>
                     ))}
                   </ul>
                 )}
               </Card>
             </div>
+            <Card className="finance-accounts-panel">
+              <SectionHeader
+                title="By merchant"
+                action={<span>{result.merchantBreakdown.length} merchants</span>}
+              />
+              {result.merchantBreakdown.length === 0 ? (
+                <Empty
+                  title="No merchant breakdown yet"
+                  description="Merchant totals appear with posted expense activity."
+                />
+              ) : (
+                <ul className="finance-record-list" aria-label="Spending totals by merchant">
+                  {result.merchantBreakdown.slice(0, 8).map((item) => (
+                    <li className="finance-record-item" key={item.id}>
+                      <Link
+                        href={breakdownHref('merchant', item.id)}
+                        style={{
+                          display: 'flex',
+                          minWidth: 0,
+                          flex: 1,
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 14,
+                          color: 'inherit',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <div>
+                          <strong>{item.label}</strong>
+                          <small>{spendingShare(item.amountMinor)}% of spending</small>
+                        </div>
+                        <strong>
+                          {formatMinor(item.amountMinor, currency)} <ArrowRight size={14} />
+                        </strong>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+            <Card className="finance-record-panel">
+              <SectionHeader title="Compared with last period" />
+              <strong>{comparison}</strong>
+              <p className="finance-muted">
+                Previously spent {formatMinor(previous?.spentMinor ?? 0n, currency)}
+              </p>
+            </Card>
+            <Card className="finance-record-panel">
+              <SectionHeader title="Largest expenses" />
+              {largestExpenses.length === 0 ? (
+                <Empty
+                  title="No expenses yet"
+                  description="Your largest posted expenses in this period will appear here."
+                />
+              ) : (
+                <ul className="finance-record-list">
+                  {largestExpenses.map((record) => {
+                    const id = idAliases(record)[0];
+                    const content = (
+                      <>
+                        <span className="finance-record-copy">
+                          <strong>{record.title || record.merchant || 'Expense'}</strong>
+                          <small>
+                            {record.occurredAt
+                              ? new Date(record.occurredAt).toLocaleDateString()
+                              : 'Date unavailable'}
+                          </small>
+                        </span>
+                        <strong>{formatMinor(amountAsBigInt(record.amountMinor), currency)}</strong>
+                      </>
+                    );
+                    return (
+                      <li className="finance-record-item" key={id ?? record.occurredAt}>
+                        {id ? (
+                          <Link
+                            href={`/transaction/${encodeURIComponent(id)}`}
+                            style={{
+                              display: 'flex',
+                              minWidth: 0,
+                              flex: 1,
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 14,
+                              color: 'inherit',
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {content}
+                          </Link>
+                        ) : (
+                          content
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
           </>
         )
       )}

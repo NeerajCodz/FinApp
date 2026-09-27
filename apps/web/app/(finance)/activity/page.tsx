@@ -16,6 +16,11 @@ import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
+import { useQuickAdd } from '@/components/finance/FinanceShell';
+import {
+  transactionHistoryRange,
+  type TransactionHistoryWindow,
+} from '@/lib/browser/history-window';
 
 type Transaction = LocalRecord & {
   type?: string;
@@ -48,12 +53,15 @@ function asMinor(value: unknown): bigint {
 }
 
 export default function ActivityPage() {
+  const openQuickAdd = useQuickAdd();
   const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
   const transactionState = useLocalRecords<Transaction>('transaction');
   const accountState = useLocalRecords<NamedRecord>('account');
   const categoryState = useLocalRecords<NamedRecord>('category');
   const profileState = useLocalRecords<Profile>('profile');
   const [period, setPeriod] = React.useState<AnalyticsPeriod>('month');
+  const [customHistory, setCustomHistory] = React.useState(false);
+  const [historyWindow, setHistoryWindow] = React.useState<TransactionHistoryWindow>('30');
   const [filter, setFilter] = React.useState<ActivityFilter>('All');
   const [query, setQuery] = React.useState('');
   const [rangeLoading, setRangeLoading] = React.useState(false);
@@ -64,8 +72,11 @@ export default function ActivityPage() {
   const timeZone = profile?.timezone ?? 'UTC';
   const currency = profile?.defaultCurrency ?? 'INR';
   const range = React.useMemo(
-    () => getAnalyticsRange(period, referenceAt ?? 0, timeZone),
-    [period, referenceAt, timeZone],
+    () =>
+      customHistory
+        ? transactionHistoryRange(historyWindow, referenceAt ?? 0)
+        : getAnalyticsRange(period, referenceAt ?? 0, timeZone),
+    [customHistory, historyWindow, period, referenceAt, timeZone],
   );
 
   React.useEffect(() => {
@@ -234,14 +245,44 @@ export default function ActivityPage() {
           {periods.map((option) => (
             <Button
               key={option.value}
-              variant={period === option.value ? 'secondary' : 'outline'}
+              variant={!customHistory && period === option.value ? 'secondary' : 'outline'}
               size="sm"
-              aria-pressed={period === option.value}
-              onPress={() => setPeriod(option.value)}
+              aria-pressed={!customHistory && period === option.value}
+              onPress={() => {
+                setCustomHistory(false);
+                setPeriod(option.value);
+              }}
             >
               {option.label}
             </Button>
           ))}
+          <Button
+            variant={customHistory ? 'secondary' : 'outline'}
+            size="sm"
+            aria-pressed={customHistory}
+            onPress={() => setCustomHistory(true)}
+          >
+            History
+          </Button>
+          {customHistory && (
+            <label className="finance-form-field" style={{ minWidth: 180 }}>
+              <span>Activity history</span>
+              <select
+                aria-label="Activity history window"
+                value={historyWindow}
+                onChange={(event) =>
+                  setHistoryWindow(event.currentTarget.value as TransactionHistoryWindow)
+                }
+              >
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="180">Last 180 days</option>
+                <option value="365">Last year</option>
+                <option value="all">All history</option>
+              </select>
+            </label>
+          )}
           <label className="finance-form-field" style={{ marginLeft: 'auto', minWidth: 180 }}>
             <span>Activity type</span>
             <select
@@ -270,7 +311,11 @@ export default function ActivityPage() {
 
       {(rangeLoading || rangeError || error) && (
         <p className="finance-muted" role={error || rangeError ? 'alert' : 'status'}>
-          {rangeLoading ? 'Refreshing this period… ' : ''}
+          {rangeLoading
+            ? customHistory
+              ? 'Refreshing this history window… '
+              : 'Refreshing this period… '
+            : ''}
           {rangeError || (error ? 'Some saved records could not be loaded.' : '')}
         </p>
       )}
@@ -285,16 +330,27 @@ export default function ActivityPage() {
         </p>
       ) : rows.length === 0 ? (
         <Empty
-          title={query ? 'No search matches' : 'No activity in this period'}
+          title={
+            query
+              ? 'No search matches'
+              : customHistory
+                ? 'No activity in this history window'
+                : 'No activity in this period'
+          }
           description={
             query
               ? 'Try a different title, merchant, category, account, or amount.'
               : 'Transactions you add or sync will appear here.'
           }
           action={
-            <Link className="finance-inline-link" href="/add">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="finance-inline-link"
+              onPress={openQuickAdd}
+            >
               Add to your ledger
-            </Link>
+            </Button>
           }
         />
       ) : (

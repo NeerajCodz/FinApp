@@ -244,6 +244,10 @@ export default function AnalyticsBreakdownPage() {
         : dimension === 'merchant'
           ? 'Merchant breakdown'
           : 'Breakdown';
+  const sharePercent =
+    result?.spentMinor && result.spentMinor > 0n
+      ? Number((result.item!.amountMinor * 1000n) / result.spentMinor) / 10
+      : 0;
 
   if (!userId)
     return (
@@ -306,9 +310,16 @@ export default function AnalyticsBreakdownPage() {
       </p>
       <div className="finance-dashboard-grid">
         <Card className="finance-metric-card finance-balance-card">
-          <span className="finance-metric-label">TOTAL SPENDING · {currency}</span>
+          <span className="finance-metric-label">
+            {dimension.toUpperCase()} SPENDING · {currency}
+          </span>
           <strong>{formatMinor(result.item.amountMinor, currency)}</strong>
-          <span className="finance-metric-foot">{result.rows.length} matching cached expenses</span>
+          <span className="finance-metric-foot">
+            {sharePercent}% of spending · {query.period} · {result.rows.length} matching expenses
+          </span>
+          <div className="finance-plan-track" aria-label={`${sharePercent}% of spending`}>
+            <span style={{ width: `${sharePercent}%` }} />
+          </div>
         </Card>
         <Card className="finance-metric-card">
           <span className="finance-metric-label">ALL SPENDING · {currency}</span>
@@ -328,30 +339,41 @@ export default function AnalyticsBreakdownPage() {
           />
         ) : (
           <ul className="finance-record-list">
-            {result.rows.map((record) => (
-              <li key={idOf(record)}>
-                <span className="finance-record-symbol">
-                  <ChartNoAxesCombined size={17} />
-                </span>
-                <span className="finance-record-copy">
-                  <strong>
-                    <Link href={`/transaction/${encodeURIComponent(idOf(record))}`}>
-                      {record.title ?? record.merchant ?? 'Expense'}
-                    </Link>
-                  </strong>
-                  <small>
-                    {record.occurredAt
-                      ? new Date(record.occurredAt).toLocaleDateString()
-                      : 'Date unavailable'}{' '}
-                    · {record.type}
-                  </small>
-                </span>
-                <strong>
-                  {formatMinor(asMinor(record.amountMinor), record.currency ?? currency)}{' '}
-                  <ArrowRight size={14} aria-hidden="true" />
-                </strong>
-              </li>
-            ))}
+            {result.rows.map((record) => {
+              const id = idOf(record);
+              return (
+                <li key={id}>
+                  <Link
+                    href={`/transaction/${encodeURIComponent(id)}`}
+                    style={{
+                      display: 'flex',
+                      minWidth: 0,
+                      alignItems: 'center',
+                      gap: 12,
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span className="finance-record-symbol">
+                      <ChartNoAxesCombined size={17} />
+                    </span>
+                    <span className="finance-record-copy" style={{ flex: 1 }}>
+                      <strong>{record.title ?? record.merchant ?? 'Expense'}</strong>
+                      <small>
+                        {record.occurredAt
+                          ? new Date(record.occurredAt).toLocaleDateString()
+                          : 'Date unavailable'}{' '}
+                        · {record.type}
+                      </small>
+                    </span>
+                    <strong>
+                      {formatMinor(asMinor(record.amountMinor), record.currency ?? currency)}{' '}
+                      <ArrowRight size={14} aria-hidden="true" />
+                    </strong>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
