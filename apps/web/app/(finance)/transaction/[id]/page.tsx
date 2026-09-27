@@ -3,9 +3,16 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Copy, ReceiptText } from 'lucide-react';
-import { Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { formatMinor } from '@convex/shared/money';
+import { ArrowLeft, ArrowRight, ReceiptText } from 'lucide-react';
+import { Empty } from '@finapp/ui/web';
+import {
+  CategoryIcon,
+  Money,
+  SemanticMarker,
+  SettingsRow,
+  type SemanticType,
+  type TransactionType,
+} from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
@@ -15,7 +22,6 @@ import {
   belongsToUser,
   matchesId,
   minorToInput,
-  PageHeading,
   SignInGate,
 } from '../../_personal';
 
@@ -105,17 +111,44 @@ export default function PersonalTransactionDetailPage() {
         Sign in to review a transaction from this browser’s local finance data.
       </SignInGate>
     );
+  if (!routeId)
+    return (
+      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
+            <ArrowLeft size={21} />
+          </Link>
+          <h1 style={{ margin: 0 }}>Transaction</h1>
+        </div>
+        <Empty
+          title="Missing transaction ID"
+          description="Open a transaction from Activity to view its details."
+        />
+      </div>
+    );
   if (transactionLoading || accountLoading || categoryLoading || profileLoading)
     return (
-      <div className="finance-page">
+      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
+            <ArrowLeft size={21} />
+          </Link>
+          <h1 style={{ margin: 0 }}>Transaction</h1>
+        </div>
         <p className="finance-muted" role="status">
-          Opening transaction…
+          Loading transaction…
         </p>
       </div>
     );
   if (transactionError || accountError || categoryError || profileError)
     return (
-      <div className="finance-page">
+      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
+            <ArrowLeft size={21} />
+          </Link>
+          <h1 style={{ margin: 0 }}>Transaction</h1>
+        </div>
         <p className="finance-form-error" role="alert">
           Transaction data could not be opened:{' '}
           {transactionError ?? accountError ?? categoryError ?? profileError}
@@ -124,7 +157,13 @@ export default function PersonalTransactionDetailPage() {
     );
   if (!transaction || transaction.deletedAt !== undefined)
     return (
-      <div className="finance-page">
+      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
+            <ArrowLeft size={21} />
+          </Link>
+          <h1 style={{ margin: 0 }}>Transaction</h1>
+        </div>
         <Empty
           title="Transaction unavailable"
           description="This transaction was removed or is no longer saved on this device."
@@ -137,101 +176,110 @@ export default function PersonalTransactionDetailPage() {
       </div>
     );
   const currency = transaction.currency ?? 'INR';
-  const isIncome = transaction.type === 'income' || transaction.type === 'refund';
+  const semanticType: SemanticType = transaction.groupId
+    ? 'split'
+    : transaction.type === 'income' ||
+        transaction.type === 'expense' ||
+        transaction.type === 'transfer' ||
+        transaction.type === 'refund' ||
+        transaction.type === 'settlement'
+      ? transaction.type
+      : 'expense';
+  const amountType: TransactionType =
+    transaction.type === 'income' ||
+    transaction.type === 'expense' ||
+    transaction.type === 'transfer' ||
+    transaction.type === 'refund' ||
+    transaction.type === 'adjustment'
+      ? transaction.type
+      : 'expense';
   return (
-    <div className="finance-page">
-      <Link className="finance-secondary-action" href="/activity">
-        <ArrowLeft size={15} /> Back to activity
-      </Link>
-      <PageHeading
-        eyebrow="TRANSACTION DETAIL"
-        title={transaction.title || 'Transaction'}
-        description={`${transaction.groupId ? 'Split · ' : ''}${transaction.type ?? 'Activity'} · ${transaction.occurredAt ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short', timeZone }).format(transaction.occurredAt) : 'Date unavailable'}${transaction.status ? ` · ${transaction.status.toUpperCase()}` : ''}`}
-      />
-      <Card className="finance-metric-card finance-balance-card">
-        <span className="finance-metric-label">
-          {currency} · {transaction.type ?? 'TRANSACTION'}
-        </span>
-        <strong>
-          {isIncome ? '+' : transaction.type === 'transfer' ? '↔ ' : '−'}
-          {formatMinor(asMinor(transaction.amountMinor), currency)}
-        </strong>
-        <span className="finance-metric-foot">
-          {transaction.clientUpdatedAt
-            ? 'Stored in this browser; sync status may change'
-            : 'Saved transaction record'}
-        </span>
-      </Card>
-      <Card className="finance-record-panel">
-        <SectionHeader title="Transaction details" action={<ReceiptText size={17} />} />
-        <dl
+    <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
+          <ArrowLeft size={21} />
+        </Link>
+        <h1 style={{ margin: 0 }}>Transaction</h1>
+      </div>
+      <div style={{ display: 'grid', justifyItems: 'center', gap: 12, paddingBlock: 24 }}>
+        <CategoryIcon
+          label={category?.name ?? transaction.type ?? 'Transaction'}
+          icon={category?.icon}
+        />
+        <Money
+          amountMinor={asMinor(transaction.amountMinor)}
+          currency={currency}
+          type={amountType}
+          size="display"
+        />
+        <h2 style={{ margin: 0, textAlign: 'center' }}>
+          {transaction.title || 'Transaction'}
+        </h2>
+        <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: 14,
-            margin: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            gap: 10,
           }}
         >
-          <div>
-            <dt className="finance-muted">Account</dt>
-            <dd>{account?.name ?? 'Unassigned account'}</dd>
-          </div>
-          <div>
-            <dt className="finance-muted">Category</dt>
-            <dd>
-              {category?.icon && (
-                <span aria-hidden="true" style={{ marginRight: 8 }}>
-                  {category.icon}
-                </span>
-              )}
-              {category?.name ??
-                (transaction.categoryId ? 'Unavailable in local category data' : 'Uncategorized')}
-            </dd>
-          </div>
-          {transaction.type === 'transfer' && (
-            <div>
-              <dt className="finance-muted">Destination</dt>
-              <dd>{destination?.name ?? 'Unassigned account'}</dd>
-            </div>
+          <SemanticMarker type={semanticType} />
+          {transaction.status && (
+            <span className="finance-muted">{transaction.status.toUpperCase()}</span>
           )}
-          <div>
-            <dt className="finance-muted">Currency</dt>
-            <dd>{currency}</dd>
-          </div>
-          {transaction.merchant && (
-            <div>
-              <dt className="finance-muted">Merchant</dt>
-              <dd>{transaction.merchant}</dd>
-            </div>
-          )}
-          <div>
-            <dt className="finance-muted">Note</dt>
-            <dd>{transaction.note?.trim() || 'None'}</dd>
-          </div>
-        </dl>
-      </Card>
-      {duplicable ? (
-        <Card className="finance-form-panel">
-          <SectionHeader title="Create a copy" action={<Copy size={17} />} />
-          <p className="finance-muted">
-            A duplicate opens a new transaction form with the original values. It will not change
-            this saved record.
-          </p>
-          <Link className="finance-primary-link" href={duplicateHref}>
-            Duplicate transaction <Copy size={15} />
-          </Link>
-        </Card>
-      ) : (
-        <Card className="finance-record-panel">
-          <p className="finance-muted">
-            This transaction cannot be duplicated because its type or linked account/category is
-            unavailable or archived.
-          </p>
-        </Card>
+        </div>
+      </div>
+      <div>
+        {transaction.merchant && (
+          <>
+            <SettingsRow label="Merchant" value={transaction.merchant} />
+            <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+          </>
+        )}
+        <SettingsRow
+          label="Category"
+          leadingIcon={
+            <CategoryIcon label={category?.name ?? 'Uncategorized'} icon={category?.icon} />
+          }
+          value={category?.name ?? 'Uncategorized'}
+        />
+        <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+        <SettingsRow label="Account" value={account?.name ?? 'Unassigned account'} />
+        {transaction.type === 'transfer' && (
+          <>
+            <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+            <SettingsRow label="Destination" value={destination?.name ?? 'Unassigned account'} />
+          </>
+        )}
+        <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+        <SettingsRow
+          label="Date"
+          value={
+            transaction.occurredAt
+              ? new Intl.DateTimeFormat('en-US', {
+                  dateStyle: 'long',
+                  timeStyle: 'short',
+                  timeZone,
+                }).format(transaction.occurredAt)
+              : 'Date unavailable'
+          }
+        />
+        <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+        <SettingsRow label="Note" value={transaction.note?.trim() || 'None'} />
+      </div>
+      {duplicable && (
+        <Link
+          className="finance-secondary-action"
+          href={duplicateHref}
+          style={{ justifyContent: 'space-between', minHeight: 56 }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ReceiptText size={19} /> Duplicate transaction
+          </span>
+          <ArrowRight size={18} />
+        </Link>
       )}
-      <p className="finance-form-note">
-        Transaction details are read-only. There are no edit or delete actions.
-      </p>
     </div>
   );
 }

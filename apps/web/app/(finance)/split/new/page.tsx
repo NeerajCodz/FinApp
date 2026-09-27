@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { allocateParticipants } from '@convex/splits/domain';
 import { formatMinor, parseMinor } from '@convex/shared/money';
-import { ArrowLeft, ArrowRight, UsersRound } from 'lucide-react';
-import { Badge, Button, Card, SectionHeader, Select } from '@finapp/ui/web';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Button, Card, Checkbox, RadioGroup, SectionHeader, Tabs } from '@finapp/ui/web';
+import { CurrencyInput, SemanticMarker } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -124,10 +125,9 @@ function NewSplitForm() {
   let shares: Array<{ userId: string; amountMinor: bigint }> = [];
   let validation = '';
   if (!userId) validation = 'Sign in before recording a split.';
-  else if (!group) validation = 'Choose a saved group.';
-  else if (!currency) validation = 'The group currency is unavailable.';
-  else if (!selectedAccount)
-    validation = 'Add or choose an active personal account in the group currency.';
+  else if (!group) validation = 'Choose a saved group to record this split.';
+  else if (!currency) validation = 'This group has no currency.';
+  else if (!selectedAccount) validation = 'Choose an account in the group currency.';
   else if (!title.trim()) validation = 'Enter what this expense was for.';
   else if (!amount.trim()) validation = 'Enter the total amount.';
   else if (!participantIds.length || participantIds.length !== selectedIds.length)
@@ -141,9 +141,9 @@ function NewSplitForm() {
           ? undefined
           : participantIds.map((memberId) => {
               const value = (basis[memberId] ?? '').trim();
-              if (!value) throw new Error('Enter a split value for every selected member.');
+              if (!value) throw new Error('Enter a value for every selected member.');
               if (method === 'shares') {
-                if (!/^\d+$/.test(value)) throw new Error('Shares must be positive whole numbers.');
+                if (!/^\d+$/.test(value)) throw new Error('Shares must be whole numbers.');
                 return BigInt(value);
               }
               const parsed = parseMinor(value, method === 'percentage' ? 'USD' : currency);
@@ -157,12 +157,12 @@ function NewSplitForm() {
         !['INVALID_SPLIT', 'INVALID_AMOUNT', 'INVALID_CURRENCY'].includes(cause.message)
           ? cause.message
           : method === 'exact'
-            ? 'Exact allocations must add up to the total.'
+            ? 'Exact amounts must add up to the total.'
             : method === 'percentage'
               ? 'Percentages must add up to 100%.'
               : method === 'shares'
                 ? 'Enter at least one positive whole share.'
-                : 'Enter a valid amount.';
+                : 'Enter a valid amount in the group currency.';
     }
   }
 
@@ -279,60 +279,46 @@ function NewSplitForm() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <div>
-          <Link
-            className="finance-secondary-action"
-            href={groupId ? `/group/${encodeURIComponent(groupId)}` : '/groups'}
-          >
-            <ArrowLeft size={15} /> Back
-          </Link>
-          <p className="finance-kicker">GROUP EXPENSE</p>
-          <h1>Split expense</h1>
-          <p className="finance-muted">
-            The current user pays. Choose how the amount is shared among group members.
-          </p>
-        </div>
-        <Badge variant="neutral">Saved locally first</Badge>
+        <Link
+          className="finance-secondary-action"
+          href={groupId ? `/group/${encodeURIComponent(groupId)}` : '/groups'}
+          aria-label="Go back"
+        >
+          <ArrowLeft size={18} />
+        </Link>
+        <h1 style={{ flex: 1, margin: 0 }}>Split expense</h1>
+        <SemanticMarker type="split" />
       </header>
-      <div className="finance-accounts-layout">
+      <div
+        className="finance-accounts-layout"
+        style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}
+      >
         <Card className="finance-form-panel">
-          <SectionHeader title="Expense details" action={<UsersRound size={17} />} />
           <form className="finance-form" onSubmit={saveExpense}>
-            <Select
-              label="Group"
-              options={activeGroups.map(
-                (item) => `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
-              )}
-              value={group ? `${group.name ?? 'Group'} · ${group.currency ?? 'INR'}` : ''}
-              onChange={(value) => {
-                const selected = activeGroups.find(
-                  (item) => `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}` === value,
-                );
-                if (selected) chooseGroup(idOf(selected));
-              }}
-            />
-            {!activeGroups.length && <p className="finance-form-note">No saved groups yet.</p>}
+          <RadioGroup
+            label="Group"
+            options={activeGroups.map((item) => ({
+              value: idOf(item),
+              label: `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
+            }))}
+            value={group ? idOf(group) : ''}
+            onChange={chooseGroup}
+          />
+            {!activeGroups.length && (
+              <p className="finance-form-note">No saved groups yet.</p>
+            )}
             <Link className="finance-secondary-action" href="/group/new">
-              Create a group <ArrowRight size={15} />
+              Create a group
             </Link>
             {group && (
               <>
-                <FinanceInput
-                  label={`Total amount · ${currency}`}
-                  type="number"
-                  inputMode="decimal"
-                  min="0.01"
-                  step="0.01"
-                  value={amount}
-                  onChangeText={setAmount}
-                  required
-                />
+                <CurrencyInput currency={currency} value={amount} onChangeText={setAmount} />
                 <FinanceInput
                   label="What was it for?"
                   value={title}
                   onChangeText={setTitle}
                   maxLength={120}
-                  placeholder="Dinner after the match"
+                  placeholder="Dinner, travel, supplies"
                   required
                 />
                 <div className="finance-form-field">
@@ -344,41 +330,31 @@ function NewSplitForm() {
                     Recorded from your account. Another payer is not supported here.
                   </p>
                 </div>
-                <Select
+                <RadioGroup
                   label={`Account in ${currency}`}
-                  options={accountOptions.map((item) => String(item.name ?? 'Account'))}
-                  value={selectedAccount?.name ?? ''}
-                  onChange={(value) => {
-                    const selected = accountOptions.find((item) => item.name === value);
-                    if (selected) setAccountId(idOf(selected));
-                  }}
+                  options={accountOptions.map((item) => ({
+                    value: idOf(item),
+                    label: String(item.name ?? 'Account'),
+                  }))}
+                  value={selectedAccount ? idOf(selectedAccount) : ''}
+                  onChange={setAccountId}
                 />
                 {!accountOptions.length && (
                   <p className="finance-form-note">
                     No account uses {currency}. Add one before saving a split.
                   </p>
                 )}
-                <Select
+                <Tabs
                   label="Split method"
-                  options={['Equal', 'Exact', '%', 'Shares']}
-                  value={
-                    {
-                      equal: 'Equal',
-                      exact: 'Exact',
-                      percentage: '%',
-                      shares: 'Shares',
-                    }[method]
-                  }
+                  tabs={[
+                    { label: 'Equal', value: 'equal' },
+                    { label: 'Exact', value: 'exact' },
+                    { label: '%', value: 'percentage' },
+                    { label: 'Shares', value: 'shares' },
+                  ]}
+                  value={method}
                   onChange={(value) => {
-                    const next: SplitMethod =
-                      value === 'Exact'
-                        ? 'exact'
-                        : value === '%'
-                          ? 'percentage'
-                          : value === 'Shares'
-                            ? 'shares'
-                            : 'equal';
-                    setMethod(next);
+                    setMethod(value as SplitMethod);
                     setBasis({});
                   }}
                 />
@@ -389,22 +365,22 @@ function NewSplitForm() {
                       const share = shares.find((item) => item.userId === member.userId);
                       return (
                         <li key={member.userId}>
-                          <label className="finance-checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.includes(member.userId)}
-                              onChange={(event) => {
-                                const checked = event.currentTarget.checked;
-                                setSelectedIds((current) =>
-                                  checked
-                                    ? [...current, member.userId]
-                                    : current.filter((id) => id !== member.userId),
-                                );
-                              }}
-                            />
-                            <span>{member.name}</span>
-                            {share && <small>{formatMinor(share.amountMinor, currency)}</small>}
-                          </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <Checkbox
+                            checked={selectedIds.includes(member.userId)}
+                            onChange={(checked) =>
+                              setSelectedIds((current) =>
+                                checked
+                                  ? current.includes(member.userId)
+                                    ? current
+                                    : [...current, member.userId]
+                                  : current.filter((id) => id !== member.userId),
+                              )
+                            }
+                            label={member.name}
+                          />
+                          {share && <small>{formatMinor(share.amountMinor, currency)}</small>}
+                        </div>
                         </li>
                       );
                     })}
@@ -468,24 +444,9 @@ function NewSplitForm() {
               </p>
             )}
             <Button type="submit" disabled={saving || Boolean(validation)}>
-              {saving ? 'Saving…' : 'Save split'} <ArrowRight size={15} />
+              {saving ? 'Saving…' : 'Save split'}
             </Button>
-            <p className="finance-form-note">
-              This is a group expense, not a personal transaction. Its payer and allocations sync
-              together through the group expense outbox.
-            </p>
           </form>
-        </Card>
-        <Card className="finance-record-panel">
-          <SectionHeader title="How it works" />
-          <p className="finance-muted">
-            The expense is recorded once, with your account as payer. Participant shares must add up
-            to the total before it can be saved.
-          </p>
-          <p className="finance-form-note">
-            Exact amounts, percentages, and shares are validated with the same allocation rules as
-            the mobile app.
-          </p>
         </Card>
       </div>
     </div>
