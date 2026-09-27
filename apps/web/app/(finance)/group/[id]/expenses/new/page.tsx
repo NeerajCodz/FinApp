@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Split } from 'lucide-react';
 import { Button } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -10,10 +10,14 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 export default function NewGroupExpensePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParams = new URLSearchParams(searchParams.toString());
+  redirectParams.set('groupId', id);
+  const targetHref = `/split/new?${redirectParams.toString()}`;
   const { userId } = useBrowserSync();
   React.useEffect(() => {
-    if (userId) router.replace(`/split/new?groupId=${encodeURIComponent(id)}`);
-  }, [id, router, userId]);
+    if (userId) router.replace(targetHref);
+  }, [router, targetHref, userId]);
   if (!userId)
     return (
       <section className="finance-welcome">
@@ -35,10 +39,7 @@ export default function NewGroupExpensePage() {
       <p className="finance-muted" role="status">
         <Split size={16} /> Opening the split form…
       </p>
-      <Button
-        variant="outline"
-        onPress={() => router.replace(`/split/new?groupId=${encodeURIComponent(id)}`)}
-      >
+      <Button variant="outline" onPress={() => router.replace(targetHref)}>
         Continue to split <ArrowRight size={15} />
       </Button>
     </div>

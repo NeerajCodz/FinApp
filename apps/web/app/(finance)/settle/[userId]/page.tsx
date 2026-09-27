@@ -2,18 +2,22 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 export default function MemberSettlementPage() {
   const params = useParams<{ userId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const memberId = params.userId;
+  const redirectParams = new URLSearchParams(searchParams.toString());
+  redirectParams.set('member', memberId);
+  const targetHref = `/settle/new?${redirectParams.toString()}`;
   const { userId: currentUserId } = useBrowserSync();
   React.useEffect(() => {
-    if (currentUserId) router.replace(`/settle/new?member=${encodeURIComponent(memberId)}`);
-  }, [currentUserId, memberId, router]);
+    if (currentUserId) router.replace(targetHref);
+  }, [currentUserId, router, targetHref]);
   if (!currentUserId)
     return (
       <section className="finance-welcome">
@@ -33,10 +37,7 @@ export default function MemberSettlementPage() {
       <p className="finance-muted" role="status">
         <ArrowLeftRight size={16} /> Opening the repayment form for this member…
       </p>
-      <Link
-        className="finance-secondary-action"
-        href={`/settle/new?member=${encodeURIComponent(memberId)}`}
-      >
+      <Link className="finance-secondary-action" href={targetHref}>
         Continue <ArrowRight size={15} />
       </Link>
     </div>

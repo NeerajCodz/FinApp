@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { allocateParticipants } from '@convex/splits/domain';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { ArrowLeft, ArrowRight, UsersRound } from 'lucide-react';
@@ -35,13 +35,31 @@ const aliases = (record: LocalRecord) =>
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function NewSplitPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="finance-page">
+          <p className="finance-muted" role="status">
+            Opening split form…
+          </p>
+        </div>
+      }
+    >
+      <NewSplitForm />
+    </React.Suspense>
+  );
+}
+
+function NewSplitForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedGroupId = searchParams.get('groupId') ?? '';
   const { userId } = useBrowserSync();
   const { records: groups } = useLocalRecords<Group>('group');
   const { records: memberships } = useLocalRecords<Member>('groupMember');
   const { records: accounts } = useLocalRecords<Account>('account');
   const { records: profiles } = useLocalRecords<LocalRecord>('profile');
-  const [groupId, setGroupId] = React.useState('');
+  const [groupId, setGroupId] = React.useState(requestedGroupId);
   const [accountId, setAccountId] = React.useState('');
   const [title, setTitle] = React.useState('');
   const [amount, setAmount] = React.useState('');
@@ -52,10 +70,12 @@ export default function NewSplitPage() {
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     if (!userId) return;
-    const requested = new URLSearchParams(window.location.search).get('groupId');
-    if (requested) setGroupId(requested);
-    setSelectedIds((current) => (current.length ? current : [userId]));
-  }, [userId]);
+    setGroupId(requestedGroupId);
+    setSelectedIds([userId]);
+    setAccountId('');
+    setBasis({});
+    setError('');
+  }, [requestedGroupId, userId]);
 
   const activeGroups = groups.filter((item) => item.archivedAt === undefined);
   React.useEffect(() => {
@@ -68,7 +88,7 @@ export default function NewSplitPage() {
   if (userId)
     groupMembers.push({
       userId,
-      name: String(profiles[0]?.displayName ?? profiles[0]?.name ?? 'You'),
+      name: String(profiles[0]?.displayName ?? profiles[0]?.name ?? 'Signed-in member'),
     });
   const seenMembers = new Set(groupMembers.map((member) => member.userId));
   for (const member of memberships) {
@@ -95,7 +115,8 @@ export default function NewSplitPage() {
       item.archivedAt === undefined && item.ownerId === userId && item.currency === currency,
   );
   const selectedAccount =
-    accountOptions.find((item) => aliases(item).includes(accountId)) ?? accountOptions[0];
+    accountOptions.find((item) => aliases(item).includes(accountId)) ??
+    (accountOptions.length === 1 ? accountOptions[0] : undefined);
   const participantIds = groupMembers
     .filter((member) => selectedIds.includes(member.userId))
     .map((member) => member.userId);
@@ -105,8 +126,6 @@ export default function NewSplitPage() {
   if (!userId) validation = 'Sign in before recording a split.';
   else if (!group) validation = 'Choose a saved group.';
   else if (!currency) validation = 'The group currency is unavailable.';
-  else if (currency !== 'INR')
-    validation = 'Groups use Indian rupees. This group cannot accept expenses in another currency.';
   else if (!selectedAccount)
     validation = 'Add or choose an active personal account in the group currency.';
   else if (!title.trim()) validation = 'Enter what this expense was for.';
@@ -249,7 +268,7 @@ export default function NewSplitPage() {
             <ArrowLeft size={15} /> Back
           </Link>
           <p className="finance-kicker">GROUP EXPENSE</p>
-          <h1>Split an expense</h1>
+          <h1>Split expense</h1>
           <p className="finance-muted">
             The current user pays. Choose how the amount is shared among group members.
           </p>
@@ -261,7 +280,7 @@ export default function NewSplitPage() {
           <SectionHeader title="Expense details" action={<UsersRound size={17} />} />
           <form className="finance-form" onSubmit={saveExpense}>
             <Select
-              label="Group · currency stays INR"
+              label="Group"
               options={activeGroups.map(
                 (item) => `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
               )}
@@ -273,122 +292,154 @@ export default function NewSplitPage() {
                 if (selected) chooseGroup(idOf(selected));
               }}
             />
+            {!activeGroups.length && <p className="finance-form-note">No saved groups yet.</p>}
+            <Link className="finance-secondary-action" href="/group/new">
+              Create a group <ArrowRight size={15} />
+            </Link>
             {group && (
-              <Select
-                label="Paid from your account"
-                options={accountOptions.map((item) => String(item.name ?? 'Account'))}
-                value={selectedAccount?.name ?? ''}
-                onChange={(value) => {
-                  const selected = accountOptions.find((item) => item.name === value);
-                  if (selected) setAccountId(idOf(selected));
-                }}
-              />
-            )}
-            <FinanceInput
-              label="What was this for?"
-              value={title}
-              onChangeText={setTitle}
-              maxLength={120}
-              placeholder="Dinner after the match"
-              required
-            />
-            <FinanceInput
-              label={`Total amount · ${currency || 'group currency'}`}
-              type="number"
-              inputMode="decimal"
-              min="0.01"
-              step="0.01"
-              value={amount}
-              onChangeText={setAmount}
-              required
-            />
-            <Select
-              label="Split method"
-              options={['Equal', 'Exact amounts', 'Percentages', 'Shares']}
-              value={
-                {
-                  equal: 'Equal',
-                  exact: 'Exact amounts',
-                  percentage: 'Percentages',
-                  shares: 'Shares',
-                }[method]
-              }
-              onChange={(value) => {
-                const next: SplitMethod =
-                  value === 'Exact amounts'
-                    ? 'exact'
-                    : value === 'Percentages'
-                      ? 'percentage'
-                      : value === 'Shares'
-                        ? 'shares'
-                        : 'equal';
-                setMethod(next);
-                setBasis({});
-              }}
-            />
-            <section className="finance-form-field">
-              <span>Participants</span>
-              {groupMembers.length ? (
-                <ul className="finance-record-list">
-                  {groupMembers.map((member) => (
-                    <li key={member.userId}>
-                      <label className="finance-checkbox-row">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(member.userId)}
-                          onChange={(event) =>
-                            setSelectedIds((current) =>
-                              event.currentTarget.checked
-                                ? [...current, member.userId]
-                                : current.filter((id) => id !== member.userId),
-                            )
-                          }
-                        />
-                        <span>
-                          {member.userId === userId ? `${member.name} (payer)` : member.name}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="finance-form-note">
-                  No group members are cached. Reconnect and open the group before splitting.
-                </p>
-              )}
-            </section>
-            {method !== 'equal' &&
-              participantIds.map((memberId) => {
-                const member = groupMembers.find((item) => item.userId === memberId);
-                return (
-                  <FinanceInput
-                    key={memberId}
-                    label={`${member?.name ?? 'Member'} · ${method === 'shares' ? 'shares' : method === 'percentage' ? 'percent' : currency}`}
-                    type="number"
-                    min="0"
-                    step={method === 'shares' ? '1' : '0.01'}
-                    value={basis[memberId] ?? ''}
-                    onChangeText={(value) =>
-                      setBasis((current) => ({ ...current, [memberId]: value }))
-                    }
-                    required
-                  />
-                );
-              })}
-            {shares.length > 0 && (
-              <Card variant="subtle">
-                <SectionHeader title="Allocation preview" />
-                {shares.map((share) => (
-                  <p key={share.userId} className="finance-form-note">
-                    {groupMembers.find((member) => member.userId === share.userId)?.name ??
-                      'Member'}{' '}
-                    · {formatMinor(share.amountMinor, currency)}
+              <>
+                <FinanceInput
+                  label={`Total amount · ${currency}`}
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  step="0.01"
+                  value={amount}
+                  onChangeText={setAmount}
+                  required
+                />
+                <FinanceInput
+                  label="What was it for?"
+                  value={title}
+                  onChangeText={setTitle}
+                  maxLength={120}
+                  placeholder="Dinner after the match"
+                  required
+                />
+                <div className="finance-form-field">
+                  <span>Paid by</span>
+                  <strong>
+                    {String(profiles[0]?.displayName ?? profiles[0]?.name ?? 'Signed-in member')}
+                  </strong>
+                  <p className="finance-form-note">
+                    Recorded from your account. Another payer is not supported here.
                   </p>
-                ))}
-              </Card>
+                </div>
+                <Select
+                  label={`Account in ${currency}`}
+                  options={accountOptions.map((item) => String(item.name ?? 'Account'))}
+                  value={selectedAccount?.name ?? ''}
+                  onChange={(value) => {
+                    const selected = accountOptions.find((item) => item.name === value);
+                    if (selected) setAccountId(idOf(selected));
+                  }}
+                />
+                {!accountOptions.length && (
+                  <p className="finance-form-note">
+                    No account uses {currency}. Add one before saving a split.
+                  </p>
+                )}
+                <Select
+                  label="Split method"
+                  options={['Equal', 'Exact', '%', 'Shares']}
+                  value={
+                    {
+                      equal: 'Equal',
+                      exact: 'Exact',
+                      percentage: '%',
+                      shares: 'Shares',
+                    }[method]
+                  }
+                  onChange={(value) => {
+                    const next: SplitMethod =
+                      value === 'Exact'
+                        ? 'exact'
+                        : value === '%'
+                          ? 'percentage'
+                          : value === 'Shares'
+                            ? 'shares'
+                            : 'equal';
+                    setMethod(next);
+                    setBasis({});
+                  }}
+                />
+                <section className="finance-form-field">
+                  <span>Group members sharing this expense</span>
+                  <ul className="finance-record-list">
+                    {groupMembers.map((member) => {
+                      const share = shares.find((item) => item.userId === member.userId);
+                      return (
+                        <li key={member.userId}>
+                          <label className="finance-checkbox-row">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(member.userId)}
+                              onChange={(event) => {
+                                const checked = event.currentTarget.checked;
+                                setSelectedIds((current) =>
+                                  checked
+                                    ? [...current, member.userId]
+                                    : current.filter((id) => id !== member.userId),
+                                );
+                              }}
+                            />
+                            <span>{member.name}</span>
+                            {share && <small>{formatMinor(share.amountMinor, currency)}</small>}
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {groupMembers.length === 1 && (
+                    <p className="finance-form-note">
+                      Other group members will be available once their memberships are saved on this
+                      device.
+                    </p>
+                  )}
+                </section>
+                {method !== 'equal' &&
+                  participantIds.map((memberId) => {
+                    const member = groupMembers.find((item) => item.userId === memberId);
+                    return (
+                      <FinanceInput
+                        key={memberId}
+                        label={
+                          method === 'exact'
+                            ? `Amount for ${member?.name ?? 'Member'}`
+                            : method === 'percentage'
+                              ? `Percentage for ${member?.name ?? 'Member'}`
+                              : `Shares for ${member?.name ?? 'Member'}`
+                        }
+                        type="number"
+                        min="0"
+                        step={method === 'shares' ? '1' : '0.01'}
+                        placeholder={
+                          method === 'percentage'
+                            ? '0–100%'
+                            : method === 'shares'
+                              ? 'Whole shares'
+                              : currency
+                        }
+                        value={basis[memberId] ?? ''}
+                        onChangeText={(value) =>
+                          setBasis((current) => ({ ...current, [memberId]: value }))
+                        }
+                        required
+                      />
+                    );
+                  })}
+                <SectionHeader
+                  title="Total"
+                  action={
+                    <strong className="finance-record-amount">
+                      {totalMinor !== null ? formatMinor(totalMinor, currency) : currency}
+                    </strong>
+                  }
+                />
+              </>
             )}
             {validation && (
-              <p className="finance-form-error" role="status">
+              <p className="finance-form-error" role="alert">
                 {validation}
               </p>
             )}
@@ -398,7 +449,7 @@ export default function NewSplitPage() {
               </p>
             )}
             <Button type="submit" disabled={saving || Boolean(validation)}>
-              {saving ? 'Saving split…' : 'Save shared expense'} <ArrowRight size={15} />
+              {saving ? 'Saving…' : 'Save split'} <ArrowRight size={15} />
             </Button>
             <p className="finance-form-note">
               This is a group expense, not a personal transaction. Its payer and allocations sync

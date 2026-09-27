@@ -151,7 +151,7 @@ export default function NewGroupPage() {
           <p className="finance-kicker">SHARED FINANCES</p>
           <h1>New group</h1>
           <p className="finance-muted">
-            Groups stay in Indian rupees. Invites are sent only for the people you choose.
+            Name the group, then add people by @username or from selected phone contacts.
           </p>
         </div>
         <Link className="finance-secondary-action" href="/groups">
@@ -160,7 +160,10 @@ export default function NewGroupPage() {
       </header>
       <div className="finance-accounts-layout">
         <Card className="finance-form-panel">
-          <SectionHeader title="Group details" action={<Badge variant="neutral">INR</Badge>} />
+          <SectionHeader title="Name the group." action={<Badge variant="neutral">INR</Badge>} />
+          <p className="finance-form-note">
+            Unknown people receive a pending invite. The group currency stays fixed to INR.
+          </p>
           <form className="finance-form" onSubmit={createGroup}>
             <FinanceInput
               label="Group name"
@@ -178,8 +181,8 @@ export default function NewGroupPage() {
                 aria-label="Group currency, fixed to Indian rupees"
               />
             </div>
-            <section className="finance-form-field" aria-labelledby="username-invites">
-              <span id="username-invites">Invite by username</span>
+            <section className="finance-form-field" aria-labelledby="group-people">
+              <span id="group-people">People · optional</span>
               <div className="finance-form-row">
                 <input
                   aria-label="Username to invite"
@@ -242,7 +245,7 @@ export default function NewGroupPage() {
               )}
             </section>
             <section className="finance-form-field" aria-labelledby="phone-invites">
-              <span id="phone-invites">Invite by phone</span>
+              <span id="phone-invites">From your contacts</span>
               <p className="finance-form-note">
                 {phoneVerified
                   ? 'Your phone is verified. Add a normalized international number or pick specific contacts.'

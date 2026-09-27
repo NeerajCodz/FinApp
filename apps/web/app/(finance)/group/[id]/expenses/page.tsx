@@ -122,7 +122,9 @@ export default function GroupExpensesPage() {
         groupIds.includes(item.groupId) &&
         item.type === 'expense' &&
         item.deletedAt === undefined &&
-        item.currency === (group.currency ?? 'INR'),
+        item.currency === (group.currency ?? 'INR') &&
+        Number(item.occurredAt ?? 0) >= startAt &&
+        Number(item.occurredAt ?? 0) < endAt,
     )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
   return (
@@ -130,7 +132,7 @@ export default function GroupExpensesPage() {
       <header className="finance-page-heading">
         <div>
           <Link className="finance-secondary-action" href={`/group/${encodeURIComponent(groupId)}`}>
-            ‹ {group.name ?? 'Group'}
+            <ArrowLeft size={15} /> {group.name ?? 'Group'}
           </Link>
           <p className="finance-kicker">SHARED LEDGER</p>
           <h1>Expenses</h1>
@@ -143,7 +145,7 @@ export default function GroupExpensesPage() {
           className="finance-primary-link"
           href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
         >
-          Add expense <Plus size={15} />
+          <Plus size={15} /> Add expense
         </Link>
       </header>
       {rangeStatus === 'loading' && (
@@ -177,10 +179,17 @@ export default function GroupExpensesPage() {
                     <ReceiptText size={17} />
                   </span>
                   <span className="finance-record-copy">
-                    <strong>{expense.title ?? 'Group expense'}</strong>
+                    <strong>
+                      <Link
+                        href={`/transaction/${encodeURIComponent(idOf(expense))}`}
+                        style={{ color: 'inherit', textDecoration: 'none' }}
+                      >
+                        {expense.title ?? 'Group expense'}
+                      </Link>
+                    </strong>
                     <small>
-                      {new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()} ·{' '}
-                      {expense.status === 'pending' ? 'Pending sync' : 'Expense'}
+                      {new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()} ·
+                      Group expense
                     </small>
                   </span>
                   <strong className="finance-record-amount">
@@ -192,7 +201,7 @@ export default function GroupExpensesPage() {
           ) : (
             <Empty
               title="No group expenses"
-              description="Add the first expense and choose how it is shared."
+              description="Add the first expense and choose who shared it."
               action={
                 <Link
                   className="finance-secondary-action"

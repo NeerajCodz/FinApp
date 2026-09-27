@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { calculateNetBalances } from '@convex/splits/domain';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { ArrowLeft, ArrowRight, ArrowLeftRight } from 'lucide-react';
@@ -58,7 +58,26 @@ const aliases = (record: LocalRecord) =>
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function NewSettlementPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="finance-page">
+          <p className="finance-muted" role="status">
+            Opening settlement form…
+          </p>
+        </div>
+      }
+    >
+      <NewSettlementForm />
+    </React.Suspense>
+  );
+}
+
+function NewSettlementForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedGroupId = searchParams.get('groupId') ?? '';
+  const requestedMemberId = searchParams.get('member') ?? '';
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
   const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
   const { records: accounts, loading: accountsLoading } = useLocalRecords<Account>('account');
@@ -80,10 +99,11 @@ export default function NewSettlementPage() {
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     if (!userId) return;
-    const params = new URLSearchParams(window.location.search);
-    setGroupId(params.get('groupId') ?? '');
-    setMemberId(params.get('member') ?? '');
-  }, [userId]);
+    setGroupId(requestedGroupId);
+    setMemberId(requestedMemberId);
+    setAccountId('');
+    setAmount('');
+  }, [requestedGroupId, requestedMemberId, userId]);
   const activeGroups = groups.filter((item) => item.archivedAt === undefined);
   React.useEffect(() => {
     if (!groupId && activeGroups.length === 1) setGroupId(idOf(activeGroups[0]!));
@@ -279,25 +299,23 @@ export default function NewSettlementPage() {
     ? groupsLoading
       ? 'Loading saved groups…'
       : 'Choose a saved group.'
-    : currency !== 'INR'
-      ? 'Groups use Indian rupees. This group cannot accept a repayment in another currency.'
-      : rangeStatus === 'error'
-        ? 'Retry the all-time range before recording a settlement.'
-        : rangeStatus === 'loading'
-          ? 'Loading all-time balances…'
-          : rangeStatus === 'uncached'
-            ? 'The all-time range is uncached. Reconnect before recording a repayment.'
-            : ledgerError
-              ? 'Complete group allocations are required to confirm the debt.'
-              : !availableMembers.length
-                ? 'There is no outstanding bilateral balance to settle.'
-                : !chosenMember
-                  ? 'Choose the member involved in this repayment.'
-                  : accountsLoading
-                    ? 'Loading accounts…'
-                    : !chosenAccount
-                      ? `Choose an active account in ${currency}.`
-                      : undefined;
+    : rangeStatus === 'error'
+      ? 'Retry the all-time range before recording a settlement.'
+      : rangeStatus === 'loading'
+        ? 'Loading all-time balances…'
+        : rangeStatus === 'uncached'
+          ? 'The all-time range is uncached. Reconnect before recording a settlement.'
+          : ledgerError
+            ? 'Complete group allocations are required to confirm the debt.'
+            : !availableMembers.length
+              ? 'There is no outstanding bilateral balance to settle.'
+              : !chosenMember
+                ? 'Choose the member involved in this repayment.'
+                : accountsLoading
+                  ? 'Loading accounts…'
+                  : !chosenAccount
+                    ? `Choose an active account in ${currency}.`
+                    : undefined;
 
   async function saveSettlement(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -359,7 +377,7 @@ export default function NewSettlementPage() {
       );
       router.replace(`/group/${encodeURIComponent(currentGroupId)}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save this repayment.');
+      setError(cause instanceof Error ? cause.message : 'Could not save settlement.');
     } finally {
       setSaving(false);
     }
@@ -386,7 +404,7 @@ export default function NewSettlementPage() {
           >
             <ArrowLeft size={15} /> Back
           </Link>
-          <p className="finance-kicker">GROUP REPAYMENT</p>
+          <p className="finance-kicker">SETTLEMENT</p>
           <h1>Settle up</h1>
           <p className="finance-muted">
             Record an amount already paid. This does not move money from the linked account.
@@ -429,7 +447,7 @@ export default function NewSettlementPage() {
       )}
       <div className="finance-accounts-layout">
         <Card className="finance-form-panel">
-          <SectionHeader title="Repayment details" action={<ArrowLeftRight size={17} />} />
+          <SectionHeader title="Record a settlement" action={<ArrowLeftRight size={17} />} />
           <form className="finance-form" onSubmit={saveSettlement}>
             <Select
               label="Group"
@@ -451,7 +469,7 @@ export default function NewSettlementPage() {
             />
             {availableMembers.length > 0 && (
               <Select
-                label={direction === 'pay' ? 'You paid' : 'They paid you'}
+                label={direction === 'pay' ? 'You paid' : 'Paid you'}
                 options={availableMembers.map((member) => member.name)}
                 value={chosenMember?.name ?? ''}
                 onChange={(value) => {
@@ -475,7 +493,7 @@ export default function NewSettlementPage() {
               />
             )}
             <FinanceInput
-              label={`Amount · maximum ${formatMinor(maximum, currency || 'INR')}`}
+              label="Amount"
               type="number"
               inputMode="decimal"
               min="0.01"
@@ -486,13 +504,18 @@ export default function NewSettlementPage() {
               required
             />
             {chosenMember && (
-              <p className="finance-form-note">
-                {direction === 'pay'
-                  ? `You owe ${chosenMember.name}`
-                  : `${chosenMember.name} owes you`}
-                . Maximum allowed is the smaller of both current net balances:{' '}
-                {formatMinor(maximum, currency)}.
-              </p>
+              <>
+                <p className="finance-form-note">
+                  {direction === 'pay'
+                    ? `You owe ${chosenMember.name}`
+                    : `${chosenMember.name} owes you`}
+                  . Maximum allowed is the smaller of both current net balances:{' '}
+                  {formatMinor(maximum, currency)}.
+                </p>
+                <p className="finance-form-note">
+                  This records a payment already made; it does not send money.
+                </p>
+              </>
             )}
             {unavailable && (
               <p className="finance-form-note" role="status">
@@ -520,7 +543,7 @@ export default function NewSettlementPage() {
                 !chosenAccount,
               )}
             >
-              {saving ? 'Saving repayment…' : 'Record repayment'} <ArrowRight size={15} />
+              {saving ? 'Saving…' : 'Record settlement'} <ArrowRight size={15} />
             </Button>
             <p className="finance-form-note">
               Saved as a settlement only. No transaction or account balance change is created.

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, UsersRound } from 'lucide-react';
+import { ArrowRight, Plus, UsersRound } from 'lucide-react';
 import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -37,7 +37,7 @@ export default function GroupsPage() {
       </section>
     );
 
-  const groups = records.filter((group) => group.archivedAt === undefined);
+  const groups = records;
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
@@ -45,11 +45,11 @@ export default function GroupsPage() {
           <p className="finance-kicker">SHARED FINANCES</p>
           <h1>Groups</h1>
           <p className="finance-muted">
-            Shared expenses and balances stay available from this browser.
+            Shared ledgers · {groups.length} {groups.length === 1 ? 'group' : 'groups'}
           </p>
         </div>
         <Link className="finance-primary-link" href="/group/new">
-          Create group <ArrowRight size={16} />
+          <Plus size={16} /> Create group
         </Link>
       </header>
       {error && (
@@ -60,7 +60,7 @@ export default function GroupsPage() {
       <Card className="finance-record-panel">
         <SectionHeader
           title="Your groups"
-          action={<Badge variant="neutral">{groups.length} active</Badge>}
+          action={<Badge variant="neutral">{groups.length} total</Badge>}
         />
         {loading ? (
           <p className="finance-muted" role="status">
@@ -68,12 +68,12 @@ export default function GroupsPage() {
           </p>
         ) : groups.length === 0 ? (
           <Empty
-            title="No shared groups yet"
-            description="Create a group to share expenses and keep a clear record of who paid."
+            title="No groups yet"
+            description="Create one for a trip, home, or any expense shared with people."
             icon={<UsersRound size={20} />}
             action={
               <Link className="finance-secondary-action" href="/group/new">
-                Create your first group <ArrowRight size={15} />
+                Create group <ArrowRight size={15} />
               </Link>
             }
           />
@@ -95,8 +95,8 @@ export default function GroupsPage() {
                   <span className="finance-record-copy">
                     <strong>{group.name ?? 'Shared group'}</strong>
                     <small>
-                      {memberCount} {memberCount === 1 ? 'member' : 'members'} ·{' '}
-                      {group.currency ?? 'INR'}
+                      {group.currency ?? 'INR'} · shared ledger · {memberCount}{' '}
+                      {memberCount === 1 ? 'member' : 'members'}
                       {group.ownerId === userId ? ' · owner' : ''}
                     </small>
                   </span>
@@ -112,7 +112,7 @@ export default function GroupsPage() {
           </ul>
         )}
         <Link className="finance-secondary-action" href="/settle/new">
-          Record a repayment <ArrowRight size={15} />
+          Settle up <ArrowRight size={15} />
         </Link>
       </Card>
     </div>
