@@ -3,12 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button, Card } from '@finapp/ui/web';
+import { ArrowLeft } from 'lucide-react';
+import { Button, Card, Empty, RadioGroup, Tabs } from '@finapp/ui/web';
 import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { CurrencyInput } from '@finapp/ui/finance';
 import { FinanceInput } from '@/components/finance/FinanceInput';
 import {
   belongsToUser,
@@ -66,7 +67,7 @@ export default function NewPersonalBudgetPage() {
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   const account = accounts.find((item) => idOf(item) === accountId);
   const category = categories.find((item) => idOf(item) === categoryId);
-  const currency = period === 'account' ? account?.currency : profile?.defaultCurrency;
+  const currency = period === 'account' ? (account?.currency ?? profile?.defaultCurrency) : profile?.defaultCurrency;
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -156,14 +157,11 @@ export default function NewPersonalBudgetPage() {
   const dataError = profileError ?? accountError ?? categoryError;
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/budget">
-        <ArrowLeft size={15} /> Back to budgets
+      <Link className="finance-secondary-action" href="/budget" aria-label="Go back">
+        <ArrowLeft size={18} />
       </Link>
-      <PageHeading
-        eyebrow="NEW BUDGET"
-        title="New budget"
-        description="Track real expenses against a limit you choose. Choose a period and optional category or account scope."
-      />
+      <PageHeading eyebrow="NEW BUDGET" title="New budget" description="Give spending a boundary." />
+      <p className="finance-muted">Track real expenses against a limit you choose.</p>
       <Card className="finance-form-panel">
         {loading ? (
           <p className="finance-muted" role="status">
@@ -176,112 +174,99 @@ export default function NewPersonalBudgetPage() {
         ) : (
           <form className="finance-form" onSubmit={create}>
             <FinanceInput
-              label="Budget name"
+              label="Name"
               value={name}
               onChangeText={setName}
-              placeholder="Everyday spending"
+              placeholder="Monthly spending"
               maxLength={80}
               required
             />
-            <label className="finance-form-field">
-              <span>Scope</span>
-              <select
-                value={period}
-                onChange={(event) => setPeriod(event.currentTarget.value as Period)}
-              >
-                <option value="monthly">Monthly</option>
-                <option value="category">Category</option>
-                <option value="account">Account</option>
-                <option value="custom">Custom date range</option>
-              </select>
-            </label>
-            {period === 'category' && (
-              <label className="finance-form-field">
-                <span>Category</span>
-                <select
-                  value={categoryId}
-                  onChange={(event) => setCategoryId(event.currentTarget.value)}
-                  required
-                >
-                  <option value="">Choose a category</option>
-                  {categories.map((item) => (
-                    <option key={idOf(item)} value={idOf(item)}>
-                      {item.name ?? 'Category'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {period === 'account' && (
-              <label className="finance-form-field">
-                <span>Account</span>
-                <select
-                  value={accountId}
-                  onChange={(event) => setAccountId(event.currentTarget.value)}
-                  required
-                >
-                  <option value="">Choose an account</option>
-                  {accounts.map((item) => (
-                    <option key={idOf(item)} value={idOf(item)}>
-                      {item.name ?? 'Account'} · {item.currency ?? 'INR'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {(period === 'category' && categories.length === 0) ||
-            (period === 'account' && accounts.length === 0) ? (
-              <p className="finance-muted">
-                {period === 'category' ? (
-                  <>
-                    Create a category before setting a category budget.{' '}
-                    <Link className="finance-inline-link" href="/category/new">
-                      Create category
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    Create an account before setting an account budget.{' '}
-                    <Link className="finance-inline-link" href="/account/new">
-                      Create account
-                    </Link>
-                  </>
-                )}
+            {currency ? (
+              <CurrencyInput currency={currency} value={amount} onChangeText={setAmount} />
+            ) : profile === undefined ? (
+              <p className="finance-muted" role="status">
+                Loading your default currency…
               </p>
-            ) : null}
-            {!currency && period !== 'account' && (
+            ) : (
               <p className="finance-muted">
-                Set a default currency before creating this budget.{' '}
+                Choose a default currency before creating this budget.{' '}
                 <Link className="finance-inline-link" href="/settings/currency">
-                  Set default currency
+                  Set your default currency
                 </Link>
               </p>
             )}
-            {currency && (
-              <FinanceInput
-                label={`Limit (${currency})`}
-                type="number"
-                min="0.01"
-                step={currency === 'JPY' || currency === 'KRW' ? '1' : '0.01'}
-                value={amount}
-                onChangeText={setAmount}
-                required
-              />
+            <Tabs
+              label="Period"
+              value={period}
+              onChange={(value) => setPeriod(value as Period)}
+              tabs={[
+                { label: 'Monthly', value: 'monthly' },
+                { label: 'Category', value: 'category' },
+                { label: 'Account', value: 'account' },
+                { label: 'Custom', value: 'custom' },
+              ]}
+            />
+            {period === 'category' && (
+              <div className="finance-form-field">
+                <span>Category</span>
+                {categories.length ? (
+                  <RadioGroup
+                    options={categories.map((item) => ({
+                      value: idOf(item),
+                      label: item.name ?? 'Category',
+                    }))}
+                    value={categoryId}
+                    onChange={setCategoryId}
+                  />
+                ) : (
+                  <Empty
+                    title="No categories yet"
+                    description="Create one before setting a category budget."
+                    action={
+                      <Link className="finance-inline-link" href="/category/new">
+                        Create category
+                      </Link>
+                    }
+                  />
+                )}
+              </div>
+            )}
+            {period === 'account' && (
+              <div className="finance-form-field">
+                <span>Account</span>
+                {accounts.length ? (
+                  <RadioGroup
+                    options={accounts.map((item) => ({
+                      value: idOf(item),
+                      label: `${item.name ?? 'Account'} · ${item.currency ?? 'INR'}`,
+                    }))}
+                    value={accountId}
+                    onChange={setAccountId}
+                  />
+                ) : (
+                  <p className="finance-muted">
+                    Create an account first.{' '}
+                    <Link className="finance-inline-link" href="/account/new">
+                      Create account
+                    </Link>
+                  </p>
+                )}
+              </div>
             )}
             {period === 'custom' && (
               <div className="finance-form-row">
                 <FinanceInput
-                  label="Starts on"
-                  type="date"
+                  label="Starts (YYYY-MM-DD)"
                   value={startDate}
                   onChangeText={setStartDate}
+                  placeholder="2026-01-01"
                   required
                 />
                 <FinanceInput
-                  label="Ends (exclusive)"
-                  type="date"
+                  label="Ends (exclusive, YYYY-MM-DD)"
                   value={endDate}
                   onChangeText={setEndDate}
+                  placeholder="2026-02-01"
                   required
                 />
               </div>
@@ -293,14 +278,18 @@ export default function NewPersonalBudgetPage() {
             )}
             <Button
               type="submit"
-              disabled={saving || loading || !name.trim() || !amount || !currency}
+              disabled={
+                saving ||
+                loading ||
+                !name.trim() ||
+                !amount ||
+                !currency ||
+                (period === 'category' && !category) ||
+                (period === 'account' && !account)
+              }
             >
-              {saving ? 'Saving…' : 'Save budget'} <ArrowRight size={15} />
+              {saving ? 'Saving…' : 'Save budget'}
             </Button>
-            <p className="finance-form-note">
-              Budgets compare posted expenses in this date range. They never move money between
-              accounts.
-            </p>
           </form>
         )}
       </Card>

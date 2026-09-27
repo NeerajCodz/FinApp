@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { CalendarDays, Plus } from 'lucide-react';
-import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -129,24 +129,23 @@ export default function PersonalBudgetsPage() {
     );
   return (
     <div className="finance-page">
-      <PageHeading
-        eyebrow="MAKE ROOM FOR WHAT MATTERS"
-        title="Budgets"
-        description="Review spending limits against posted expenses."
-      />
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Badge variant="neutral">{budgets.length} active</Badge>
-        <Link className="finance-primary-link" href="/budget/new">
-          New budget <Plus size={16} />
+      <header className="finance-page-heading">
+        <div>
+          <h1>Budgets</h1>
+          <p className="finance-muted">Keep spending within reach</p>
+        </div>
+        <Link className="finance-secondary-action" href="/budget/new" aria-label="New budget">
+          <Plus size={20} />
         </Link>
-      </div>
+      </header>
       {featuredBudget && (
         <Card className="finance-metric-card finance-balance-card">
-          <span className="finance-metric-label">BUDGET OVERVIEW · {featuredCurrency}</span>
-          <strong>{formatMinor(featuredSpent, featuredCurrency)}</strong>
+          <span className="finance-metric-label">Budget overview</span>
           <span className="finance-metric-foot">
-            Spent so far · {featuredBudget.name ?? 'Budget'}
+            {featuredBudget.name ?? 'No active budget'} · {featuredCurrency}
           </span>
+          <span className="finance-metric-foot">Spent so far</span>
+          <strong>{formatMinor(featuredSpent, featuredCurrency)}</strong>
           <div
             className="finance-plan-track"
             role="progressbar"
@@ -182,17 +181,10 @@ export default function PersonalBudgetsPage() {
         </p>
       )}
       <Card className="finance-record-panel">
-        <SectionHeader
-          title="Your budgets"
-          action={
-            <Link href="/budget/new" aria-label="Add budget">
-              <Plus size={17} />
-            </Link>
-          }
-        />
+        <SectionHeader title="Your budgets" action={<span>{budgets.length} active</span>} />
         {loading ? (
           <p className="finance-muted" role="status">
-            Opening your local budgets…
+            Loading budgets…
           </p>
         ) : error ? (
           <p className="finance-form-error" role="alert">
@@ -200,8 +192,8 @@ export default function PersonalBudgetsPage() {
           </p>
         ) : budgets.length === 0 ? (
           <Empty
-            title="No budgets yet"
-            description="Create a limit for all spending, a category, an account, or a custom date range."
+            title="Give your money a plan"
+            description="Add a spending limit and watch real posted expenses move against it."
             icon={<CalendarDays size={20} />}
             action={
               <Link className="finance-inline-link" href="/budget/new">

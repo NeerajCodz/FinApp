@@ -3,13 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, CalendarDays } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { formatMinor } from '@convex/shared/money';
+import { CategoryIcon, Money, TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { asMinor, belongsToUser, idOf, matchesId, PageHeading, SignInGate } from '../../_personal';
+import { asMinor, belongsToUser, idOf, matchesId, SignInGate } from '../../_personal';
 
 type Budget = LocalRecord & {
   name?: string;
@@ -36,7 +36,7 @@ type Transaction = LocalRecord & {
   merchant?: string;
 };
 type Account = LocalRecord & { name?: string };
-type Category = LocalRecord & { name?: string };
+type Category = LocalRecord & { name?: string; icon?: string };
 
 export default function PersonalBudgetDetailPage() {
   const params = useParams<{ id: string }>();
@@ -125,7 +125,7 @@ export default function PersonalBudgetDetailPage() {
   const spent = matching.reduce((sum, item) => sum + asMinor(item.amountMinor), 0n);
   const limit = asMinor(budget?.amountMinor);
   const remaining = limit - spent;
-  const progress = limit > 0n ? Math.min(100, Number((spent * 100n) / limit)) : 0;
+  const progress = limit > 0n ? Math.min(100, Number((spent * 10_000n) / limit) / 100) : 0;
 
   async function archive() {
     if (!userId || !budget || pending) return;
@@ -134,7 +134,6 @@ export default function PersonalBudgetDetailPage() {
       setFormError('This budget has no saved identifier and cannot be archived.');
       return;
     }
-    if (!window.confirm('Archive this budget? Its saved history will remain available.')) return;
     setPending(true);
     setFormError(null);
     try {
@@ -196,30 +195,45 @@ export default function PersonalBudgetDetailPage() {
     );
   const scope =
     budget.period === 'category'
-      ? (category?.name ?? 'Category')
+      ? (category?.name ?? 'Category budget')
       : budget.period === 'account'
-        ? (account?.name ?? 'Account')
+        ? (account?.name ?? 'Account budget')
         : budget.period === 'custom'
-          ? 'Custom dates'
+          ? 'Custom period'
           : 'Monthly';
+  const dateOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const dateRange = `${new Date(startAt).toLocaleDateString(undefined, dateOptions)} – ${new Date(
+    endAt,
+  ).toLocaleDateString(undefined, dateOptions)}`;
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/budget">
-        <ArrowLeft size={15} /> Back to budgets
-      </Link>
-      <PageHeading
-        eyebrow="BUDGET DETAIL"
-        title={budget.name ?? 'Budget'}
-        description={`${scope} · ${currency}`}
-      />
-      <div className="finance-dashboard-grid">
+      <header className="finance-page-heading">
+        <Link className="finance-secondary-action" href="/budget" aria-label="Go back">
+          <ArrowLeft size={18} />
+        </Link>
+        <div style={{ minWidth: 0 }}>
+          <h1>{budget.name ?? 'Budget'}</h1>
+          <p className="finance-muted">{scope} · {dateRange}</p>
+        </div>
+      </header>
         <Card className="finance-metric-card finance-balance-card">
-          <SectionHeader title="Budget progress" action={<span>{currency}</span>} />
-          <span className="finance-metric-label">SPENT THIS PERIOD</span>
-          <strong>{formatMinor(spent, currency)}</strong>
-          <span className="finance-metric-foot">
-            of {formatMinor(limit, currency)} · {progress}% used
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {category && (
+              <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />
+            )}
+            <span style={{ display: 'grid', flex: 1, gap: 3 }}>
+              <strong>Budget progress</strong>
+              <small>{Math.round(progress)}% used</small>
+            </span>
+            <small>{currency}</small>
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <span className="finance-metric-foot">Spent this period</span>
+            <Money amountMinor={spent} currency={currency} size="display" />
+            <span className="finance-metric-foot">
+              of <Money amountMinor={limit} currency={currency} />
+            </span>
+          </div>
           <div
             className="finance-plan-track"
             role="progressbar"
@@ -241,63 +255,20 @@ export default function PersonalBudgetDetailPage() {
             <span>
               <small className="finance-metric-label">Limit</small>
               <br />
-              {formatMinor(limit, currency)}
+              <Money amountMinor={limit} currency={currency} />
             </span>
             <span style={{ textAlign: 'right' }}>
               <small className="finance-metric-label">
                 {remaining < 0n ? 'Over limit' : 'Still available'}
               </small>
               <br />
-              {formatMinor(remaining < 0n ? -remaining : remaining, currency)}
+              <Money
+                amountMinor={remaining < 0n ? -remaining : remaining}
+                currency={currency}
+              />
             </span>
           </div>
-          <p className="finance-plan-dates">
-            {new Date(startAt).toLocaleDateString()} – {new Date(endAt).toLocaleDateString()}
-          </p>
         </Card>
-        <Card className="finance-record-panel">
-          <SectionHeader title="Scope and dates" action={<CalendarDays size={17} />} />
-          <ul className="finance-record-list">
-            <li>
-              <span className="finance-record-copy">
-                <strong>Scope</strong>
-                <small>{scope}</small>
-              </span>
-              <span>{budget.period ?? 'monthly'}</span>
-            </li>
-            <li>
-              <span className="finance-record-copy">
-                <strong>Date range</strong>
-                <small>
-                  {new Date(startAt).toLocaleDateString()} through{' '}
-                  {new Date(endAt).toLocaleDateString()}
-                </small>
-              </span>
-            </li>
-            <li>
-              <span className="finance-record-copy">
-                <strong>Limit</strong>
-                <small>{currency}</small>
-              </span>
-              <strong>{formatMinor(limit, currency)}</strong>
-            </li>
-          </ul>
-        </Card>
-      </div>
-      <Card className="finance-record-panel">
-        <SectionHeader title="Archive budget" />
-        <p className="finance-muted">
-          Archiving removes this budget from active tracking without deleting its record.
-        </p>
-        {formError && (
-          <p className="finance-form-error" role="alert">
-            {formError}
-          </p>
-        )}
-        <Button type="button" variant="outline" disabled={pending} onPress={() => void archive()}>
-          {pending ? 'Archiving…' : 'Archive budget'} <ArrowRight size={15} />
-        </Button>
-      </Card>
       <Card className="finance-record-panel">
         <SectionHeader
           title="Recent expenses"
@@ -320,33 +291,29 @@ export default function PersonalBudgetDetailPage() {
           <ul className="finance-record-list">
             {matching.slice(0, 5).map((item) => {
               const transactionId = idOf(item);
+              const expenseCategory = categories.find((entry) =>
+                aliases(entry).has(String(item.categoryId ?? '')),
+              );
+              const expenseAccount = accounts.find((entry) =>
+                aliases(entry).has(String(item.accountId ?? '')),
+              );
               return (
                 <li key={transactionId}>
-                  <Link
-                    href={`/transaction/${encodeURIComponent(transactionId)}`}
-                    style={{
-                      display: 'flex',
-                      minWidth: 0,
-                      flex: 1,
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 14,
-                      color: 'inherit',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    <span className="finance-record-copy">
-                      <strong>{item.title ?? item.merchant ?? 'Expense'}</strong>
-                      <small>
-                        {item.occurredAt
-                          ? new Date(item.occurredAt).toLocaleDateString()
-                          : 'Date unavailable'}
-                      </small>
-                    </span>
-                    <strong>
-                      {formatMinor(asMinor(item.amountMinor), item.currency ?? currency)}
-                    </strong>
-                  </Link>
+                  <TransactionRow
+                    title={item.title ?? item.merchant ?? 'Expense'}
+                    merchant={item.merchant}
+                    category={expenseCategory?.name ?? 'Expense'}
+                    account={expenseAccount?.name}
+                    amountMinor={asMinor(item.amountMinor)}
+                    currency={item.currency ?? currency}
+                    type="expense"
+                    date={
+                      item.occurredAt
+                        ? new Date(item.occurredAt).toLocaleDateString()
+                        : 'Date unavailable'
+                    }
+                    onPress={() => router.push(`/transaction/${encodeURIComponent(transactionId)}`)}
+                  />
                 </li>
               );
             })}
@@ -361,6 +328,14 @@ export default function PersonalBudgetDetailPage() {
           </p>
         )}
       </Card>
+      {formError && (
+        <p className="finance-form-error" role="alert">
+          {formError}
+        </p>
+      )}
+      <Button type="button" variant="outline" disabled={pending} onPress={() => void archive()}>
+        {pending ? 'Archiving…' : 'Archive budget'}
+      </Button>
     </div>
   );
 }
