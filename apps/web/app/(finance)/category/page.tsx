@@ -2,13 +2,15 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Plus, Tags } from 'lucide-react';
-import { Badge, Card, Empty, SectionHeader } from '@finapp/ui/web';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, ChevronRight, Plus } from 'lucide-react';
+import { Empty, IconButton, Separator, Typography } from '@finapp/ui/web';
+import { CategoryIcon } from '@finapp/ui/finance';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-import { asMinor, aliasesOf, belongsToUser, idOf, PageHeading, SignInGate } from '../_personal';
+import { asMinor, aliasesOf, belongsToUser, idOf, SignInGate } from '../_personal';
 
 type Category = LocalRecord & {
   name?: string;
@@ -31,6 +33,7 @@ type Transaction = LocalRecord & {
 };
 
 export default function PersonalCategoriesPage() {
+  const router = useRouter();
   const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
   const { records, loading, error } = useLocalRecords<Category>('category');
   const {
@@ -71,7 +74,7 @@ export default function PersonalCategoriesPage() {
     .sort(
       (left, right) =>
         Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) ||
-        (left.name ?? '').localeCompare(right.name ?? ''),
+        String(left._id ?? left.id ?? '').localeCompare(String(right._id ?? right.id ?? '')),
     );
   const categoryById = new Map<string, Category>();
   for (const category of categories) {
@@ -105,11 +108,89 @@ export default function PersonalCategoriesPage() {
     );
   return (
     <div className="finance-page">
-      <PageHeading
-        eyebrow="ORGANIZE YOUR ACTIVITY"
-        title="Categories"
-        description="Keep category names and icons consistent across your local and synced transaction history."
-      />
+      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+          <ArrowLeft size={21} aria-hidden="true" />
+        </IconButton>
+        <Typography variant="title" style={{ flex: 1 }}>
+          Categories
+        </Typography>
+        <IconButton
+          label="Add category"
+          variant="ghost"
+          onPress={() => router.push('/category/new')}
+        >
+          <Plus size={22} aria-hidden="true" />
+        </IconButton>
+      </header>
+      {loading || profileLoading || transactionLoading ? (
+        <Typography variant="small" role="status">Loading categories…</Typography>
+      ) : error ? (
+        <p className="finance-form-error" role="alert">
+          Category data could not be opened: {error}
+        </p>
+      ) : categories.length === 0 ? (
+        <Empty
+          title="No categories yet."
+          description="Create a category to organize your income and spending."
+          action={
+            <Link className="finance-inline-link" href="/category/new">
+              Add category
+            </Link>
+          }
+        />
+      ) : (
+        <section style={{ display: 'grid', gap: 12 }}>
+          <Typography variant="label">Categories</Typography>
+          <div>
+            {categories.map((category, index) => {
+              const currency = category.limitCurrency ?? profile?.defaultCurrency;
+              const totals = monthlyTotals.get(idOf(category)) ?? { spent: 0n, received: 0n };
+              return (
+                <React.Fragment key={idOf(category)}>
+                  <Link
+                    href={`/category/${encodeURIComponent(idOf(category))}`}
+                    aria-label={`Open ${category.name ?? 'Category'} category`}
+                    style={{
+                      display: 'flex',
+                      minHeight: 72,
+                      alignItems: 'center',
+                      gap: 12,
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />
+                    <span style={{ display: 'grid', minWidth: 0, flex: 1, gap: 2 }}>
+                      <Typography variant="bodyLarge" style={{ overflow: 'hidden', fontSize: 15, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {category.name ?? 'Category'}
+                      </Typography>
+                      <Typography variant="caption">Monthly activity</Typography>
+                    </span>
+                    {currency && (
+                      <span style={{ display: 'grid', justifyItems: 'end', gap: 4, flexShrink: 0 }}>
+                        <Typography variant="caption">
+                          Spent {formatMinor(totals.spent, currency)}
+                        </Typography>
+                        <Typography variant="caption">
+                          Received {formatMinor(totals.received, currency)}
+                        </Typography>
+                        {category.monthlyLimitMinor !== undefined && (
+                          <Typography variant="caption">
+                            Limit {formatMinor(asMinor(category.monthlyLimitMinor), currency)}
+                          </Typography>
+                        )}
+                      </span>
+                    )}
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </Link>
+                  {index < categories.length - 1 && <Separator />}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {(profileError || transactionError) && (
         <p className="finance-form-error" role="alert">
           Monthly category activity could not be opened: {profileError ?? transactionError}
@@ -120,75 +201,6 @@ export default function PersonalCategoriesPage() {
           Range refresh unavailable. Showing monthly activity already saved in this browser.
         </p>
       )}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Badge variant="neutral">{categories.length} active</Badge>
-        <Link className="finance-primary-link" href="/category/new">
-          New category <Plus size={16} />
-        </Link>
-      </div>
-      <Card className="finance-record-panel">
-        <SectionHeader
-          title="Your categories"
-          action={
-            <Link href="/category/new" aria-label="Add category">
-              <Plus size={17} />
-            </Link>
-          }
-        />
-        {loading || profileLoading || transactionLoading ? (
-          <p className="finance-muted" role="status">
-            Opening your local categories…
-          </p>
-        ) : error ? (
-          <p className="finance-form-error" role="alert">
-            Category data could not be opened: {error}
-          </p>
-        ) : categories.length === 0 ? (
-          <Empty
-            title="No categories yet"
-            description="Add a category to organize transactions and set an optional monthly limit."
-            icon={<Tags size={20} />}
-            action={
-              <Link className="finance-inline-link" href="/category/new">
-                Create a category
-              </Link>
-            }
-          />
-        ) : (
-          <ul className="finance-record-list">
-            {categories.map((category) => {
-              const currency = category.limitCurrency ?? profile?.defaultCurrency;
-              const totals = monthlyTotals.get(idOf(category)) ?? { spent: 0n, received: 0n };
-              return (
-                <li key={idOf(category)}>
-                  <span className="finance-record-symbol" aria-hidden="true">
-                    {category.icon ?? <Tags size={17} />}
-                  </span>
-                  <span className="finance-record-copy">
-                    <strong>
-                      <Link href={`/category/${encodeURIComponent(idOf(category))}`}>
-                        {category.name ?? 'Category'}
-                      </Link>
-                    </strong>
-                    <small>{category.isSystem ? 'System category' : 'Personal category'}</small>
-                    <small>Monthly activity{currency ? ` · ${currency}` : ''}</small>
-                    {currency && (
-                      <small>
-                        Spent {formatMinor(totals.spent, currency)} · received{' '}
-                        {formatMinor(totals.received, currency)}
-                        {category.monthlyLimitMinor !== undefined
-                          ? ` · limit ${formatMinor(asMinor(category.monthlyLimitMinor), currency)}`
-                          : ''}
-                      </small>
-                    )}
-                  </span>
-                  <ArrowRight size={15} aria-hidden="true" />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
     </div>
   );
 }

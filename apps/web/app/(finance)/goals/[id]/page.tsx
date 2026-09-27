@@ -3,10 +3,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Target } from 'lucide-react';
+import { ArrowLeft, Target } from 'lucide-react';
 import { formatMinor, parseMinor } from '@convex/shared/money';
-import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { FinanceInput } from '@/components/finance/FinanceInput';
+import { Money } from '@finapp/ui/finance';
+import { Button, Empty, Input, Progress, Typography } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -114,104 +114,96 @@ export default function GoalDetailPage() {
   const loading = goalsLoading || contributionsLoading;
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/goals">
-        <ArrowLeft size={15} /> Back to goals
-      </Link>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Link className="finance-secondary-action" href="/goals" aria-label="Go back">
+          <ArrowLeft size={20} />
+        </Link>
+        <h1 style={{ margin: 0 }}>Goal</h1>
+      </div>
       {loading ? (
-        <p className="finance-muted" role="status">
-          Opening this saved goal…
-        </p>
+        <Typography variant="small" role="status">Loading goal…</Typography>
       ) : loadError ? (
-        <p className="finance-form-error" role="alert">
-          Saved goal details could not be opened: {loadError}
-        </p>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <Typography variant="small" role="alert">Saved goal details could not be loaded.</Typography>
+          <Button variant="outline" onPress={() => window.location.reload()}>Retry</Button>
+        </div>
       ) : !goal || goal.archivedAt !== undefined ? (
         <Empty
           title="Goal unavailable"
-          description="This goal is not saved on this device or has been archived."
+          description="It may have been archived or is not saved on this device."
           icon={<Target size={20} />}
-          action={
-            <Link className="finance-inline-link" href="/goals">
-              Return to goals
-            </Link>
-          }
         />
       ) : (
         <>
-          <header className="finance-page-heading">
-            <div>
-              <p className="finance-kicker">SAVINGS GOAL</p>
-              <h1>{goal.name ?? 'Savings goal'}</h1>
-              <p className="finance-muted">
-                {goal.targetDate
-                  ? `Target ${new Date(goal.targetDate).toLocaleDateString()}`
-                  : 'No target date'}
-              </p>
+          <section style={{ display: 'grid', gap: 8 }}>
+            <Typography variant="title">{goal.name}</Typography>
+            <Typography variant="label">Saved so far</Typography>
+            <Money amountMinor={saved} currency={currency} size="display" />
+            <Typography variant="small">of {formatMinor(target, currency)} target</Typography>
+            <Progress value={progress} />
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="caption">{percent}% reached</Typography>
+              <Typography variant="caption">
+                {goal.targetDate ? new Date(goal.targetDate).toLocaleDateString() : 'No target date'}
+              </Typography>
             </div>
-            <span className="finance-goal-total">{percent}% reached</span>
-          </header>
-          <Card className="finance-metric-card">
-            <SectionHeader title="Saved so far" action={<Target size={18} aria-hidden="true" />} />
-            <strong>{formatMinor(saved, currency)}</strong>
-            <span className="finance-metric-foot">of {formatMinor(target, currency)} target</span>
-            <div
-              className="finance-plan-track"
-              role="progressbar"
-              aria-label={`${percent}% of goal reached`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={progress}
-            >
-              <span style={{ width: `${progress}%` }} />
-            </div>
-          </Card>
-          <Card className="finance-form-panel">
-            <SectionHeader title="Record a contribution" />
-            <p className="finance-muted">
+          </section>
+          <section
+            style={{
+              display: 'grid',
+              gap: 12,
+              paddingTop: 18,
+              borderTop: '1px solid var(--finance-line)',
+            }}
+          >
+            <Typography variant="heading">Record a contribution</Typography>
+            <Typography variant="small">
               This tracks progress; it does not move money between accounts.
-            </p>
-            <form className="finance-form" onSubmit={contribute}>
-              <FinanceInput
-                label={`Contribution amount · ${currency}`}
+            </Typography>
+            <form onSubmit={contribute} style={{ display: 'grid', gap: 12 }}>
+              <Input
+                aria-label={`Amount in ${currency}`}
+                placeholder={`Amount · ${currency}`}
+                inputMode="decimal"
                 value={amount}
                 onChangeText={setAmount}
-                inputMode="decimal"
                 required
               />
-              {error && (
-                <p className="finance-form-error" role="alert">
-                  {error}
-                </p>
-              )}
               <Button type="submit" disabled={saving || !amount.trim()}>
-                {saving ? 'Saving locally…' : 'Add contribution'} <ArrowRight size={15} />
+                {saving ? 'Saving…' : 'Add contribution'}
               </Button>
             </form>
-          </Card>
-          <Card className="finance-record-panel">
-            <SectionHeader
-              title="Contribution history"
-              action={<span>{history.length} entries</span>}
-            />
+          </section>
+          <section style={{ display: 'grid', gap: 10 }}>
+            <Typography variant="heading">History</Typography>
             {history.length === 0 ? (
-              <p className="finance-muted">No contributions recorded yet.</p>
+              <Typography variant="small">No contributions recorded yet.</Typography>
             ) : (
-              <ul className="finance-record-list">
-                {history.map((entry) => (
-                  <li key={idOf(entry)}>
-                    <span className="finance-record-copy">
-                      <strong>
-                        {new Date(Number(entry.occurredAt ?? 0)).toLocaleDateString()}
-                      </strong>
-                      <small>Saved locally first</small>
-                    </span>
-                    <strong>{formatMinor(toMinor(entry.amountMinor), currency)}</strong>
-                  </li>
-                ))}
-              </ul>
+              history.map((entry) => (
+                <div
+                  key={idOf(entry)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingBlock: 13,
+                    borderBottom: '1px solid var(--finance-line)',
+                  }}
+                >
+                  <Typography variant="small">
+                    {new Date(Number(entry.occurredAt ?? 0)).toLocaleDateString()}
+                  </Typography>
+                  <Money amountMinor={toMinor(entry.amountMinor)} currency={currency} />
+                </div>
+              ))
             )}
-          </Card>
+          </section>
         </>
+      )}
+      {!!error && (
+        <div role="alert" style={{ color: 'var(--finapp-destructive)' }}>
+          <Typography variant="small">{error}</Typography>
+        </div>
       )}
     </div>
   );
