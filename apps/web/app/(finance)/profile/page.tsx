@@ -46,12 +46,6 @@ const links = [
     href: '/category',
     icon: ReceiptText,
   },
-  {
-    label: 'Groups',
-    description: 'Shared money with people',
-    href: '/groups',
-    icon: CircleUserRound,
-  },
   { label: 'Budget', description: 'Limits and progress', href: '/budget', icon: Coins },
   {
     label: 'Analytics',
@@ -173,6 +167,15 @@ export default function ProfilePage() {
                 <strong>{profile?.displayName ?? 'Your profile'}</strong>
                 <span className="finance-muted">{profile?.email ?? 'Signed-in account'}</span>
               </div>
+            </div>
+            <div className="finance-record-item">
+              <div>
+                <small>YOUR SHARE TAG</small>
+                <strong>{profile?.username ? `@${profile.username}` : 'Set username'}</strong>
+              </div>
+              <Button size="sm" variant="outline" onPress={() => openEditor('username')}>
+                Edit
+              </Button>
             </div>
             <div className="finance-record-list">
               <div className="finance-record-item">

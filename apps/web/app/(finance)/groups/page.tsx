@@ -24,6 +24,10 @@ export default function GroupsPage() {
   const { userId } = useBrowserSync();
   const { records, loading, error } = useLocalRecords<Group>('group');
   const { records: memberships } = useLocalRecords<Member>('groupMember');
+  const { records: profiles } = useLocalRecords<LocalRecord>('profile');
+  const phoneVerified = Boolean(
+    profiles[0]?.phone && profiles[0]?.phoneVerificationTime !== undefined,
+  );
 
   if (!userId)
     return (
@@ -42,16 +46,38 @@ export default function GroupsPage() {
     <div className="finance-page">
       <header className="finance-page-heading">
         <div>
-          <p className="finance-kicker">SHARED FINANCES</p>
+          <p className="finance-kicker">SHARED LEDGERS</p>
           <h1>Groups</h1>
           <p className="finance-muted">
-            Shared ledgers · {groups.length} {groups.length === 1 ? 'group' : 'groups'}
+            {groups.length
+              ? `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`
+              : 'Your groups will appear here when available.'}
           </p>
         </div>
         <Link className="finance-primary-link" href="/group/new">
           <Plus size={16} /> Create group
         </Link>
       </header>
+      <section className="finance-record-panel" aria-labelledby="people-to-split-title">
+        <SectionHeader title="People to split with" />
+        <div className="finance-record-item">
+          <span className="finance-record-symbol">
+            <UsersRound size={17} />
+          </span>
+          <span className="finance-record-copy">
+            <strong>Invite someone to a shared ledger</strong>
+            <small>
+              {phoneVerified
+                ? 'Choose one contact or add people by username in the invite form.'
+                : 'Add people by username. Selected contacts unlock after manual phone verification.'}
+            </small>
+          </span>
+          <Link className="finance-secondary-action" href="/group/new">
+            Invite people <ArrowRight size={15} />
+          </Link>
+        </div>
+      </section>
+
       {error && (
         <p className="finance-form-error" role="alert">
           Saved groups could not be read: {error}
