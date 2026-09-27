@@ -1301,3 +1301,116 @@
   flex: 0 0 auto;
   color: var(--finance-muted);
 }
+
+/* All Web routes use the same handset frame and navigation as the native app. */
+.finance-app {
+  min-height: 100dvh;
+  grid-template-columns: minmax(0, 430px);
+  justify-content: center;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+.finance-sidebar,
+.finance-mobile-header,
+.finance-desktop-add {
+  display: none !important;
+}
+.finance-content {
+  width: min(100%, 430px);
+  margin-inline: auto;
+  padding: calc(16px + env(safe-area-inset-top)) 20px 36px;
+}
+.finance-mobile-nav {
+  position: fixed;
+  z-index: 20;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  display: grid !important;
+  width: min(100%, 430px);
+  height: calc(96px + env(safe-area-inset-bottom));
+  min-height: calc(96px + env(safe-area-inset-bottom));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: start;
+  padding: 0 8px env(safe-area-inset-bottom);
+  background: transparent;
+  transform: translateX(-50%);
+}
+.finance-mobile-nav-shape {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.finance-mobile-nav > :not(svg) {
+  position: relative;
+  z-index: 1;
+}
+.finance-mobile-nav a {
+  position: relative;
+  display: flex;
+  min-width: 44px;
+  min-height: 88px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 12px;
+  color: var(--finance-dim);
+  font-size: 0.62rem;
+  text-decoration: none;
+}
+.finance-mobile-nav a.active {
+  background: transparent;
+  color: var(--finance-text);
+}
+.finance-mobile-nav a.active::before {
+  position: absolute;
+  top: 0;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--finance-lime);
+  content: '';
+}
+.finance-mobile-add {
+  display: inline-flex;
+  width: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  height: 58px;
+  justify-self: center;
+  align-self: start;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--finance-lime);
+  color: var(--finapp-primary-foreground);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--finance-lime) 27%, transparent);
+}
+.finance-guest-home {
+  padding-bottom: 0;
+}
+.finance-guest-home .finance-content {
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+}
+.finance-guest-home .finance-mobile-nav {
+  display: none !important;
+}
+
+@media (min-width: 791px) {
+  .finance-app ~ .finapp-overlay--sheet {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .finance-app ~ .finapp-overlay--sheet .finapp-overlay__panel {
+    width: min(100%, 430px);
+    margin-inline: auto;
+    border: 1px solid var(--finance-line);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    padding: 20px;
+    animation-name: finapp-panel-in;
+  }
+}
