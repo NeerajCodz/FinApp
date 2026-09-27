@@ -9,11 +9,6 @@ const nextConfig: NextConfig = {
         destination: '/split/new?groupId=:id',
         permanent: false,
       },
-      {
-        source: '/settle/:userId',
-        destination: '/settle/new?member=:userId',
-        permanent: false,
-      },
     ];
   },
 };

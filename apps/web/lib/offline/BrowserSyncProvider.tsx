@@ -29,6 +29,7 @@ import {
   retryFailed,
   subscribeLocalData,
   upsertCloudPage,
+  recordGroupRangeCoverage,
 } from './repository';
 import { syncOutbox } from './sync';
 
@@ -499,7 +500,11 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
             cursor = page.settlements.continueCursor;
           }
         };
-        await Promise.all([fetchTransactions(), fetchSettlements()]);
+        await Promise.all(
+          [groupId, ...(cloudGroupId === groupId ? [] : [cloudGroupId])].map((coveredGroupId) =>
+            recordGroupRangeCoverage(userId, coveredGroupId, startAt, endAt),
+          ),
+        );
       })();
       rangeFetches.current.set(key, request);
       const removeRequest = () => {
@@ -515,8 +520,9 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     async (targetUserId: string, startAt: number, endAt: number) => {
       const groups = await readLocal<LocalRecord>(targetUserId, 'group');
       for (const group of groups) {
-        const groupId = String(group.cloudId ?? group._id ?? '');
-        if (groupId && !groupId.startsWith('local-'))
+        const groupId = String(group.id ?? group._id ?? group.cloudId ?? '');
+        const cloudId = String(group.cloudId ?? group._id ?? '');
+        if (groupId && cloudId && !cloudId.startsWith('local-'))
           await fetchGroupRange(groupId, startAt, endAt);
       }
     },

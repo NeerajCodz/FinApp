@@ -99,12 +99,25 @@ type ConflictRow = {
   createdAt: number;
   resolvedAt: number | null;
 };
+type RangeCoverageRow = {
+  key: string;
+  userId: string;
+  scope: string;
+  startAt: number;
+  endAt: number;
+  completedAt: number;
+};
 
 const subscribers = new Map<string, Set<() => void>>();
 const retryDelays = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000] as const;
 
 function requireUser(userId: string): void {
   if (!userId) throw new Error('AUTH_REQUIRED');
+}
+
+function assertDateRange(startAt: number, endAt: number): void {
+  if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
+    throw new Error('INVALID_DATE_RANGE');
 }
 
 function recordKey(userId: string, entityType: LocalEntity, id: string): string {
@@ -631,11 +644,57 @@ export async function applyCloudChanges(
   notify(userId);
 }
 
+export async function recordGroupRangeCoverage(
+  userId: string,
+  groupId: string,
+  startAt: number,
+  endAt: number,
+): Promise<void> {
+  requireUser(userId);
+  if (!groupId) throw new Error('GROUP_ID_REQUIRED');
+  assertDateRange(startAt, endAt);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('rangeCoverage', 'readwrite');
+  const done = transactionComplete(transaction);
+  const scope = `group:${groupId}`;
+  transaction.objectStore('rangeCoverage').put({
+    key: `${userId}\u0000${scope}\u0000${startAt}\u0000${endAt}`,
+    userId,
+    scope,
+    startAt,
+    endAt,
+    completedAt: Date.now(),
+  } satisfies RangeCoverageRow);
+  await done;
+  notify(userId);
+}
+
+export async function isGroupRangeCovered(
+  userId: string,
+  groupId: string,
+  startAt: number,
+  endAt: number,
+): Promise<boolean> {
+  requireUser(userId);
+  if (!groupId) throw new Error('GROUP_ID_REQUIRED');
+  assertDateRange(startAt, endAt);
+  const db = await openWebDatabase();
+  const transaction = db.transaction('rangeCoverage', 'readonly');
+  const done = transactionComplete(transaction);
+  const scope = `group:${groupId}`;
+  const rows = (await requestResultFor(
+    transaction.objectStore('rangeCoverage').index('by-user-scope').getAll(
+      IDBKeyRange.only([userId, scope]),
+    ),
+  )) as RangeCoverageRow[];
+  await done;
+  return rows.some((row) => row.startAt <= startAt && row.endAt >= endAt);
+}
 export async function clearLocalData(userId: string): Promise<void> {
   requireUser(userId);
   const db = await openWebDatabase();
   const transaction = db.transaction(
-    ['records', 'outbox', 'idMappings', 'syncState', 'conflicts'],
+    ['records', 'outbox', 'idMappings', 'syncState', 'conflicts', 'rangeCoverage'],
     'readwrite',
   );
   const done = transactionComplete(transaction);
@@ -676,6 +735,17 @@ export async function clearLocalData(userId: string): Promise<void> {
   const conflictCursor = conflicts.index('by-user').openCursor(IDBKeyRange.only(userId));
   conflictCursor.onsuccess = () => {
     const cursor = conflictCursor.result;
+    if (cursor) {
+      cursor.delete();
+      cursor.continue();
+    }
+  };
+  const rangeCoverage = transaction.objectStore('rangeCoverage');
+  const coverageCursor = rangeCoverage
+    .index('by-user-scope')
+    .openCursor(IDBKeyRange.bound([userId, ''], [userId, '\uffff']));
+  coverageCursor.onsuccess = () => {
+    const cursor = coverageCursor.result;
     if (cursor) {
       cursor.delete();
       cursor.continue();

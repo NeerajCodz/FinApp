@@ -67,3 +67,107 @@ export function calculateNetBalances(
   }
   return balances;
 }
+type GroupLedgerRecord = Record<string, unknown> & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+};
+type ParticipantAmountCandidate = { userId: string; amountMinor: unknown };
+type SettlementAmount = { fromUserId: string; toUserId: string; amountMinor: bigint };
+type SettlementAmountCandidate = Omit<SettlementAmount, 'amountMinor'> & { amountMinor: unknown };
+
+function groupRecordIds(record: GroupLedgerRecord): Set<string> {
+  return new Set(
+    [record.id, record._id, record.cloudId].filter(
+      (value): value is string => typeof value === 'string',
+    ),
+  );
+}
+
+function belongsToGroup(record: GroupLedgerRecord, field: string, ids: Set<string>): boolean {
+  const value = record[field];
+  return typeof value === 'string' && ids.has(value);
+}
+
+function isParticipantAmount(item: ParticipantAmountCandidate): item is ParticipantAmount {
+  return Boolean(item.userId) && typeof item.amountMinor === 'bigint' && item.amountMinor >= 0n;
+}
+
+function isSettlementAmount(item: SettlementAmountCandidate): item is SettlementAmount {
+  return (
+    Boolean(item.fromUserId) &&
+    Boolean(item.toUserId) &&
+    typeof item.amountMinor === 'bigint' &&
+    item.amountMinor >= 0n
+  );
+}
+
+export function projectGroupBalances(
+  group: GroupLedgerRecord,
+  transactions: readonly GroupLedgerRecord[],
+  payerRecords: readonly GroupLedgerRecord[],
+  participantRecords: readonly GroupLedgerRecord[],
+  settlementRecords: readonly GroupLedgerRecord[],
+) {
+  const groupIds = groupRecordIds(group);
+  const currency = group.currency;
+  if (!groupIds.size || typeof currency !== 'string') throw new Error('GROUP_UNAVAILABLE');
+  const expenses = transactions.filter(
+    (record) =>
+      belongsToGroup(record, 'groupId', groupIds) &&
+      record.type === 'expense' &&
+      record.status === 'posted' &&
+      record.deletedAt === undefined &&
+      record.currency === currency,
+  );
+  const payers: ParticipantAmount[] = [];
+  const participants: ParticipantAmount[] = [];
+  for (const transaction of expenses) {
+    const transactionIds = groupRecordIds(transaction);
+    const paidRows = payerRecords.filter((record) =>
+      belongsToGroup(record, 'transactionId', transactionIds),
+    );
+    const sharedRows = participantRecords.filter((record) =>
+      belongsToGroup(record, 'transactionId', transactionIds),
+    );
+    const paidCandidates = paidRows.map((record) => ({
+      userId: String(record.userId ?? record.memberId ?? ''),
+      amountMinor: record.amountMinor,
+    }));
+    const sharedCandidates = sharedRows.map((record) => ({
+      userId: String(record.userId ?? record.memberId ?? ''),
+      amountMinor: record.amountMinor,
+    }));
+    const paid = paidCandidates.filter(isParticipantAmount);
+    const shared = sharedCandidates.filter(isParticipantAmount);
+    const expected = transaction.amountMinor;
+    if (
+      typeof expected !== 'bigint' ||
+      paid.length !== paidCandidates.length ||
+      shared.length !== sharedCandidates.length ||
+      !paid.length ||
+      !shared.length ||
+      sum(paid) !== expected ||
+      sum(shared) !== expected
+    )
+      throw new Error('INCOMPLETE_GROUP_SPLITS');
+    payers.push(...paid);
+    participants.push(...shared);
+  }
+  const settlementCandidates = settlementRecords
+    .filter(
+      (record) =>
+        belongsToGroup(record, 'groupId', groupIds) &&
+        record.currency === currency &&
+        record.deletedAt === undefined,
+    )
+    .map((record) => ({
+      fromUserId: String(record.fromUserId ?? ''),
+      toUserId: String(record.toUserId ?? ''),
+      amountMinor: record.amountMinor,
+    }));
+  const settlements = settlementCandidates.filter(isSettlementAmount);
+  if (settlements.length !== settlementCandidates.length)
+    throw new Error('INCOMPLETE_GROUP_SETTLEMENTS');
+  return { currency, balances: calculateNetBalances(payers, participants, settlements), expenses };
+}

@@ -283,6 +283,18 @@ describe('browser offline repository', () => {
     expect(await repository.getMappedCloudId(userB, 'account', accountB)).toBe('cloud-account-b');
   });
 
+  it('tracks complete group ranges per user and removes coverage with local data', async () => {
+    await repository.recordGroupRangeCoverage(userA, 'group-a', 0, 1_000);
+
+    await expect(repository.isGroupRangeCovered(userA, 'group-a', 100, 900)).resolves.toBe(true);
+    await expect(repository.isGroupRangeCovered(userA, 'group-a', -1, 1_000)).resolves.toBe(false);
+    await expect(repository.isGroupRangeCovered(userA, 'group-b', 100, 900)).resolves.toBe(false);
+    await expect(repository.isGroupRangeCovered(userB, 'group-a', 100, 900)).resolves.toBe(false);
+
+    await repository.clearLocalData(userA);
+
+    await expect(repository.isGroupRangeCovered(userA, 'group-a', 100, 900)).resolves.toBe(false);
+  });
   it('upgrades a version-one database without losing user data', async () => {
     const request = indexedDB.open(WEB_DATABASE_NAME, 1);
     const oldDatabase = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -324,9 +336,10 @@ describe('browser offline repository', () => {
       { id: 'account-v1', name: 'Kept through upgrade' },
     ]);
     const upgraded = await openWebDatabase();
-    expect(upgraded.version).toBe(2);
-    expect(
-      Array.from(upgraded.transaction('conflicts').objectStore('conflicts').indexNames),
-    ).toEqual(['by-user']);
+    expect(upgraded.version).toBe(3);
+    expect(Array.from(upgraded.objectStoreNames)).toContain('rangeCoverage');
+    expect(Array.from(upgraded.transaction('conflicts').objectStore('conflicts').indexNames)).toEqual([
+      'by-user',
+    ]);
   });
 });

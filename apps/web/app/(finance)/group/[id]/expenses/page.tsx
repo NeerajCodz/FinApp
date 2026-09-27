@@ -8,6 +8,7 @@ import { formatMinor } from '@convex/shared/money';
 import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
+import { isGroupRangeCovered } from '@/lib/offline/repository';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type Group = LocalRecord & { name?: string; currency?: string };
@@ -34,13 +35,13 @@ const aliases = (record: LocalRecord) =>
     (value): value is string => typeof value === 'string',
   );
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
-const endAt = Date.now() + 1;
-const startAt = endAt - 90 * 24 * 60 * 60 * 1000;
 
 export default function GroupExpensesPage() {
   const params = useParams<{ id: string }>();
   const routeId = params.id;
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
+  const startAt = React.useMemo(() => Date.now() - 90 * 24 * 60 * 60 * 1000, []);
+  const endAt = React.useMemo(() => Date.now() + 1, []);
   const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
   const { records: transactions, loading: transactionsLoading } =
     useLocalRecords<Expense>('transaction');
@@ -54,14 +55,30 @@ export default function GroupExpensesPage() {
 
   React.useEffect(() => {
     if (!userId || !group) return;
-    if (!isConnected) {
-      setRangeStatus('uncached');
-      setRangeError(
-        'Offline. Saved expenses remain visible, but this 90-day range may not be complete.',
-      );
-      return;
-    }
     let active = true;
+    if (!isConnected) {
+      void isGroupRangeCovered(userId, groupId, startAt, endAt).then(
+        (covered) => {
+          if (!active) return;
+          setRangeStatus(covered ? 'loaded' : 'uncached');
+          setRangeError(
+            covered
+              ? ''
+              : 'Offline. Saved expenses remain visible, but this 90-day range may not be complete.',
+          );
+        },
+        (cause: unknown) => {
+          if (!active) return;
+          setRangeStatus('error');
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Saved range coverage could not be checked.',
+          );
+        },
+      );
+      return () => {
+        active = false;
+      };
+    }
     setRangeStatus('loading');
     setRangeError('');
     void fetchGroupRange(groupId, startAt, endAt).then(
@@ -80,7 +97,7 @@ export default function GroupExpensesPage() {
     return () => {
       active = false;
     };
-  }, [fetchGroupRange, groupReady, groupId, isConnected, userId]);
+  }, [fetchGroupRange, groupReady, groupId, isConnected, startAt, endAt, userId]);
 
   if (!userId)
     return (
@@ -120,13 +137,10 @@ export default function GroupExpensesPage() {
       (item) =>
         typeof item.groupId === 'string' &&
         groupIds.includes(item.groupId) &&
-        item.type === 'expense' &&
-        item.deletedAt === undefined &&
-        item.currency === (group.currency ?? 'INR') &&
         Number(item.occurredAt ?? 0) >= startAt &&
         Number(item.occurredAt ?? 0) < endAt,
     )
-    .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
+    .sort((left, right) => Number(left.occurredAt ?? 0) - Number(right.occurredAt ?? 0));
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
@@ -179,21 +193,17 @@ export default function GroupExpensesPage() {
                     <ReceiptText size={17} />
                   </span>
                   <span className="finance-record-copy">
-                    <strong>
-                      <Link
-                        href={`/transaction/${encodeURIComponent(idOf(expense))}`}
-                        style={{ color: 'inherit', textDecoration: 'none' }}
-                      >
-                        {expense.title ?? 'Group expense'}
-                      </Link>
-                    </strong>
+                    <strong>{expense.title ?? 'Group expense'}</strong>
                     <small>
                       {new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()} ·
                       Group expense
                     </small>
                   </span>
                   <strong className="finance-record-amount">
-                    {formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}
+                    {formatMinor(
+                      asMinor(expense.amountMinor),
+                      expense.currency ?? group.currency ?? 'INR',
+                    )}
                   </strong>
                 </li>
               ))}

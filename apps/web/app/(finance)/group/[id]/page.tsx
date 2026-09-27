@@ -11,11 +11,12 @@ import {
   Plus,
   Settings2,
 } from 'lucide-react';
-import { calculateNetBalances } from '@convex/splits/domain';
+import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
 import { Avatar, Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
+import { isGroupRangeCovered } from '@/lib/offline/repository';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type Group = LocalRecord & {
@@ -87,18 +88,35 @@ export default function GroupHomePage() {
   const groupIds = group ? recordIds(group) : [groupId];
   const localGroupId = group ? recordId(group) : groupId;
   const groupReady = Boolean(group);
+  const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
 
   React.useEffect(() => {
     if (!userId || !group) return;
-    if (!isConnected) {
-      setRangeStatus('uncached');
-      setRangeError('Offline. Showing saved records; the all-time range may be incomplete.');
-      return;
-    }
     let active = true;
+    if (!isConnected) {
+      void isGroupRangeCovered(userId, localGroupId, 0, rangeEndAt).then(
+        (covered) => {
+          if (!active) return;
+          setRangeStatus(covered ? 'loaded' : 'uncached');
+          setRangeError(
+            covered ? '' : 'Offline. Showing saved records; the all-time range may be incomplete.',
+          );
+        },
+        (cause: unknown) => {
+          if (!active) return;
+          setRangeStatus('error');
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Saved range coverage could not be checked.',
+          );
+        },
+      );
+      return () => {
+        active = false;
+      };
+    }
     setRangeStatus('loading');
     setRangeError('');
-    void fetchGroupRange(localGroupId, 0, Date.now() + 1).then(
+    void fetchGroupRange(localGroupId, 0, rangeEndAt).then(
       () => {
         if (active) setRangeStatus('loaded');
       },
@@ -114,7 +132,7 @@ export default function GroupHomePage() {
     return () => {
       active = false;
     };
-  }, [fetchGroupRange, groupReady, isConnected, localGroupId, userId]);
+  }, [fetchGroupRange, groupReady, isConnected, localGroupId, rangeEndAt, userId]);
 
   if (!userId)
     return (
@@ -173,82 +191,24 @@ export default function GroupHomePage() {
     const transactionIds = recordIds(expense);
     return transactionIds.length > 0;
   });
-  const eligibleTransactionIds = new Set(activeExpenses.flatMap(recordIds));
-  const payerRows = payers.filter(
-    (item) =>
-      typeof item.transactionId === 'string' && eligibleTransactionIds.has(item.transactionId),
-  );
-  const participantRows = participants.filter(
-    (item) =>
-      typeof item.transactionId === 'string' && eligibleTransactionIds.has(item.transactionId),
-  );
-  let incompleteAllocation = false;
-  const payerAmounts: Array<{ userId: string; amountMinor: bigint }> = [];
-  const participantAmounts: Array<{ userId: string; amountMinor: bigint }> = [];
-  for (const expense of activeExpenses) {
-    const expenseIds = recordIds(expense);
-    const relatedPayers = payerRows.filter(
-      (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-    );
-    const relatedParticipants = participantRows.filter(
-      (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-    );
-    const expensePayers = relatedPayers.length
-      ? relatedPayers.map((item) => ({
-          userId: String(item.userId ?? item.memberId ?? ''),
-          amountMinor: asMinor(item.amountMinor),
-        }))
-      : expense.payerUserId
-        ? [
-            {
-              userId: expense.payerUserId,
-              amountMinor: asMinor(expense.payerAmountMinor ?? expense.amountMinor),
-            },
-          ]
-        : [];
-    const expenseParticipants = relatedParticipants.length
-      ? relatedParticipants.map((item) => ({
-          userId: String(item.userId ?? item.memberId ?? ''),
-          amountMinor: asMinor(item.amountMinor),
-        }))
-      : (expense.participants ?? []).map((item) => ({
-          userId: item.userId,
-          amountMinor: asMinor(item.amountMinor),
-        }));
-    const expected = asMinor(expense.amountMinor);
-    if (
-      !expensePayers.length ||
-      !expenseParticipants.length ||
-      expensePayers.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected ||
-      expenseParticipants.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected
-    )
-      incompleteAllocation = true;
-    payerAmounts.push(...expensePayers);
-    participantAmounts.push(...expenseParticipants);
-  }
-  const settlementRows = settlements
-    .filter(
-      (item) =>
-        typeof item.groupId === 'string' &&
-        groupIds.includes(item.groupId) &&
-        item.currency === (group.currency ?? 'INR') &&
-        item.deletedAt === undefined,
-    )
-    .map((item) => ({
-      fromUserId: String(item.fromUserId ?? ''),
-      toUserId: String(item.toUserId ?? ''),
-      amountMinor: asMinor(item.amountMinor),
-    }));
+  const rangeComplete = rangeStatus === 'loaded';
   let balanceByUser: Record<string, bigint> = {};
-  let ledgerError = incompleteAllocation ? 'INCOMPLETE_GROUP_SPLITS' : '';
-  if (!incompleteAllocation) {
+  let ledgerError = '';
+  if (rangeComplete) {
     try {
-      balanceByUser = calculateNetBalances(payerAmounts, participantAmounts, settlementRows);
+      balanceByUser = projectGroupBalances(
+        group,
+        transactions,
+        payers,
+        participants,
+        settlements,
+      ).balances;
     } catch (cause) {
       ledgerError = cause instanceof Error ? cause.message : 'The group balance is incomplete.';
     }
   }
-  const myBalance = userId ? (balanceByUser[userId] ?? 0n) : 0n;
+  const ledgerUnavailable = !rangeComplete || Boolean(ledgerError);
+  const myBalance = ledgerUnavailable ? 0n : userId ? (balanceByUser[userId] ?? 0n) : 0n;
   const recent = [...activeExpenses]
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
     .slice(0, 5);
@@ -264,10 +224,9 @@ export default function GroupHomePage() {
               ? `@${member.username}`
               : `Member ${String(member.userId ?? '').slice(-6)}`)),
     ),
-    balance: balanceByUser[String(member.userId ?? member.memberId ?? '')] ?? 0n,
   }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
-    memberNames.unshift({ id: userId, username: undefined, name: 'You', balance: myBalance });
+    memberNames.unshift({ id: userId, username: undefined, name: 'You' });
   const formatDate = (value: unknown) => new Date(Number(value ?? Date.now())).toLocaleDateString();
 
   return (
@@ -329,8 +288,10 @@ export default function GroupHomePage() {
           action={
             <Badge
               variant={
-                ledgerError
-                  ? 'danger'
+                ledgerUnavailable
+                  ? rangeStatus === 'loading'
+                    ? 'neutral'
+                    : 'danger'
                   : myBalance === 0n
                     ? 'neutral'
                     : myBalance > 0n
@@ -338,7 +299,7 @@ export default function GroupHomePage() {
                       : 'danger'
               }
             >
-              {ledgerError
+              {ledgerUnavailable
                 ? 'Unavailable'
                 : myBalance === 0n
                   ? 'You are settled'
@@ -349,11 +310,17 @@ export default function GroupHomePage() {
           }
         />
         <strong className="finance-record-amount">
-          {ledgerError ? 'Balance unavailable' : formatMinor(myBalance, group.currency ?? 'INR')}
+          {ledgerUnavailable
+            ? rangeStatus === 'loading' && !ledgerError
+              ? 'Loading…'
+              : 'Balance unavailable'
+            : formatMinor(myBalance, group.currency ?? 'INR')}
         </strong>
         <p className="finance-muted">
-          {ledgerError
-            ? 'Complete group balances are unavailable. No partial value is shown.'
+          {ledgerUnavailable
+            ? rangeStatus === 'loading' && !ledgerError
+              ? 'Loading all-time balance…'
+              : 'Complete group balances are unavailable. No partial value is shown.'
             : myBalance === 0n
               ? 'You are settled.'
               : myBalance > 0n
@@ -404,15 +371,6 @@ export default function GroupHomePage() {
                   />
                   <span className="finance-record-copy">
                     <strong>{member.name}</strong>
-                    <small>
-                      {ledgerError
-                        ? 'Balance unavailable'
-                        : member.balance === 0n
-                          ? 'Even'
-                          : member.balance > 0n
-                            ? `Owed ${formatMinor(member.balance, group.currency ?? 'INR')}`
-                            : `Owes ${formatMinor(-member.balance, group.currency ?? 'INR')}`}
-                    </small>
                   </span>
                   {member.id !== userId && member.username && (
                     <Link
@@ -433,17 +391,7 @@ export default function GroupHomePage() {
           )}
         </Card>
         <Card className="finance-record-panel">
-          <SectionHeader
-            title="Recent"
-            action={
-              <Link
-                className="finance-secondary-action"
-                href={`/group/${encodeURIComponent(localGroupId)}/expenses`}
-              >
-                All expenses <ArrowRight size={15} />
-              </Link>
-            }
-          />
+          <SectionHeader title="Recent" />
           {recent.length ? (
             <ul className="finance-record-list">
               {recent.map((expense) => (
