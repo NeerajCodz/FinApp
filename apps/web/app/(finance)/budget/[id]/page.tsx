@@ -52,7 +52,11 @@ export default function PersonalBudgetDetailPage() {
   const { records: categories } = useLocalRecords<Category>('category');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const budget = budgets.find(
-    (item) => userId && belongsToUser(item, userId) && matchesId(item, routeId),
+    (item) =>
+      userId &&
+      belongsToUser(item, userId) &&
+      matchesId(item, routeId) &&
+      item.archivedAt === undefined,
   );
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -181,7 +185,7 @@ export default function PersonalBudgetDetailPage() {
       <div className="finance-page">
         <Empty
           title="Budget unavailable"
-          description="This budget is not in the current user's local records."
+          description="It may have been archived or removed. Your other budgets are still available."
           action={
             <Link className="finance-inline-link" href="/budget">
               Back to budgets
@@ -206,7 +210,7 @@ export default function PersonalBudgetDetailPage() {
       <PageHeading
         eyebrow="BUDGET DETAIL"
         title={budget.name ?? 'Budget'}
-        description={`${scope} · ${currency}${budget.archivedAt !== undefined ? ' · Archived' : ''}`}
+        description={`${scope} · ${currency}`}
       />
       <div className="finance-dashboard-grid">
         <Card className="finance-metric-card finance-balance-card">
@@ -280,28 +284,20 @@ export default function PersonalBudgetDetailPage() {
           </ul>
         </Card>
       </div>
-      {budget.archivedAt === undefined ? (
-        <Card className="finance-record-panel">
-          <SectionHeader title="Archive budget" />
-          <p className="finance-muted">
-            Archiving removes this budget from active tracking without deleting its record.
+      <Card className="finance-record-panel">
+        <SectionHeader title="Archive budget" />
+        <p className="finance-muted">
+          Archiving removes this budget from active tracking without deleting its record.
+        </p>
+        {formError && (
+          <p className="finance-form-error" role="alert">
+            {formError}
           </p>
-          {formError && (
-            <p className="finance-form-error" role="alert">
-              {formError}
-            </p>
-          )}
-          <Button type="button" variant="outline" disabled={pending} onPress={() => void archive()}>
-            {pending ? 'Archiving…' : 'Archive budget'} <ArrowRight size={15} />
-          </Button>
-        </Card>
-      ) : (
-        <Card className="finance-record-panel">
-          <p className="finance-muted">
-            This budget is archived and will not be changed by new transactions.
-          </p>
-        </Card>
-      )}
+        )}
+        <Button type="button" variant="outline" disabled={pending} onPress={() => void archive()}>
+          {pending ? 'Archiving…' : 'Archive budget'} <ArrowRight size={15} />
+        </Button>
+      </Card>
       <Card className="finance-record-panel">
         <SectionHeader
           title="Recent expenses"

@@ -3,14 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowRight, Plus, Target } from 'lucide-react';
-import { Badge, Button, Card, Empty, SectionHeader, Select } from '@finapp/ui/web';
+import { Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { FinanceInput } from '@/components/finance/FinanceInput';
 
-type Account = LocalRecord & { currency?: string; archivedAt?: number };
 type Profile = LocalRecord & { defaultCurrency?: string };
 type Settings = LocalRecord & { currency?: string };
 type Goal = LocalRecord & {
@@ -48,7 +47,6 @@ export default function GoalsPage() {
     loading: contributionsLoading,
     error: contributionsError,
   } = useLocalRecords<Contribution>('goalContribution');
-  const { records: accounts, loading: accountsLoading } = useLocalRecords<Account>('account');
   const {
     records: profiles,
     loading: profilesLoading,
@@ -61,17 +59,10 @@ export default function GoalsPage() {
   } = useLocalRecords<Settings>('settings');
   const [name, setName] = React.useState('');
   const [target, setTarget] = React.useState('');
-  const [currency, setCurrency] = React.useState('');
-  const [targetDate, setTargetDate] = React.useState('');
   const [adding, setAdding] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
-  const preferredCurrency =
-    profiles[0]?.defaultCurrency ?? settings[0]?.currency ?? accounts[0]?.currency;
-  React.useEffect(() => {
-    if (!currency && preferredCurrency) setCurrency(preferredCurrency);
-  }, [currency, preferredCurrency]);
-  const selectedCurrency = currency || preferredCurrency || 'INR';
+  const selectedCurrency = profiles[0]?.defaultCurrency ?? settings[0]?.currency ?? '';
   const activeGoals = goals
     .filter((goal) => goal.archivedAt === undefined)
     .sort(
@@ -86,7 +77,7 @@ export default function GoalsPage() {
     const saved = contributions
       .filter((entry) => typeof entry.goalId === 'string' && goalAliases.includes(entry.goalId))
       .reduce((sum, entry) => sum + toMinor(entry.amountMinor), 0n);
-    const goalCurrency = goal.currency ?? selectedCurrency;
+    const goalCurrency = goal.currency ?? (selectedCurrency || 'INR');
     const targetMinor = toMinor(goal.targetAmountMinor);
     const percent = targetMinor > 0n ? Number((saved * 100n) / targetMinor) : 0;
     return { goal, saved, targetMinor, currency: goalCurrency, percent };
@@ -94,28 +85,23 @@ export default function GoalsPage() {
   const currencies = new Set(goalRows.map((row) => row.currency));
   const totalSaved =
     currencies.size === 1 ? goalRows.reduce((sum, row) => sum + row.saved, 0n) : null;
-  const loading =
-    goalsLoading || contributionsLoading || accountsLoading || profilesLoading || settingsLoading;
+  const loading = goalsLoading || contributionsLoading || profilesLoading || settingsLoading;
   const loadError = goalsError ?? contributionsError ?? profilesError ?? settingsError;
 
   async function createGoal(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userId || saving) return;
+    if (!userId || !selectedCurrency || !name.trim() || saving) return;
     setSaving(true);
     setError(null);
     try {
       const targetAmountMinor = parseMinor(target, selectedCurrency);
       if (targetAmountMinor <= 0n) throw new Error('Enter a positive target amount.');
-      const date = targetDate ? new Date(`${targetDate}T12:00:00`).getTime() : undefined;
-      if (date !== undefined && (!Number.isFinite(date) || date <= Date.now()))
-        throw new Error('Choose a target date in the future.');
       const now = Date.now();
       const record: LocalRecord = {
         ownerId: userId,
         name: name.trim(),
         targetAmountMinor,
         currency: selectedCurrency,
-        ...(date !== undefined ? { targetDate: date } : {}),
         createdAt: now,
         updatedAt: now,
       };
@@ -123,11 +109,9 @@ export default function GoalsPage() {
         name: name.trim(),
         targetAmountMinor,
         currency: selectedCurrency,
-        ...(date !== undefined ? { targetDate: date } : {}),
       });
       setName('');
       setTarget('');
-      setTargetDate('');
       setAdding(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this goal.');
@@ -163,7 +147,12 @@ export default function GoalsPage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
           <Badge variant="neutral">{activeGoals.length} active</Badge>
           {!adding ? (
-            <Button type="button" variant="outline" onPress={() => setAdding(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading || !selectedCurrency}
+              onPress={() => setAdding(true)}
+            >
               <Plus size={16} /> Add goal
             </Button>
           ) : (
@@ -173,6 +162,14 @@ export default function GoalsPage() {
           )}
         </div>
       </header>
+      {!loading && !selectedCurrency && (
+        <p className="finance-form-note">
+          Choose a default currency in settings before creating a goal.{' '}
+          <Link className="finance-inline-link" href="/settings/currency">
+            Set default currency
+          </Link>
+        </p>
+      )}
       {(error || loadError) && (
         <p className="finance-form-error" role="alert">
           {error ?? `Saved goals could not be opened: ${loadError}`}
@@ -213,7 +210,7 @@ export default function GoalsPage() {
               description="Set a target and track each contribution in one place."
               icon={<Target size={20} />}
               action={
-                !adding ? (
+                !adding && selectedCurrency ? (
                   <Button type="button" size="sm" onPress={() => setAdding(true)}>
                     Create a goal
                   </Button>
@@ -286,34 +283,13 @@ export default function GoalsPage() {
                 maxLength={80}
               />
               <FinanceInput
-                label={`Target amount · ${selectedCurrency}`}
+                label={`Target amount · ${selectedCurrency || 'currency unavailable'}`}
                 type="number"
                 min="0.01"
                 step={selectedCurrency === 'JPY' || selectedCurrency === 'KRW' ? '1' : '0.01'}
                 value={target}
                 onChangeText={setTarget}
                 required
-              />
-              <Select
-                label="Currency"
-                options={[
-                  ...new Set([
-                    selectedCurrency,
-                    ...accounts.map((account) => account.currency ?? 'INR'),
-                    'INR',
-                    'USD',
-                    'EUR',
-                    'GBP',
-                  ]),
-                ]}
-                value={selectedCurrency}
-                onChange={setCurrency}
-              />
-              <FinanceInput
-                label="Target date"
-                type="date"
-                value={targetDate}
-                onChangeText={setTargetDate}
               />
               {error && (
                 <p className="finance-form-error" role="alert">
@@ -326,7 +302,9 @@ export default function GoalsPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={saving || loading || !name.trim() || !target.trim()}
+                  disabled={
+                    saving || loading || !selectedCurrency || !name.trim() || !target.trim()
+                  }
                 >
                   {saving ? 'Saving…' : 'Save goal'} <ArrowRight size={15} />
                 </Button>

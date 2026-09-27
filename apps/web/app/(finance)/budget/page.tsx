@@ -40,25 +40,25 @@ export default function PersonalBudgetsPage() {
   const { records: transactions } = useLocalRecords<Transaction>('transaction');
   const { records: accountRecords } = useLocalRecords<Account>('account');
   const { records: categoryRecords } = useLocalRecords<Category>('category');
-  const [showArchived, setShowArchived] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
   const budgets = budgetRecords
-    .filter((item) => userId && belongsToUser(item, userId))
+    .filter(
+      (item) =>
+        userId && belongsToUser(item, userId) && item.archivedAt === undefined,
+    )
     .sort(
       (left, right) =>
         Number(left.startAt ?? 0) - Number(right.startAt ?? 0) ||
         (left.name ?? '').localeCompare(right.name ?? ''),
     );
-  const active = budgets.filter((item) => item.archivedAt === undefined);
-  const shown = budgets.filter((item) => showArchived === (item.archivedAt !== undefined));
-  const rangeStartAt = active.length
-    ? active.reduce(
+  const rangeStartAt = budgets.length
+    ? budgets.reduce(
         (minimum, item) => Math.min(minimum, Number(item.startAt ?? 0)),
         Number.MAX_SAFE_INTEGER,
       )
     : null;
-  const rangeEndAt = active.length
-    ? active.reduce((maximum, item) => Math.max(maximum, Number(item.endAt ?? 1)), 0)
+  const rangeEndAt = budgets.length
+    ? budgets.reduce((maximum, item) => Math.max(maximum, Number(item.endAt ?? 1)), 0)
     : null;
   React.useEffect(() => {
     if (!userId || rangeStartAt === null || rangeEndAt === null || !isConnected) return;
@@ -114,7 +114,7 @@ export default function PersonalBudgetsPage() {
       return sum + asMinor(transaction.amountMinor);
     }, 0n);
   };
-  const featuredBudget = active[0];
+  const featuredBudget = budgets[0];
   const featuredAccount = featuredBudget?.accountId
     ? accountByAlias.get(featuredBudget.accountId)
     : undefined;
@@ -135,22 +135,15 @@ export default function PersonalBudgetsPage() {
       <PageHeading
         eyebrow="MAKE ROOM FOR WHAT MATTERS"
         title="Budgets"
-        description="Review spending limits against posted expenses. Archived budgets remain available without changing past records."
+        description="Review spending limits against posted expenses."
       />
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Badge variant="neutral">{active.length} active</Badge>
-        <Button
-          type="button"
-          variant={showArchived ? 'secondary' : 'outline'}
-          onPress={() => setShowArchived((value) => !value)}
-        >
-          {showArchived ? 'Show active' : 'Show archived'}
-        </Button>
+        <Badge variant="neutral">{budgets.length} active</Badge>
         <Link className="finance-primary-link" href="/budget/new">
           New budget <Plus size={16} />
         </Link>
       </div>
-      {!showArchived && featuredBudget && (
+      {featuredBudget && (
         <Card className="finance-metric-card finance-balance-card">
           <span className="finance-metric-label">BUDGET OVERVIEW · {featuredCurrency}</span>
           <strong>{formatMinor(featuredSpent, featuredCurrency)}</strong>
@@ -193,7 +186,7 @@ export default function PersonalBudgetsPage() {
       )}
       <Card className="finance-record-panel">
         <SectionHeader
-          title={showArchived ? 'Archived budgets' : 'Your budgets'}
+          title="Your budgets"
           action={
             <Link href="/budget/new" aria-label="Add budget">
               <Plus size={17} />
@@ -208,26 +201,20 @@ export default function PersonalBudgetsPage() {
           <p className="finance-form-error" role="alert">
             Budget data could not be opened: {error}
           </p>
-        ) : shown.length === 0 ? (
+        ) : budgets.length === 0 ? (
           <Empty
-            title={showArchived ? 'No archived budgets' : 'No budgets yet'}
-            description={
-              showArchived
-                ? 'Archived budgets stay available for reference.'
-                : 'Create a limit for all spending, a category, an account, or a custom date range.'
-            }
+            title="No budgets yet"
+            description="Create a limit for all spending, a category, an account, or a custom date range."
             icon={<CalendarDays size={20} />}
             action={
-              !showArchived ? (
-                <Link className="finance-inline-link" href="/budget/new">
-                  Create a budget
-                </Link>
-              ) : undefined
+              <Link className="finance-inline-link" href="/budget/new">
+                Create a budget
+              </Link>
             }
           />
         ) : (
           <ul className="finance-plan-cards">
-            {shown.map((budget) => {
+            {budgets.map((budget) => {
               const category = budget.categoryId
                 ? categoryByAlias.get(budget.categoryId)
                 : undefined;
@@ -256,7 +243,6 @@ export default function PersonalBudgetsPage() {
                         <strong>{budget.name ?? 'Budget'}</strong>
                         <small>
                           {scope} · {currency}
-                          {budget.archivedAt !== undefined ? ' · archived' : ''}
                         </small>
                       </span>
                       <strong>

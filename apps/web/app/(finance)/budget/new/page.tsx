@@ -48,7 +48,6 @@ export default function NewPersonalBudgetPage() {
   const [period, setPeriod] = React.useState<Period>('monthly');
   const [categoryId, setCategoryId] = React.useState('');
   const [accountId, setAccountId] = React.useState('');
-  const [month, setMonth] = React.useState(() => new Date().toISOString().slice(0, 7));
   const [startDate, setStartDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = React.useState(() => {
     const now = new Date();
@@ -95,21 +94,21 @@ export default function NewPersonalBudgetPage() {
       const amountMinor = parseMinor(amount, currency);
       if (amountMinor <= 0n || amountMinor > maxInt64)
         throw new Error('Enter a positive valid budget limit.');
+      const now = Date.now();
       let startAt: number | null;
       let endAt: number | null;
       if (period === 'custom') {
         startAt = dateAtUtcStart(startDate);
         endAt = dateAtUtcStart(endDate);
       } else {
-        if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Choose a valid month.');
-        const [year, monthNumber] = month.split('-').map(Number);
-        if (!year || !monthNumber || monthNumber > 12) throw new Error('Choose a valid month.');
-        startAt = Date.UTC(year, monthNumber - 1, 1);
-        endAt = Date.UTC(year, monthNumber, 1);
+        const currentUtcMonth = new Date(now);
+        const year = currentUtcMonth.getUTCFullYear();
+        const month = currentUtcMonth.getUTCMonth();
+        startAt = Date.UTC(year, month, 1);
+        endAt = Date.UTC(year, month + 1, 1);
       }
       if (startAt === null || endAt === null || endAt <= startAt)
         throw new Error('Choose a valid date range with an end after its start.');
-      const now = Date.now();
       const record: LocalRecord = {
         ownerId: userId,
         name: trimmedName,
@@ -147,7 +146,6 @@ export default function NewPersonalBudgetPage() {
       setSaving(false);
     }
   }
-
   if (!userId)
     return (
       <SignInGate eyebrow="NEW BUDGET" title="Give spending a boundary.">
@@ -270,7 +268,7 @@ export default function NewPersonalBudgetPage() {
                 required
               />
             )}
-            {period === 'custom' ? (
+            {period === 'custom' && (
               <div className="finance-form-row">
                 <FinanceInput
                   label="Starts on"
@@ -287,14 +285,6 @@ export default function NewPersonalBudgetPage() {
                   required
                 />
               </div>
-            ) : (
-              <FinanceInput
-                label="Month"
-                type="month"
-                value={month}
-                onChangeText={setMonth}
-                required
-              />
             )}
             {error && (
               <p className="finance-form-error" role="alert">
