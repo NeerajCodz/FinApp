@@ -30,6 +30,7 @@ export default defineSchema({
     createdAt: v.optional(timestamp),
     updatedAt: v.optional(timestamp),
     deletedAt: optionalTime,
+    signupTwoFactorEnabled: v.optional(v.boolean()),
   })
     .index('email', ['email'])
     .index('by_identityId', ['identityId'])

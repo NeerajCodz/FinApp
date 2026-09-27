@@ -23,11 +23,13 @@ export const current = query({
 export const twoFactorEnabledForUser = internalQuery({
   args: { userId: v.id('users') },
   handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    if (!user || user.deletedAt !== undefined) return false;
     const settings = await ctx.db
       .query('userSettings')
       .withIndex('by_user', (query) => query.eq('userId', userId))
       .unique();
-    return settings?.twoFactorEnabled ?? false;
+    return settings?.twoFactorEnabled ?? user.signupTwoFactorEnabled ?? false;
   },
 });
 
@@ -43,7 +45,7 @@ export const twoFactorEnabledForEmail = internalQuery({
       .query('userSettings')
       .withIndex('by_user', (query) => query.eq('userId', user._id))
       .unique();
-    return settings?.twoFactorEnabled ?? false;
+    return settings?.twoFactorEnabled ?? user.signupTwoFactorEnabled ?? false;
   },
 });
 
@@ -56,7 +58,9 @@ export const securityPreferences = query({
       .query('userSettings')
       .withIndex('by_user', (query) => query.eq('userId', user._id))
       .unique();
-    return { twoFactorEnabled: settings?.twoFactorEnabled ?? false };
+    return {
+      twoFactorEnabled: settings?.twoFactorEnabled ?? user.signupTwoFactorEnabled ?? false,
+    };
   },
 });
 

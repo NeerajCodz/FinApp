@@ -19,6 +19,12 @@ import { createNotification } from './notifications/mutations';
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const passwordProvider = Password({
+  profile: (params) => ({
+    email: params.email as string,
+    ...(params.flow === 'signUp'
+      ? { signupTwoFactorEnabled: params.twoFactorEnabled === 'true' }
+      : {}),
+  }),
   verify: resendOtpProvider('resend-email-verification', 'verify'),
   reset: resendOtpProvider('resend-password-reset', 'reset'),
   validatePasswordRequirements: (password) => {

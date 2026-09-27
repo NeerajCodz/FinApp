@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
-import { Button, Input, Label } from '@finapp/ui/web';
+import { Button, Checkbox, Input, Label } from '@finapp/ui/web';
 import { AuthFrame } from '@/components/auth/AuthFrame';
 
 export default function SignUpPage() {
   const [email, setEmail] = React.useState('');
+  const [twoFactorEnabled, setTwoFactorEnabled] = React.useState(false);
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [pending, setPending] = React.useState(false);
@@ -25,6 +26,7 @@ export default function SignUpPage() {
     const form = new FormData();
     form.set('email', normalizedEmail);
     form.set('password', password);
+    form.set('twoFactorEnabled', twoFactorEnabled ? 'true' : 'false');
     form.set('flow', 'signUp');
     try {
       const result = await signIn('password', form);
@@ -80,6 +82,14 @@ export default function SignUpPage() {
             required
           />
           <span className="auth-helper">Use at least eight characters.</span>
+        </div>
+        <div className="auth-two-factor-option">
+          <Checkbox
+            checked={twoFactorEnabled}
+            onChange={setTwoFactorEnabled}
+            label="Use email two-factor sign-in"
+          />
+          <p>Optional. Require a code sent to your email after your password.</p>
         </div>
         {error && (
           <p className="auth-error" role="alert" aria-live="polite">

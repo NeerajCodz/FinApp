@@ -167,7 +167,7 @@ export const setTwoFactorEnabled = mutation({
         updatedAt,
       });
     }
-    await ctx.db.patch(user._id, { updatedAt });
+    await ctx.db.patch(user._id, { updatedAt, signupTwoFactorEnabled: undefined });
     return { twoFactorEnabled: enabled };
   },
 });
