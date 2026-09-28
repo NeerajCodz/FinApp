@@ -29,4 +29,7 @@ describe('offline financial safety', () => {
   it('exports safe CSV data', () => {
     expect(exportCsv([{ amountMinor: 100n, title: 'Lunch' }])).toContain('100n,Lunch');
   });
+  it('quotes CSV cells containing commas, quotes, and line breaks', () => {
+    expect(exportCsv([{ title: 'A,\r\n"B"' }])).toBe('title\n"A,\r\n""B"""');
+  });
 });

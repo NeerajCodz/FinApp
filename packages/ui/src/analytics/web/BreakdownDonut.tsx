@@ -4,7 +4,7 @@ import { CategoryIcon } from '@finapp/ui/finance';
 import { formatMinor } from '@convex/shared/money';
 import type { AnalyticsBreakdownItem } from '@convex/analytics/domain';
 
-const chartColors = ['volt', 'blue', 'violet'] as const;
+const chartColors = ['volt', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
 
 export function BreakdownDonut({
   items,

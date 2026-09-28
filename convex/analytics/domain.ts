@@ -111,6 +111,14 @@ export function getAnalyticsRange(period: AnalyticsPeriod, referenceAt: number, 
     previousStartAt: startOfDate(previous, formatter),
   };
 }
+export function getAnalyticsDayRange(referenceAt: number, timeZone: string) {
+  const formatter = calendarFormatter(timeZone || 'UTC');
+  const current = calendarParts(formatter, referenceAt);
+  return {
+    startAt: startOfDate(current, formatter),
+    endAt: startOfDate(shiftDate(current, 1), formatter),
+  };
+}
 
 export function validateAnalyticsRange(period: AnalyticsPeriod, startAt: number, endAt: number) {
   const duration = endAt - startAt;

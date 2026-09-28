@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateAnalytics,
   deterministicInsights,
+  getAnalyticsDayRange,
   getAnalyticsRange,
   validateAnalyticsRange,
 } from '../../convex/analytics/domain';
@@ -164,6 +165,21 @@ describe('analytics domains', () => {
       endAt: Date.UTC(2024, 11, 31, 18, 30),
       previousStartAt: Date.UTC(2022, 11, 31, 18, 30),
     });
+  });
+  it('uses local day boundaries across 23-hour and 25-hour DST days', () => {
+    const spring = getAnalyticsDayRange(Date.UTC(2024, 2, 10, 12), 'America/New_York');
+    expect(spring).toEqual({
+      startAt: Date.UTC(2024, 2, 10, 5),
+      endAt: Date.UTC(2024, 2, 11, 4),
+    });
+    expect(spring.endAt - spring.startAt).toBe(23 * 60 * 60 * 1000);
+
+    const fall = getAnalyticsDayRange(Date.UTC(2024, 10, 3, 12), 'America/New_York');
+    expect(fall).toEqual({
+      startAt: Date.UTC(2024, 10, 3, 4),
+      endAt: Date.UTC(2024, 10, 4, 5),
+    });
+    expect(fall.endAt - fall.startAt).toBe(25 * 60 * 60 * 1000);
   });
 
   it('buckets both series on local dates with half-open bounds and exact bigint rankings', () => {
