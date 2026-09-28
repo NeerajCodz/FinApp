@@ -25,7 +25,6 @@ export type HomeDashboardProps = {
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
   onOpenSync: () => void;
-  onAddTransaction: () => void;
   onOpenTransaction: (id: string) => void;
   onSeeAllTransactions: () => void;
   onOpenBudget: (id: string) => void;

@@ -173,7 +173,6 @@ export default function HomeScreen() {
           onAccountChange={setSelectedAccountId}
           onChooseDate={() => setPeriodOpen(true)}
           onOpenSync={() => setSyncOpen(true)}
-          onAddTransaction={() => router.push('/transaction/new' as never)}
           onOpenTransaction={(id) => router.push(`/transaction/${id}` as never)}
           onSeeAllTransactions={() => router.push('/(tabs)/activity' as never)}
           onOpenBudget={(id) => router.push(`/budget/${id}` as never)}

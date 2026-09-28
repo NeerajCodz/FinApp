@@ -143,7 +143,6 @@ export default function DashboardPage() {
         onAccountChange={setSelectedAccountId}
         onChooseDate={() => setPeriodOpen(true)}
         onOpenSync={() => setSyncOpen(true)}
-        onAddTransaction={() => router.push('/transaction/new')}
         onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
         onSeeAllTransactions={() => router.push('/activity')}
         onOpenBudget={(id) => router.push(`/budget/${encodeURIComponent(id)}`)}

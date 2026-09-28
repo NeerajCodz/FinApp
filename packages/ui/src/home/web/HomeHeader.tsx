@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarDays, Plus, Search, ShieldCheck } from 'lucide-react';
+import { CalendarDays, Search, ShieldCheck } from 'lucide-react';
 import type { HomeAccountOption } from '../types';
 
 export function HomeHeader({
@@ -11,7 +11,6 @@ export function HomeHeader({
   onAccountChange,
   onChooseDate,
   onOpenSync,
-  onAddTransaction,
 }: {
   accounts: readonly HomeAccountOption[];
   selectedAccountId: string;
@@ -21,7 +20,6 @@ export function HomeHeader({
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
   onOpenSync: () => void;
-  onAddTransaction: () => void;
 }) {
   return (
     <header className="finance-home-toolbar">
@@ -66,9 +64,6 @@ export function HomeHeader({
           onClick={onOpenSync}
         >
           <ShieldCheck size={18} aria-hidden="true" />
-        </button>
-        <button className="finance-home-add" type="button" onClick={onAddTransaction}>
-          <Plus size={16} aria-hidden="true" /> Add transaction
         </button>
       </div>
     </header>

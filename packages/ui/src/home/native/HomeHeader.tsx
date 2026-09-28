@@ -1,11 +1,6 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import {
-  CalendarDays,
-  ClockCounterClockwise,
-  MagnifyingGlass,
-  Plus,
-} from '@finapp/ui/icons/native';
+import { CalendarDays, ClockCounterClockwise, MagnifyingGlass } from '@finapp/ui/icons/native';
 import { Button, IconButton, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import type { HomeAccountOption } from '../types';
 
@@ -18,7 +13,6 @@ export function HomeHeader({
   onAccountChange,
   onChooseDate,
   onOpenSync,
-  onAddTransaction,
 }: {
   accounts: readonly HomeAccountOption[];
   selectedAccountId: string;
@@ -28,7 +22,6 @@ export function HomeHeader({
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
   onOpenSync: () => void;
-  onAddTransaction: () => void;
 }) {
   const { tokens } = useTheme();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -91,9 +84,6 @@ export function HomeHeader({
           autoFocus
         />
       )}
-      <Button onPress={onAddTransaction} style={{ minHeight: 46 }}>
-        <Plus size={17} color={tokens.primaryForeground} /> Add transaction
-      </Button>
       <Sheet visible={accountOpen} onClose={() => setAccountOpen(false)} title="Choose account">
         <View style={{ gap: 6 }}>
           <Button

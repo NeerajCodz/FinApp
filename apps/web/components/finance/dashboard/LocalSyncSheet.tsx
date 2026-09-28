@@ -1,13 +1,10 @@
 import React from 'react';
 import { Button, Sheet, Text, Typography, useTheme } from '@finapp/ui/web';
-import type {
-  LocalConflict,
-  LocalSyncStatus,
-  OutboxEntry,
-} from '@/lib/offline/repository';
+import type { LocalConflict, LocalSyncStatus, OutboxEntry } from '@/lib/offline/repository';
 
 export function LocalSyncSheet({
   visible,
+  isSignedIn = true,
   isConnected,
   isSyncing,
   status,
@@ -21,6 +18,7 @@ export function LocalSyncSheet({
   onOpenSettings,
 }: {
   visible: boolean;
+  isSignedIn?: boolean;
   isConnected: boolean;
   isSyncing: boolean;
   status: LocalSyncStatus;
@@ -40,24 +38,30 @@ export function LocalSyncSheet({
       <div style={{ display: 'grid', gap: 14 }}>
         <div style={{ display: 'grid', gap: 4 }}>
           <Typography variant="heading">
-            {!isConnected
-              ? 'Offline'
-              : isSyncing
-                ? 'Syncing changes'
-                : hasIssue
-                  ? 'Action needed'
-                  : status.pending > 0
-                    ? 'Changes pending'
-                    : 'Up to date'}
+            {!isSignedIn
+              ? 'Sign in to sync'
+              : !isConnected
+                ? 'Offline'
+                : isSyncing
+                  ? 'Syncing changes'
+                  : hasIssue
+                    ? 'Action needed'
+                    : status.pending > 0
+                      ? 'Changes pending'
+                      : 'Up to date'}
           </Typography>
           <Text style={{ color: tokens.foregroundMuted }}>
-            {!isConnected
-              ? 'Your cached records stay available. New edits are queued on this device.'
-              : 'Local changes sync to your cloud account when connected.'}
+            {!isSignedIn
+              ? 'Sign in to connect this device to your cloud account. Local changes stay on this device.'
+              : !isConnected
+                ? 'Your cached records stay available. New edits are queued on this device.'
+                : 'Local changes sync to your cloud account when connected.'}
           </Text>
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
-          <Text>Connection: {isConnected ? 'Online' : 'Offline'}</Text>
+          <Text>
+            Connection: {!isSignedIn ? 'Not signed in' : isConnected ? 'Online' : 'Offline'}
+          </Text>
           <Text>Pending: {status.pending}</Text>
           <Text>Active sync: {isSyncing ? 'Yes' : 'No'}</Text>
           <Text>Failed: {status.failed}</Text>
@@ -134,7 +138,7 @@ export function LocalSyncSheet({
           </div>
         )}
         {!!syncError && <Typography style={{ color: tokens.destructive }}>{syncError}</Typography>}
-        <Button size="lg" disabled={isSyncing} onPress={onRetry}>
+        <Button size="lg" disabled={!isSignedIn || isSyncing} onPress={onRetry}>
           Retry now
         </Button>
         <Button variant="outline" onPress={onOpenSettings}>
