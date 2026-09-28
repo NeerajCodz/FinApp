@@ -188,6 +188,7 @@ export default function DashboardPage() {
       />
       <LocalSyncSheet
         visible={syncOpen}
+        isSignedIn={Boolean(userId)}
         isConnected={isConnected}
         isSyncing={isSyncing}
         status={status}

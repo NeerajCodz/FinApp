@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { Check, ClockCounterClockwise, TriangleAlert } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useQueries, type RequestForQueries } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -143,7 +144,79 @@ export default function HomeScreen() {
     day: 'numeric',
   });
   const dateLabel = `${startLabel} – ${endLabel}`;
-  const syncHasIssue = status.failed > 0 || status.conflicts > 0;
+  const syncHasIssue = status.failed > 0 || status.conflicts > 0 || Boolean(syncError);
+  const syncState = syncHasIssue
+    ? 'attention'
+    : !isConnected
+      ? 'offline'
+      : isSyncing
+        ? 'syncing'
+        : status.pending > 0
+          ? 'pending'
+          : 'synced';
+  const syncTitle =
+    syncState === 'attention'
+      ? 'Needs attention'
+      : syncState === 'offline'
+        ? 'Offline'
+        : syncState === 'syncing'
+          ? 'Syncing now'
+          : syncState === 'pending'
+            ? 'Changes waiting'
+            : 'Up to date';
+  const syncDescription =
+    syncState === 'attention'
+      ? 'Some changes need a retry or conflict decision.'
+      : syncState === 'offline'
+        ? 'Changes stay on this device and sync after you reconnect.'
+        : syncState === 'syncing'
+          ? 'Your latest changes are moving to your cloud account.'
+          : syncState === 'pending'
+            ? 'Changes are saved on this device and waiting to sync.'
+            : 'Your changes are synced across your devices.';
+  const SyncIcon =
+    syncState === 'synced'
+      ? Check
+      : syncState === 'attention' || syncState === 'offline'
+        ? TriangleAlert
+        : ClockCounterClockwise;
+  const syncColor =
+    syncState === 'synced'
+      ? tokens.positive
+      : syncState === 'offline'
+        ? tokens.warning
+        : syncState === 'attention'
+          ? tokens.destructive
+          : tokens.primary;
+  const connectionColor = isConnected ? tokens.positive : tokens.warning;
+  const lastSynced = status.lastSyncedAt
+    ? new Date(status.lastSyncedAt).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'Never';
+  const syncMetrics = [
+    {
+      label: 'Pending',
+      value: String(status.pending),
+      color: status.pending ? tokens.warning : tokens.foreground,
+    },
+    {
+      label: 'Failed',
+      value: String(status.failed),
+      color: status.failed ? tokens.destructive : tokens.foreground,
+    },
+    {
+      label: 'Conflicts',
+      value: String(status.conflicts),
+      color: status.conflicts ? tokens.destructive : tokens.foreground,
+    },
+    { label: 'Active sync', value: isSyncing ? 'Running' : 'Idle', color: tokens.foreground },
+  ];
+  const { height: windowHeight } = useWindowDimensions();
   const peopleLoading = isConnected && peopleQuery === undefined;
   if (!userId) return null;
 
@@ -246,117 +319,266 @@ export default function HomeScreen() {
         </View>
       </Sheet>
       <Sheet visible={syncOpen} onClose={() => setSyncOpen(false)} title="Local sync">
-        <View style={{ gap: 14 }}>
-          <View style={{ gap: 4 }}>
-            <Typography variant="heading">
-              {!isConnected
-                ? 'Offline'
-                : isSyncing
-                  ? 'Syncing changes'
-                  : syncHasIssue
-                    ? 'Action needed'
-                    : status.pending > 0
-                      ? 'Changes pending'
-                      : 'Up to date'}
-            </Typography>
-            <Text style={{ color: tokens.foregroundMuted }}>
-              {!isConnected
-                ? 'Your cached records stay available. New edits are queued on this device.'
-                : 'Local changes sync to your cloud account when connected.'}
-            </Text>
-          </View>
-          <View style={{ gap: 6 }}>
-            <Text>Connection: {isConnected ? 'Online' : 'Offline'}</Text>
-            <Text>Pending: {status.pending}</Text>
-            <Text>Active sync: {isSyncing ? 'Yes' : 'No'}</Text>
-            <Text>Failed: {status.failed}</Text>
-            <Text>Conflicts: {status.conflicts}</Text>
-            <Text>
-              Last successful cloud sync:{' '}
-              {status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleString() : 'Never'}
-            </Text>
-          </View>
-          {failedEntries.length > 0 && (
-            <ScrollView style={{ maxHeight: 220 }} contentContainerStyle={{ gap: 10 }}>
-              {failedEntries.map((entry) => (
-                <View key={entry.localId} style={{ gap: 5 }}>
-                  <Typography variant="small">{entry.operation}</Typography>
-                  <Text style={{ color: tokens.destructive }}>
-                    {entry.lastError ?? 'Cloud rejected this change.'}
-                  </Text>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isSyncing}
-                    onPress={() => void retryEntry(entry.localId)}
-                    style={{ alignSelf: 'flex-start' }}
+        <View style={{ gap: 12 }}>
+          <ScrollView
+            style={{ maxHeight: windowHeight * 0.54 }}
+            contentContainerStyle={{ gap: 12, paddingBottom: 2 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                borderRadius: 16,
+                padding: 14,
+                backgroundColor: tokens.surfaceRaised,
+              }}
+            >
+              <View
+                style={{
+                  width: 42,
+                  height: 42,
+                  flex: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.borderSubtle,
+                  backgroundColor: tokens.surfaceSubtle,
+                }}
+              >
+                <SyncIcon size={20} color={syncColor} />
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Typography
+                  variant="caption"
+                  style={{
+                    color: syncColor,
+                    fontSize: 10,
+                    letterSpacing: 1.1,
+                    fontWeight: '600',
+                  }}
+                >
+                  SYNC STATUS
+                </Typography>
+                <Typography variant="heading" style={{ fontSize: 18, lineHeight: 23 }}>
+                  {syncTitle}
+                </Typography>
+                <Text style={{ color: tokens.foregroundMuted, lineHeight: 20 }}>
+                  {syncDescription}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {syncMetrics.map((metric) => (
+                <View
+                  key={metric.label}
+                  style={{
+                    flexBasis: '48%',
+                    flexGrow: 1,
+                    minHeight: 66,
+                    justifyContent: 'center',
+                    gap: 4,
+                    borderWidth: 1,
+                    borderColor: tokens.borderSubtle,
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    backgroundColor: tokens.surfaceSubtle,
+                  }}
+                >
+                  <Typography variant="caption">{metric.label}</Typography>
+                  <Text
+                    style={{
+                      color: metric.color,
+                      fontSize: 17,
+                      lineHeight: 21,
+                      fontFamily: 'SpaceGrotesk_600SemiBold',
+                      fontVariant: ['tabular-nums'],
+                    }}
                   >
-                    Retry this change
-                  </Button>
+                    {metric.value}
+                  </Text>
                 </View>
               ))}
-            </ScrollView>
-          )}
-          {conflicts.length > 0 && (
-            <ScrollView style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 12 }}>
-              {conflicts.map((conflict) => {
-                const localValue = String(
-                  conflict.localRecord.title ??
-                    conflict.localRecord.name ??
-                    conflict.localRecord.amountMinor ??
-                    'Local version',
-                );
-                const cloudValue = String(
-                  conflict.cloudRecord.title ??
-                    conflict.cloudRecord.name ??
-                    conflict.cloudRecord.amountMinor ??
-                    'Cloud version',
-                );
-                return (
-                  <View key={conflict.id} style={{ gap: 6 }}>
-                    <Typography variant="small">
-                      {conflict.entityType} · {conflict.recordId}
-                    </Typography>
-                    <Text style={{ color: tokens.foregroundMuted }}>Local: {localValue}</Text>
-                    <Text style={{ color: tokens.foregroundMuted }}>Cloud: {cloudValue}</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isSyncing}
-                        onPress={() => void resolveConflict(conflict.id, 'local')}
-                      >
-                        Keep local
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isSyncing}
-                        onPress={() => void resolveConflict(conflict.id, 'cloud')}
-                      >
-                        Use cloud
-                      </Button>
-                    </View>
+            </View>
+
+            <View
+              style={{
+                gap: 9,
+                borderTopWidth: 1,
+                borderColor: tokens.borderSubtle,
+                paddingTop: 10,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ color: tokens.foregroundMuted }}>Connection</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  <View
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 4,
+                      backgroundColor: connectionColor,
+                    }}
+                  />
+                  <Text style={{ color: connectionColor }}>
+                    {isConnected ? 'Online' : 'Offline'}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <Text style={{ color: tokens.foregroundMuted, flexShrink: 0 }}>
+                  Last successful sync
+                </Text>
+                <Text style={{ flexShrink: 1, textAlign: 'right' }}>{lastSynced}</Text>
+              </View>
+            </View>
+
+            {failedEntries.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Typography variant="small" style={{ fontFamily: 'SpaceGrotesk_600SemiBold' }}>
+                  Failed changes
+                </Typography>
+                {failedEntries.map((entry) => (
+                  <View
+                    key={entry.localId}
+                    style={{
+                      gap: 6,
+                      borderTopWidth: 1,
+                      borderColor: tokens.borderSubtle,
+                      paddingTop: 10,
+                    }}
+                  >
+                    <Typography variant="small">{entry.operation}</Typography>
+                    <Text style={{ color: tokens.destructive }}>
+                      {entry.lastError ?? 'Cloud rejected this change.'}
+                    </Text>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isSyncing}
+                      onPress={() => void retryEntry(entry.localId)}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      Retry this change
+                    </Button>
                   </View>
-                );
-              })}
-            </ScrollView>
-          )}
-          {!!syncError && (
-            <Typography style={{ color: tokens.destructive }}>{syncError}</Typography>
-          )}
-          <Button size="lg" disabled={isSyncing} onPress={() => void retryNow()}>
-            Retry now
-          </Button>
-          <Button
-            variant="outline"
-            onPress={() => {
-              setSyncOpen(false);
-              router.push('/settings/sync' as never);
-            }}
-          >
-            Local sync settings
-          </Button>
+                ))}
+              </View>
+            )}
+
+            {conflicts.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Typography variant="small" style={{ fontFamily: 'SpaceGrotesk_600SemiBold' }}>
+                  Conflicts
+                </Typography>
+                {conflicts.map((conflict) => {
+                  const localValue = String(
+                    conflict.localRecord.title ??
+                      conflict.localRecord.name ??
+                      conflict.localRecord.amountMinor ??
+                      'Local version',
+                  );
+                  const cloudValue = String(
+                    conflict.cloudRecord.title ??
+                      conflict.cloudRecord.name ??
+                      conflict.cloudRecord.amountMinor ??
+                      'Cloud version',
+                  );
+                  return (
+                    <View
+                      key={conflict.id}
+                      style={{
+                        gap: 6,
+                        borderTopWidth: 1,
+                        borderColor: tokens.borderSubtle,
+                        paddingTop: 10,
+                      }}
+                    >
+                      <Typography variant="small">
+                        {conflict.entityType} · {conflict.recordId}
+                      </Typography>
+                      <Text style={{ color: tokens.foregroundMuted }}>
+                        On this device: {localValue}
+                      </Text>
+                      <Text style={{ color: tokens.foregroundMuted }}>In cloud: {cloudValue}</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isSyncing}
+                          onPress={() => void resolveConflict(conflict.id, 'local')}
+                        >
+                          Keep this device
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isSyncing}
+                          onPress={() => void resolveConflict(conflict.id, 'cloud')}
+                        >
+                          Use cloud
+                        </Button>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {!!syncError && (
+              <View
+                accessibilityRole="alert"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: `${tokens.destructive}55`,
+                  borderRadius: 12,
+                  padding: 11,
+                  backgroundColor: `${tokens.destructive}12`,
+                }}
+              >
+                <TriangleAlert size={16} color={tokens.destructive} />
+                <Text style={{ flex: 1, color: tokens.destructive }}>{syncError}</Text>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={{ gap: 8 }}>
+            <Button size="lg" disabled={isSyncing} onPress={() => void retryNow()}>
+              <ClockCounterClockwise size={17} color={tokens.primaryForeground} />
+              <Text style={{ color: tokens.primaryForeground }}>Retry now</Text>
+            </Button>
+            <Button
+              variant="outline"
+              onPress={() => {
+                setSyncOpen(false);
+                router.push('/settings/sync' as never);
+              }}
+            >
+              <Text style={{ color: tokens.foreground }}>Local sync settings</Text>
+            </Button>
+          </View>
         </View>
       </Sheet>
     </>
