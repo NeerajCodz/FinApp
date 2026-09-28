@@ -15,6 +15,7 @@ export type HomeDashboardProps = {
   data: HomeDashboardData;
   people: readonly HomePerson[];
   peopleLoading: boolean;
+  peopleError: boolean;
   accounts: readonly HomeAccountOption[];
   selectedAccountId: string;
   search: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useConvexAuth, useQuery } from 'convex/react';
+import { useConvexAuth, useQueries, type RequestForQueries } from 'convex/react';
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@convex/_generated/api';
@@ -68,8 +68,16 @@ export default function DashboardPage() {
   }, [authLoading, identityReady, isAuthenticated, router, userId]);
   const currency =
     typeof profiles[0]?.defaultCurrency === 'string' ? profiles[0].defaultCurrency : 'INR';
-  const peopleQuery = useQuery(api.dashboard.queries.frequentPeople, isConnected ? {} : 'skip');
-  const people = (peopleQuery ?? []).filter((person) => person !== null);
+  const peopleQueries = React.useMemo<RequestForQueries>(() => {
+    const queries: RequestForQueries = {};
+    if (isConnected) {
+      queries.frequentPeople = { query: api.dashboard.queries.frequentPeople, args: {} };
+    }
+    return queries;
+  }, [isConnected]);
+  const peopleQuery = useQueries(peopleQueries).frequentPeople;
+  const peopleQueryError = peopleQuery instanceof Error;
+  const people = Array.isArray(peopleQuery) ? peopleQuery.filter((person) => person !== null) : [];
   const data = React.useMemo(
     () =>
       buildHomeDashboard({
@@ -125,6 +133,7 @@ export default function DashboardPage() {
         data={data}
         people={people}
         peopleLoading={peopleLoading}
+        peopleError={peopleQueryError}
         accounts={accountOptions}
         selectedAccountId={selectedAccountId}
         search={search}

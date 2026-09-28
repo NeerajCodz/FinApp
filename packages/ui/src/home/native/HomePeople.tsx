@@ -8,11 +8,13 @@ import type { HomePerson } from '../types';
 export function HomePeople({
   people,
   loading,
+  error,
   currency,
   onOpenPerson,
 }: {
   people: readonly HomePerson[];
   loading: boolean;
+  error: boolean;
   currency: string;
   onOpenPerson: (username: string) => void;
 }) {
@@ -25,6 +27,13 @@ export function HomePeople({
       />
       {loading ? (
         <Typography variant="small">Loading shared activity…</Typography>
+      ) : error ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={{ color: tokens.foregroundMuted, lineHeight: 20 }}
+        >
+          Shared activity couldn’t load. The rest of your dashboard is still available.
+        </Text>
       ) : people.length ? (
         <ScrollView
           horizontal

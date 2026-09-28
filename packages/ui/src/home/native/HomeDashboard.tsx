@@ -24,6 +24,7 @@ export function HomeDashboard(props: HomeDashboardProps) {
         people={props.people}
         loading={props.peopleLoading}
         currency={props.currency}
+        error={props.peopleError}
         onOpenPerson={props.onOpenPerson}
       />
       <HomeRecent

@@ -6,11 +6,13 @@ import type { HomePerson } from '../types';
 export function HomePeople({
   people,
   loading,
+  error,
   currency,
   onOpenPerson,
 }: {
   people: readonly HomePerson[];
   loading: boolean;
+  error: boolean;
   currency: string;
   onOpenPerson: (username: string) => void;
 }) {
@@ -25,6 +27,10 @@ export function HomePeople({
       </div>
       {loading ? (
         <p className="finance-home-empty">Loading shared activity…</p>
+      ) : error ? (
+        <p className="finance-home-empty" role="status">
+          Shared activity couldn’t load. The rest of your dashboard is still available.
+        </p>
       ) : people.length ? (
         <div className="finance-home-people-rail">
           {people.map((person) => (

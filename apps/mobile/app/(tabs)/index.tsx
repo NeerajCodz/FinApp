@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
+import { useQueries, type RequestForQueries } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeDashboard, buildHomeDashboard, type HomeRecord } from '@finapp/ui/home';
@@ -69,8 +69,16 @@ export default function HomeScreen() {
     range.endAt,
     fetchTransactionRange,
   );
-  const peopleQuery = useQuery(api.dashboard.queries.frequentPeople, isConnected ? {} : 'skip');
-  const people = (peopleQuery ?? []).filter((person) => person !== null);
+  const peopleQueries = useMemo<RequestForQueries>(() => {
+    const queries: RequestForQueries = {};
+    if (isConnected) {
+      queries.frequentPeople = { query: api.dashboard.queries.frequentPeople, args: {} };
+    }
+    return queries;
+  }, [isConnected]);
+  const peopleQuery = useQueries(peopleQueries).frequentPeople;
+  const peopleQueryError = peopleQuery instanceof Error;
+  const people = Array.isArray(peopleQuery) ? peopleQuery.filter((person) => person !== null) : [];
   const profile = profiles?.[0];
   const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
   const allTransactions = useMemo(() => {
@@ -155,6 +163,7 @@ export default function HomeScreen() {
           data={data}
           people={people}
           peopleLoading={peopleLoading}
+          peopleError={peopleQueryError}
           accounts={accountOptions}
           selectedAccountId={selectedAccountId}
           search={search}
