@@ -1,12 +1,19 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, X } from 'lucide-react';
-import { Button, Card, Empty, Input, Tabs, Typography, useTheme } from '@finapp/ui/web';
-import { DateSection, TransactionRow, type TransactionType } from '@finapp/ui/finance';
+import { Typography } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
+import {
+  ActivityFilters,
+  ActivityHeader,
+  ActivityQuickFilters,
+  ActivityStatus,
+  ActivitySummary,
+  ActivityTopCategories,
+  ActivityTransactionList,
+  type ActivityCategoryItem,
+} from '@finapp/ui/activity';
 import { filterActivity, type ActivityFilter, type ActivityKind, type ActivityRow } from '@convex/activity/domain';
 import { getAnalyticsDayRange, getAnalyticsRange, type AnalyticsPeriod } from '@convex/analytics/domain';
 import { formatMinor } from '@convex/shared/money';
@@ -39,15 +46,6 @@ const periods: { value: ActivityPeriod; label: string }[] = [
   { value: 'year', label: 'Year' },
   { value: 'all', label: 'All time' },
 ];
-const fieldStyle: React.CSSProperties = {
-  minHeight: 38,
-  border: '1px solid var(--finapp-border-subtle)',
-  borderRadius: 10,
-  padding: '0 11px',
-  color: 'inherit',
-  background: 'var(--finapp-surface-raised)',
-  font: 'inherit',
-};
 
 function asMinor(value: unknown): bigint {
   if (typeof value === 'bigint') return value;
@@ -87,7 +85,6 @@ function formatRange(range: Range, timeZone: string) {
 
 export default function ActivityPage() {
   const router = useRouter();
-  const { tokens } = useTheme();
   const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
   const transactionState = useLocalRecords<Transaction>('transaction');
   const accountState = useLocalRecords<NamedRecord>('account');
@@ -194,17 +191,6 @@ export default function ActivityPage() {
       .filter((record) => (record.currency ?? currency) === currency);
   }, [accountById, accountFilter, categoryById, categoryFilter, currency, filter, query, range, referenceAt, transactionState.records, userId]);
 
-  const dateSections = React.useMemo(() => {
-    const formatter = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    const sections = new Map<string, Transaction[]>();
-    for (const record of rows) {
-      const label = formatter.format(Number(record.occurredAt ?? 0));
-      const section = sections.get(label) ?? [];
-      section.push(record);
-      sections.set(label, section);
-    }
-    return [...sections];
-  }, [rows, timeZone]);
 
   const totals = React.useMemo(
     () => rows.reduce<{ income: bigint; expenses: bigint; transfers: bigint; count: number }>(
@@ -221,6 +207,34 @@ export default function ActivityPage() {
     ),
     [rows],
   );
+  const metricSparks = React.useMemo(() => {
+    const recent = rows
+      .filter((record) => record.status !== 'pending' && record.status !== 'voided')
+      .slice(0, 5)
+      .reverse();
+    const valuesFor = (kind: 'spent' | 'income' | 'net' | 'count') => {
+      const values = recent.map((record) => {
+        const amount = asMinor(record.amountMinor);
+        if (kind === 'count') return 1n;
+        if (kind === 'spent') return record.type === 'expense' ? amount : 0n;
+        if (kind === 'income') return record.type === 'income' ? amount : 0n;
+        if (record.type === 'income') return amount;
+        if (record.type === 'expense') return -amount;
+        return 0n;
+      });
+      const largest = values.reduce((max, value) => {
+        const absolute = value < 0n ? -value : value;
+        return absolute > max ? absolute : max;
+      }, 0n);
+      return values.map((value) => largest > 0n ? Math.max(8, Number(((value < 0n ? -value : value) * 100n) / largest)) : 0);
+    };
+    return {
+      spent: valuesFor('spent'),
+      income: valuesFor('income'),
+      net: valuesFor('net'),
+      count: valuesFor('count'),
+    };
+  }, [rows]);
 
   const topCategories = React.useMemo(() => {
     const totals = new Map<string, bigint>();
@@ -269,81 +283,94 @@ export default function ActivityPage() {
     }
   };
 
+  const net = totals.income - totals.expenses;
+  const transactionItems = React.useMemo(() => rows.map((record) => {
+    const id = String(record.id ?? record._id ?? record.cloudId ?? '');
+    const category = categoryById.get(record.categoryId ?? '');
+    const account = accountById.get(record.accountId ?? '');
+    const occurredAt = Number(record.occurredAt ?? 0);
+    const type = record.type ?? 'expense';
+    return {
+      id,
+      title: record.title || record.merchant || 'Transaction',
+      category: category?.name ?? 'Uncategorized',
+      categoryIcon: category?.icon,
+      account: account?.name,
+      date: occurredAt ? new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(occurredAt) : 'Saved offline',
+      dateTime: occurredAt ? new Date(occurredAt).toISOString() : undefined,
+      amount: formatMinor(asMinor(record.amountMinor), record.currency ?? currency),
+      amountSign: type === 'expense' ? '−' : type === 'income' || type === 'refund' ? '+' : '',
+      type,
+    };
+  }), [accountById, categoryById, currency, rows, timeZone]);
+  const categoryItems = React.useMemo<ActivityCategoryItem[]>(() => topCategories.map(({ id, amount, category }) => ({
+    id,
+    name: category?.name ?? (id === '__uncategorized__' ? 'Uncategorized' : 'Category'),
+    icon: typeof category?.icon === 'string' ? category.icon : '•',
+    amount: formatMinor(amount, currency),
+    share: categoryTotal > 0n ? Number((amount * 1000n) / categoryTotal) / 10 : 0,
+  })), [categoryTotal, currency, topCategories]);
   if (!userId) return <FinanceSignedOut section="ACTIVITY" title="Activity unavailable" description="Sign in to see your ledger." />;
   if (!profileState.loading && !profile) return <FinanceSignedOut section="ACTIVITY" title="Activity unavailable" description="Your local profile could not be found." />;
 
   return (
-    <div className="finance-page" style={{ display: 'grid', gap: 16, paddingBottom: 88 }}>
-      <header style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ minWidth: 180 }}>
-          <Typography variant="title">Activity</Typography>
-          <Typography variant="caption">Your money, in motion · {currency}</Typography>
-        </div>
-        <div style={{ display: 'flex', flex: '1 1 360px', justifyContent: 'flex-end', gap: 8 }}>
-          <div style={{ display: 'flex', flex: '1 1 240px', maxWidth: 430, alignItems: 'center', gap: 8, padding: '0 12px', border: `1px solid ${tokens.borderSubtle}`, borderRadius: 11 }}>
-            <Search size={17} aria-hidden="true" color={tokens.foregroundMuted} />
-            <Input accessibilityLabel="Search transactions" onChangeText={setQuery} placeholder="Search transactions" value={query} />
-            {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')} style={{ border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer' }}><X size={15} /></button>}
-          </div>
-          <Link className="finance-primary-link" href="/transaction/new">Add transaction</Link>
-        </div>
-      </header>
+    <div className="finance-page activity-page">
+      <ActivityHeader
+        query={query}
+        onQueryChange={setQuery}
+        onClearQuery={() => setQuery('')}
+        onAddTransaction={() => router.push('/transaction/new')}
+      />
+      <ActivityFilters
+        periods={periods}
+        period={period}
+        customRange={customRange !== null}
+        onPeriodChange={(value) => selectRange(value as ActivityPeriod)}
+        filters={filters.map((value) => ({ value, label: value }))}
+        filter={filter}
+        onFilterChange={(value) => setFilter(value as ActivityFilter)}
+        accounts={accountState.records.filter((item) => !item.archivedAt && aliases(item).length > 0).map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Account' }))}
+        account={accountFilter}
+        onAccountChange={setAccountFilter}
+        categories={categoryState.records.filter((item) => !item.archivedAt && aliases(item).length > 0).map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Category' }))}
+        category={categoryFilter}
+        onCategoryChange={setCategoryFilter}
+      />
 
-      <Card style={{ display: 'grid', gap: 12, padding: 14 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <Tabs label="Activity period" value={period} onChange={(value) => selectRange(value as ActivityPeriod)} tabs={periods} />
-          <Typography variant="caption">{range ? formatRange(range, timeZone) : 'Loading range'} · {currency}</Typography>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 8 }}>
-          <label style={{ display: 'grid', gap: 5 }}><Typography variant="caption">Account</Typography><select aria-label="Filter by account" value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)} style={fieldStyle}><option value="all">All accounts</option>{accountState.records.filter((item) => !item.archivedAt).map((item) => <option key={aliases(item)[0]} value={aliases(item)[0]}>{item.name ?? 'Account'}</option>)}</select></label>
-          <label style={{ display: 'grid', gap: 5 }}><Typography variant="caption">Category</Typography><select aria-label="Filter by category" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={fieldStyle}><option value="all">All categories</option>{categoryState.records.filter((item) => !item.archivedAt).map((item) => <option key={aliases(item)[0]} value={aliases(item)[0]}>{item.name ?? 'Category'}</option>)}</select></label>
-          <div style={{ display: 'grid', alignContent: 'end' }}><Typography variant="caption">LOCAL RECORDS · POSTED TOTALS</Typography></div>
-        </div>
-        <div style={{ overflowX: 'auto' }}><Tabs label="Activity type filter" value={filter} onChange={(value) => setFilter(value as ActivityFilter)} tabs={filters.map((value) => ({ label: value, value }))} /></div>
-      </Card>
+      {(rangeLoading || rangeError || allError) && <ActivityStatus
+        message={rangeLoading ? 'Refreshing activity…' : rangeError || 'Some saved records could not be loaded.'}
+        alert={Boolean(rangeError || allError)}
+        onRetry={(rangeError || allError) ? () => window.location.reload() : undefined}
+      />}
 
-      {(rangeLoading || rangeError || allError) && <div role={rangeError || allError ? 'alert' : 'status'} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}><Typography variant="caption">{rangeLoading ? 'Refreshing activity… ' : ''}{rangeError || (allError ? 'Some saved records could not be loaded.' : '')}</Typography>{(allError || rangeError) && <Button variant="outline" onPress={() => window.location.reload()}>Retry</Button>}</div>}
-      {rangeError && !isConnected && <Typography variant="caption">Offline mode shows matching records already downloaded to this browser.</Typography>}
+      {ready && <ActivitySummary metrics={[
+        { label: 'Total Spent', value: formatMinor(totals.expenses, currency), color: 'var(--finapp-expense)', spark: metricSparks.spent },
+        { label: 'Total Income', value: formatMinor(totals.income, currency), color: 'var(--finapp-income)', spark: metricSparks.income },
+        { label: 'Net', value: formatMinor(net, currency), color: net >= 0n ? 'var(--finapp-income)' : 'var(--finapp-expense)', spark: metricSparks.net },
+        { label: 'Transactions', value: String(totals.count), color: 'var(--finapp-foreground)', spark: metricSparks.count },
+      ]} />}
 
-      {ready && <section aria-label="Activity summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 10 }}>
-        {[
-          { label: 'Income', value: formatMinor(totals.income, currency), color: tokens.income },
-          { label: 'Expenses', value: formatMinor(totals.expenses, currency), color: tokens.expense },
-          { label: 'Transfers', value: formatMinor(totals.transfers, currency), color: tokens.transfer },
-          { label: 'Transactions', value: String(totals.count), color: tokens.foreground },
-        ].map((metric) => <Card key={metric.label} variant="subtle" style={{ display: 'grid', gap: 8, padding: '14px 16px', border: `1px solid ${tokens.borderSubtle}` }}><Typography variant="caption">{metric.label}</Typography><Typography variant="heading" style={{ color: metric.color, fontVariantNumeric: 'tabular-nums' }}>{metric.value}</Typography></Card>)}
-      </section>}
+      {range && <Typography className="activity-range-caption" variant="caption">{formatRange(range, timeZone)} · {currency}</Typography>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 14, alignItems: 'start' }}>
-        <Card style={{ minWidth: 0, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}><Typography variant="bodyLarge">Transactions</Typography><Typography variant="caption">{rows.length} records</Typography></div>
-          {!ready && !allError ? <Typography variant="small">Loading activity…</Typography> : ready && dateSections.length === 0 ? <Empty title={query ? 'No search matches' : 'No activity in this period'} description={query ? 'Try another merchant, title, category, account, or amount.' : 'Transactions matching this date range and filters will appear here.'} /> : dateSections.map(([date, records]) => <DateSection key={date} title={date}>{records.map((transaction) => {
-            const id = String(transaction.id ?? transaction._id ?? transaction.cloudId ?? '');
-            const category = categoryById.get(transaction.categoryId ?? '');
-            const account = accountById.get(transaction.accountId ?? '');
-            return <TransactionRow key={id} title={transaction.title || transaction.merchant || 'Transaction'} merchant={transaction.merchant} category={category?.name} categoryIcon={category?.icon} account={account?.name} date={transaction.occurredAt ? new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(transaction.occurredAt) : 'Saved offline'} status={transaction.status} amountMinor={asMinor(transaction.amountMinor)} currency={transaction.currency ?? currency} type={(transaction.type ?? 'expense') as TransactionType} semanticType={transaction.groupId ? 'split' : undefined} onPress={() => router.push(`/transaction/${encodeURIComponent(id)}`)} />;
-          })}</DateSection>)}
-        </Card>
-
-        <aside style={{ display: 'grid', gap: 14 }}>
-          <Card style={{ display: 'grid', gap: 11, padding: 16 }}>
-            <div><Typography variant="bodyLarge">Quick filters</Typography><Typography variant="caption">Jump to a familiar date range</Typography></div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 7 }}>
-              {(['Today', 'This week', 'This month', 'Last month', 'All time'] as const).map((label) => <Button key={label} size="sm" variant="outline" onPress={() => setQuickRange(label)}>{label}</Button>)}
-            </div>
-            <Link className="finance-inline-link" href="/analytics">Explore analytics</Link>
-          </Card>
-          <Card style={{ display: 'grid', gap: 12, padding: 16 }}>
-            <div><Typography variant="bodyLarge">Top categories</Typography><Typography variant="caption">Posted expenses · {range ? formatRange(range, timeZone) : 'Loading range'}</Typography></div>
-            {topCategories.length ? topCategories.map(({ id, amount, category }, index) => {
-              const share = categoryTotal > 0n ? Number((amount * 100n) / categoryTotal) : 0;
-              const icon = typeof category?.icon === 'string' ? category.icon : '•';
-              return <Link key={id} href={category ? `/category/${encodeURIComponent(id)}` : '/analytics'} style={{ display: 'grid', gap: 5, color: 'inherit', textDecoration: 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span aria-hidden="true">{icon}</span><Typography variant="small" style={{ flex: 1 }}>{category?.name ?? (id === '__uncategorized__' ? 'Uncategorized' : 'Category')}</Typography><Typography variant="small">{formatMinor(amount, currency)}</Typography></div>
-                <div style={{ height: 4, overflow: 'hidden', borderRadius: 8, background: tokens.borderSubtle }}><div style={{ width: `${share}%`, height: '100%', borderRadius: 8, background: index === 0 ? tokens.primary : tokens.foregroundMuted }} /></div>
-              </Link>;
-            }) : <Typography variant="caption">No posted expenses in this range.</Typography>}
-          </Card>
+      <div className="activity-content-grid">
+        <ActivityTransactionList
+          items={transactionItems}
+          loading={!ready && !allError}
+          query={query}
+          onSelect={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+        />
+        <aside className="activity-sidebar">
+          <ActivityQuickFilters
+            options={['Today', 'This week', 'This month', 'Last month', 'All time'] as const}
+            onSelectRange={setQuickRange}
+            onAddTransaction={() => router.push('/transaction/new')}
+            onOpenAnalytics={() => router.push('/analytics')}
+          />
+          <ActivityTopCategories
+            items={categoryItems}
+            rangeLabel={range ? formatRange(range, timeZone) : 'Loading range'}
+            onSelect={(id) => router.push(categoryById.has(id) ? `/category/${encodeURIComponent(id)}` : '/analytics')}
+          />
         </aside>
       </div>
     </div>

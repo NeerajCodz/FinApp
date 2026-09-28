@@ -19,6 +19,7 @@
       "browser": "./src/analytics/web/index.ts",
       "default": "./src/analytics/web/index.ts"
     },
+    "./activity": "./src/activity/web/index.ts",
     "./icons/native": "./src/icons/native.tsx",
     "./finance/money": "./src/finance/money.ts"
   },
