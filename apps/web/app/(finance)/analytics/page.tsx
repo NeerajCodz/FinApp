@@ -3,9 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Download, ReceiptText } from 'lucide-react';
-import { Button, Card, Empty, Tabs, Typography, useTheme } from '@finapp/ui/web';
-import { AnalyticsChartPanel, BarChart, BreakdownDonut, CashFlowChart, SpendingLineChart } from '@finapp/ui/analytics';
+import { ArrowRight, ReceiptText } from 'lucide-react';
+import { Button, Card, Empty, Typography, useTheme } from '@finapp/ui/web';
+import { AnalyticsChartPanel, AnalyticsFilters, AnalyticsHeader, AnalyticsSummary, BarChart, BreakdownDonut, CashFlowChart, SpendingLineChart } from '@finapp/ui/analytics';
 import { BudgetProgress, TransactionRow } from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
@@ -79,16 +79,6 @@ const dailyChartTypes = [
   { value: 'bars', label: 'Bars' },
   { value: 'line', label: 'Line' },
 ] as const;
-const selectStyle: React.CSSProperties = {
-  minHeight: 36,
-  border: '1px solid var(--finapp-border-subtle)',
-  borderRadius: 9,
-  padding: '0 10px',
-  color: 'inherit',
-  background: 'var(--finapp-surface-raised)',
-  font: 'inherit',
-  fontSize: 12,
-};
 
 function amountAsBigInt(value: unknown): bigint {
   if (typeof value === 'bigint') return value;
@@ -397,28 +387,29 @@ export default function AnalyticsPage() {
 
   return (
     <div className="finance-page" style={{ display: 'grid', gap: 14, paddingBottom: 88 }}>
-      <header style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div><Typography variant="title">Analytics</Typography><Typography variant="caption">Live view of your saved finances</Typography></div>
-        <Button variant="outline" onPress={downloadCsv}><Download size={16} aria-hidden="true" /> Export CSV</Button>
-      </header>
+      <AnalyticsHeader onExport={downloadCsv} />
 
-      <Card style={{ display: 'grid', gap: 12, padding: 13 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <Tabs value={period} onChange={(value) => { setPeriod(value as AnalyticsPeriod); setReferenceAt(Date.now()); }} label="Analytics period" tabs={periods} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <button type="button" aria-label="Previous period" disabled={!range} onClick={() => range && setReferenceAt(range.previousStartAt)} style={{ ...selectStyle, display: 'grid', placeItems: 'center', width: 36, padding: 0, cursor: 'pointer' }}><ArrowLeft size={15} /></button>
-            <Typography variant="small" style={{ minWidth: 150, textAlign: 'center' }}>{range ? rangeTitle(range.startAt, range.endAt, period, timeZone) : 'Loading range'}</Typography>
-            <button type="button" aria-label="Next period" disabled={!range} onClick={() => range && setReferenceAt(range.endAt)} style={{ ...selectStyle, display: 'grid', placeItems: 'center', width: 36, padding: 0, cursor: 'pointer' }}><ArrowRight size={15} /></button>
-            <Button size="sm" variant="ghost" onPress={() => setReferenceAt(Date.now())}>Today</Button>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 8 }}>
-          <label style={{ display: 'grid', gap: 4 }}><Typography variant="caption">Currency</Typography><select aria-label="Filter by currency" value={currency} onChange={(event) => { setSelectedCurrency(event.target.value); setAccountFilter('all'); }} style={selectStyle}>{currencyOptions.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
-          <label style={{ display: 'grid', gap: 4 }}><Typography variant="caption">Account</Typography><select aria-label="Filter by account" value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)} style={selectStyle}><option value="all">All accounts</option>{accountState.records.filter((item) => !item.archivedAt && (item.currency ?? profile?.defaultCurrency ?? 'INR') === currency).map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name ?? 'Account'}</option>)}</select></label>
-          <label style={{ display: 'grid', gap: 4 }}><Typography variant="caption">Category</Typography><select aria-label="Filter by category" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={selectStyle}><option value="all">All categories</option>{categoryState.records.filter((item) => !item.archivedAt).map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name ?? 'Category'}</option>)}</select></label>
-          <label style={{ display: 'grid', gap: 4 }}><Typography variant="caption">Type</Typography><select aria-label="Filter by transaction type" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)} style={selectStyle}><option value="all">All activity</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option><option value="refund">Refunds</option><option value="adjustment">Adjustments</option></select></label>
-        </div>
-      </Card>
+      <AnalyticsFilters
+        period={period}
+        periods={periods}
+        onPeriodChange={(value) => { setPeriod(value as AnalyticsPeriod); setReferenceAt(Date.now()); }}
+        rangeLabel={range ? rangeTitle(range.startAt, range.endAt, period, timeZone) : 'Loading range'}
+        onPrevious={() => range && setReferenceAt(range.previousStartAt)}
+        onNext={() => range && setReferenceAt(range.endAt)}
+        onToday={() => setReferenceAt(Date.now())}
+        canNavigate={Boolean(range)}
+        currency={currency}
+        currencies={currencyOptions}
+        onCurrencyChange={(value) => { setSelectedCurrency(value); setAccountFilter('all'); }}
+        account={accountFilter}
+        accounts={accountState.records.filter((item) => !item.archivedAt && (item.currency ?? profile?.defaultCurrency ?? 'INR') === currency).map((item) => ({ value: idOf(item), label: item.name ?? 'Account' }))}
+        onAccountChange={setAccountFilter}
+        category={categoryFilter}
+        categories={categoryState.records.filter((item) => !item.archivedAt).map((item) => ({ value: idOf(item), label: item.name ?? 'Category' }))}
+        onCategoryChange={setCategoryFilter}
+        type={typeFilter}
+        onTypeChange={(value) => setTypeFilter(value as typeof typeFilter)}
+      />
 
       <div role={rangeError || coreError || groupRangeError || auxiliaryError ? 'alert' : 'status'} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <Typography variant="caption">{rangeLoading ? 'Refreshing transactions…' : rangeError ? 'Showing saved data; this range may be incomplete.' : isConnected && loadedRange === rangeKey ? 'Selected server date range loaded.' : 'Showing browser-cached transactions for this period.'}{groupRangeLoading ? ' · Refreshing shared activity…' : ''}{groupRangeError ? ` · ${groupRangeError}` : ''}</Typography>
@@ -428,17 +419,16 @@ export default function AnalyticsPage() {
       </div>
 
       {loading ? <Typography variant="heading">Loading analytics…</Typography> : coreError ? null : result ? <>
-        <section aria-label="Analytics summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 9 }}>
-          {[
-            { label: 'Spent', value: formatMinor(result.spentMinor, currency), color: tokens.expense },
-            { label: 'Income', value: formatMinor(result.incomeMinor, currency), color: tokens.income },
-            { label: 'Net', value: formatMinor(result.incomeMinor - result.spentMinor, currency), color: result.incomeMinor >= result.spentMinor ? tokens.income : tokens.expense },
-            { label: 'Savings rate', value: savingsRate === null ? '—' : `${savingsRate}%`, color: tokens.primary },
-            { label: 'Transactions', value: String(transactionCount), color: tokens.foreground },
-          ].map((item) => <Card key={item.label} variant="subtle" style={{ display: 'grid', gap: 7, minWidth: 0, padding: 14, border: `1px solid ${tokens.borderSubtle}` }}><Typography variant="caption">{item.label}</Typography><Typography variant="heading" style={{ color: item.color, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{item.value}</Typography>{item.label === 'Spent' && <Typography variant="caption">{comparison}</Typography>}</Card>)}
-        </section>
+        <AnalyticsSummary metrics={[
+          { label: 'Total Spent', value: formatMinor(result.spentMinor, currency), color: tokens.expense, detail: comparison },
+          { label: 'Total Income', value: formatMinor(result.incomeMinor, currency), color: tokens.income },
+          { label: 'Net Cash Flow', value: formatMinor(result.incomeMinor - result.spentMinor, currency), color: result.incomeMinor >= result.spentMinor ? tokens.income : tokens.expense },
+          { label: 'Savings Rate', value: savingsRate === null ? '—' : `${savingsRate}%`, color: tokens.primary },
+          { label: 'Transactions', value: String(transactionCount), color: tokens.foreground },
+        ]} />
 
         {transactionCount === 0 && <Empty title="No activity in this period" description="Record a transaction to start seeing trends from your local finance data." icon={<ReceiptText size={20} aria-hidden="true" />} action={<Link className="finance-inline-link" href="/transaction/new">Add transaction</Link>} />}
+
 
         <section className="analytics-primary-charts">
           <AnalyticsChartPanel
@@ -463,7 +453,7 @@ export default function AnalyticsPage() {
             }} onSelectItem={(item) => router.push(breakdownHref('category', item.id))} /> : result.categoryBreakdown.length ? <div role="img" aria-label="Spending by category bar chart"><BarChart values={result.categoryBreakdown.map((item) => result.spentMinor > 0n ? Number((item.amountMinor * 10000n) / result.spentMinor) / 100 : 0)} labels={result.categoryBreakdown.map((item) => item.label)} /></div> : <Typography variant="caption">No posted expenses in this period.</Typography>}
           </AnalyticsChartPanel>
         </section>
-        <section className="analytics-daily-chart">
+        <section className="analytics-secondary-grid">
           <AnalyticsChartPanel
             title="Daily spending"
             description={`${period === 'year' ? 'Monthly totals' : 'Posted expense totals'} · ${currency}`}
@@ -473,11 +463,8 @@ export default function AnalyticsPage() {
           >
             {chartMax > 0n ? dailyChartType === 'bars' ? <div role="img" aria-label={`Daily spending by period. ${chartDescription}`}><BarChart values={chartValues} labels={result.buckets.map((item) => item.label)} /></div> : <SpendingLineChart values={chartValues} labels={[result.buckets[0]?.label ?? 'Start', result.buckets.at(-1)?.label ?? 'End']} /> : <Typography variant="caption">No daily spending in this period.</Typography>}
           </AnalyticsChartPanel>
-        </section>
-
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12 }}>
           <Card style={{ display: 'grid', alignContent: 'start', gap: 12, padding: 15 }}>
-            <div><Typography variant="bodyLarge">Accounts</Typography><Typography variant="caption">Current balances and expense share · {currency}</Typography></div>
+            <div><Typography variant="bodyLarge">Accounts & balances</Typography><Typography variant="caption">Current balances and expense share · {currency}</Typography></div>
             {accountState.records.filter((account) => !account.archivedAt && (account.currency ?? profile?.defaultCurrency ?? 'INR') === currency).length ? accountState.records.filter((account) => !account.archivedAt && (account.currency ?? profile?.defaultCurrency ?? 'INR') === currency).map((account) => {
               const balance = account.currentBalance === undefined ? null : amountAsBigInt(account.currentBalance);
               const expense = result.accountBreakdown.find((item) => idAliases(account).includes(item.id))?.amountMinor ?? 0n;
@@ -485,12 +472,25 @@ export default function AnalyticsPage() {
             }) : <Empty title="No account activity" description="Accounts in this currency will appear here." />}
             <Link className="finance-inline-link" href="/account">All accounts</Link>
           </Card>
+        </section>
+
+        <section className="analytics-planning-grid">
           <Card style={{ display: 'grid', alignContent: 'start', gap: 12, padding: 15 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><Typography variant="bodyLarge">Budgets</Typography><Typography variant="caption">Spend within the selected range</Typography></div><Link className="finance-inline-link" href="/budget">View all</Link></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><Typography variant="bodyLarge">Budget progress</Typography><Typography variant="caption">Spend within the selected range</Typography></div><Link className="finance-inline-link" href="/budget">View all</Link></div>
             {budgetState.loading ? <Typography variant="small">Loading budgets…</Typography> : budgetState.error ? <Typography variant="small" role="alert">Budgets could not be loaded.</Typography> : budgetItems.length ? budgetItems.map((budget) => <BudgetProgress key={idOf(budget)} title={budget.name ?? 'Budget'} spentMinor={budgetSpent(budget)} limitMinor={amountAsBigInt(budget.amountMinor)} currency={budget.currency ?? accountById.get(String(budget.accountId ?? ''))?.currency ?? profile?.defaultCurrency ?? 'INR'} />) : <Empty title="No budgets yet" description="Create a budget to keep an eye on your plan." action={<Link className="finance-inline-link" href="/budget/new">Create a budget</Link>} />}
           </Card>
           <Card style={{ display: 'grid', alignContent: 'start', gap: 12, padding: 15 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><Typography variant="bodyLarge">Groups & splits</Typography><Typography variant="caption">Shared records in this range</Typography></div><Link className="finance-inline-link" href="/groups">View groups</Link></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><Typography variant="bodyLarge">Recurring & subscriptions</Typography><Typography variant="caption">Saved recurring payments</Typography></div><Link className="finance-inline-link" href="/recurring">View all</Link></div>
+            {recurringState.loading ? <Typography variant="small">Loading recurring payments…</Typography> : recurringState.error ? <Typography variant="small" role="alert">Recurring records could not be loaded.</Typography> : recurringItems.length ? recurringItems.map((rule) => {
+              const ruleCurrency = rule.template?.currency ?? accountById.get(String(rule.template?.accountId ?? ''))?.currency ?? profile?.defaultCurrency ?? 'INR';
+              return <div key={idOf(rule)} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 4 }}><Typography variant="small">{rule.name ?? 'Recurring payment'}</Typography><Typography variant="small">{rule.template?.amountMinor === undefined ? '—' : formatMinor(amountAsBigInt(rule.template.amountMinor), ruleCurrency)}</Typography><Typography variant="caption">{rule.frequency ?? 'Scheduled'}</Typography><Typography variant="caption">{rule.nextOccurrence ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone }).format(Number(rule.nextOccurrence)) : 'Date unavailable'}</Typography></div>;
+            }) : <Empty title="No recurring payments" description="Enabled recurring records will be listed here." />}
+          </Card>
+        </section>
+
+        <section className="analytics-shared-grid">
+          <Card style={{ display: 'grid', alignContent: 'start', gap: 12, padding: 15 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><Typography variant="bodyLarge">Groups, splits & settlements</Typography><Typography variant="caption">Shared records in this range</Typography></div><Link className="finance-inline-link" href="/groups">View groups</Link></div>
             {groupState.loading ? <Typography variant="small">Loading groups…</Typography> : groupState.error ? <Typography variant="small" role="alert">Groups could not be loaded.</Typography> : currencyGroups.length ? currencyGroups.map((group) => {
               const groupAliases = idAliases(group);
               const amount = rangeRecords.filter((record) => record.type === 'expense' && groupAliases.includes(String(record.groupId ?? ''))).reduce((sum, record) => sum + amountAsBigInt(record.amountMinor), 0n);
@@ -499,36 +499,28 @@ export default function AnalyticsPage() {
             }) : <Empty title="No shared groups" description="Group activity will appear after you join or create a group." />}
             <Typography variant="caption">Total shared expenses {formatMinor(splitSpend, currency)} · settlements {formatMinor(settledMinor, currency)}</Typography>
           </Card>
-          <Card style={{ display: 'grid', alignContent: 'start', gap: 12, padding: 15 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><Typography variant="bodyLarge">Recurring</Typography><Typography variant="caption">Saved recurring payments</Typography></div><Link className="finance-inline-link" href="/recurring">View all</Link></div>
-            {recurringState.loading ? <Typography variant="small">Loading recurring payments…</Typography> : recurringState.error ? <Typography variant="small" role="alert">Recurring records could not be loaded.</Typography> : recurringItems.length ? recurringItems.map((rule) => {
-              const ruleCurrency = rule.template?.currency ?? accountById.get(String(rule.template?.accountId ?? ''))?.currency ?? profile?.defaultCurrency ?? 'INR';
-              return <div key={idOf(rule)} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 4 }}><Typography variant="small">{rule.name ?? 'Recurring payment'}</Typography><Typography variant="small">{rule.template?.amountMinor === undefined ? '—' : formatMinor(amountAsBigInt(rule.template.amountMinor), ruleCurrency)}</Typography><Typography variant="caption">{rule.frequency ?? 'Scheduled'}</Typography><Typography variant="caption">{rule.nextOccurrence ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone }).format(Number(rule.nextOccurrence)) : 'Date unavailable'}</Typography></div>;
-            }) : <Empty title="No recurring payments" description="Enabled recurring records will be listed here." />}
-          </Card>
-        </section>
-
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12 }}>
           <Card style={{ display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
-            <div><Typography variant="bodyLarge">Top merchants</Typography><Typography variant="caption">Posted expenses · {currency}</Typography></div>
-            {result.merchantBreakdown.length ? result.merchantBreakdown.slice(0, 7).map((item) => <Link key={item.id} href={breakdownHref('merchant', item.id)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: 'inherit', textDecoration: 'none' }}><Typography variant="small">{item.label}</Typography><Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography></Link>) : <Typography variant="caption">No merchant totals in this range.</Typography>}
-          </Card>
-          <Card style={{ display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
-            <div><Typography variant="bodyLarge">Category details</Typography><Typography variant="caption">Counts and share of selected-range spend</Typography></div>
-            {result.categoryBreakdown.length ? <div style={{ display: 'grid', gap: 7 }}>{result.categoryBreakdown.map((item, index) => {
-              const count = categoryCounts.get(item.id) ?? 0;
-              const share = result.spentMinor > 0n ? Number((item.amountMinor * 1000n) / result.spentMinor) / 10 : 0;
-              return <Link key={item.id} href={breakdownHref('category', item.id)} style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none', padding: '5px 0', borderBottom: `1px solid ${tokens.borderSubtle}` }}><Typography variant="caption" style={{ color: tokens.primary }}>{String(index + 1).padStart(2, '0')}</Typography><span><Typography variant="small">{item.label}</Typography><Typography variant="caption">{count} transactions · {share}%</Typography></span><Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography></Link>;
-            })}</div> : <Typography variant="caption">No category totals in this range.</Typography>}
-          </Card>
-          <Card style={{ display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
-            <div><Typography variant="bodyLarge">Largest transactions</Typography><Typography variant="caption">Highest posted expenses in this period</Typography></div>
+            <div><Typography variant="bodyLarge">Top transactions</Typography><Typography variant="caption">Highest posted expenses in this period</Typography></div>
             {largestExpenses.length ? largestExpenses.map((record) => {
               const id = idOf(record);
               const category = categoryById.get(String(record.categoryId ?? ''));
               const account = accountById.get(String(record.accountId ?? ''));
               return <TransactionRow key={id} title={record.title || record.merchant || 'Transaction'} merchant={record.merchant} category={category?.name} categoryIcon={category?.icon} account={account?.name} date={record.occurredAt ? new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(Number(record.occurredAt)) : undefined} status={record.status} amountMinor={amountAsBigInt(record.amountMinor)} currency={String(record.currency ?? currency)} type="expense" semanticType={record.groupId ? 'split' : undefined} onPress={id ? () => router.push(`/transaction/${encodeURIComponent(id)}`) : undefined} />;
             }) : <Empty title="No expenses yet" description="Posted expenses in this period will appear here." />}
+          </Card>
+        </section>
+        <section className="analytics-bottom-grid">
+          <Card style={{ display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
+            <div><Typography variant="bodyLarge">Top merchants</Typography><Typography variant="caption">Posted expenses · {currency}</Typography></div>
+            {result.merchantBreakdown.length ? result.merchantBreakdown.slice(0, 7).map((item) => <Link key={item.id} href={breakdownHref('merchant', item.id)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: 'inherit', textDecoration: 'none' }}><Typography variant="small">{item.label}</Typography><Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography></Link>) : <Typography variant="caption">No merchant totals in this range.</Typography>}
+          </Card>
+          <Card style={{ display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
+            <div><Typography variant="bodyLarge">Category breakdown</Typography><Typography variant="caption">Counts and share of selected-range spend</Typography></div>
+            {result.categoryBreakdown.length ? <div style={{ display: 'grid', gap: 7 }}>{result.categoryBreakdown.map((item, index) => {
+              const count = categoryCounts.get(item.id) ?? 0;
+              const share = result.spentMinor > 0n ? Number((item.amountMinor * 1000n) / result.spentMinor) / 10 : 0;
+              return <Link key={item.id} href={breakdownHref('category', item.id)} style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none', padding: '5px 0', borderBottom: `1px solid ${tokens.borderSubtle}` }}><Typography variant="caption" style={{ color: tokens.primary }}>{String(index + 1).padStart(2, '0')}</Typography><span><Typography variant="small">{item.label}</Typography><Typography variant="caption">{count} transactions · {share}%</Typography></span><Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography></Link>;
+            })}</div> : <Typography variant="caption">No category totals in this range.</Typography>}
           </Card>
         </section>
       </> : null}

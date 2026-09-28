@@ -1742,15 +1742,163 @@
   background: var(--finance-lime);
 }
 
+
+.analytics-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.analytics-page-kicker {
+  margin: 0 0 3px;
+  color: var(--finance-lime);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.analytics-page-description {
+  max-width: 620px;
+  margin: 3px 0 0;
+  color: var(--finance-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+.analytics-toolbar {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+.analytics-period-controls {
+  display: contents;
+}
+.analytics-period-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(3, auto);
+  padding: 3px;
+  border: 1px solid var(--finance-line);
+  border-radius: 9px;
+  background: var(--finance-panel);
+}
+.analytics-period-switch button,
+.analytics-date-controls button {
+  min-height: 31px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 9px;
+  background: transparent;
+  color: var(--finance-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.analytics-period-switch button[aria-pressed="true"] {
+  background: var(--finance-lime);
+  color: var(--finapp-primary-foreground);
+}
+.analytics-date-controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--finance-line);
+  border-radius: 9px;
+  background: var(--finance-panel);
+}
+.analytics-date-controls span {
+  min-width: 105px;
+  color: var(--finance-text);
+  font-size: 0.68rem;
+  text-align: center;
+  white-space: nowrap;
+}
+.analytics-date-controls button {
+  min-width: 27px;
+  padding-inline: 5px;
+}
+.analytics-date-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.analytics-date-controls .analytics-today-button {
+  border-left: 1px solid var(--finance-line);
+  padding-inline: 8px;
+}
+.analytics-select-controls {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.analytics-select-controls label,
+.analytics-select-controls select {
+  width: 100%;
+  min-width: 0;
+}
+.analytics-select-controls select {
+  min-height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--finance-line);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--finance-panel);
+  color: var(--finance-text);
+  font: inherit;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+}
+.analytics-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+}
+.analytics-summary-card {
+  display: grid;
+  min-width: 0;
+  min-height: 91px;
+  align-content: center;
+  gap: 6px;
+  padding: 13px;
+}
+.analytics-summary-value {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.analytics-secondary-grid,
+.analytics-planning-grid,
+.analytics-shared-grid,
+.analytics-bottom-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
+}
+.analytics-secondary-grid > *,
+.analytics-planning-grid > *,
+.analytics-shared-grid > *,
+.analytics-bottom-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.analytics-bottom-grid {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+.analytics-primary-charts > *,
+.analytics-secondary-grid > *,
+.analytics-planning-grid > *,
+.analytics-shared-grid > *,
+.analytics-bottom-grid > * {
+  overflow-wrap: anywhere;
+}
 .analytics-primary-charts {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   align-items: stretch;
   gap: 12px;
-}
-.analytics-daily-chart {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
 }
 .analytics-chart-panel {
   display: grid;
@@ -1902,5 +2050,45 @@
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
+  }
+}
+
+@media (max-width: 900px) {
+  .analytics-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .analytics-period-controls {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+@media (max-width: 790px) {
+  .analytics-primary-charts,
+  .analytics-secondary-grid,
+  .analytics-planning-grid,
+  .analytics-shared-grid,
+  .analytics-bottom-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .analytics-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 570px) {
+  .analytics-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .analytics-page-header > button {
+    align-self: flex-start;
+  }
+  .analytics-select-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1000px) {
+  .analytics-bottom-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

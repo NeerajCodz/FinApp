@@ -5,3 +5,6 @@ export { CashFlowChart } from './CashFlowChart';
 export { BreakdownDonut } from './BreakdownDonut';
 export { AnalyticsChartPanel } from './AnalyticsChartPanel';
 export { ChartTypeSelect, type ChartTypeOption } from './ChartTypeSelect';
+export { AnalyticsHeader } from './AnalyticsHeader';
+export { AnalyticsFilters, type AnalyticsFilterOption } from './AnalyticsFilters';
+export { AnalyticsSummary, type AnalyticsMetric } from './AnalyticsSummary';
