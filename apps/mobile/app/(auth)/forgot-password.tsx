@@ -3,9 +3,9 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft } from '@/lib/icons';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { toast } from '@/lib/toast';
-import { BrandMark } from '@/components/finance';
+import { BrandMark } from '@finapp/ui/finance';
 import { Button, IconButton, Input, InputOTP, Label, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 
