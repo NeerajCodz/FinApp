@@ -19,6 +19,11 @@
       "browser": "./src/analytics/web/index.ts",
       "default": "./src/analytics/web/index.ts"
     },
+    "./home": {
+      "react-native": "./src/home/native/index.ts",
+      "browser": "./src/home/web/index.ts",
+      "default": "./src/home/web/index.ts"
+    },
     "./activity": "./src/activity/web/index.ts",
     "./icons/native": "./src/icons/native.tsx",
     "./finance/money": "./src/finance/money.ts"
