@@ -3,3 +3,5 @@ export { BarChart } from './BarChart';
 export { InsightBars } from './InsightBars';
 export { CashFlowChart } from './CashFlowChart';
 export { BreakdownDonut } from './BreakdownDonut';
+export { AnalyticsChartPanel } from './AnalyticsChartPanel';
+export { ChartTypeSelect, type ChartTypeOption } from './ChartTypeSelect';

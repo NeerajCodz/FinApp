@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Download, ReceiptText } from 'lucide-react';
 import { Button, Card, Empty, Tabs, Typography, useTheme } from '@finapp/ui/web';
-import { BarChart, BreakdownDonut, CashFlowChart } from '@finapp/ui/analytics';
+import { AnalyticsChartPanel, BarChart, BreakdownDonut, CashFlowChart, SpendingLineChart } from '@finapp/ui/analytics';
 import { BudgetProgress, TransactionRow } from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
@@ -67,6 +67,18 @@ const periods: { value: AnalyticsPeriod; label: string }[] = [
   { value: 'month', label: 'Month' },
   { value: 'year', label: 'Year' },
 ];
+const cashFlowChartTypes = [
+  { value: 'lines', label: 'Lines' },
+  { value: 'bars', label: 'Bars' },
+] as const;
+const categoryChartTypes = [
+  { value: 'donut', label: 'Donut' },
+  { value: 'bars', label: 'Bars' },
+] as const;
+const dailyChartTypes = [
+  { value: 'bars', label: 'Bars' },
+  { value: 'line', label: 'Line' },
+] as const;
 const selectStyle: React.CSSProperties = {
   minHeight: 36,
   border: '1px solid var(--finapp-border-subtle)',
@@ -130,6 +142,9 @@ export default function AnalyticsPage() {
   const [accountFilter, setAccountFilter] = React.useState('all');
   const [categoryFilter, setCategoryFilter] = React.useState('all');
   const [typeFilter, setTypeFilter] = React.useState<'all' | 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'>('all');
+  const [cashFlowChartType, setCashFlowChartType] = React.useState<'lines' | 'bars'>('lines');
+  const [categoryChartType, setCategoryChartType] = React.useState<'donut' | 'bars'>('donut');
+  const [dailyChartType, setDailyChartType] = React.useState<'bars' | 'line'>('bars');
   const [rangeLoading, setRangeLoading] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
   const [loadedRange, setLoadedRange] = React.useState('');
@@ -425,22 +440,39 @@ export default function AnalyticsPage() {
 
         {transactionCount === 0 && <Empty title="No activity in this period" description="Record a transaction to start seeing trends from your local finance data." icon={<ReceiptText size={20} aria-hidden="true" />} action={<Link className="finance-inline-link" href="/transaction/new">Add transaction</Link>} />}
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))', gap: 12, alignItems: 'stretch' }}>
-          <Card style={{ minWidth: 0, display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
-            <div><Typography variant="bodyLarge">Cash flow</Typography><Typography variant="caption">Select a period to inspect its activity</Typography></div>
-            {result.buckets.length ? <CashFlowChart buckets={result.buckets} currency={currency} variant="lines" onSelectBucket={(bucket) => router.push(`/activity?startAt=${bucket.startAt}&endAt=${bucket.endAt}`)} /> : <Typography variant="caption">No cash flow in this period.</Typography>}
-          </Card>
-          <Card style={{ minWidth: 0, display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
-            <div><Typography variant="bodyLarge">Spending by category</Typography><Typography variant="caption">Posted expenses · {currency}</Typography></div>
-            <BreakdownDonut items={result.categoryBreakdown} totalMinor={result.spentMinor} currency={currency} iconForCategory={(id) => {
+        <section className="analytics-primary-charts">
+          <AnalyticsChartPanel
+            title="Cash flow"
+            description="Select a period to inspect its activity"
+            chartType={cashFlowChartType}
+            chartTypes={cashFlowChartTypes}
+            onChartTypeChange={(value) => setCashFlowChartType(value as 'lines' | 'bars')}
+          >
+            {result.buckets.length ? <CashFlowChart buckets={result.buckets} currency={currency} variant={cashFlowChartType} onSelectBucket={(bucket) => router.push(`/activity?startAt=${bucket.startAt}&endAt=${bucket.endAt}`)} /> : <Typography variant="caption">No cash flow in this period.</Typography>}
+          </AnalyticsChartPanel>
+          <AnalyticsChartPanel
+            title="Spending by category"
+            description={`Posted expenses · ${currency}`}
+            chartType={categoryChartType}
+            chartTypes={categoryChartTypes}
+            onChartTypeChange={(value) => setCategoryChartType(value as 'donut' | 'bars')}
+          >
+            {categoryChartType === 'donut' ? <BreakdownDonut items={result.categoryBreakdown} totalMinor={result.spentMinor} currency={currency} iconForCategory={(id) => {
               const category = categoryById.get(id);
               return typeof category?.icon === 'string' ? category.icon : undefined;
-            }} onSelectItem={(item) => router.push(breakdownHref('category', item.id))} />
-          </Card>
-          <Card style={{ minWidth: 0, display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
-            <div><Typography variant="bodyLarge">Daily spending</Typography><Typography variant="caption">{period === 'year' ? 'Monthly totals' : 'Posted expense totals'} · {currency}</Typography></div>
-            {chartMax > 0n ? <div role="img" aria-label={`Daily spending by period. ${chartDescription}`}><BarChart values={chartValues} labels={result.buckets.map((item) => item.label)} /></div> : <Typography variant="caption">No daily spending in this period.</Typography>}
-          </Card>
+            }} onSelectItem={(item) => router.push(breakdownHref('category', item.id))} /> : result.categoryBreakdown.length ? <div role="img" aria-label="Spending by category bar chart"><BarChart values={result.categoryBreakdown.map((item) => result.spentMinor > 0n ? Number((item.amountMinor * 10000n) / result.spentMinor) / 100 : 0)} labels={result.categoryBreakdown.map((item) => item.label)} /></div> : <Typography variant="caption">No posted expenses in this period.</Typography>}
+          </AnalyticsChartPanel>
+        </section>
+        <section className="analytics-daily-chart">
+          <AnalyticsChartPanel
+            title="Daily spending"
+            description={`${period === 'year' ? 'Monthly totals' : 'Posted expense totals'} · ${currency}`}
+            chartType={dailyChartType}
+            chartTypes={dailyChartTypes}
+            onChartTypeChange={(value) => setDailyChartType(value as 'bars' | 'line')}
+          >
+            {chartMax > 0n ? dailyChartType === 'bars' ? <div role="img" aria-label={`Daily spending by period. ${chartDescription}`}><BarChart values={chartValues} labels={result.buckets.map((item) => item.label)} /></div> : <SpendingLineChart values={chartValues} labels={[result.buckets[0]?.label ?? 'Start', result.buckets.at(-1)?.label ?? 'End']} /> : <Typography variant="caption">No daily spending in this period.</Typography>}
+          </AnalyticsChartPanel>
         </section>
 
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12 }}>
