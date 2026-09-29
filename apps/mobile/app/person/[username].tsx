@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowLeftRight, UsersThree } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money, TransactionRow } from '@finapp/ui/finance';
+import { formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
 import {
   Avatar,
   Button,
@@ -40,6 +40,7 @@ type TimelineRecord = LocalRecord & {
   currency?: string;
   title?: string;
   occurredAt?: number;
+  hasTime?: boolean;
 };
 
 function GroupTimeline({
@@ -89,7 +90,10 @@ function GroupTimeline({
           currency={String(transaction.currency ?? group.currency ?? 'INR')}
           type="expense"
           semanticType="split"
-          date={new Date(Number(transaction.occurredAt ?? Date.now())).toLocaleDateString()}
+          date={formatTransactionDate(
+            Number(transaction.occurredAt ?? Date.now()),
+            Boolean(transaction.hasTime),
+          )}
         />
       ))}
     </>
