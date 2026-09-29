@@ -1,4 +1,5 @@
-import { mutation } from '../_generated/server';
+import { internal } from '../_generated/api';
+import { internalMutation, mutation } from '../_generated/server';
 import { v } from 'convex/values';
 import { requireIdentity, requireUser } from '../shared/auth';
 import { assertCurrency } from '../shared/validators';
@@ -8,10 +9,33 @@ import {
   type GroupRole,
   type Membership,
 } from '../shared/permissions';
-import { changeMemberRole, createGroup, renameGroup, type Group } from './domain';
+import {
+  changeMemberRole,
+  createGroup,
+  renameGroup,
+  type Group,
+  validateBillImageMetadata,
+} from './domain';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
 import { allocateParticipants } from '../splits/domain';
+
+const CHAT_RETENTION_OPTIONS: Record<number, true> = {
+  86_400_000: true,
+  604_800_000: true,
+  2_592_000_000: true,
+};
+const CHAT_TEXT_LIMIT = 4_000;
+
+function validateGroupIcon(icon: string | undefined) {
+  if (icon === undefined) return;
+  if (
+    icon.startsWith('lucide:')
+      ? !/^lucide:[A-Z][A-Za-z0-9]*$/.test(icon)
+      : !icon.trim() || icon.length > 16 || /[\u0000-\u001f]/.test(icon)
+  )
+    throw new Error('INVALID_GROUP_ICON');
+}
 
 export function createGroupRecord(ownerId: string, name: string, currency: string): Group {
   return createGroup(ownerId, name, currency);
@@ -42,6 +66,7 @@ export const create = mutation({
     memberUsernames: v.array(v.string()),
     clientMutationId: v.optional(v.string()),
     memberPhones: v.optional(v.array(v.string())),
+    icon: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
@@ -63,12 +88,14 @@ export const create = mutation({
     const currency = args.currency.toUpperCase();
     assertCurrency(currency);
     const name = args.name.trim();
+    validateGroupIcon(args.icon);
     if (!name) throw new Error('INVALID_GROUP');
     const now = Date.now();
     const groupId = await ctx.db.insert('groups', {
       ownerId: owner._id,
       name,
       currency,
+      ...(args.icon === undefined ? {} : { icon: args.icon }),
       createdAt: now,
       updatedAt: now,
     });
@@ -170,7 +197,9 @@ export const create = mutation({
 export const updateSettings = mutation({
   args: {
     groupId: v.id('groups'),
-    name: v.string(),
+    name: v.optional(v.string()),
+    icon: v.optional(v.union(v.string(), v.null())),
+    messageRetentionMs: v.optional(v.union(v.number(), v.null())),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -199,20 +228,47 @@ export const updateSettings = mutation({
       userId: String(member.userId),
       role: member.role,
     }));
-    const updated = renameGroup(
-      actor._id,
-      {
-        id: String(group._id),
-        ownerId: String(group.ownerId),
-        name: group.name,
-        currency: group.currency,
-        archivedAt: group.archivedAt,
-      },
-      roles,
-      args.name,
-    );
+    requireAdmin(actor._id, String(group.ownerId), roles);
+    if (args.name !== undefined && !args.name.trim()) throw new Error('INVALID_GROUP');
+    if (args.icon !== undefined && args.icon !== null) validateGroupIcon(args.icon);
+    if (
+      args.messageRetentionMs !== undefined &&
+      args.messageRetentionMs !== null &&
+      !CHAT_RETENTION_OPTIONS[args.messageRetentionMs]
+    )
+      throw new Error('INVALID_MESSAGE_RETENTION');
+
     const updatedAt = Date.now();
-    await ctx.db.patch(args.groupId, { name: updated.name, updatedAt });
+    const patch = {
+      ...(args.name === undefined ? {} : { name: args.name.trim() }),
+      ...(args.icon === undefined ? {} : { icon: args.icon ?? undefined }),
+      ...(args.messageRetentionMs === undefined
+        ? {}
+        : { messageRetentionMs: args.messageRetentionMs ?? undefined }),
+      updatedAt,
+    };
+    await ctx.db.patch(args.groupId, patch);
+
+    if (args.messageRetentionMs !== undefined) {
+      const messages = await ctx.db
+        .query('groupMessages')
+        .withIndex('by_group_createdAt', (query) => query.eq('groupId', args.groupId))
+        .collect();
+      for (const message of messages) {
+        const expiresAt =
+          args.messageRetentionMs === null
+            ? undefined
+            : message.createdAt + args.messageRetentionMs;
+        await ctx.db.patch(message._id, { expiresAt });
+        if (expiresAt !== undefined)
+          await ctx.scheduler.runAt(
+            Math.max(Date.now(), expiresAt),
+            internal.groups.mutations.deleteExpiredMessage,
+            { messageId: message._id },
+          );
+      }
+    }
+    const updated = (await ctx.db.get(args.groupId)) ?? group;
     await publishMutationResult(
       ctx,
       actor._id,
@@ -222,7 +278,7 @@ export const updateSettings = mutation({
       'groups',
       String(args.groupId),
       updatedAt,
-      { ...group, name: updated.name, updatedAt },
+      updated,
       memberships.map((member) => member.userId),
     );
     return args.groupId;
@@ -295,6 +351,239 @@ export const setMemberRole = mutation({
       memberships.map((member) => member.userId),
     );
     return target._id;
+  },
+});
+export const addMember = mutation({
+  args: { groupId: v.id('groups'), username: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .collect();
+    requireAdmin(
+      actor._id,
+      String(group.ownerId),
+      memberships.map((member) => ({ userId: String(member.userId), role: member.role })),
+    );
+    const username = args.username.replace(/^@+/, '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,32}$/.test(username)) throw new Error('INVALID_USERNAME');
+    const target = await ctx.db
+      .query('users')
+      .withIndex('by_username', (query) => query.eq('username', username))
+      .unique();
+    if (!target) {
+      const invite = await ctx.db.insert('groupInvites', {
+        groupId: args.groupId,
+        inviterId: actor._id,
+        inviteeEmail: '',
+        inviteeUsername: username,
+        status: 'pending',
+        createdAt: Date.now(),
+      });
+      const document = await ctx.db.get(invite);
+      await recordSyncChange(ctx, actor._id, 'groupInvites', String(invite), Date.now(), document);
+      return null;
+    }
+    if (memberships.some((member) => member.userId === target._id))
+      throw new Error('ALREADY_MEMBER');
+    const now = Date.now();
+    const memberId = await ctx.db.insert('groupMembers', {
+      groupId: args.groupId,
+      userId: target._id,
+      role: 'member',
+      joinedAt: now,
+    });
+    await ctx.db.patch(args.groupId, { updatedAt: now });
+    const [member, updatedGroup] = await Promise.all([
+      ctx.db.get(memberId),
+      ctx.db.get(args.groupId),
+    ]);
+    const scopes = [...new Set([...memberships.map((item) => item.userId), target._id])];
+    for (const scopeUserId of scopes) {
+      await recordSyncChange(ctx, scopeUserId, 'groupMembers', String(memberId), now, member);
+      await recordSyncChange(ctx, scopeUserId, 'groups', String(args.groupId), now, updatedGroup);
+    }
+    await createNotification(
+      ctx,
+      target._id,
+      `group:${args.groupId}:joined`,
+      'group',
+      'group',
+      String(args.groupId),
+      `Added to ${group.name}`,
+      'A new shared group is ready.',
+    );
+    return memberId;
+  },
+});
+
+export const removeMember = mutation({
+  args: { groupId: v.id('groups'), memberUserId: v.id('users') },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .collect();
+    requireAdmin(
+      actor._id,
+      String(group.ownerId),
+      memberships.map((member) => ({ userId: String(member.userId), role: member.role })),
+    );
+    if (args.memberUserId === group.ownerId) throw new Error('CANNOT_REMOVE_OWNER');
+    const target = memberships.find((member) => member.userId === args.memberUserId);
+    if (!target) throw new Error('NOT_MEMBER');
+    const now = Date.now();
+    await ctx.db.delete(target._id);
+    await ctx.db.patch(args.groupId, { updatedAt: now });
+    const updatedGroup = await ctx.db.get(args.groupId);
+    const scopes = [...new Set(memberships.map((member) => member.userId))];
+    for (const scopeUserId of scopes) {
+      await recordSyncChange(
+        ctx,
+        scopeUserId,
+        'groupMembers',
+        String(target._id),
+        now,
+        undefined,
+        now,
+      );
+      if (scopeUserId === target.userId)
+        await recordSyncChange(
+          ctx,
+          scopeUserId,
+          'groups',
+          String(args.groupId),
+          now,
+          undefined,
+          now,
+        );
+      else
+        await recordSyncChange(ctx, scopeUserId, 'groups', String(args.groupId), now, updatedGroup);
+    }
+    return target._id;
+  },
+});
+
+// Chat bypasses the offline finance outbox so message authorization and attachment expiry stay server-owned.
+export const createChatUploadUrl = mutation({
+  args: { groupId: v.id('groups') },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const membership = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group_user', (query) =>
+        query.eq('groupId', args.groupId).eq('userId', user._id),
+      )
+      .unique();
+    if (!membership) throw new Error('NOT_MEMBER');
+    return ctx.storage.generateUploadUrl();
+  },
+});
+
+export const sendChatText = mutation({
+  args: { groupId: v.id('groups'), text: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const membership = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group_user', (query) =>
+        query.eq('groupId', args.groupId).eq('userId', user._id),
+      )
+      .unique();
+    if (!membership) throw new Error('NOT_MEMBER');
+    const text = args.text.trim();
+    if (!text || text.length > CHAT_TEXT_LIMIT) throw new Error('INVALID_CHAT_TEXT');
+    const now = Date.now();
+    const expiresAt = group.messageRetentionMs ? now + group.messageRetentionMs : undefined;
+    const messageId = await ctx.db.insert('groupMessages', {
+      groupId: args.groupId,
+      senderId: user._id,
+      kind: 'text',
+      text,
+      createdAt: now,
+      expiresAt,
+    });
+    if (expiresAt !== undefined)
+      await ctx.scheduler.runAt(expiresAt, internal.groups.mutations.deleteExpiredMessage, {
+        messageId,
+      });
+    return messageId;
+  },
+});
+
+export const sendBillAttachment = mutation({
+  args: { groupId: v.id('groups'), storageId: v.id('_storage') },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const membership = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group_user', (query) =>
+        query.eq('groupId', args.groupId).eq('userId', user._id),
+      )
+      .unique();
+    if (!membership) throw new Error('NOT_MEMBER');
+    const metadata = await ctx.storage.getMetadata(args.storageId);
+    if (!metadata) return null;
+    const mimeType = validateBillImageMetadata(metadata);
+    if (!mimeType) {
+      await ctx.storage.delete(args.storageId);
+      return null;
+    }
+    const existing = await ctx.db
+      .query('groupMessages')
+      .withIndex('by_storage', (query) => query.eq('storageId', args.storageId))
+      .unique();
+    if (existing) throw new Error('BILL_IMAGE_ALREADY_ATTACHED');
+    const now = Date.now();
+    const expiresAt = group.messageRetentionMs ? now + group.messageRetentionMs : undefined;
+    const messageId = await ctx.db.insert('groupMessages', {
+      groupId: args.groupId,
+      senderId: user._id,
+      kind: 'bill',
+      storageId: args.storageId,
+      mimeType,
+      size: metadata.size,
+      createdAt: now,
+      expiresAt,
+    });
+    if (expiresAt !== undefined)
+      await ctx.scheduler.runAt(expiresAt, internal.groups.mutations.deleteExpiredMessage, {
+        messageId,
+      });
+    return messageId;
+  },
+});
+
+export const deleteExpiredMessage = internalMutation({
+  args: { messageId: v.id('groupMessages') },
+  handler: async (ctx, { messageId }) => {
+    const message = await ctx.db.get(messageId);
+    if (!message || message.expiresAt === undefined) return;
+    if (message.expiresAt > Date.now()) {
+      await ctx.scheduler.runAt(message.expiresAt, internal.groups.mutations.deleteExpiredMessage, {
+        messageId,
+      });
+      return;
+    }
+    if (message.storageId) await ctx.storage.delete(message.storageId);
+    await ctx.db.delete(messageId);
   },
 });
 

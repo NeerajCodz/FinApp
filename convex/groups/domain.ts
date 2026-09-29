@@ -14,6 +14,19 @@ export type Group = {
   archivedAt?: number;
 };
 
+export const BILL_IMAGE_LIMIT_BYTES = 5 * 1024 * 1024;
+const billImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+export function validateBillImageMetadata(
+  metadata: { contentType?: string | null; size: number } | null,
+): string | null {
+  if (!metadata || !Number.isFinite(metadata.size) || metadata.size <= 0) return null;
+  const mimeType = metadata.contentType?.split(';')[0]?.trim().toLowerCase();
+  return mimeType && billImageMimeTypes.has(mimeType) && metadata.size <= BILL_IMAGE_LIMIT_BYTES
+    ? mimeType
+    : null;
+}
+
 export function createGroup(ownerId: string, name: string, currency: string): Group {
   if (!ownerId || !name.trim() || !/^[A-Z]{3}$/.test(currency))
     throw new DomainError('INVALID_CURRENCY');

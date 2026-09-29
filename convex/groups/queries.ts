@@ -107,3 +107,46 @@ export const detail = query({
     };
   },
 });
+export const chatMessages = query({
+  args: { groupId: v.id('groups') },
+  handler: async (ctx, args) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) return [];
+    const membership = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group_user', (query) =>
+        query.eq('groupId', args.groupId).eq('userId', user._id),
+      )
+      .unique();
+    if (!membership) return [];
+    const now = Date.now();
+    const messages = (
+      await ctx.db
+        .query('groupMessages')
+        .withIndex('by_group_createdAt', (query) => query.eq('groupId', args.groupId))
+        .order('asc')
+        .collect()
+    ).filter((message) => message.expiresAt === undefined || message.expiresAt > now);
+    return Promise.all(
+      messages.map(async (message) => {
+        const [sender, attachmentUrl] = await Promise.all([
+          ctx.db.get(message.senderId),
+          message.storageId ? ctx.storage.getUrl(message.storageId) : Promise.resolve(null),
+        ]);
+        return {
+          id: message._id,
+          kind: message.kind,
+          text: message.text,
+          senderId: message.senderId,
+          senderName: sender?.displayName ?? sender?.name ?? 'Member',
+          createdAt: message.createdAt,
+          attachmentUrl,
+          mimeType: message.mimeType,
+          size: message.size,
+        };
+      }),
+    );
+  },
+});
