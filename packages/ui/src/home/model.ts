@@ -22,6 +22,8 @@ export type HomeTransactionItem = {
   type: string;
   status?: string;
   occurredAt: number;
+  hasTime: boolean;
+  timeZone?: string;
   groupId?: string;
 };
 
@@ -33,6 +35,7 @@ export type HomeDashboardData = {
   upcomingBillsMinor: bigint;
   upcomingBillsCount: number;
   cashFlow: HomeBucket[];
+  cashFlowRanges: { week: HomeBucket[]; month: HomeBucket[]; year: HomeBucket[] };
   budgets: Array<{
     id: string;
     name: string;
@@ -71,6 +74,7 @@ export type HomeDashboardInput = {
   startAt: number;
   endAt: number;
   currency: string;
+  timeZone?: string;
   accountId?: string;
   search?: string;
   accounts: readonly HomeRecord[];
@@ -107,6 +111,32 @@ function hasAlias(record: HomeRecord, value: unknown): boolean {
 
 function isPosted(transaction: HomeRecord): boolean {
   return transaction.status === 'posted' && transaction.deletedAt === undefined;
+}
+
+function dailyCashFlowBuckets(start: Date, count: number, label: 'weekday' | 'day'): HomeBucket[] {
+  return Array.from({ length: count }, (_, index) => {
+    const bucketStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+    return {
+      startAt: bucketStart.getTime(),
+      endAt: new Date(
+        bucketStart.getFullYear(),
+        bucketStart.getMonth(),
+        bucketStart.getDate() + 1,
+      ).getTime(),
+      amountMinor: 0n,
+      incomeMinor: 0n,
+      label:
+        label === 'weekday'
+          ? bucketStart.toLocaleDateString(undefined, { weekday: 'short' })
+          : String(bucketStart.getDate()),
+    };
+  });
+}
+
+function addCashFlowTransaction(bucket: HomeBucket | undefined, transaction: HomeRecord) {
+  if (!bucket) return;
+  if (transaction.type === 'expense') bucket.amountMinor += amount(transaction.amountMinor);
+  if (transaction.type === 'income') bucket.incomeMinor += amount(transaction.amountMinor);
 }
 
 export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData {
@@ -175,22 +205,35 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
     } else if (transaction.type === 'income') incomeMinor += amount(transaction.amountMinor);
   }
 
-  const year = new Date(input.now).getFullYear();
-  const cashFlow: HomeBucket[] = Array.from({ length: 12 }, (_, month) => ({
-    startAt: new Date(year, month, 1).getTime(),
-    endAt: new Date(year, month + 1, 1).getTime(),
+  const now = new Date(input.now);
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const cashFlow: HomeBucket[] = Array.from({ length: 12 }, (_, monthIndex) => ({
+    startAt: new Date(year, monthIndex, 1).getTime(),
+    endAt: new Date(year, monthIndex + 1, 1).getTime(),
     amountMinor: 0n,
     incomeMinor: 0n,
-    label: new Date(year, month, 1).toLocaleDateString(undefined, { month: 'short' }),
+    label: new Date(year, monthIndex, 1).toLocaleDateString(undefined, { month: 'short' }),
   }));
+  const monthStart = new Date(year, month, 1);
+  const weekStart = new Date(year, month, now.getDate() - now.getDay());
+  const monthCashFlow = dailyCashFlowBuckets(
+    monthStart,
+    new Date(year, month + 1, 0).getDate(),
+    'day',
+  );
+  const weekCashFlow = dailyCashFlowBuckets(weekStart, 7, 'weekday');
+  const weekStartDay = Date.UTC(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
   for (const transaction of transactions) {
     if (!isPosted(transaction) || typeof transaction.occurredAt !== 'number') continue;
     const date = new Date(transaction.occurredAt);
-    if (date.getFullYear() !== year) continue;
-    const bucket = cashFlow[date.getMonth()];
-    if (!bucket) continue;
-    if (transaction.type === 'expense') bucket.amountMinor += amount(transaction.amountMinor);
-    if (transaction.type === 'income') bucket.incomeMinor += amount(transaction.amountMinor);
+    if (date.getFullYear() === year) addCashFlowTransaction(cashFlow[date.getMonth()], transaction);
+    const dayIndex = Math.floor(
+      (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - weekStartDay) / 86_400_000,
+    );
+    addCashFlowTransaction(weekCashFlow[dayIndex], transaction);
+    if (date.getFullYear() === year && date.getMonth() === month)
+      addCashFlowTransaction(monthCashFlow[date.getDate() - 1], transaction);
   }
 
   const accountByAlias = new Map<string, HomeRecord>();
@@ -409,6 +452,8 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
         type: typeof transaction.type === 'string' ? transaction.type : 'expense',
         status: typeof transaction.status === 'string' ? transaction.status : undefined,
         occurredAt: Number(transaction.occurredAt ?? 0),
+        hasTime: transaction.hasTime === true,
+        timeZone: input.timeZone,
         groupId: typeof transaction.groupId === 'string' ? transaction.groupId : undefined,
       };
     });
@@ -421,6 +466,7 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
     upcomingBillsMinor,
     upcomingBillsCount: upcomingRules.length,
     cashFlow,
+    cashFlowRanges: { week: weekCashFlow, month: monthCashFlow, year: cashFlow },
     budgets: budgetRecords,
     upcomingBills,
     goals,

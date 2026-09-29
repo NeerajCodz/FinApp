@@ -2,6 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { Button, Card, SectionHeader, Typography } from '@finapp/ui/native';
 import { TransactionRow } from '@finapp/ui/finance';
+import { formatTransactionDate } from '../../finance/datetime';
 import type { HomeDashboardData } from '../model';
 
 export function HomeRecent({
@@ -34,7 +35,11 @@ export function HomeRecent({
             currency={transaction.currency}
             type={transaction.type as 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'}
             semanticType={transaction.groupId ? 'split' : undefined}
-            date={new Date(transaction.occurredAt).toLocaleDateString()}
+            date={formatTransactionDate(
+              transaction.occurredAt,
+              transaction.hasTime,
+              transaction.timeZone,
+            )}
             status={transaction.status === 'pending' ? 'Pending' : undefined}
             onPress={() => onOpenTransaction(transaction.id)}
           />

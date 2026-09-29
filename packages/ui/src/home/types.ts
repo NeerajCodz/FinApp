@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { HomeDashboardData } from './model';
 
 export type HomePerson = {
@@ -25,6 +26,10 @@ export type HomeDashboardProps = {
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
   onOpenSync: () => void;
+  syncLabel?: string;
+  syncIcon?: ReactNode;
+  notificationCount?: number;
+  onOpenNotifications?: () => void;
   onOpenTransaction: (id: string) => void;
   onSeeAllTransactions: () => void;
   onOpenBudget: (id: string) => void;

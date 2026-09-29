@@ -1,6 +1,7 @@
 import React from 'react';
-import { ArrowDownRight, ArrowUpRight, ArrowUpRight as OpenIcon, ReceiptText } from 'lucide-react';
-import { formatMinor } from '@convex/shared/money';
+import { ArrowUpRight as OpenIcon, ReceiptText } from 'lucide-react';
+import { TransactionRow } from '@finapp/ui/finance';
+import { formatTransactionDate } from '../../finance/datetime';
 import type { HomeDashboardData } from '../model';
 
 export function HomeRecent({
@@ -27,37 +28,27 @@ export function HomeRecent({
       </div>
       {data.transactions.length ? (
         <div className="finance-home-transaction-list">
-          {data.transactions.map((transaction) => {
-            const positive = transaction.type === 'income' || transaction.type === 'refund';
-            const Icon = positive ? ArrowUpRight : ArrowDownRight;
-            return (
-              <button
-                className="finance-home-transaction"
-                key={transaction.id}
-                type="button"
-                onClick={() => onOpenTransaction(transaction.id)}
-              >
-                <span className="finance-home-transaction-icon">
-                  {transaction.categoryIcon ? (
-                    <span aria-hidden="true">{transaction.categoryIcon}</span>
-                  ) : (
-                    <ReceiptText size={17} aria-hidden="true" />
-                  )}
-                </span>
-                <span className="finance-home-transaction-main">
-                  <strong>{transaction.title}</strong>
-                  <small>
-                    {transaction.category ?? 'Uncategorized'} ·{' '}
-                    {new Date(transaction.occurredAt).toLocaleDateString()}
-                  </small>
-                </span>
-                <span className={positive ? 'finance-home-amount positive' : 'finance-home-amount'}>
-                  <Icon size={14} aria-hidden="true" />
-                  {formatMinor(transaction.amountMinor, transaction.currency || currency)}
-                </span>
-              </button>
-            );
-          })}
+          {data.transactions.map((transaction) => (
+            <div className="finance-home-transaction" key={transaction.id}>
+              <TransactionRow
+                title={transaction.title}
+                category={transaction.category}
+                categoryIcon={transaction.categoryIcon}
+                date={formatTransactionDate(
+                  transaction.occurredAt,
+                  transaction.hasTime,
+                  transaction.timeZone,
+                )}
+                amountMinor={transaction.amountMinor}
+                currency={transaction.currency || currency}
+                type={
+                  transaction.type as 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'
+                }
+                semanticType={transaction.groupId ? 'split' : undefined}
+                onPress={() => onOpenTransaction(transaction.id)}
+              />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="finance-home-empty-block">

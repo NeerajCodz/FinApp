@@ -68,6 +68,7 @@ export default function DashboardPage() {
   }, [authLoading, identityReady, isAuthenticated, router, userId]);
   const currency =
     typeof profiles[0]?.defaultCurrency === 'string' ? profiles[0].defaultCurrency : 'INR';
+  const timeZone = typeof profiles[0]?.timezone === 'string' ? profiles[0].timezone : undefined;
   const peopleQueries = React.useMemo<RequestForQueries>(() => {
     const queries: RequestForQueries = {};
     if (isConnected) {
@@ -85,6 +86,7 @@ export default function DashboardPage() {
         startAt: range.startAt,
         endAt: range.endAt,
         currency,
+        timeZone,
         accountId: selectedAccountId,
         search,
         accounts,
@@ -102,6 +104,7 @@ export default function DashboardPage() {
       budgets,
       categories,
       currency,
+      timeZone,
       goalContributions,
       goals,
       groupMembers,

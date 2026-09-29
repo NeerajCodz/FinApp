@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import { Wallet } from '@finapp/ui/icons/native';
-import { Button, Card, SectionHeader, Text, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Card, SectionHeader, Tabs, Text, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
 import { CashFlowChart } from '../../analytics/native/CashFlowChart';
 import type { HomeDashboardData } from '../model';
+type CashFlowRange = 'week' | 'month' | 'year';
+
+const cashFlowTabs = [
+  { label: 'Week', value: 'week' },
+  { label: 'Month', value: 'month' },
+  { label: 'Year', value: 'year' },
+];
 
 export function HomeFlowBudgets({
   data,
@@ -18,14 +25,25 @@ export function HomeFlowBudgets({
   onSeeAllBudgets: () => void;
 }) {
   const { tokens } = useTheme();
+  const [cashFlowRange, setCashFlowRange] = useState<CashFlowRange>('month');
+  const rangeLabel = `THIS ${cashFlowRange.toUpperCase()}`;
   return (
     <View style={{ gap: 12 }}>
       <Card style={{ gap: 13 }}>
         <SectionHeader
           title="Cash flow"
-          action={<Typography variant="caption">THIS YEAR</Typography>}
+          action={<Typography variant="caption">{rangeLabel}</Typography>}
         />
-        <CashFlowChart buckets={data.cashFlow} currency={currency} variant="lines" />
+        <Tabs
+          tabs={cashFlowTabs}
+          value={cashFlowRange}
+          onChange={(value) => setCashFlowRange(value as CashFlowRange)}
+        />
+        <CashFlowChart
+          buckets={data.cashFlowRanges[cashFlowRange]}
+          currency={currency}
+          variant="lines"
+        />
       </Card>
       <Card style={{ gap: 8 }}>
         <SectionHeader

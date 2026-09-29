@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { CalendarDays, ClockCounterClockwise, MagnifyingGlass } from '@finapp/ui/icons/native';
+import {
+  Bell,
+  CalendarDays,
+  ClockCounterClockwise,
+  MagnifyingGlass,
+} from '@finapp/ui/icons/native';
 import { Button, IconButton, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import type { HomeAccountOption } from '../types';
+import { BrandMark } from '../../finance/native/ScreenPrimitives';
 
 export function HomeHeader({
   accounts,
@@ -13,6 +19,10 @@ export function HomeHeader({
   onAccountChange,
   onChooseDate,
   onOpenSync,
+  syncLabel,
+  syncIcon,
+  notificationCount = 0,
+  onOpenNotifications,
 }: {
   accounts: readonly HomeAccountOption[];
   selectedAccountId: string;
@@ -22,6 +32,10 @@ export function HomeHeader({
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
   onOpenSync: () => void;
+  syncLabel?: string;
+  syncIcon?: React.ReactNode;
+  notificationCount?: number;
+  onOpenNotifications?: () => void;
 }) {
   const { tokens } = useTheme();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -38,17 +52,63 @@ export function HomeHeader({
         }}
       >
         <View style={{ gap: 4, flex: 1 }}>
-          <Typography variant="label" style={{ color: tokens.primary }}>
-            PERSONAL FINANCE
-          </Typography>
+          <BrandMark />
           <Typography variant="title" style={{ fontSize: 28, lineHeight: 32 }}>
             Home
           </Typography>
           <Typography variant="small">Your money, clearly in view.</Typography>
         </View>
-        <IconButton label="Open sync status" variant="ghost" onPress={onOpenSync}>
-          <ClockCounterClockwise size={19} color={tokens.foregroundMuted} />
-        </IconButton>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <IconButton label={syncLabel ?? 'Open sync status'} variant="ghost" onPress={onOpenSync}>
+            {syncIcon ?? <ClockCounterClockwise size={19} color={tokens.foregroundMuted} />}
+          </IconButton>
+          {onOpenNotifications && (
+            <View style={{ position: 'relative' }}>
+              <IconButton
+                label={
+                  notificationCount > 0
+                    ? `Notifications, ${notificationCount} unread`
+                    : 'Notifications'
+                }
+                variant="outline"
+                onPress={onOpenNotifications}
+                style={{ borderRadius: 22 }}
+              >
+                <Bell
+                  size={18}
+                  color={notificationCount > 0 ? tokens.primary : tokens.foregroundMuted}
+                />
+              </IconButton>
+              {notificationCount > 0 && (
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    minWidth: 19,
+                    height: 19,
+                    paddingHorizontal: 4,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: tokens.destructive,
+                    borderWidth: 2,
+                    borderColor: tokens.background,
+                    elevation: 2,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    style={{ color: tokens.background, fontSize: 9, lineHeight: 11 }}
+                  >
+                    {notificationCount > 99 ? '99+' : notificationCount}
+                  </Typography>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
       </View>
       <View style={{ flexDirection: 'row', gap: 7, alignItems: 'center' }}>
         <Button

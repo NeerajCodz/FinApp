@@ -4,6 +4,11 @@ import { Check, ClockCounterClockwise, TriangleAlert } from '@finapp/ui/icons/na
 import { router } from 'expo-router';
 import { useQueries, type RequestForQueries } from 'convex/react';
 import { api } from '@convex/_generated/api';
+import {
+  normalizeNotificationPreferences,
+  notificationTypes,
+  type NotificationType,
+} from '@convex/notifications/domain';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeDashboard, buildHomeDashboard, type HomeRecord } from '@finapp/ui/home';
 import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
@@ -64,6 +69,8 @@ export default function HomeScreen() {
   const { data: recurringRules } = useLocalRecords<HomeRecord>(userId, 'recurringRule');
   const { data: goals } = useLocalRecords<HomeRecord>(userId, 'goal');
   const { data: goalContributions } = useLocalRecords<HomeRecord>(userId, 'goalContribution');
+  const { data: notificationRecords } = useLocalRecords<HomeRecord>(userId, 'notification');
+  const { data: settings } = useLocalRecords<HomeRecord>(userId, 'settings');
   const transactionRange = useLocalTransactionRange<HomeRecord>(
     userId,
     range.startAt,
@@ -82,6 +89,20 @@ export default function HomeScreen() {
   const people = Array.isArray(peopleQuery) ? peopleQuery.filter((person) => person !== null) : [];
   const profile = profiles?.[0];
   const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
+  const timeZone = typeof profile?.timezone === 'string' ? profile.timezone : undefined;
+  const unreadNotificationCount = useMemo(() => {
+    if (!settings) return 0;
+    const preferences = normalizeNotificationPreferences(settings[0]?.notificationPreferences);
+    return (notificationRecords ?? []).filter((record) => {
+      const type = record.type;
+      return (
+        record.readAt === undefined &&
+        typeof type === 'string' &&
+        notificationTypes.includes(type as NotificationType) &&
+        preferences[type as NotificationType]
+      );
+    }).length;
+  }, [notificationRecords, settings]);
   const allTransactions = useMemo(() => {
     const byId = new Map<string, HomeRecord>();
     for (const transaction of [...(transactions ?? []), ...(transactionRange.data ?? [])]) {
@@ -97,6 +118,7 @@ export default function HomeScreen() {
         startAt: range.startAt,
         endAt: range.endAt,
         currency,
+        timeZone,
         accountId: selectedAccountId,
         search,
         accounts: accounts ?? [],
@@ -116,6 +138,7 @@ export default function HomeScreen() {
       budgets,
       categories,
       currency,
+      timeZone,
       goalContributions,
       goals,
       groupMembers,
@@ -246,6 +269,10 @@ export default function HomeScreen() {
           onAccountChange={setSelectedAccountId}
           onChooseDate={() => setPeriodOpen(true)}
           onOpenSync={() => setSyncOpen(true)}
+          syncLabel={syncTitle}
+          syncIcon={<SyncIcon size={19} color={syncColor} />}
+          notificationCount={unreadNotificationCount}
+          onOpenNotifications={() => router.push('/notifications' as never)}
           onOpenTransaction={(id) => router.push(`/transaction/${id}` as never)}
           onSeeAllTransactions={() => router.push('/(tabs)/activity' as never)}
           onOpenBudget={(id) => router.push(`/budget/${id}` as never)}
@@ -567,7 +594,9 @@ export default function HomeScreen() {
           <View style={{ gap: 8 }}>
             <Button size="lg" disabled={isSyncing} onPress={() => void retryNow()}>
               <ClockCounterClockwise size={17} color={tokens.primaryForeground} />
-              <Text style={{ color: tokens.primaryForeground }}>Retry now</Text>
+              <Text style={{ color: tokens.primaryForeground }}>
+                {status.failed > 0 ? 'Retry now' : 'Sync now'}
+              </Text>
             </Button>
             <Button
               variant="outline"
