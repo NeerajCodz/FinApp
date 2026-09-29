@@ -4,7 +4,13 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, ArrowRight, ReceiptText, UsersThree } from '@finapp/ui/icons/native';
-import { CategoryIcon, CurrencyInput, SettingsRow } from '@finapp/ui/finance';
+import {
+  CategoryIcon,
+  CurrencyInput,
+  DateTimePicker,
+  SettingsRow,
+  formatTransactionDate,
+} from '@finapp/ui/finance';
 import { Button, IconButton, Input, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,8 +44,7 @@ type CategoryRecord = LocalRecord & {
   archivedAt?: number;
 };
 type Picker = 'category' | 'account' | 'destination' | 'date' | null;
-const transactionTypes: TransactionType[] = ['expense', 'income', 'transfer'];
-const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const transactionTypes = ['expense', 'income', 'transfer'] as const;
 const scalar = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 function amountInMinor(value: string): bigint | null {
@@ -49,98 +54,6 @@ function amountInMinor(value: string): bigint | null {
   return minor > 0n && minor <= 9223372036854775807n ? minor : null;
 }
 
-function DateSelector({ value, onChange }: { value: Date; onChange: (date: Date) => void }) {
-  const { tokens } = useTheme();
-  const [visibleMonth, setVisibleMonth] = useState(
-    () => new Date(value.getFullYear(), value.getMonth(), 1),
-  );
-  const year = visibleMonth.getFullYear();
-  const month = visibleMonth.getMonth();
-  const leading = new Date(year, month, 1).getDay();
-  const days = new Date(year, month + 1, 0).getDate();
-  const cells = Array.from({ length: leading + days }, (_, index) =>
-    index < leading ? 0 : index - leading + 1,
-  );
-  return (
-    <View style={{ gap: 16 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button
-          variant="outline"
-          size="sm"
-          accessibilityLabel="Previous month"
-          onPress={() => setVisibleMonth(new Date(year, month - 1, 1))}
-        >
-          ‹
-        </Button>
-        <Typography variant="bodyLarge">
-          {visibleMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-        </Typography>
-        <Button
-          variant="outline"
-          size="sm"
-          accessibilityLabel="Next month"
-          onPress={() => setVisibleMonth(new Date(year, month + 1, 1))}
-        >
-          ›
-        </Button>
-      </View>
-      <View style={{ flexDirection: 'row' }}>
-        {weekdays.map((day) => (
-          <Typography
-            key={day}
-            variant="caption"
-            style={{ width: '14.2857%', textAlign: 'center' }}
-          >
-            {day}
-          </Typography>
-        ))}
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {cells.map((day, index) => {
-          const selected =
-            day > 0 &&
-            value.getFullYear() === year &&
-            value.getMonth() === month &&
-            value.getDate() === day;
-          return (
-            <View key={index} style={{ width: '14.2857%', padding: 2 }}>
-              {day > 0 && (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel={new Date(year, month, day).toLocaleDateString(undefined, {
-                    dateStyle: 'full',
-                  })}
-                  accessibilityState={{ selected }}
-                  onPress={() => onChange(new Date(year, month, day, 12))}
-                  activeOpacity={0.7}
-                  style={{
-                    height: 44,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 12,
-                    backgroundColor: selected ? tokens.primary : 'transparent',
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: selected ? tokens.primaryForeground : tokens.foreground,
-                      fontFamily: 'SpaceGrotesk_500Medium',
-                    }}
-                  >
-                    {day}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })}
-      </View>
-      <Button variant="outline" onPress={() => onChange(new Date())}>
-        Today
-      </Button>
-    </View>
-  );
-}
 export default function NewTransactionScreen() {
   const params = useLocalSearchParams<{
     type?: string | string[];
@@ -149,6 +62,7 @@ export default function NewTransactionScreen() {
     categoryId?: string | string[];
     destinationId?: string | string[];
     occurredAt?: string | string[];
+    hasTime?: string | string[];
     note?: string | string[];
   }>();
   const queryType = scalar(params.type);
@@ -166,9 +80,14 @@ export default function NewTransactionScreen() {
   const [destinationId, setDestinationId] = useState<string | null>(
     scalar(params.destinationId) || null,
   );
-  const [date, setDate] = useState(() =>
-    Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date(),
-  );
+  const [date, setDate] = useState(() => {
+    const value =
+      Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date();
+    if (!Number.isFinite(initialDate) || initialDate <= 0) value.setHours(12, 0, 0, 0);
+    return value;
+  });
+  const initialHasTime = scalar(params.hasTime);
+  const [showTime, setShowTime] = useState(() => initialHasTime === 'true');
   const [note, setNote] = useState(scalar(params.note) ?? '');
   const [picker, setPicker] = useState<Picker>(null);
   const [error, setError] = useState('');
@@ -250,6 +169,7 @@ export default function NewTransactionScreen() {
         note: note.trim() || undefined,
         transferAccountId: type === 'transfer' ? destinationRecordId : undefined,
         occurredAt: date.getTime(),
+        hasTime: showTime,
       };
       const record: LocalRecord = {
         accountId: accountRecordId,
@@ -258,6 +178,7 @@ export default function NewTransactionScreen() {
         amountMinor: validAmount,
         currency: String(account.currency),
         occurredAt: date.getTime(),
+        hasTime: showTime,
         type,
         status: 'posted',
         title,
@@ -501,9 +422,39 @@ export default function NewTransactionScreen() {
           <Separator />
           <SettingsRow
             label="Date"
-            value={date.toLocaleDateString(undefined, { dateStyle: 'medium' })}
+            value={formatTransactionDate(date.getTime(), showTime)}
             onPress={() => setPicker('date')}
           />
+          <Separator />
+          <TouchableOpacity
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showTime }}
+            onPress={() => {
+              const enabled = !showTime;
+              setShowTime(enabled);
+              const updated = new Date(date);
+              if (enabled) {
+                const now = new Date();
+                updated.setHours(now.getHours(), now.getMinutes(), 0, 0);
+              } else updated.setHours(12, 0, 0, 0);
+              setDate(updated);
+            }}
+            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+          >
+            <View
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: showTime ? tokens.primary : tokens.borderSubtle,
+                backgroundColor: showTime ? tokens.primary : 'transparent',
+              }}
+            />
+            <Typography variant="bodyLarge" style={{ fontSize: 14 }}>
+              Include time
+            </Typography>
+          </TouchableOpacity>
         </View>
         <View style={{ gap: 12 }}>
           <Typography variant="label">Note</Typography>
@@ -597,12 +548,10 @@ export default function NewTransactionScreen() {
         }
       >
         {picker === 'date' ? (
-          <DateSelector
-            value={date}
-            onChange={(value) => {
-              setDate(value);
-              setPicker(null);
-            }}
+          <DateTimePicker
+            value={date.getTime()}
+            showTime={showTime}
+            onChange={(value) => setDate(new Date(value))}
           />
         ) : (
           <>

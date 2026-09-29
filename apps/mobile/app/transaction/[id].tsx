@@ -3,7 +3,13 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight, ReceiptText } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryIcon, Money, SemanticMarker, SettingsRow } from '@finapp/ui/finance';
+import {
+  CategoryIcon,
+  Money,
+  SemanticMarker,
+  SettingsRow,
+  formatTransactionDate,
+} from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -21,6 +27,10 @@ export default function TransactionDetailScreen() {
   const accountState = useLocalRecords<LocalRecord>(userId, 'account');
   const categoryState = useLocalRecords<LocalRecord>(userId, 'category');
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
+  const timeZone =
+    typeof profileState.data?.[0]?.timeZone === 'string'
+      ? profileState.data[0].timeZone
+      : undefined;
   const record = transactionState.data?.find((item) => id && recordIds(item).includes(id));
   const transaction = record ? ledgerTransaction(record) : null;
   const accounts = useMemo(() => recordIndex(accountState.data ?? []), [accountState.data]);
@@ -30,10 +40,6 @@ export default function TransactionDetailScreen() {
   const destination = accounts.get(
     typeof record?.transferAccountId === 'string' ? record.transferAccountId : '',
   );
-  const timeZone =
-    typeof profileState.data?.[0]?.timezone === 'string'
-      ? (profileState.data[0].timezone as string)
-      : 'UTC';
   const error =
     transactionState.error || accountState.error || categoryState.error || profileState.error;
   const loading =
@@ -60,6 +66,7 @@ export default function TransactionDetailScreen() {
         categoryId: transaction.categoryId ?? '',
         destinationId: typeof record.transferAccountId === 'string' ? record.transferAccountId : '',
         occurredAt: String(transaction.occurredAt),
+        hasTime: String(record.hasTime === true),
         note: typeof record.note === 'string' ? record.note : '',
       },
     });
@@ -206,11 +213,11 @@ export default function TransactionDetailScreen() {
             <Separator />
             <SettingsRow
               label="Date"
-              value={new Intl.DateTimeFormat('en-US', {
-                dateStyle: 'long',
-                timeStyle: 'short',
+              value={formatTransactionDate(
+                transaction.occurredAt,
+                typeof record?.hasTime === 'boolean' ? record.hasTime : undefined,
                 timeZone,
-              }).format(transaction.occurredAt)}
+              )}
             />
             <Separator />
             <SettingsRow
