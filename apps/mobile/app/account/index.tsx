@@ -143,7 +143,9 @@ export default function AccountsScreen() {
         </IconButton>
         <View style={{ flex: 1, gap: 2 }}>
           <Typography variant="title">Accounts</Typography>
-          <Typography variant="small">Balances, together.</Typography>
+          <Typography variant="small">
+            Select an account to see its balance and activity.
+          </Typography>
         </View>
         <IconButton
           label="Add account"

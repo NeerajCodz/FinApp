@@ -112,7 +112,9 @@ export default function PersonalAccountsPage() {
         </IconButton>
         <div style={{ flex: 1, display: 'grid', gap: 2 }}>
           <Typography variant="title">Accounts</Typography>
-          <Typography variant="small">Balances, together.</Typography>
+          <Typography variant="small">
+            Select an account to see its balance and activity.
+          </Typography>
         </div>
         <IconButton
           label="Add account"
