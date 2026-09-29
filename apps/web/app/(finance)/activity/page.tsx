@@ -5,22 +5,33 @@ import { useRouter } from 'next/navigation';
 import { Typography } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import {
+  ActivityActions,
   ActivityFilters,
   ActivityHeader,
-  ActivityQuickFilters,
   ActivityStatus,
   ActivitySummary,
   ActivityTopCategories,
   ActivityTransactionList,
   type ActivityCategoryItem,
 } from '@finapp/ui/activity';
-import { filterActivity, type ActivityFilter, type ActivityKind, type ActivityRow } from '@convex/activity/domain';
-import { getAnalyticsDayRange, getAnalyticsRange, type AnalyticsPeriod } from '@convex/analytics/domain';
+import {
+  filterActivity,
+  type ActivityFilter,
+  type ActivityKind,
+  type ActivityRow,
+} from '@convex/activity/domain';
+import {
+  getAnalyticsCalendarDate,
+  getAnalyticsCustomRange,
+  getAnalyticsDayRange,
+  getAnalyticsRange,
+  type AnalyticsPeriod,
+} from '@convex/analytics/domain';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-
+import { formatTransactionDate, type TransactionType } from '@finapp/ui/finance';
 type Transaction = LocalRecord & {
   type?: string;
   amountMinor?: bigint | number | string;
@@ -31,6 +42,7 @@ type Transaction = LocalRecord & {
   title?: string;
   merchant?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   status?: string;
   deletedAt?: number;
 };
@@ -40,11 +52,15 @@ type Range = { startAt: number; endAt: number; label: string };
 type ActivityPeriod = AnalyticsPeriod | 'all';
 
 const filters: ActivityFilter[] = ['All', 'Expenses', 'Income', 'Transfers', 'Groups'];
-const periods: { value: ActivityPeriod; label: string }[] = [
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-  { value: 'year', label: 'Year' },
-  { value: 'all', label: 'All time' },
+const periodPresets = [
+  { value: 'period:week', label: 'Week' },
+  { value: 'period:month', label: 'Month' },
+  { value: 'period:year', label: 'Year' },
+  { value: 'quick:Today', label: 'Today' },
+  { value: 'quick:This week', label: 'This week' },
+  { value: 'quick:This month', label: 'This month' },
+  { value: 'quick:Last month', label: 'Last month' },
+  { value: 'period:all', label: 'All time' },
 ];
 
 function asMinor(value: unknown): bigint {
@@ -150,7 +166,10 @@ export default function ActivityPage() {
   }, [fetchTransactionRange, isConnected, range, userId]);
 
   const accountById = React.useMemo(() => entityMap(accountState.records), [accountState.records]);
-  const categoryById = React.useMemo(() => entityMap(categoryState.records), [categoryState.records]);
+  const categoryById = React.useMemo(
+    () => entityMap(categoryState.records),
+    [categoryState.records],
+  );
   const rows = React.useMemo(() => {
     if (!range) return [];
     const records = new Map<string, Transaction>();
@@ -164,15 +183,32 @@ export default function ActivityPage() {
         occurredAt < range.startAt ||
         occurredAt >= Math.min(range.endAt, (referenceAt ?? Date.now()) + 1) ||
         !['expense', 'income', 'transfer', 'refund', 'adjustment'].includes(record.type ?? '')
-      ) continue;
+      )
+        continue;
       const account = accountById.get(accountFilter);
-      if (accountFilter !== 'all' && !(account ? aliases(account) : [accountFilter]).includes(String(record.accountId ?? ''))) continue;
+      if (
+        accountFilter !== 'all' &&
+        !(account ? aliases(account) : [accountFilter]).includes(String(record.accountId ?? ''))
+      )
+        continue;
       const category = categoryById.get(categoryFilter);
-      if (categoryFilter !== 'all' && !(category ? aliases(category) : [categoryFilter]).includes(String(record.categoryId ?? ''))) continue;
-      const kind: ActivityKind = record.groupId && record.type === 'expense' ? 'group' : (record.type as ActivityKind);
+      if (
+        categoryFilter !== 'all' &&
+        !(category ? aliases(category) : [categoryFilter]).includes(String(record.categoryId ?? ''))
+      )
+        continue;
+      const kind: ActivityKind =
+        record.groupId && record.type === 'expense' ? 'group' : (record.type as ActivityKind);
       const amountMinor = asMinor(record.amountMinor);
       records.set(id, record);
-      activity.push({ id, ownerId: userId ?? '', kind, occurredAt, ...(record.merchant ? { merchant: record.merchant } : {}), amountMinor });
+      activity.push({
+        id,
+        ownerId: userId ?? '',
+        kind,
+        occurredAt,
+        ...(record.merchant ? { merchant: record.merchant } : {}),
+        amountMinor,
+      });
     }
     const needle = query.trim().toLocaleLowerCase();
     return filterActivity(activity, filter)
@@ -182,29 +218,50 @@ export default function ActivityPage() {
         if (!record) return false;
         const account = accountById.get(record.accountId ?? '');
         const category = categoryById.get(record.categoryId ?? '');
-        return [record.title, record.merchant, account?.name, category?.name, record.amountMinor,
-          formatMinor(row.amountMinor, record.currency ?? currency)]
-          .some((value) => String(value ?? '').toLocaleLowerCase().includes(needle));
+        return [
+          record.title,
+          record.merchant,
+          account?.name,
+          category?.name,
+          record.amountMinor,
+          formatMinor(row.amountMinor, record.currency ?? currency),
+        ].some((value) =>
+          String(value ?? '')
+            .toLocaleLowerCase()
+            .includes(needle),
+        );
       })
       .sort((left, right) => right.occurredAt - left.occurredAt)
       .map((row) => records.get(row.id)!)
       .filter((record) => (record.currency ?? currency) === currency);
-  }, [accountById, accountFilter, categoryById, categoryFilter, currency, filter, query, range, referenceAt, transactionState.records, userId]);
-
+  }, [
+    accountById,
+    accountFilter,
+    categoryById,
+    categoryFilter,
+    currency,
+    filter,
+    query,
+    range,
+    referenceAt,
+    transactionState.records,
+    userId,
+  ]);
 
   const totals = React.useMemo(
-    () => rows.reduce<{ income: bigint; expenses: bigint; transfers: bigint; count: number }>(
-      (sum, record) => {
-        if (record.status === 'pending' || record.status === 'voided') return sum;
-        const amount = asMinor(record.amountMinor);
-        if (record.type === 'income') sum.income += amount;
-        if (record.type === 'expense') sum.expenses += amount;
-        if (record.type === 'transfer') sum.transfers += amount;
-        sum.count += 1;
-        return sum;
-      },
-      { income: 0n, expenses: 0n, transfers: 0n, count: 0 },
-    ),
+    () =>
+      rows.reduce<{ income: bigint; expenses: bigint; transfers: bigint; count: number }>(
+        (sum, record) => {
+          if (record.status === 'pending' || record.status === 'voided') return sum;
+          const amount = asMinor(record.amountMinor);
+          if (record.type === 'income') sum.income += amount;
+          if (record.type === 'expense') sum.expenses += amount;
+          if (record.type === 'transfer') sum.transfers += amount;
+          sum.count += 1;
+          return sum;
+        },
+        { income: 0n, expenses: 0n, transfers: 0n, count: 0 },
+      ),
     [rows],
   );
   const metricSparks = React.useMemo(() => {
@@ -226,7 +283,9 @@ export default function ActivityPage() {
         const absolute = value < 0n ? -value : value;
         return absolute > max ? absolute : max;
       }, 0n);
-      return values.map((value) => largest > 0n ? Math.max(8, Number(((value < 0n ? -value : value) * 100n) / largest)) : 0);
+      return values.map((value) =>
+        largest > 0n ? Math.max(8, Number(((value < 0n ? -value : value) * 100n) / largest)) : 0,
+      );
     };
     return {
       spent: valuesFor('spent'),
@@ -243,21 +302,35 @@ export default function ActivityPage() {
       const id = String(row.categoryId ?? '__uncategorized__');
       totals.set(id, (totals.get(id) ?? 0n) + asMinor(row.amountMinor));
     }
-    return [...totals].map(([id, amount]) => ({ id, amount, category: categoryById.get(id) }))
-      .sort((a, b) => a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1).slice(0, 5);
+    return [...totals]
+      .map(([id, amount]) => ({ id, amount, category: categoryById.get(id) }))
+      .sort((a, b) => (a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1))
+      .slice(0, 5);
   }, [categoryById, rows]);
   const categoryTotal = rows.reduce(
-    (sum, row) => row.type === 'expense' && row.status !== 'pending' && row.status !== 'voided' ? sum + asMinor(row.amountMinor) : sum,
+    (sum, row) =>
+      row.type === 'expense' && row.status !== 'pending' && row.status !== 'voided'
+        ? sum + asMinor(row.amountMinor)
+        : sum,
     0n,
   );
-  const allError = transactionState.error ?? accountState.error ?? categoryState.error ?? profileState.error;
-  const ready = referenceAt !== null && !!profile && !transactionState.loading && !accountState.loading && !categoryState.loading && !profileState.loading;
+  const allError =
+    transactionState.error ?? accountState.error ?? categoryState.error ?? profileState.error;
+  const ready =
+    referenceAt !== null &&
+    !!profile &&
+    !transactionState.loading &&
+    !accountState.loading &&
+    !categoryState.loading &&
+    !profileState.loading;
 
   const selectRange = (nextPeriod: ActivityPeriod) => {
     setPeriod(nextPeriod);
     setCustomRange(null);
   };
-  const setQuickRange = (name: 'Today' | 'This week' | 'This month' | 'Last month' | 'All time') => {
+  const setQuickRange = (
+    name: 'Today' | 'This week' | 'This month' | 'Last month' | 'All time',
+  ) => {
     if (referenceAt === null) return;
     if (name === 'Today') {
       setCustomRange(rangeFromDay(referenceAt, timeZone));
@@ -279,39 +352,72 @@ export default function ActivityPage() {
       setCustomRange(null);
     } else {
       setPeriod('month');
-      setCustomRange({ startAt: monthRange.previousStartAt, endAt: monthRange.startAt, label: 'Last month' });
+      setCustomRange({
+        startAt: monthRange.previousStartAt,
+        endAt: monthRange.startAt,
+        label: 'Last month',
+      });
     }
   };
 
   const net = totals.income - totals.expenses;
-  const transactionItems = React.useMemo(() => rows.map((record) => {
-    const id = String(record.id ?? record._id ?? record.cloudId ?? '');
-    const category = categoryById.get(record.categoryId ?? '');
-    const account = accountById.get(record.accountId ?? '');
-    const occurredAt = Number(record.occurredAt ?? 0);
-    const type = record.type ?? 'expense';
-    return {
-      id,
-      title: record.title || record.merchant || 'Transaction',
-      category: category?.name ?? 'Uncategorized',
-      categoryIcon: category?.icon,
-      account: account?.name,
-      date: occurredAt ? new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(occurredAt) : 'Saved offline',
-      dateTime: occurredAt ? new Date(occurredAt).toISOString() : undefined,
-      amount: formatMinor(asMinor(record.amountMinor), record.currency ?? currency),
-      amountSign: type === 'expense' ? '−' : type === 'income' || type === 'refund' ? '+' : '',
-      type,
-    };
-  }), [accountById, categoryById, currency, rows, timeZone]);
-  const categoryItems = React.useMemo<ActivityCategoryItem[]>(() => topCategories.map(({ id, amount, category }) => ({
-    id,
-    name: category?.name ?? (id === '__uncategorized__' ? 'Uncategorized' : 'Category'),
-    icon: typeof category?.icon === 'string' ? category.icon : '•',
-    amount: formatMinor(amount, currency),
-    share: categoryTotal > 0n ? Number((amount * 1000n) / categoryTotal) / 10 : 0,
-  })), [categoryTotal, currency, topCategories]);
-  if (!userId) return <FinanceSignedOut section="ACTIVITY" title="Activity unavailable" description="Sign in to see your ledger." />;
-  if (!profileState.loading && !profile) return <FinanceSignedOut section="ACTIVITY" title="Activity unavailable" description="Your local profile could not be found." />;
+  const transactionItems = React.useMemo(
+    () =>
+      rows.map((record) => {
+        const id = String(record.id ?? record._id ?? record.cloudId ?? '');
+        const category = categoryById.get(record.categoryId ?? '');
+        const account = accountById.get(record.accountId ?? '');
+        const occurredAt = Number(record.occurredAt ?? 0);
+        const type = (record.type ?? 'expense') as TransactionType;
+        return {
+          id,
+          title: record.title || record.merchant || 'Transaction',
+          category: category?.name ?? 'Uncategorized',
+          categoryIcon: category?.icon,
+          account: account?.name,
+          merchant: record.merchant,
+          date: occurredAt
+            ? formatTransactionDate(occurredAt, record.hasTime === true, timeZone)
+            : 'Saved offline',
+          amountMinor: asMinor(record.amountMinor),
+          currency: record.currency ?? currency,
+          type,
+        };
+      }),
+    [accountById, categoryById, currency, rows, timeZone],
+  );
+  const categoryItems = React.useMemo<ActivityCategoryItem[]>(
+    () =>
+      topCategories.map(({ id, amount, category }) => ({
+        id,
+        name: category?.name ?? (id === '__uncategorized__' ? 'Uncategorized' : 'Category'),
+        icon: typeof category?.icon === 'string' ? category.icon : '•',
+        amount: formatMinor(amount, currency),
+        share: categoryTotal > 0n ? Number((amount * 1000n) / categoryTotal) / 10 : 0,
+      })),
+    [categoryTotal, currency, topCategories],
+  );
+  if (!userId)
+    return (
+      <FinanceSignedOut
+        section="ACTIVITY"
+        title="Activity unavailable"
+        description="Sign in to see your ledger."
+      />
+    );
+  if (!profileState.loading && !profile)
+    return (
+      <FinanceSignedOut
+        section="ACTIVITY"
+        title="Activity unavailable"
+        description="Your local profile could not be found."
+      />
+    );
+  const pickerReferenceAt = customRange?.startAt ?? referenceAt ?? Date.now();
+  const pickerEndAt = customRange
+    ? Math.max(customRange.startAt, customRange.endAt - 1)
+    : pickerReferenceAt;
+  const rangeLabel = range ? formatRange(range, timeZone) : 'Choose dates';
 
   return (
     <div className="finance-page activity-page">
@@ -319,38 +425,86 @@ export default function ActivityPage() {
         query={query}
         onQueryChange={setQuery}
         onClearQuery={() => setQuery('')}
-        onAddTransaction={() => router.push('/transaction/new')}
+        onOpenAnalytics={() => router.push('/analytics')}
       />
       <ActivityFilters
-        periods={periods}
-        period={period}
-        customRange={customRange !== null}
-        onPeriodChange={(value) => selectRange(value as ActivityPeriod)}
+        rangeLabel={rangeLabel}
+        rangeStartDate={getAnalyticsCalendarDate(pickerReferenceAt, timeZone)}
+        rangeEndDate={getAnalyticsCalendarDate(pickerEndAt, timeZone)}
+        presets={periodPresets}
+        onPresetSelect={(value) => {
+          const [kind, selected] = value.split(':');
+          if (kind === 'period') selectRange(selected as ActivityPeriod);
+          else if (kind === 'quick') setQuickRange(selected as Parameters<typeof setQuickRange>[0]);
+        }}
+        onRangeApply={(startDate, endDate) => {
+          const bounds = getAnalyticsCustomRange(startDate, endDate, timeZone);
+          setPeriod('month');
+          setCustomRange({ ...bounds, label: '' });
+        }}
         filters={filters.map((value) => ({ value, label: value }))}
         filter={filter}
         onFilterChange={(value) => setFilter(value as ActivityFilter)}
-        accounts={accountState.records.filter((item) => !item.archivedAt && aliases(item).length > 0).map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Account' }))}
+        accounts={accountState.records
+          .filter((item) => !item.archivedAt && aliases(item).length > 0)
+          .map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Account' }))}
         account={accountFilter}
         onAccountChange={setAccountFilter}
-        categories={categoryState.records.filter((item) => !item.archivedAt && aliases(item).length > 0).map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Category' }))}
+        categories={categoryState.records
+          .filter((item) => !item.archivedAt && aliases(item).length > 0)
+          .map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Category' }))}
         category={categoryFilter}
         onCategoryChange={setCategoryFilter}
       />
 
-      {(rangeLoading || rangeError || allError) && <ActivityStatus
-        message={rangeLoading ? 'Refreshing activity…' : rangeError || 'Some saved records could not be loaded.'}
-        alert={Boolean(rangeError || allError)}
-        onRetry={(rangeError || allError) ? () => window.location.reload() : undefined}
-      />}
+      {(rangeLoading || rangeError || allError) && (
+        <ActivityStatus
+          message={
+            rangeLoading
+              ? 'Refreshing activity…'
+              : rangeError || 'Some saved records could not be loaded.'
+          }
+          alert={Boolean(rangeError || allError)}
+          onRetry={rangeError || allError ? () => window.location.reload() : undefined}
+        />
+      )}
 
-      {ready && <ActivitySummary metrics={[
-        { label: 'Total Spent', value: formatMinor(totals.expenses, currency), color: 'var(--finapp-expense)', spark: metricSparks.spent },
-        { label: 'Total Income', value: formatMinor(totals.income, currency), color: 'var(--finapp-income)', spark: metricSparks.income },
-        { label: 'Net', value: formatMinor(net, currency), color: net >= 0n ? 'var(--finapp-income)' : 'var(--finapp-expense)', spark: metricSparks.net },
-        { label: 'Transactions', value: String(totals.count), color: 'var(--finapp-foreground)', spark: metricSparks.count },
-      ]} />}
+      {ready && (
+        <ActivitySummary
+          metrics={[
+            {
+              label: 'Total Spent',
+              value: formatMinor(totals.expenses, currency),
+              color: 'var(--finapp-expense)',
+              spark: metricSparks.spent,
+            },
+            {
+              label: 'Total Income',
+              value: formatMinor(totals.income, currency),
+              color: 'var(--finapp-income)',
+              spark: metricSparks.income,
+            },
+            {
+              label: 'Net',
+              value: formatMinor(net, currency),
+              color: net >= 0n ? 'var(--finapp-income)' : 'var(--finapp-expense)',
+              spark: metricSparks.net,
+            },
+            {
+              label: 'Transactions',
+              value: String(totals.count),
+              color: 'var(--finapp-foreground)',
+              spark: metricSparks.count,
+            },
+          ]}
+        />
+      )}
 
-      {range && <Typography className="activity-range-caption" variant="caption">{formatRange(range, timeZone)} · {currency}</Typography>}
+      {range && (
+        <Typography className="activity-range-caption" variant="caption">
+          {formatRange(range, timeZone)} · {currency}
+        </Typography>
+      )}
 
       <div className="activity-content-grid">
         <ActivityTransactionList
@@ -360,16 +514,18 @@ export default function ActivityPage() {
           onSelect={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
         />
         <aside className="activity-sidebar">
-          <ActivityQuickFilters
-            options={['Today', 'This week', 'This month', 'Last month', 'All time'] as const}
-            onSelectRange={setQuickRange}
+          <ActivityActions
             onAddTransaction={() => router.push('/transaction/new')}
             onOpenAnalytics={() => router.push('/analytics')}
           />
           <ActivityTopCategories
             items={categoryItems}
             rangeLabel={range ? formatRange(range, timeZone) : 'Loading range'}
-            onSelect={(id) => router.push(categoryById.has(id) ? `/category/${encodeURIComponent(id)}` : '/analytics')}
+            onSelect={(id) =>
+              router.push(
+                categoryById.has(id) ? `/category/${encodeURIComponent(id)}` : '/analytics',
+              )
+            }
           />
         </aside>
       </div>
