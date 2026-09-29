@@ -1,10 +1,15 @@
 import React from 'react';
-import { ScrollView, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMutation, useQuery } from 'convex/react';
+import * as ImagePicker from 'expo-image-picker';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { ArrowLeft, Gear, Plus, ReceiptText, UsersThree } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money, TransactionRow } from '@finapp/ui/finance';
+import { EntityIcon, formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
 import {
   Avatar,
   Button,
@@ -14,14 +19,15 @@ import {
   Separator,
   Text,
   Typography,
+  useTheme,
 } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
 import { recordId, recordIds } from '@/lib/ledger';
 
 export default function GroupHomeScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { tokens } = useTheme();
+  const { isConnected } = useLocalSync();
   const insets = useSafeAreaInsets();
   const { group, members, ledger, error, loading, retry, userId } = useGroupLedger(id);
   const groupMembers =
@@ -33,6 +39,94 @@ export default function GroupHomeScreen() {
     .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt))
     .slice(0, 5);
   const balance = userId ? (ledger?.balances[userId] ?? 0n) : 0n;
+  const groupIdentity = String(
+    (group as { cloudId?: string; _id?: string } | undefined)?.cloudId ??
+      (group as { _id?: string } | undefined)?._id ??
+      '',
+  );
+  const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
+  const canUseGroupChat = isConnected && Boolean(cloudGroupId);
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const chatMessages = useQuery(
+    api.groups.queries.chatMessages,
+    canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
+  const sendChatText = useMutation(api.groups.mutations.sendChatText);
+  const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
+  const [chatDraft, setChatDraft] = React.useState('');
+  const [chatPending, setChatPending] = React.useState(false);
+  const [chatError, setChatError] = React.useState('');
+
+  async function submitChatMessage() {
+    if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
+    setChatPending(true);
+    setChatError('');
+    try {
+      await sendChatText({
+        groupId: cloudGroupId as Id<'groups'>,
+        text: chatDraft.trim(),
+      });
+      setChatDraft('');
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : 'Could not send this message.');
+    } finally {
+      setChatPending(false);
+    }
+  }
+
+  async function pickBillImage() {
+    if (!canUseGroupChat || chatPending) return;
+    setChatError('');
+    let selection: ImagePicker.ImagePickerResult;
+    try {
+      selection = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+      });
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : 'Could not open the image picker.');
+      return;
+    }
+    if (selection.canceled) return;
+    const asset = selection.assets[0];
+    const mimeType = asset?.mimeType?.toLowerCase();
+    if (
+      !asset ||
+      !mimeType ||
+      !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) ||
+      (asset.fileSize !== undefined && asset.fileSize > 5 * 1024 * 1024)
+    ) {
+      setChatError('Choose a JPEG, PNG, or WebP bill image up to 5 MB.');
+      return;
+    }
+    setChatPending(true);
+    try {
+      const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
+      const image = await (await fetch(asset.uri)).blob();
+      if (!image.size || image.size > 5 * 1024 * 1024) throw new Error('INVALID_BILL_IMAGE');
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType },
+        body: image,
+      });
+      if (!response.ok) throw new Error('BILL_UPLOAD_FAILED');
+      const result = (await response.json()) as { storageId?: string };
+      if (!result.storageId) throw new Error('BILL_UPLOAD_FAILED');
+      const messageId = await sendBillAttachment({
+        groupId: cloudGroupId as Id<'groups'>,
+        storageId: result.storageId as Id<'_storage'>,
+      });
+      if (!messageId) throw new Error('INVALID_BILL_IMAGE');
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : 'Could not upload this bill image.');
+    } finally {
+      setChatPending(false);
+    }
+  }
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -47,6 +141,17 @@ export default function GroupHomeScreen() {
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
+        <EntityIcon
+          value={
+            remoteGroup
+              ? (remoteGroup.icon ?? 'lucide:UsersRound')
+              : typeof group?.icon === 'string'
+                ? group.icon
+                : 'lucide:UsersRound'
+          }
+          size={23}
+          color={tokens.primary}
+        />
         <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>
           {String(group?.name ?? 'Group')}
         </Typography>
@@ -142,6 +247,105 @@ export default function GroupHomeScreen() {
             </Text>
           </Button>
           <View style={{ gap: 12 }}>
+            <SectionHeader title="Group chat" />
+            {canUseGroupChat ? (
+              <>
+                <View
+                  accessibilityLiveRegion="polite"
+                  accessibilityLabel="Group messages"
+                  style={{ gap: 10, maxHeight: 380 }}
+                >
+                  {chatMessages === undefined ? (
+                    <Typography variant="small">Loading messages…</Typography>
+                  ) : chatMessages.length ? (
+                    chatMessages.map((message) => (
+                      <View
+                        key={message.id}
+                        style={{
+                          alignSelf: message.senderId === userId ? 'flex-end' : 'flex-start',
+                          maxWidth: '90%',
+                          gap: 6,
+                          padding: 12,
+                          borderRadius: 14,
+                          backgroundColor: tokens.surfaceSubtle,
+                        }}
+                      >
+                        <Typography variant="caption">{message.senderName}</Typography>
+                        {message.kind === 'bill' ? (
+                          message.attachmentUrl ? (
+                            <Image
+                              source={{ uri: message.attachmentUrl }}
+                              accessibilityLabel="Bill attachment"
+                              resizeMode="contain"
+                              style={{ width: 260, height: 210, borderRadius: 10 }}
+                            />
+                          ) : (
+                            <Typography variant="small">Bill image unavailable.</Typography>
+                          )
+                        ) : (
+                          <Text style={{ color: tokens.foreground, flexShrink: 1 }}>
+                            {message.text}
+                          </Text>
+                        )}
+                        <Typography variant="caption">
+                          {new Date(message.createdAt).toLocaleString()}
+                        </Typography>
+                      </View>
+                    ))
+                  ) : (
+                    <Typography variant="small">
+                      No messages yet. Start the conversation.
+                    </Typography>
+                  )}
+                </View>
+                <TextInput
+                  accessibilityLabel="Group message"
+                  value={chatDraft}
+                  onChangeText={setChatDraft}
+                  editable={!chatPending}
+                  maxLength={4_000}
+                  multiline
+                  placeholder="Write a message…"
+                  placeholderTextColor={tokens.foregroundSubtle}
+                  style={{
+                    minHeight: 84,
+                    padding: 12,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: tokens.borderSubtle,
+                    backgroundColor: tokens.surfaceSubtle,
+                    color: tokens.foreground,
+                    textAlignVertical: 'top',
+                  }}
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Button
+                    style={{ flex: 1 }}
+                    variant="outline"
+                    disabled={chatPending}
+                    onPress={() => void pickBillImage()}
+                  >
+                    Attach bill image
+                  </Button>
+                  <Button
+                    style={{ flex: 1 }}
+                    disabled={chatPending || !chatDraft.trim()}
+                    onPress={() => void submitChatMessage()}
+                  >
+                    {chatPending ? 'Sending…' : 'Send'}
+                  </Button>
+                </View>
+              </>
+            ) : (
+              <Typography variant="small">Connect to the internet to use group chat.</Typography>
+            )}
+            {!!chatError && (
+              <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
+                {chatError}
+              </Typography>
+            )}
+          </View>
+          <View style={{ gap: 12 }}>
             <SectionHeader title="People" />
             {groupMembers.length > 0 ? (
               <ScrollView
@@ -208,7 +412,10 @@ export default function GroupHomeScreen() {
                     currency={ledger!.currency}
                     type="expense"
                     semanticType="split"
-                    date={new Date(Number(expense.occurredAt)).toLocaleDateString()}
+                    date={formatTransactionDate(
+                      Number(expense.occurredAt),
+                      Boolean(expense.hasTime),
+                    )}
                     onPress={
                       transactionId
                         ? () =>
