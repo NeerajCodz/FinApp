@@ -163,7 +163,13 @@ export default function AnalyticsBreakdownScreen() {
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+        <IconButton
+          label="Go back"
+          variant="ghost"
+          onPress={() =>
+            router.canGoBack() ? router.back() : router.replace('/analytics' as never)
+          }
+        >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
         <Typography variant="title">

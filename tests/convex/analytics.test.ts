@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateAnalytics,
   deterministicInsights,
+  getAnalyticsCalendarDate,
+  getAnalyticsCustomRange,
   getAnalyticsDayRange,
   getAnalyticsRange,
   validateAnalyticsRange,
@@ -175,6 +177,38 @@ describe('analytics domains', () => {
     expect(spring.endAt - spring.startAt).toBe(23 * 60 * 60 * 1000);
 
     const fall = getAnalyticsDayRange(Date.UTC(2024, 10, 3, 12), 'America/New_York');
+    expect(fall).toEqual({
+      startAt: Date.UTC(2024, 10, 3, 4),
+      endAt: Date.UTC(2024, 10, 4, 5),
+    });
+    expect(fall.endAt - fall.startAt).toBe(25 * 60 * 60 * 1000);
+  });
+
+  it('builds inclusive custom date ranges in the profile timezone', () => {
+    const range = getAnalyticsCustomRange('2024-03-10', '2024-03-11', 'America/New_York');
+    expect(range).toEqual({
+      startAt: Date.UTC(2024, 2, 10, 5),
+      endAt: Date.UTC(2024, 2, 12, 4),
+    });
+    expect(getAnalyticsCalendarDate(range.startAt, 'America/New_York')).toBe('2024-03-10');
+    expect(getAnalyticsCalendarDate(range.endAt - 1, 'America/New_York')).toBe('2024-03-11');
+    expect(() => getAnalyticsCustomRange('2024-02-30', '2024-03-01', 'UTC')).toThrow(
+      'INVALID_DATE_RANGE',
+    );
+    expect(() => getAnalyticsCustomRange('2024-03-02', '2024-03-01', 'UTC')).toThrow(
+      'INVALID_DATE_RANGE',
+    );
+  });
+
+  it('returns timezone-aware day boundaries across daylight-saving transitions', () => {
+    const spring = getAnalyticsDayRange(Date.UTC(2024, 2, 10, 16), 'America/New_York');
+    expect(spring).toEqual({
+      startAt: Date.UTC(2024, 2, 10, 5),
+      endAt: Date.UTC(2024, 2, 11, 4),
+    });
+    expect(spring.endAt - spring.startAt).toBe(23 * 60 * 60 * 1000);
+
+    const fall = getAnalyticsDayRange(Date.UTC(2024, 10, 3, 17), 'America/New_York');
     expect(fall).toEqual({
       startAt: Date.UTC(2024, 10, 3, 4),
       endAt: Date.UTC(2024, 10, 4, 5),

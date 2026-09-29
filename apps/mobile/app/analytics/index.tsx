@@ -2,6 +2,8 @@ import React, { Component, useMemo, useState } from 'react';
 import { Alert, Share, ScrollView, TouchableOpacity, View } from 'react-native';
 import {
   aggregateAnalytics,
+  getAnalyticsCalendarDate,
+  getAnalyticsCustomRange,
   getAnalyticsRange,
   UNCATEGORIZED_ID,
   type AnalyticsBreakdownItem,
@@ -10,14 +12,16 @@ import {
 import { ArrowLeft, ArrowRight } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { BarChart, BreakdownDonut, CashFlowChart } from '@finapp/ui/analytics';
+import { BarChart, BreakdownDonut, CashFlowChart, SpendingLineChart } from '@finapp/ui/analytics';
+import { DateRangePopover } from '@finapp/ui/activity';
 import { BudgetProgress, Metric, MetricPair, TransactionRow } from '@finapp/ui/finance';
 import {
   Button,
   Empty,
+  FilterSheet,
   IconButton,
+  QuickFiltersPopover,
   SectionHeader,
-  Tabs,
   Text,
   Typography,
   useTheme,
@@ -31,10 +35,17 @@ import {
   displayAccountName,
   ledgerTransaction,
   recordId,
+  recordIds,
   recordIndex,
   transactionRow,
 } from '@/lib/ledger';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+
+const periodOptions = [
+  { label: 'Week', value: 'week' },
+  { label: 'Month', value: 'month' },
+  { label: 'Year', value: 'year' },
+];
 
 type AnalyticsProps = { children: React.ReactNode };
 type AnalyticsState = { hasError: boolean };
@@ -97,38 +108,6 @@ function Panel({
   );
 }
 
-function FilterRail({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: readonly FilterOption[];
-  onChange: (id: string) => void;
-}) {
-  return (
-    <View style={{ gap: 7 }}>
-      <Typography variant="caption">{label}</Typography>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', gap: 8, paddingRight: 16 }}>
-          {options.map((option) => (
-            <Button
-              key={option.id}
-              size="sm"
-              variant={option.id === value ? 'primary' : 'outline'}
-              onPress={() => onChange(option.id)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
 function RankedBreakdown({
   items,
   totalMinor,
@@ -142,7 +121,9 @@ function RankedBreakdown({
 }) {
   const { tokens } = useTheme();
   if (!items.length)
-    return <Typography variant="small">No posted expenses match this period and filter.</Typography>;
+    return (
+      <Typography variant="small">No posted expenses match this period and filter.</Typography>
+    );
   return (
     <View style={{ gap: 4 }}>
       {items.map((item, index) => {
@@ -159,7 +140,11 @@ function RankedBreakdown({
             <Typography variant="caption" style={{ color: tokens.primary, width: 20 }}>
               {String(index + 1).padStart(2, '0')}
             </Typography>
-            <Typography variant="small" numberOfLines={2} style={{ flex: 1, color: tokens.foreground }}>
+            <Typography
+              variant="small"
+              numberOfLines={2}
+              style={{ flex: 1, color: tokens.foreground }}
+            >
               {item.label}
             </Typography>
             <View style={{ alignItems: 'flex-end' }}>
@@ -188,11 +173,15 @@ function chartValues(amounts: readonly bigint[]) {
 
 function AnalyticsContent() {
   const [period, setPeriod] = useState<AnalyticsPeriod>('month');
+  const [customRange, setCustomRange] = useState<{ startAt: number; endAt: number } | null>(null);
   const [referenceAt, setReferenceAt] = useState(() => Date.now());
   const [typeFilter, setTypeFilter] = useState<AnalyticsType>('all');
   const [currencyFilter, setCurrencyFilter] = useState('');
   const [accountFilter, setAccountFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [cashFlowChartType, setCashFlowChartType] = useState<'lines' | 'bars'>('lines');
+  const [categoryChartType, setCategoryChartType] = useState<'donut' | 'bars'>('donut');
+  const [dailyChartType, setDailyChartType] = useState<'bars' | 'line'>('bars');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId, fetchTransactionRange, isConnected } = useLocalSync();
@@ -203,14 +192,19 @@ function AnalyticsContent() {
   const recurringState = useLocalRecords<LocalRecord>(userId, 'recurringRule');
   const groupState = useLocalRecords<LocalRecord>(userId, 'group');
   const settlementState = useLocalRecords<LocalRecord>(userId, 'settlement');
+  const transactionState = useLocalRecords<LocalRecord>(userId, 'transaction');
   const profile = profileState.data?.[0];
   const timeZone = typeof profile?.timezone === 'string' ? profile.timezone : 'UTC';
-  const defaultCurrency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
+  const defaultCurrency =
+    typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
   const currency = currencyFilter || defaultCurrency;
-  const range = useMemo(
-    () => getAnalyticsRange(period, referenceAt, timeZone),
-    [period, referenceAt, timeZone],
-  );
+  const range = useMemo(() => {
+    if (customRange) {
+      const duration = customRange.endAt - customRange.startAt;
+      return { ...customRange, previousStartAt: customRange.startAt - duration };
+    }
+    return getAnalyticsRange(period, referenceAt, timeZone);
+  }, [customRange, period, referenceAt, timeZone]);
   const rangeState = useLocalTransactionRange<LocalRecord>(
     userId,
     range.previousStartAt,
@@ -218,13 +212,35 @@ function AnalyticsContent() {
     fetchTransactionRange,
   );
   const currencyOptions = useMemo<FilterOption[]>(() => {
-    const currencies = new Set([defaultCurrency, currency]);
+    const currencies = new Set<string>([defaultCurrency, currency]);
+    const addCurrency = (value: unknown) => {
+      if (typeof value === 'string' && value) currencies.add(value);
+    };
     for (const record of rangeState.data ?? []) {
-      const transaction = ledgerTransaction(record);
-      if (transaction?.currency) currencies.add(transaction.currency);
+      addCurrency(ledgerTransaction(record)?.currency);
     }
-    return [...currencies].map((code) => ({ id: code, label: code }));
-  }, [defaultCurrency, currency, rangeState.data]);
+    for (const record of transactionState.data ?? []) {
+      addCurrency(ledgerTransaction(record)?.currency);
+    }
+    for (const record of accountState.data ?? []) addCurrency(record.currency);
+    for (const record of budgetState.data ?? []) addCurrency(record.currency);
+    for (const record of recurringState.data ?? []) {
+      addCurrency(localRecord(record.template)?.currency);
+    }
+    for (const record of groupState.data ?? []) addCurrency(record.currency);
+    for (const record of settlementState.data ?? []) addCurrency(record.currency);
+    return [...currencies].sort().map((code) => ({ id: code, label: code }));
+  }, [
+    accountState.data,
+    budgetState.data,
+    defaultCurrency,
+    currency,
+    groupState.data,
+    rangeState.data,
+    transactionState.data,
+    recurringState.data,
+    settlementState.data,
+  ]);
   const activeBudgets = useMemo(
     () =>
       (budgetState.data ?? []).filter(
@@ -242,9 +258,12 @@ function AnalyticsContent() {
   const relevantBudgets = useMemo(
     () =>
       activeBudgets.filter(
-        (budget) => budget.startAt < range.endAt && budget.endAt > range.startAt,
+        (budget) =>
+          budget.currency === currency &&
+          budget.startAt < range.endAt &&
+          budget.endAt > range.startAt,
       ),
-    [activeBudgets, range.startAt, range.endAt],
+    [activeBudgets, currency, range.startAt, range.endAt],
   );
   const budgetWindow = useMemo(
     () =>
@@ -268,7 +287,10 @@ function AnalyticsContent() {
     () => [
       { id: 'all', label: 'All accounts' },
       ...(accountState.data ?? [])
-        .filter((account) => account.archivedAt === undefined)
+        .filter(
+          (account) =>
+            account.archivedAt === undefined && (account.currency ?? defaultCurrency) === currency,
+        )
         .flatMap((account) => {
           const id = recordId(account);
           return id && typeof account.name === 'string'
@@ -276,15 +298,17 @@ function AnalyticsContent() {
             : [];
         }),
     ],
-    [accountState.data],
+    [accountState.data, currency, defaultCurrency],
   );
   const categoryOptions = useMemo<FilterOption[]>(
     () => [
       { id: 'all', label: 'All categories' },
-      ...(categoryState.data ?? []).flatMap((category) => {
-        const id = recordId(category);
-        return id && typeof category.name === 'string' ? [{ id, label: category.name }] : [];
-      }),
+      ...(categoryState.data ?? [])
+        .filter((category) => category.archivedAt === undefined)
+        .flatMap((category) => {
+          const id = recordId(category);
+          return id && typeof category.name === 'string' ? [{ id, label: category.name }] : [];
+        }),
     ],
     [categoryState.data],
   );
@@ -414,61 +438,101 @@ function AnalyticsContent() {
       Alert.alert('Export failed', 'Your device could not open a share sheet.');
     });
   };
+  const currencyGroupIds = useMemo(
+    () =>
+      new Set(
+        (groupState.data ?? [])
+          .filter(
+            (group) =>
+              group.archivedAt === undefined && (group.currency ?? defaultCurrency) === currency,
+          )
+          .flatMap(recordIds),
+      ),
+    [groupState.data, currency, defaultCurrency],
+  );
   const flowTotals = useMemo(() => {
     const totals = { spend: 0n, income: 0n, transfer: 0n, split: 0n, other: 0n };
     for (const record of postedCurrentRecords) {
       const transaction = ledgerTransaction(record);
       if (!transaction) continue;
       if (transaction.type === 'expense') {
-        if (typeof record.groupId === 'string') totals.split += transaction.amountMinor;
+        if (typeof record.groupId === 'string' && currencyGroupIds.has(record.groupId))
+          totals.split += transaction.amountMinor;
         else totals.spend += transaction.amountMinor;
       } else if (transaction.type === 'income') totals.income += transaction.amountMinor;
       else if (transaction.type === 'transfer') totals.transfer += transaction.amountMinor;
       else totals.other += transaction.amountMinor;
     }
     return totals;
-  }, [postedCurrentRecords]);
+  }, [postedCurrentRecords, currencyGroupIds]);
   const flowRows = [
-    { key: 'spend', label: 'Personal expenses', amountMinor: flowTotals.spend, color: tokens.expense },
+    {
+      key: 'spend',
+      label: 'Personal expenses',
+      amountMinor: flowTotals.spend,
+      color: tokens.expense,
+    },
     { key: 'income', label: 'Income', amountMinor: flowTotals.income, color: tokens.income },
-    { key: 'transfer', label: 'Transfers', amountMinor: flowTotals.transfer, color: tokens.transfer },
+    {
+      key: 'transfer',
+      label: 'Transfers',
+      amountMinor: flowTotals.transfer,
+      color: tokens.transfer,
+    },
     { key: 'split', label: 'Shared expenses', amountMinor: flowTotals.split, color: tokens.split },
-    { key: 'other', label: 'Refunds and adjustments', amountMinor: flowTotals.other, color: tokens.settlement },
+    {
+      key: 'other',
+      label: 'Refunds and adjustments',
+      amountMinor: flowTotals.other,
+      color: tokens.settlement,
+    },
   ];
   const groupExpenses = useMemo(
     () =>
       postedCurrentRecords.filter((record) => {
         const transaction = ledgerTransaction(record);
-        return transaction?.type === 'expense' && typeof record.groupId === 'string';
+        return (
+          transaction?.type === 'expense' &&
+          typeof record.groupId === 'string' &&
+          currencyGroupIds.has(record.groupId)
+        );
       }),
-    [postedCurrentRecords],
+    [postedCurrentRecords, currencyGroupIds],
   );
   const settlements = useMemo(
     () =>
       (settlementState.data ?? [])
         .filter((record) => {
           const at = typeof record.occurredAt === 'number' ? record.occurredAt : record.createdAt;
+          const groupId = typeof record.groupId === 'string' ? record.groupId : '';
           return (
             typeof record.amountMinor === 'bigint' &&
-            record.currency === currency &&
             typeof at === 'number' &&
+            currencyGroupIds.has(groupId) &&
+            record.currency === currency &&
             at >= range.startAt &&
             at < range.endAt &&
-            record.deletedAt === undefined
+            record.deletedAt === undefined &&
+            record.status !== 'voided'
           );
         })
         .sort((left, right) => {
-          const leftAt = typeof left.occurredAt === 'number' ? left.occurredAt : Number(left.createdAt);
-          const rightAt = typeof right.occurredAt === 'number' ? right.occurredAt : Number(right.createdAt);
+          const leftAt =
+            typeof left.occurredAt === 'number' ? left.occurredAt : Number(left.createdAt);
+          const rightAt =
+            typeof right.occurredAt === 'number' ? right.occurredAt : Number(right.createdAt);
           return rightAt - leftAt;
         }),
-    [settlementState.data, currency, range.startAt, range.endAt],
+    [settlementState.data, currency, range.startAt, range.endAt, currencyGroupIds],
   );
   const settlementsMinor = settlements.reduce(
-    (sum, settlement) => sum + (typeof settlement.amountMinor === 'bigint' ? settlement.amountMinor : 0n),
+    (sum, settlement) =>
+      sum + (typeof settlement.amountMinor === 'bigint' ? settlement.amountMinor : 0n),
     0n,
   );
-  const groups = (groupState.data ?? []).filter((group) => group.archivedAt === undefined);
+  const groups = (groupState.data ?? []).filter(
+    (group) => group.archivedAt === undefined && (group.currency ?? defaultCurrency) === currency,
+  );
   const groupIndex = useMemo(() => recordIndex(groups), [groups]);
   const budgetProgress = useMemo(() => {
     const records = budgetRangeState.data ?? [];
@@ -478,9 +542,16 @@ function AnalyticsContent() {
         if (
           !transaction ||
           transaction.type !== 'expense' ||
+          (typeFilter !== 'all' && typeFilter !== 'expense') ||
           transaction.status !== 'posted' ||
           transaction.deletedAt !== undefined ||
           transaction.currency !== budget.currency ||
+          transaction.occurredAt < range.startAt ||
+          transaction.occurredAt >= range.endAt ||
+          (accountFilter !== 'all' &&
+            recordId(accounts.get(transaction.accountId ?? '') ?? {}) !== accountFilter) ||
+          (categoryFilter !== 'all' &&
+            recordId(categories.get(transaction.categoryId ?? '') ?? {}) !== categoryFilter) ||
           transaction.occurredAt < budget.startAt ||
           transaction.occurredAt >= budget.endAt
         )
@@ -488,24 +559,36 @@ function AnalyticsContent() {
         if (budget.categoryId) {
           const transactionCategory = categories.get(transaction.categoryId ?? '');
           const budgetCategory = categories.get(budget.categoryId);
-          const matches = transactionCategory && budgetCategory
-            ? recordId(transactionCategory) === recordId(budgetCategory)
-            : transaction.categoryId === budget.categoryId;
+          const matches =
+            transactionCategory && budgetCategory
+              ? recordId(transactionCategory) === recordId(budgetCategory)
+              : transaction.categoryId === budget.categoryId;
           if (!matches) return sum;
         }
         if (budget.accountId) {
           const transactionAccount = accounts.get(transaction.accountId ?? '');
           const budgetAccount = accounts.get(budget.accountId);
-          const matches = transactionAccount && budgetAccount
-            ? recordId(transactionAccount) === recordId(budgetAccount)
-            : transaction.accountId === budget.accountId;
+          const matches =
+            transactionAccount && budgetAccount
+              ? recordId(transactionAccount) === recordId(budgetAccount)
+              : transaction.accountId === budget.accountId;
           if (!matches) return sum;
         }
         return sum + transaction.amountMinor;
       }, 0n);
       return { budget, spentMinor };
     });
-  }, [relevantBudgets, budgetRangeState.data, categories, accounts]);
+  }, [
+    relevantBudgets,
+    budgetRangeState.data,
+    categories,
+    accounts,
+    typeFilter,
+    accountFilter,
+    categoryFilter,
+    range.startAt,
+    range.endAt,
+  ]);
   const recurringRules = (recurringState.data ?? [])
     .filter((rule) => rule.enabled === true && rule.deletedAt === undefined)
     .slice()
@@ -536,6 +619,7 @@ function AnalyticsContent() {
     profileState.error ||
     categoryState.error ||
     accountState.error ||
+    transactionState.error ||
     rangeState.error ||
     budgetState.error ||
     budgetRangeState.error ||
@@ -544,15 +628,12 @@ function AnalyticsContent() {
     settlementState.error;
   const hasRangeData = rangeState.covered || Boolean(rangeState.data?.length);
   const ready =
-    !!profile &&
-    !!categoryState.data &&
-    !!accountState.data &&
-    !!rangeState.data &&
-    hasRangeData;
+    !!profile && !!categoryState.data && !!accountState.data && !!rangeState.data && hasRangeData;
   const retry = () => {
     profileState.retry();
     categoryState.retry();
     accountState.retry();
+    transactionState.retry();
     rangeState.retry();
     budgetState.retry();
     budgetRangeState.retry();
@@ -560,7 +641,10 @@ function AnalyticsContent() {
     groupState.retry();
     settlementState.retry();
   };
-  const navigate = (dimension: 'category' | 'account' | 'merchant', item: AnalyticsBreakdownItem) => {
+  const navigate = (
+    dimension: 'category' | 'account' | 'merchant',
+    item: AnalyticsBreakdownItem,
+  ) => {
     router.push({
       pathname: '/analytics/breakdown/[dimension]',
       params: {
@@ -591,27 +675,106 @@ function AnalyticsContent() {
       : `${Number(((analytics.incomeMinor - analytics.spentMinor) * 1000n) / analytics.incomeMinor) / 10}%`
     : '—';
   const dateFormatter = useMemo(
-    () => new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric' }),
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
     [timeZone],
   );
   const rangeLabel = `${dateFormatter.format(range.startAt)} – ${dateFormatter.format(range.endAt - 1)}`;
+  const quickFilterGroups = [
+    {
+      id: 'type',
+      label: 'Type',
+      options: typeOptions.map(({ id, label }) => ({ value: id, label })),
+      value: typeFilter,
+      onChange: (value: string) => setTypeFilter(value as AnalyticsType),
+    },
+    {
+      id: 'account',
+      label: 'Account',
+      options: accountOptions.map(({ id, label }) => ({ value: id, label })),
+      value: accountFilter,
+      onChange: setAccountFilter,
+    },
+    {
+      id: 'category',
+      label: 'Category',
+      options: categoryOptions.map(({ id, label }) => ({ value: id, label })),
+      value: categoryFilter,
+      onChange: setCategoryFilter,
+    },
+    {
+      id: 'currency',
+      label: 'Currency',
+      options: currencyOptions.map(({ id, label }) => ({ value: id, label })),
+      value: currency,
+      onChange: (value: string) => {
+        setCurrencyFilter(value);
+        setAccountFilter('all');
+      },
+    },
+  ];
   const trendBuckets = analytics?.buckets ?? [];
   const trendStride = Math.max(1, Math.ceil(trendBuckets.length / 7));
   const trendLabels = trendBuckets.map((bucket, index) => {
     if (index % trendStride !== 0 && index !== trendBuckets.length - 1) return '';
     if (period === 'year') return bucket.label;
     return period === 'week'
-      ? bucket.label.split(' ')[0] ?? bucket.label
-      : bucket.label.split(' ').at(-1) ?? bucket.label;
+      ? (bucket.label.split(' ')[0] ?? bucket.label)
+      : (bucket.label.split(' ').at(-1) ?? bucket.label);
   });
   const currentBucket = trendBuckets.findIndex(
     (bucket) => Date.now() >= bucket.startAt && Date.now() < bucket.endAt,
   );
+  const accountBalances = useMemo(() => {
+    const balances = new Map<string, bigint>();
+    for (const account of accountState.data ?? []) {
+      const id = recordId(account);
+      const openingBalance =
+        typeof account.balanceMinor === 'bigint'
+          ? account.balanceMinor
+          : typeof account.openingBalanceMinor === 'bigint'
+            ? account.openingBalanceMinor
+            : undefined;
+      if (!id || openingBalance === undefined) continue;
+      const ids = new Set(recordIds(account));
+      const optimisticDelta = (transactionState.data ?? []).reduce((sum, record) => {
+        if (
+          typeof record.clientUpdatedAt !== 'number' ||
+          record.status !== 'posted' ||
+          record.deletedAt !== undefined ||
+          typeof record.amountMinor !== 'bigint'
+        )
+          return sum;
+        const sourceId = typeof record.accountId === 'string' ? record.accountId : '';
+        const destinationId =
+          typeof record.transferAccountId === 'string' ? record.transferAccountId : '';
+        const sourceDelta = ids.has(sourceId)
+          ? record.type === 'expense' || record.type === 'transfer'
+            ? -record.amountMinor
+            : record.amountMinor
+          : 0n;
+        const destinationDelta =
+          record.type === 'transfer' && ids.has(destinationId) ? record.amountMinor : 0n;
+        return sum + sourceDelta + destinationDelta;
+      }, 0n);
+      balances.set(id, openingBalance + optimisticDelta);
+    }
+    return balances;
+  }, [accountState.data, transactionState.data]);
   const sharedExpenseMinor = groupExpenses.reduce((sum, record) => {
     const transaction = ledgerTransaction(record);
     return sum + (transaction?.amountMinor ?? 0n);
   }, 0n);
-  const settlementDate = new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric' });
+  const settlementDate = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
+  });
 
   return (
     <ScrollView
@@ -625,72 +788,104 @@ function AnalyticsContent() {
       showsVerticalScrollIndicator={false}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+        <IconButton
+          label="Go back"
+          variant="ghost"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)' as never))}
+        >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
         <View style={{ flex: 1, gap: 2 }}>
           <Typography variant="title">Analytics</Typography>
           <Typography variant="caption">A closer look at your local ledger</Typography>
         </View>
-        <Button size="sm" variant="outline" onPress={exportAnalytics}>Export</Button>
+        <Button size="sm" variant="outline" onPress={exportAnalytics}>
+          Export
+        </Button>
       </View>
       <View style={{ gap: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        >
           <IconButton
             label="Previous period"
             variant="ghost"
-            onPress={() => setReferenceAt(range.previousStartAt + 1)}
+            onPress={() => {
+              if (customRange) {
+                const duration = customRange.endAt - customRange.startAt;
+                setCustomRange({
+                  startAt: customRange.startAt - duration,
+                  endAt: customRange.startAt,
+                });
+              } else {
+                setReferenceAt(range.previousStartAt + 1);
+              }
+            }}
           >
             <ArrowLeft size={18} color={tokens.foreground} />
           </IconButton>
-          <Typography variant="caption">{rangeLabel} · {currency}</Typography>
+          <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+            <DateRangePopover
+              label={rangeLabel}
+              startDate={getAnalyticsCalendarDate(customRange?.startAt ?? range.startAt, timeZone)}
+              endDate={getAnalyticsCalendarDate(
+                customRange
+                  ? Math.max(customRange.startAt, customRange.endAt - 1)
+                  : range.endAt - 1,
+                timeZone,
+              )}
+              presets={periodOptions}
+              onPresetSelect={(value) => {
+                setPeriod(value as AnalyticsPeriod);
+                setCustomRange(null);
+                setReferenceAt(Date.now());
+              }}
+              onRangeApply={(startDate, endDate) => {
+                setPeriod('month');
+                setCustomRange(getAnalyticsCustomRange(startDate, endDate, timeZone));
+              }}
+            />
+            <Typography variant="caption">{currency}</Typography>
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => {
+                setCustomRange(null);
+                setReferenceAt(Date.now());
+              }}
+            >
+              Today
+            </Button>
+          </View>
           <IconButton
             label="Next period"
             variant="ghost"
-            onPress={() => setReferenceAt(range.endAt)}
+            onPress={() => {
+              if (customRange) {
+                const duration = customRange.endAt - customRange.startAt;
+                setCustomRange({
+                  startAt: customRange.endAt,
+                  endAt: customRange.endAt + duration,
+                });
+              } else {
+                setReferenceAt(range.endAt);
+              }
+            }}
           >
             <ArrowRight size={18} color={tokens.foreground} />
           </IconButton>
         </View>
-        <Tabs
-          value={period}
-          onChange={(value) => {
-            setPeriod(value as AnalyticsPeriod);
-            setReferenceAt(Date.now());
-          }}
-          tabs={[
-            { label: 'Week', value: 'week' },
-            { label: 'Month', value: 'month' },
-            { label: 'Year', value: 'year' },
-          ]}
-        />
-        <FilterRail
-          label="TYPE"
-          value={typeFilter}
-          options={typeOptions}
-          onChange={(value) => setTypeFilter(value as AnalyticsType)}
-        />
-        <FilterRail
-          label="ACCOUNT"
-          value={accountFilter}
-          options={accountOptions}
-          onChange={setAccountFilter}
-        />
-        <FilterRail
-          label="CATEGORY"
-          value={categoryFilter}
-          options={categoryOptions}
-          onChange={setCategoryFilter}
-        />
-        <FilterRail
-          label="CURRENCY"
-          value={currency}
-          options={currencyOptions}
-          onChange={setCurrencyFilter}
-        />
+        <QuickFiltersPopover groups={quickFilterGroups} />
       </View>
       {!isConnected && ready && (
         <Typography variant="caption">Offline · showing records saved on this device.</Typography>
+      )}
+      {ready && (
+        <Typography variant="caption">
+          {isConnected && rangeState.covered
+            ? 'Selected server date range loaded.'
+            : 'Showing records saved on this device for this period.'}
+        </Typography>
       )}
       {error && (
         <View style={{ gap: 10 }} accessibilityRole="alert">
@@ -704,7 +899,10 @@ function AnalyticsContent() {
       )}
       {rangeState.refreshing && <Typography variant="caption">Refreshing transactions…</Typography>}
       {!userId || (profileState.data && !profile) ? (
-        <Empty title="Analytics unavailable" description="Sign in to see your spending and income." />
+        <Empty
+          title="Analytics unavailable"
+          description="Sign in to see your spending and income."
+        />
       ) : (!analytics || !hasRangeData) && !error ? (
         <Typography variant="heading" accessibilityLabel="Loading analytics">
           Loading analytics…
@@ -715,15 +913,28 @@ function AnalyticsContent() {
           <>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {[
-                { label: 'Spent', value: formatMinor(analytics.spentMinor, currency), color: tokens.expense },
-                { label: 'Income', value: formatMinor(analytics.incomeMinor, currency), color: tokens.income },
+                {
+                  label: 'Total spent',
+                  value: formatMinor(analytics.spentMinor, currency),
+                  color: tokens.expense,
+                },
+                {
+                  label: 'Total income',
+                  value: formatMinor(analytics.incomeMinor, currency),
+                  color: tokens.income,
+                },
                 {
                   label: 'Net cash flow',
                   value: formatMinor(analytics.incomeMinor - analytics.spentMinor, currency),
-                  color: analytics.incomeMinor >= analytics.spentMinor ? tokens.income : tokens.expense,
+                  color:
+                    analytics.incomeMinor >= analytics.spentMinor ? tokens.income : tokens.expense,
                 },
                 { label: 'Savings rate', value: savingsRate, color: tokens.primary },
-                { label: 'Transactions', value: String(transactionCount), color: tokens.foreground },
+                {
+                  label: 'Transactions',
+                  value: String(transactionCount),
+                  color: tokens.foreground,
+                },
               ].map((item) => (
                 <View
                   key={item.label}
@@ -740,13 +951,40 @@ function AnalyticsContent() {
                   }}
                 >
                   <Metric label={item.label} value={item.value} />
-                  <View style={{ height: 2, width: 30, borderRadius: 2, backgroundColor: item.color }} />
+                  <View
+                    style={{ height: 2, width: 30, borderRadius: 2, backgroundColor: item.color }}
+                  />
                 </View>
               ))}
             </View>
+            {transactionCount === 0 && (
+              <Empty
+                title="No activity in this period"
+                description="Record a transaction to start seeing trends from your local finance data."
+                action={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onPress={() => router.push('/transaction/new' as never)}
+                  >
+                    Add transaction
+                  </Button>
+                }
+              />
+            )}
             <Panel title="Cash flow">
+              <FilterSheet
+                label="Chart"
+                title="Cash flow chart type"
+                options={[
+                  { label: 'Lines', value: 'lines' },
+                  { label: 'Bars', value: 'bars' },
+                ]}
+                value={cashFlowChartType}
+                onChange={(value) => setCashFlowChartType(value as 'lines' | 'bars')}
+              />
               <CashFlowChart
-                variant="lines"
+                variant={cashFlowChartType}
                 buckets={analytics.buckets}
                 currency={currency}
                 onSelectBucket={(bucket) =>
@@ -762,35 +1000,152 @@ function AnalyticsContent() {
               />
             </Panel>
             <Panel title={period === 'year' ? 'Monthly spending trend' : 'Daily spending trend'}>
+              <FilterSheet
+                label="Chart"
+                title="Spending trend chart type"
+                options={[
+                  { label: 'Bars', value: 'bars' },
+                  { label: 'Line', value: 'line' },
+                ]}
+                value={dailyChartType}
+                onChange={(value) => setDailyChartType(value as 'bars' | 'line')}
+              />
               {analytics.buckets.some((bucket) => bucket.amountMinor > 0n) ? (
-                <BarChart
-                  values={chartValues(analytics.buckets.map((bucket) => bucket.amountMinor))}
-                  labels={trendLabels}
-                  highlightIndex={currentBucket >= 0 ? currentBucket : undefined}
-                />
+                dailyChartType === 'bars' ? (
+                  <BarChart
+                    values={chartValues(analytics.buckets.map((bucket) => bucket.amountMinor))}
+                    labels={trendLabels}
+                    highlightIndex={currentBucket >= 0 ? currentBucket : undefined}
+                  />
+                ) : (
+                  <SpendingLineChart
+                    values={chartValues(analytics.buckets.map((bucket) => bucket.amountMinor))}
+                    labels={[
+                      trendBuckets[0]?.label ?? 'Start',
+                      trendBuckets.at(-1)?.label ?? 'End',
+                    ]}
+                  />
+                )
               ) : (
                 <Typography variant="small">No posted expenses to chart in this period.</Typography>
               )}
             </Panel>
             <Panel title="Spending by category">
-              <BreakdownDonut
-                items={analytics.categoryBreakdown}
-                totalMinor={analytics.spentMinor}
-                currency={currency}
-                iconForCategory={(id) => {
-                  const icon = categories.get(id)?.icon;
-                  return typeof icon === 'string' ? icon : undefined;
-                }}
-                onSelectItem={(item) => navigate('category', item)}
+              <FilterSheet
+                label="Chart"
+                title="Category chart type"
+                options={[
+                  { label: 'Donut', value: 'donut' },
+                  { label: 'Bars', value: 'bars' },
+                ]}
+                value={categoryChartType}
+                onChange={(value) => setCategoryChartType(value as 'donut' | 'bars')}
               />
+              {categoryChartType === 'donut' ? (
+                <BreakdownDonut
+                  items={analytics.categoryBreakdown}
+                  totalMinor={analytics.spentMinor}
+                  currency={currency}
+                  iconForCategory={(id) => {
+                    const icon = categories.get(id)?.icon;
+                    return typeof icon === 'string' ? icon : undefined;
+                  }}
+                  onSelectItem={(item) => navigate('category', item)}
+                />
+              ) : analytics.categoryBreakdown.length ? (
+                <BarChart
+                  values={analytics.categoryBreakdown.map((item) =>
+                    analytics.spentMinor > 0n
+                      ? Number((item.amountMinor * 10000n) / analytics.spentMinor) / 100
+                      : 0,
+                  )}
+                  labels={analytics.categoryBreakdown.map((item) => item.label)}
+                />
+              ) : (
+                <Typography variant="small">No posted expenses in this period.</Typography>
+              )}
             </Panel>
-            <Panel title="Accounts · posted spending">
-              <RankedBreakdown
-                items={analytics.accountBreakdown}
-                totalMinor={analytics.spentMinor}
-                currency={currency}
-                onSelect={(item) => navigate('account', item)}
-              />
+            <Panel
+              title="Accounts & balances"
+              action={
+                <Button size="sm" variant="ghost" onPress={() => router.push('/account' as never)}>
+                  All accounts
+                </Button>
+              }
+            >
+              {accountState.loading || transactionState.loading ? (
+                <Typography variant="small">Loading account balances…</Typography>
+              ) : accountState.data?.filter(
+                  (account) =>
+                    account.archivedAt === undefined &&
+                    (account.currency ?? defaultCurrency) === currency,
+                ).length ? (
+                <View style={{ gap: 2 }}>
+                  {accountState.data
+                    .filter(
+                      (account) =>
+                        account.archivedAt === undefined &&
+                        (account.currency ?? defaultCurrency) === currency,
+                    )
+                    .map((account) => {
+                      const id = recordId(account);
+                      if (!id) return null;
+                      const aliases = recordIds(account);
+                      const balance = accountBalances.get(id);
+                      const breakdown = analytics.accountBreakdown.find((item) =>
+                        aliases.includes(item.id),
+                      );
+                      const spentMinor = breakdown?.amountMinor ?? 0n;
+                      return (
+                        <TouchableOpacity
+                          key={id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${String(account.name ?? 'Account')} account`}
+                          onPress={() => {
+                            if (balance === undefined && breakdown) {
+                              navigate('account', breakdown);
+                              return;
+                            }
+                            router.push({ pathname: '/account/[id]', params: { id } } as never);
+                          }}
+                          activeOpacity={0.7}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 10,
+                            paddingVertical: 8,
+                            borderBottomWidth: 1,
+                            borderColor: tokens.borderSubtle,
+                          }}
+                        >
+                          <View style={{ flex: 1, gap: 3 }}>
+                            <Typography variant="small" numberOfLines={1}>
+                              {typeof account.name === 'string'
+                                ? displayAccountName(account.name)
+                                : 'Account'}
+                            </Typography>
+                            <Typography variant="caption">
+                              {balance === undefined ? 'Posted expenses' : 'Current balance'}
+                            </Typography>
+                          </View>
+                          <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                            <Typography variant="small">
+                              {formatMinor(balance ?? spentMinor, currency)}
+                            </Typography>
+                            <Typography variant="caption">
+                              {formatMinor(spentMinor, currency)} spent
+                            </Typography>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                </View>
+              ) : (
+                <Empty
+                  title="No account activity"
+                  description="Accounts in this currency will appear here."
+                />
+              )}
             </Panel>
             <Panel title="Transaction mix">
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -806,7 +1161,9 @@ function AnalyticsContent() {
                       paddingVertical: 4,
                     }}
                   >
-                    <View style={{ width: 8, height: 8, borderRadius: 5, backgroundColor: item.color }} />
+                    <View
+                      style={{ width: 8, height: 8, borderRadius: 5, backgroundColor: item.color }}
+                    />
                     <View style={{ flex: 1, gap: 2 }}>
                       <Typography variant="caption">{item.label}</Typography>
                       <Typography variant="small" style={{ color: tokens.foreground }}>
@@ -816,7 +1173,9 @@ function AnalyticsContent() {
                   </View>
                 ))}
               </View>
-              <Typography variant="caption">Shared expenses are also included in total spent.</Typography>
+              <Typography variant="caption">
+                Shared expenses are also included in total spent.
+              </Typography>
             </Panel>
             <Panel title="Compared with last period">
               <Typography variant="heading">{comparison}</Typography>
@@ -843,7 +1202,9 @@ function AnalyticsContent() {
                         key={id || budget.name}
                         accessibilityRole="button"
                         accessibilityLabel={`Open ${budget.name} budget`}
-                        onPress={() => id && router.push({ pathname: '/budget/[id]', params: { id } } as never)}
+                        onPress={() =>
+                          id && router.push({ pathname: '/budget/[id]', params: { id } } as never)
+                        }
                         activeOpacity={0.75}
                       >
                         <BudgetProgress
@@ -862,7 +1223,11 @@ function AnalyticsContent() {
                   title="No active budgets"
                   description="Saved budget progress will appear here."
                   action={
-                    <Button size="sm" variant="outline" onPress={() => router.push('/budget/new' as never)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onPress={() => router.push('/budget/new' as never)}
+                    >
                       Create budget
                     </Button>
                   }
@@ -874,7 +1239,11 @@ function AnalyticsContent() {
             <Panel
               title="Recurring"
               action={
-                <Button size="sm" variant="ghost" onPress={() => router.push('/recurring' as never)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => router.push('/recurring' as never)}
+                >
                   View all
                 </Button>
               }
@@ -884,14 +1253,21 @@ function AnalyticsContent() {
               ) : recurringState.data ? (
                 recurringRules.length ? (
                   <View style={{ gap: 10 }}>
-                    <Typography variant="caption">{recurringRules.length} active reminders</Typography>
+                    <Typography variant="caption">
+                      {recurringRules.length} active reminders
+                    </Typography>
                     {recurringRules.slice(0, 4).map((rule) => {
                       const template = localRecord(rule.template);
                       const amount = template?.amountMinor;
                       const templateCurrency = template?.currency;
-                      const next = typeof rule.nextOccurrence === 'number' ? rule.nextOccurrence : undefined;
+                      const next =
+                        typeof rule.nextOccurrence === 'number' ? rule.nextOccurrence : undefined;
                       const dueLabel = next
-                        ? new Intl.DateTimeFormat('en-US', { timeZone, month: 'short', day: 'numeric' }).format(next)
+                        ? new Intl.DateTimeFormat('en-US', {
+                            timeZone,
+                            month: 'short',
+                            day: 'numeric',
+                          }).format(next)
                         : 'Date not set';
                       return (
                         <View
@@ -910,7 +1286,8 @@ function AnalyticsContent() {
                               {typeof rule.name === 'string' ? rule.name : 'Recurring reminder'}
                             </Typography>
                             <Typography variant="caption">
-                              {typeof rule.frequency === 'string' ? rule.frequency : 'Scheduled'} · next {dueLabel}
+                              {typeof rule.frequency === 'string' ? rule.frequency : 'Scheduled'} ·
+                              next {dueLabel}
                             </Typography>
                           </View>
                           {typeof amount === 'bigint' && typeof templateCurrency === 'string' && (
@@ -927,7 +1304,11 @@ function AnalyticsContent() {
                     title="No active reminders"
                     description="Upcoming recurring rules will appear here."
                     action={
-                      <Button size="sm" variant="outline" onPress={() => router.push('/recurring' as never)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onPress={() => router.push('/recurring' as never)}
+                      >
                         Open recurring
                       </Button>
                     }
@@ -940,14 +1321,21 @@ function AnalyticsContent() {
             <Panel
               title="Groups, splits & settlements"
               action={
-                <Button size="sm" variant="ghost" onPress={() => router.push('/(tabs)/groups' as never)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => router.push('/(tabs)/groups' as never)}
+                >
                   View groups
                 </Button>
               }
             >
               <MetricPair
                 left={{ label: 'Active groups', value: String(groups.length) }}
-                right={{ label: 'Shared expenses', value: formatMinor(sharedExpenseMinor, currency) }}
+                right={{
+                  label: 'Shared expenses',
+                  value: formatMinor(sharedExpenseMinor, currency),
+                }}
               />
               <View style={{ height: 1, backgroundColor: tokens.borderSubtle }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
@@ -957,37 +1345,64 @@ function AnalyticsContent() {
                 </Typography>
               </View>
               {groupExpenses.length === 0 && settlements.length === 0 ? (
-                <Typography variant="small">No shared expenses or settlements in this period.</Typography>
+                <Typography variant="small">
+                  No shared expenses or settlements in this period.
+                </Typography>
               ) : (
                 <View style={{ gap: 2 }}>
-                  {groupExpenses.slice().sort((left, right) => Number(right.occurredAt) - Number(left.occurredAt)).slice(0, 3).map((record) => {
-                    const transaction = ledgerTransaction(record);
-                    const groupId = typeof record.groupId === 'string' ? record.groupId : '';
-                    const group = groupIndex.get(groupId);
-                    const groupName = typeof group?.name === 'string' ? group.name : 'Shared expense';
-                    return (
-                      <TouchableOpacity
-                        key={recordId(record)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Open ${groupName}`}
-                        onPress={() => groupId && router.push({ pathname: '/group/[id]', params: { id: groupId } } as never)}
-                        activeOpacity={0.75}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 }}
-                      >
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Typography variant="small" style={{ color: tokens.foreground }} numberOfLines={1}>
-                            {transaction?.title || transaction?.merchant || groupName}
+                  {groupExpenses
+                    .slice()
+                    .sort((left, right) => Number(right.occurredAt) - Number(left.occurredAt))
+                    .slice(0, 3)
+                    .map((record) => {
+                      const transaction = ledgerTransaction(record);
+                      const groupId = typeof record.groupId === 'string' ? record.groupId : '';
+                      const group = groupIndex.get(groupId);
+                      const groupName =
+                        typeof group?.name === 'string' ? group.name : 'Shared expense';
+                      return (
+                        <TouchableOpacity
+                          key={recordId(record)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${groupName}`}
+                          onPress={() =>
+                            groupId &&
+                            router.push({
+                              pathname: '/group/[id]',
+                              params: { id: groupId },
+                            } as never)
+                          }
+                          activeOpacity={0.75}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 10,
+                            minHeight: 48,
+                          }}
+                        >
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <Typography
+                              variant="small"
+                              style={{ color: tokens.foreground }}
+                              numberOfLines={1}
+                            >
+                              {transaction?.title || transaction?.merchant || groupName}
+                            </Typography>
+                            <Typography variant="caption">{groupName}</Typography>
+                          </View>
+                          <Typography variant="small" style={{ color: tokens.foreground }}>
+                            {transaction
+                              ? formatMinor(transaction.amountMinor, transaction.currency)
+                              : ''}
                           </Typography>
-                          <Typography variant="caption">{groupName}</Typography>
-                        </View>
-                        <Typography variant="small" style={{ color: tokens.foreground }}>
-                          {transaction ? formatMinor(transaction.amountMinor, transaction.currency) : ''}
-                        </Typography>
-                      </TouchableOpacity>
-                    );
-                  })}
+                        </TouchableOpacity>
+                      );
+                    })}
                   {settlements.slice(0, 3).map((record) => {
-                    const at = typeof record.occurredAt === 'number' ? record.occurredAt : Number(record.createdAt);
+                    const at =
+                      typeof record.occurredAt === 'number'
+                        ? record.occurredAt
+                        : Number(record.createdAt);
                     const groupId = typeof record.groupId === 'string' ? record.groupId : '';
                     const group = groupIndex.get(groupId);
                     const groupName = typeof group?.name === 'string' ? group.name : 'Settlement';
@@ -996,16 +1411,28 @@ function AnalyticsContent() {
                         key={recordId(record)}
                         accessibilityRole="button"
                         accessibilityLabel={`Open ${groupName} settlement`}
-                        onPress={() => groupId && router.push({ pathname: '/group/[id]', params: { id: groupId } } as never)}
+                        onPress={() =>
+                          groupId &&
+                          router.push({ pathname: '/group/[id]', params: { id: groupId } } as never)
+                        }
                         activeOpacity={0.75}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          minHeight: 44,
+                        }}
                       >
                         <View style={{ flex: 1, gap: 2 }}>
-                          <Typography variant="small" style={{ color: tokens.foreground }}>{groupName} settlement</Typography>
+                          <Typography variant="small" style={{ color: tokens.foreground }}>
+                            {groupName} settlement
+                          </Typography>
                           <Typography variant="caption">{settlementDate.format(at)}</Typography>
                         </View>
                         <Typography variant="small" style={{ color: tokens.primary }}>
-                          {typeof record.amountMinor === 'bigint' ? formatMinor(record.amountMinor, currency) : ''}
+                          {typeof record.amountMinor === 'bigint'
+                            ? formatMinor(record.amountMinor, currency)
+                            : ''}
                         </Typography>
                       </TouchableOpacity>
                     );
@@ -1013,7 +1440,9 @@ function AnalyticsContent() {
                 </View>
               )}
               {groupState.error || settlementState.error ? (
-                <Typography variant="caption">Some saved group or settlement records are unavailable.</Typography>
+                <Typography variant="caption">
+                  Some saved group or settlement records are unavailable.
+                </Typography>
               ) : null}
             </Panel>
             <Panel title={typeFilter === 'income' ? 'Top income' : 'Top transactions'}>
@@ -1056,14 +1485,22 @@ function AnalyticsContent() {
                       borderColor: tokens.borderSubtle,
                     }}
                   >
-                    <Typography variant="caption" style={{ flex: 1 }}>Category</Typography>
-                    <Typography variant="caption" style={{ width: 46, textAlign: 'right' }}>Count</Typography>
-                    <Typography variant="caption" style={{ width: 88, textAlign: 'right' }}>Amount</Typography>
+                    <View style={{ width: 24 }} />
+                    <Typography variant="caption" style={{ flex: 1 }}>
+                      Category
+                    </Typography>
+                    <Typography variant="caption" style={{ width: 46, textAlign: 'right' }}>
+                      Count
+                    </Typography>
+                    <Typography variant="caption" style={{ width: 88, textAlign: 'right' }}>
+                      Amount
+                    </Typography>
                   </View>
-                  {analytics.categoryBreakdown.map((item) => {
-                    const share = analytics.spentMinor > 0n
-                      ? Number((item.amountMinor * 1000n) / analytics.spentMinor) / 10
-                      : 0;
+                  {analytics.categoryBreakdown.map((item, index) => {
+                    const share =
+                      analytics.spentMinor > 0n
+                        ? Number((item.amountMinor * 1000n) / analytics.spentMinor) / 10
+                        : 0;
                     return (
                       <TouchableOpacity
                         key={item.id}
@@ -1080,14 +1517,25 @@ function AnalyticsContent() {
                           borderColor: tokens.borderSubtle,
                         }}
                       >
-                        <Typography variant="small" numberOfLines={1} style={{ flex: 1, color: tokens.foreground }}>
+                        <Typography variant="caption" style={{ width: 24, color: tokens.primary }}>
+                          {String(index + 1).padStart(2, '0')}
+                        </Typography>
+                        <Typography
+                          variant="small"
+                          numberOfLines={1}
+                          style={{ flex: 1, color: tokens.foreground }}
+                        >
                           {item.label}
                         </Typography>
                         <Typography variant="caption" style={{ width: 46, textAlign: 'right' }}>
                           {categoryCounts.get(item.id) ?? 0}
                         </Typography>
                         <View style={{ width: 88, alignItems: 'flex-end' }}>
-                          <Typography variant="small" style={{ color: tokens.foreground }} numberOfLines={1}>
+                          <Typography
+                            variant="small"
+                            style={{ color: tokens.foreground }}
+                            numberOfLines={1}
+                          >
                             {formatMinor(item.amountMinor, currency)}
                           </Typography>
                           <Typography variant="caption">{share}%</Typography>
