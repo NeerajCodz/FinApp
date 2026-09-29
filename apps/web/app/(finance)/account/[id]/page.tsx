@@ -3,8 +3,23 @@
 import React from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, ReceiptText } from 'lucide-react';
-import { Button, Empty, IconButton, Input, Label, Separator, Sheet, Typography } from '@finapp/ui/web';
-import { Money, TransactionRow, type TransactionType } from '@finapp/ui/finance';
+import {
+  Button,
+  Empty,
+  IconButton,
+  Input,
+  Label,
+  Separator,
+  Sheet,
+  Typography,
+} from '@finapp/ui/web';
+import {
+  EntityIconPicker,
+  formatTransactionDate,
+  Money,
+  TransactionRow,
+  type TransactionType,
+} from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -33,6 +48,7 @@ type Account = LocalRecord & {
   isIncludedInTotal?: boolean;
 };
 type Category = LocalRecord & { name?: string; icon?: string };
+type Profile = LocalRecord & { timezone?: string };
 type Transaction = LocalRecord & {
   accountId?: string;
   transferAccountId?: string;
@@ -44,6 +60,7 @@ type Transaction = LocalRecord & {
   title?: string;
   note?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   status?: string;
   deletedAt?: number;
 };
@@ -57,7 +74,6 @@ const ACCOUNT_TYPES = {
   other: 'Other',
 } as const;
 export default function PersonalAccountDetailPage() {
-
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { userId, isConnected, fetchTransactionRange } = useBrowserSync();
@@ -72,6 +88,8 @@ export default function PersonalAccountDetailPage() {
     error: transactionError,
   } = useLocalRecords<Transaction>('transaction');
   const { records: categories } = useLocalRecords<Category>('category');
+  const { records: profiles } = useLocalRecords<Profile>('profile');
+  const timeZone = profiles[0]?.timezone;
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const account = records.find(
     (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
@@ -136,7 +154,10 @@ export default function PersonalAccountDetailPage() {
       <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
         <ArrowLeft size={21} aria-hidden="true" />
       </IconButton>
-      <Typography variant="heading" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <Typography
+        variant="heading"
+        style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
         {account?.name ?? 'Account'}
       </Typography>
     </header>
@@ -172,6 +193,33 @@ export default function PersonalAccountDetailPage() {
       setEditing(false);
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Could not rename this account.');
+    } finally {
+      setPending(false);
+    }
+  }
+  async function updateIcon(icon?: string) {
+    if (!userId || !account || pending) return;
+    if (!accountId) {
+      setFormError('This account has no saved identifier and cannot update its icon.');
+      return;
+    }
+    setPending(true);
+    setFormError(null);
+    try {
+      await commitLocalWrite(
+        userId,
+        'account',
+        'account.setIcon',
+        { ...account, icon: icon ?? undefined },
+        { accountId, icon: icon ?? null },
+        {
+          recordId: localId,
+          dependencies: accountDependency ? [accountDependency] : [],
+          baseUpdatedAt: typeof account.updatedAt === 'number' ? account.updatedAt : undefined,
+        },
+      );
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Could not update this account icon.');
     } finally {
       setPending(false);
     }
@@ -263,11 +311,16 @@ export default function PersonalAccountDetailPage() {
           {accountType} · {currency}
         </Typography>
         <Typography variant="caption">
-          {account.isIncludedInTotal
-            ? 'Included in total balance'
-            : 'Excluded from total balance'}
+          {account.isIncludedInTotal ? 'Included in total balance' : 'Excluded from total balance'}
         </Typography>
-        {account.icon ? <Typography variant="caption">Icon: {account.icon}</Typography> : null}
+        {account.archivedAt === undefined && (
+          <EntityIconPicker
+            mode="lucide"
+            value={account.icon}
+            onChange={(icon) => void updateIcon(icon)}
+            label="Change account icon"
+          />
+        )}
         {account.color ? <Typography variant="caption">Color: {account.color}</Typography> : null}
         {typeof account.createdAt === 'number' && Number.isFinite(account.createdAt) ? (
           <Typography variant="caption">
@@ -367,7 +420,11 @@ export default function PersonalAccountDetailPage() {
                     categoryIcon={category?.icon}
                     date={
                       transaction.occurredAt
-                        ? new Date(transaction.occurredAt).toLocaleDateString()
+                        ? formatTransactionDate(
+                            transaction.occurredAt,
+                            transaction.hasTime,
+                            timeZone,
+                          )
                         : 'Date unavailable'
                     }
                     status={transaction.status}

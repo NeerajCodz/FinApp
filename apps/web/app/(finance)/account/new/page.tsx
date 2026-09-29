@@ -4,7 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, ChevronDown, Landmark } from 'lucide-react';
 import { Button, IconButton, Input, Label, Sheet, Typography } from '@finapp/ui/web';
-import { CurrencyInput } from '@finapp/ui/finance';
+import { CurrencyInput, EntityIconPicker } from '@finapp/ui/finance';
 import { currencies } from '@convex/shared/validators';
 import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -33,6 +33,7 @@ export default function NewPersonalAccountPage() {
   } = useLocalRecords<Profile>('profile');
   const profile = profiles[0];
   const [name, setName] = React.useState('');
+  const [icon, setIcon] = React.useState<string>();
   const [type, setType] = React.useState<(typeof accountTypes)[number][1]>('bank');
   const [customType, setCustomType] = React.useState('');
   const currency = profile?.defaultCurrency ?? '';
@@ -73,6 +74,7 @@ export default function NewPersonalAccountPage() {
         ownerId: userId,
         name: trimmedName,
         type,
+        ...(icon ? { icon } : {}),
         ...(type === 'other' ? { customType: custom } : {}),
         currency,
         openingBalanceMinor,
@@ -83,6 +85,7 @@ export default function NewPersonalAccountPage() {
       };
       const id = await commitLocalWrite(userId, 'account', 'account.create', record, {
         name: trimmedName,
+        ...(icon ? { icon } : {}),
         type,
         ...(type === 'other' ? { customType: custom } : {}),
         currency,
@@ -149,6 +152,10 @@ export default function NewPersonalAccountPage() {
           />
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
+          <Label>Icon</Label>
+          <EntityIconPicker mode="lucide" value={icon} onChange={setIcon} />
+        </div>
+        <div style={{ display: 'grid', gap: 6 }}>
           <Label htmlFor="account-type">Type</Label>
           <Button
             id="account-type"
@@ -201,11 +208,7 @@ export default function NewPersonalAccountPage() {
             />
           </div>
         ) : (
-          <Button
-            type="button"
-            variant="outline"
-            onPress={() => router.push('/settings/currency')}
-          >
+          <Button type="button" variant="outline" onPress={() => router.push('/settings/currency')}>
             Set your default currency
           </Button>
         )}

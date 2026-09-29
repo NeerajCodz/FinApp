@@ -8,7 +8,7 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Input, Label, Sheet, Text, Typography } from '@finapp/ui/native';
-import { CurrencyInput } from '@finapp/ui/finance';
+import { CurrencyInput, EntityIconPicker } from '@finapp/ui/finance';
 import { parseMinor } from '@/lib/money';
 import { useTheme } from '@finapp/ui/native';
 
@@ -27,6 +27,7 @@ type AccountType = (typeof ACCOUNT_TYPES)[number]['value'];
 
 export default function NewAccountScreen() {
   const [name, setName] = useState('');
+  const [icon, setIcon] = useState<string>();
   const [openingBalance, setOpeningBalance] = useState('');
   const [type, setType] = useState<AccountType>('bank');
   const [customType, setCustomType] = useState('');
@@ -70,6 +71,7 @@ export default function NewAccountScreen() {
           ownerId: userId,
           name: trimmedName,
           type,
+          ...(icon ? { icon } : {}),
           customType: type === 'other' ? customTypeLabel : undefined,
           currency: profile.defaultCurrency,
           openingBalanceMinor,
@@ -81,6 +83,7 @@ export default function NewAccountScreen() {
         {
           name: trimmedName,
           type,
+          ...(icon ? { icon } : {}),
           customType: type === 'other' ? customTypeLabel : undefined,
           currency: profile.defaultCurrency,
           openingBalanceMinor,
@@ -146,6 +149,10 @@ export default function NewAccountScreen() {
                 placeholder="Everyday account"
                 returnKeyType="next"
               />
+            </View>
+            <View style={{ gap: 6 }}>
+              <Label>Icon</Label>
+              <EntityIconPicker mode="lucide" value={icon} onChange={setIcon} />
             </View>
             <View style={{ gap: 6 }}>
               <Label>Type</Label>

@@ -12,6 +12,7 @@ export type AccountDraft<OwnerId extends string = string> = {
   customType?: string;
   currency: string;
   openingBalanceMinor: bigint;
+  icon?: string;
   isIncludedInTotal: boolean;
 };
 
@@ -61,6 +62,7 @@ export const create = mutation({
     currency: v.string(),
     openingBalanceMinor: v.int64(),
     isIncludedInTotal: v.boolean(),
+    icon: v.optional(v.string()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -78,6 +80,8 @@ export const create = mutation({
       return previousId;
     }
     assertCurrency(args.currency);
+    if (args.icon !== undefined && (args.icon.length === 0 || args.icon.length > 80))
+      throw new Error('INVALID_ACCOUNT');
     const { clientMutationId, ...accountArgs } = args;
     const record = createAccountRecord(user._id, {
       ...accountArgs,
@@ -129,6 +133,49 @@ export const rename = mutation({
       user._id,
       args.clientMutationId,
       'account.rename',
+      args.accountId,
+      'accounts',
+      String(args.accountId),
+      updatedAt,
+      { ...updated, _id: args.accountId },
+    );
+    return args.accountId;
+  },
+});
+export const setIcon = mutation({
+  args: {
+    accountId: v.id('accounts'),
+    icon: v.union(v.string(), v.null()),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.setIcon',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('accounts', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
+      throw new Error('ACCOUNT_UNAVAILABLE');
+    if (args.icon !== null && (args.icon.length === 0 || args.icon.length > 80))
+      throw new Error('INVALID_ACCOUNT');
+    const updatedAt = Date.now();
+    await ctx.db.patch(args.accountId, { icon: args.icon ?? undefined, updatedAt });
+    const updated = await ctx.db.get(args.accountId);
+    if (!updated) throw new Error('ACCOUNT_UNAVAILABLE');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.setIcon',
       args.accountId,
       'accounts',
       String(args.accountId),
