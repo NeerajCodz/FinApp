@@ -4,7 +4,16 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CalendarClock, CalendarDays, Plus } from 'lucide-react';
-import { Button, Card, Empty, IconButton, SectionHeader, Text, Typography, useTheme } from '@finapp/ui/web';
+import {
+  Button,
+  Card,
+  Empty,
+  IconButton,
+  SectionHeader,
+  Text,
+  Typography,
+  useTheme,
+} from '@finapp/ui/web';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -265,7 +274,9 @@ export default function RecurringPage() {
       )}
       {loadError && (
         <div role="alert" style={{ display: 'grid', gap: 10 }}>
-          <Text style={{ color: tokens.destructive }}>Saved recurring rules could not be loaded.</Text>
+          <Text style={{ color: tokens.destructive }}>
+            Saved recurring rules could not be loaded.
+          </Text>
           <Button
             variant="outline"
             onPress={() => {
@@ -302,7 +313,10 @@ export default function RecurringPage() {
           aria-live="polite"
           style={{ display: 'grid', gap: 10 }}
         >
-          <SectionHeader title="Reminder due" action={<CalendarClock size={18} aria-hidden="true" />} />
+          <SectionHeader
+            title="Reminder due"
+            action={<CalendarClock size={18} aria-hidden="true" />}
+          />
           <Text>
             {dueRules.length} scheduled {dueRules.length === 1 ? 'reminder is' : 'reminders are'}{' '}
             due. Finapp never records a transaction automatically.
@@ -355,7 +369,8 @@ export default function RecurringPage() {
               <div
                 key={id}
                 style={{
-                  display: 'flex',
+                  display: 'grid',
+                  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
                   alignItems: 'center',
                   gap: 12,
                   padding: '16px 0',
@@ -376,7 +391,15 @@ export default function RecurringPage() {
                 >
                   <CalendarDays size={20} color={tokens.primary} />
                 </span>
-                <span style={{ display: 'grid', flex: 1, minWidth: 0, gap: 4 }}>
+                <span
+                  style={{
+                    display: 'grid',
+                    flex: 1,
+                    minWidth: 0,
+                    gap: 4,
+                    overflowWrap: 'anywhere',
+                  }}
+                >
                   <Typography variant="bodyLarge">{rule.name ?? 'Reminder'}</Typography>
                   <Typography variant="small">
                     {rule.enabled
