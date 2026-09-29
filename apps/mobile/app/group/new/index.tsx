@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { ArrowLeft, Check, UsersThree } from '@finapp/ui/icons/native';
+import { ArrowLeft, Check } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -32,6 +32,7 @@ export default function NewGroupScreen() {
   const [members, setMembers] = useState<string[]>([]);
   const [contactPhones, setContactPhones] = useState<string[]>([]);
   const [contactNames, setContactNames] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -55,7 +56,13 @@ export default function NewGroupScreen() {
   }
 
   async function save() {
-    if (!userId) return;
+    if (!userId || saving) return;
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setError('Enter a group name.');
+      return;
+    }
+    setSaving(true);
     setError('');
     try {
       const groupId = await commitLocalWrite(
@@ -64,14 +71,14 @@ export default function NewGroupScreen() {
         'group.create',
         {
           ...(icon ? { icon } : {}),
-          name: name.trim(),
+          name: cleanName,
           currency: 'INR',
           participantUsernames: members,
           contactPhones,
           contactNames,
         },
         {
-          name: name.trim(),
+          name: cleanName,
           currency: 'INR',
           memberUsernames: members,
           ...(icon ? { icon } : {}),
@@ -81,6 +88,8 @@ export default function NewGroupScreen() {
       router.replace(`/group/${groupId}` as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create group');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -96,45 +105,51 @@ export default function NewGroupScreen() {
           paddingHorizontal: 20,
           paddingTop: insets.top + 12,
           paddingBottom: insets.bottom + 24,
-          gap: 28,
+          gap: 24,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
             <ArrowLeft size={21} color={tokens.foreground} />
           </IconButton>
-          <Typography variant="heading">New group</Typography>
+          <View style={{ gap: 2 }}>
+            <Typography variant="caption" style={{ color: tokens.primary }}>
+              SHARED FINANCES
+            </Typography>
+            <Typography variant="heading">New group</Typography>
+          </View>
         </View>
 
-        <View style={{ gap: 12 }}>
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              backgroundColor: tokens.surfaceRaised,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <UsersThree size={21} color={tokens.foreground} />
-          </View>
-          <Typography variant="title">Name the group.</Typography>
-          <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-            Add people by @username or from your phone contacts. Unknown people receive a pending
-            invite.
+        <View style={{ gap: 10 }}>
+          <Typography variant="title">A place for shared plans.</Typography>
+          <Text style={{ color: tokens.foregroundMuted, maxWidth: 310, lineHeight: 21 }}>
+            Add a name and icon. Invite people now or add them later from group settings. Changes
+            save on this device first.
           </Text>
         </View>
 
-        <View>
-          <Label>Group name</Label>
-          <Input
-            accessibilityLabel="Group name"
-            autoFocus
-            value={name}
-            onChangeText={setName}
-            placeholder="Goa Trip"
-          />
+        <View
+          style={{
+            padding: 16,
+            gap: 12,
+            borderRadius: 18,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.surfaceRaised,
+          }}
+        >
+          <View>
+            <Label>Group name</Label>
+            <Input
+              accessibilityLabel="Group name"
+              autoFocus
+              value={name}
+              onChangeText={setName}
+              placeholder="Goa Trip"
+              maxLength={80}
+              returnKeyType="done"
+            />
+          </View>
           <EntityIconPicker
             mode="either"
             value={icon}
@@ -208,11 +223,14 @@ export default function NewGroupScreen() {
             </View>
           )}
         </View>
-
-        {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
+        {!!error && (
+          <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
+            {error}
+          </Typography>
+        )}
         <Separator />
-        <Button size="lg" disabled={!name.trim()} onPress={save}>
-          Create group
+        <Button size="lg" disabled={saving || !name.trim()} onPress={save}>
+          {saving ? 'Saving locally…' : 'Create group'}
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>

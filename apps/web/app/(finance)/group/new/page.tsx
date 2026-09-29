@@ -158,17 +158,20 @@ export default function NewGroupPage() {
     <div className="finance-page">
       <header className="finance-page-heading">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/groups" aria-label="Go back">
+          <Link className="finance-secondary-action" href="/groups" aria-label="Go back to groups">
             <ArrowLeft size={18} />
           </Link>
-          <h1>New group</h1>
+          <div>
+            <p className="finance-kicker">SHARED FINANCES</p>
+            <h1>New group</h1>
+          </div>
         </div>
       </header>
       <section style={{ display: 'grid', gap: 8 }}>
         <h2>Name the group.</h2>
         <p className="finance-muted">
-          Add people by @username or from your phone contacts. Unknown people receive a pending
-          invite.
+          Start with a name and icon. Invite people now or add them later from settings. Group
+          details save on this device first and sync when connected.
         </p>
       </section>
       <Card className="finance-form-panel">
