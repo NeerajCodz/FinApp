@@ -6,7 +6,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { ArrowLeft, ArrowLeftRight, ArrowRight, Plus, Settings2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowRight,
+  ChartNoAxesCombined,
+  Plus,
+  Settings2,
+} from 'lucide-react';
 import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
 import { Avatar, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
@@ -106,6 +113,13 @@ export default function GroupHomePage() {
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
   const [chatError, setChatError] = React.useState('');
+  const chatTimelineRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const timeline = chatTimelineRef.current;
+    if (canUseGroupChat && chatMessages?.length && timeline)
+      timeline.scrollTop = timeline.scrollHeight;
+  }, [canUseGroupChat, chatMessages?.length]);
 
   React.useEffect(() => {
     if (!userId || !group) return;
@@ -244,8 +258,43 @@ export default function GroupHomePage() {
   }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
     memberNames.unshift({ id: userId, username: undefined, name: 'You' });
+  const recentSettlements = settlements
+    .filter(
+      (record) =>
+        typeof record.groupId === 'string' &&
+        groupIds.includes(record.groupId) &&
+        record.currency === (group.currency ?? 'INR') &&
+        record.deletedAt === undefined,
+    )
+    .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
+    .slice(0, 5);
+  const memberName = (id: string | undefined) =>
+    id === userId
+      ? 'You'
+      : (memberNames.find((member) => member.id === id)?.name ??
+        (id ? `Member ${id.slice(-6)}` : 'Group member'));
   const formatDate = (value: unknown, hasTime?: boolean) =>
     formatTransactionDate(Number(value ?? Date.now()), hasTime);
+  const chatTimelineItems = [
+    ...recent.map((expense) => ({
+      id: `expense:${recordId(expense)}`,
+      kind: 'expense' as const,
+      createdAt: Number(expense.occurredAt ?? 0),
+      expense,
+    })),
+    ...recentSettlements.map((settlement) => ({
+      id: `settlement:${recordId(settlement)}`,
+      kind: 'settlement' as const,
+      createdAt: Number(settlement.occurredAt ?? 0),
+      settlement,
+    })),
+    ...(chatMessages ?? []).map((message) => ({
+      id: `message:${message.id}`,
+      kind: 'message' as const,
+      createdAt: message.createdAt,
+      message,
+    })),
+  ].sort((left, right) => left.createdAt - right.createdAt);
   async function submitChatMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
@@ -316,6 +365,14 @@ export default function GroupHomePage() {
           size={24}
         />
         <h1 style={{ flex: 1, margin: 0 }}>{group.name ?? 'Group'}</h1>
+        <Link
+          className="finance-secondary-action"
+          href={`/group/${encodeURIComponent(localGroupId)}/analytics`}
+          aria-label="Group analytics"
+          title="Group analytics"
+        >
+          <ChartNoAxesCombined size={18} />
+        </Link>
         <Link
           className="finance-secondary-action"
           href={`/group/${encodeURIComponent(localGroupId)}/settings`}
@@ -403,62 +460,198 @@ export default function GroupHomePage() {
       </Link>
       <Card className="finance-record-panel">
         <SectionHeader title="Group chat" />
+        <p id="group-chat-help" className="finance-muted">
+          Messages and bill images are saved to this group when you are online. They are not queued
+          for offline sending.
+        </p>
         {canUseGroupChat ? (
           <>
             <div
+              ref={chatTimelineRef}
               role="log"
               aria-live="polite"
+              aria-relevant="additions text"
               aria-label="Group messages"
-              style={{ display: 'grid', gap: 12, maxHeight: 420, overflowY: 'auto' }}
+              tabIndex={0}
+              style={{
+                display: 'grid',
+                alignContent: 'start',
+                gap: 10,
+                minHeight: 180,
+                maxHeight: 440,
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                padding: 14,
+                border: '1px solid var(--finance-border, rgba(127,127,127,.2))',
+                borderRadius: 16,
+                background: 'var(--finance-surface-subtle, rgba(127,127,127,.05))',
+              }}
             >
-              {chatMessages === undefined ? (
+              {chatMessages === undefined && (
                 <p className="finance-muted" role="status">
-                  Loading messages…
+                  Loading saved messages…
                 </p>
-              ) : chatMessages.length ? (
-                chatMessages.map((message) => (
-                  <article
-                    key={message.id}
-                    style={{
-                      display: 'grid',
-                      justifySelf: message.senderId === userId ? 'end' : 'start',
-                      maxWidth: 'min(88%, 520px)',
-                      gap: 6,
-                      padding: 12,
-                      borderRadius: 14,
-                      background: 'var(--finance-surface-subtle, rgba(127,127,127,.08))',
-                    }}
-                  >
-                    <strong>{message.senderName}</strong>
-                    {message.kind === 'bill' && message.attachmentUrl ? (
-                      <img
-                        src={message.attachmentUrl}
-                        alt="Bill attachment"
-                        style={{
-                          display: 'block',
-                          maxWidth: '100%',
-                          maxHeight: 360,
-                          objectFit: 'contain',
-                        }}
-                      />
-                    ) : (
-                      <p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                        {message.text}
-                      </p>
-                    )}
-                    <time
-                      className="finance-muted"
-                      dateTime={new Date(message.createdAt).toISOString()}
-                    >
-                      {new Date(message.createdAt).toLocaleString()}
-                    </time>
-                  </article>
-                ))
-              ) : (
-                <p className="finance-muted">No messages yet. Start the group conversation.</p>
               )}
+              {chatTimelineItems.length ? (
+                chatTimelineItems.map((item) => {
+                  const createdAt = new Date(item.createdAt);
+                  if (item.kind === 'message') {
+                    const { message } = item;
+                    const ownMessage = message.senderId === userId;
+                    return (
+                      <article
+                        key={item.id}
+                        aria-label={`${ownMessage ? 'You' : message.senderName}, ${createdAt.toLocaleString()}`}
+                        style={{
+                          display: 'grid',
+                          justifySelf: ownMessage ? 'end' : 'start',
+                          width: 'fit-content',
+                          maxWidth: 'min(88%, 560px)',
+                          gap: 6,
+                          padding: '10px 13px',
+                          border: '1px solid var(--finance-border, rgba(127,127,127,.16))',
+                          borderRadius: ownMessage ? '16px 16px 5px 16px' : '16px 16px 16px 5px',
+                          background: ownMessage
+                            ? 'var(--finance-accent-subtle, rgba(190,255,0,.12))'
+                            : 'var(--finance-surface, rgba(127,127,127,.1))',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        <strong style={{ fontSize: 13 }}>
+                          {ownMessage ? 'You' : message.senderName}
+                        </strong>
+                        {message.kind === 'bill' ? (
+                          message.attachmentUrl ? (
+                            <a
+                              href={message.attachmentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Open bill image shared by ${ownMessage ? 'you' : message.senderName}`}
+                            >
+                              <img
+                                src={message.attachmentUrl}
+                                alt={`Bill shared by ${ownMessage ? 'you' : message.senderName}`}
+                                style={{
+                                  display: 'block',
+                                  maxWidth: '100%',
+                                  maxHeight: 320,
+                                  borderRadius: 10,
+                                  objectFit: 'contain',
+                                }}
+                              />
+                            </a>
+                          ) : (
+                            <p className="finance-muted" style={{ margin: 0 }}>
+                              Bill image is no longer available.
+                            </p>
+                          )
+                        ) : (
+                          <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                            {message.text}
+                          </p>
+                        )}
+                        <time
+                          className="finance-muted"
+                          dateTime={createdAt.toISOString()}
+                          style={{ fontSize: 12 }}
+                        >
+                          {createdAt.toLocaleString()}
+                        </time>
+                      </article>
+                    );
+                  }
+                  if (item.kind === 'expense') {
+                    const { expense } = item;
+                    return (
+                      <article
+                        key={item.id}
+                        aria-label={`Shared expense: ${expense.title ?? 'Group expense'}, ${formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}`}
+                        style={{
+                          display: 'grid',
+                          justifySelf: 'center',
+                          width: 'min(100%, 540px)',
+                          gap: 5,
+                          padding: '11px 14px',
+                          border: '1px solid var(--finance-border, rgba(127,127,127,.16))',
+                          borderLeft: '3px solid var(--finapp-split)',
+                          borderRadius: 12,
+                          background: 'var(--finance-surface-raised, rgba(127,127,127,.08))',
+                        }}
+                      >
+                        <strong style={{ fontSize: 12 }}>Shared expense · Split</strong>
+                        <span>{expense.title ?? 'Group expense'}</span>
+                        <strong>
+                          {formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}
+                        </strong>
+                        <time
+                          className="finance-muted"
+                          dateTime={createdAt.toISOString()}
+                          style={{ fontSize: 12 }}
+                        >
+                          {formatDate(expense.occurredAt, expense.hasTime)}
+                        </time>
+                      </article>
+                    );
+                  }
+                  const { settlement } = item;
+                  const from = String(settlement.fromUserId ?? '');
+                  const to = String(settlement.toUserId ?? '');
+                  return (
+                    <article
+                      key={item.id}
+                      aria-label={`Settlement: ${memberName(from)} paid ${memberName(to)}, ${formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR')}`}
+                      style={{
+                        display: 'grid',
+                        justifySelf: 'center',
+                        width: 'min(100%, 540px)',
+                        gap: 5,
+                        padding: '11px 14px',
+                        border: '1px solid var(--finance-border, rgba(127,127,127,.16))',
+                        borderLeft: '3px solid var(--finapp-settlement)',
+                        borderRadius: 12,
+                        background: 'var(--finance-surface-raised, rgba(127,127,127,.08))',
+                      }}
+                    >
+                      <strong style={{ fontSize: 12 }}>Settlement</strong>
+                      <span>
+                        {memberName(from)} paid {memberName(to)}
+                      </span>
+                      <strong>
+                        {formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR')}
+                      </strong>
+                      <time
+                        className="finance-muted"
+                        dateTime={createdAt.toISOString()}
+                        style={{ fontSize: 12 }}
+                      >
+                        {formatDate(settlement.occurredAt, true)}
+                      </time>
+                    </article>
+                  );
+                })
+              ) : chatMessages !== undefined ? (
+                <div
+                  style={{
+                    alignSelf: 'center',
+                    justifySelf: 'center',
+                    padding: '18px 8px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <strong style={{ display: 'block', marginBottom: 5 }}>
+                    Start the conversation
+                  </strong>
+                  <span className="finance-muted">
+                    Share a note or attach a bill for the group.
+                  </span>
+                </div>
+              ) : null}
             </div>
-            <form className="finance-form" onSubmit={submitChatMessage}>
+            <form
+              className="finance-form"
+              onSubmit={submitChatMessage}
+              aria-describedby="group-chat-help"
+            >
               <textarea
                 aria-label="Group message"
                 value={chatDraft}
@@ -467,6 +660,7 @@ export default function GroupHomePage() {
                 rows={3}
                 placeholder="Write a message…"
                 disabled={chatPending}
+                style={{ resize: 'vertical', minHeight: 84 }}
               />
               <div className="finance-page-actions">
                 <label className="finance-secondary-action">
@@ -480,13 +674,29 @@ export default function GroupHomePage() {
                   />
                 </label>
                 <Button type="submit" disabled={chatPending || !chatDraft.trim()}>
-                  {chatPending ? 'Sending…' : 'Send'}
+                  {chatPending ? 'Sending…' : 'Send message'}
                 </Button>
               </div>
+              <p className="finance-muted" aria-live="polite">
+                {chatPending ? 'Sending to the group…' : `${chatDraft.length}/4,000 characters`}
+              </p>
             </form>
           </>
         ) : (
-          <p className="finance-muted">Connect to the internet to use group chat.</p>
+          <div
+            style={{
+              padding: 16,
+              border: '1px solid var(--finance-border, rgba(127,127,127,.2))',
+              borderRadius: 14,
+            }}
+          >
+            <strong>{isConnected ? 'Chat is not synced yet' : 'Group chat is offline'}</strong>
+            <p className="finance-muted" style={{ marginBottom: 0 }}>
+              {isConnected
+                ? 'This saved group has no connected cloud ID. Sync the group before using server chat or sharing bill images.'
+                : 'Connect to the internet to load saved messages or send a message and bill image. Group ledger data remains available offline.'}
+            </p>
+          </div>
         )}
         {!!chatError && (
           <p className="finance-form-error" role="alert">
@@ -602,6 +812,41 @@ export default function GroupHomePage() {
                 </Link>
               }
             />
+          )}
+        </section>
+        <section>
+          <SectionHeader title="Recent settlements" />
+          {recentSettlements.length ? (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {recentSettlements.map((settlement) => {
+                const from = String(settlement.fromUserId ?? '');
+                const to = String(settlement.toUserId ?? '');
+                return (
+                  <Card
+                    key={recordId(settlement)}
+                    className="finance-record-panel"
+                    style={{ display: 'grid', gap: 8 }}
+                  >
+                    <strong>
+                      {memberName(from)} paid {memberName(to)}
+                    </strong>
+                    <span className="finance-record-amount">
+                      {formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR')}
+                    </span>
+                    {settlement.occurredAt !== undefined && (
+                      <time
+                        className="finance-muted"
+                        dateTime={new Date(settlement.occurredAt).toISOString()}
+                      >
+                        {formatDate(settlement.occurredAt, true)}
+                      </time>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="finance-muted">Settlements recorded for this group will appear here.</p>
           )}
         </section>
       </section>
