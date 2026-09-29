@@ -215,7 +215,8 @@ export default function PersonalBudgetDetailPage() {
         <div style={{ minWidth: 0 }}>
           <h1>{budget.name ?? 'Budget'}</h1>
           <p className="finance-muted">
-            {scope} · {dateRange}
+            {scope} · {dateRange} ·{' '}
+            {Date.now() < startAt ? 'Upcoming' : Date.now() >= endAt ? 'Ended' : 'In progress'}
           </p>
         </div>
       </header>

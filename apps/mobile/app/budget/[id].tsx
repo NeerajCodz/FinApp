@@ -203,7 +203,24 @@ export default function BudgetDetailScreen() {
         >
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Text style={{ color: tokens.foregroundMuted }}>Loading budget…</Text>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading budget details"
+          style={{
+            marginTop: 28,
+            gap: 10,
+            padding: 20,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.surfaceSubtle,
+          }}
+        >
+          <Typography variant="bodyLarge">Opening budget details</Typography>
+          <Text style={{ color: tokens.foregroundMuted }}>
+            Loading the saved limit and matching posted activity…
+          </Text>
+        </View>
       </View>
     );
   if (budget === null)
@@ -289,7 +306,12 @@ export default function BudgetDetailScreen() {
             {budget.name}
           </Typography>
           <Typography variant="caption">
-            {periodLabel} · {range}
+            {periodLabel} · {range} ·{' '}
+            {Date.now() < budget.startAt
+              ? 'Upcoming'
+              : Date.now() >= budget.endAt
+                ? 'Ended'
+                : 'In progress'}
           </Typography>
         </View>
       </View>
