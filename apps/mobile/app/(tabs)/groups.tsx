@@ -27,34 +27,54 @@ export default function GroupsScreen() {
         gap: 32,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <IconButton
-            label="Go back"
-            variant="ghost"
-            onPress={() =>
-              router.canGoBack() ? router.back() : router.replace('/(tabs)' as never)
-            }
-          >
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          <Typography variant="title">Groups</Typography>
-        </View>
-        <IconButton
-          label="Create group"
-          variant="ghost"
-          onPress={() => router.push('/group/new' as never)}
+      <View style={{ gap: 12 }}>
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
-          <Plus size={22} color={tokens.foreground} />
-        </IconButton>
-      </View>
-      <View style={{ gap: 6 }}>
-        <Typography variant="label">Shared ledgers</Typography>
-        <Typography variant="small">
-          {groups
-            ? `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`
-            : 'Your groups will appear here when available.'}
-        </Typography>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <IconButton
+              label="Go back"
+              variant="ghost"
+              onPress={() =>
+                router.canGoBack() ? router.back() : router.replace('/(tabs)' as never)
+              }
+            >
+              <ArrowLeft size={21} color={tokens.foreground} />
+            </IconButton>
+            <View style={{ gap: 2 }}>
+              <Typography variant="caption" style={{ color: tokens.primary }}>
+                SHARED FINANCES
+              </Typography>
+              <Typography variant="title">Groups</Typography>
+            </View>
+          </View>
+          <IconButton
+            label="Create group"
+            variant="ghost"
+            onPress={() => router.push('/group/new' as never)}
+          >
+            <Plus size={22} color={tokens.primary} />
+          </IconButton>
+        </View>
+        <View
+          style={{
+            padding: 16,
+            gap: 6,
+            borderRadius: 18,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.surfaceRaised,
+          }}
+        >
+          <Typography variant="label">Shared ledgers</Typography>
+          <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+            {groupState.loading
+              ? 'Loading groups saved on this device…'
+              : groupState.error
+                ? 'Your saved groups are temporarily unavailable.'
+                : `${groups?.length ?? 0} ${(groups?.length ?? 0) === 1 ? 'group' : 'groups'} saved on this device`}
+          </Typography>
+        </View>
       </View>
       <PeopleRail
         title="People to split with"

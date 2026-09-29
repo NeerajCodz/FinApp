@@ -42,17 +42,24 @@ export default function GroupsPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <h1>Groups</h1>
+        <div>
+          <p className="finance-kicker">SHARED FINANCES</p>
+          <h1>Groups</h1>
+          <p className="finance-muted">Keep shared plans, people, and balances together.</p>
+        </div>
         <Link className="finance-secondary-action" href="/group/new" aria-label="Create group">
           <Plus size={20} />
+          <span>Create group</span>
         </Link>
       </header>
-      <section style={{ display: 'grid', gap: 6 }}>
+      <section style={{ display: 'grid', gap: 6 }} aria-label="Group overview">
         <strong>Shared ledgers</strong>
-        <p className="finance-muted">
-          {loading || error
-            ? 'Your groups will appear here when available.'
-            : `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`}
+        <p className="finance-muted" aria-live="polite">
+          {loading
+            ? 'Loading your groups…'
+            : error
+              ? 'Your groups are temporarily unavailable.'
+              : `${groups.length} ${groups.length === 1 ? 'group' : 'groups'} saved on this device`}
         </p>
       </section>
       <PeopleRail
