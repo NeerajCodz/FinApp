@@ -7,6 +7,7 @@ import {
   BudgetProgress,
   CategoryEmojiPicker,
   CategoryIcon,
+  formatTransactionDate,
   Money,
   TransactionRow,
 } from '@finapp/ui/finance';
@@ -41,12 +42,14 @@ type ProfileRecord = LocalRecord & {
   defaultCurrency?: string;
   defaultExpenseCategoryId?: string;
   defaultIncomeCategoryId?: string;
+  timezone?: string;
 };
 type TransactionRecord = LocalRecord & {
   id?: string;
   _id?: string;
   categoryId?: string;
   occurredAt: number;
+  hasTime?: boolean;
   amountMinor: bigint;
   currency: string;
   type: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
@@ -550,7 +553,11 @@ export default function CategoryDetailScreen() {
                         amountMinor={transaction.amountMinor}
                         currency={transaction.currency}
                         type={transaction.type}
-                        date={new Date(transaction.occurredAt).toLocaleDateString()}
+                        date={formatTransactionDate(
+                          transaction.occurredAt,
+                          transaction.hasTime,
+                          profileState.data?.[0]?.timezone,
+                        )}
                         semanticType={transaction.groupId ? 'split' : undefined}
                         onPress={() =>
                           router.push(`/transaction/${transaction._id ?? transaction.id}` as never)
