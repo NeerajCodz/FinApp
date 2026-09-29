@@ -1,13 +1,13 @@
-'use client';
-
-import { Card } from '@finapp/ui/web';
-import { QuickFiltersPopover } from '../../web/QuickFiltersPopover';
+import React from 'react';
+import { View } from 'react-native';
+import { QuickFiltersPopover } from '../../native/QuickFiltersPopover';
 import type { QuickFilterGroup } from '../../quickFilters';
 import { DateRangePopover } from './DateRangePopover';
 import type { DateRangePreset } from '../dateRangeCalendar';
 
 type Choice = { value: string; label: string };
 type Option = { id: string; label: string };
+
 export function ActivityFilters({
   rangeLabel,
   rangeStartDate,
@@ -65,7 +65,7 @@ export function ActivityFilters({
     },
   ];
   return (
-    <Card className="activity-toolbar" aria-label="Activity filters">
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
       <QuickFiltersPopover groups={groups} />
       <DateRangePopover
         label={rangeLabel}
@@ -75,6 +75,6 @@ export function ActivityFilters({
         onPresetSelect={onPresetSelect}
         onRangeApply={onRangeApply}
       />
-    </Card>
+    </View>
   );
 }
