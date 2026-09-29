@@ -237,13 +237,22 @@ export default function GoalsPage() {
           {!isConnected && <Typography variant="small">Offline · showing saved goals</Typography>}
         </section>
       )}
-      {!loading && goalRows.length > 0 && (
+      {!loading && !loadError && goalRows.length > 0 && (
         <section style={{ display: 'grid', gap: 6 }}>
           <Typography variant="label">Your goals</Typography>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {goalRows.map(({ goal, saved, targetMinor, currency, percent }) => {
               const progress = Math.min(100, Math.max(0, percent));
               const id = idOf(goal);
+              const targetDate = goal.targetDate ? new Date(goal.targetDate) : null;
+              const dateLabel =
+                percent >= 100
+                  ? 'Target reached'
+                  : targetDate
+                    ? targetDate.getTime() < Date.now()
+                      ? `Target date passed · ${targetDate.toLocaleDateString()}`
+                      : `Target · ${targetDate.toLocaleDateString()}`
+                    : 'No target date';
               return (
                 <li key={id}>
                   <Link
@@ -251,8 +260,8 @@ export default function GoalsPage() {
                     aria-label={`${goal.name ?? 'Savings goal'}, ${percent}% of target saved`}
                     style={{
                       display: 'grid',
-                      gap: 9,
-                      paddingBlock: 16,
+                      gap: 12,
+                      paddingBlock: 18,
                       borderBottom: '1px solid var(--finapp-border-subtle)',
                       color: 'inherit',
                       textDecoration: 'none',
@@ -263,34 +272,30 @@ export default function GoalsPage() {
                         aria-hidden="true"
                         style={{
                           display: 'grid',
-                          width: 44,
-                          height: 44,
+                          width: 48,
+                          height: 48,
                           flex: '0 0 auto',
                           placeItems: 'center',
-                          borderRadius: 14,
+                          borderRadius: 16,
                           background: 'var(--finapp-surface-raised)',
+                          color: 'var(--finapp-primary)',
                         }}
                       >
-                        <EntityIcon
-                          value={goal.icon ?? 'lucide:Target'}
-                          size={21}
-                          color="var(--finapp-primary)"
-                        />
+                        <EntityIcon value={goal.icon ?? 'lucide:Target'} size={22} />
                       </span>
-                      <span style={{ display: 'grid', flex: 1, gap: 4 }}>
+                      <span style={{ display: 'grid', flex: 1, minWidth: 0, gap: 4 }}>
                         <Typography variant="bodyLarge">{goal.name ?? 'Savings goal'}</Typography>
-                        <Typography variant="small">
-                          {percent >= 100
-                            ? 'Target reached'
-                            : goal.targetDate
-                              ? `Target ${new Date(goal.targetDate).toLocaleDateString()}`
-                              : 'No target date'}
-                        </Typography>
+                        <Typography variant="small">{dateLabel}</Typography>
                       </span>
-                      <Money amountMinor={saved} currency={currency} />
-                      <ChevronRight size={17} />
+                      <span style={{ textAlign: 'right' }}>
+                        <Money amountMinor={saved} currency={currency} />
+                        <Typography variant="caption"> saved</Typography>
+                      </span>
+                      <ChevronRight size={17} aria-hidden="true" />
                     </div>
-                    <Progress value={progress} color="var(--finapp-primary)" />
+                    <div aria-label={`${percent}% of ${formatMinor(targetMinor, currency)} saved`}>
+                      <Progress value={progress} color="var(--finapp-primary)" />
+                    </div>
                     <Typography variant="caption">
                       {percent}% of {formatMinor(targetMinor, currency)}
                     </Typography>
