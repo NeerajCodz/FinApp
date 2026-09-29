@@ -33,7 +33,9 @@ export async function syncOutbox(
   userId: string,
   send: (entry: OutboxEntry) => Promise<SyncReceipt>,
 ): Promise<SyncResult[]> {
-  const candidates = (await listOutbox(userId)).slice(0, 25);
+  const candidates = (await listOutbox(userId))
+    .filter((entry) => entry.status === 'pending')
+    .slice(0, 25);
   const results: SyncResult[] = [];
   const attempted = new Set<string>();
   const blockedRecords = new Set<string>();
@@ -42,11 +44,6 @@ export async function syncOutbox(
   while (madeProgress && results.length < 25) {
     madeProgress = false;
     for (const candidate of candidates) {
-      if (attempted.has(candidate.localId)) continue;
-      if (candidate.status !== 'pending' && candidate.status !== 'failed') {
-        attempted.add(candidate.localId);
-        continue;
-      }
       const recordKey =
         candidate.entityType && candidate.recordId
           ? `${candidate.entityType}:${candidate.recordId}`
@@ -58,7 +55,7 @@ export async function syncOutbox(
       const current = (await listOutbox(userId)).find(
         (entry) => entry.localId === candidate.localId,
       );
-      if (!current || (current.status !== 'pending' && current.status !== 'failed')) {
+      if (!current || current.status !== 'pending') {
         attempted.add(candidate.localId);
         continue;
       }

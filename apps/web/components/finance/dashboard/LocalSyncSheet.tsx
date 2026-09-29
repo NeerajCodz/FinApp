@@ -102,7 +102,6 @@ export function LocalSyncSheet({
     },
     { label: 'Active sync', value: isSyncing ? 'Running' : 'Idle', tone: 'neutral' },
   ];
-
   return (
     <Sheet
       visible={visible}
@@ -234,7 +233,7 @@ export function LocalSyncSheet({
         <div className="finance-sync-actions">
           <Button size="lg" disabled={!isSignedIn || isSyncing} onPress={onRetry}>
             <History size={17} aria-hidden="true" />
-            <Text>Retry now</Text>
+            <Text>{status.failed > 0 ? 'Retry now' : 'Sync now'}</Text>
           </Button>
           <Button variant="outline" onPress={onOpenSettings}>
             Local sync settings

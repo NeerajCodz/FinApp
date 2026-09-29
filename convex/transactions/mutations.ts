@@ -21,6 +21,7 @@ export type TransactionDraft = {
   categoryId?: string;
   transferAccountId?: string;
   occurredAt: number;
+  hasTime?: boolean;
   clientMutationId: string;
 };
 export type TransactionDependencies = {
@@ -90,6 +91,7 @@ export const create = mutation({
     note: v.optional(v.string()),
     transferAccountId: v.optional(v.id('accounts')),
     occurredAt: v.number(),
+    hasTime: v.optional(v.boolean()),
     clientMutationId: v.string(),
   },
   handler: async (ctx, args) => {
@@ -137,6 +139,7 @@ export const create = mutation({
       ownerId: user._id,
       accountId: args.accountId,
       transferAccountId: args.transferAccountId,
+      ...(args.hasTime !== undefined ? { hasTime: args.hasTime } : {}),
     };
     const transactionId = await ctx.db.insert('transactions', record);
     const updatedAt = record.updatedAt;
