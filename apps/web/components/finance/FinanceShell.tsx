@@ -33,6 +33,7 @@ import type { LocalRecord } from '@/lib/offline/repository';
 import { LocalSyncSheet } from '@/components/finance/dashboard/LocalSyncSheet';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Button, Sheet } from '@finapp/ui/web';
+import { MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
@@ -259,61 +260,50 @@ export function FinanceShell({ children }: { children: ReactNode }) {
             </Link>
           </header>
           <main className="finance-content">{children}</main>
-          <nav className="finance-mobile-nav" aria-label="Main navigation">
-            <svg
-              className="finance-mobile-nav-shape"
-              viewBox="0 0 390 96"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path
-                d="M 0 24 L 121 24 C 138 24 136 52 153 60 C 167 66 177 68 195 68 C 213 68 223 66 237 60 C 254 52 252 24 269 24 L 390 24 L 390 96 L 0 96 Z"
-                fill="var(--finance-background)"
-                stroke="var(--finance-line)"
-                strokeWidth="1"
-              />
-            </svg>
-            {mobileNavigation.slice(0, 2).map(({ href, label, icon: Icon }) => {
-              const active = isActive(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-label={label}
-                  aria-current={active ? 'page' : undefined}
-                  className={active ? 'active' : ''}
-                >
-                  <Icon size={22} aria-hidden="true" />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-            <Button
-              className="finance-mobile-add"
-              size="icon"
-              aria-label="Add"
-              onPress={openQuickAdd}
-            >
-              <Plus size={25} strokeWidth={2.2} aria-hidden="true" />
-            </Button>
-            {mobileNavigation.slice(2).map(({ href, label, icon: Icon }) => {
-              const active =
-                href === '/profile' ? isProfileActive || pathname === profileHref : isActive(href);
-              return (
-                <Link
-                  key={href}
-                  href={href === '/profile' ? profileHref : href}
-                  aria-label={label}
-                  aria-current={active ? 'page' : undefined}
-                  className={active ? 'active' : ''}
-                >
-                  <Icon size={22} aria-hidden="true" />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <MobileFinanceNav
+            onAdd={openQuickAdd}
+            beforeAdd={
+              <>
+                {mobileNavigation.slice(0, 2).map(({ href, label, icon: Icon }) => {
+                  const active = isActive(href);
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      aria-label={label}
+                      aria-current={active ? 'page' : undefined}
+                      className={active ? 'active' : ''}
+                    >
+                      <Icon size={22} aria-hidden="true" />
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </>
+            }
+            afterAdd={
+              <>
+                {mobileNavigation.slice(2).map(({ href, label, icon: Icon }) => {
+                  const active =
+                    href === '/profile'
+                      ? isProfileActive || pathname === profileHref
+                      : isActive(href);
+                  return (
+                    <Link
+                      key={href}
+                      href={href === '/profile' ? profileHref : href}
+                      aria-label={label}
+                      aria-current={active ? 'page' : undefined}
+                      className={active ? 'active' : ''}
+                    >
+                      <Icon size={22} aria-hidden="true" />
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </>
+            }
+          />
         </div>
       </div>
       <Button className="finance-desktop-add" size="icon" aria-label="Add" onPress={openQuickAdd}>

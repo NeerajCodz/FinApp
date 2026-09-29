@@ -198,7 +198,7 @@
 .finance-content {
   width: min(100%, 1430px);
   margin-inline: auto;
-  padding: clamp(26px, 3.2vw, 46px) clamp(16px, 2vw, 32px) calc(96px + env(safe-area-inset-bottom));
+  padding: clamp(26px, 3.2vw, 46px) clamp(16px, 2vw, 32px) calc(32px + env(safe-area-inset-bottom));
 }
 .finance-page {
   display: grid;
@@ -701,74 +701,6 @@
   .finance-content {
     padding: 31px 20px 38px;
   }
-  .finance-mobile-nav {
-    position: fixed;
-    z-index: 20;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    display: grid;
-    height: calc(96px + env(safe-area-inset-bottom));
-    min-height: calc(96px + env(safe-area-inset-bottom));
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: start;
-    padding: 0 8px env(safe-area-inset-bottom);
-    background: transparent;
-  }
-  .finance-mobile-nav-shape {
-    position: absolute;
-    z-index: 0;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-  }
-  .finance-mobile-nav > :not(svg) {
-    position: relative;
-    z-index: 1;
-  }
-  .finance-mobile-nav a {
-    position: relative;
-    display: flex;
-    min-width: 44px;
-    min-height: 88px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    border-radius: 12px;
-    color: var(--finance-dim);
-    font-size: 0.62rem;
-    text-decoration: none;
-  }
-  .finance-mobile-nav a.active {
-    background: transparent;
-    color: var(--finance-lime);
-  }
-  .finance-mobile-nav a.active::before {
-    position: absolute;
-    top: 0;
-    width: 18px;
-    height: 2px;
-    border-radius: 1px;
-    background: var(--finance-lime);
-    content: '';
-  }
-  .finance-mobile-add {
-    display: inline-flex;
-    width: 58px;
-    min-width: 58px;
-    min-height: 58px;
-    height: 58px;
-    justify-self: center;
-    align-self: start;
-    border: 0;
-    border-radius: 50%;
-    padding: 0;
-    background: var(--finance-lime);
-    color: var(--finapp-primary-foreground);
-    box-shadow: 0 8px 20px color-mix(in srgb, var(--finance-lime) 27%, transparent);
-  }
   .finance-desktop-add {
     display: none;
   }
@@ -1061,7 +993,7 @@
   display: none;
 }
 .finance-guest-home .finance-topbar,
-.finance-guest-home .finance-mobile-nav {
+.finance-guest-home .finapp-mobile-finance-nav {
   display: none;
 }
 .finance-guest-home .finance-main {
