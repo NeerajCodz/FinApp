@@ -1,5 +1,6 @@
 export type ThemeMode = 'light' | 'dark';
-export type AccentName = 'volt';
+export type AccentName = 'volt' | 'white' | 'blue';
+export type AccentValue = AccentName | `#${string}`;
 
 export const neutralOpacity = {
   white100: '#FFFFFF',
@@ -26,7 +27,37 @@ export const chartPalette = {
 
 export const accentPalette: Record<AccentName, string> = {
   volt: chartPalette.volt,
+  white: '#FFFFFF',
+  blue: chartPalette.blue,
 };
+
+export function isAccentColor(value: string): value is `#${string}` {
+  return /^#[\da-f]{6}$/i.test(value);
+}
+
+function contrastForeground(color: string): string {
+  const channels = color
+    .match(/[\da-f]{2}/gi)
+    ?.map((channel) => Number.parseInt(channel, 16) / 255);
+  if (!channels || channels.length !== 3) return '#000000';
+  const luminance = channels
+    .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4))
+    .reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index]!, 0);
+  return luminance > 0.179 ? '#000000' : '#FFFFFF';
+}
+
+function lightThemeAccent(color: string): string {
+  if (contrastForeground(color) === '#FFFFFF') return color;
+  const channels = color.match(/[\da-f]{2}/gi);
+  if (!channels || channels.length !== 3) return color;
+  return `#${channels
+    .map((channel) =>
+      Math.round(Number.parseInt(channel, 16) * 0.55)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`.toUpperCase();
+}
 
 export const layoutTokens = {
   screenX: 20,
@@ -89,14 +120,26 @@ export type ThemeTokens = {
   chart: typeof chartPalette;
 };
 
-export function createTokens(
-  mode: ThemeMode = 'dark',
-  accentName: AccentName = 'volt',
-): ThemeTokens {
+export function createTokens(mode: ThemeMode = 'dark', accentValue: string = 'volt'): ThemeTokens {
   const isDark = mode === 'dark';
   const background = isDark ? '#000000' : '#FFFFFF';
-  const primary = isDark ? accentPalette[accentName] : '#365D00';
-  const primaryForeground = isDark ? '#000000' : '#FFFFFF';
+  const accentName = Object.prototype.hasOwnProperty.call(accentPalette, accentValue)
+    ? (accentValue as AccentName)
+    : null;
+  const savedAccent = accentName
+    ? accentPalette[accentName]
+    : isAccentColor(accentValue)
+      ? accentValue.toUpperCase()
+      : accentPalette.volt;
+  const lightAccent = !accentName
+    ? lightThemeAccent(savedAccent)
+    : accentName === 'volt'
+      ? '#365D00'
+      : accentName === 'blue'
+        ? '#315DBB'
+        : '#4B5563';
+  const primary = isDark ? savedAccent : lightAccent;
+  const primaryForeground = contrastForeground(primary);
   const foreground = isDark ? '#FFFFFF' : '#000000';
   const inverseOpacity = {
     strong: isDark ? neutralOpacity.white80 : '#000000CC',

@@ -58,7 +58,22 @@ export function Button({
   const textOnly = content.every((child) => typeof child === 'string' || typeof child === 'number');
   const contentJustify = staticStyle?.justifyContent ?? 'center';
   const textAlign = contentJustify === 'flex-start' ? 'left' : 'center';
-
+  const textStyle = {
+    color,
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontSize: compact ? 13 : 15,
+    lineHeight: compact ? 18 : 20,
+    textAlign,
+  } as const;
+  const normalizedContent = content.map((child, index) =>
+    typeof child === 'string' || typeof child === 'number' ? (
+      <Text key={`button-text-${index}`} numberOfLines={1} style={textStyle}>
+        {child}
+      </Text>
+    ) : (
+      child
+    ),
+  );
   return (
     <TouchableOpacity
       accessibilityRole="button"
@@ -91,16 +106,7 @@ export function Button({
       {...props}
     >
       {textOnly ? (
-        <Text
-          numberOfLines={1}
-          style={{
-            color,
-            fontFamily: 'SpaceGrotesk_600SemiBold',
-            fontSize: compact ? 13 : 15,
-            lineHeight: compact ? 18 : 20,
-            textAlign,
-          }}
-        >
+        <Text numberOfLines={1} style={textStyle}>
           {content.join('')}
         </Text>
       ) : (
@@ -114,7 +120,7 @@ export function Button({
             justifyContent: contentJustify,
           }}
         >
-          {children}
+          {normalizedContent}
         </View>
       )}
     </TouchableOpacity>

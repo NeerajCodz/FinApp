@@ -1,17 +1,26 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { createTokens, type ThemeMode, type ThemeTokens } from '../tokens';
+import {
+  createTokens,
+  isAccentColor,
+  type AccentValue,
+  type ThemeMode,
+  type ThemeTokens,
+} from '../tokens';
 
 type Appearance = ThemeMode | 'system';
 type ThemeContextValue = {
   appearance: Appearance;
   setAppearance: (appearance: Appearance) => void;
+  accent: AccentValue;
+  setAccent: (accent: AccentValue) => void;
   tokens: ThemeTokens;
   isDark: boolean;
 };
 
 const APPEARANCE_KEY = 'finapp.appearance.mode.v1';
+const ACCENT_KEY = 'finapp.appearance.accent.v1';
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readSavedAppearance(): Appearance {
@@ -21,6 +30,18 @@ function readSavedAppearance(): Appearance {
     return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'dark';
   } catch {
     return 'dark';
+  }
+}
+
+function readSavedAccent(): AccentValue {
+  if (typeof window === 'undefined') return 'volt';
+  try {
+    const saved = window.localStorage.getItem(ACCENT_KEY);
+    if (saved === 'white' || saved === 'blue' || saved === 'volt') return saved;
+    if (saved && isAccentColor(saved)) return saved;
+    return 'volt';
+  } catch {
+    return 'volt';
   }
 }
 
@@ -69,8 +90,8 @@ function tokenVariables(tokens: ThemeTokens): React.CSSProperties {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Keep the server and first client render identical; storage is read after hydration.
   const [appearance, updateAppearance] = useState<Appearance>('dark');
+  const [accent, updateAccent] = useState<AccentValue>('volt');
   const [systemIsDark, setSystemIsDark] = useState(true);
-
   useEffect(() => {
     updateAppearance(readSavedAppearance());
     const media =
@@ -78,6 +99,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ? window.matchMedia('(prefers-color-scheme: dark)')
         : null;
     setSystemIsDark(media?.matches ?? true);
+    updateAccent(readSavedAccent());
   }, []);
 
   useEffect(() => {
@@ -110,11 +132,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const setAccent = useCallback((next: AccentValue) => {
+    updateAccent(next);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(ACCENT_KEY, next);
+      } catch {
+        // Accent still changes for this session when storage is unavailable.
+      }
+    }
+  }, []);
+
   const isDark = appearance === 'system' ? systemIsDark : appearance === 'dark';
-  const tokens = useMemo(() => createTokens(isDark ? 'dark' : 'light'), [isDark]);
+  const tokens = useMemo(() => createTokens(isDark ? 'dark' : 'light', accent), [accent, isDark]);
   const contextValue = useMemo(
-    () => ({ appearance, setAppearance, tokens, isDark }),
-    [appearance, setAppearance, tokens, isDark],
+    () => ({ appearance, setAppearance, accent, setAccent, tokens, isDark }),
+    [appearance, setAppearance, accent, setAccent, tokens, isDark],
   );
 
   return (

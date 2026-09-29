@@ -11,6 +11,8 @@ export { Input, Textarea, Command, InputOTP } from './input';
 export { Avatar, Separator, Progress, Skeleton, Empty } from './feedback';
 export { Checkbox, RadioGroup, Switch, Tabs, Select, Slider } from './controls';
 export { Sheet, Dialog, AlertDialog, Drawer, DropdownMenu } from './overlays';
+export { FilterSheet, type FilterSheetOption } from './FilterSheet';
+export { QuickFiltersPopover } from './QuickFiltersPopover';
 export { ScrollArea, Accordion, Collapsible } from './navigation';
 export const Tooltip = ({ children, label }: { children: React.ReactNode; label: string }) => (
   <View accessibilityLabel={label}>{children}</View>

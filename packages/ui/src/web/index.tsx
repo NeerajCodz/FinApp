@@ -2,12 +2,34 @@
 import React, { useId, useState } from 'react';
 
 export { ThemeProvider, useTheme } from './ThemeProvider';
-export { getTouchTargetStyle, Text, Typography, type Appearance, type TypographyVariant } from './typography';
-export { Button, IconButton, type ButtonVariant, type ButtonSize, type ButtonProps } from './button';
+export {
+  getTouchTargetStyle,
+  Text,
+  Typography,
+  type Appearance,
+  type TypographyVariant,
+} from './typography';
+export {
+  Button,
+  IconButton,
+  type ButtonVariant,
+  type ButtonSize,
+  type ButtonProps,
+} from './button';
 export { Card } from './card';
-export { Input, Label, Badge, Avatar, SectionHeader, Separator, Progress, type InputProps } from './fields';
+export {
+  Input,
+  Label,
+  Badge,
+  Avatar,
+  SectionHeader,
+  Separator,
+  Progress,
+  type InputProps,
+} from './fields';
 export { Checkbox, RadioGroup, Switch, Tabs, Select } from './choices';
 export { Popover, Sheet, Dialog, AlertDialog, Drawer } from './overlay';
+export { FilterOptionPopover, type FilterOptionPopoverOption } from './FilterOptionPopover';
 export { Textarea, InputOTP, type TextareaProps } from './text-entry';
 export { DropdownMenu, Calendar, Skeleton, Empty, ScrollArea, Slider } from './display';
 export { Collapsible, Accordion, Command, Toast, Toggle, View } from './misc';
