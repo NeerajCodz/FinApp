@@ -7,14 +7,23 @@ import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/web
 import {
   allEmojiPickerOptions,
   emojiPickerCategories,
-  getEmojiPickerCategoryId,
   getEmojiPickerOptions,
+  getPopularEmojiOptions,
+  getRecentEmojiOptions,
+  recordRecentEmoji,
   type EmojiPickerOption,
 } from '../emoji-picker-data';
+import { getIconPurpose, iconPurposeCategories, type IconPurpose } from '../icon-picker-data';
 
 export type EntityIconPickerMode = 'emoji' | 'lucide' | 'either';
 type LucideIconComponent = React.ComponentType<LucideProps>;
 type PickerKind = 'emoji' | 'lucide';
+
+const emojiTabs = [
+  { id: 'recent', label: 'Recent' },
+  { id: 'popular', label: 'Popular' },
+  ...emojiPickerCategories,
+];
 
 export type EntityIconPickerProps = {
   mode: EntityIconPickerMode;
@@ -37,6 +46,7 @@ const lucideIcons = Object.entries(LucideIcons)
   .map(([name, icon]) => ({
     name,
     searchText: name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase(),
+    purpose: getIconPurpose(name),
     Icon: icon as unknown as LucideIconComponent,
   }))
   .sort((left, right) => left.name.localeCompare(right.name));
@@ -108,17 +118,33 @@ function IconTile({
       onClick={onSelect}
       style={{
         minWidth: 0,
-        aspectRatio: '1',
-        display: 'grid',
-        placeItems: 'center',
+        minHeight: 46,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 8,
+        padding: '0 9px',
         border: `1px solid ${selected ? tokens.primary : tokens.borderSubtle}`,
         borderRadius: 11,
         background: selected ? tokens.surfaceSubtle : tokens.surfaceRaised,
         color: tokens.primary,
         cursor: 'pointer',
+        textAlign: 'left',
       }}
     >
-      <Icon size={20} color={tokens.primary} aria-hidden="true" />
+      <Icon size={17} color={tokens.primary} aria-hidden="true" />
+      <span
+        style={{
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          color: tokens.foregroundMuted,
+          fontSize: 11,
+        }}
+      >
+        {icon.searchText}
+      </span>
     </button>
   );
 }
@@ -169,17 +195,24 @@ export function EntityIconPicker({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<PickerKind>(mode === 'emoji' ? 'emoji' : 'lucide');
-  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('recent');
+  const [activeIconPurpose, setActiveIconPurpose] = useState<IconPurpose>('finance');
   const [visibleIconCount, setVisibleIconCount] = useState(120);
   const triggerLabel = label ?? (value ? 'Change icon' : 'Choose icon');
-  const selectedCategory = useMemo(() => getEmojiPickerCategoryId(value), [value]);
   const matchingEmojis = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const recent = getRecentEmojiOptions();
     const options = needle
       ? allEmojiPickerOptions
-      : activeCategory === 'all'
-        ? allEmojiPickerOptions
-        : getEmojiPickerOptions(activeCategory);
+      : activeCategory === 'recent'
+        ? recent.length
+          ? recent
+          : getPopularEmojiOptions()
+        : activeCategory === 'popular'
+          ? getPopularEmojiOptions()
+          : activeCategory === 'all'
+            ? allEmojiPickerOptions
+            : getEmojiPickerOptions(activeCategory);
     return needle
       ? options.filter(
           (emoji) => emoji.searchText.includes(needle) || emoji.native.includes(needle),
@@ -188,20 +221,25 @@ export function EntityIconPicker({
   }, [activeCategory, search]);
   const matchingIcons = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return needle ? lucideIcons.filter((icon) => icon.searchText.includes(needle)) : lucideIcons;
-  }, [search]);
+    return lucideIcons.filter((icon) =>
+      needle
+        ? icon.searchText.includes(needle)
+        : activeIconPurpose === 'all' || icon.purpose === activeIconPurpose,
+    );
+  }, [activeIconPurpose, search]);
   const displayedIcons = matchingIcons.slice(0, visibleIconCount);
 
   function openPicker() {
     if (mode === 'either') setKind(value?.startsWith('lucide:') ? 'lucide' : 'emoji');
     else setKind(mode);
-    setActiveCategory(selectedCategory ?? 'all');
-    setSearch('');
+    setActiveCategory(getRecentEmojiOptions().length ? 'recent' : 'popular');
+    setActiveIconPurpose('finance');
     setVisibleIconCount(120);
     setOpen(true);
   }
 
   function select(nextValue?: string) {
+    if (nextValue && !nextValue.startsWith('lucide:')) recordRecentEmoji(nextValue);
     onChange(nextValue);
     setOpen(false);
     setSearch('');
@@ -211,6 +249,8 @@ export function EntityIconPicker({
     setKind(nextKind);
     setSearch('');
     setVisibleIconCount(120);
+    setActiveCategory(getRecentEmojiOptions().length ? 'recent' : 'popular');
+    setActiveIconPurpose('finance');
   }
 
   return (
@@ -289,6 +329,42 @@ export function EntityIconPicker({
           autoCapitalize="none"
           autoCorrect="off"
         />
+        {kind === 'lucide' && (
+          <div
+            role="tablist"
+            aria-label="Icon purpose"
+            style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2 }}
+          >
+            {iconPurposeCategories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                role="tab"
+                aria-selected={activeIconPurpose === category.id}
+                onClick={() => {
+                  setActiveIconPurpose(category.id);
+                  setSearch('');
+                  setVisibleIconCount(120);
+                }}
+                style={{
+                  minHeight: 34,
+                  padding: '0 10px',
+                  flex: '0 0 auto',
+                  border: 0,
+                  borderRadius: 9,
+                  background:
+                    activeIconPurpose === category.id ? tokens.surfaceSubtle : 'transparent',
+                  color:
+                    activeIconPurpose === category.id ? tokens.primary : tokens.foregroundMuted,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                }}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
+        )}
         {kind === 'emoji' ? (
           <>
             <div
@@ -296,7 +372,7 @@ export function EntityIconPicker({
               aria-label="Emoji categories"
               style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2 }}
             >
-              {emojiPickerCategories.map((category) => (
+              {emojiTabs.map((category) => (
                 <button
                   key={category.id}
                   type="button"
@@ -328,7 +404,7 @@ export function EntityIconPicker({
               aria-label={
                 search
                   ? 'Emoji search results'
-                  : `${emojiPickerCategories.find((category) => category.id === activeCategory)?.label ?? 'All'} emoji`
+                  : `${emojiTabs.find((category) => category.id === activeCategory)?.label ?? 'All'} emoji`
               }
               style={{
                 maxHeight: 326,
@@ -356,12 +432,16 @@ export function EntityIconPicker({
           <>
             <div
               role="grid"
-              aria-label="Lucide icon catalog"
+              aria-label={
+                search
+                  ? 'Icon search results'
+                  : `${iconPurposeCategories.find((category) => category.id === activeIconPurpose)?.label ?? 'All icons'} catalog`
+              }
               style={{
                 maxHeight: 356,
                 overflowY: 'auto',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(124px, 1fr))',
                 gap: 6,
                 padding: '2px 1px',
               }}
