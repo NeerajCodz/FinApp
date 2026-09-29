@@ -24,7 +24,11 @@
       "browser": "./src/home/web/index.ts",
       "default": "./src/home/web/index.ts"
     },
-    "./activity": "./src/activity/web/index.ts",
+    "./activity": {
+      "react-native": "./src/activity/native/index.ts",
+      "browser": "./src/activity/web/index.ts",
+      "default": "./src/activity/web/index.ts"
+    },
     "./icons/native": "./src/icons/native.tsx",
     "./finance/money": "./src/finance/money.ts"
   },
@@ -39,5 +43,8 @@
     "lucide-react-native": "^1.34.0",
     "react": ">=19.0.0",
     "react-native": ">=0.86.0"
+  },
+  "dependencies": {
+    "@emoji-mart/data": "^1.2.1"
   }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { FilterOptionPopover } from '../../web/FilterOptionPopover';
 export type ChartTypeOption = { value: string; label: string };
 
 export function ChartTypeSelect({
@@ -14,11 +15,12 @@ export function ChartTypeSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="analytics-chart-type">
-      <span>Chart</span>
-      <select className="analytics-chart-select" aria-label={`${label} chart type`} value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </label>
+    <FilterOptionPopover
+      label={label}
+      title={`${label} chart type`}
+      value={value}
+      options={options}
+      onChange={onChange}
+    />
   );
 }

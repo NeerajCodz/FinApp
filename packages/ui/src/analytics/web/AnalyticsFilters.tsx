@@ -1,16 +1,22 @@
 'use client';
 
- 
+import { QuickFiltersPopover } from '../../web/QuickFiltersPopover';
+import type { QuickFilterGroup } from '../../quickFilters';
+import { DateRangePopover } from '../../activity/web/DateRangePopover';
+import type { DateRangePreset } from '../../activity/dateRangeCalendar';
+
 export type AnalyticsFilterOption = {
   value: string;
   label: string;
 };
 
 type AnalyticsFiltersProps = {
-  period: string;
   periods: AnalyticsFilterOption[];
-  onPeriodChange: (period: string) => void;
   rangeLabel: string;
+  rangeStartDate: string;
+  rangeEndDate: string;
+  onPeriodChange: (period: string) => void;
+  onRangeApply: (startDate: string, endDate: string) => void;
   onPrevious: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -29,10 +35,12 @@ type AnalyticsFiltersProps = {
 };
 
 export function AnalyticsFilters({
-  period,
   periods,
-  onPeriodChange,
   rangeLabel,
+  rangeStartDate,
+  rangeEndDate,
+  onPeriodChange,
+  onRangeApply,
   onPrevious,
   onNext,
   onToday,
@@ -49,29 +57,79 @@ export function AnalyticsFilters({
   type,
   onTypeChange,
 }: AnalyticsFiltersProps) {
+  const presets: DateRangePreset[] = periods;
+  const groups: QuickFilterGroup[] = [
+    {
+      id: 'currency',
+      label: 'Currency',
+      options: currencies.map((value) => ({ value, label: value })),
+      value: currency,
+      onChange: onCurrencyChange,
+    },
+    {
+      id: 'type',
+      label: 'Type',
+      options: [
+        { value: 'all', label: 'All types' },
+        { value: 'expense', label: 'Expenses' },
+        { value: 'income', label: 'Income' },
+        { value: 'transfer', label: 'Transfers' },
+        { value: 'refund', label: 'Refunds' },
+        { value: 'adjustment', label: 'Adjustments' },
+      ],
+      value: type,
+      onChange: onTypeChange,
+    },
+    {
+      id: 'account',
+      label: 'Account',
+      options: [
+        { value: 'all', label: 'All accounts' },
+        ...accounts.map((item) => ({ value: item.value, label: item.label })),
+      ],
+      value: account,
+      onChange: onAccountChange,
+    },
+    {
+      id: 'category',
+      label: 'Category',
+      options: [
+        { value: 'all', label: 'All categories' },
+        ...categories.map((item) => ({ value: item.value, label: item.label })),
+      ],
+      value: category,
+      onChange: onCategoryChange,
+    },
+  ];
   return (
     <section className="analytics-toolbar" aria-label="Analytics filters">
       <div className="analytics-period-controls">
-        <div className="analytics-period-switch" role="group" aria-label="Analytics period">
-          {periods.map((item) => (
-            <button key={item.value} type="button" aria-pressed={period === item.value} onClick={() => onPeriodChange(item.value)}>
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <DateRangePopover
+          label={rangeLabel}
+          startDate={rangeStartDate}
+          endDate={rangeEndDate}
+          presets={presets}
+          onPresetSelect={onPeriodChange}
+          onRangeApply={onRangeApply}
+        />
         <div className="analytics-date-controls">
-          <button type="button" aria-label="Previous period" disabled={!canNavigate} onClick={onPrevious}>‹</button>
-          <span>{rangeLabel}</span>
-          <button type="button" aria-label="Next period" disabled={!canNavigate} onClick={onNext}>›</button>
-          <button className="analytics-today-button" type="button" onClick={onToday}>Today</button>
+          <button
+            type="button"
+            aria-label="Previous period"
+            disabled={!canNavigate}
+            onClick={onPrevious}
+          >
+            ‹
+          </button>
+          <button type="button" aria-label="Next period" disabled={!canNavigate} onClick={onNext}>
+            ›
+          </button>
+          <button className="analytics-today-button" type="button" onClick={onToday}>
+            Today
+          </button>
         </div>
       </div>
-      <div className="analytics-select-controls">
-        <label><span className="activity-visually-hidden">Currency</span><select aria-label="Filter by currency" value={currency} onChange={(event) => onCurrencyChange(event.target.value)}>{currencies.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
-        <label><span className="activity-visually-hidden">Account</span><select aria-label="Filter by account" value={account} onChange={(event) => onAccountChange(event.target.value)}><option value="all">All accounts</option>{accounts.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        <label><span className="activity-visually-hidden">Category</span><select aria-label="Filter by category" value={category} onChange={(event) => onCategoryChange(event.target.value)}><option value="all">All categories</option>{categories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        <label><span className="activity-visually-hidden">Transaction type</span><select aria-label="Filter by transaction type" value={type} onChange={(event) => onTypeChange(event.target.value)}><option value="all">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option><option value="refund">Refunds</option><option value="adjustment">Adjustments</option></select></label>
-      </div>
+      <QuickFiltersPopover groups={groups} />
     </section>
   );
 }
