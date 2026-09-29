@@ -12,6 +12,7 @@ export const create = mutation({
     targetAmountMinor: v.int64(),
     currency: v.string(),
     targetDate: v.optional(v.number()),
+    icon: v.optional(v.string()),
     clientMutationId: v.string(),
   },
   handler: async (ctx, args) => {
@@ -26,6 +27,8 @@ export const create = mutation({
     const name = args.name.trim();
     assertPositiveAmount(args.targetAmountMinor);
     assertCurrency(args.currency);
+    if (args.icon !== undefined && (args.icon.length === 0 || args.icon.length > 80))
+      throw new Error('INVALID_GOAL');
     if (!name || (args.targetDate !== undefined && args.targetDate <= Date.now()))
       throw new Error('INVALID_GOAL');
     const now = Date.now();
@@ -36,6 +39,7 @@ export const create = mutation({
       currency: args.currency,
       targetDate: args.targetDate,
       createdAt: now,
+      icon: args.icon,
       updatedAt: now,
     };
     const id = await ctx.db.insert('goals', record);
@@ -51,6 +55,44 @@ export const create = mutation({
       { ...record, _id: id },
     );
     return id;
+  },
+});
+export const setIcon = mutation({
+  args: {
+    goalId: v.id('goals'),
+    icon: v.union(v.string(), v.null()),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'goal.setIcon');
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('goals', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const goal = await ctx.db.get(args.goalId);
+    if (!goal || goal.ownerId !== user._id || goal.archivedAt !== undefined)
+      throw new Error('INVALID_GOAL');
+    if (args.icon !== null && (args.icon.length === 0 || args.icon.length > 80))
+      throw new Error('INVALID_GOAL');
+    const updatedAt = Date.now();
+    await ctx.db.patch(args.goalId, { icon: args.icon ?? undefined, updatedAt });
+    const updated = await ctx.db.get(args.goalId);
+    if (!updated) throw new Error('INVALID_GOAL');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'goal.setIcon',
+      args.goalId,
+      'goals',
+      String(args.goalId),
+      updatedAt,
+      { ...updated, _id: args.goalId },
+    );
+    return args.goalId;
   },
 });
 

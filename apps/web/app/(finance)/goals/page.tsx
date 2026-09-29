@@ -8,7 +8,7 @@ import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { Money } from '@finapp/ui/finance';
+import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
 
 type Profile = LocalRecord & { defaultCurrency?: string };
 type Settings = LocalRecord & { currency?: string };
@@ -19,6 +19,7 @@ type Goal = LocalRecord & {
   targetDate?: number;
   completedAt?: number;
   archivedAt?: number;
+  icon?: string;
   cloudId?: string;
 };
 type Contribution = LocalRecord & {
@@ -58,6 +59,7 @@ export default function GoalsPage() {
     error: settingsError,
   } = useLocalRecords<Settings>('settings');
   const [name, setName] = React.useState('');
+  const [icon, setIcon] = React.useState<string>();
   const [target, setTarget] = React.useState('');
   const [adding, setAdding] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -100,6 +102,7 @@ export default function GoalsPage() {
       const record: LocalRecord = {
         ownerId: userId,
         name: name.trim(),
+        ...(icon ? { icon } : {}),
         targetAmountMinor,
         currency: selectedCurrency,
         createdAt: now,
@@ -107,11 +110,13 @@ export default function GoalsPage() {
       };
       await commitLocalWrite(userId, 'goal', 'goal.create', record, {
         name: name.trim(),
+        ...(icon ? { icon } : {}),
         targetAmountMinor,
         currency: selectedCurrency,
       });
       setName('');
       setTarget('');
+      setIcon(undefined);
       setAdding(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this goal.');
@@ -137,11 +142,7 @@ export default function GoalsPage() {
   return (
     <div className="finance-page" style={{ gap: 24 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <IconButton
-          label="Go back"
-          variant="ghost"
-          onPress={() => window.history.back()}
-        >
+        <IconButton label="Go back" variant="ghost" onPress={() => window.history.back()}>
           <ArrowLeft size={21} />
         </IconButton>
         <Typography variant="title" style={{ flex: 1 }}>
@@ -233,9 +234,7 @@ export default function GoalsPage() {
               Set default currency
             </Button>
           )}
-          {!isConnected && (
-            <Typography variant="small">Offline · showing saved goals</Typography>
-          )}
+          {!isConnected && <Typography variant="small">Offline · showing saved goals</Typography>}
         </section>
       )}
       {!loading && goalRows.length > 0 && (
@@ -260,10 +259,26 @@ export default function GoalsPage() {
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          display: 'grid',
+                          width: 44,
+                          height: 44,
+                          flex: '0 0 auto',
+                          placeItems: 'center',
+                          borderRadius: 14,
+                          background: 'var(--finapp-surface-raised)',
+                        }}
+                      >
+                        <EntityIcon
+                          value={goal.icon ?? 'lucide:Target'}
+                          size={21}
+                          color="var(--finapp-primary)"
+                        />
+                      </span>
                       <span style={{ display: 'grid', flex: 1, gap: 4 }}>
-                        <Typography variant="bodyLarge">
-                          {goal.name ?? 'Savings goal'}
-                        </Typography>
+                        <Typography variant="bodyLarge">{goal.name ?? 'Savings goal'}</Typography>
                         <Typography variant="small">
                           {percent >= 100
                             ? 'Target reached'
@@ -297,6 +312,12 @@ export default function GoalsPage() {
         >
           <Typography variant="heading">New goal</Typography>
           <form onSubmit={createGoal} style={{ display: 'grid', gap: 14 }}>
+            <EntityIconPicker
+              mode="lucide"
+              value={icon}
+              onChange={setIcon}
+              label="Choose goal icon"
+            />
             <Input
               aria-label="Goal name"
               placeholder="What are you saving for?"
@@ -330,9 +351,7 @@ export default function GoalsPage() {
               <Button
                 type="submit"
                 style={{ flex: 1 }}
-                disabled={
-                  saving || loading || !selectedCurrency || !name.trim() || !target.trim()
-                }
+                disabled={saving || loading || !selectedCurrency || !name.trim() || !target.trim()}
               >
                 {saving ? 'Saving…' : 'Save goal'}
               </Button>

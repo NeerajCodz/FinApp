@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { CategoryIcon, Money, TransactionRow } from '@finapp/ui/finance';
+import { CategoryIcon, Money, TransactionRow, formatTransactionDate } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -30,6 +30,7 @@ type Transaction = LocalRecord & {
   categoryId?: string;
   accountId?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   status?: string;
   deletedAt?: number;
   title?: string;
@@ -213,62 +214,59 @@ export default function PersonalBudgetDetailPage() {
         </Link>
         <div style={{ minWidth: 0 }}>
           <h1>{budget.name ?? 'Budget'}</h1>
-          <p className="finance-muted">{scope} · {dateRange}</p>
+          <p className="finance-muted">
+            {scope} · {dateRange}
+          </p>
         </div>
       </header>
-        <Card className="finance-metric-card finance-balance-card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {category && (
-              <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />
-            )}
-            <span style={{ display: 'grid', flex: 1, gap: 3 }}>
-              <strong>Budget progress</strong>
-              <small>{Math.round(progress)}% used</small>
-            </span>
-            <small>{currency}</small>
-          </div>
-          <div style={{ display: 'grid', gap: 4 }}>
-            <span className="finance-metric-foot">Spent this period</span>
-            <Money amountMinor={spent} currency={currency} size="display" />
-            <span className="finance-metric-foot">
-              of <Money amountMinor={limit} currency={currency} />
-            </span>
-          </div>
-          <div
-            className="finance-plan-track"
-            role="progressbar"
-            aria-label="Budget usage"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progress}
-          >
-            <span style={{ width: `${progress}%` }} />
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <span>
-              <small className="finance-metric-label">Limit</small>
-              <br />
-              <Money amountMinor={limit} currency={currency} />
-            </span>
-            <span style={{ textAlign: 'right' }}>
-              <small className="finance-metric-label">
-                {remaining < 0n ? 'Over limit' : 'Still available'}
-              </small>
-              <br />
-              <Money
-                amountMinor={remaining < 0n ? -remaining : remaining}
-                currency={currency}
-              />
-            </span>
-          </div>
-        </Card>
+      <Card className="finance-metric-card finance-balance-card">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {category && <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />}
+          <span style={{ display: 'grid', flex: 1, gap: 3 }}>
+            <strong>Budget progress</strong>
+            <small>{Math.round(progress)}% used</small>
+          </span>
+          <small>{currency}</small>
+        </div>
+        <div style={{ display: 'grid', gap: 4 }}>
+          <span className="finance-metric-foot">Spent this period</span>
+          <Money amountMinor={spent} currency={currency} size="display" />
+          <span className="finance-metric-foot">
+            of <Money amountMinor={limit} currency={currency} />
+          </span>
+        </div>
+        <div
+          className="finance-plan-track"
+          role="progressbar"
+          aria-label="Budget usage"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+        >
+          <span style={{ width: `${progress}%` }} />
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>
+            <small className="finance-metric-label">Limit</small>
+            <br />
+            <Money amountMinor={limit} currency={currency} />
+          </span>
+          <span style={{ textAlign: 'right' }}>
+            <small className="finance-metric-label">
+              {remaining < 0n ? 'Over limit' : 'Still available'}
+            </small>
+            <br />
+            <Money amountMinor={remaining < 0n ? -remaining : remaining} currency={currency} />
+          </span>
+        </div>
+      </Card>
       <Card className="finance-record-panel">
         <SectionHeader
           title="Recent expenses"
@@ -309,7 +307,10 @@ export default function PersonalBudgetDetailPage() {
                     type="expense"
                     date={
                       item.occurredAt
-                        ? new Date(item.occurredAt).toLocaleDateString()
+                        ? formatTransactionDate(
+                            item.occurredAt,
+                            typeof item.hasTime === 'boolean' ? item.hasTime : undefined,
+                          )
                         : 'Date unavailable'
                     }
                     onPress={() => router.push(`/transaction/${encodeURIComponent(transactionId)}`)}

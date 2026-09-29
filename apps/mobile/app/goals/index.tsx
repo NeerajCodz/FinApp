@@ -3,7 +3,7 @@ import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { ArrowLeft, CaretRight, Plus, Wallet } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money } from '@finapp/ui/finance';
+import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Progress, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -20,6 +20,7 @@ type Goal = LocalRecord & {
   archivedAt?: number;
   completedAt?: number;
   targetDate?: number;
+  icon?: string;
 };
 type Contribution = LocalRecord & { goalId: string; amountMinor: bigint };
 
@@ -33,6 +34,7 @@ export default function GoalsScreen() {
   const settings = useLocalRecords<LocalRecord>(userId, 'settings');
   const [adding, setAdding] = React.useState(false);
   const [name, setName] = React.useState('');
+  const [icon, setIcon] = React.useState<string>();
   const [target, setTarget] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -82,16 +84,18 @@ export default function GoalsScreen() {
         'goal.create',
         {
           ownerId: userId,
+          ...(icon ? { icon } : {}),
           name: name.trim(),
           targetAmountMinor,
           currency,
           createdAt: now,
           updatedAt: now,
         },
-        { name: name.trim(), targetAmountMinor, currency },
+        { name: name.trim(), ...(icon ? { icon } : {}), targetAmountMinor, currency },
       );
       setAdding(false);
       setName('');
+      setIcon(undefined);
       setTarget('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this goal.');
@@ -224,6 +228,22 @@ export default function GoalsScreen() {
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      backgroundColor: tokens.surfaceRaised,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <EntityIcon
+                      value={goal.icon ?? 'lucide:Target'}
+                      size={21}
+                      color={tokens.primary}
+                    />
+                  </View>
                   <View style={{ flex: 1, gap: 4 }}>
                     <Typography variant="bodyLarge">{goal.name}</Typography>
                     <Typography variant="small">
@@ -252,6 +272,12 @@ export default function GoalsScreen() {
         >
           <Typography variant="heading">New goal</Typography>
           <Input placeholder="What are you saving for?" value={name} onChangeText={setName} />
+          <EntityIconPicker
+            mode="lucide"
+            value={icon}
+            onChange={setIcon}
+            label="Choose goal icon"
+          />
           <Input
             placeholder={currency ? `Target amount · ${currency}` : 'Loading currency…'}
             keyboardType="decimal-pad"
