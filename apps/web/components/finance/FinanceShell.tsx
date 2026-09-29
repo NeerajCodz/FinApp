@@ -128,6 +128,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const {
     userId,
+    identityReady,
     isConnected,
     isSyncing,
     syncError,
@@ -155,6 +156,9 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       tag: 'finapp-sync-error',
     });
   }, [syncError]);
+  useEffect(() => {
+    if (identityReady && !userId) router.replace('/sign-in');
+  }, [identityReady, router, userId]);
   const hasSyncIssue = status.failed > 0 || status.conflicts > 0 || Boolean(syncError);
   const state = !userId
     ? 'Sign in to sync'
@@ -185,6 +189,8 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       ? count + 1
       : count;
   }, 0);
+  if (!identityReady || !userId) return null;
+
   const profileHref = userId ? '/profile' : '/sign-in';
   const isActive = (href: string) =>
     pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
