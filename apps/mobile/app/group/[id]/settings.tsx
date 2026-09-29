@@ -216,12 +216,15 @@ export default function GroupSettingsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
+        <IconButton label="Go back to group" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Typography variant="title" style={{ flex: 1 }}>
-          Group settings
-        </Typography>
+        <View style={{ gap: 2 }}>
+          <Typography variant="caption" style={{ color: tokens.primary }}>
+            GROUP MANAGEMENT
+          </Typography>
+          <Typography variant="title">Settings</Typography>
+        </View>
       </View>
 
       {!id ? (
@@ -385,6 +388,9 @@ export default function GroupSettingsScreen() {
           {canManage && (
             <View style={{ gap: 12 }}>
               <Typography variant="label">Appearance & chat</Typography>
+              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                Icon and chat retention changes require an internet connection.
+              </Typography>
               <View
                 style={{
                   padding: 16,
