@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { ArrowLeft, NotePencil, UsersThree } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
@@ -16,9 +19,10 @@ import {
   Input,
   Separator,
   Typography,
+  useTheme,
 } from '@finapp/ui/native';
+import { EntityIcon, EntityIconPicker } from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { useTheme } from '@finapp/ui/native';
 
 export default function GroupSettingsScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -30,29 +34,54 @@ export default function GroupSettingsScreen() {
   const memberState = useLocalRecords<LocalRecord>(userId, 'groupMember');
   const group = groupState.data?.find((record) => id && recordIds(record).includes(id));
   const groupIds = group ? recordIds(group) : [];
-  const members =
+  const groupLocalId = group ? recordId(group) : '';
+  const groupPayloadId = group ? String(group.cloudId ?? group._id ?? group.id ?? '') : '';
+  const cloudGroupId = group ? String(group.cloudId ?? group._id ?? '') : '';
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    cloudGroupId ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const localMembers =
     memberState.data?.filter(
       (record) => typeof record.groupId === 'string' && groupIds.includes(record.groupId),
     ) ?? [];
+  const members: LocalRecord[] = remoteGroup
+    ? remoteGroup.members.map((member) => ({
+        id: member.id,
+        groupId: cloudGroupId,
+        userId: member.id,
+        role: member.role,
+        username: member.username,
+        displayName: member.displayName,
+      }))
+    : localMembers;
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [memberInput, setMemberInput] = useState('');
+  const [iconDraft, setIconDraft] = useState<string>();
+  const [retentionDraft, setRetentionDraft] = useState<number | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const updateGroupSettings = useMutation(api.groups.mutations.updateSettings);
+  const updateMemberRole = useMutation(api.groups.mutations.setMemberRole);
+  const addGroupMember = useMutation(api.groups.mutations.addMember);
+  const removeGroupMember = useMutation(api.groups.mutations.removeMember);
   const loading = groupState.loading || memberState.loading;
   const loadError = groupState.error || memberState.error;
   const retry = () => {
     groupState.retry();
     memberState.retry();
   };
-  const groupLocalId = group ? recordId(group) : '';
-  const groupPayloadId = group ? String(group._id ?? group.cloudId ?? group.id ?? '') : '';
+  const remoteRole = remoteGroup?.members.find((member) => member.id === userId)?.role;
   const canManage = Boolean(
-    group &&
-    userId &&
-    (group.ownerId === userId ||
-      members.some((member) => member.userId === userId && member.role === 'admin') ||
-      (!group.ownerId && members.length === 0)),
+    remoteGroup && userId && (remoteGroup.ownerId === userId || remoteRole === 'admin'),
   );
+  React.useEffect(() => {
+    setIconDraft(
+      remoteGroup ? remoteGroup.icon : typeof group?.icon === 'string' ? group.icon : undefined,
+    );
+    setRetentionDraft(remoteGroup?.messageRetentionMs ?? null);
+  }, [group?.icon, remoteGroup?.icon, remoteGroup?.messageRetentionMs]);
 
   async function saveName() {
     if (!group || !userId || !groupLocalId || !groupPayloadId || pending) return;
@@ -85,28 +114,91 @@ export default function GroupSettingsScreen() {
   }
 
   async function toggleAdmin(member: LocalRecord, makeAdmin: boolean) {
-    if (!group || !userId || !groupPayloadId || pending) return;
+    if (!canManage || !cloudGroupId || pending) return;
     const memberUserId = typeof member.userId === 'string' ? member.userId : '';
     const memberRecordId = recordId(member);
     if (!memberUserId || !memberRecordId) return;
-    const role = makeAdmin ? 'admin' : 'member';
     setPending(memberRecordId);
     setActionError('');
     try {
-      await commitLocalWrite(
-        userId,
-        'groupMember',
-        'group.setMemberRole',
-        { ...member, role },
-        { groupId: groupPayloadId, memberUserId, role },
-        {
-          recordId: memberRecordId,
-          dependencies: group._id || group.cloudId ? [] : [`group:${groupPayloadId}`],
-          baseUpdatedAt: typeof member.updatedAt === 'number' ? member.updatedAt : undefined,
-        },
-      );
+      await updateMemberRole({
+        groupId: cloudGroupId as Id<'groups'>,
+        memberUserId: memberUserId as Id<'users'>,
+        role: makeAdmin ? 'admin' : 'member',
+      });
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : 'Could not update this member role.');
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function saveGroupIcon() {
+    if (!canManage || !cloudGroupId || pending) return;
+    setPending('icon');
+    setActionError('');
+    try {
+      await updateGroupSettings({
+        groupId: cloudGroupId as Id<'groups'>,
+        icon: iconDraft ?? null,
+      });
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Could not update the group icon.');
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function saveRetention() {
+    if (!canManage || !cloudGroupId || pending) return;
+    setPending('retention');
+    setActionError('');
+    try {
+      await updateGroupSettings({
+        groupId: cloudGroupId as Id<'groups'>,
+        messageRetentionMs: retentionDraft,
+      });
+    } catch (cause) {
+      setActionError(
+        cause instanceof Error ? cause.message : 'Could not update message retention.',
+      );
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function addMember() {
+    if (!canManage || !cloudGroupId || pending) return;
+    setPending('member-add');
+    setActionError('');
+    try {
+      const result = await addGroupMember({
+        groupId: cloudGroupId as Id<'groups'>,
+        username: memberInput,
+      });
+      setMemberInput('');
+      if (!result) setActionError('No account matched; an invite was created for that username.');
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Could not add this member.');
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function removeMember(member: LocalRecord) {
+    if (!canManage || !cloudGroupId || pending) return;
+    const memberUserId = typeof member.userId === 'string' ? member.userId : '';
+    if (!memberUserId) return;
+    const memberRecordId = recordId(member);
+    setPending(memberRecordId);
+    setActionError('');
+    try {
+      await removeGroupMember({
+        groupId: cloudGroupId as Id<'groups'>,
+        memberUserId: memberUserId as Id<'users'>,
+      });
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Could not remove this member.');
     } finally {
       setPending(null);
     }
@@ -172,7 +264,17 @@ export default function GroupSettingsScreen() {
                   justifyContent: 'center',
                 }}
               >
-                <UsersThree size={23} color={tokens.primary} />
+                <EntityIcon
+                  value={
+                    remoteGroup
+                      ? (remoteGroup.icon ?? 'lucide:UsersRound')
+                      : typeof group.icon === 'string'
+                        ? group.icon
+                        : 'lucide:UsersRound'
+                  }
+                  size={23}
+                  color={tokens.primary}
+                />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Typography variant="heading" numberOfLines={2}>
@@ -197,9 +299,9 @@ export default function GroupSettingsScreen() {
                 }}
               >
                 <Typography variant="caption">
-                  {group.ownerId === userId || (!group.ownerId && members.length === 0)
+                  {remoteGroup?.ownerId === userId
                     ? 'Owner'
-                    : members.find((member) => member.userId === userId)?.role === 'admin'
+                    : remoteRole === 'admin'
                       ? 'Admin'
                       : 'Member'}
                 </Typography>
@@ -280,6 +382,65 @@ export default function GroupSettingsScreen() {
               </View>
             </View>
           </View>
+          {canManage && (
+            <View style={{ gap: 12 }}>
+              <Typography variant="label">Appearance & chat</Typography>
+              <View
+                style={{
+                  padding: 16,
+                  gap: 12,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: tokens.borderSubtle,
+                  backgroundColor: tokens.surfaceSubtle,
+                }}
+              >
+                <EntityIconPicker
+                  mode="either"
+                  value={iconDraft}
+                  onChange={setIconDraft}
+                  label="Group icon"
+                  compact
+                  allowClear
+                />
+                <Button
+                  variant="outline"
+                  disabled={Boolean(pending) || !cloudGroupId}
+                  onPress={() => void saveGroupIcon()}
+                >
+                  {pending === 'icon' ? 'Saving icon…' : 'Save icon'}
+                </Button>
+                <Separator />
+                <Typography variant="bodyLarge">Disappearing messages</Typography>
+                <Typography variant="caption">
+                  Existing and new messages, including bill images, are deleted on expiry.
+                </Typography>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[
+                    { value: null, label: 'Never' },
+                    { value: 86_400_000, label: '1 day' },
+                    { value: 604_800_000, label: '7 days' },
+                    { value: 2_592_000_000, label: '30 days' },
+                  ].map((option) => (
+                    <Button
+                      key={option.label}
+                      size="sm"
+                      variant={retentionDraft === option.value ? 'secondary' : 'outline'}
+                      onPress={() => setRetentionDraft(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </View>
+                <Button
+                  disabled={Boolean(pending) || !cloudGroupId}
+                  onPress={() => void saveRetention()}
+                >
+                  {pending === 'retention' ? 'Saving…' : 'Save retention'}
+                </Button>
+              </View>
+            </View>
+          )}
 
           <View style={{ gap: 12 }}>
             <View
@@ -292,6 +453,26 @@ export default function GroupSettingsScreen() {
               <Typography variant="label">Members</Typography>
               <Typography variant="caption">{members.length || 1} total</Typography>
             </View>
+            {canManage && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Input
+                  accessibilityLabel="Add member username"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={memberInput}
+                  onChangeText={setMemberInput}
+                  placeholder="@username"
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  size="sm"
+                  disabled={Boolean(pending) || !memberInput.trim() || !cloudGroupId}
+                  onPress={() => void addMember()}
+                >
+                  {pending === 'member-add' ? 'Adding…' : 'Add'}
+                </Button>
+              </View>
+            )}
             <View
               style={{
                 paddingHorizontal: 16,
@@ -344,18 +525,28 @@ export default function GroupSettingsScreen() {
                         </Typography>
                       </View>
                       {canChangeRole && (
-                        <Button
-                          variant={role === 'admin' ? 'secondary' : 'outline'}
-                          size="sm"
-                          disabled={pending === recordId(member)}
-                          onPress={() => void toggleAdmin(member, role !== 'admin')}
-                        >
-                          {pending === recordId(member)
-                            ? 'Saving…'
-                            : role === 'admin'
-                              ? 'Remove admin'
-                              : 'Make admin'}
-                        </Button>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <Button
+                            variant={role === 'admin' ? 'secondary' : 'outline'}
+                            size="sm"
+                            disabled={Boolean(pending)}
+                            onPress={() => void toggleAdmin(member, role !== 'admin')}
+                          >
+                            {pending === recordId(member)
+                              ? 'Saving…'
+                              : role === 'admin'
+                                ? 'Remove admin'
+                                : 'Make admin'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={Boolean(pending)}
+                            onPress={() => void removeMember(member)}
+                          >
+                            {pending === recordId(member) ? 'Removing…' : 'Remove'}
+                          </Button>
+                        </View>
                       )}
                     </View>
                   </React.Fragment>
@@ -363,7 +554,7 @@ export default function GroupSettingsScreen() {
               })}
             </View>
             <Typography variant="caption">
-              Owners and admins can rename the group and promote or remove admins.
+              Owners and admins can manage members, the group icon, and message retention.
             </Typography>
           </View>
 
@@ -373,7 +564,7 @@ export default function GroupSettingsScreen() {
             </Typography>
           )}
           <Typography variant="caption">
-            Changes are saved on this device and sync when connected.
+            Group name changes sync when connected; membership, icon, and retention save online.
           </Typography>
         </>
       )}
