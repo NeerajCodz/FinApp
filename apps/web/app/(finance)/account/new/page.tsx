@@ -134,7 +134,7 @@ export default function NewPersonalAccountPage() {
         </span>
         <Typography variant="title">Add an account</Typography>
         <Typography variant="small" style={{ maxWidth: 320 }}>
-          Name where you keep money, then choose how it appears in your accounts.
+          Each account keeps its own type, currency, and starting balance.
         </Typography>
       </header>
 

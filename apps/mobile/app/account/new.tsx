@@ -136,7 +136,7 @@ export default function NewAccountScreen() {
             </View>
             <Typography variant="title">Add an account</Typography>
             <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
-              Name where you keep money, then choose how it appears in your accounts.
+              Each account keeps its own type, currency, and starting balance.
             </Text>
           </View>
           <View style={{ gap: 18 }}>
