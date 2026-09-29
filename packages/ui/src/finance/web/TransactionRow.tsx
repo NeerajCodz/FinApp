@@ -1,11 +1,10 @@
 import React from 'react';
-import { Typography } from '@finapp/ui/web';
+import { useTheme } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { signedMinor } from '../money';
 import { semanticLabels, type SemanticType, type TransactionType } from '../types';
 import { CategoryIcon } from './CategoryIcon';
 import { Money } from './Money';
-import { SemanticMarker } from './SemanticMarker';
 
 export function TransactionRow({
   title,
@@ -14,7 +13,6 @@ export function TransactionRow({
   account,
   categoryIcon,
   date,
-  status,
   amountMinor,
   currency,
   type,
@@ -34,33 +32,35 @@ export function TransactionRow({
   type: TransactionType;
   onPress?: () => void;
 }) {
-  const detail = [merchant ?? category, account].filter(Boolean).join(' · ');
-  const contents = (
-    <>
-      <CategoryIcon label={category ?? title} icon={categoryIcon} />
-      <span style={{ display: 'grid', minWidth: 0, flex: 1, gap: 3, textAlign: 'left' }}>
-        <Typography variant="bodyLarge" style={{ overflow: 'hidden', fontSize: 15, lineHeight: '20px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {title}
-        </Typography>
-        {!!detail && (
-          <Typography variant="caption" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {detail}
-          </Typography>
-        )}
-        <SemanticMarker type={semanticType ?? type} />
-      </span>
-      <span style={{ display: 'grid', flexShrink: 0, justifyItems: 'end', gap: 3 }}>
-        <Money amountMinor={amountMinor} currency={currency} type={type} />
-        <Typography variant="caption">{status ?? date}</Typography>
-      </span>
-    </>
-  );
-  const style: React.CSSProperties = {
+  const { tokens } = useTheme();
+  const amountColor =
+    type === 'expense'
+      ? tokens.expense
+      : type === 'income' || type === 'refund'
+        ? tokens.income
+        : tokens.transfer;
+  const categoryDetails = [
+    category ? { label: 'Category', value: category } : undefined,
+    merchant ? { label: 'Merchant', value: merchant } : undefined,
+    account ? { label: 'Account', value: account } : undefined,
+  ].filter((item): item is { label: string; value: string } => Boolean(item));
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  const rowStyle: React.CSSProperties = {
     display: 'flex',
     width: '100%',
-    minHeight: 72,
+    minHeight: 56,
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    color: 'inherit',
+    font: 'inherit',
+    textAlign: 'left',
+  };
+  const mainStyle: React.CSSProperties = {
+    display: 'flex',
+    minWidth: 0,
+    flex: 1,
+    alignItems: 'center',
+    gap: 10,
     border: 0,
     padding: 0,
     background: 'transparent',
@@ -69,14 +69,90 @@ export function TransactionRow({
     textAlign: 'left',
     textDecoration: 'none',
   };
-  const accessibleLabel = `${title}, ${semanticLabels[semanticType ?? type]}, ${detail}, ${formatMinor(signedMinor(amountMinor, type), currency)}`;
-  return onPress ? (
-    <button type="button" aria-label={accessibleLabel} onClick={onPress} style={{ ...style, cursor: 'pointer' }}>
-      {contents}
-    </button>
-  ) : (
-    <div aria-label={accessibleLabel} style={style}>
-      {contents}
+  const info = (
+    <>
+      <span
+        style={{
+          minWidth: 0,
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontSize: 15,
+          lineHeight: '20px',
+        }}
+      >
+        {title}
+      </span>
+      <time
+        style={{ flexShrink: 0, color: tokens.foregroundMuted, fontSize: 12, whiteSpace: 'nowrap' }}
+      >
+        {date ?? 'Date unavailable'}
+      </time>
+      <Money amountMinor={amountMinor} currency={currency} type={type} color={amountColor} />
+    </>
+  );
+  const accessibleLabel = `${title}, ${date ?? 'Date unavailable'}, ${semanticLabels[semanticType ?? type]}, ${category ?? 'Uncategorized'}${merchant ? `, ${merchant}` : ''}${account ? `, ${account}` : ''}, ${formatMinor(signedMinor(amountMinor, type), currency)}`;
+  return (
+    <div style={{ ...rowStyle, position: 'relative' }}>
+      <span
+        style={{ position: 'relative', display: 'inline-flex', flex: '0 0 40px' }}
+        onMouseEnter={() => categoryDetails.length > 0 && setDetailsOpen(true)}
+        onMouseLeave={() => setDetailsOpen(false)}
+        onFocus={() => categoryDetails.length > 0 && setDetailsOpen(true)}
+        onBlur={() => setDetailsOpen(false)}
+      >
+        <button
+          type="button"
+          aria-label={`Show category details for ${category ?? title}`}
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen(true)}
+          style={{ border: 0, padding: 0, background: 'transparent', cursor: 'pointer' }}
+        >
+          <CategoryIcon label={category ?? title} icon={categoryIcon} />
+        </button>
+        {detailsOpen && categoryDetails.length > 0 && (
+          <span
+            role="tooltip"
+            style={{
+              position: 'absolute',
+              zIndex: 10,
+              top: 46,
+              left: 0,
+              display: 'grid',
+              minWidth: 180,
+              gap: 6,
+              padding: '10px 12px',
+              border: `1px solid ${tokens.borderSubtle}`,
+              borderRadius: 10,
+              background: tokens.surfaceRaised,
+              boxShadow: '0 8px 28px rgba(0,0,0,.22)',
+              color: tokens.foreground,
+              fontSize: 12,
+            }}
+          >
+            {categoryDetails.map((item) => (
+              <span key={item.label}>
+                <strong>{item.label}</strong> · {item.value}
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
+      {onPress ? (
+        <button
+          type="button"
+          aria-label={accessibleLabel}
+          onClick={onPress}
+          style={{ ...mainStyle, cursor: 'pointer' }}
+        >
+          {info}
+        </button>
+      ) : (
+        <div aria-label={accessibleLabel} style={mainStyle}>
+          {info}
+        </div>
+      )}
     </div>
   );
 }

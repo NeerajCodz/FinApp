@@ -12,6 +12,7 @@ export function Money({
   size = 'body',
   hidden = false,
   emphasize = false,
+  color,
 }: {
   amountMinor: bigint;
   currency: string;
@@ -19,6 +20,7 @@ export function Money({
   size?: MoneySize;
   hidden?: boolean;
   emphasize?: boolean;
+  color?: string;
 }) {
   const amount = signedMinor(amountMinor, type);
   const formatted = hidden
@@ -34,7 +36,7 @@ export function Money({
     <span
       aria-label={hidden ? 'Balance hidden' : `${type} ${amount.toString()} ${currency}`}
       style={{
-        color: emphasize ? 'var(--finapp-primary)' : 'var(--finapp-foreground)',
+        color: color ?? (emphasize ? 'var(--finapp-primary)' : 'var(--finapp-foreground)'),
         fontFamily: 'var(--finapp-font-sans)',
         fontSize: sizeStyle.fontSize,
         lineHeight: sizeStyle.lineHeight,

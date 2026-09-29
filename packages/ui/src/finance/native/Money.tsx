@@ -11,6 +11,7 @@ export function Money({
   size = 'body',
   hidden = false,
   emphasize = false,
+  color,
 }: {
   amountMinor: bigint;
   currency: string;
@@ -18,6 +19,7 @@ export function Money({
   size?: MoneySize;
   hidden?: boolean;
   emphasize?: boolean;
+  color?: string;
 }) {
   const amount = signedMinor(amountMinor, type);
   const { tokens } = useTheme();
@@ -34,7 +36,7 @@ export function Money({
     <Text
       accessibilityLabel={hidden ? 'Balance hidden' : `${type} ${amount.toString()} ${currency}`}
       style={{
-        color: emphasize ? tokens.primary : tokens.foreground,
+        color: color ?? (emphasize ? tokens.primary : tokens.foreground),
         fontFamily: 'SpaceGrotesk_600SemiBold',
         fontVariant: ['tabular-nums'],
         ...sizeStyle,
