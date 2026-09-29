@@ -33,7 +33,7 @@ import {
 } from '@finapp/ui/web';
 import { SettingsRow } from '@finapp/ui/finance';
 import { currencies } from '@convex/shared/validators';
-import type { ProfileUpdate } from '@convex/users/domain';
+import { normalizeUsername, type ProfileUpdate } from '@convex/users/domain';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -48,6 +48,7 @@ type Profile = LocalRecord & {
   defaultCurrency?: string;
 };
 type Editor = 'username' | 'phone' | null;
+const usernamePattern = /^[a-z0-9_]{3,32}$/;
 
 const links = [
   { label: 'Accounts', description: 'Balances and activity', href: '/account', icon: Wallet },
@@ -89,7 +90,11 @@ export default function ProfilePage() {
   const [currencyOpen, setCurrencyOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState('');
-
+  const normalizedUsername = normalizeUsername(draft);
+  const usernameError =
+    editor === 'username' && draft.trim().length > 0 && !usernamePattern.test(normalizedUsername)
+      ? 'Use 3–32 letters, numbers, or underscores.'
+      : '';
   if (!userId)
     return (
       <FinanceSignedOut
@@ -117,9 +122,8 @@ export default function ProfilePage() {
     setMessage('');
     try {
       const update: ProfileUpdate =
-        editor === 'username'
-          ? { username: draft.replace(/^@+/, '').toLowerCase() }
-          : { phone: draft };
+        editor === 'username' ? { username: normalizedUsername } : { phone: draft };
+      if (editor === 'username' && !usernamePattern.test(normalizedUsername)) return;
       await save(update);
       setEditor(null);
       setMessage('Saved on this device. It will sync when connected.');
@@ -147,7 +151,7 @@ export default function ProfilePage() {
 
   async function leave() {
     await signOut();
-    router.replace('/welcome');
+    router.replace('/sign-in');
   }
 
   return (
@@ -384,12 +388,17 @@ export default function ProfilePage() {
             autoFocus
             autoComplete={editor === 'username' ? 'username' : 'tel'}
             aria-label={editor === 'username' ? 'Username' : 'Phone number'}
-            maxLength={editor === 'username' ? 32 : 24}
-            onChangeText={setDraft}
+            aria-invalid={Boolean(usernameError)}
+            onChangeText={(value) => {
+              setDraft(value);
+              setMessage('');
+            }}
+            maxLength={editor === 'username' ? 64 : 24}
             placeholder={editor === 'username' ? '@neeraj' : '+91 98765 43210'}
             required
             value={draft}
           />
+          {!!usernameError && <Text role="alert">{usernameError}</Text>}
           <Text>
             {editor === 'username'
               ? '3–32 letters, numbers, or underscores.'
@@ -404,11 +413,7 @@ export default function ProfilePage() {
         </form>
       </Sheet>
 
-      <Sheet
-        visible={currencyOpen}
-        onClose={() => setCurrencyOpen(false)}
-        title="Default currency"
-      >
+      <Sheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} title="Default currency">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {currencies.map((currency) => (
             <Button
