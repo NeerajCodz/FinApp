@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Popover } from '../../web/overlay';
+import { Dialog } from '../../web/overlay';
 import {
   calendarMonthDays,
   calendarMonthKey,
+  defaultDateRangePresets,
   formatCalendarDate,
+  getDateRangePreset,
+  localCalendarDateKey,
   shiftCalendarMonth,
 } from '../dateRangeCalendar';
 import type { DateRangePreset } from '../dateRangeCalendar';
@@ -29,11 +32,20 @@ export function DateRangePopover({
 }) {
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() =>
-    calendarMonthKey(startDate || new Date().toISOString().slice(0, 10)),
+    calendarMonthKey(startDate || localCalendarDateKey(new Date())),
   );
   const [draftStart, setDraftStart] = useState(startDate);
   const [draftEnd, setDraftEnd] = useState(endDate);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const quickPresets = useMemo(
+    () => [
+      ...defaultDateRangePresets,
+      ...presets.filter(
+        (preset) =>
+          !defaultDateRangePresets.some((defaultPreset) => defaultPreset.label === preset.label),
+      ),
+    ],
+    [presets],
+  );
   const days = useMemo(() => calendarMonthDays(month), [month]);
   const monthLabel = useMemo(() => {
     const [year = 1970, monthNumber = 1] = month.split('-').map(Number);
@@ -48,19 +60,7 @@ export function DateRangePopover({
     if (!open) return;
     setDraftStart(startDate);
     setDraftEnd(endDate);
-    setMonth(calendarMonthKey(startDate || new Date().toISOString().slice(0, 10)));
-    const closeOnOutsidePress = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOnOutsidePress);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePress);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
+    setMonth(calendarMonthKey(startDate || localCalendarDateKey(new Date())));
   }, [endDate, open, startDate]);
 
   const chooseDay = (date: string) => {
@@ -75,11 +75,11 @@ export function DateRangePopover({
     }
   };
   const rangeLabel = draftStart
-    ? `${formatCalendarDate(draftStart)}${draftEnd ? ` – ${formatCalendarDate(draftEnd)}` : ' – Choose end date'}`
+    ? `${formatCalendarDate(draftStart)}${draftEnd ? ` – ${formatCalendarDate(draftEnd)}` : ' – Choose an end date or apply this day'}`
     : 'Choose a date range';
 
   return (
-    <div className="finapp-filter-option-popover activity-date-range" ref={rootRef}>
+    <div className="finapp-filter-option-popover activity-date-range">
       <button
         type="button"
         className="activity-date-range__trigger"
@@ -91,20 +91,25 @@ export function DateRangePopover({
         <CalendarDays size={15} aria-hidden="true" />
         <span>{label}</span>
       </button>
-      <Popover visible={open} className="activity-date-range__popup">
-        <div
-          role="dialog"
-          aria-label="Choose activity date range"
-          className="activity-date-range__layout"
-        >
+      <Dialog
+        visible={open}
+        onClose={() => setOpen(false)}
+        title="Choose activity date range"
+        className="activity-date-range__popup"
+      >
+        <div className="activity-date-range__layout">
           <div className="activity-date-range__presets">
             <strong>Quick ranges</strong>
-            {presets.map((preset) => (
+            {quickPresets.map((preset) => (
               <button
                 type="button"
                 key={preset.value}
                 onClick={() => {
-                  onPresetSelect(preset.value);
+                  const providedPreset = presets.find((item) => item.label === preset.label);
+                  const range = providedPreset ? undefined : getDateRangePreset(preset.value);
+                  if (providedPreset) onPresetSelect(providedPreset.value);
+                  else if (range) onRangeApply(range.startDate, range.endDate);
+                  else onPresetSelect(preset.value);
                   setOpen(false);
                 }}
               >
@@ -146,6 +151,8 @@ export function DateRangePopover({
                     key={date}
                     aria-label={formatCalendarDate(date)}
                     aria-pressed={selected}
+                    data-range-start={date === draftStart || undefined}
+                    data-range-end={(!!draftEnd && date === draftEnd) || undefined}
                     data-in-range={inRange || undefined}
                     data-selected={selected || undefined}
                     onClick={() => chooseDay(date)}
@@ -164,19 +171,19 @@ export function DateRangePopover({
               </button>
               <button
                 type="button"
-                disabled={!draftStart || !draftEnd}
+                disabled={!draftStart}
                 onClick={() => {
-                  if (!draftStart || !draftEnd) return;
-                  onRangeApply(draftStart, draftEnd);
+                  if (!draftStart) return;
+                  onRangeApply(draftStart, draftEnd || draftStart);
                   setOpen(false);
                 }}
               >
-                Apply range
+                {draftEnd ? 'Apply range' : 'Apply this day'}
               </button>
             </div>
           </div>
         </div>
-      </Popover>
+      </Dialog>
     </div>
   );
 }
