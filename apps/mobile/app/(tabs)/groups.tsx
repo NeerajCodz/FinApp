@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { Plus, UsersThree } from '@finapp/ui/icons/native';
+import { ArrowLeft, Plus, UsersThree } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupCard } from '@finapp/ui/finance';
 import { PeopleRail } from '@/components/finance/PeopleRail';
@@ -28,7 +28,18 @@ export default function GroupsScreen() {
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="title">Groups</Typography>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <IconButton
+            label="Go back"
+            variant="ghost"
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/(tabs)' as never)
+            }
+          >
+            <ArrowLeft size={21} color={tokens.foreground} />
+          </IconButton>
+          <Typography variant="title">Groups</Typography>
+        </View>
         <IconButton
           label="Create group"
           variant="ghost"
@@ -58,6 +69,7 @@ export default function GroupsScreen() {
               <GroupCard
                 key={groupId}
                 name={String(group.name ?? 'Group')}
+                icon={typeof group.icon === 'string' ? group.icon : undefined}
                 meta={`${String(group.currency ?? 'INR')} · shared ledger`}
                 balance="View balance"
                 meaning="Calculated from the complete group ledger"

@@ -97,6 +97,7 @@ export default function GroupsPage() {
                 <li key={id}>
                   <GroupCard
                     name={group.name ?? 'Group'}
+                    icon={typeof group.icon === 'string' ? group.icon : undefined}
                     meta={`${group.currency ?? 'INR'} · shared ledger`}
                     balance="View balance"
                     meaning="Calculated from the complete group ledger"

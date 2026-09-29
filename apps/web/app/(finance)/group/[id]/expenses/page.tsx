@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { Button, Empty } from '@finapp/ui/web';
-import { TransactionRow } from '@finapp/ui/finance';
+import { formatTransactionDate, TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered } from '@/lib/offline/repository';
@@ -19,6 +19,7 @@ type Expense = LocalRecord & {
   amountMinor?: bigint | number | string;
   currency?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   status?: string;
   deletedAt?: number;
 };
@@ -198,7 +199,10 @@ export default function GroupExpensesPage() {
                   currency={expense.currency ?? group.currency ?? 'INR'}
                   type="expense"
                   semanticType="split"
-                  date={new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
+                  date={formatTransactionDate(
+                    Number(expense.occurredAt ?? Date.now()),
+                    expense.hasTime,
+                  )}
                 />
               </Link>
             );
