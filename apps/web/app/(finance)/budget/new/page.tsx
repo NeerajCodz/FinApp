@@ -67,7 +67,10 @@ export default function NewPersonalBudgetPage() {
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   const account = accounts.find((item) => idOf(item) === accountId);
   const category = categories.find((item) => idOf(item) === categoryId);
-  const currency = period === 'account' ? (account?.currency ?? profile?.defaultCurrency) : profile?.defaultCurrency;
+  const currency =
+    period === 'account'
+      ? (account?.currency ?? profile?.defaultCurrency)
+      : profile?.defaultCurrency;
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -160,8 +163,14 @@ export default function NewPersonalBudgetPage() {
       <Link className="finance-secondary-action" href="/budget" aria-label="Go back">
         <ArrowLeft size={18} />
       </Link>
-      <PageHeading eyebrow="NEW BUDGET" title="New budget" description="Give spending a boundary." />
-      <p className="finance-muted">Track real expenses against a limit you choose.</p>
+      <PageHeading
+        eyebrow="BUDGET SETUP"
+        title="New budget"
+        description="Choose a limit and what it covers."
+      />
+      <p className="finance-muted">
+        Your budget is saved locally first and will sync when available.
+      </p>
       <Card className="finance-form-panel">
         {loading ? (
           <p className="finance-muted" role="status">
