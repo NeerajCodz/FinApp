@@ -154,7 +154,25 @@ export default function BudgetScreen() {
       </View>
 
       {loading ? (
-        <Text style={{ color: tokens.foregroundMuted }}>Loading budgets…</Text>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading budgets"
+          style={{
+            minHeight: 180,
+            justifyContent: 'center',
+            padding: 22,
+            gap: 12,
+            borderRadius: 22,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.surfaceSubtle,
+          }}
+        >
+          <Typography variant="label">Opening your budgets</Typography>
+          <Text style={{ color: tokens.foregroundMuted }}>
+            Reading saved limits and matching posted expenses…
+          </Text>
+        </View>
       ) : budgets.length === 0 ? (
         <View
           style={{
@@ -252,7 +270,7 @@ export default function BudgetScreen() {
               }}
             >
               <Typography variant="heading">Your budgets</Typography>
-              <Typography variant="caption">{budgets.length} active</Typography>
+              <Typography variant="caption">{budgets.length} saved</Typography>
             </View>
             {budgets.map((budget) => {
               const budgetId = budget.id ?? budget._id ?? budget.cloudId;
@@ -313,6 +331,23 @@ export default function BudgetScreen() {
                       </Typography>
                       <Typography variant="caption">
                         {period} · {budget.currency}
+                      </Typography>
+                      <Typography variant="caption">
+                        {Date.now() < budget.startAt
+                          ? 'Upcoming'
+                          : Date.now() >= budget.endAt
+                            ? 'Ended'
+                            : 'In progress'}{' '}
+                        ·{' '}
+                        {new Date(budget.startAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}{' '}
+                        –{' '}
+                        {new Date(budget.endAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
                       </Typography>
                     </View>
                     <CaretRight size={18} color={tokens.foregroundSubtle} />
