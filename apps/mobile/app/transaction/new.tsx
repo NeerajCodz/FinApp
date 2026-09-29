@@ -315,25 +315,49 @@ export default function NewTransactionScreen() {
           paddingHorizontal: 20,
           paddingTop: insets.top + 12,
           paddingBottom: insets.bottom + 24,
-          gap: 28,
+          gap: 20,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48 }}>
           <IconButton label="Cancel" variant="ghost" onPress={() => router.back()}>
             <ArrowLeft size={21} color={tokens.foreground} />
           </IconButton>
-          <Typography variant="bodyLarge" style={{ flex: 1, textAlign: 'center' }}>
-            Add {type}
-          </Typography>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Typography variant="bodyLarge" style={{ fontFamily: 'SpaceGrotesk_600SemiBold' }}>
+              New transaction
+            </Typography>
+            <Typography variant="caption">Record locally, sync when ready</Typography>
+          </View>
           <View style={{ width: 44 }} />
         </View>
-        <View style={{ minHeight: 150, alignItems: 'center', justifyContent: 'center' }}>
+        <View
+          style={{
+            minHeight: 180,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.surfaceRaised,
+            padding: 20,
+          }}
+        >
+          <Typography
+            variant="caption"
+            style={{ color: tokens.foregroundMuted, letterSpacing: 1.5 }}
+          >
+            {type} amount
+          </Typography>
           <CurrencyInput
             currency={account?.currency ?? profile?.defaultCurrency ?? 'INR'}
             value={amount}
             onChangeText={setAmount}
           />
         </View>
+        <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+          Transaction type
+        </Typography>
         <View
           style={{
             flexDirection: 'row',
@@ -382,7 +406,18 @@ export default function NewTransactionScreen() {
             );
           })}
         </View>
-        <View>
+        <View
+          style={{
+            paddingHorizontal: 12,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            borderRadius: 16,
+            backgroundColor: tokens.surfaceRaised,
+          }}
+        >
+          <Typography variant="caption" style={{ marginTop: 12, color: tokens.foregroundMuted }}>
+            Transaction details
+          </Typography>
           {type !== 'transfer' && (
             <>
               <SettingsRow
@@ -420,6 +455,9 @@ export default function NewTransactionScreen() {
             </>
           )}
           <Separator />
+          <Typography variant="caption" style={{ marginTop: 8, color: tokens.foregroundMuted }}>
+            Timing
+          </Typography>
           <SettingsRow
             label="Date"
             value={formatTransactionDate(date.getTime(), showTime)}
@@ -456,8 +494,16 @@ export default function NewTransactionScreen() {
             </Typography>
           </TouchableOpacity>
         </View>
-        <View style={{ gap: 12 }}>
-          <Typography variant="label">Note</Typography>
+        <View
+          style={{
+            gap: 12,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            borderRadius: 16,
+          }}
+        >
+          <Typography variant="label">Note and sharing</Typography>
           <Input
             accessibilityLabel="Transaction note"
             placeholder="What was this for?"

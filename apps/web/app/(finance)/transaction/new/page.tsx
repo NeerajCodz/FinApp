@@ -291,127 +291,197 @@ export default function NewPersonalTransactionPage() {
       </SignInGate>
     );
   const dataError = accountError ?? categoryError;
-  let amountValid = false;
-  try {
-    const amountMinor = parseMinor(amount, source?.currency ?? profile?.defaultCurrency ?? 'INR');
-    amountValid = amountMinor > 0n && amountMinor <= maxInt64;
-  } catch {}
+  const amountValid = (() => {
+    try {
+      const amountMinor = parseMinor(amount, source?.currency ?? profile?.defaultCurrency ?? 'INR');
+      return amountMinor > 0n && amountMinor <= maxInt64;
+    } catch {
+      return false;
+    }
+  })();
   return (
-    <div className="finance-page" style={{ gap: 24 }}>
-      <header style={{ display: 'flex', alignItems: 'center' }}>
+    <div
+      className="finance-page"
+      style={{ gap: 20, maxWidth: 760, marginInline: 'auto', width: '100%' }}
+    >
+      <header style={{ display: 'flex', alignItems: 'center', minHeight: 44 }}>
         <Link className="finance-secondary-action" href="/activity" aria-label="Cancel">
           <ArrowLeft size={21} aria-hidden="true" />
         </Link>
-        <Typography variant="bodyLarge" style={{ flex: 1, textAlign: 'center' }}>
-          Add {type}
-        </Typography>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <Typography variant="bodyLarge" style={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
+            New transaction
+          </Typography>
+          <Typography variant="small" style={{ color: 'var(--finapp-foreground-muted)' }}>
+            Record it locally, sync when ready
+          </Typography>
+        </div>
         <span aria-hidden="true" style={{ width: 44 }} />
       </header>
-      <form className="finance-form" onSubmit={create} style={{ display: 'grid', gap: 28 }}>
-        <div style={{ minHeight: 150, display: 'grid', placeItems: 'center' }}>
+      <form className="finance-form" onSubmit={create} style={{ display: 'grid', gap: 20 }}>
+        <section
+          aria-label="Transaction amount"
+          style={{
+            minHeight: 180,
+            display: 'grid',
+            alignContent: 'center',
+            justifyItems: 'center',
+            gap: 10,
+            borderRadius: 20,
+            border: '1px solid var(--finance-line)',
+            background: 'var(--finapp-surface-raised)',
+            padding: '20px 16px',
+          }}
+        >
+          <span
+            style={{
+              color: 'var(--finapp-foreground-muted)',
+              fontSize: 12,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+            }}
+          >
+            {type} amount
+          </span>
           <CurrencyInput
             currency={source?.currency ?? profile?.defaultCurrency ?? 'INR'}
             value={amount}
             onChangeText={setAmount}
           />
+        </section>
+        <div>
+          <Typography
+            variant="small"
+            style={{ display: 'block', marginBottom: 8, color: 'var(--finapp-foreground-muted)' }}
+          >
+            Transaction type
+          </Typography>
+          <div
+            role="group"
+            aria-label="Transaction type"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 4,
+              padding: 4,
+              borderRadius: 12,
+              background: 'var(--finapp-surface-raised)',
+            }}
+          >
+            {transactionTypes.map((item) => (
+              <Button
+                key={item}
+                type="button"
+                size="sm"
+                variant={type === item ? 'primary' : 'ghost'}
+                aria-pressed={type === item}
+                onPress={() => {
+                  setType(item);
+                  setCategoryId('');
+                }}
+                style={{
+                  minHeight: 42,
+                  borderRadius: 10,
+                  backgroundColor:
+                    type === item
+                      ? `var(--finapp-${item === 'transfer' ? 'warning' : item})`
+                      : 'transparent',
+                  color: type === item ? '#000' : undefined,
+                }}
+              >
+                {item.charAt(0).toUpperCase() + item.slice(1)}
+              </Button>
+            ))}
+          </div>
         </div>
-        <div
-          role="group"
-          aria-label="Transaction type"
+        <section
+          aria-label="Transaction details"
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            gap: 4,
-            padding: 4,
-            borderRadius: 12,
+            padding: '4px 16px',
+            border: '1px solid var(--finance-line)',
+            borderRadius: 16,
             background: 'var(--finapp-surface-raised)',
           }}
         >
-          {transactionTypes.map((item) => (
-            <Button
-              key={item}
-              type="button"
-              size="sm"
-              variant={type === item ? 'primary' : 'ghost'}
-              aria-pressed={type === item}
-              onPress={() => {
-                setType(item);
-                setCategoryId('');
-              }}
-              style={{
-                minHeight: 42,
-                borderRadius: 10,
-                backgroundColor:
-                  type === item
-                    ? `var(--finapp-${item === 'transfer' ? 'warning' : item})`
-                    : 'transparent',
-                color: type === item ? '#000' : undefined,
-              }}
-            >
-              {item.charAt(0).toUpperCase() + item.slice(1)}
-            </Button>
-          ))}
-        </div>
-        <div>
-          {type !== 'transfer' && (
-            <>
-              <SettingsRow
-                label="Category"
-                leadingIcon={
-                  <CategoryIcon label={category?.name ?? 'Category'} icon={category?.icon} />
-                }
-                value={
-                  category?.name ?? (categoryLoading ? 'Loading categories…' : 'Choose a category')
-                }
-                onPress={() => setPicker('category')}
-              />
-              <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-            </>
-          )}
-          <SettingsRow
-            label={type === 'transfer' ? 'From account' : 'Account'}
-            value={source?.name ?? (accountLoading ? 'Loading accounts…' : 'Choose an account')}
-            onPress={() => setPicker('account')}
-          />
-          {type === 'transfer' && (
-            <>
-              <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-              <SettingsRow
-                label="To account"
-                value={destination?.name ?? 'Choose destination'}
-                onPress={() => setPicker('destination')}
-              />
-            </>
-          )}
-          <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-          <SettingsRow
-            label="Date"
-            value={formatTransactionDate(occurredAt, showTime)}
-            onPress={() => setPicker('date')}
-          />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0' }}>
-            <input
-              type="checkbox"
-              checked={showTime}
-              onChange={(event) => {
-                const enabled = event.currentTarget.checked;
-                setShowTime(enabled);
-                if (enabled) {
-                  const date = new Date(occurredAt);
-                  const now = new Date();
-                  date.setHours(now.getHours(), now.getMinutes(), 0, 0);
-                  setOccurredAt(date.getTime());
-                } else {
-                  const date = new Date(occurredAt);
-                  date.setHours(12, 0, 0, 0);
-                  setOccurredAt(date.getTime());
-                }
-              }}
+          <div>
+            {type !== 'transfer' && (
+              <>
+                <SettingsRow
+                  label="Category"
+                  leadingIcon={
+                    <CategoryIcon label={category?.name ?? 'Category'} icon={category?.icon} />
+                  }
+                  value={
+                    category?.name ??
+                    (categoryLoading ? 'Loading categories…' : 'Choose a category')
+                  }
+                  onPress={() => setPicker('category')}
+                />
+                <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+              </>
+            )}
+            <SettingsRow
+              label={type === 'transfer' ? 'From account' : 'Account'}
+              value={source?.name ?? (accountLoading ? 'Loading accounts…' : 'Choose an account')}
+              onPress={() => setPicker('account')}
             />
-            <span>Include time</span>
-          </label>
-        </div>
-        <div style={{ display: 'grid', gap: 12 }}>
+            {type === 'transfer' && (
+              <>
+                <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+                <SettingsRow
+                  label="To account"
+                  value={destination?.name ?? 'Choose destination'}
+                  onPress={() => setPicker('destination')}
+                />
+              </>
+            )}
+            <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+            <Typography
+              variant="small"
+              style={{ display: 'block', paddingTop: 10, color: 'var(--finapp-foreground-muted)' }}
+            >
+              Timing
+            </Typography>
+            <SettingsRow
+              label="Date"
+              value={formatTransactionDate(occurredAt, showTime)}
+              onPress={() => setPicker('date')}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0' }}>
+              <input
+                type="checkbox"
+                checked={showTime}
+                onChange={(event) => {
+                  const enabled = event.currentTarget.checked;
+                  setShowTime(enabled);
+                  if (enabled) {
+                    const date = new Date(occurredAt);
+                    const now = new Date();
+                    date.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                    setOccurredAt(date.getTime());
+                  } else {
+                    const date = new Date(occurredAt);
+                    date.setHours(12, 0, 0, 0);
+                    setOccurredAt(date.getTime());
+                  }
+                }}
+              />
+              <span>Include time</span>
+            </label>
+          </div>
+        </section>
+        <section
+          style={{
+            display: 'grid',
+            gap: 12,
+            padding: 16,
+            border: '1px solid var(--finance-line)',
+            borderRadius: 16,
+          }}
+        >
+          <Typography variant="small" style={{ color: 'var(--finapp-foreground-muted)' }}>
+            Note and sharing
+          </Typography>
           <label className="finance-form-field">
             <span>Note</span>
             <Input
@@ -449,7 +519,7 @@ export default function NewPersonalTransactionPage() {
               <ArrowRight size={18} />
             </Link>
           )}
-        </div>
+        </section>
         {!accountLoading && accounts.length === 0 && (
           <p className="finance-muted">
             <Link className="finance-inline-link" href="/account/new">
