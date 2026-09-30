@@ -33,3 +33,58 @@ export function formatCalendarDate(dateKey: string) {
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
+
+export const defaultDateRangePresets: readonly DateRangePreset[] = [
+  { label: 'This week', value: 'range:this-week' },
+  { label: 'Today', value: 'range:today' },
+  { label: 'This month', value: 'range:this-month' },
+  { label: 'Last month', value: 'range:last-month' },
+  { label: 'Last 3 months', value: 'range:last-three-months' },
+  { label: 'This year', value: 'range:this-year' },
+];
+
+export function localCalendarDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+export function getDateRangePreset(
+  value: string,
+  referenceDate = new Date(),
+): { startDate: string; endDate: string } | undefined {
+  const today = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
+  );
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  let start: Date;
+
+  switch (value) {
+    case 'range:today':
+      start = today;
+      break;
+    case 'range:this-week':
+      start = new Date(year, month, today.getDate() - ((today.getDay() + 6) % 7));
+      break;
+    case 'range:this-month':
+      start = new Date(year, month, 1);
+      break;
+    case 'range:last-month':
+      start = new Date(year, month - 1, 1);
+      return {
+        startDate: localCalendarDateKey(start),
+        endDate: localCalendarDateKey(new Date(year, month, 0)),
+      };
+    case 'range:last-three-months':
+      start = new Date(year, month - 2, 1);
+      break;
+    case 'range:this-year':
+      start = new Date(year, 0, 1);
+      break;
+    default:
+      return undefined;
+  }
+
+  return { startDate: localCalendarDateKey(start), endDate: localCalendarDateKey(today) };
+}

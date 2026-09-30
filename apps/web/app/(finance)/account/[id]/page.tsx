@@ -300,17 +300,29 @@ export default function PersonalAccountDetailPage() {
     <div className="finance-page" style={{ gap: 28 }}>
       {pageHeader}
 
-      <section style={{ display: 'grid', gap: 8 }}>
+      <section
+        aria-label="Account balance"
+        style={{
+          display: 'grid',
+          gap: 10,
+          padding: 24,
+          borderRadius: 24,
+          border: '1px solid var(--finapp-border-subtle)',
+          background:
+            'radial-gradient(ellipse at 92% 0%, color-mix(in srgb, var(--finapp-primary) 12%, transparent), transparent 52%), var(--finapp-card)',
+        }}
+      >
+        <Typography variant="caption">CURRENT BALANCE</Typography>
         <Money amountMinor={balance} currency={currency} size="display" />
-        <Typography variant="caption">Current balance · {currency}</Typography>
-      </section>
-
-      <section style={{ display: 'grid', gap: 8 }}>
-        <Typography variant="title">{account.name ?? 'Account'}</Typography>
         <Typography variant="small">
           {accountType} · {currency}
         </Typography>
-        <Typography variant="caption">
+      </section>
+
+      <section style={{ display: 'grid', gap: 8 }}>
+        <Typography variant="caption">ACCOUNT DETAILS</Typography>
+        <Typography variant="title">{account.name ?? 'Account'}</Typography>
+        <Typography variant="small">
           {account.isIncludedInTotal ? 'Included in total balance' : 'Excluded from total balance'}
         </Typography>
         {account.archivedAt === undefined && (

@@ -213,6 +213,15 @@ export default function GoalsScreen() {
               goal.targetAmountMinor > 0n
                 ? Number((amount * 100n) / BigInt(goal.targetAmountMinor))
                 : 0;
+            const targetDate = goal.targetDate ? new Date(goal.targetDate) : null;
+            const dateLabel =
+              percent >= 100
+                ? 'Target reached'
+                : targetDate
+                  ? targetDate.getTime() < Date.now()
+                    ? `Target date passed · ${targetDate.toLocaleDateString()}`
+                    : `Target · ${targetDate.toLocaleDateString()}`
+                  : 'No target date';
             return (
               <TouchableOpacity
                 key={goal.id}
@@ -221,8 +230,8 @@ export default function GoalsScreen() {
                 onPress={() => router.push(`/goals/${goal.id}` as never)}
                 activeOpacity={0.65}
                 style={{
-                  paddingVertical: 16,
-                  gap: 9,
+                  paddingVertical: 18,
+                  gap: 10,
                   borderBottomWidth: 1,
                   borderColor: tokens.borderSubtle,
                 }}
@@ -230,9 +239,9 @@ export default function GoalsScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View
                     style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
+                      width: 48,
+                      height: 48,
+                      borderRadius: 16,
                       backgroundColor: tokens.surfaceRaised,
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -244,17 +253,16 @@ export default function GoalsScreen() {
                       color={tokens.primary}
                     />
                   </View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Typography variant="bodyLarge">{goal.name}</Typography>
-                    <Typography variant="small">
-                      {percent >= 100
-                        ? 'Target reached'
-                        : goal.targetDate
-                          ? `Target ${new Date(goal.targetDate).toLocaleDateString()}`
-                          : 'No target date'}
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                    <Typography variant="bodyLarge" numberOfLines={1}>
+                      {goal.name}
                     </Typography>
+                    <Typography variant="small">{dateLabel}</Typography>
                   </View>
-                  <Money amountMinor={amount} currency={goal.currency} />
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Money amountMinor={amount} currency={goal.currency} />
+                    <Typography variant="caption">saved</Typography>
+                  </View>
                   <CaretRight size={17} color={tokens.foregroundSubtle} />
                 </View>
                 <Progress value={Math.min(100, Math.max(0, percent))} color={tokens.primary} />
@@ -271,7 +279,12 @@ export default function GoalsScreen() {
           style={{ gap: 14, paddingTop: 16, borderTopWidth: 1, borderColor: tokens.borderSubtle }}
         >
           <Typography variant="heading">New goal</Typography>
-          <Input placeholder="What are you saving for?" value={name} onChangeText={setName} />
+          <Input
+            accessibilityLabel="Goal name"
+            placeholder="What are you saving for?"
+            value={name}
+            onChangeText={setName}
+          />
           <EntityIconPicker
             mode="lucide"
             value={icon}
@@ -279,6 +292,7 @@ export default function GoalsScreen() {
             label="Choose goal icon"
           />
           <Input
+            accessibilityLabel={`Target amount${currency ? ` in ${currency}` : ''}`}
             placeholder={currency ? `Target amount · ${currency}` : 'Loading currency…'}
             keyboardType="decimal-pad"
             value={target}

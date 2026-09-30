@@ -369,7 +369,8 @@ export default function RecurringPage() {
               <div
                 key={id}
                 style={{
-                  display: 'flex',
+                  display: 'grid',
+                  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
                   alignItems: 'center',
                   gap: 12,
                   padding: '16px 0',
@@ -390,7 +391,15 @@ export default function RecurringPage() {
                 >
                   <CalendarDays size={20} color={tokens.primary} />
                 </span>
-                <span style={{ display: 'grid', flex: 1, minWidth: 0, gap: 4 }}>
+                <span
+                  style={{
+                    display: 'grid',
+                    flex: 1,
+                    minWidth: 0,
+                    gap: 4,
+                    overflowWrap: 'anywhere',
+                  }}
+                >
                   <Typography variant="bodyLarge">{rule.name ?? 'Reminder'}</Typography>
                   <Typography variant="small">
                     {rule.enabled

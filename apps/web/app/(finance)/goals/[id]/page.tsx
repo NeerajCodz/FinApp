@@ -72,6 +72,16 @@ export default function GoalDetailPage() {
   const currency = goal?.currency ?? 'INR';
   const percent = target > 0n ? Number((saved * 100n) / target) : 0;
   const progress = Math.min(100, Math.max(0, percent));
+  const remaining = target > saved ? target - saved : 0n;
+  const targetDate = goal?.targetDate ? new Date(goal.targetDate) : null;
+  const targetDateLabel =
+    percent >= 100
+      ? 'Target reached'
+      : targetDate
+        ? targetDate.getTime() < Date.now()
+          ? `Target date passed · ${targetDate.toLocaleDateString()}`
+          : `Target date · ${targetDate.toLocaleDateString()}`
+        : 'No target date set';
 
   async function contribute(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -203,19 +213,31 @@ export default function GoalDetailPage() {
               {iconError}
             </Typography>
           )}
-          <section style={{ display: 'grid', gap: 8 }}>
+          <section
+            aria-label="Goal progress"
+            style={{
+              display: 'grid',
+              gap: 10,
+              padding: 20,
+              borderRadius: 20,
+              background: 'var(--finapp-surface-raised)',
+            }}
+          >
             <Typography variant="label">Saved so far</Typography>
             <Money amountMinor={saved} currency={currency} size="display" />
             <Typography variant="small">of {formatMinor(target, currency)} target</Typography>
             <Progress value={progress} />
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div
+              style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8 }}
+            >
               <Typography variant="caption">{percent}% reached</Typography>
-              <Typography variant="caption">
-                {goal.targetDate
-                  ? new Date(goal.targetDate).toLocaleDateString()
-                  : 'No target date'}
-              </Typography>
+              <Typography variant="caption">{targetDateLabel}</Typography>
             </div>
+            {remaining > 0n && (
+              <Typography variant="small">
+                {formatMinor(remaining, currency)} left to reach your target
+              </Typography>
+            )}
           </section>
           <section
             style={{

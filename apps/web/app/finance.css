@@ -2927,8 +2927,7 @@
 .activity-date-range__trigger:hover {
   color: var(--finance-lime);
 }
-.quick-filters-popover-popup.finapp-popover,
-.activity-date-range__popup.finapp-popover {
+.quick-filters-popover-popup.finapp-popover {
   position: absolute;
   z-index: 40;
   top: calc(100% + 8px);
@@ -2983,9 +2982,13 @@
   background: color-mix(in srgb, var(--finance-lime) 12%, transparent);
   color: var(--finance-lime);
 }
-.activity-date-range__popup.finapp-popover {
-  right: 0;
+.activity-date-range__popup.finapp-overlay__panel {
   width: min(600px, calc(100vw - 36px));
+  padding: 15px;
+  border-color: var(--finance-line);
+  border-radius: 14px;
+  background: var(--finapp-popover);
+  color: var(--finapp-popover-foreground);
 }
 .activity-date-range__layout {
   display: grid;
@@ -3037,7 +3040,7 @@
 .activity-date-range__days {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 3px;
+  gap: 0;
 }
 .activity-date-range__days > span {
   display: grid;
@@ -3050,7 +3053,7 @@
   min-width: 0;
   min-height: 34px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--finance-text);
   font: inherit;
@@ -3058,6 +3061,7 @@
   cursor: pointer;
 }
 .activity-date-range__days > button[data-in-range='true'] {
+  border-radius: 0;
   background: color-mix(in srgb, var(--finance-lime) 10%, transparent);
 }
 .activity-date-range__days > button[data-selected='true'] {

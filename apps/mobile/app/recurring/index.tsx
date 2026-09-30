@@ -231,9 +231,11 @@ export default function RecurringScreen() {
                 >
                   <CalendarDays size={20} color={tokens.primary} />
                 </View>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Typography variant="bodyLarge">{rule.name}</Typography>
-                  <Typography variant="small">
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                  <Typography variant="bodyLarge" numberOfLines={1}>
+                    {rule.name}
+                  </Typography>
+                  <Typography variant="small" numberOfLines={2}>
                     {rule.enabled
                       ? `${rule.frequency} · ${upcoming > now ? new Date(upcoming).toLocaleDateString() : 'due'}`
                       : 'Paused'}{' '}
@@ -301,7 +303,12 @@ export default function RecurringScreen() {
           style={{ gap: 14, paddingTop: 16, borderTopWidth: 1, borderColor: tokens.borderSubtle }}
         >
           <Typography variant="heading">New reminder</Typography>
-          <Input placeholder="Expense name" value={name} onChangeText={setName} />
+          <Input
+            accessibilityLabel="Expense name"
+            placeholder="Expense name"
+            value={name}
+            onChangeText={setName}
+          />
           <Typography variant="label">Account</Typography>
           {activeAccounts?.length === 0 && (
             <Button variant="outline" onPress={() => router.push('/account/new')}>
@@ -320,6 +327,7 @@ export default function RecurringScreen() {
             </Button>
           ))}
           <Input
+            accessibilityLabel={selected ? `Amount in ${selected.currency}` : 'Amount'}
             placeholder={selected ? `Amount · ${selected.currency}` : 'Choose an account first'}
             keyboardType="decimal-pad"
             value={amount}

@@ -2,6 +2,7 @@ import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { Typography } from './typography';
+import { Button } from './button';
 
 export function Sheet({
   visible,
@@ -64,7 +65,83 @@ export function Sheet({
 }
 
 export const Dialog = Sheet;
-export const AlertDialog = Sheet;
+export type AlertDialogProps = {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm?: () => void | Promise<void>;
+};
+
+export function AlertDialog({
+  visible,
+  onClose,
+  title = 'Confirm action',
+  description,
+  children,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  destructive = false,
+  onConfirm,
+}: AlertDialogProps) {
+  const { tokens } = useTheme();
+  const confirm = async () => {
+    await onConfirm?.();
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View
+        accessibilityViewIsModal
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close alert dialog"
+          onPress={onClose}
+          style={[StyleSheet.absoluteFill, { backgroundColor: tokens.overlay }]}
+        />
+        <View
+          accessibilityRole="alert"
+          style={{
+            width: '100%',
+            maxWidth: 440,
+            maxHeight: '88%',
+            gap: 16,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            borderRadius: 20,
+            backgroundColor: tokens.popover,
+          }}
+        >
+          <Typography variant="heading" style={{ fontSize: 20, lineHeight: 26 }}>
+            {title}
+          </Typography>
+          {description ? (
+            <Typography variant="body" style={{ color: tokens.foregroundMuted }}>
+              {description}
+            </Typography>
+          ) : null}
+          {children}
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+            <Button variant="outline" size="sm" onPress={onClose}>
+              {cancelLabel}
+            </Button>
+            <Button variant={destructive ? 'destructive' : 'primary'} size="sm" onPress={confirm}>
+              {confirmLabel}
+            </Button>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 export const Drawer = Sheet;
 
 export const DropdownMenu = ({ children }: { children: React.ReactNode }) => (

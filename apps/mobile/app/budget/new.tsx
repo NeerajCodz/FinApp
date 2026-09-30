@@ -194,9 +194,9 @@ export default function NewBudgetScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
+          paddingTop: insets.top + 10,
           paddingBottom: insets.bottom + 24,
-          gap: 28,
+          gap: 20,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -205,10 +205,13 @@ export default function NewBudgetScreen() {
           </IconButton>
           <Typography variant="heading">New budget</Typography>
         </View>
-        <View style={{ gap: 10 }}>
+        <View style={{ gap: 8 }}>
           <Typography variant="title">Give spending a boundary.</Typography>
           <Text style={{ color: tokens.foregroundMuted }}>
             Track real expenses against a limit you choose.
+          </Text>
+          <Text style={{ color: tokens.foregroundSubtle }}>
+            Saved on this device first; sync continues when you’re online.
           </Text>
         </View>
         <View>
@@ -236,6 +239,11 @@ export default function NewBudgetScreen() {
             onChange={(value) => setPeriod(value as Period)}
             tabs={periodOptions}
           />
+          <Text style={{ color: tokens.foregroundMuted }}>
+            {period === 'custom'
+              ? 'Choose a start date and an exclusive end date.'
+              : 'The budget covers this calendar month.'}
+          </Text>
         </View>
         {period === 'category' && (
           <View style={{ gap: 8 }}>

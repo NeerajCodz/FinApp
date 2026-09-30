@@ -266,22 +266,27 @@ export default function GroupSettingsPage() {
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <Link
-          className="finance-secondary-action"
-          href={`/group/${encodeURIComponent(currentGroupId)}`}
-          aria-label="Go back"
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <EntityIcon
-          value={
-            remoteGroup
-              ? (remoteGroup.icon ?? 'lucide:UsersRound')
-              : (group.icon ?? 'lucide:UsersRound')
-          }
-          size={24}
-        />
-        <h1 style={{ margin: 0 }}>Group settings</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link
+            className="finance-secondary-action"
+            href={`/group/${encodeURIComponent(currentGroupId)}`}
+            aria-label="Back to group"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <EntityIcon
+            value={
+              remoteGroup
+                ? (remoteGroup.icon ?? 'lucide:UsersRound')
+                : (group.icon ?? 'lucide:UsersRound')
+            }
+            size={24}
+          />
+          <div>
+            <p className="finance-kicker">GROUP MANAGEMENT</p>
+            <h1 style={{ margin: 0 }}>Settings</h1>
+          </div>
+        </div>
       </header>
       {(error || groupsError || membersError) && (
         <p className="finance-form-error" role="alert">
@@ -307,6 +312,9 @@ export default function GroupSettingsPage() {
       </Card>
       <Card className="finance-form-panel">
         <SectionHeader title="General" />
+        <p className="finance-form-note">
+          Owners and admins can rename the group. Currency stays fixed for existing splits.
+        </p>
         {editing ? (
           <form className="finance-form" onSubmit={saveName}>
             <FinanceInput
@@ -360,6 +368,9 @@ export default function GroupSettingsPage() {
       {canManage && (
         <Card className="finance-form-panel">
           <SectionHeader title="Appearance & chat" />
+          <p className="finance-form-note">
+            Icon and chat retention changes require an internet connection.
+          </p>
           <div className="finance-form-field">
             <span>Group icon</span>
             <EntityIconPicker

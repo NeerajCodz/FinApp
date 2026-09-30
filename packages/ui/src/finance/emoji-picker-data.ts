@@ -70,6 +70,54 @@ for (const [id, emoji] of Object.entries(data.emojis)) {
 }
 export const allEmojiPickerOptions = emojiPickerOptions;
 
+const emojiByNative = new Map(emojiPickerOptions.map((option) => [option.native, option]));
+const popularEmojiIds = [
+  'money_with_wings',
+  'moneybag',
+  'credit_card',
+  'shopping_cart',
+  'receipt',
+  'hamburger',
+  'coffee',
+  'house',
+  'car',
+  'airplane',
+  'gift',
+  'tada',
+  'books',
+  'pill',
+  'dog',
+  'bulb',
+  'iphone',
+  'musical_note',
+  'weight_lifting',
+  'seedling',
+  'luggage',
+  'green_salad',
+];
+const recentEmojiValues: string[] = [];
+
+export function getRecentEmojiOptions(): EmojiPickerOption[] {
+  return recentEmojiValues.flatMap((value) => {
+    const option = emojiByNative.get(value);
+    return option ? [option] : [];
+  });
+}
+
+export function getPopularEmojiOptions(): EmojiPickerOption[] {
+  return popularEmojiIds.flatMap((id) => (emojiByBaseId[id]?.[0] ? [emojiByBaseId[id][0]] : []));
+}
+
+export function recordRecentEmoji(value: string): void {
+  if (!emojiByNative.has(value)) return;
+  recentEmojiValues.splice(
+    0,
+    recentEmojiValues.length,
+    value,
+    ...recentEmojiValues.filter((item) => item !== value).slice(0, 23),
+  );
+}
+
 export function getEmojiPickerOptions(categoryId: string): EmojiPickerOption[] {
   const ids = emojisByCategory[categoryId];
   if (!ids) return emojiPickerOptions;

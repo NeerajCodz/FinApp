@@ -164,11 +164,13 @@ export default function NewPersonalBudgetPage() {
         <ArrowLeft size={18} />
       </Link>
       <PageHeading
-        eyebrow="NEW BUDGET"
+        eyebrow="BUDGET SETUP"
         title="New budget"
-        description="Give spending a boundary."
+        description="Choose a limit and what it covers."
       />
-      <p className="finance-muted">Track real expenses against a limit you choose.</p>
+      <p className="finance-muted">
+        Your budget is saved locally first and will sync when available.
+      </p>
       <Card className="finance-form-panel">
         {loading ? (
           <p className="finance-muted" role="status">

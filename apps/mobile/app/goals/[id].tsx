@@ -52,6 +52,17 @@ export default function GoalDetailScreen() {
     goal && goal.targetAmountMinor > 0n
       ? Number((saved * 100n) / BigInt(goal.targetAmountMinor))
       : 0;
+  const target = goal ? BigInt(goal.targetAmountMinor) : 0n;
+  const remaining = target > saved ? target - saved : 0n;
+  const targetDate = goal?.targetDate ? new Date(goal.targetDate) : null;
+  const targetDateLabel =
+    percent >= 100
+      ? 'Target reached'
+      : targetDate
+        ? targetDate.getTime() < Date.now()
+          ? `Target date passed · ${targetDate.toLocaleDateString()}`
+          : `Target date · ${targetDate.toLocaleDateString()}`
+        : 'No target date set';
 
   async function contribute() {
     if (!userId || !goal || saving) return;
@@ -197,19 +208,37 @@ export default function GoalDetailScreen() {
                 {iconError}
               </Text>
             )}
-            <Typography variant="label">Saved so far</Typography>
-            <Money amountMinor={saved} currency={goal.currency} size="display" />
-            <Text style={{ color: tokens.foregroundMuted }}>
-              of {formatMinor(BigInt(goal.targetAmountMinor), goal.currency)} target
-            </Text>
-            <Progress value={Math.min(100, Math.max(0, percent))} color={tokens.primary} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Typography variant="caption">{percent}% reached</Typography>
-              <Typography variant="caption">
-                {goal.targetDate
-                  ? new Date(goal.targetDate).toLocaleDateString()
-                  : 'No target date'}
-              </Typography>
+            <View
+              accessibilityLabel="Goal progress"
+              style={{
+                gap: 10,
+                padding: 18,
+                borderRadius: 20,
+                backgroundColor: tokens.surfaceRaised,
+              }}
+            >
+              <Typography variant="label">Saved so far</Typography>
+              <Money amountMinor={saved} currency={goal.currency} size="display" />
+              <Text style={{ color: tokens.foregroundMuted }}>
+                of {formatMinor(target, goal.currency)} target
+              </Text>
+              <Progress value={Math.min(100, Math.max(0, percent))} color={tokens.primary} />
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}
+              >
+                <Typography variant="caption">{percent}% reached</Typography>
+                <Typography variant="caption">{targetDateLabel}</Typography>
+              </View>
+              {remaining > 0n && (
+                <Text style={{ color: tokens.foregroundMuted }}>
+                  {formatMinor(remaining, goal.currency)} left to reach your target
+                </Text>
+              )}
             </View>
           </View>
           <View
@@ -220,6 +249,7 @@ export default function GoalDetailScreen() {
               This tracks progress; it does not move money between accounts.
             </Text>
             <Input
+              accessibilityLabel={`Contribution amount in ${goal.currency}`}
               placeholder={`Amount · ${goal.currency}`}
               keyboardType="decimal-pad"
               value={amount}

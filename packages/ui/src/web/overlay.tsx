@@ -25,6 +25,19 @@ type OverlayProps = {
   className?: string;
 };
 
+export type AlertDialogProps = {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm?: () => void | Promise<void>;
+  className?: string;
+};
+
 type OverlayKind = 'sheet' | 'dialog' | 'alert' | 'drawer';
 
 function Overlay({
@@ -134,8 +147,37 @@ export function Dialog(props: OverlayProps) {
   return <Overlay {...props} kind="dialog" />;
 }
 
-export function AlertDialog(props: OverlayProps) {
-  return <Overlay {...props} kind="alert" />;
+export function AlertDialog({
+  visible,
+  onClose,
+  title = 'Confirm action',
+  description,
+  children,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  destructive = false,
+  onConfirm,
+  className,
+}: AlertDialogProps) {
+  const confirm = async () => {
+    await onConfirm?.();
+    onClose();
+  };
+
+  return (
+    <Overlay visible={visible} onClose={onClose} title={title} className={className} kind="alert">
+      {description ? <Typography variant="body">{description}</Typography> : null}
+      {children}
+      <div className="finapp-alert-dialog__actions">
+        <Button variant="outline" size="sm" onPress={onClose}>
+          {cancelLabel}
+        </Button>
+        <Button variant={destructive ? 'destructive' : 'primary'} size="sm" onPress={confirm}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </Overlay>
+  );
 }
 
 export function Drawer(props: OverlayProps) {

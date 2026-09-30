@@ -7,7 +7,14 @@ import type { Id } from '@convex/_generated/dataModel';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { ArrowLeft, Gear, Plus, ReceiptText, UsersThree } from '@finapp/ui/icons/native';
+import {
+  ArrowLeft,
+  ChartLineUp,
+  Gear,
+  Plus,
+  ReceiptText,
+  UsersThree,
+} from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntityIcon, formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
 import {
@@ -22,6 +29,7 @@ import {
   useTheme,
 } from '@finapp/ui/native';
 import { recordId, recordIds } from '@/lib/ledger';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
 
 export default function GroupHomeScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -30,6 +38,8 @@ export default function GroupHomeScreen() {
   const { isConnected } = useLocalSync();
   const insets = useSafeAreaInsets();
   const { group, members, ledger, error, loading, retry, userId } = useGroupLedger(id);
+  const localSettlements = useLocalRecords(userId, 'settlement');
+  const chatTimelineRef = React.useRef<ScrollView>(null);
   const groupMembers =
     members?.filter(
       (record) =>
@@ -60,6 +70,10 @@ export default function GroupHomeScreen() {
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
   const [chatError, setChatError] = React.useState('');
+  React.useEffect(() => {
+    if (canUseGroupChat && chatMessages?.length)
+      chatTimelineRef.current?.scrollToEnd({ animated: true });
+  }, [canUseGroupChat, chatMessages?.length]);
 
   async function submitChatMessage() {
     if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
@@ -127,6 +141,48 @@ export default function GroupHomeScreen() {
       setChatPending(false);
     }
   }
+  const groupSettlementIds = recordIds(group ?? {});
+  const recentSettlements = (localSettlements.data ?? [])
+    .filter(
+      (record) =>
+        typeof record.groupId === 'string' &&
+        groupSettlementIds.includes(record.groupId) &&
+        typeof record.currency === 'string' &&
+        record.currency === ledger?.currency &&
+        record.deletedAt === undefined &&
+        typeof record.fromUserId === 'string' &&
+        typeof record.toUserId === 'string' &&
+        typeof record.amountMinor === 'bigint',
+    )
+    .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
+    .slice(0, 5);
+  const settlementMemberName = (memberId: string) => {
+    if (memberId === userId) return 'You';
+    const member = groupMembers.find((record) => (record.userId ?? record.memberId) === memberId);
+    return String(
+      member?.displayName ?? member?.name ?? member?.username ?? `Member ${memberId.slice(-6)}`,
+    );
+  };
+  const chatTimelineItems = [
+    ...recent.map((expense) => ({
+      id: `expense:${recordId(expense)}`,
+      kind: 'expense' as const,
+      createdAt: Number(expense.occurredAt ?? 0),
+      expense,
+    })),
+    ...recentSettlements.map((settlement) => ({
+      id: `settlement:${recordId(settlement)}`,
+      kind: 'settlement' as const,
+      createdAt: Number(settlement.occurredAt ?? 0),
+      settlement,
+    })),
+    ...(chatMessages ?? []).map((message) => ({
+      id: `message:${message.id}`,
+      kind: 'message' as const,
+      createdAt: message.createdAt,
+      message,
+    })),
+  ].sort((left, right) => left.createdAt - right.createdAt);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -155,6 +211,15 @@ export default function GroupHomeScreen() {
         <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>
           {String(group?.name ?? 'Group')}
         </Typography>
+        {!!id && (
+          <IconButton
+            label="Group analytics"
+            variant="ghost"
+            onPress={() => router.push({ pathname: '/group/[id]/analytics', params: { id } })}
+          >
+            <ChartLineUp size={20} color={tokens.foreground} />
+          </IconButton>
+        )}
         {!!id && (
           <IconButton
             label="Group settings"
@@ -248,58 +313,187 @@ export default function GroupHomeScreen() {
           </Button>
           <View style={{ gap: 12 }}>
             <SectionHeader title="Group chat" />
+            <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+              Messages and bill images are saved to this group when online. They are not queued for
+              offline sending.
+            </Typography>
             {canUseGroupChat ? (
               <>
-                <View
-                  accessibilityLiveRegion="polite"
+                <ScrollView
+                  ref={chatTimelineRef}
+                  accessibilityRole="list"
                   accessibilityLabel="Group messages"
-                  style={{ gap: 10, maxHeight: 380 }}
+                  accessibilityLiveRegion="polite"
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                  style={{
+                    maxHeight: 440,
+                    minHeight: 180,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: tokens.borderSubtle,
+                    backgroundColor: tokens.surfaceSubtle,
+                  }}
+                  contentContainerStyle={{ padding: 14, gap: 10, flexGrow: 1 }}
                 >
-                  {chatMessages === undefined ? (
-                    <Typography variant="small">Loading messages…</Typography>
-                  ) : chatMessages.length ? (
-                    chatMessages.map((message) => (
-                      <View
-                        key={message.id}
-                        style={{
-                          alignSelf: message.senderId === userId ? 'flex-end' : 'flex-start',
-                          maxWidth: '90%',
-                          gap: 6,
-                          padding: 12,
-                          borderRadius: 14,
-                          backgroundColor: tokens.surfaceSubtle,
-                        }}
-                      >
-                        <Typography variant="caption">{message.senderName}</Typography>
-                        {message.kind === 'bill' ? (
-                          message.attachmentUrl ? (
-                            <Image
-                              source={{ uri: message.attachmentUrl }}
-                              accessibilityLabel="Bill attachment"
-                              resizeMode="contain"
-                              style={{ width: 260, height: 210, borderRadius: 10 }}
-                            />
-                          ) : (
-                            <Typography variant="small">Bill image unavailable.</Typography>
-                          )
-                        ) : (
-                          <Text style={{ color: tokens.foreground, flexShrink: 1 }}>
-                            {message.text}
-                          </Text>
-                        )}
-                        <Typography variant="caption">
-                          {new Date(message.createdAt).toLocaleString()}
-                        </Typography>
-                      </View>
-                    ))
-                  ) : (
-                    <Typography variant="small">
-                      No messages yet. Start the conversation.
+                  {chatMessages === undefined && (
+                    <Typography variant="small" accessibilityLiveRegion="polite">
+                      Loading saved messages…
                     </Typography>
                   )}
-                </View>
+                  {chatTimelineItems.length ? (
+                    chatTimelineItems.map((item) => {
+                      const createdAt = new Date(item.createdAt);
+                      if (item.kind === 'message') {
+                        const { message } = item;
+                        const ownMessage = message.senderId === userId;
+                        return (
+                          <View
+                            key={item.id}
+                            accessibilityRole="text"
+                            accessibilityLabel={`${ownMessage ? 'You' : message.senderName}, ${createdAt.toLocaleString()}`}
+                            style={{
+                              alignSelf: ownMessage ? 'flex-end' : 'flex-start',
+                              maxWidth: '90%',
+                              gap: 6,
+                              paddingVertical: 10,
+                              paddingHorizontal: 13,
+                              borderWidth: 1,
+                              borderColor: tokens.borderSubtle,
+                              borderTopLeftRadius: 16,
+                              borderTopRightRadius: 16,
+                              borderBottomLeftRadius: ownMessage ? 16 : 5,
+                              borderBottomRightRadius: ownMessage ? 5 : 16,
+                              backgroundColor: ownMessage ? tokens.secondary : tokens.background,
+                            }}
+                          >
+                            <Typography variant="caption">
+                              {ownMessage ? 'You' : message.senderName}
+                            </Typography>
+                            {message.kind === 'bill' ? (
+                              message.attachmentUrl ? (
+                                <Image
+                                  source={{ uri: message.attachmentUrl }}
+                                  accessibilityLabel={`Bill image shared by ${ownMessage ? 'you' : message.senderName}`}
+                                  resizeMode="contain"
+                                  style={{ width: 260, height: 210, borderRadius: 10 }}
+                                />
+                              ) : (
+                                <Typography variant="small">
+                                  Bill image is no longer available.
+                                </Typography>
+                              )
+                            ) : (
+                              <Text
+                                style={{
+                                  color: tokens.foreground,
+                                  flexShrink: 1,
+                                  lineHeight: 22,
+                                }}
+                              >
+                                {message.text}
+                              </Text>
+                            )}
+                            <Typography variant="caption">{createdAt.toLocaleString()}</Typography>
+                          </View>
+                        );
+                      }
+                      if (item.kind === 'expense') {
+                        const { expense } = item;
+                        return (
+                          <View
+                            key={item.id}
+                            accessibilityRole="text"
+                            accessibilityLabel={`Shared expense: ${String(expense.title ?? 'Group expense')}, ${String(group?.currency ?? 'INR')}`}
+                            style={{
+                              alignSelf: 'center',
+                              width: '100%',
+                              gap: 5,
+                              padding: 12,
+                              borderWidth: 1,
+                              borderLeftWidth: 3,
+                              borderColor: tokens.borderSubtle,
+                              borderLeftColor: tokens.split,
+                              borderRadius: 12,
+                              backgroundColor: tokens.surfaceRaised,
+                            }}
+                          >
+                            <Typography variant="caption">Shared expense · Split</Typography>
+                            <Typography variant="bodyLarge">
+                              {String(expense.title ?? 'Group expense')}
+                            </Typography>
+                            <Money
+                              amountMinor={expense.amountMinor as bigint}
+                              currency={String(group?.currency ?? ledger?.currency ?? 'INR')}
+                              size="body"
+                            />
+                            <Typography variant="caption">
+                              {formatTransactionDate(
+                                Number(expense.occurredAt ?? 0),
+                                Boolean(expense.hasTime),
+                              )}
+                            </Typography>
+                          </View>
+                        );
+                      }
+                      const { settlement } = item;
+                      return (
+                        <View
+                          key={item.id}
+                          accessibilityRole="text"
+                          accessibilityLabel={`Settlement: ${settlementMemberName(String(settlement.fromUserId))} paid ${settlementMemberName(String(settlement.toUserId))}`}
+                          style={{
+                            alignSelf: 'center',
+                            width: '100%',
+                            gap: 5,
+                            padding: 12,
+                            borderWidth: 1,
+                            borderLeftWidth: 3,
+                            borderColor: tokens.borderSubtle,
+                            borderLeftColor: tokens.settlement,
+                            borderRadius: 12,
+                            backgroundColor: tokens.surfaceRaised,
+                          }}
+                        >
+                          <Typography variant="caption">Settlement</Typography>
+                          <Typography variant="bodyLarge">
+                            {settlementMemberName(String(settlement.fromUserId))} paid{' '}
+                            {settlementMemberName(String(settlement.toUserId))}
+                          </Typography>
+                          <Money
+                            amountMinor={settlement.amountMinor as bigint}
+                            currency={String(group?.currency ?? ledger?.currency ?? 'INR')}
+                            size="body"
+                          />
+                          {typeof settlement.occurredAt === 'number' && (
+                            <Typography variant="caption">
+                              {formatTransactionDate(settlement.occurredAt, true)}
+                            </Typography>
+                          )}
+                        </View>
+                      );
+                    })
+                  ) : chatMessages !== undefined ? (
+                    <View
+                      style={{
+                        flex: 1,
+                        minHeight: 150,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                        padding: 12,
+                      }}
+                    >
+                      <Typography variant="bodyLarge">Start the conversation</Typography>
+                      <Typography variant="small" style={{ textAlign: 'center' }}>
+                        Share a note or attach a bill for the group.
+                      </Typography>
+                    </View>
+                  ) : null}
+                </ScrollView>
                 <TextInput
                   accessibilityLabel="Group message"
+                  accessibilityHint="Messages are sent to the group when you are online."
                   value={chatDraft}
                   onChangeText={setChatDraft}
                   editable={!chatPending}
@@ -318,11 +512,15 @@ export default function GroupHomeScreen() {
                     textAlignVertical: 'top',
                   }}
                 />
+                <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                  {chatPending ? 'Sending to the group…' : `${chatDraft.length}/4,000 characters`}
+                </Typography>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <Button
                     style={{ flex: 1 }}
                     variant="outline"
                     disabled={chatPending}
+                    accessibilityLabel="Attach bill image"
                     onPress={() => void pickBillImage()}
                   >
                     Attach bill image
@@ -332,12 +530,30 @@ export default function GroupHomeScreen() {
                     disabled={chatPending || !chatDraft.trim()}
                     onPress={() => void submitChatMessage()}
                   >
-                    {chatPending ? 'Sending…' : 'Send'}
+                    {chatPending ? 'Sending…' : 'Send message'}
                   </Button>
                 </View>
               </>
             ) : (
-              <Typography variant="small">Connect to the internet to use group chat.</Typography>
+              <View
+                style={{
+                  padding: 16,
+                  gap: 6,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.borderSubtle,
+                  backgroundColor: tokens.surfaceSubtle,
+                }}
+              >
+                <Typography variant="label">
+                  {isConnected ? 'Chat is not synced yet' : 'Group chat is offline'}
+                </Typography>
+                <Typography variant="small">
+                  {isConnected
+                    ? 'This saved group has no connected cloud ID. Sync the group before using server chat or sharing bill images.'
+                    : 'Connect to the internet to load saved messages or send a message and bill image. Group ledger data remains available offline.'}
+                </Typography>
+              </View>
             )}
             {!!chatError && (
               <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
@@ -445,6 +661,48 @@ export default function GroupHomeScreen() {
                   Add expense
                 </Button>
               </View>
+            )}
+          </View>
+          <View style={{ gap: 12 }}>
+            <SectionHeader title="Recent settlements" />
+            {localSettlements.loading ? (
+              <Typography variant="small">Loading saved settlements…</Typography>
+            ) : localSettlements.error ? (
+              <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
+                Saved settlements could not be loaded.
+              </Typography>
+            ) : recentSettlements.length ? (
+              recentSettlements.map((settlement) => (
+                <View
+                  key={recordId(settlement)}
+                  style={{
+                    padding: 16,
+                    gap: 8,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: tokens.borderSubtle,
+                    backgroundColor: tokens.surfaceSubtle,
+                  }}
+                >
+                  <Typography variant="label">
+                    {settlementMemberName(String(settlement.fromUserId))} paid{' '}
+                    {settlementMemberName(String(settlement.toUserId))}
+                  </Typography>
+                  <Money
+                    amountMinor={settlement.amountMinor as bigint}
+                    currency={ledger!.currency}
+                    size="body"
+                  />
+                  {typeof settlement.occurredAt === 'number' &&
+                    Number.isFinite(settlement.occurredAt) && (
+                      <Typography variant="caption">
+                        {formatTransactionDate(settlement.occurredAt, true)}
+                      </Typography>
+                    )}
+                </View>
+              ))
+            ) : (
+              <Typography variant="small">No settlements recorded for this group yet.</Typography>
             )}
           </View>
         </>

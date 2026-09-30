@@ -5,7 +5,10 @@ import { Typography, useTheme } from '@finapp/ui/native';
 import {
   calendarMonthDays,
   calendarMonthKey,
+  defaultDateRangePresets,
   formatCalendarDate,
+  getDateRangePreset,
+  localCalendarDateKey,
   shiftCalendarMonth,
 } from '../dateRangeCalendar';
 import type { DateRangePreset } from '../dateRangeCalendar';
@@ -28,7 +31,7 @@ export function DateRangePopover({
   const { tokens } = useTheme();
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() =>
-    calendarMonthKey(startDate || new Date().toISOString().slice(0, 10)),
+    calendarMonthKey(startDate || localCalendarDateKey(new Date())),
   );
   const [draftStart, setDraftStart] = useState(startDate);
   const [draftEnd, setDraftEnd] = useState(endDate);
@@ -39,6 +42,16 @@ export function DateRangePopover({
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+  const quickPresets = useMemo(
+    () => [
+      ...defaultDateRangePresets,
+      ...presets.filter(
+        (preset) =>
+          !defaultDateRangePresets.some((defaultPreset) => defaultPreset.label === preset.label),
+      ),
+    ],
+    [presets],
+  );
   const chooseDay = (date: string) => {
     if (!draftStart || draftEnd) {
       setDraftStart(date);
@@ -61,7 +74,7 @@ export function DateRangePopover({
         onPress={() => {
           setDraftStart(startDate);
           setDraftEnd(endDate);
-          setMonth(calendarMonthKey(startDate || new Date().toISOString().slice(0, 10)));
+          setMonth(calendarMonthKey(startDate || localCalendarDateKey(new Date())));
           setOpen(true);
         }}
         style={{
@@ -126,12 +139,16 @@ export function DateRangePopover({
             <View style={{ gap: 7 }}>
               <Typography variant="caption">QUICK RANGES</Typography>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-                {presets.map((preset) => (
+                {quickPresets.map((preset) => (
                   <TouchableOpacity
                     key={preset.value}
                     accessibilityRole="button"
                     onPress={() => {
-                      onPresetSelect(preset.value);
+                      const providedPreset = presets.find((item) => item.label === preset.label);
+                      const range = providedPreset ? undefined : getDateRangePreset(preset.value);
+                      if (providedPreset) onPresetSelect(providedPreset.value);
+                      else if (range) onRangeApply(range.startDate, range.endDate);
+                      else onPresetSelect(preset.value);
                       close();
                     }}
                     style={{
@@ -200,7 +217,7 @@ export function DateRangePopover({
                       aspectRatio: 1,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      borderRadius: 99,
+                      borderRadius: selected ? 99 : inRange ? 0 : 99,
                       backgroundColor: selected
                         ? tokens.primary
                         : inRange
@@ -220,7 +237,7 @@ export function DateRangePopover({
             </View>
             <Typography variant="caption">
               {draftStart
-                ? `${formatCalendarDate(draftStart)}${draftEnd ? ` – ${formatCalendarDate(draftEnd)}` : ' – Choose end date'}`
+                ? `${formatCalendarDate(draftStart)}${draftEnd ? ` – ${formatCalendarDate(draftEnd)}` : ' – Choose an end date or apply this day'}`
                 : 'Choose a date range'}
             </Typography>
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
@@ -233,28 +250,27 @@ export function DateRangePopover({
               </TouchableOpacity>
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !draftStart || !draftEnd }}
-                disabled={!draftStart || !draftEnd}
+                accessibilityState={{ disabled: !draftStart }}
+                disabled={!draftStart}
                 onPress={() => {
-                  if (!draftStart || !draftEnd) return;
-                  onRangeApply(draftStart, draftEnd);
+                  if (!draftStart) return;
+                  onRangeApply(draftStart, draftEnd || draftStart);
                   close();
                 }}
                 style={{
                   borderRadius: 10,
                   paddingHorizontal: 14,
                   paddingVertical: 10,
-                  backgroundColor: !draftStart || !draftEnd ? tokens.surfaceSubtle : tokens.primary,
+                  backgroundColor: !draftStart ? tokens.surfaceSubtle : tokens.primary,
                 }}
               >
                 <Typography
                   variant="small"
                   style={{
-                    color:
-                      !draftStart || !draftEnd ? tokens.foregroundMuted : tokens.primaryForeground,
+                    color: !draftStart ? tokens.foregroundMuted : tokens.primaryForeground,
                   }}
                 >
-                  Apply range
+                  {draftEnd ? 'Apply range' : 'Apply this day'}
                 </Typography>
               </TouchableOpacity>
             </View>

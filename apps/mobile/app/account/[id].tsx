@@ -266,24 +266,35 @@ export default function AccountDetailScreen() {
           />
         ) : (
           <>
-            <View style={{ gap: 8 }}>
+            <View
+              style={{
+                gap: 10,
+                padding: 20,
+                borderRadius: 24,
+                backgroundColor: tokens.card,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+              }}
+            >
+              <Typography variant="caption">CURRENT BALANCE</Typography>
               <Money amountMinor={balanceMinor} currency={account.currency} size="display" />
-              <Typography variant="caption">Current balance · {account.currency}</Typography>
-            </View>
-
-            <View style={{ gap: 8 }}>
-              <Typography variant="heading">{displayAccountName(account.name)}</Typography>
               <Typography variant="small">
                 {account.type === 'other' && account.customType
                   ? account.customType
                   : (ACCOUNT_TYPES[account.type] ?? 'Account')}{' '}
                 · {account.currency}
               </Typography>
-              <Typography variant="caption">
+            </View>
+
+            <View style={{ gap: 10, paddingTop: 4 }}>
+              <Typography variant="caption">ACCOUNT DETAILS</Typography>
+              <Typography variant="heading">{displayAccountName(account.name)}</Typography>
+              <Typography variant="small">
                 {account.isIncludedInTotal
                   ? 'Included in total balance'
                   : 'Excluded from total balance'}
               </Typography>
+
               {account.archivedAt === undefined && (
                 <EntityIconPicker
                   mode="lucide"
