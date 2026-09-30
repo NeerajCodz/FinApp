@@ -4,7 +4,7 @@
 
 The public web landing page lives at `/` and renders without a Convex deployment URL.
 Its black-and-volt layout includes an interactive sample spending preview, savings and
-shared-money sections, FAQs, and a final-section WebGL coin. `/welcome`, `/sign-in`,
+shared-money sections, FAQs, and an interactive 3D WebGPU coin. `/welcome`, `/sign-in`,
 and `/sign-up` retain the app's authentication entry points; these routes require
 `NEXT_PUBLIC_CONVEX_URL` in `apps/web/.env.local`.
 
@@ -14,7 +14,8 @@ password visibility controls, and responsive verification-code fields.
 
 Account creation asks for email and password, followed by email verification. It
 does not offer or submit a two-factor enrollment option. Onboarding retains display
-name, username, gender, and avatar selection from the current application.
+name, username, and gender selection, with a live profile preview that reflects the
+entered name and selected avatar.
 
 Profile details are edited at `/profile/edit` on web and native, reachable from
 both the Profile page and Settings. Profile name, username, phone, and avatar edits
@@ -23,18 +24,22 @@ home header; they are not repeated across other screens.
 
 ### Coin implementation
 
-- `packages/ui/src/coin/geometry.ts`: flat volt faces, a thin beveled/reeded edge,
-  shallow circular grooves, and a recessed black F. Earcut triangulates the face
-  around the engraving rather than drawing a letter on top of an uncut face.
-- `packages/ui/src/coin/renderer.ts`: shared browser WebGL / Expo GLView renderer
-  with a fixed pose. Its only animated transform is vertical translation.
-- `packages/ui/src/coin/motion.ts`: Anime.js object animation sampled by each
-  platform's rendering loop; no DOM dependency or global engine modification.
-- Platform `CoinLogo` components stop animation for reduced motion and when hidden
-  or unfocused, dispose GPU resources on teardown, and retain the existing app icon
-  when WebGL is unavailable.
+- `packages/ui/src/coin/geometry.ts`: volt faces, a beveled/reeded edge, shallow
+  circular grooves, and a recessed black F. Earcut triangulates the face around
+  the engraving rather than drawing a letter on top of an uncut face.
+- `packages/ui/src/coin/renderer.ts`: shared WebGL / Expo GLView renderer with
+  interactive rotation and cursor- or touch-responsive lighting.
+- `apps/web/components/brand/createVgpuCoinRenderer.ts`: WebGPU lighting and a
+  cursor-responsive soft shadow, with the shared WebGL renderer as a fallback.
+- Platform `CoinLogo` components support pointer drag and arrow-key rotation on
+  web, touch drag on native, and stop animation for reduced motion or when hidden.
+  They dispose GPU resources on teardown and retain the app icon when WebGL is
+  unavailable.
 
 The native coin requires a build containing `expo-gl`.
+
+The public `/about` page and the About rows in Settings and Profile show version
+`v1.0.0` and link the developer credit to GitHub.
 
 ### Development
 
