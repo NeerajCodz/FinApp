@@ -35,7 +35,7 @@ export function CoinLogo({ className = '', paused = false }: { className?: strin
       if (!renderer || !visible || document.hidden) return;
       if (previous) elapsed += Math.min((timestamp - previous) / 1000, 0.1);
       previous = timestamp;
-      draw();
+      renderer.render(elapsed, canvas.width, canvas.height);
       if (!paused && !motion.matches) frame = requestAnimationFrame(tick);
     };
     const sync = () => {

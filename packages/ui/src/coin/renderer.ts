@@ -4,21 +4,16 @@ const vertexSource = `
 attribute vec3 aPosition;
 attribute vec3 aNormal;
 attribute vec3 aColor;
-uniform vec3 uRotation;
+uniform mat3 uRotation;
 uniform float uFloat;
 uniform float uAspect;
 varying vec3 vNormal;
 varying vec3 vColor;
 varying vec3 vPosition;
 void main() {
-  float x = uRotation.x, y = uRotation.y, z = uRotation.z;
-  mat3 rx = mat3(1.,0.,0., 0.,cos(x),sin(x), 0.,-sin(x),cos(x));
-  mat3 ry = mat3(cos(y),0.,-sin(y), 0.,1.,0., sin(y),0.,cos(y));
-  mat3 rz = mat3(cos(z),sin(z),0., -sin(z),cos(z),0., 0.,0.,1.);
-  mat3 rotation = rz * rx * ry;
-  vec3 position = rotation * aPosition + vec3(0., uFloat, -3.6);
+  vec3 position = uRotation * aPosition + vec3(0., uFloat, -3.6);
   vPosition = position;
-  vNormal = rotation * aNormal;
+  vNormal = uRotation * aNormal;
   vColor = aColor;
   gl_Position = vec4(position.x * 2.6 / uAspect, position.y * 2.6,
     -1.020202 * position.z - 0.2020202, -position.z);
@@ -91,6 +86,7 @@ export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
     const rotation = gl.getUniformLocation(program, 'uRotation');
     const floating = gl.getUniformLocation(program, 'uFloat');
     const aspect = gl.getUniformLocation(program, 'uAspect');
+    const matrix = new Float32Array(9);
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0, 0, 0, 0);
     return {
@@ -98,8 +94,22 @@ export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
         if (!program || width <= 0 || height <= 0) return;
         gl.viewport(0, 0, width, height);
         gl.useProgram(program);
-        gl.uniform3f(rotation, -0.18 + Math.sin(seconds * 0.45) * 0.08,
-          -0.42 + seconds * 0.65, 0.1 + Math.sin(seconds * 0.3) * 0.065);
+        const x = -0.18 + Math.sin(seconds * 0.45) * 0.08;
+        const y = -0.42 + seconds * 0.65;
+        const z = 0.1 + Math.sin(seconds * 0.3) * 0.065;
+        const sx = Math.sin(x), cx = Math.cos(x);
+        const sy = Math.sin(y), cy = Math.cos(y);
+        const sz = Math.sin(z), cz = Math.cos(z);
+        matrix[0] = cz * cy - sz * sx * sy;
+        matrix[1] = sz * cy + cz * sx * sy;
+        matrix[2] = -cx * sy;
+        matrix[3] = -sz * cx;
+        matrix[4] = cz * cx;
+        matrix[5] = sx;
+        matrix[6] = cz * sy + sz * sx * cy;
+        matrix[7] = sz * sy - cz * sx * cy;
+        matrix[8] = cx * cy;
+        gl.uniformMatrix3fv(rotation, false, matrix);
         gl.uniform1f(floating, Math.sin(seconds * 0.9) * 0.085);
         gl.uniform1f(aspect, width / height);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
