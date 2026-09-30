@@ -51,7 +51,7 @@ export function CoinLogo({
     if (!interactive || !previousTouch.current) return;
     const { pageX, pageY, locationX, locationY } = event.nativeEvent;
     interaction.current.rotationY += (pageX - previousTouch.current.x) * 0.012;
-    interaction.current.rotationX += (pageY - previousTouch.current.y) * 0.012;
+    interaction.current.rotationX -= (pageY - previousTouch.current.y) * 0.012;
     interaction.current.lightX = Math.max(-1, Math.min(1, (locationX / size) * 2 - 1));
     interaction.current.lightY = Math.max(-1, Math.min(1, 1 - (locationY / size) * 2));
     previousTouch.current = { x: pageX, y: pageY };

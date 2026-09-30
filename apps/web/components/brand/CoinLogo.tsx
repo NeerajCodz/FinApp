@@ -52,7 +52,7 @@ export function CoinLogo({
     interaction.current.lightY = lightY;
     if (drag.current?.pointerId === event.pointerId) {
       interaction.current.rotationY += (event.clientX - drag.current.x) * 0.012;
-      interaction.current.rotationX += (event.clientY - drag.current.y) * 0.012;
+      interaction.current.rotationX -= (event.clientY - drag.current.y) * 0.012;
       drag.current.x = event.clientX;
       drag.current.y = event.clientY;
       hoverRotation.current.x = 0;
