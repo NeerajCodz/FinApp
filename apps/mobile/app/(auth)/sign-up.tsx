@@ -3,19 +3,17 @@ import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { Button, Checkbox, Input, Label, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Input, Label, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit, isEmail, PasswordField } from '@/components/auth/AuthFields';
 
 export default function SignUpScreen() {
   const [email, setEmail] = useState('');
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [pending, setPending] = useState(false);
   const { signIn } = useAuthActions();
-  const { tokens } = useTheme();
 
   async function submit() {
     if (pending) return;
@@ -30,7 +28,6 @@ export default function SignUpScreen() {
     const form = new FormData();
     form.append('email', email.trim().toLowerCase());
     form.append('password', password);
-    form.append('twoFactorEnabled', String(twoFactorEnabled));
     form.append('flow', 'signUp');
     try {
       const result = await signIn('password', form);
@@ -102,20 +99,6 @@ export default function SignUpScreen() {
         editable={!pending}
         error={fieldErrors.password}
       />
-      <View
-        style={{ gap: 6, padding: 14, borderRadius: 18, backgroundColor: tokens.surfaceRaised }}
-      >
-        <Checkbox
-          checked={twoFactorEnabled}
-          onChange={(value) => {
-            if (!pending) setTwoFactorEnabled(value);
-          }}
-          label="Add email two-factor sign-in"
-        />
-        <Typography variant="small">
-          Optional. Get an email code after entering your password each time you sign in.
-        </Typography>
-      </View>
       <AuthError message={error} />
       <AuthSubmit
         label={pending ? 'Creating account…' : 'Create account'}

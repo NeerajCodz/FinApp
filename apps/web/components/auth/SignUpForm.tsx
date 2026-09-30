@@ -4,14 +4,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { Button, Checkbox, Input, Label } from '@finapp/ui/web';
+import { Button, Input, Label } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
 import { PasswordField } from './PasswordField';
 
 export function SignUpForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({ email: '', password: '' });
   const [pending, setPending] = useState(false);
@@ -46,7 +45,6 @@ export function SignUpForm() {
     const form = new FormData();
     form.set('email', normalizedEmail);
     form.set('password', password);
-    form.set('twoFactorEnabled', twoFactorEnabled ? 'true' : 'false');
     form.set('flow', 'signUp');
     try {
       const result = await signIn('password', form);
@@ -137,15 +135,6 @@ export function SignUpForm() {
               {fieldErrors.password}
             </p>
           )}
-        </div>
-        <div className="auth-two-factor-option">
-          <Checkbox
-            checked={twoFactorEnabled}
-            onChange={setTwoFactorEnabled}
-            disabled={pending}
-            label="Use email two-factor sign-in"
-          />
-          <p>Optional. Require a code sent to your email after your password.</p>
         </div>
         {error && (
           <p id="sign-up-error" className="auth-error" role="alert">

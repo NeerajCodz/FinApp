@@ -250,26 +250,6 @@ form.auth-form {
   background: #ffffff08;
   color: #b7ff4a;
 }
-.auth-two-factor-option {
-  display: grid;
-  gap: 4px;
-  padding: 12px 14px;
-  border: 1px solid #b7ff4a18;
-  border-radius: 12px;
-  background: #b7ff4a04;
-}
-.auth-two-factor-option .finapp-choice {
-  min-height: 32px;
-  align-items: center;
-  font-size: 0.8rem;
-}
-.auth-two-factor-option p {
-  margin: 0;
-  padding-left: 32px;
-  color: #b5b5b0;
-  font-size: 0.73rem;
-  line-height: 1.6;
-}
 .auth-form .finapp-button,
 .auth-welcome-actions .finapp-button {
   width: 100%;
@@ -827,9 +807,6 @@ form.auth-form {
   }
   .auth-story-index {
     font-size: 0.48rem;
-  }
-  .auth-two-factor-option {
-    padding-inline: 10px;
   }
   .auth-step-actions {
     display: grid;

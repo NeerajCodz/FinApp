@@ -16,7 +16,16 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
-import { Avatar, Button, Input, Label, Progress, Tabs, Typography, useTheme } from '@finapp/ui/native';
+import {
+  Avatar,
+  Button,
+  Input,
+  Label,
+  Progress,
+  Tabs,
+  Typography,
+  useTheme,
+} from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit } from '@/components/auth/AuthFields';
 type CurrencyCode = (typeof currencies)[number];

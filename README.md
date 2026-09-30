@@ -12,6 +12,10 @@ Web and mobile authentication use a scoped dark theme without changing the user'
 saved appearance preference. Mobile forms use a keyboard-aware scrollable scaffold,
 password visibility controls, and responsive verification-code fields.
 
+Account creation asks for email and password, followed by email verification. It
+does not offer or submit a two-factor enrollment option. Onboarding retains display
+name, username, gender, and avatar selection from the current application.
+
 ### Coin implementation
 
 - `packages/ui/src/coin/geometry.ts`: flat volt faces, a thin beveled/reeded edge,
