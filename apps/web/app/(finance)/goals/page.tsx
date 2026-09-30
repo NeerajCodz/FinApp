@@ -11,7 +11,7 @@ import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
 
 type Profile = LocalRecord & { defaultCurrency?: string };
-type Settings = LocalRecord & { currency?: string };
+type Settings = LocalRecord & { currency?: string; defaultCurrency?: string };
 type Goal = LocalRecord & {
   name?: string;
   targetAmountMinor?: bigint | number | string;
@@ -64,7 +64,8 @@ export default function GoalsPage() {
   const [adding, setAdding] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
-  const selectedCurrency = profiles[0]?.defaultCurrency ?? settings[0]?.currency ?? '';
+  const selectedCurrency =
+    profiles[0]?.defaultCurrency ?? settings[0]?.defaultCurrency ?? settings[0]?.currency ?? '';
   const activeGoals = goals
     .filter((goal) => goal.archivedAt === undefined)
     .sort(
@@ -148,7 +149,7 @@ export default function GoalsPage() {
         <Typography variant="title" style={{ flex: 1 }}>
           Goals
         </Typography>
-        {!loading && !adding && (
+        {!loading && !adding && selectedCurrency && (
           <IconButton label="Add goal" variant="ghost" onPress={() => setAdding(true)}>
             <Plus size={21} />
           </IconButton>

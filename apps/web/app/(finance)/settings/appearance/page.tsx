@@ -8,6 +8,8 @@ import type { Appearance } from '@finapp/ui/web';
 import { isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
+import { useLocalRecords } from '@/lib/offline/hooks';
+import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
 const options: { value: Appearance; label: string }[] = [
   { value: 'dark', label: 'Dark' },
@@ -28,6 +30,32 @@ export default function AppearanceSettingsPage() {
   const [customColor, setCustomColor] = useState<string>(
     isAccentColor(accent) ? accent : '#B7FF4A',
   );
+  const { records } = useLocalRecords<LocalRecord>('profile');
+  const profile = records[0];
+  const [accentError, setAccentError] = useState('');
+  async function chooseAccent(next: string) {
+    if (!userId) return;
+    setAccent(next as typeof accent);
+    setAccentError('');
+    try {
+      window.localStorage.setItem(`finapp.appearance.accent.v1:${userId}`, next);
+    } catch {
+      // Cloud persistence remains available if local cache storage is blocked.
+    }
+    try {
+      const current = profile ?? { id: userId };
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.update',
+        { ...current, accent: next },
+        { accent: next },
+        { recordId: String(current.id ?? current._id ?? userId) },
+      );
+    } catch {
+      setAccentError('Could not save this accent on this device.');
+    }
+  }
   if (!userId)
     return (
       <FinanceSignedOut
@@ -70,6 +98,7 @@ export default function AppearanceSettingsPage() {
         </section>
         <section style={{ display: 'grid', gap: 12 }}>
           <Typography variant="label">Accent color</Typography>
+          {accentError && <Text role="status">{accentError}</Text>}
           <Text style={{ maxWidth: 320 }}>
             Choose the color used for primary actions and highlights.
           </Text>
@@ -81,7 +110,7 @@ export default function AppearanceSettingsPage() {
                   key={option.value}
                   variant={selected ? 'primary' : 'outline'}
                   aria-pressed={selected}
-                  onPress={() => setAccent(option.value)}
+                  onPress={() => void chooseAccent(option.value)}
                   style={{ justifyContent: 'space-between', minHeight: 56 }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -147,7 +176,7 @@ export default function AppearanceSettingsPage() {
             disabled={!isAccentColor(customColor)}
             onPress={() => {
               if (!isAccentColor(customColor)) return;
-              setAccent(customColor);
+              void chooseAccent(customColor);
               setColorPickerOpen(false);
             }}
           >

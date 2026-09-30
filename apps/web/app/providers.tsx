@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
-import { ConvexReactClient } from 'convex/react';
+import { ConvexReactClient, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { ThemeProvider, useTheme } from '@finapp/ui/web';
-import { BrowserSyncProvider } from '@/lib/offline/BrowserSyncProvider';
+import type { AccentValue } from '@finapp/ui/tokens';
+import { BrowserSyncProvider, useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 function ThemedToaster() {
   const { tokens, isDark } = useTheme();
@@ -28,6 +30,53 @@ function ThemedToaster() {
 }
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
+
+const isAccent = (value: unknown): value is AccentValue =>
+  value === 'volt' ||
+  value === 'white' ||
+  value === 'blue' ||
+  (typeof value === 'string' && /^#[\da-f]{6}$/i.test(value));
+
+function AccentSync({ children }: { children: ReactNode }) {
+  const { userId } = useBrowserSync();
+  const profile = useQuery(api.users.queries.current);
+  const { setAccent } = useTheme();
+  const activeUser = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeUser.current = userId;
+    if (!userId) {
+      setAccent('volt');
+      return;
+    }
+    let cached: string | null = null;
+    try {
+      cached = window.localStorage.getItem(`finapp.appearance.accent.v1:${userId}`);
+    } catch {
+      // Keep the in-memory theme when browser storage is unavailable.
+    }
+    setAccent(isAccent(cached) ? cached : 'volt');
+  }, [userId, setAccent]);
+
+  useEffect(() => {
+    const profileId = String(profile?._id ?? '');
+    if (
+      !userId ||
+      activeUser.current !== userId ||
+      profileId !== userId ||
+      !isAccent(profile?.accent)
+    )
+      return;
+    setAccent(profile.accent);
+    try {
+      window.localStorage.setItem(`finapp.appearance.accent.v1:${userId}`, profile.accent);
+    } catch {
+      // Keep the in-memory theme when browser storage is unavailable.
+    }
+  }, [profile, userId, setAccent]);
+
+  return children;
+}
 
 export function Providers({ children }: { children: ReactNode }) {
   const client = useMemo(() => {
@@ -55,8 +104,10 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <ConvexAuthProvider client={client}>
       <ThemeProvider>
-        <BrowserSyncProvider>{children}</BrowserSyncProvider>
-        <ThemedToaster />
+        <BrowserSyncProvider>
+          <AccentSync>{children}</AccentSync>
+          <ThemedToaster />
+        </BrowserSyncProvider>
       </ThemeProvider>
     </ConvexAuthProvider>
   );

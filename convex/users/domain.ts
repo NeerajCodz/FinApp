@@ -1,7 +1,10 @@
+export type AccentValue = 'volt' | 'white' | 'blue' | `#${string}`;
+
 export type UserProfile = {
   identityId: string;
   displayName: string;
   username?: string;
+  accent?: AccentValue;
   email: string;
   phone?: string;
   avatarStorageId?: string;
@@ -26,7 +29,10 @@ export type UserSettings = {
 };
 
 export type ProfileUpdate = Partial<
-  Pick<UserProfile, 'displayName' | 'username' | 'phone' | 'defaultCurrency' | 'timezone'>
+  Pick<
+    UserProfile,
+    'displayName' | 'username' | 'phone' | 'defaultCurrency' | 'timezone' | 'accent'
+  >
 >;
 
 export function normalizeUsername(value: string): string {
@@ -47,6 +53,12 @@ export function validateProfileUpdate(update: ProfileUpdate): void {
     throw new Error('INVALID_PROFILE');
   if (update.phone !== undefined && !/^\+?[1-9]\d{7,14}$/.test(normalizePhone(update.phone)))
     throw new Error('INVALID_PHONE');
+  if (
+    update.accent !== undefined &&
+    !(['volt', 'white', 'blue'] as string[]).includes(update.accent) &&
+    !/^#[\da-f]{6}$/i.test(update.accent)
+  )
+    throw new Error('INVALID_ACCENT');
   if (update.defaultCurrency !== undefined && !/^[A-Z]{3}$/.test(update.defaultCurrency))
     throw new Error('INVALID_CURRENCY');
   if (update.timezone !== undefined) {

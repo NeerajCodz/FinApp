@@ -38,7 +38,10 @@ export default function GoalsScreen() {
   const [target, setTarget] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
-  const preferredCurrency = profiles.data?.[0]?.defaultCurrency ?? settings.data?.[0]?.currency;
+  const preferredCurrency =
+    profiles.data?.[0]?.defaultCurrency ??
+    settings.data?.[0]?.defaultCurrency ??
+    settings.data?.[0]?.currency;
   const currency = typeof preferredCurrency === 'string' ? preferredCurrency : null;
   const active = goals.data
     ?.filter((goal) => goal.archivedAt === undefined)
@@ -123,7 +126,7 @@ export default function GoalsScreen() {
         <Typography variant="title" style={{ flex: 1 }}>
           Goals
         </Typography>
-        {!loading && active && !adding && (
+        {!loading && active && !adding && currency && (
           <IconButton label="Add goal" variant="ghost" onPress={() => setAdding(true)}>
             <Plus size={21} color={tokens.foreground} />
           </IconButton>

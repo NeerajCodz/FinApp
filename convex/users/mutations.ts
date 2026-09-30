@@ -6,6 +6,7 @@ import {
   normalizePhone,
   normalizeUsername,
   validateProfileUpdate,
+  type AccentValue,
   type ProfileUpdate,
   type UserSettings,
 } from './domain';
@@ -19,6 +20,7 @@ type ProfileUpdateArgs = {
   phone?: string;
   defaultCurrency?: string;
   timezone?: string;
+  accent?: AccentValue;
   clientMutationId?: string;
 };
 
@@ -30,6 +32,7 @@ function normalizeProfileUpdate(update: ProfileUpdate): ProfileUpdate {
   if (update.defaultCurrency !== undefined)
     normalized.defaultCurrency = update.defaultCurrency.toUpperCase();
   if (update.timezone !== undefined) normalized.timezone = update.timezone.trim();
+  if (update.accent !== undefined) normalized.accent = update.accent.trim() as AccentValue;
   return normalized;
 }
 
@@ -62,6 +65,7 @@ export const update = mutation({
     phone: v.optional(v.string()),
     defaultCurrency: v.optional(v.string()),
     timezone: v.optional(v.string()),
+    accent: v.optional(v.string()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args: ProfileUpdateArgs) => {

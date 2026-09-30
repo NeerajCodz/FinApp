@@ -906,14 +906,18 @@ describe('Convex public runtime functions', () => {
         email: 'rahul@example.com',
         name: 'Rahul',
         username: 'rahul_42',
+        accent: 'blue',
       }),
     );
     const authenticated = t.withIdentity(identity);
 
     const usernameUpdated = await authenticated.mutation(api.users.mutations.update, {
       username: '@Neeraj_27',
+      accent: '#B7FF4A',
     });
     expect(usernameUpdated).toMatchObject({
+      username: 'neeraj_27',
+      accent: '#B7FF4A',
       phone: '+919876543210',
       phoneVerificationTime: 1234,
     });
@@ -925,6 +929,7 @@ describe('Convex public runtime functions', () => {
     expect(updated).toMatchObject({
       _id: userId,
       username: 'neeraj_27',
+      accent: '#B7FF4A',
       phone: '+919876543210',
       phoneVerificationTime: 1234,
       defaultCurrency: 'USD',
@@ -932,11 +937,27 @@ describe('Convex public runtime functions', () => {
     });
     expect(await authenticated.query(api.users.queries.current, {})).toMatchObject({
       username: 'neeraj_27',
+      accent: '#B7FF4A',
       phone: '+919876543210',
       defaultCurrency: 'USD',
       timezone: 'Asia/Kolkata',
     });
+    const otherAuthenticated = t.withIdentity({
+      subject: 'other-runtime-user',
+      email: 'rahul@example.com',
+    });
+    expect(await otherAuthenticated.query(api.users.queries.current, {})).toMatchObject({
+      username: 'rahul_42',
+      accent: 'blue',
+    });
+    const restoredSession = t.withIdentity(identity);
+    expect(await restoredSession.query(api.users.queries.current, {})).toMatchObject({
+      username: 'neeraj_27',
+      accent: '#B7FF4A',
+    });
     expect(await t.run((ctx) => ctx.db.get(userId))).toMatchObject({
+      username: 'neeraj_27',
+      accent: '#B7FF4A',
       defaultCurrency: 'USD',
     });
     const updatedSettings = await t.run((ctx) =>

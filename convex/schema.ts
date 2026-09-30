@@ -21,6 +21,7 @@ export default defineSchema({
     identityId: v.optional(v.string()),
     displayName: v.optional(v.string()),
     username: optionalText,
+    accent: optionalText,
     avatarStorageId: optionalText,
     defaultCurrency: v.optional(currency),
     defaultAccountId: v.optional(v.id('accounts')),

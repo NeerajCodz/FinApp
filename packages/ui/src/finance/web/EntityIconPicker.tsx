@@ -114,37 +114,21 @@ function IconTile({
       type="button"
       aria-label={icon.searchText}
       aria-pressed={selected}
-      title={icon.name}
       onClick={onSelect}
       style={{
         minWidth: 0,
         minHeight: 46,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        gap: 8,
-        padding: '0 9px',
+        aspectRatio: '1',
+        display: 'grid',
+        placeItems: 'center',
         border: `1px solid ${selected ? tokens.primary : tokens.borderSubtle}`,
         borderRadius: 11,
         background: selected ? tokens.surfaceSubtle : tokens.surfaceRaised,
         color: tokens.primary,
         cursor: 'pointer',
-        textAlign: 'left',
       }}
     >
-      <Icon size={17} color={tokens.primary} aria-hidden="true" />
-      <span
-        style={{
-          minWidth: 0,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          color: tokens.foregroundMuted,
-          fontSize: 11,
-        }}
-      >
-        {icon.searchText}
-      </span>
+      <Icon size={20} color={tokens.primary} aria-hidden="true" />
     </button>
   );
 }
@@ -164,7 +148,6 @@ function EmojiTile({
       type="button"
       aria-label={`${emoji.native} ${emoji.name}`}
       aria-pressed={selected}
-      title={emoji.name}
       onClick={onSelect}
       style={{
         minWidth: 0,

@@ -103,26 +103,21 @@ function IconTile({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={icon.name}
+      accessibilityLabel={icon.searchText}
       accessibilityState={{ selected }}
       onPress={onSelect}
       style={{
-        width: '30%',
-        minHeight: 44,
-        flexDirection: 'row',
-        gap: 6,
-        paddingHorizontal: 8,
+        width: '15%',
+        aspectRatio: 1,
         borderWidth: 1,
         borderColor: selected ? tokens.primary : tokens.borderSubtle,
         borderRadius: 11,
         backgroundColor: selected ? tokens.surfaceSubtle : tokens.surfaceRaised,
         alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
-      <Icon size={17} color={tokens.primary} />
-      <Text numberOfLines={1} style={{ flex: 1, color: tokens.foregroundMuted, fontSize: 11 }}>
-        {icon.searchText}
-      </Text>
+      <Icon size={20} color={tokens.primary} />
     </Pressable>
   );
 }

@@ -138,13 +138,13 @@ export const chatMessages = query({
         return {
           id: message._id,
           kind: message.kind,
-          text: message.text,
+          ...(message.text === undefined ? {} : { text: message.text }),
           senderId: message.senderId,
           senderName: sender?.displayName ?? sender?.name ?? 'Member',
           createdAt: message.createdAt,
           attachmentUrl,
-          mimeType: message.mimeType,
-          size: message.size,
+          ...(message.mimeType === undefined ? {} : { mimeType: message.mimeType }),
+          ...(message.size === undefined ? {} : { size: message.size }),
         };
       }),
     );

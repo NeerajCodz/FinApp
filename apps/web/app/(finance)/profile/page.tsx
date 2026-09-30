@@ -1,9 +1,11 @@
 'use client';
 
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useRouter } from 'next/navigation';
+import { useMutation } from 'convex/react';
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { api } from '@convex/_generated/api';
 import {
   ArrowRight,
   Bell,
@@ -37,7 +39,7 @@ import { normalizeUsername, type ProfileUpdate } from '@convex/users/domain';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { commitLocalWrite, upsertCloudPage, type LocalRecord } from '@/lib/offline/repository';
 
 type Profile = LocalRecord & {
   displayName?: string;
@@ -74,8 +76,9 @@ const privacyLinks = [
 
 export default function ProfilePage() {
   const { signOut } = useAuthActions();
+  const updateUser = useMutation(api.users.mutations.update);
   const router = useRouter();
-  const { userId } = useBrowserSync();
+  const { userId, isConnected } = useBrowserSync();
   const { tokens, appearance } = useTheme();
   const { records, loading, error } = useLocalRecords<Profile>('profile');
   const profile = records[0];
@@ -101,6 +104,11 @@ export default function ProfilePage() {
   async function save(update: ProfileUpdate) {
     if (!userId) throw new Error('AUTH_REQUIRED');
     const current: Profile = profile ?? { id: userId, displayName: 'Your profile' };
+    if (update.username !== undefined && isConnected) {
+      const savedProfile = await updateUser({ username: update.username });
+      await upsertCloudPage(userId, 'profile', [savedProfile as unknown as LocalRecord]);
+      return;
+    }
     const next = { ...current, ...update };
     if (update.phone !== undefined && update.phone !== profile?.phone)
       next.phoneVerificationTime = undefined;
@@ -120,7 +128,11 @@ export default function ProfilePage() {
       if (editor === 'username' && !usernamePattern.test(normalizedUsername)) return;
       await save(update);
       setEditor(null);
-      setMessage('Saved on this device. It will sync when connected.');
+      setMessage(
+        update.username !== undefined && isConnected
+          ? 'Username saved to your account.'
+          : 'Saved on this device. It will sync when connected.',
+      );
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Could not save profile changes.');
     } finally {

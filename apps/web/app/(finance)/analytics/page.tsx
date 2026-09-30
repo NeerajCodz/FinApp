@@ -88,10 +88,6 @@ const periods: { value: AnalyticsPeriod; label: string }[] = [
   { value: 'month', label: 'Month' },
   { value: 'year', label: 'Year' },
 ];
-const cashFlowChartTypes = [
-  { value: 'lines', label: 'Lines' },
-  { value: 'bars', label: 'Bars' },
-] as const;
 const categoryChartTypes = [
   { value: 'donut', label: 'Donut' },
   { value: 'bars', label: 'Bars' },
@@ -174,7 +170,6 @@ export default function AnalyticsPage() {
   const [typeFilter, setTypeFilter] = React.useState<
     'all' | 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'
   >('all');
-  const [cashFlowChartType, setCashFlowChartType] = React.useState<'lines' | 'bars'>('lines');
   const [categoryChartType, setCategoryChartType] = React.useState<'donut' | 'bars'>('donut');
   const [dailyChartType, setDailyChartType] = React.useState<'bars' | 'line'>('bars');
   const [rangeLoading, setRangeLoading] = React.useState(false);
@@ -463,10 +458,35 @@ export default function AnalyticsPage() {
     result?.buckets.map((bucket) =>
       chartMax > 0n ? Number((bucket.amountMinor * 10000n) / chartMax) / 100 : 0,
     ) ?? [];
-  const chartDescription =
-    result?.buckets
-      .map((bucket) => `${bucket.label}: ${formatMinor(bucket.amountMinor, currency)}`)
-      .join('; ') ?? '';
+  const chartAxisFormatter = React.useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        ...(period === 'year' ? { month: 'short' } : { day: 'numeric' }),
+      }),
+    [period, timeZone],
+  );
+  const chartDetailFormatter = React.useMemo(
+    () => new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeZone }),
+    [timeZone],
+  );
+  const chartAxisLabels =
+    result?.buckets.map((bucket) =>
+      period === 'year' ? bucket.label : chartAxisFormatter.format(bucket.startAt),
+    ) ?? [];
+  const chartDetails =
+    result?.buckets.map((bucket) => chartDetailFormatter.format(bucket.startAt)) ?? [];
+  const chartAmounts =
+    result?.buckets.map((bucket) => formatMinor(bucket.amountMinor, currency)) ?? [];
+  const categoryAmounts =
+    result?.categoryBreakdown.map((item) => formatMinor(item.amountMinor, currency)) ?? [];
+  const categoryDetails = result
+    ? result.categoryBreakdown.map(
+        (item) =>
+          `${result.spentMinor > 0n ? Number((item.amountMinor * 1000n) / result.spentMinor) / 10 : 0}% of spending`,
+      )
+    : [];
+
   const savingsRate =
     result?.incomeMinor && result.incomeMinor > 0n
       ? Number(((result.incomeMinor - result.spentMinor) * 1000n) / result.incomeMinor) / 10
@@ -804,15 +824,12 @@ export default function AnalyticsPage() {
             <AnalyticsChartPanel
               title="Cash flow"
               description="Select a period to inspect its activity"
-              chartType={cashFlowChartType}
-              chartTypes={cashFlowChartTypes}
-              onChartTypeChange={(value) => setCashFlowChartType(value as 'lines' | 'bars')}
             >
               {result.buckets.length ? (
                 <CashFlowChart
                   buckets={result.buckets}
                   currency={currency}
-                  variant={cashFlowChartType}
+                  timeZone={timeZone}
                   onSelectBucket={(bucket) =>
                     router.push(`/activity?startAt=${bucket.startAt}&endAt=${bucket.endAt}`)
                   }
@@ -840,16 +857,17 @@ export default function AnalyticsPage() {
                   onSelectItem={(item) => router.push(breakdownHref('category', item.id))}
                 />
               ) : result.categoryBreakdown.length ? (
-                <div role="img" aria-label="Spending by category bar chart">
-                  <BarChart
-                    values={result.categoryBreakdown.map((item) =>
-                      result.spentMinor > 0n
-                        ? Number((item.amountMinor * 10000n) / result.spentMinor) / 100
-                        : 0,
-                    )}
-                    labels={result.categoryBreakdown.map((item) => item.label)}
-                  />
-                </div>
+                <BarChart
+                  values={result.categoryBreakdown.map((item) =>
+                    result.spentMinor > 0n
+                      ? Number((item.amountMinor * 10000n) / result.spentMinor) / 100
+                      : 0,
+                  )}
+                  labels={result.categoryBreakdown.map((item) => item.label)}
+                  details={categoryDetails}
+                  amounts={categoryAmounts}
+                  orientation="horizontal"
+                />
               ) : (
                 <Typography variant="caption">No posted expenses in this period.</Typography>
               )}
@@ -865,12 +883,12 @@ export default function AnalyticsPage() {
             >
               {chartMax > 0n ? (
                 dailyChartType === 'bars' ? (
-                  <div role="img" aria-label={`Daily spending by period. ${chartDescription}`}>
-                    <BarChart
-                      values={chartValues}
-                      labels={result.buckets.map((item) => item.label)}
-                    />
-                  </div>
+                  <BarChart
+                    values={chartValues}
+                    labels={chartAxisLabels}
+                    details={chartDetails}
+                    amounts={chartAmounts}
+                  />
                 ) : (
                   <SpendingLineChart
                     values={chartValues}
@@ -878,12 +896,16 @@ export default function AnalyticsPage() {
                       result.buckets[0]?.label ?? 'Start',
                       result.buckets.at(-1)?.label ?? 'End',
                     ]}
+                    xLabels={chartAxisLabels}
+                    details={chartDetails}
+                    amounts={chartAmounts}
                   />
                 )
               ) : (
                 <Typography variant="caption">No daily spending in this period.</Typography>
               )}
             </AnalyticsChartPanel>
+
             <Card style={{ display: 'grid', alignContent: 'start', gap: 12, padding: 15 }}>
               <div>
                 <Typography variant="bodyLarge">Accounts & balances</Typography>

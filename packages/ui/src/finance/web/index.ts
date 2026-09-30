@@ -11,6 +11,7 @@ export { CurrencyInput } from './CurrencyInput';
 export { BudgetProgress } from './BudgetProgress';
 export { GroupCard } from './GroupCard';
 export { SettlementEditor } from './SettlementEditor';
+export { InfoDescription, type InfoDescriptionProps } from './InfoDescription';
 export { semanticLabels, type MoneySize, type SemanticType, type TransactionType } from '../types';
 export { signedMinor } from '../money';
 export { MobileFinanceNav } from './MobileFinanceNav';

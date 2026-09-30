@@ -8,28 +8,14 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import Storage from 'expo-sqlite/kv-store';
-import {
-  createTokens,
-  isAccentColor,
-  type AccentValue,
-  type ThemeMode,
-  type ThemeTokens,
-} from '../tokens';
+import { createTokens, type AccentValue, type ThemeMode, type ThemeTokens } from '../tokens';
 
 type Appearance = 'system' | ThemeMode;
 const APPEARANCE_KEY = 'finapp.appearance.mode.v1';
-const ACCENT_KEY = 'finapp.appearance.accent.v1';
 
 function savedAppearance(): Appearance {
   const value = Storage.getItemSync(APPEARANCE_KEY);
   return value === 'light' || value === 'dark' || value === 'system' ? value : 'dark';
-}
-
-function savedAccent(): AccentValue {
-  const value = Storage.getItemSync(ACCENT_KEY);
-  if (value === 'white' || value === 'blue' || value === 'volt') return value;
-  if (value && isAccentColor(value)) return value;
-  return 'volt';
 }
 
 type ThemeContextValue = {
@@ -46,13 +32,12 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme();
   const [appearance, updateAppearance] = useState<Appearance>(savedAppearance);
-  const [accent, updateAccent] = useState<AccentValue>(savedAccent);
+  const [accent, updateAccent] = useState<AccentValue>('volt');
   const setAppearance = useCallback((value: Appearance) => {
     Storage.setItemSync(APPEARANCE_KEY, value);
     updateAppearance(value);
   }, []);
   const setAccent = useCallback((value: AccentValue) => {
-    Storage.setItemSync(ACCENT_KEY, value);
     updateAccent(value);
   }, []);
   const [fontsLoaded] = useFonts({
