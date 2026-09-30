@@ -1,40 +1,24 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ReceiptText } from '@finapp/ui/icons/native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { AccountDetailView } from '@finapp/ui/finance';
+import type { AccountActivityEntry } from '@finapp/ui/finance';
+import { formatTransactionDate } from '@finapp/ui/finance';
+import type { TransactionType } from '@finapp/ui/finance';
+import { Button, Empty, Typography, useTheme } from '@finapp/ui/native';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EntityIconPicker, formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
-import { displayAccountName, recordIndex } from '@/lib/ledger';
-import {
-  Button,
-  Empty,
-  IconButton,
-  Input,
-  Label,
-  Separator,
-  Sheet,
-  Typography,
-} from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { recordIndex } from '@/lib/ledger';
 
-const ACCOUNT_TYPES = {
-  cash: 'Cash',
-  bank: 'Bank',
-  card: 'Card',
-  wallet: 'Wallet',
-  loan: 'Loan',
-  other: 'Other',
-} as const;
 type AccountRecord = LocalRecord & {
   id?: string;
   _id?: string;
   cloudId?: string;
   name: string;
-  type: keyof typeof ACCOUNT_TYPES;
+  type: string;
   customType?: string;
   currency: string;
   balanceMinor?: bigint;
@@ -46,7 +30,6 @@ type AccountRecord = LocalRecord & {
   icon?: string;
   color?: string;
 };
-
 type TransactionRecord = LocalRecord & {
   id?: string;
   _id?: string;
@@ -88,10 +71,7 @@ export default function AccountDetailScreen() {
     timelineRange.endAt,
     fetchTransactionRange,
   );
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState('');
   const [pending, setPending] = useState(false);
-  const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [error, setError] = useState('');
   const account = accountState.data?.find(
     (record) =>
@@ -99,359 +79,171 @@ export default function AccountDetailScreen() {
       (record.id === id || record._id === id || record.cloudId === id),
   );
   const accountIds = useMemo(
-    () =>
-      new Set(
-        [id, account?.id, account?._id, account?.cloudId].filter(
-          (value): value is string => typeof value === 'string' && value.length > 0,
-        ),
-      ),
+    () => new Set([id, account?.id, account?._id, account?.cloudId].filter((value): value is string => typeof value === 'string' && value.length > 0)),
     [id, account],
   );
   const accountTransactions = useMemo(
-    () =>
-      (transactionRange.data ?? [])
-        .filter(
-          (transaction) =>
-            transaction.status === 'posted' &&
-            transaction.deletedAt === undefined &&
-            (accountIds.has(transaction.accountId) ||
-              (transaction.type === 'transfer' &&
-                !!transaction.transferAccountId &&
-                accountIds.has(transaction.transferAccountId))),
-        )
-        .sort((left, right) => right.occurredAt - left.occurredAt)
-        .slice(0, 50),
+    () => (transactionRange.data ?? [])
+      .filter((transaction) =>
+        transaction.status === 'posted' &&
+        transaction.deletedAt === undefined &&
+        (accountIds.has(transaction.accountId) ||
+          (transaction.type === 'transfer' && !!transaction.transferAccountId && accountIds.has(transaction.transferAccountId))),
+      )
+      .sort((left, right) => right.occurredAt - left.occurredAt),
     [transactionRange.data, accountIds],
   );
-  const balanceMinor =
-    (account?.balanceMinor ?? account?.openingBalanceMinor ?? 0n) +
+  const flowActivity = accountTransactions.map((transaction) => {
+    const isOutgoing = accountIds.has(transaction.accountId);
+    return {
+      occurredAt: transaction.occurredAt,
+      cashFlowMinor: transaction.type === 'transfer'
+        ? isOutgoing ? -transaction.amountMinor : transaction.amountMinor
+        : transaction.type === 'expense' ? -transaction.amountMinor : transaction.amountMinor,
+    };
+  });
+  const balanceMinor = (account?.balanceMinor ?? account?.openingBalanceMinor ?? 0n) +
     (localTransactions.data ?? []).reduce((delta, transaction) => {
-      if (
-        typeof transaction.clientUpdatedAt !== 'number' ||
-        transaction.status !== 'posted' ||
-        transaction.deletedAt !== undefined
-      )
-        return delta;
-      const amount = transaction.amountMinor;
+      if (typeof transaction.clientUpdatedAt !== 'number' || transaction.status !== 'posted' || transaction.deletedAt !== undefined) return delta;
       const sourceDelta = accountIds.has(transaction.accountId)
-        ? transaction.type === 'expense' || transaction.type === 'transfer'
-          ? -amount
-          : amount
+        ? transaction.type === 'expense' || transaction.type === 'transfer' ? -transaction.amountMinor : transaction.amountMinor
         : 0n;
-      const destinationDelta =
-        transaction.type === 'transfer' &&
-        transaction.transferAccountId &&
-        accountIds.has(transaction.transferAccountId)
-          ? amount
-          : 0n;
+      const destinationDelta = transaction.type === 'transfer' && transaction.transferAccountId && accountIds.has(transaction.transferAccountId)
+        ? transaction.amountMinor
+        : 0n;
       return delta + sourceDelta + destinationDelta;
     }, 0n);
+  const activity: AccountActivityEntry[] = accountTransactions.slice(0, 50).map((transaction) => {
+    const isTransfer = transaction.type === 'transfer';
+    const isOutgoing = accountIds.has(transaction.accountId);
+    const category = categories.get(transaction.categoryId ?? '');
+    const cashFlowMinor = isTransfer
+      ? isOutgoing ? -transaction.amountMinor : transaction.amountMinor
+      : transaction.type === 'expense' ? -transaction.amountMinor : transaction.amountMinor;
+    const type: TransactionType = isTransfer
+      ? isOutgoing ? 'expense' : 'income'
+      : transaction.type;
+    const transactionId = String(transaction._id ?? transaction.id ?? transaction.cloudId ?? '');
+    return {
+      id: transactionId,
+      title: isTransfer
+        ? `${isOutgoing ? 'Transfer out' : 'Transfer in'} · ${transaction.title}`
+        : transaction.title,
+      category: typeof category?.name === 'string' ? category.name : undefined,
+      categoryIcon: typeof category?.icon === 'string' ? category.icon : undefined,
+      date: formatTransactionDate(transaction.occurredAt, transaction.hasTime, timeZone),
+      status: transaction.status,
+      amountMinor: transaction.amountMinor,
+      currency: transaction.currency,
+      type,
+      semanticType: transaction.groupId ? 'split' : isTransfer ? 'transfer' : undefined,
+      occurredAt: transaction.occurredAt,
+      cashFlowMinor,
+    };
+  });
+  const accountLocalId = account?.id ?? account?._id ?? account?.cloudId;
+  const operationAccountId = account?._id ?? account?.cloudId ?? account?.id;
 
-  async function saveName() {
-    if (!account || !userId || !name.trim() || pending) return;
-    const localRecordId = account.id ?? account._id ?? account.cloudId;
-    const operationAccountId = account._id ?? account.cloudId ?? account.id;
-    if (!localRecordId || !operationAccountId) return;
-    const trimmedName = name.trim();
+  async function writeAccount(
+    operation: 'account.rename' | 'account.setIcon' | 'account.setColor' | 'account.archive',
+    record: LocalRecord,
+    payload: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (!account || !userId || !accountLocalId || !operationAccountId || pending) return false;
     setPending(true);
     setError('');
     try {
       await commitLocalWrite(
         userId,
         'account',
-        'account.rename',
-        { ...account, name: trimmedName },
-        { accountId: operationAccountId, name: trimmedName },
+        operation,
+        record,
+        { accountId: operationAccountId, ...payload },
         {
-          recordId: localRecordId,
+          recordId: accountLocalId,
           dependencies: account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
           baseUpdatedAt: account.updatedAt,
         },
       );
-      setEditing(false);
+      return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not rename account.');
-    } finally {
-      setPending(false);
-    }
-  }
-  async function saveIcon(icon?: string) {
-    if (!account || !userId || pending) return;
-    const localRecordId = account.id ?? account._id ?? account.cloudId;
-    const operationAccountId = account._id ?? account.cloudId ?? account.id;
-    if (!localRecordId || !operationAccountId) return;
-    setPending(true);
-    setError('');
-    try {
-      await commitLocalWrite(
-        userId,
-        'account',
-        'account.setIcon',
-        { ...account, icon: icon ?? undefined },
-        { accountId: operationAccountId, icon: icon ?? null },
-        {
-          recordId: localRecordId,
-          dependencies: account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
-          baseUpdatedAt: account.updatedAt,
-        },
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update account icon.');
+      setError(cause instanceof Error ? cause.message : `Could not save this account ${operation === 'account.setColor' ? 'color' : 'change'}.`);
+      return false;
     } finally {
       setPending(false);
     }
   }
 
-  async function archiveAccount() {
-    if (!account || !userId || pending) return;
-    const localRecordId = account.id ?? account._id ?? account.cloudId;
-    const operationAccountId = account._id ?? account.cloudId ?? account.id;
-    if (!localRecordId || !operationAccountId) return;
-    setPending(true);
-    setError('');
-    try {
-      await commitLocalWrite(
-        userId,
-        'account',
-        'account.archive',
-        { ...account, archivedAt: Date.now() },
-        { accountId: operationAccountId },
-        {
-          recordId: localRecordId,
-          dependencies: account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
-          baseUpdatedAt: account.updatedAt,
-        },
-      );
-      router.replace('/account' as never);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not archive account.');
-      setConfirmingArchive(false);
-    } finally {
-      setPending(false);
-    }
+  async function renameAccount(name: string): Promise<boolean> {
+    if (!account) return false;
+    return writeAccount('account.rename', { ...account, name }, { name });
   }
+  async function setAccountIcon(icon: string | null): Promise<void> {
+    if (!account) return;
+    await writeAccount('account.setIcon', { ...account, icon: icon ?? undefined }, { icon });
+  }
+  async function setAccountColor(color: string | null): Promise<void> {
+    if (!account) return;
+    await writeAccount('account.setColor', { ...account, color: color ?? undefined }, { color });
+  }
+  async function archiveAccount(): Promise<boolean> {
+    if (!account) return false;
+    const didArchive = await writeAccount('account.archive', { ...account, archivedAt: Date.now() }, {});
+    if (didArchive) router.replace('/accounts' as never);
+    return didArchive;
+  }
+
   if (accountState.error) throw accountState.error;
   if (localTransactions.error) throw localTransactions.error;
   if (transactionRange.error && !transactionRange.data) throw transactionRange.error;
   const isLoading = accountState.loading || localTransactions.loading || transactionRange.loading;
 
+  if (!id) {
+    return <Empty title="Account unavailable." description="This account could not be found." />;
+  }
+  if (isLoading) {
+    return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: tokens.background }}><Typography variant="small">Loading account…</Typography></View>;
+  }
+  if (!account) {
+    return <Empty title="Account unavailable." description="This account could not be found or is no longer available." />;
+  }
+
   return (
-    <>
-      <ScrollView
-        style={{ flex: 1, backgroundColor: tokens.background }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 32,
-          gap: 28,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          <Typography variant="heading" style={{ flex: 1 }} numberOfLines={1}>
-            {account ? displayAccountName(account.name) : 'Account'}
-          </Typography>
-        </View>
-
-        {!id ? (
-          <Empty title="Account unavailable." description="This account could not be found." />
-        ) : isLoading ? (
-          <Typography variant="small">Loading account…</Typography>
-        ) : !account ? (
-          <Empty
-            title="Account unavailable."
-            description="This account could not be found or is no longer available."
-          />
-        ) : (
-          <>
-            <View
-              style={{
-                gap: 10,
-                padding: 20,
-                borderRadius: 24,
-                backgroundColor: tokens.card,
-                borderWidth: 1,
-                borderColor: tokens.borderSubtle,
-              }}
-            >
-              <Typography variant="caption">CURRENT BALANCE</Typography>
-              <Money amountMinor={balanceMinor} currency={account.currency} size="display" />
-              <Typography variant="small">
-                {account.type === 'other' && account.customType
-                  ? account.customType
-                  : (ACCOUNT_TYPES[account.type] ?? 'Account')}{' '}
-                · {account.currency}
-              </Typography>
-            </View>
-
-            <View style={{ gap: 10, paddingTop: 4 }}>
-              <Typography variant="caption">ACCOUNT DETAILS</Typography>
-              <Typography variant="heading">{displayAccountName(account.name)}</Typography>
-              <Typography variant="small">
-                {account.isIncludedInTotal
-                  ? 'Included in total balance'
-                  : 'Excluded from total balance'}
-              </Typography>
-
-              {account.archivedAt === undefined && (
-                <EntityIconPicker
-                  mode="lucide"
-                  value={account.icon}
-                  onChange={(icon) => void saveIcon(icon)}
-                  label="Change account icon"
-                />
-              )}
-              {account.color ? (
-                <Typography variant="caption">Color: {account.color}</Typography>
-              ) : null}
-              {typeof account.createdAt === 'number' && Number.isFinite(account.createdAt) ? (
-                <Typography variant="caption">
-                  Added {new Date(account.createdAt).toLocaleDateString()}
-                </Typography>
-              ) : null}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onPress={() => {
-                    setName(displayAccountName(account.name));
-                    setEditing(true);
-                  }}
-                >
-                  Rename
-                </Button>
-                <Button size="sm" variant="destructive" onPress={() => setConfirmingArchive(true)}>
-                  Archive
-                </Button>
-              </View>
-            </View>
-
-            {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
-
-            <View style={{ gap: 10 }}>
-              <Typography variant="heading">Recent activity</Typography>
-              {accountTransactions.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 24, gap: 10 }}>
-                  <ReceiptText size={28} color={tokens.foregroundMuted} />
-                  <Typography variant="bodyLarge">No posted activity yet</Typography>
-                  <Typography variant="small" style={{ textAlign: 'center' }}>
-                    Record a transaction to see it here.
-                  </Typography>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onPress={() =>
-                      router.push({
-                        pathname: '/transaction/new',
-                        params: { accountId: id },
-                      } as never)
-                    }
-                  >
-                    Add transaction
-                  </Button>
-                </View>
-              ) : (
-                <View>
-                  {accountTransactions.map((transaction, index) => {
-                    const category = categories.get(transaction.categoryId ?? '');
-                    return (
-                      <React.Fragment
-                        key={transaction._id ?? transaction.id ?? transaction.cloudId}
-                      >
-                        <TransactionRow
-                          title={
-                            transaction.type === 'transfer'
-                              ? `${accountIds.has(transaction.accountId) ? 'Transfer out' : 'Transfer in'} · ${transaction.title}`
-                              : transaction.title
-                          }
-                          category={typeof category?.name === 'string' ? category.name : undefined}
-                          categoryIcon={
-                            typeof category?.icon === 'string' ? category.icon : undefined
-                          }
-                          amountMinor={transaction.amountMinor}
-                          currency={transaction.currency}
-                          type={
-                            transaction.type === 'transfer'
-                              ? accountIds.has(transaction.accountId)
-                                ? 'expense'
-                                : 'income'
-                              : transaction.type
-                          }
-                          semanticType={
-                            transaction.groupId
-                              ? 'split'
-                              : transaction.type === 'transfer'
-                                ? 'transfer'
-                                : undefined
-                          }
-                          date={formatTransactionDate(
-                            transaction.occurredAt,
-                            transaction.hasTime,
-                            timeZone,
-                          )}
-                          onPress={() =>
-                            router.push(
-                              `/transaction/${transaction._id ?? transaction.id ?? transaction.cloudId}` as never,
-                            )
-                          }
-                        />
-                        {index < accountTransactions.length - 1 && <Separator />}
-                      </React.Fragment>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          </>
-        )}
-      </ScrollView>
-
-      <Sheet visible={editing} title="Rename account" onClose={() => setEditing(false)}>
-        <Label>Account name</Label>
-        <Input accessibilityLabel="Account name" value={name} onChangeText={setName} autoFocus />
-        <Button disabled={pending || !name.trim()} onPress={saveName}>
-          {pending ? 'Saving…' : 'Save name'}
-        </Button>
-        <Button variant="outline" onPress={() => setEditing(false)}>
-          Cancel
-        </Button>
-      </Sheet>
-      <Sheet
-        visible={confirmingArchive}
-        title="Archive account?"
-        onClose={() => setConfirmingArchive(false)}
-      >
-        <Typography variant="small">
-          Past transactions and balances remain in your history. This account will no longer be
-          available for new activity.
-        </Typography>
-        <Button variant="destructive" disabled={pending} onPress={archiveAccount}>
-          {pending
-            ? 'Archiving…'
-            : `Archive ${account ? displayAccountName(account.name) : 'account'}`}
-        </Button>
-        <Button variant="outline" onPress={() => setConfirmingArchive(false)}>
-          Cancel
-        </Button>
-      </Sheet>
-    </>
+    <AccountDetailView
+      account={{
+        id: String(accountLocalId),
+        name: account.name,
+        type: account.type,
+        customType: account.customType,
+        currency: account.currency,
+        balanceMinor,
+        icon: account.icon,
+        color: account.color,
+        isIncludedInTotal: account.isIncludedInTotal === true,
+        createdAt: account.createdAt,
+      }}
+      activity={activity}
+      flowActivity={flowActivity}
+      isBusy={pending}
+      error={error}
+      rangeNotice={transactionRange.error?.message}
+      topInset={insets.top}
+      bottomInset={insets.bottom}
+      onRename={renameAccount}
+      onArchive={archiveAccount}
+      onSetIcon={(icon) => void setAccountIcon(icon)}
+      onSetColor={(color) => void setAccountColor(color)}
+      onBack={() => router.back()}
+      onAddTransaction={() => router.push({ pathname: '/transaction/new', params: { accountId: id } } as never)}
+      onOpenTransaction={(transactionId) => router.push(`/transaction/${encodeURIComponent(transactionId)}` as never)}
+    />
   );
 }
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   const { tokens } = useTheme();
   return (
-    <View
-      style={{
-        flex: 1,
-        padding: 24,
-        justifyContent: 'center',
-        gap: 12,
-        backgroundColor: tokens.background,
-      }}
-    >
+    <View style={{ flex: 1, justifyContent: 'center', gap: 12, padding: 24, backgroundColor: tokens.background }}>
       <Typography variant="heading">Could not load this account.</Typography>
       <Typography variant="small">{error.message}</Typography>
       <Button onPress={retry}>Try again</Button>
