@@ -17,10 +17,11 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
 import {
-  Avatar,
   Button,
   Input,
   Label,
+  OnboardingAvatarPicker,
+  ProfilePreview,
   Progress,
   Tabs,
   Typography,
@@ -266,6 +267,11 @@ export default function OnboardingScreen() {
               editable={!pending}
               returnKeyType="next"
             />
+            <ProfilePreview
+              displayName={displayName}
+              username={handle}
+              avatarUrl={selectedAvatar?.url}
+            />
             <Label style={{ marginBottom: 0 }}>Username</Label>
             <Input
               accessibilityLabel="Username"
@@ -309,23 +315,11 @@ export default function OnboardingScreen() {
               ))}
             </View>
             <Label style={{ marginBottom: 0 }}>Choose an avatar</Label>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-                {visibleAvatars.map((avatar) => (
-                  <Button
-                    key={avatar.avatarId}
-                    variant={avatarId === avatar.avatarId ? 'primary' : 'outline'}
-                    disabled={pending}
-                    accessibilityLabel={`Select avatar ${avatar.avatarId}`}
-                    accessibilityState={{ selected: avatarId === avatar.avatarId }}
-                    onPress={() => setAvatarId(avatar.avatarId)}
-                    style={{ width: 58, height: 58, padding: 3, borderRadius: 999 }}
-                  >
-                    <Avatar initials="" label={avatar.avatarId} imageUrl={avatar.url} size={48} />
-                  </Button>
-                ))}
-              </View>
-            </ScrollView>
+            <OnboardingAvatarPicker
+              choices={visibleAvatars}
+              selectedId={avatarId}
+              onSelect={setAvatarId}
+            />
           </View>
         )}
         {step === 2 && (

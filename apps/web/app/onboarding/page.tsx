@@ -6,7 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useConvexAuth, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Avatar, Button, Input, Label, Sheet, Tabs } from '@finapp/ui/web';
+import {
+  Button,
+  Input,
+  Label,
+  OnboardingAvatarPicker,
+  ProfilePreview,
+  Sheet,
+  Tabs,
+} from '@finapp/ui/web';
 import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -338,6 +346,11 @@ export default function OnboardingPage() {
                       value={displayName}
                       onChangeText={setDisplayName}
                     />
+                    <ProfilePreview
+                      displayName={displayName}
+                      username={handle}
+                      avatarUrl={selectedAvatar?.url}
+                    />
                   </div>
                   <div className="auth-field">
                     <Label htmlFor="username">Username</Label>
@@ -391,44 +404,12 @@ export default function OnboardingPage() {
                   <div className="auth-field">
                     <Label>Choose an avatar</Label>
                     {visibleAvatars.length ? (
-                      <div
-                        role="group"
-                        aria-label={`${gender} avatars`}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-                          gap: 9,
-                          maxHeight: 248,
-                          overflowY: 'auto',
-                        }}
-                      >
-                        {visibleAvatars.map((avatar) => (
-                          <button
-                            key={avatar.avatarId}
-                            type="button"
-                            aria-label={`Select avatar ${avatar.avatarId}`}
-                            aria-pressed={avatarId === avatar.avatarId}
-                            onClick={() => setAvatarId(avatar.avatarId)}
-                            style={{
-                              padding: 3,
-                              borderRadius: '50%',
-                              border:
-                                avatarId === avatar.avatarId
-                                  ? '2px solid var(--primary)'
-                                  : '2px solid transparent',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <Avatar
-                              initials=""
-                              label={avatar.avatarId}
-                              imageUrl={avatar.url}
-                              size={42}
-                            />
-                          </button>
-                        ))}
-                      </div>
+                      <OnboardingAvatarPicker
+                        choices={visibleAvatars}
+                        selectedId={avatarId}
+                        label={`${gender} avatars`}
+                        onSelect={setAvatarId}
+                      />
                     ) : (
                       <span className="auth-helper">Avatar choices are loading.</span>
                     )}
