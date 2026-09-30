@@ -1,12 +1,14 @@
+import { api } from '@convex/_generated/api';
 import { ArrowRight } from '@finapp/ui/icons/native';
 import { currencies } from '@convex/shared/validators';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { useMutation } from 'convex/react';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
-import type { LocalRecord } from '@/local/repository';
+import { upsertCloudPage, type LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { normalizeUsername } from '@convex/users/domain';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -160,7 +162,8 @@ function ProfileActionRow({
 
 export default function ProfileScreen() {
   const { signOut } = useAuthActions();
-  const { userId } = useLocalSync();
+  const updateUser = useMutation(api.users.mutations.update);
+  const { userId, isConnected } = useLocalSync();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
   const { tokens } = useTheme();
@@ -187,6 +190,11 @@ export default function ProfileScreen() {
 
   async function saveProfile(update: Partial<ProfileRecord>) {
     if (!userId) throw new Error('AUTH_REQUIRED');
+    if (update.username !== undefined && isConnected) {
+      const savedProfile = await updateUser({ username: update.username });
+      await upsertCloudPage(userId, 'profile', [savedProfile as unknown as LocalRecord]);
+      return;
+    }
     const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
     const nextProfile: ProfileRecord = { ...currentProfile, ...update };
     if (update.phone !== undefined && update.phone !== profile?.phone)
