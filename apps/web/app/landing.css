@@ -221,6 +221,7 @@
   height: 440px;
   border: 1px solid #b7ff4a45;
   border-radius: 50%;
+  pointer-events: none;
   content: '';
 }
 .landing-hero-monogram {
@@ -228,10 +229,12 @@
   z-index: -1;
   top: -65px;
   right: -38px;
-  color: var(--landing-volt);
+  color: #171a13;
   font-size: 640px;
   font-weight: 700;
   line-height: 1;
+  pointer-events: none;
+  user-select: none;
   transform: rotate(-14deg);
 }
 .landing-product {
