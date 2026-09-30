@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { InfoDescription } from '@finapp/ui/finance';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 export function idOf(record: LocalRecord): string {
@@ -95,8 +96,10 @@ export function PageHeading({
     <header className="finance-page-heading">
       <div>
         <p className="finance-kicker">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className="finance-muted">{description}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h1>{title}</h1>
+          <InfoDescription title={title} description={description} />
+        </div>
       </div>
     </header>
   );
