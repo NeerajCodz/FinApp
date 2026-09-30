@@ -361,8 +361,8 @@
 .landing-chart > div > div:first-child {
   height: 112px !important;
 }
-.landing-chart > div > div:first-child > div > div {
-  background-color: var(--landing-volt) !important;
+.landing-chart .recharts-wrapper {
+  background-color: #050505 !important;
 }
 .landing-recent {
   margin-top: 18px;
