@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarDays, Search, ShieldCheck } from 'lucide-react';
+import { Bell, CalendarDays, Search, ShieldCheck } from 'lucide-react';
 import type { HomeAccountOption } from '../types';
 
 export function HomeHeader({
@@ -11,6 +11,7 @@ export function HomeHeader({
   onAccountChange,
   onChooseDate,
   onOpenSync,
+  onOpenNotifications,
 }: {
   accounts: readonly HomeAccountOption[];
   selectedAccountId: string;
@@ -20,6 +21,7 @@ export function HomeHeader({
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
   onOpenSync: () => void;
+  onOpenNotifications?: () => void;
 }) {
   return (
     <header className="finance-home-toolbar">
@@ -57,14 +59,26 @@ export function HomeHeader({
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </label>
-        <button
-          className="finance-home-sync"
-          type="button"
-          aria-label="Open sync status"
-          onClick={onOpenSync}
-        >
-          <ShieldCheck size={18} aria-hidden="true" />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {onOpenNotifications && (
+            <button
+              className="finance-home-sync"
+              type="button"
+              aria-label="Notifications"
+              onClick={onOpenNotifications}
+            >
+              <Bell size={18} aria-hidden="true" />
+            </button>
+          )}
+          <button
+            className="finance-home-sync"
+            type="button"
+            aria-label="Open sync status"
+            onClick={onOpenSync}
+          >
+            <ShieldCheck size={18} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </header>
   );
