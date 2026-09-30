@@ -3,11 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Plus, Settings2 } from 'lucide-react';
 import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
 import { Avatar, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { TransactionRow } from '@finapp/ui/finance';
+import { EntityIcon, formatTransactionDate, TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered } from '@/lib/offline/repository';
@@ -18,6 +21,7 @@ type Group = LocalRecord & {
   currency?: string;
   ownerId?: string;
   archivedAt?: number;
+  icon?: string;
 };
 type Member = LocalRecord & {
   groupId?: string;
@@ -40,6 +44,7 @@ type LedgerRecord = LocalRecord & {
   amountMinor?: bigint | number | string;
   currency?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   title?: string;
   deletedAt?: number;
   participants?: Array<{ userId: string; amountMinor: bigint | number | string }>;
@@ -84,6 +89,23 @@ export default function GroupHomePage() {
   const localGroupId = group ? recordId(group) : groupId;
   const groupReady = Boolean(group);
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
+  const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
+  const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
+  const canUseGroupChat = isConnected && Boolean(cloudGroupId);
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const chatMessages = useQuery(
+    api.groups.queries.chatMessages,
+    canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
+  const sendChatText = useMutation(api.groups.mutations.sendChatText);
+  const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
+  const [chatDraft, setChatDraft] = React.useState('');
+  const [chatPending, setChatPending] = React.useState(false);
+  const [chatError, setChatError] = React.useState('');
 
   React.useEffect(() => {
     if (!userId || !group) return;
@@ -222,18 +244,77 @@ export default function GroupHomePage() {
   }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
     memberNames.unshift({ id: userId, username: undefined, name: 'You' });
-  const formatDate = (value: unknown) => new Date(Number(value ?? Date.now())).toLocaleDateString();
+  const formatDate = (value: unknown, hasTime?: boolean) =>
+    formatTransactionDate(Number(value ?? Date.now()), hasTime);
+  async function submitChatMessage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
+    setChatPending(true);
+    setChatError('');
+    try {
+      await sendChatText({
+        groupId: cloudGroupId as Id<'groups'>,
+        text: chatDraft.trim(),
+      });
+      setChatDraft('');
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : 'Could not send this message.');
+    } finally {
+      setChatPending(false);
+    }
+  }
+
+  async function uploadBillImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (
+      !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) ||
+      file.size > 5 * 1024 * 1024
+    ) {
+      setChatError('Choose a JPEG, PNG, or WebP bill image up to 5 MB.');
+      return;
+    }
+    if (!canUseGroupChat || chatPending) return;
+    setChatPending(true);
+    setChatError('');
+    try {
+      const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!response.ok) throw new Error('BILL_UPLOAD_FAILED');
+      const result = (await response.json()) as { storageId?: string };
+      if (!result.storageId) throw new Error('BILL_UPLOAD_FAILED');
+      const messageId = await sendBillAttachment({
+        groupId: cloudGroupId as Id<'groups'>,
+        storageId: result.storageId as Id<'_storage'>,
+      });
+      if (!messageId) throw new Error('INVALID_BILL_IMAGE');
+    } catch (cause) {
+      setChatError(cause instanceof Error ? cause.message : 'Could not upload this bill image.');
+    } finally {
+      setChatPending(false);
+    }
+  }
 
   return (
     <div className="finance-page">
       <header className="finance-page-heading">
-        <Link
-          className="finance-secondary-action"
-          href="/groups"
-          aria-label="Go back to groups"
-        >
+        <Link className="finance-secondary-action" href="/groups" aria-label="Go back to groups">
           <ArrowLeft size={18} />
         </Link>
+        <EntityIcon
+          value={
+            remoteGroup
+              ? (remoteGroup.icon ?? 'lucide:UsersRound')
+              : (group.icon ?? 'lucide:UsersRound')
+          }
+          size={24}
+        />
         <h1 style={{ flex: 1, margin: 0 }}>{group.name ?? 'Group'}</h1>
         <Link
           className="finance-secondary-action"
@@ -320,6 +401,99 @@ export default function GroupHomePage() {
       >
         <Plus size={17} /> Add expense
       </Link>
+      <Card className="finance-record-panel">
+        <SectionHeader title="Group chat" />
+        {canUseGroupChat ? (
+          <>
+            <div
+              role="log"
+              aria-live="polite"
+              aria-label="Group messages"
+              style={{ display: 'grid', gap: 12, maxHeight: 420, overflowY: 'auto' }}
+            >
+              {chatMessages === undefined ? (
+                <p className="finance-muted" role="status">
+                  Loading messages…
+                </p>
+              ) : chatMessages.length ? (
+                chatMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    style={{
+                      display: 'grid',
+                      justifySelf: message.senderId === userId ? 'end' : 'start',
+                      maxWidth: 'min(88%, 520px)',
+                      gap: 6,
+                      padding: 12,
+                      borderRadius: 14,
+                      background: 'var(--finance-surface-subtle, rgba(127,127,127,.08))',
+                    }}
+                  >
+                    <strong>{message.senderName}</strong>
+                    {message.kind === 'bill' && message.attachmentUrl ? (
+                      <img
+                        src={message.attachmentUrl}
+                        alt="Bill attachment"
+                        style={{
+                          display: 'block',
+                          maxWidth: '100%',
+                          maxHeight: 360,
+                          objectFit: 'contain',
+                        }}
+                      />
+                    ) : (
+                      <p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                        {message.text}
+                      </p>
+                    )}
+                    <time
+                      className="finance-muted"
+                      dateTime={new Date(message.createdAt).toISOString()}
+                    >
+                      {new Date(message.createdAt).toLocaleString()}
+                    </time>
+                  </article>
+                ))
+              ) : (
+                <p className="finance-muted">No messages yet. Start the group conversation.</p>
+              )}
+            </div>
+            <form className="finance-form" onSubmit={submitChatMessage}>
+              <textarea
+                aria-label="Group message"
+                value={chatDraft}
+                onChange={(event) => setChatDraft(event.currentTarget.value)}
+                maxLength={4_000}
+                rows={3}
+                placeholder="Write a message…"
+                disabled={chatPending}
+              />
+              <div className="finance-page-actions">
+                <label className="finance-secondary-action">
+                  Attach bill image
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    aria-label="Attach bill image"
+                    disabled={chatPending}
+                    onChange={(event) => void uploadBillImage(event)}
+                  />
+                </label>
+                <Button type="submit" disabled={chatPending || !chatDraft.trim()}>
+                  {chatPending ? 'Sending…' : 'Send'}
+                </Button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <p className="finance-muted">Connect to the internet to use group chat.</p>
+        )}
+        {!!chatError && (
+          <p className="finance-form-error" role="alert">
+            {chatError}
+          </p>
+        )}
+      </Card>
       <section style={{ display: 'grid', gap: 24 }}>
         <section>
           <SectionHeader title="People" />
@@ -349,9 +523,7 @@ export default function GroupHomePage() {
                       size={48}
                     />
                     <small>
-                      {member.username
-                        ? `@${member.username.replace(/^@+/, '')}`
-                        : member.name}
+                      {member.username ? `@${member.username.replace(/^@+/, '')}` : member.name}
                     </small>
                   </>
                 );
@@ -411,10 +583,8 @@ export default function GroupHomePage() {
                     currency={group.currency ?? 'INR'}
                     type="expense"
                     semanticType="split"
-                    date={formatDate(expense.occurredAt)}
-                    onPress={() =>
-                      router.push(`/transaction/${encodeURIComponent(transactionId)}`)
-                    }
+                    date={formatDate(expense.occurredAt, expense.hasTime)}
+                    onPress={() => router.push(`/transaction/${encodeURIComponent(transactionId)}`)}
                   />
                 );
               })}

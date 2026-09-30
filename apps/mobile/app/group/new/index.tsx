@@ -9,14 +9,24 @@ import { commitLocalWrite } from '@/local/commands';
 import type { DeviceContact } from '@/lib/contacts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PeopleRail } from '@/components/finance/PeopleRail';
-import { Button, IconButton, Input, Label, Separator, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import {
+  Button,
+  IconButton,
+  Input,
+  Label,
+  Separator,
+  Text,
+  Typography,
+  useTheme,
+} from '@finapp/ui/native';
+import { EntityIconPicker } from '@finapp/ui/finance';
 
 function normalizeHandle(value: string) {
   return value.replace(/^@+/, '').trim().toLowerCase();
 }
 
 export default function NewGroupScreen() {
+  const [icon, setIcon] = useState<string>();
   const [name, setName] = useState('');
   const [memberInput, setMemberInput] = useState('');
   const [members, setMembers] = useState<string[]>([]);
@@ -53,6 +63,7 @@ export default function NewGroupScreen() {
         'group',
         'group.create',
         {
+          ...(icon ? { icon } : {}),
           name: name.trim(),
           currency: 'INR',
           participantUsernames: members,
@@ -62,9 +73,9 @@ export default function NewGroupScreen() {
         {
           name: name.trim(),
           currency: 'INR',
-          participantUsernames: members,
-          contactPhones,
-          contactNames,
+          memberUsernames: members,
+          ...(icon ? { icon } : {}),
+          memberPhones: contactPhones,
         },
       );
       router.replace(`/group/${groupId}` as never);
@@ -123,6 +134,14 @@ export default function NewGroupScreen() {
             value={name}
             onChangeText={setName}
             placeholder="Goa Trip"
+          />
+          <EntityIconPicker
+            mode="either"
+            value={icon}
+            onChange={setIcon}
+            label="Group icon"
+            compact
+            allowClear
           />
         </View>
 

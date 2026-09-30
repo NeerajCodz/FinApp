@@ -7,7 +7,7 @@ import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money, TransactionRow } from '@finapp/ui/finance';
+import { EntityIconPicker, formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
 import { displayAccountName, recordIndex } from '@/lib/ledger';
 import {
   Button,
@@ -60,6 +60,7 @@ type TransactionRecord = LocalRecord & {
   currency: string;
   title: string;
   occurredAt: number;
+  hasTime?: boolean;
   status: string;
   deletedAt?: number;
   clientUpdatedAt?: number;
@@ -78,6 +79,8 @@ export default function AccountDetailScreen() {
   const accountState = useLocalRecords<AccountRecord>(userId, 'account');
   const categoryState = useLocalRecords<LocalRecord>(userId, 'category');
   const categories = useMemo(() => recordIndex(categoryState.data ?? []), [categoryState.data]);
+  const profileState = useLocalRecords<LocalRecord & { timezone?: string }>(userId, 'profile');
+  const timeZone = profileState.data?.[0]?.timezone;
   const localTransactions = useLocalRecords<TransactionRecord>(userId, 'transaction');
   const transactionRange = useLocalTransactionRange<TransactionRecord>(
     userId,
@@ -172,6 +175,32 @@ export default function AccountDetailScreen() {
       setPending(false);
     }
   }
+  async function saveIcon(icon?: string) {
+    if (!account || !userId || pending) return;
+    const localRecordId = account.id ?? account._id ?? account.cloudId;
+    const operationAccountId = account._id ?? account.cloudId ?? account.id;
+    if (!localRecordId || !operationAccountId) return;
+    setPending(true);
+    setError('');
+    try {
+      await commitLocalWrite(
+        userId,
+        'account',
+        'account.setIcon',
+        { ...account, icon: icon ?? undefined },
+        { accountId: operationAccountId, icon: icon ?? null },
+        {
+          recordId: localRecordId,
+          dependencies: account._id || account.cloudId ? [] : [`account:${operationAccountId}`],
+          baseUpdatedAt: account.updatedAt,
+        },
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update account icon.');
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function archiveAccount() {
     if (!account || !userId || pending) return;
@@ -255,9 +284,14 @@ export default function AccountDetailScreen() {
                   ? 'Included in total balance'
                   : 'Excluded from total balance'}
               </Typography>
-              {account.icon ? (
-                <Typography variant="caption">Icon: {account.icon}</Typography>
-              ) : null}
+              {account.archivedAt === undefined && (
+                <EntityIconPicker
+                  mode="lucide"
+                  value={account.icon}
+                  onChange={(icon) => void saveIcon(icon)}
+                  label="Change account icon"
+                />
+              )}
               {account.color ? (
                 <Typography variant="caption">Color: {account.color}</Typography>
               ) : null}
@@ -341,7 +375,11 @@ export default function AccountDetailScreen() {
                                 ? 'transfer'
                                 : undefined
                           }
-                          date={new Date(transaction.occurredAt).toLocaleDateString()}
+                          date={formatTransactionDate(
+                            transaction.occurredAt,
+                            transaction.hasTime,
+                            timeZone,
+                          )}
                           onPress={() =>
                             router.push(
                               `/transaction/${transaction._id ?? transaction.id ?? transaction.cloudId}` as never,

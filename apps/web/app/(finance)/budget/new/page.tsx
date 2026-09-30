@@ -67,7 +67,10 @@ export default function NewPersonalBudgetPage() {
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   const account = accounts.find((item) => idOf(item) === accountId);
   const category = categories.find((item) => idOf(item) === categoryId);
-  const currency = period === 'account' ? (account?.currency ?? profile?.defaultCurrency) : profile?.defaultCurrency;
+  const currency =
+    period === 'account'
+      ? (account?.currency ?? profile?.defaultCurrency)
+      : profile?.defaultCurrency;
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -160,7 +163,11 @@ export default function NewPersonalBudgetPage() {
       <Link className="finance-secondary-action" href="/budget" aria-label="Go back">
         <ArrowLeft size={18} />
       </Link>
-      <PageHeading eyebrow="NEW BUDGET" title="New budget" description="Give spending a boundary." />
+      <PageHeading
+        eyebrow="NEW BUDGET"
+        title="New budget"
+        description="Give spending a boundary."
+      />
       <p className="finance-muted">Track real expenses against a limit you choose.</p>
       <Card className="finance-form-panel">
         {loading ? (

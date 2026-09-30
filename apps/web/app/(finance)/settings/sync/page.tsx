@@ -60,7 +60,11 @@ export default function SyncSettingsPage() {
           data; it never removes older history already downloaded to this device.
         </Text>
       </section>
-      <div style={{ display: 'grid', gap: 8 }} role="radiogroup" aria-label="Initial download window">
+      <div
+        style={{ display: 'grid', gap: 8 }}
+        role="radiogroup"
+        aria-label="Initial download window"
+      >
         {syncWindowOptions.map((option) => {
           const selected = syncWindow === option.value;
           return (

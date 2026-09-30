@@ -135,9 +135,7 @@ export default function NotificationSettingsPage() {
           Retry loading preferences
         </Button>
       )}
-      {!loading && !error && !setting && (
-        <Text>Connect once to load your account settings.</Text>
-      )}
+      {!loading && !error && !setting && <Text>Connect once to load your account settings.</Text>}
       {!loading && !error && setting && (
         <div>
           {options.map((option, index) => (
@@ -149,7 +147,10 @@ export default function NotificationSettingsPage() {
                 disabled={saving}
                 onValueChange={(value) => void change(option.type, value)}
               />
-              <Typography variant="small" style={{ display: 'block', marginTop: -4, marginBottom: 12 }}>
+              <Typography
+                variant="small"
+                style={{ display: 'block', marginTop: -4, marginBottom: 12 }}
+              >
                 {option.detail}
               </Typography>
             </div>
@@ -158,7 +159,12 @@ export default function NotificationSettingsPage() {
       )}
 
       <section
-        style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: `1px solid ${tokens.border}` }}
+        style={{
+          display: 'grid',
+          gap: 10,
+          paddingTop: 12,
+          borderTop: `1px solid ${tokens.border}`,
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Bell size={19} color={tokens.primary} aria-hidden="true" />

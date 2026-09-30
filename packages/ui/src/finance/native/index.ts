@@ -20,3 +20,11 @@ export { SplitMemberRow } from './SplitMemberRow';
 export { TransactionRow } from './TransactionRow';
 export { semanticLabels, type MoneySize, type SemanticType, type TransactionType } from '../types';
 export { signedMinor } from '../money';
+export { DateTimePicker } from './DateTimePicker';
+export {
+  EntityIcon,
+  EntityIconPicker,
+  type EntityIconPickerMode,
+  type EntityIconPickerProps,
+} from './EntityIconPicker';
+export { formatTransactionDate } from '../datetime';

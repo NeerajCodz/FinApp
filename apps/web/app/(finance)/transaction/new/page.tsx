@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, ReceiptText, UsersRound } from 'lucide-react';
 import { Button, Input, Sheet, Typography } from '@finapp/ui/web';
-import { CategoryIcon, CurrencyInput, SettingsRow } from '@finapp/ui/finance';
+import {
+  CategoryIcon,
+  CurrencyInput,
+  DateTimePicker,
+  SettingsRow,
+  formatTransactionDate,
+} from '@finapp/ui/finance';
 import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -13,7 +19,6 @@ import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import {
   aliasesOf,
   belongsToUser,
-  dateAtUtcStart,
   idOf,
   localDependency,
   matchesId,
@@ -53,12 +58,17 @@ export default function NewPersonalTransactionPage() {
   const [categoryId, setCategoryId] = React.useState('');
   const [amount, setAmount] = React.useState('');
   const [description, setDescription] = React.useState('');
-  const [occurredOn, setOccurredOn] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [occurredAt, setOccurredAt] = React.useState(() => {
+    const initial = new Date();
+    initial.setHours(12, 0, 0, 0);
+    return initial.getTime();
+  });
+  const [showTime, setShowTime] = React.useState(false);
   const [savingDefault, setSavingDefault] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  const [picker, setPicker] = React.useState<'category' | 'account' | 'destination' | 'date' | null>(
-    null,
-  );
+  const [picker, setPicker] = React.useState<
+    'category' | 'account' | 'destination' | 'date' | null
+  >(null);
   const [error, setError] = React.useState<string | null>(null);
   const appliedQuery = React.useRef(false);
   const queryOverrides = React.useRef({ account: false, category: false });
@@ -104,8 +114,10 @@ export default function NewPersonalTransactionPage() {
     const queryDestination = query.get('destinationId');
     if (queryDestination) setDestinationId(queryDestination);
     const queryAt = Number(query.get('occurredAt'));
-    if (Number.isSafeInteger(queryAt) && queryAt > 0)
-      setOccurredOn(new Date(queryAt).toISOString().slice(0, 10));
+    if (Number.isSafeInteger(queryAt) && queryAt > 0) {
+      setOccurredAt(queryAt);
+      setShowTime(query.get('hasTime') === 'true');
+    }
     const queryNote = query.get('note');
     if (queryNote) setDescription(queryNote);
   }, []);
@@ -206,8 +218,7 @@ export default function NewPersonalTransactionPage() {
       setError('Choose an available category.');
       return;
     }
-    const dateStart = dateAtUtcStart(occurredOn);
-    if (dateStart === null) {
+    if (!Number.isFinite(occurredAt)) {
       setError('Choose a valid transaction date.');
       return;
     }
@@ -217,8 +228,6 @@ export default function NewPersonalTransactionPage() {
       const amountMinor = parseMinor(amount, source.currency ?? 'INR');
       if (amountMinor <= 0n || amountMinor > maxInt64)
         throw new Error('Enter a positive valid amount.');
-      const occurredAt = new Date(`${occurredOn}T12:00:00`).getTime();
-      if (!Number.isFinite(occurredAt)) throw new Error('Choose a valid transaction date.');
       const note = description.trim();
       const title =
         type === 'transfer'
@@ -236,6 +245,7 @@ export default function NewPersonalTransactionPage() {
         title,
         ...(note ? { note } : {}),
         occurredAt,
+        hasTime: showTime,
         status: 'posted',
         createdAt: Date.now(),
       };
@@ -249,6 +259,7 @@ export default function NewPersonalTransactionPage() {
           : { categoryId: idOf(category!) }),
         title,
         ...(note ? { note } : {}),
+        hasTime: showTime,
         occurredAt,
       };
       const dependencies = [
@@ -280,14 +291,13 @@ export default function NewPersonalTransactionPage() {
       </SignInGate>
     );
   const dataError = accountError ?? categoryError;
-  let amountValid = false;
+  let amountValid: boolean;
   try {
-    const amountMinor = parseMinor(
-      amount,
-      source?.currency ?? profile?.defaultCurrency ?? 'INR',
-    );
+    const amountMinor = parseMinor(amount, source?.currency ?? profile?.defaultCurrency ?? 'INR');
     amountValid = amountMinor > 0n && amountMinor <= maxInt64;
-  } catch {}
+  } catch {
+    amountValid = false;
+  }
   return (
     <div className="finance-page" style={{ gap: 24 }}>
       <header style={{ display: 'flex', alignItems: 'center' }}>
@@ -307,159 +317,174 @@ export default function NewPersonalTransactionPage() {
             onChangeText={setAmount}
           />
         </div>
-          <div
-            role="group"
-            aria-label="Transaction type"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-              gap: 4,
-              padding: 4,
-              borderRadius: 12,
-              background: 'var(--finapp-surface-raised)',
-            }}
-          >
-                  {transactionTypes.map((item) => (
-                    <Button
-                      key={item}
-                      type="button"
-                      size="sm"
-                      variant={type === item ? 'primary' : 'ghost'}
-                      aria-pressed={type === item}
-                      onPress={() => {
-                        setType(item);
-                        setCategoryId('');
-                      }}
-                      style={{
-                        minHeight: 42,
-                        borderRadius: 10,
-                        backgroundColor:
-                          type === item
-                            ? `var(--finapp-${item === 'transfer' ? 'warning' : item})`
-                            : 'transparent',
-                        color: type === item ? '#000' : undefined,
-                      }}
-                    >
-                      {item.charAt(0).toUpperCase() + item.slice(1)}
-                    </Button>
-                  ))}
-                </div>
-                <div>
-                  {type !== 'transfer' && (
-                    <>
-                      <SettingsRow
-                        label="Category"
-                        leadingIcon={
-                          <CategoryIcon label={category?.name ?? 'Category'} icon={category?.icon} />
-                        }
-                        value={
-                          category?.name ??
-                          (categoryLoading ? 'Loading categories…' : 'Choose a category')
-                        }
-                        onPress={() => setPicker('category')}
-                      />
-                      <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-                    </>
-                  )}
-                  <SettingsRow
-                    label={type === 'transfer' ? 'From account' : 'Account'}
-                    value={source?.name ?? (accountLoading ? 'Loading accounts…' : 'Choose an account')}
-                    onPress={() => setPicker('account')}
-                  />
-                  {type === 'transfer' && (
-                    <>
-                      <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-                      <SettingsRow
-                        label="To account"
-                        value={destination?.name ?? 'Choose destination'}
-                        onPress={() => setPicker('destination')}
-                      />
-                    </>
-                  )}
-                  <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-                  <SettingsRow
-                    label="Date"
-                    value={new Date(`${occurredOn}T12:00:00`).toLocaleDateString(undefined, {
-                      dateStyle: 'medium',
-                    })}
-                    onPress={() => setPicker('date')}
-                  />
-                </div>
-                <div style={{ display: 'grid', gap: 12 }}>
-                  <label className="finance-form-field">
-                    <span>Note</span>
-                    <Input
-                      accessibilityLabel="Transaction note"
-                      placeholder="What was this for?"
-                      value={description}
-                      onChangeText={setDescription}
-                      maxLength={120}
-                    />
-                  </label>
-                  {type === 'expense' && (
-                    <Link
-                      className="finance-secondary-action"
-                      href="/split/new"
-                      style={{ justifyContent: 'space-between', minHeight: 68, paddingInline: 16 }}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            display: 'grid',
-                            placeItems: 'center',
-                            width: 38,
-                            height: 38,
-                            borderRadius: 12,
-                          }}
-                        >
-                          <UsersRound size={19} />
-                        </span>
-                        <span style={{ display: 'grid', gap: 2 }}>
-                          <strong>Split this expense</strong>
-                          <span className="finance-muted">Choose people and shares</span>
-                        </span>
-                      </span>
-                      <ArrowRight size={18} />
-                    </Link>
-                  )}
-                </div>
-                {!accountLoading && accounts.length === 0 && (
-                  <p className="finance-muted">
-                    <Link className="finance-inline-link" href="/account/new">
-                      Add an account before recording a transaction.
-                    </Link>
-                  </p>
-                )}
-                {!categoryLoading && type !== 'transfer' && categories.length === 0 && (
-                  <p className="finance-muted">
-                    <Link className="finance-inline-link" href="/category/new">
-                      Add a category before recording a transaction.
-                    </Link>
-                  </p>
-                )}
-                {dataError && (
-                  <p className="finance-form-error" role="alert">
-                    Transaction options could not be opened: {dataError}
-                  </p>
-                )}
-                {error && (
-                  <p className="finance-form-error" role="alert">
-                    {error}
-                  </p>
-                )}
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={
-                    saving ||
-                    !amountValid ||
-                    !source ||
-                    (type === 'transfer' ? !destination : !category)
-                  }
+        <div
+          role="group"
+          aria-label="Transaction type"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gap: 4,
+            padding: 4,
+            borderRadius: 12,
+            background: 'var(--finapp-surface-raised)',
+          }}
+        >
+          {transactionTypes.map((item) => (
+            <Button
+              key={item}
+              type="button"
+              size="sm"
+              variant={type === item ? 'primary' : 'ghost'}
+              aria-pressed={type === item}
+              onPress={() => {
+                setType(item);
+                setCategoryId('');
+              }}
+              style={{
+                minHeight: 42,
+                borderRadius: 10,
+                backgroundColor:
+                  type === item
+                    ? `var(--finapp-${item === 'transfer' ? 'warning' : item})`
+                    : 'transparent',
+                color: type === item ? '#000' : undefined,
+              }}
+            >
+              {item.charAt(0).toUpperCase() + item.slice(1)}
+            </Button>
+          ))}
+        </div>
+        <div>
+          {type !== 'transfer' && (
+            <>
+              <SettingsRow
+                label="Category"
+                leadingIcon={
+                  <CategoryIcon label={category?.name ?? 'Category'} icon={category?.icon} />
+                }
+                value={
+                  category?.name ?? (categoryLoading ? 'Loading categories…' : 'Choose a category')
+                }
+                onPress={() => setPicker('category')}
+              />
+              <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+            </>
+          )}
+          <SettingsRow
+            label={type === 'transfer' ? 'From account' : 'Account'}
+            value={source?.name ?? (accountLoading ? 'Loading accounts…' : 'Choose an account')}
+            onPress={() => setPicker('account')}
+          />
+          {type === 'transfer' && (
+            <>
+              <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+              <SettingsRow
+                label="To account"
+                value={destination?.name ?? 'Choose destination'}
+                onPress={() => setPicker('destination')}
+              />
+            </>
+          )}
+          <div style={{ borderTop: '1px solid var(--finance-line)' }} />
+          <SettingsRow
+            label="Date"
+            value={formatTransactionDate(occurredAt, showTime)}
+            onPress={() => setPicker('date')}
+          />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0' }}>
+            <input
+              type="checkbox"
+              checked={showTime}
+              onChange={(event) => {
+                const enabled = event.currentTarget.checked;
+                setShowTime(enabled);
+                if (enabled) {
+                  const date = new Date(occurredAt);
+                  const now = new Date();
+                  date.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                  setOccurredAt(date.getTime());
+                } else {
+                  const date = new Date(occurredAt);
+                  date.setHours(12, 0, 0, 0);
+                  setOccurredAt(date.getTime());
+                }
+              }}
+            />
+            <span>Include time</span>
+          </label>
+        </div>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <label className="finance-form-field">
+            <span>Note</span>
+            <Input
+              accessibilityLabel="Transaction note"
+              placeholder="What was this for?"
+              value={description}
+              onChangeText={setDescription}
+              maxLength={120}
+            />
+          </label>
+          {type === 'expense' && (
+            <Link
+              className="finance-secondary-action"
+              href="/split/new"
+              style={{ justifyContent: 'space-between', minHeight: 68, paddingInline: 16 }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: 'grid',
+                    placeItems: 'center',
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                  }}
                 >
-                  <ReceiptText size={18} /> {saving ? 'Saving…' : `Save ${type}`}
-                </Button>
+                  <UsersRound size={19} />
+                </span>
+                <span style={{ display: 'grid', gap: 2 }}>
+                  <strong>Split this expense</strong>
+                  <span className="finance-muted">Choose people and shares</span>
+                </span>
+              </span>
+              <ArrowRight size={18} />
+            </Link>
+          )}
+        </div>
+        {!accountLoading && accounts.length === 0 && (
+          <p className="finance-muted">
+            <Link className="finance-inline-link" href="/account/new">
+              Add an account before recording a transaction.
+            </Link>
+          </p>
+        )}
+        {!categoryLoading && type !== 'transfer' && categories.length === 0 && (
+          <p className="finance-muted">
+            <Link className="finance-inline-link" href="/category/new">
+              Add a category before recording a transaction.
+            </Link>
+          </p>
+        )}
+        {dataError && (
+          <p className="finance-form-error" role="alert">
+            Transaction options could not be opened: {dataError}
+          </p>
+        )}
+        {error && (
+          <p className="finance-form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <Button
+          type="submit"
+          size="lg"
+          disabled={
+            saving || !amountValid || !source || (type === 'transfer' ? !destination : !category)
+          }
+        >
+          <ReceiptText size={18} /> {saving ? 'Saving…' : `Save ${type}`}
+        </Button>
       </form>
       <Sheet
         visible={picker !== null}
@@ -475,17 +500,7 @@ export default function NewPersonalTransactionPage() {
         }
       >
         {picker === 'date' ? (
-          <div style={{ display: 'grid', gap: 12 }}>
-            <Input
-              type="date"
-              accessibilityLabel="Choose date"
-              value={occurredOn}
-              onChangeText={(value) => {
-                setOccurredOn(value);
-                setPicker(null);
-              }}
-            />
-          </div>
+          <DateTimePicker value={occurredAt} showTime={showTime} onChange={setOccurredAt} />
         ) : (
           <div style={{ display: 'grid', gap: 8 }}>
             <div style={{ maxHeight: 380, overflowY: 'auto' }}>
@@ -497,9 +512,11 @@ export default function NewPersonalTransactionPage() {
                         leadingIcon={
                           <CategoryIcon label={item.name ?? 'Category'} icon={item.icon} />
                         }
-                        value={category && aliasesOf(category).some((id) => aliasesOf(item).includes(id))
-                          ? 'Selected'
-                          : undefined}
+                        value={
+                          category && aliasesOf(category).some((id) => aliasesOf(item).includes(id))
+                            ? 'Selected'
+                            : undefined
+                        }
                         onPress={() => {
                           setCategoryId(idOf(item));
                           setPicker(null);
@@ -522,8 +539,8 @@ export default function NewPersonalTransactionPage() {
                           label={item.name ?? 'Account'}
                           value={`${item.currency ?? 'INR'}${
                             (picker === 'destination' ? destination : source) &&
-                            aliasesOf(picker === 'destination' ? destination! : source!).some((id) =>
-                              aliasesOf(item).includes(id),
+                            aliasesOf(picker === 'destination' ? destination! : source!).some(
+                              (id) => aliasesOf(item).includes(id),
                             )
                               ? ' · Selected'
                               : ''
@@ -554,7 +571,8 @@ export default function NewPersonalTransactionPage() {
                   </Typography>
                 </div>
               )}
-              {picker !== 'category' && !accountLoading &&
+              {picker !== 'category' &&
+                !accountLoading &&
                 (picker === 'destination'
                   ? accounts.filter(
                       (item) =>

@@ -52,3 +52,79 @@ export const summary = query({
     return { currency, incomeMinor, spentMinor, chart, recent };
   },
 });
+
+export const frequentPeople = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect();
+    const people = new Map<string, { count: number; amountMinor: bigint }>();
+    const since = Date.now() - 90 * 86_400_000;
+    for (const membership of memberships) {
+      const group = await ctx.db.get(membership.groupId);
+      if (!group || group.archivedAt !== undefined) continue;
+      const transactions = await ctx.db
+        .query('transactions')
+        .withIndex('by_group_occurredAt', (q) =>
+          q.eq('groupId', membership.groupId).gte('occurredAt', since),
+        )
+        .order('desc')
+        .take(12);
+      for (const transaction of transactions) {
+        if (
+          transaction.type !== 'expense' ||
+          transaction.status !== 'posted' ||
+          transaction.deletedAt !== undefined ||
+          transaction.currency !== (user.defaultCurrency ?? 'INR')
+        )
+          continue;
+        const participants = await ctx.db
+          .query('expenseParticipants')
+          .withIndex('by_transaction', (q) => q.eq('transactionId', transaction._id))
+          .collect();
+        if (!participants.some((participant) => participant.userId === user._id)) continue;
+        for (const participant of participants) {
+          if (participant.userId === user._id) continue;
+          const id = String(participant.userId);
+          const current = people.get(id) ?? { count: 0, amountMinor: 0n };
+          current.count += 1;
+          current.amountMinor += participant.amountMinor;
+          people.set(id, current);
+        }
+      }
+    }
+    const ranked = [...people.entries()]
+      .sort(
+        ([leftId, left], [rightId, right]) =>
+          right.count - left.count ||
+          (right.amountMinor > left.amountMinor
+            ? 1
+            : right.amountMinor < left.amountMinor
+              ? -1
+              : 0) ||
+          leftId.localeCompare(rightId),
+      )
+      .slice(0, 6);
+    return Promise.all(
+      ranked.map(async ([id, activity]) => {
+        const profile = await ctx.db.get(id as typeof user._id);
+        if (!profile) return null;
+        const image =
+          profile.image ??
+          (profile.avatarStorageId ? await ctx.storage.getUrl(profile.avatarStorageId) : null);
+        return {
+          id,
+          username: profile.username,
+          name: profile.displayName ?? profile.name ?? profile.username ?? 'Finapp user',
+          image,
+          transactionCount: activity.count,
+          amountMinor: activity.amountMinor,
+        };
+      }),
+    ).then((rows) => rows.filter((row): row is NonNullable<typeof row> => row !== null));
+  },
+});

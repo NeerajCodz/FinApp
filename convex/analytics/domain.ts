@@ -111,6 +111,40 @@ export function getAnalyticsRange(period: AnalyticsPeriod, referenceAt: number, 
     previousStartAt: startOfDate(previous, formatter),
   };
 }
+export function getAnalyticsDayRange(referenceAt: number, timeZone: string) {
+  const formatter = calendarFormatter(timeZone || 'UTC');
+  const current = calendarParts(formatter, referenceAt);
+  return {
+    startAt: startOfDate(current, formatter),
+    endAt: startOfDate(shiftDate(current, 1), formatter),
+  };
+}
+export function getAnalyticsCalendarDate(referenceAt: number, timeZone: string) {
+  const { year, month, date } = calendarParts(calendarFormatter(timeZone || 'UTC'), referenceAt);
+  return `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+}
+
+export function getAnalyticsCustomRange(startDate: string, endDate: string, timeZone: string) {
+  const parse = (value: string): CalendarDate | null => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+    const date = { year: Number(match[1]), month: Number(match[2]), date: Number(match[3]) };
+    const normalized = new Date(Date.UTC(date.year, date.month - 1, date.date));
+    return normalized.getUTCFullYear() === date.year &&
+      normalized.getUTCMonth() + 1 === date.month &&
+      normalized.getUTCDate() === date.date
+      ? date
+      : null;
+  };
+  const start = parse(startDate);
+  const end = parse(endDate);
+  if (!start || !end || compareDates(start, end) > 0) throw new Error('INVALID_DATE_RANGE');
+  const formatter = calendarFormatter(timeZone || 'UTC');
+  return {
+    startAt: startOfDate(start, formatter),
+    endAt: startOfDate(shiftDate(end, 1), formatter),
+  };
+}
 
 export function validateAnalyticsRange(period: AnalyticsPeriod, startAt: number, endAt: number) {
   const duration = endAt - startAt;

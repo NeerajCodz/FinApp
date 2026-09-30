@@ -8,7 +8,7 @@ import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-import { asMinor, belongsToUser, idOf, PageHeading, SignInGate } from '../_personal';
+import { asMinor, belongsToUser, idOf, SignInGate } from '../_personal';
 
 type Budget = LocalRecord & {
   name?: string;

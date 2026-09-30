@@ -8,7 +8,7 @@ import { api } from '@convex/_generated/api';
 import { calculateBilateralBalance } from '@convex/splits/domain';
 import { ArrowLeft, ArrowLeftRight, ArrowRight, UsersRound } from 'lucide-react';
 import { Avatar, Card, Empty, SectionHeader, Separator } from '@finapp/ui/web';
-import { Money, TransactionRow } from '@finapp/ui/finance';
+import { formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
@@ -34,6 +34,7 @@ type Entry = LocalRecord & {
   amountMinor?: bigint | number | string;
   currency?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   title?: string;
   deletedAt?: number;
   participants?: Array<{ userId: string; amountMinor: bigint | number | string }>;
@@ -273,7 +274,10 @@ export default function PersonPage() {
         >
           <UsersRound size={17} /> Split
         </Link>
-        <Link className="finance-secondary-action" href={`/settle/${encodeURIComponent(routeToSettle)}`}>
+        <Link
+          className="finance-secondary-action"
+          href={`/settle/${encodeURIComponent(routeToSettle)}`}
+        >
           <ArrowLeftRight size={17} /> Settle
         </Link>
       </div>
@@ -320,7 +324,10 @@ export default function PersonPage() {
                   currency={expense.currency ?? group?.currency ?? 'INR'}
                   type="expense"
                   semanticType="split"
-                  date={new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
+                  date={formatTransactionDate(
+                    Number(expense.occurredAt ?? Date.now()),
+                    expense.hasTime,
+                  )}
                 />
               );
             })}

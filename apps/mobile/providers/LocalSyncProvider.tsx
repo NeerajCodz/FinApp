@@ -172,6 +172,14 @@ async function sendMutation(
       return convex.mutation(api.accounts.mutations.create, payload as never);
     case 'account.rename':
       return convex.mutation(api.accounts.mutations.rename, payload as never);
+    case 'account.setIcon': {
+      const accountId = String(payload.accountId);
+      const mappedAccountId = await getMappedCloudId(userId, 'account', accountId);
+      return convex.mutation(api.accounts.mutations.setIcon, {
+        ...payload,
+        accountId: mappedAccountId ?? accountId,
+      } as never);
+    }
     case 'account.archive':
       return convex.mutation(api.accounts.mutations.archive, payload as never);
     case 'category.create':
@@ -253,6 +261,14 @@ async function sendMutation(
     }
     case 'goal.create':
       return convex.mutation(api.goals.mutations.create, payload as never);
+    case 'goal.setIcon': {
+      const goalId = String(payload.goalId);
+      const mappedGoalId = await getMappedCloudId(userId, 'goal', goalId);
+      return convex.mutation(api.goals.mutations.setIcon, {
+        ...payload,
+        goalId: mappedGoalId ?? goalId,
+      } as never);
+    }
     case 'goal.contribute': {
       const goalId = String(payload.goalId);
       const mapped = await getMappedCloudId(userId, 'goal', goalId);
@@ -303,6 +319,13 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const auth = useConvexAuth();
   const connection = useConvexConnectionState();
   const currentProfile = useQuery(api.users.queries.current, auth.isAuthenticated ? {} : 'skip');
+  const reactiveChanges = useQuery(
+    api.sync.queries.changes,
+    auth.isAuthenticated && connection.isWebSocketConnected
+      ? { paginationOpts: { numItems: 1, cursor: null } }
+      : 'skip',
+  );
+  const remoteRevision = reactiveChanges?.latestRevision.toString();
   const [storedUserId, setStoredUserId] = React.useState<string | null>(null);
   const [status, setStatus] = React.useState(emptyStatus);
   const [failedEntries, setFailedEntries] = React.useState<OutboxEntry[]>([]);
@@ -313,7 +336,6 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const accountSnapshotsStale = React.useRef(false);
   const running = React.useRef(false);
-  const retryTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const previousReminderUserId = React.useRef<string | null>(null);
   const isConnected = connection.isWebSocketConnected;
   const authenticatedUserId = typeof currentProfile?._id === 'string' ? currentProfile._id : null;
@@ -587,23 +609,6 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
       await pullChanges(userId);
       await syncOutbox(userId, await listOutbox(userId), (entry) => runOutboxEntry(userId, entry));
       await pullChanges(userId);
-      const pending = await listOutbox(userId);
-      const nextRetryAt = pending
-        .filter((entry) => entry.status === 'failed' && entry.nextRetryAt !== undefined)
-        .reduce<number | null>(
-          (soonest, entry) =>
-            soonest === null ? entry.nextRetryAt! : Math.min(soonest, entry.nextRetryAt!),
-          null,
-        );
-      clearTimeout(retryTimer.current);
-      if (nextRetryAt !== null) {
-        retryTimer.current = setTimeout(
-          () => {
-            void flush();
-          },
-          Math.max(0, nextRetryAt - Date.now()),
-        );
-      }
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : 'SYNC_FAILED');
     } finally {
@@ -705,21 +710,41 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   );
 
   React.useEffect(() => {
-    if (validatedOnline) void flush();
-  }, [flush, validatedOnline]);
-
+    if (!userId || !validatedOnline || scopedStatus.pending === 0) return;
+    let active = true;
+    void hasCompletedBootstrap(userId)
+      .then((complete) => {
+        if (active && complete) void flush();
+      })
+      .catch((error: unknown) => {
+        if (active) setSyncError(error instanceof Error ? error.message : 'LOCAL_STORAGE_FAILED');
+      });
+    return () => {
+      active = false;
+    };
+  }, [flush, scopedStatus.pending, userId, validatedOnline]);
   React.useEffect(() => {
-    if (validatedOnline && scopedStatus.pending > 0) void flush();
-  }, [flush, scopedStatus.pending, validatedOnline]);
+    if (!userId || !validatedOnline) return;
+    let active = true;
+    void hasCompletedBootstrap(userId)
+      .then(async (complete) => {
+        if (!active) return;
+        if (!complete) {
+          void flush();
+          return;
+        }
+        if (!remoteRevision) return;
+        const revision = await getSyncRevision(userId);
+        if (active && BigInt(remoteRevision) > BigInt(revision)) void flush();
+      })
+      .catch((error: unknown) => {
+        if (active) setSyncError(error instanceof Error ? error.message : 'LOCAL_STORAGE_FAILED');
+      });
+    return () => {
+      active = false;
+    };
+  }, [flush, remoteRevision, userId, validatedOnline]);
 
-  React.useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && validatedOnline) void flush();
-    });
-    return () => subscription.remove();
-  }, [flush, validatedOnline]);
-
-  React.useEffect(() => () => clearTimeout(retryTimer.current), []);
   React.useEffect(() => {
     const previous = previousReminderUserId.current;
     if (previous && previous !== userId) void clearDeviceReminders(previous).catch(() => undefined);

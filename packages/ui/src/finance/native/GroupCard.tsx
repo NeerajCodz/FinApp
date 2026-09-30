@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, View, type PressableProps } from 'react-native';
 import { Typography, useTheme } from '@finapp/ui/native';
+import { EntityIcon } from './EntityIconPicker';
 import { CaretRight } from '@finapp/ui/icons/native';
 
 export function GroupCard({
@@ -8,12 +9,14 @@ export function GroupCard({
   meta,
   balance,
   meaning,
+  icon,
   onPress,
 }: {
   name: string;
   meta: string;
   balance: string;
   meaning: string;
+  icon?: string;
   onPress?: PressableProps['onPress'];
 }) {
   const { tokens } = useTheme();
@@ -33,9 +36,26 @@ export function GroupCard({
       }}
     >
       <View
-        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+        }}
       >
-        <View style={{ gap: 4 }}>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 15,
+            backgroundColor: tokens.surfaceRaised,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <EntityIcon value={icon ?? 'lucide:UsersRound'} size={23} color={tokens.primary} />
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
           <Typography variant="heading">{name}</Typography>
           <Typography variant="caption">{meta}</Typography>
         </View>

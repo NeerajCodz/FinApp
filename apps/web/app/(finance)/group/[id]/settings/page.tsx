@@ -3,18 +3,24 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { ArrowLeft, ArrowRight, Check, Pencil } from 'lucide-react';
 import { Avatar, Badge, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { FinanceInput } from '@/components/finance/FinanceInput';
+import { EntityIcon, EntityIconPicker } from '@finapp/ui/finance';
 
 type Group = LocalRecord & {
   name?: string;
   currency?: string;
   ownerId?: string;
   updatedAt?: number;
+  icon?: string;
+  messageRetentionMs?: number;
 };
 type Member = LocalRecord & {
   groupId?: string;
@@ -49,29 +55,40 @@ export default function GroupSettingsPage() {
   const [name, setName] = React.useState('');
   const [saving, setSaving] = React.useState('');
   const [error, setError] = React.useState('');
+  const [memberInput, setMemberInput] = React.useState('');
+  const [iconDraft, setIconDraft] = React.useState<string>();
+  const [retentionDraft, setRetentionDraft] = React.useState<number | null>(null);
+  const updateGroupSettings = useMutation(api.groups.mutations.updateSettings);
+  const updateMemberRole = useMutation(api.groups.mutations.setMemberRole);
+  const addGroupMember = useMutation(api.groups.mutations.addMember);
+  const removeGroupMember = useMutation(api.groups.mutations.removeMember);
   const group = groups.find((item) => aliases(item).includes(routeId));
   const groupIds = group ? aliases(group) : [routeId];
-  const groupMembers = allMembers.filter(
+  const currentGroupId = group ? localId(group) : routeId;
+  const cloudGroupId = group ? String(group.cloudId ?? group._id ?? '') : '';
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    cloudGroupId ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const localMembers = allMembers.filter(
     (member) => typeof member.groupId === 'string' && groupIds.includes(member.groupId),
   );
-  const currentGroupId = group ? localId(group) : routeId;
+  const groupMembers: Member[] = remoteGroup
+    ? remoteGroup.members.map((member) => ({
+        id: member.id,
+        groupId: cloudGroupId,
+        userId: member.id,
+        role: member.role,
+        username: member.username,
+        displayName: member.displayName,
+      }))
+    : localMembers;
+  const remoteRole = remoteGroup?.members.find((member) => member.id === userId)?.role;
   const canManage = Boolean(
-    group &&
-    userId &&
-    (group.ownerId === userId ||
-      groupMembers.some(
-        (member) => (member.userId ?? member.memberId) === userId && member.role === 'admin',
-      ) ||
-      (!group.ownerId && !groupMembers.length)),
+    remoteGroup && userId && (remoteGroup.ownerId === userId || remoteRole === 'admin'),
   );
   const currentRole =
-    group?.ownerId === userId || (!group?.ownerId && !groupMembers.length)
-      ? 'Owner'
-      : groupMembers.some(
-            (member) => (member.userId ?? member.memberId) === userId && member.role === 'admin',
-          )
-        ? 'Admin'
-        : 'Member';
+    remoteGroup?.ownerId === userId ? 'Owner' : remoteRole === 'admin' ? 'Admin' : 'Member';
   const memberRows: Member[] = groupMembers.length
     ? groupMembers
     : [
@@ -83,6 +100,12 @@ export default function GroupSettingsPage() {
           role: 'owner',
         },
       ];
+  React.useEffect(() => {
+    setIconDraft(
+      remoteGroup ? remoteGroup.icon : typeof group?.icon === 'string' ? group.icon : undefined,
+    );
+    setRetentionDraft(remoteGroup?.messageRetentionMs ?? null);
+  }, [group?.icon, remoteGroup?.icon, remoteGroup?.messageRetentionMs]);
 
   async function saveName(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,28 +139,89 @@ export default function GroupSettingsPage() {
   }
 
   async function changeRole(member: Member, role: 'admin' | 'member') {
-    if (!userId || !group || saving) return;
+    if (!canManage || !cloudGroupId || saving) return;
     const memberUserId = String(member.userId ?? member.memberId ?? '');
     const memberId = localId(member);
     if (!memberUserId || !memberId) return;
-    const payloadGroupId = String(group._id ?? group.cloudId ?? group.id ?? '');
     setSaving(memberId);
     setError('');
     try {
-      await commitLocalWrite(
-        userId,
-        'groupMember',
-        'group.setMemberRole',
-        { ...member, role },
-        { groupId: payloadGroupId, memberUserId, role },
-        {
-          recordId: memberId,
-          dependencies: group._id || group.cloudId ? [] : [`group:${payloadGroupId}`],
-          baseUpdatedAt: typeof member.updatedAt === 'number' ? member.updatedAt : undefined,
-        },
-      );
+      await updateMemberRole({
+        groupId: cloudGroupId as Id<'groups'>,
+        memberUserId: memberUserId as Id<'users'>,
+        role,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update this member role.');
+    } finally {
+      setSaving('');
+    }
+  }
+
+  async function saveGroupIcon() {
+    if (!canManage || !cloudGroupId || saving) return;
+    setSaving('icon');
+    setError('');
+    try {
+      await updateGroupSettings({
+        groupId: cloudGroupId as Id<'groups'>,
+        icon: iconDraft ?? null,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update the group icon.');
+    } finally {
+      setSaving('');
+    }
+  }
+
+  async function saveRetention() {
+    if (!canManage || !cloudGroupId || saving) return;
+    setSaving('retention');
+    setError('');
+    try {
+      await updateGroupSettings({
+        groupId: cloudGroupId as Id<'groups'>,
+        messageRetentionMs: retentionDraft,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update message retention.');
+    } finally {
+      setSaving('');
+    }
+  }
+
+  async function addMember() {
+    if (!canManage || !cloudGroupId || saving) return;
+    setSaving('member-add');
+    setError('');
+    try {
+      const result = await addGroupMember({
+        groupId: cloudGroupId as Id<'groups'>,
+        username: memberInput,
+      });
+      setMemberInput('');
+      if (!result) setError('No account matched; an invite was created for that username.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not add this member.');
+    } finally {
+      setSaving('');
+    }
+  }
+
+  async function removeMember(member: Member) {
+    if (!canManage || !cloudGroupId || saving) return;
+    const memberUserId = String(member.userId ?? member.memberId ?? '');
+    if (!memberUserId) return;
+    const memberId = localId(member);
+    setSaving(memberId);
+    setError('');
+    try {
+      await removeGroupMember({
+        groupId: cloudGroupId as Id<'groups'>,
+        memberUserId: memberUserId as Id<'users'>,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not remove this member.');
     } finally {
       setSaving('');
     }
@@ -189,6 +273,14 @@ export default function GroupSettingsPage() {
         >
           <ArrowLeft size={18} />
         </Link>
+        <EntityIcon
+          value={
+            remoteGroup
+              ? (remoteGroup.icon ?? 'lucide:UsersRound')
+              : (group.icon ?? 'lucide:UsersRound')
+          }
+          size={24}
+        />
         <h1 style={{ margin: 0 }}>Group settings</h1>
       </header>
       {(error || groupsError || membersError) && (
@@ -265,12 +357,73 @@ export default function GroupSettingsPage() {
           </div>
         )}
       </Card>
+      {canManage && (
+        <Card className="finance-form-panel">
+          <SectionHeader title="Appearance & chat" />
+          <div className="finance-form-field">
+            <span>Group icon</span>
+            <EntityIconPicker
+              mode="either"
+              value={iconDraft}
+              onChange={setIconDraft}
+              label="Group icon"
+              compact
+              allowClear
+            />
+            <Button disabled={Boolean(saving) || !cloudGroupId} onPress={saveGroupIcon}>
+              {saving === 'icon' ? 'Saving…' : 'Save icon'}
+            </Button>
+          </div>
+          <label className="finance-form-field">
+            <span>Disappearing messages</span>
+            <select
+              aria-label="Disappearing message retention"
+              value={retentionDraft === null ? '' : String(retentionDraft)}
+              onChange={(event) =>
+                setRetentionDraft(
+                  event.currentTarget.value ? Number(event.currentTarget.value) : null,
+                )
+              }
+            >
+              <option value="">Never</option>
+              <option value="86400000">1 day</option>
+              <option value="604800000">7 days</option>
+              <option value="2592000000">30 days</option>
+            </select>
+          </label>
+          <p className="finance-form-note">
+            Existing and new messages, including bill images, are deleted when their retention
+            expires.
+          </p>
+          <Button disabled={Boolean(saving) || !cloudGroupId} onPress={saveRetention}>
+            {saving === 'retention' ? 'Saving…' : 'Save retention'}
+          </Button>
+        </Card>
+      )}
       <Card className="finance-record-panel">
         <SectionHeader
           title="Members"
           action={<Badge variant="neutral">{groupMembers.length || 1} total</Badge>}
         />
-        {membersLoading ? (
+        {canManage && (
+          <div className="finance-form-row" style={{ marginBlock: 14 }}>
+            <input
+              aria-label="Add member username"
+              value={memberInput}
+              onChange={(event) => setMemberInput(event.currentTarget.value)}
+              placeholder="@username"
+              autoComplete="off"
+            />
+            <Button
+              type="button"
+              disabled={Boolean(saving) || !memberInput.trim()}
+              onPress={addMember}
+            >
+              {saving === 'member-add' ? 'Adding…' : 'Add member'}
+            </Button>
+          </div>
+        )}
+        {membersLoading && !remoteGroup ? (
           <p className="finance-muted" role="status">
             Loading saved membership…
           </p>
@@ -302,18 +455,28 @@ export default function GroupSettingsPage() {
                     </small>
                   </span>
                   {canManage && !isOwner && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={Boolean(saving)}
-                      onPress={() => changeRole(member, role === 'admin' ? 'member' : 'admin')}
-                    >
-                      {saving === localId(member)
-                        ? 'Saving…'
-                        : role === 'admin'
-                          ? 'Remove admin'
-                          : 'Make admin'}
-                    </Button>
+                    <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={Boolean(saving)}
+                        onPress={() => changeRole(member, role === 'admin' ? 'member' : 'admin')}
+                      >
+                        {saving === localId(member)
+                          ? 'Saving…'
+                          : role === 'admin'
+                            ? 'Remove admin'
+                            : 'Make admin'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={Boolean(saving)}
+                        onPress={() => removeMember(member)}
+                      >
+                        {saving === localId(member) ? 'Removing…' : 'Remove'}
+                      </Button>
+                    </div>
                   )}
                 </li>
               );
@@ -326,10 +489,10 @@ export default function GroupSettingsPage() {
           />
         )}
         <p className="finance-form-note">
-          Owners and admins can rename the group and promote or remove admins.
+          Owners and admins can manage members, the group icon, and disappearing-message retention.
         </p>
         <p className="finance-form-note">
-          Changes are saved on this device and sync when connected.
+          Group name changes save locally and sync when connected.
         </p>
       </Card>
     </div>

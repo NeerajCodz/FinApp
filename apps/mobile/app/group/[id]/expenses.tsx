@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useLocalGroupRange, useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TransactionRow } from '@finapp/ui/finance';
+import { formatTransactionDate, TransactionRow } from '@finapp/ui/finance';
 import { Button, IconButton, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 
@@ -64,7 +64,10 @@ export default function GroupExpensesScreen() {
               currency={String(expense.currency ?? group?.currency ?? 'INR')}
               type="expense"
               semanticType="split"
-              date={new Date(Number(expense.occurredAt ?? Date.now())).toLocaleDateString()}
+              date={formatTransactionDate(
+                Number(expense.occurredAt ?? Date.now()),
+                Boolean(expense.hasTime),
+              )}
             />
           ))}
         </View>

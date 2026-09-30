@@ -3,6 +3,7 @@ import type {
   AnalyticsCategory,
   AnalyticsTransaction,
 } from '@convex/analytics/domain';
+import { formatTransactionDate } from '@finapp/ui/finance';
 import type { LocalRecord } from '@/local/repository';
 
 export function recordIds(record: LocalRecord): string[] {
@@ -79,9 +80,7 @@ export function transactionRow(
     category: typeof category?.name === 'string' ? category.name : undefined,
     categoryIcon: typeof category?.icon === 'string' ? category.icon : undefined,
     account: typeof accountName === 'string' ? displayAccountName(accountName) : undefined,
-    date: new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone }).format(
-      transaction.occurredAt,
-    ),
+    date: formatTransactionDate(transaction.occurredAt, record.hasTime === true, timeZone),
     status: transaction.status,
     amountMinor: transaction.amountMinor,
     currency: transaction.currency,

@@ -16,7 +16,7 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { displayAccountName } from '@/lib/ledger';
 import type { LocalRecord } from '@/local/repository';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money } from '@finapp/ui/finance';
+import { EntityIcon, Money } from '@finapp/ui/finance';
 import { Button, Card, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 
@@ -39,6 +39,7 @@ type AccountRecord = LocalRecord & {
   balanceMinor?: bigint;
   openingBalanceMinor?: bigint;
   archivedAt?: number;
+  icon?: string;
   isIncludedInTotal?: boolean;
 };
 type AccountTransaction = LocalRecord & {
@@ -311,7 +312,11 @@ export default function AccountsScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <TypeIcon size={21} color={tokens.primary} />
+                      {account.icon ? (
+                        <EntityIcon value={account.icon} size={21} color={tokens.primary} />
+                      ) : (
+                        <TypeIcon size={21} color={tokens.primary} />
+                      )}
                     </View>
                     <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                       <Typography variant="bodyLarge" numberOfLines={1} ellipsizeMode="tail">

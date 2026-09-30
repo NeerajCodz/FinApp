@@ -1,13 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TouchableOpacity, View, type PressableProps } from 'react-native';
-import { Typography } from '@finapp/ui/native';
+import { Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@convex/shared/money';
 import { signedMinor } from '../money';
 import { semanticLabels, type SemanticType, type TransactionType } from '../types';
 import { CategoryIcon } from './CategoryIcon';
 import { Money } from './Money';
-import { SemanticMarker } from './SemanticMarker';
-
 export function TransactionRow({
   title,
   merchant,
@@ -15,7 +13,6 @@ export function TransactionRow({
   account,
   categoryIcon,
   date,
-  status,
   amountMinor,
   currency,
   type,
@@ -35,37 +32,90 @@ export function TransactionRow({
   type: TransactionType;
   onPress?: PressableProps['onPress'];
 }) {
-  const detail = [merchant ?? category, account].filter(Boolean).join(' · ');
+  const { tokens } = useTheme();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const categoryDetails = [
+    category ? `Category · ${category}` : undefined,
+    merchant ? `Merchant · ${merchant}` : undefined,
+    account ? `Account · ${account}` : undefined,
+  ].filter((item): item is string => Boolean(item));
+  const amountColor =
+    type === 'expense'
+      ? tokens.expense
+      : type === 'income' || type === 'refund'
+        ? tokens.income
+        : tokens.transfer;
+  const accessibleLabel = `${title}, ${date ?? 'Date unavailable'}, ${semanticLabels[semanticType ?? type]}, ${category ?? 'Uncategorized'}${merchant ? `, ${merchant}` : ''}${account ? `, ${account}` : ''}, ${formatMinor(signedMinor(amountMinor, type), currency)}`;
   return (
-    <TouchableOpacity
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${title}, ${semanticLabels[semanticType ?? type]}, ${detail}, ${formatMinor(signedMinor(amountMinor, type), currency)}`}
-      onPress={onPress ?? undefined}
-      disabled={!onPress}
-      activeOpacity={0.72}
+    <View
       style={{
-        minHeight: 72,
+        minHeight: 56,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
+        zIndex: detailsOpen ? 10 : 0,
       }}
     >
-      <CategoryIcon label={category ?? title} icon={categoryIcon} />
-      <View style={{ flex: 1, gap: 3 }}>
-        <Typography variant="bodyLarge" numberOfLines={1} style={{ fontSize: 15, lineHeight: 20 }}>
+      <View style={{ position: 'relative', zIndex: 11 }}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Show category details for ${category ?? title}`}
+          accessibilityState={{ expanded: detailsOpen }}
+          onPress={() => setDetailsOpen((open) => !open)}
+          onLongPress={() => setDetailsOpen(true)}
+          delayLongPress={350}
+          activeOpacity={0.8}
+        >
+          <CategoryIcon label={category ?? title} icon={categoryIcon} />
+        </TouchableOpacity>
+        {detailsOpen && categoryDetails.length > 0 && (
+          <View
+            accessibilityRole="summary"
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 46,
+              left: 0,
+              zIndex: 20,
+              minWidth: 180,
+              gap: 6,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: tokens.borderSubtle,
+              backgroundColor: tokens.surfaceRaised,
+              elevation: 8,
+            }}
+          >
+            {categoryDetails.map((detail) => (
+              <Typography key={detail} variant="caption">
+                {detail}
+              </Typography>
+            ))}
+          </View>
+        )}
+      </View>
+      <TouchableOpacity
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={accessibleLabel}
+        onPress={onPress ?? undefined}
+        disabled={!onPress}
+        activeOpacity={0.72}
+        style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+      >
+        <Typography
+          variant="bodyLarge"
+          numberOfLines={1}
+          style={{ flex: 1, fontSize: 15, lineHeight: 20 }}
+        >
           {title}
         </Typography>
-        {!!detail && (
-          <Typography variant="caption" numberOfLines={1}>
-            {detail}
-          </Typography>
-        )}
-        <SemanticMarker type={semanticType ?? type} />
-      </View>
-      <View style={{ alignItems: 'flex-end', gap: 3 }}>
-        <Money amountMinor={amountMinor} currency={currency} type={type} />
-        <Typography variant="caption">{status ?? date}</Typography>
-      </View>
-    </TouchableOpacity>
+        <Typography variant="caption" numberOfLines={1}>
+          {date ?? 'Date unavailable'}
+        </Typography>
+        <Money amountMinor={amountMinor} currency={currency} type={type} color={amountColor} />
+      </TouchableOpacity>
+    </View>
   );
 }

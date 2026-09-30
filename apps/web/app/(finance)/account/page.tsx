@@ -2,9 +2,18 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Banknote, ChevronRight, CircleDollarSign, CreditCard, Landmark, Plus, Wallet } from 'lucide-react';
+import {
+  ArrowLeft,
+  Banknote,
+  ChevronRight,
+  CircleDollarSign,
+  CreditCard,
+  Landmark,
+  Plus,
+  Wallet,
+} from 'lucide-react';
 import { Button, Card, IconButton, Typography } from '@finapp/ui/web';
-import { Money } from '@finapp/ui/finance';
+import { EntityIcon, Money } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
@@ -18,6 +27,7 @@ type Account = LocalRecord & {
   balanceMinor?: bigint | number | string;
   openingBalanceMinor?: bigint | number | string;
   archivedAt?: number;
+  icon?: string;
   isIncludedInTotal?: boolean;
 };
 type Transaction = LocalRecord & {
@@ -187,7 +197,8 @@ export default function PersonalAccountsPage() {
               <div style={{ display: 'grid', gap: 5 }}>
                 <Typography variant="caption">ACCOUNT OVERVIEW</Typography>
                 <Typography variant="heading">
-                  {activeAccounts.length} active {activeAccounts.length === 1 ? 'account' : 'accounts'}
+                  {activeAccounts.length} active{' '}
+                  {activeAccounts.length === 1 ? 'account' : 'accounts'}
                 </Typography>
               </div>
               <Landmark size={20} color="var(--finapp-primary)" aria-hidden="true" />
@@ -205,7 +216,9 @@ export default function PersonalAccountsPage() {
                   />
                 ))
               ) : (
-                <Typography variant="small">No account balances are included in your total.</Typography>
+                <Typography variant="small">
+                  No account balances are included in your total.
+                </Typography>
               )}
             </div>
           </Card>
@@ -265,10 +278,21 @@ export default function PersonalAccountsPage() {
                         background: 'var(--finapp-surface-raised)',
                       }}
                     >
-                      <TypeIcon size={21} color="var(--finapp-primary)" />
+                      {account.icon ? (
+                        <EntityIcon value={account.icon} size={21} color="var(--finapp-primary)" />
+                      ) : (
+                        <TypeIcon size={21} color="var(--finapp-primary)" />
+                      )}
                     </span>
                     <span style={{ display: 'grid', flex: 1, minWidth: 0, gap: 3 }}>
-                      <Typography variant="bodyLarge" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Typography
+                        variant="bodyLarge"
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {name}
                       </Typography>
                       <Typography variant="caption">
@@ -278,15 +302,17 @@ export default function PersonalAccountsPage() {
                         · {currency}
                       </Typography>
                     </span>
-                    <span
-                      style={{ display: 'grid', flexShrink: 0, justifyItems: 'end', gap: 4 }}
-                    >
+                    <span style={{ display: 'grid', flexShrink: 0, justifyItems: 'end', gap: 4 }}>
                       <Money amountMinor={account.currentBalance} currency={currency} />
                       <Typography variant="caption">
                         {account.isIncludedInTotal === true ? 'In total' : 'Excluded'}
                       </Typography>
                     </span>
-                    <ChevronRight size={18} color="var(--finapp-foreground-subtle)" aria-hidden="true" />
+                    <ChevronRight
+                      size={18}
+                      color="var(--finapp-foreground-subtle)"
+                      aria-hidden="true"
+                    />
                   </Link>
                 );
               })}

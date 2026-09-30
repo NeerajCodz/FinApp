@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button, Empty, SectionHeader, Separator, Sheet, Typography } from '@finapp/ui/web';
-import { BudgetProgress, CategoryEmojiPicker, CategoryIcon, TransactionRow } from '@finapp/ui/finance';
+import {
+  BudgetProgress,
+  CategoryEmojiPicker,
+  CategoryIcon,
+  formatTransactionDate,
+  TransactionRow,
+} from '@finapp/ui/finance';
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -35,6 +41,7 @@ type Profile = LocalRecord & {
   defaultCurrency?: string;
   defaultExpenseCategoryId?: string;
   defaultIncomeCategoryId?: string;
+  timezone?: string;
 };
 type Transaction = LocalRecord & {
   categoryId?: string;
@@ -44,6 +51,7 @@ type Transaction = LocalRecord & {
   currency?: string;
   title?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   status?: string;
   deletedAt?: number;
 };
@@ -313,7 +321,9 @@ export default function PersonalCategoryDetailPage() {
           </Link>
           <Typography variant="heading">Category</Typography>
         </header>
-        <Typography variant="small" role="status">Loading category…</Typography>
+        <Typography variant="small" role="status">
+          Loading category…
+        </Typography>
       </div>
     );
   if (error || profileError || transactionError)
@@ -444,7 +454,12 @@ export default function PersonalCategoryDetailPage() {
                   Save limit
                 </Button>
                 {monthlyLimitMinor !== null && (
-                  <Button type="button" variant="outline" disabled={pending} onPress={() => void clearLimit()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pending}
+                    onPress={() => void clearLimit()}
+                  >
                     Clear limit
                   </Button>
                 )}
@@ -499,7 +514,9 @@ export default function PersonalCategoryDetailPage() {
       <section style={{ display: 'grid', gap: 12 }}>
         <SectionHeader title="Transactions" />
         {transactionLoading ? (
-          <Typography variant="small" role="status">Loading category…</Typography>
+          <Typography variant="small" role="status">
+            Loading category…
+          </Typography>
         ) : transactionError ? (
           <p className="finance-form-error" role="alert">
             Activity could not be opened: {transactionError}
@@ -527,10 +544,23 @@ export default function PersonalCategoryDetailPage() {
                   categoryIcon={category.icon}
                   amountMinor={asMinor(transaction.amountMinor)}
                   currency={transaction.currency ?? currency}
-                  type={(transaction.type ?? 'expense') as 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'}
-                  date={transaction.occurredAt ? new Date(transaction.occurredAt).toLocaleDateString() : 'Date unavailable'}
+                  type={
+                    (transaction.type ?? 'expense') as
+                      'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'
+                  }
+                  date={
+                    transaction.occurredAt
+                      ? formatTransactionDate(
+                          transaction.occurredAt,
+                          transaction.hasTime,
+                          profile?.timezone,
+                        )
+                      : 'Date unavailable'
+                  }
                   semanticType={transaction.groupId ? 'split' : undefined}
-                  onPress={() => router.push(`/transaction/${encodeURIComponent(idOf(transaction))}`)}
+                  onPress={() =>
+                    router.push(`/transaction/${encodeURIComponent(idOf(transaction))}`)
+                  }
                 />
                 {index < matching.length - 1 && <Separator />}
               </React.Fragment>

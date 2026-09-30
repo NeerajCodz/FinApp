@@ -19,6 +19,7 @@ import {
   getLocalSyncStatus,
   getMappedCloudId,
   getSyncCursor,
+  getSyncState,
   getSyncWindow,
   hasPendingSyncWindowBackfill,
   markSyncWindowBackfillCompleted,
@@ -171,6 +172,12 @@ async function sendMutation(
     case 'account.rename':
       await convex.mutation(api.accounts.mutations.rename, payload as never);
       return;
+    case 'account.setIcon':
+      await convex.mutation(api.accounts.mutations.setIcon, {
+        ...payload,
+        accountId: await mapId('account', payload.accountId),
+      } as never);
+      return;
     case 'account.archive':
       await convex.mutation(api.accounts.mutations.archive, payload as never);
       return;
@@ -254,6 +261,12 @@ async function sendMutation(
         goalId: await mapId('goal', payload.goalId),
       } as never);
       return;
+    case 'goal.setIcon':
+      await convex.mutation(api.goals.mutations.setIcon, {
+        ...payload,
+        goalId: await mapId('goal', payload.goalId),
+      } as never);
+      return;
     case 'recurring.create':
       await convex.mutation(api.recurring.mutations.create, {
         ...payload,
@@ -306,13 +319,23 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const running = React.useRef(false);
   const syncWindowChangeDuringFlush = React.useRef(false);
-  const retryTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const rangeFetches = React.useRef(new Map<string, Promise<void>>());
   const isConnected = online && connection.isWebSocketConnected;
   const authenticatedUserId = typeof currentProfile?._id === 'string' ? currentProfile._id : null;
-  const userId = authenticatedUserId ?? (!isConnected ? storedUserId : null);
-  const identityReady = localIdentityReady;
+  const userId =
+    authenticatedUserId ?? (auth.isAuthenticated && !isConnected ? storedUserId : null);
+  const identityReady =
+    localIdentityReady &&
+    !auth.isLoading &&
+    (!auth.isAuthenticated || !isConnected || currentProfile !== undefined);
   const validatedOnline = Boolean(auth.isAuthenticated && isConnected && authenticatedUserId);
+  const reactiveChanges = useQuery(
+    api.sync.queries.changes,
+    auth.isAuthenticated && isConnected
+      ? { paginationOpts: { numItems: 1, cursor: null } }
+      : 'skip',
+  );
+  const remoteRevision = reactiveChanges?.latestRevision.toString();
   const scopedStatus = statusUserId === userId ? status : emptyStatus;
   const scopedFailedEntries = statusUserId === userId ? failedEntries : [];
   const scopedConflicts = statusUserId === userId ? conflicts : [];
@@ -646,17 +669,6 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       await pullChanges(userId);
       await syncOutbox(userId, (entry) => runOutboxEntry(userId, entry));
       await pullChanges(userId);
-      const entries = await listOutbox(userId);
-      const nextRetryAt = entries
-        .filter((entry) => entry.status === 'failed' && entry.nextRetryAt !== undefined)
-        .reduce<number | null>(
-          (soonest, entry) =>
-            soonest === null ? entry.nextRetryAt! : Math.min(soonest, entry.nextRetryAt!),
-          null,
-        );
-      clearTimeout(retryTimer.current);
-      if (nextRetryAt !== null)
-        retryTimer.current = setTimeout(() => void flush(), Math.max(0, nextRetryAt - Date.now()));
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : 'SYNC_FAILED');
     } finally {
@@ -677,12 +689,19 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   ]);
 
   React.useEffect(() => {
-    if (validatedOnline) void flush();
-  }, [flush, validatedOnline]);
-
-  React.useEffect(() => {
-    if (validatedOnline && scopedStatus.pending > 0) void flush();
-  }, [flush, scopedStatus.pending, validatedOnline]);
+    if (!userId || !validatedOnline || scopedStatus.pending === 0) return;
+    let active = true;
+    void hasCompletedBootstrap(userId)
+      .then((complete) => {
+        if (active && complete) void flush();
+      })
+      .catch((error: unknown) => {
+        if (active) setSyncError(error instanceof Error ? error.message : 'LOCAL_STORAGE_FAILED');
+      });
+    return () => {
+      active = false;
+    };
+  }, [flush, scopedStatus.pending, userId, validatedOnline]);
 
   React.useEffect(() => {
     if (!userId) {
@@ -721,20 +740,27 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       unsubscribe();
     };
   }, [userId]);
-
   React.useEffect(() => {
-    const wake = () => {
-      if (validatedOnline) void flush();
-    };
-    window.addEventListener('focus', wake);
-    document.addEventListener('visibilitychange', wake);
+    if (!userId || !validatedOnline) return;
+    let active = true;
+    void hasCompletedBootstrap(userId)
+      .then(async (complete) => {
+        if (!active) return;
+        if (!complete) {
+          void flush();
+          return;
+        }
+        if (!remoteRevision) return;
+        const { revision } = await getSyncState(userId);
+        if (active && BigInt(remoteRevision) > BigInt(revision)) void flush();
+      })
+      .catch((error: unknown) => {
+        if (active) setSyncError(error instanceof Error ? error.message : 'LOCAL_STORAGE_FAILED');
+      });
     return () => {
-      window.removeEventListener('focus', wake);
-      document.removeEventListener('visibilitychange', wake);
+      active = false;
     };
-  }, [flush, validatedOnline]);
-
-  React.useEffect(() => () => clearTimeout(retryTimer.current), []);
+  }, [flush, remoteRevision, userId, validatedOnline]);
 
   const retryNow = React.useCallback(async () => {
     if (!userId) return;

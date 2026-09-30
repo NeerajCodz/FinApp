@@ -4,7 +4,7 @@ import { CategoryIcon } from '@finapp/ui/finance';
 import { formatMinor } from '@convex/shared/money';
 import type { AnalyticsBreakdownItem } from '@convex/analytics/domain';
 
-const chartColors = ['volt', 'blue', 'violet'] as const;
+const chartColors = ['volt', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
 
 export function BreakdownDonut({
   items,
@@ -27,9 +27,30 @@ export function BreakdownDonut({
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       {totalMinor > 0n && (
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 142 }}>
-          <svg width={142} height={142} viewBox="0 0 142 142" role="img" aria-label="Expense share by category">
-            <circle cx={71} cy={71} r={radius} stroke={tokens.borderSubtle} strokeWidth={19} fill="none" />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 142,
+          }}
+        >
+          <svg
+            width={142}
+            height={142}
+            viewBox="0 0 142 142"
+            role="img"
+            aria-label="Expense share by category"
+          >
+            <circle
+              cx={71}
+              cy={71}
+              r={radius}
+              stroke={tokens.borderSubtle}
+              strokeWidth={19}
+              fill="none"
+            />
             {items.map((item, index) => {
               const fraction = Number((item.amountMinor * 10000n) / totalMinor) / 10000;
               const length = circumference * fraction;
@@ -61,7 +82,8 @@ export function BreakdownDonut({
         <Typography variant="small">No posted expenses in this period.</Typography>
       ) : (
         items.map((item, index) => {
-          const percentage = totalMinor > 0n ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0;
+          const percentage =
+            totalMinor > 0n ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0;
           return (
             <button
               key={item.id}
@@ -82,9 +104,21 @@ export function BreakdownDonut({
                 cursor: 'pointer',
               }}
             >
-              <span style={{ width: 8, height: 8, flex: '0 0 8px', borderRadius: 4, backgroundColor: colors[index % colors.length] }} />
-              {iconForCategory && <CategoryIcon label={item.label} icon={iconForCategory(item.id)} />}
-              <Typography variant="small" style={{ flex: 1 }}>{item.label}</Typography>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  flex: '0 0 8px',
+                  borderRadius: 4,
+                  backgroundColor: colors[index % colors.length],
+                }}
+              />
+              {iconForCategory && (
+                <CategoryIcon label={item.label} icon={iconForCategory(item.id)} />
+              )}
+              <Typography variant="small" style={{ flex: 1 }}>
+                {item.label}
+              </Typography>
               <span style={{ display: 'grid', justifyItems: 'end', minWidth: 88 }}>
                 <Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography>
                 <Typography variant="caption">{percentage}%</Typography>

@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, Wallet } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Money } from '@finapp/ui/finance';
+import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Progress, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -20,6 +20,8 @@ type Goal = LocalRecord & {
   targetDate?: number;
   completedAt?: number;
   archivedAt?: number;
+  icon?: string;
+  updatedAt?: number;
 };
 type Contribution = LocalRecord & {
   id: string;
@@ -38,6 +40,8 @@ export default function GoalDetailScreen() {
   const [amount, setAmount] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [iconSaving, setIconSaving] = React.useState(false);
+  const [iconError, setIconError] = React.useState('');
   const goal = goals.data?.find((item) => item.id === id || item._id === id);
   const history =
     contributions.data
@@ -86,6 +90,32 @@ export default function GoalDetailScreen() {
       setError(cause instanceof Error ? cause.message : 'Could not record contribution.');
     } finally {
       setSaving(false);
+    }
+  }
+  async function saveIcon(icon?: string) {
+    if (!userId || !goal || iconSaving) return;
+    const goalLocalId = goal.id ?? goal._id ?? goal.cloudId;
+    const goalId = goal._id ?? goal.cloudId ?? goal.id;
+    if (!goalLocalId || !goalId) return;
+    setIconSaving(true);
+    setIconError('');
+    try {
+      await commitLocalWrite(
+        userId,
+        'goal',
+        'goal.setIcon',
+        { ...goal, icon: icon ?? undefined },
+        { goalId, icon: icon ?? null },
+        {
+          recordId: goalLocalId,
+          dependencies: goal._id || goal.cloudId ? [] : [`goal:${goalId}`],
+          baseUpdatedAt: goal.updatedAt,
+        },
+      );
+    } catch (cause) {
+      setIconError(cause instanceof Error ? cause.message : 'Could not update goal icon.');
+    } finally {
+      setIconSaving(false);
     }
   }
 
@@ -139,7 +169,34 @@ export default function GoalDetailScreen() {
       {goal && !goals.loading && !contributions.loading && !goals.error && !contributions.error && (
         <>
           <View style={{ gap: 8 }}>
-            <Typography variant="title">{goal.name}</Typography>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  backgroundColor: tokens.surfaceRaised,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <EntityIcon value={goal.icon ?? 'lucide:Target'} size={22} color={tokens.primary} />
+              </View>
+              <Typography variant="title" style={{ flex: 1 }} numberOfLines={1}>
+                {goal.name}
+              </Typography>
+              <EntityIconPicker
+                mode="lucide"
+                value={goal.icon}
+                onChange={(icon) => void saveIcon(icon)}
+                label="Change goal icon"
+              />
+            </View>
+            {!!iconError && (
+              <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
+                {iconError}
+              </Text>
+            )}
             <Typography variant="label">Saved so far</Typography>
             <Money amountMinor={saved} currency={goal.currency} size="display" />
             <Text style={{ color: tokens.foregroundMuted }}>

@@ -11,6 +11,7 @@ import { PeopleRail } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { EntityIconPicker } from '@finapp/ui/finance';
 import { FinanceInput } from '@/components/finance/FinanceInput';
 
 type ContactPicker = {
@@ -29,6 +30,7 @@ export default function NewGroupPage() {
   const { records: profiles } = useLocalRecords<LocalRecord>('profile');
   const [name, setName] = React.useState('');
   const [usernameInput, setUsernameInput] = React.useState('');
+  const [icon, setIcon] = React.useState<string>();
   const [usernames, setUsernames] = React.useState<string[]>([]);
   const [phoneInput, setPhoneInput] = React.useState('');
   const [phones, setPhones] = React.useState<string[]>([]);
@@ -117,13 +119,20 @@ export default function NewGroupPage() {
         'group.create',
         {
           ownerId: userId,
+          ...(icon ? { icon } : {}),
           name: cleanName,
           currency: 'INR',
           participantUsernames: usernames,
           memberPhones: phones,
           createdAt: Date.now(),
         },
-        { name: cleanName, currency: 'INR', memberUsernames: usernames, memberPhones: phones },
+        {
+          name: cleanName,
+          currency: 'INR',
+          memberUsernames: usernames,
+          memberPhones: phones,
+          ...(icon ? { icon } : {}),
+        },
       );
       router.replace(`/group/${encodeURIComponent(localId)}`);
     } catch (cause) {
@@ -171,6 +180,14 @@ export default function NewGroupPage() {
             placeholder="Goa Trip"
             maxLength={80}
             required
+          />
+          <EntityIconPicker
+            mode="either"
+            value={icon}
+            onChange={setIcon}
+            label="Group icon"
+            compact
+            allowClear
           />
           <PeopleRail
             title="From your contacts"

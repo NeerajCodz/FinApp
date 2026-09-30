@@ -1,3 +1,5 @@
+import { ArrowRight } from '@finapp/ui/icons/native';
+import { currencies } from '@convex/shared/validators';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
@@ -6,7 +8,7 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { currencies } from '@convex/shared/validators';
+import { normalizeUsername } from '@convex/users/domain';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Avatar,
@@ -19,7 +21,7 @@ import {
   Typography,
 } from '@finapp/ui/native';
 import {
-  ArrowRight,
+  ArrowLeft,
   Bell,
   CaretRight,
   ChartLineUp,
@@ -40,6 +42,7 @@ import { useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
 import { clearValidatedLocalUserId } from '@/local/identity';
 
+const usernamePattern = /^[a-z0-9_]{3,32}$/;
 type Editor = 'username' | 'phone' | null;
 type ProfileRecord = LocalRecord & {
   displayName?: string;
@@ -49,10 +52,6 @@ type ProfileRecord = LocalRecord & {
   phoneVerificationTime?: number;
   defaultCurrency?: string;
 };
-
-function normalizeHandle(value: string) {
-  return value.replace(/^@+/, '').toLowerCase();
-}
 
 type ActionIcon = React.ComponentType<{ size?: number; color?: string }>;
 
@@ -176,8 +175,15 @@ export default function ProfileScreen() {
       ? 'Verified'
       : 'Unverified'
     : 'Add phone number';
-  const editorDisabled = !draft.trim();
   const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const normalizedUsername = normalizeUsername(draft);
+  const usernameError =
+    editor === 'username' && draft.trim().length > 0 && !usernamePattern.test(normalizedUsername)
+      ? 'Use 3–32 letters, numbers, or underscores.'
+      : '';
+  const editorDisabled =
+    !draft.trim() || saving || (editor === 'username' && !usernamePattern.test(normalizedUsername));
 
   async function saveProfile(update: Partial<ProfileRecord>) {
     if (!userId) throw new Error('AUTH_REQUIRED');
@@ -196,26 +202,31 @@ export default function ProfileScreen() {
     setDraft(next === 'username' ? (profile?.username ?? '') : (profile?.phone ?? ''));
   }
   async function saveEditor() {
+    if (saving) return;
     const update =
       editor === 'username'
-        ? { username: normalizeHandle(draft) }
+        ? { username: normalizedUsername }
         : editor === 'phone'
           ? { phone: draft }
           : null;
     if (!update) return;
+    if (editor === 'username' && !usernamePattern.test(normalizedUsername)) return;
     setSaveError('');
+    setSaving(true);
     try {
       await saveProfile(update);
       setEditor(null);
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : 'Could not save profile.');
+    } finally {
+      setSaving(false);
     }
   }
 
   async function leave() {
     await clearValidatedLocalUserId();
     await signOut();
-    router.replace('/(auth)/welcome');
+    router.replace('/(auth)/sign-in');
   }
 
   return (
@@ -233,7 +244,18 @@ export default function ProfileScreen() {
         <View
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
-          <Typography variant="title">Profile</Typography>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <IconButton
+              label="Go back"
+              variant="ghost"
+              onPress={() =>
+                router.canGoBack() ? router.back() : router.replace('/(tabs)' as never)
+              }
+            >
+              <ArrowLeft size={21} color={tokens.foreground} />
+            </IconButton>
+            <Typography variant="title">Profile</Typography>
+          </View>
           <IconButton
             label="Open settings"
             variant="ghost"
@@ -450,8 +472,15 @@ export default function ProfileScreen() {
             textContentType={editor === 'username' ? 'username' : 'telephoneNumber'}
             placeholder={editor === 'username' ? '@neeraj' : '+91 98765 43210'}
             value={draft}
-            onChangeText={setDraft}
+            maxLength={editor === 'username' ? 64 : 24}
+            onChangeText={(value) => {
+              setDraft(value);
+              setSaveError('');
+            }}
           />
+          {!!usernameError && (
+            <Typography style={{ color: tokens.destructive }}>{usernameError}</Typography>
+          )}
           <Typography variant="caption">
             {editor === 'username'
               ? '3–32 letters, numbers, or underscores.'

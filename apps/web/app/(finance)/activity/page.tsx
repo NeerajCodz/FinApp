@@ -2,10 +2,18 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X } from 'lucide-react';
-import { Button, Empty, IconButton, Input, Tabs, Typography } from '@finapp/ui/web';
-import { DateSection, MetricPair, TransactionRow, type TransactionType } from '@finapp/ui/finance';
+import { Typography } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
+import {
+  ActivityActions,
+  ActivityFilters,
+  ActivityHeader,
+  ActivityStatus,
+  ActivitySummary,
+  ActivityTopCategories,
+  ActivityTransactionList,
+  type ActivityCategoryItem,
+} from '@finapp/ui/activity';
 import {
   filterActivity,
   type ActivityFilter,
@@ -13,16 +21,17 @@ import {
   type ActivityRow,
 } from '@convex/activity/domain';
 import {
-  aggregateAnalytics,
+  getAnalyticsCalendarDate,
+  getAnalyticsCustomRange,
+  getAnalyticsDayRange,
   getAnalyticsRange,
   type AnalyticsPeriod,
-  type AnalyticsTransaction,
 } from '@convex/analytics/domain';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-
+import { formatTransactionDate, type TransactionType } from '@finapp/ui/finance';
 type Transaction = LocalRecord & {
   type?: string;
   amountMinor?: bigint | number | string;
@@ -33,17 +42,25 @@ type Transaction = LocalRecord & {
   title?: string;
   merchant?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   status?: string;
   deletedAt?: number;
 };
 type NamedRecord = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
 type Profile = LocalRecord & { defaultCurrency?: string; timezone?: string };
+type Range = { startAt: number; endAt: number; label: string };
+type ActivityPeriod = AnalyticsPeriod | 'all';
 
 const filters: ActivityFilter[] = ['All', 'Expenses', 'Income', 'Transfers', 'Groups'];
-const periods: { value: AnalyticsPeriod; label: string }[] = [
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-  { value: 'year', label: 'Year' },
+const periodPresets = [
+  { value: 'period:week', label: 'Week' },
+  { value: 'period:month', label: 'Month' },
+  { value: 'period:year', label: 'Year' },
+  { value: 'quick:Today', label: 'Today' },
+  { value: 'quick:This week', label: 'This week' },
+  { value: 'quick:This month', label: 'This month' },
+  { value: 'quick:Last month', label: 'Last month' },
+  { value: 'period:all', label: 'All time' },
 ];
 
 function asMinor(value: unknown): bigint {
@@ -53,16 +70,33 @@ function asMinor(value: unknown): bigint {
   return 0n;
 }
 
-function analyticsEntities(records: NamedRecord[]) {
-  return records.flatMap((record) => {
-    const aliases = [...new Set([record.id, record._id, record.cloudId].filter(
-      (id): id is string => typeof id === 'string' && id.length > 0,
-    ))];
-    const id = aliases[0];
-    return id && typeof record.name === 'string'
-      ? [{ id, name: record.name, aliases }]
-      : [];
+function aliases(record: LocalRecord) {
+  return [record.id, record._id, record.cloudId].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+}
+
+function entityMap<T extends NamedRecord>(records: T[]) {
+  const map = new Map<string, T>();
+  for (const record of records) for (const id of aliases(record)) map.set(id, record);
+  return map;
+}
+
+function rangeFromDay(at: number, timeZone: string): Range {
+  const bounds = getAnalyticsDayRange(at, timeZone);
+  return { ...bounds, label: 'Today' };
+}
+
+function formatRange(range: Range, timeZone: string) {
+  if (range.label) return range.label;
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
   });
+  const first = formatter.format(range.startAt);
+  const last = formatter.format(Math.max(range.startAt, range.endAt - 1));
+  return first === last ? first : `${first} – ${last}`;
 }
 
 export default function ActivityPage() {
@@ -72,28 +106,47 @@ export default function ActivityPage() {
   const accountState = useLocalRecords<NamedRecord>('account');
   const categoryState = useLocalRecords<NamedRecord>('category');
   const profileState = useLocalRecords<Profile>('profile');
-  const [period, setPeriod] = React.useState<AnalyticsPeriod>('month');
+  const [period, setPeriod] = React.useState<ActivityPeriod>('month');
+  const [customRange, setCustomRange] = React.useState<Range | null>(null);
   const [filter, setFilter] = React.useState<ActivityFilter>('All');
   const [query, setQuery] = React.useState('');
-  const [searching, setSearching] = React.useState(false);
+  const [accountFilter, setAccountFilter] = React.useState('all');
+  const [categoryFilter, setCategoryFilter] = React.useState('all');
+  const [referenceAt, setReferenceAt] = React.useState<number | null>(null);
   const [rangeLoading, setRangeLoading] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
-  const [referenceAt, setReferenceAt] = React.useState<number | null>(null);
-  React.useEffect(() => setReferenceAt(Date.now()), []);
+  React.useEffect(() => {
+    setReferenceAt(Date.now());
+    const params = new URLSearchParams(window.location.search);
+    const startAt = Number(params.get('startAt'));
+    const endAt = Number(params.get('endAt'));
+    if (Number.isFinite(startAt) && Number.isFinite(endAt) && startAt >= 0 && endAt > startAt)
+      setCustomRange({ startAt, endAt, label: '' });
+  }, []);
+
   const profile = profileState.records[0];
   const timeZone = profile?.timezone ?? 'UTC';
   const currency = profile?.defaultCurrency ?? 'INR';
-  const range = React.useMemo(
-    () => getAnalyticsRange(period, referenceAt ?? 0, timeZone),
-    [period, referenceAt, timeZone],
-  );
+  const range = React.useMemo<Range | null>(() => {
+    if (customRange) return customRange;
+    if (referenceAt === null) return null;
+    if (period === 'all') return { startAt: 0, endAt: referenceAt + 1, label: 'All time' };
+    const selected = getAnalyticsRange(period, referenceAt, timeZone);
+    return { startAt: selected.startAt, endAt: selected.endAt, label: '' };
+  }, [customRange, period, referenceAt, timeZone]);
 
   React.useEffect(() => {
-    if (!userId || referenceAt === null) return;
+    if (!userId || !range) return;
+    const endAt = Math.min(range.endAt, Date.now() + 1);
+    if (range.startAt >= endAt) {
+      setRangeLoading(false);
+      setRangeError('');
+      return;
+    }
     let active = true;
     setRangeLoading(true);
     setRangeError('');
-    void fetchTransactionRange(range.startAt, Math.min(range.endAt, Date.now() + 1))
+    void fetchTransactionRange(range.startAt, endAt)
       .catch((cause: unknown) => {
         if (active)
           setRangeError(
@@ -110,25 +163,15 @@ export default function ActivityPage() {
     return () => {
       active = false;
     };
-  }, [fetchTransactionRange, isConnected, range.endAt, range.startAt, referenceAt, userId]);
+  }, [fetchTransactionRange, isConnected, range, userId]);
 
-  const accountById = React.useMemo(() => {
-    const map = new Map<string, NamedRecord>();
-    for (const account of accountState.records) {
-      for (const id of [account.id, account._id, account.cloudId])
-        if (typeof id === 'string' && id.length > 0) map.set(id, account);
-    }
-    return map;
-  }, [accountState.records]);
-  const categoryById = React.useMemo(() => {
-    const map = new Map<string, NamedRecord>();
-    for (const category of categoryState.records) {
-      for (const id of [category.id, category._id, category.cloudId])
-        if (typeof id === 'string' && id.length > 0) map.set(id, category);
-    }
-    return map;
-  }, [categoryState.records]);
+  const accountById = React.useMemo(() => entityMap(accountState.records), [accountState.records]);
+  const categoryById = React.useMemo(
+    () => entityMap(categoryState.records),
+    [categoryState.records],
+  );
   const rows = React.useMemo(() => {
+    if (!range) return [];
     const records = new Map<string, Transaction>();
     const activity: ActivityRow[] = [];
     for (const record of transactionState.records) {
@@ -138,8 +181,20 @@ export default function ActivityPage() {
         !id ||
         record.deletedAt !== undefined ||
         occurredAt < range.startAt ||
-        occurredAt >= range.endAt ||
+        occurredAt >= Math.min(range.endAt, (referenceAt ?? Date.now()) + 1) ||
         !['expense', 'income', 'transfer', 'refund', 'adjustment'].includes(record.type ?? '')
+      )
+        continue;
+      const account = accountById.get(accountFilter);
+      if (
+        accountFilter !== 'all' &&
+        !(account ? aliases(account) : [accountFilter]).includes(String(record.accountId ?? ''))
+      )
+        continue;
+      const category = categoryById.get(categoryFilter);
+      if (
+        categoryFilter !== 'all' &&
+        !(category ? aliases(category) : [categoryFilter]).includes(String(record.categoryId ?? ''))
       )
         continue;
       const kind: ActivityKind =
@@ -177,38 +232,89 @@ export default function ActivityPage() {
         );
       })
       .sort((left, right) => right.occurredAt - left.occurredAt)
-      .map((row) => records.get(row.id)!);
+      .map((row) => records.get(row.id)!)
+      .filter((record) => (record.currency ?? currency) === currency);
   }, [
     accountById,
+    accountFilter,
     categoryById,
+    categoryFilter,
     currency,
     filter,
     query,
-    range.endAt,
-    range.startAt,
+    range,
+    referenceAt,
     transactionState.records,
     userId,
   ]);
-  const dateSections = React.useMemo(() => {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-    const sections = new Map<string, Transaction[]>();
-    for (const record of rows) {
-      const date = formatter.format(Number(record.occurredAt ?? 0));
-      const section = sections.get(date) ?? [];
-      section.push(record);
-      sections.set(date, section);
+
+  const totals = React.useMemo(
+    () =>
+      rows.reduce<{ income: bigint; expenses: bigint; transfers: bigint; count: number }>(
+        (sum, record) => {
+          if (record.status === 'pending' || record.status === 'voided') return sum;
+          const amount = asMinor(record.amountMinor);
+          if (record.type === 'income') sum.income += amount;
+          if (record.type === 'expense') sum.expenses += amount;
+          if (record.type === 'transfer') sum.transfers += amount;
+          sum.count += 1;
+          return sum;
+        },
+        { income: 0n, expenses: 0n, transfers: 0n, count: 0 },
+      ),
+    [rows],
+  );
+  const metricSparks = React.useMemo(() => {
+    const recent = rows
+      .filter((record) => record.status !== 'pending' && record.status !== 'voided')
+      .slice(0, 5)
+      .reverse();
+    const valuesFor = (kind: 'spent' | 'income' | 'net' | 'count') => {
+      const values = recent.map((record) => {
+        const amount = asMinor(record.amountMinor);
+        if (kind === 'count') return 1n;
+        if (kind === 'spent') return record.type === 'expense' ? amount : 0n;
+        if (kind === 'income') return record.type === 'income' ? amount : 0n;
+        if (record.type === 'income') return amount;
+        if (record.type === 'expense') return -amount;
+        return 0n;
+      });
+      const largest = values.reduce((max, value) => {
+        const absolute = value < 0n ? -value : value;
+        return absolute > max ? absolute : max;
+      }, 0n);
+      return values.map((value) =>
+        largest > 0n ? Math.max(8, Number(((value < 0n ? -value : value) * 100n) / largest)) : 0,
+      );
+    };
+    return {
+      spent: valuesFor('spent'),
+      income: valuesFor('income'),
+      net: valuesFor('net'),
+      count: valuesFor('count'),
+    };
+  }, [rows]);
+
+  const topCategories = React.useMemo(() => {
+    const totals = new Map<string, bigint>();
+    for (const row of rows) {
+      if (row.type !== 'expense' || row.status === 'pending' || row.status === 'voided') continue;
+      const id = String(row.categoryId ?? '__uncategorized__');
+      totals.set(id, (totals.get(id) ?? 0n) + asMinor(row.amountMinor));
     }
-    return [...sections];
-  }, [rows, timeZone]);
-
-
-  const error =
+    return [...totals]
+      .map(([id, amount]) => ({ id, amount, category: categoryById.get(id) }))
+      .sort((a, b) => (a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1))
+      .slice(0, 5);
+  }, [categoryById, rows]);
+  const categoryTotal = rows.reduce(
+    (sum, row) =>
+      row.type === 'expense' && row.status !== 'pending' && row.status !== 'voided'
+        ? sum + asMinor(row.amountMinor)
+        : sum,
+    0n,
+  );
+  const allError =
     transactionState.error ?? accountState.error ?? categoryState.error ?? profileState.error;
   const ready =
     referenceAt !== null &&
@@ -217,53 +323,80 @@ export default function ActivityPage() {
     !accountState.loading &&
     !categoryState.loading &&
     !profileState.loading;
-  const totals = React.useMemo(() => {
-    const analyticsTransactions = rows.flatMap((record): AnalyticsTransaction[] => {
-      const type = record.type;
-      if (
-        type !== 'expense' &&
-        type !== 'income' &&
-        type !== 'transfer' &&
-        type !== 'refund' &&
-        type !== 'adjustment'
-      )
-        return [];
-      return [
-        {
-          type,
+
+  const selectRange = (nextPeriod: ActivityPeriod) => {
+    setPeriod(nextPeriod);
+    setCustomRange(null);
+  };
+  const setQuickRange = (
+    name: 'Today' | 'This week' | 'This month' | 'Last month' | 'All time',
+  ) => {
+    if (referenceAt === null) return;
+    if (name === 'Today') {
+      setCustomRange(rangeFromDay(referenceAt, timeZone));
+      return;
+    }
+    if (name === 'All time') {
+      setPeriod('all');
+      setCustomRange(null);
+      return;
+    }
+    if (name === 'This week') {
+      setPeriod('week');
+      setCustomRange(null);
+      return;
+    }
+    const monthRange = getAnalyticsRange('month', referenceAt, timeZone);
+    if (name === 'This month') {
+      setPeriod('month');
+      setCustomRange(null);
+    } else {
+      setPeriod('month');
+      setCustomRange({
+        startAt: monthRange.previousStartAt,
+        endAt: monthRange.startAt,
+        label: 'Last month',
+      });
+    }
+  };
+
+  const net = totals.income - totals.expenses;
+  const transactionItems = React.useMemo(
+    () =>
+      rows.map((record) => {
+        const id = String(record.id ?? record._id ?? record.cloudId ?? '');
+        const category = categoryById.get(record.categoryId ?? '');
+        const account = accountById.get(record.accountId ?? '');
+        const occurredAt = Number(record.occurredAt ?? 0);
+        const type = (record.type ?? 'expense') as TransactionType;
+        return {
+          id,
+          title: record.title || record.merchant || 'Transaction',
+          category: category?.name ?? 'Uncategorized',
+          categoryIcon: category?.icon,
+          account: account?.name,
+          merchant: record.merchant,
+          date: occurredAt
+            ? formatTransactionDate(occurredAt, record.hasTime === true, timeZone)
+            : 'Saved offline',
           amountMinor: asMinor(record.amountMinor),
-          currency: String(record.currency ?? currency),
-          ...(typeof record.categoryId === 'string' ? { categoryId: record.categoryId } : {}),
-          ...(typeof record.accountId === 'string' ? { accountId: record.accountId } : {}),
-          ...(typeof record.merchant === 'string' ? { merchant: record.merchant } : {}),
-          ...(typeof record.title === 'string' ? { title: record.title } : {}),
-          occurredAt: typeof record.occurredAt === 'number' ? record.occurredAt : 0,
-          status:
-            record.status === 'pending' || record.status === 'voided' ? record.status : 'posted',
-          ...(typeof record.deletedAt === 'number' ? { deletedAt: record.deletedAt } : {}),
-        },
-      ];
-    });
-    return aggregateAnalytics(
-      analyticsTransactions,
-      analyticsEntities(categoryState.records),
-      currency,
-      period,
-      range.startAt,
-      range.endAt,
-      timeZone,
-      analyticsEntities(accountState.records),
-    );
-  }, [
-    accountState.records,
-    categoryState.records,
-    currency,
-    period,
-    range.endAt,
-    range.startAt,
-    rows,
-    timeZone,
-  ]);
+          currency: record.currency ?? currency,
+          type,
+        };
+      }),
+    [accountById, categoryById, currency, rows, timeZone],
+  );
+  const categoryItems = React.useMemo<ActivityCategoryItem[]>(
+    () =>
+      topCategories.map(({ id, amount, category }) => ({
+        id,
+        name: category?.name ?? (id === '__uncategorized__' ? 'Uncategorized' : 'Category'),
+        icon: typeof category?.icon === 'string' ? category.icon : '•',
+        amount: formatMinor(amount, currency),
+        share: categoryTotal > 0n ? Number((amount * 1000n) / categoryTotal) / 10 : 0,
+      })),
+    [categoryTotal, currency, topCategories],
+  );
   if (!userId)
     return (
       <FinanceSignedOut
@@ -272,150 +405,130 @@ export default function ActivityPage() {
         description="Sign in to see your ledger."
       />
     );
+  if (!profileState.loading && !profile)
+    return (
+      <FinanceSignedOut
+        section="ACTIVITY"
+        title="Activity unavailable"
+        description="Your local profile could not be found."
+      />
+    );
+  const pickerReferenceAt = customRange?.startAt ?? referenceAt ?? Date.now();
+  const pickerEndAt = customRange
+    ? Math.max(customRange.startAt, customRange.endAt - 1)
+    : pickerReferenceAt;
+  const rangeLabel = range ? formatRange(range, timeZone) : 'Choose dates';
 
   return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        {searching ? (
-          <div style={{ display: 'flex', flex: 1, minWidth: 0, alignItems: 'center', gap: 8 }}>
-            <Input
-              autoFocus
-              accessibilityLabel="Search transactions"
-              onChangeText={setQuery}
-              placeholder="Title, merchant, category, amount…"
-              value={query}
-            />
-            <IconButton
-              label="Close search"
-              variant="ghost"
-              onPress={() => {
-                setQuery('');
-                setSearching(false);
-              }}
-            >
-              <X size={20} aria-hidden="true" />
-            </IconButton>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              width: '100%',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Typography variant="title">Activity</Typography>
-            <IconButton label="Search activity" variant="ghost" onPress={() => setSearching(true)}>
-              <Search size={21} aria-hidden="true" />
-            </IconButton>
-          </div>
-        )}
-      </header>
-      <Tabs
-        label="Activity period"
-        value={period}
-        onChange={(value) => setPeriod(value as AnalyticsPeriod)}
-        tabs={periods}
+    <div className="finance-page activity-page">
+      <ActivityHeader
+        query={query}
+        onQueryChange={setQuery}
+        onClearQuery={() => setQuery('')}
+        onOpenAnalytics={() => router.push('/analytics')}
       />
-      {ready && (
-        <section style={{ display: 'grid', gap: 12 }}>
-          <Typography variant="label">
-            {period} · {currency}
-          </Typography>
-          <MetricPair
-            left={{ label: 'Spent', value: formatMinor(totals.spentMinor, currency) }}
-            right={{ label: 'Income', value: formatMinor(totals.incomeMinor, currency) }}
-          />
-          <Typography variant="caption">
-            Totals include posted transactions in {currency} only.
-          </Typography>
-        </section>
-      )}
-      <div style={{ overflowX: 'auto' }}>
-        <Tabs
-          label="Activity type filter"
-          value={filter}
-          onChange={(value) => setFilter(value as ActivityFilter)}
-          tabs={filters.map((value) => ({ label: value, value }))}
-        />
-      </div>
+      <ActivityFilters
+        rangeLabel={rangeLabel}
+        rangeStartDate={getAnalyticsCalendarDate(pickerReferenceAt, timeZone)}
+        rangeEndDate={getAnalyticsCalendarDate(pickerEndAt, timeZone)}
+        presets={periodPresets}
+        onPresetSelect={(value) => {
+          const [kind, selected] = value.split(':');
+          if (kind === 'period') selectRange(selected as ActivityPeriod);
+          else if (kind === 'quick') setQuickRange(selected as Parameters<typeof setQuickRange>[0]);
+        }}
+        onRangeApply={(startDate, endDate) => {
+          const bounds = getAnalyticsCustomRange(startDate, endDate, timeZone);
+          setPeriod('month');
+          setCustomRange({ ...bounds, label: '' });
+        }}
+        filters={filters.map((value) => ({ value, label: value }))}
+        filter={filter}
+        onFilterChange={(value) => setFilter(value as ActivityFilter)}
+        accounts={accountState.records
+          .filter((item) => !item.archivedAt && aliases(item).length > 0)
+          .map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Account' }))}
+        account={accountFilter}
+        onAccountChange={setAccountFilter}
+        categories={categoryState.records
+          .filter((item) => !item.archivedAt && aliases(item).length > 0)
+          .map((item) => ({ id: aliases(item)[0], label: item.name ?? 'Category' }))}
+        category={categoryFilter}
+        onCategoryChange={setCategoryFilter}
+      />
 
-      {(rangeLoading || rangeError || error) && (
-        <p className="finance-muted" role={error || rangeError ? 'alert' : 'status'}>
-          {rangeLoading ? 'Refreshing activity… ' : ''}
-          {rangeError || (error ? 'Some saved records could not be loaded.' : '')}
-        </p>
-      )}
-      {error && (
-        <Button variant="outline" onPress={() => window.location.reload()}>
-          Retry
-        </Button>
-      )}
-      {!profileState.loading && !profile ? (
-        <FinanceSignedOut
-          section="ACTIVITY"
-          title="Activity unavailable"
-          description="Sign in to see your ledger."
-        />
-      ) : !ready && !error ? (
-        <Typography variant="heading">Loading activity…</Typography>
-      ) : ready && dateSections.length === 0 && !rangeError ? (
-        <Empty
-          title={query ? 'No search matches' : 'No activity this period'}
-          description={
-            query
-              ? 'Try a merchant, title, category, account, or amount.'
-              : 'No transactions match this period and filter.'
+      {(rangeLoading || rangeError || allError) && (
+        <ActivityStatus
+          message={
+            rangeLoading
+              ? 'Refreshing activity…'
+              : rangeError || 'Some saved records could not be loaded.'
           }
+          alert={Boolean(rangeError || allError)}
+          onRetry={rangeError || allError ? () => window.location.reload() : undefined}
         />
-      ) : ready && dateSections.length === 0 ? (
-        <Typography variant="small">
-          No matching saved rows. Refresh to confirm the full period.
+      )}
+
+      {ready && (
+        <ActivitySummary
+          metrics={[
+            {
+              label: 'Total Spent',
+              value: formatMinor(totals.expenses, currency),
+              color: 'var(--finapp-expense)',
+              spark: metricSparks.spent,
+            },
+            {
+              label: 'Total Income',
+              value: formatMinor(totals.income, currency),
+              color: 'var(--finapp-income)',
+              spark: metricSparks.income,
+            },
+            {
+              label: 'Net',
+              value: formatMinor(net, currency),
+              color: net >= 0n ? 'var(--finapp-income)' : 'var(--finapp-expense)',
+              spark: metricSparks.net,
+            },
+            {
+              label: 'Transactions',
+              value: String(totals.count),
+              color: 'var(--finapp-foreground)',
+              spark: metricSparks.count,
+            },
+          ]}
+        />
+      )}
+
+      {range && (
+        <Typography className="activity-range-caption" variant="caption">
+          {formatRange(range, timeZone)} · {currency}
         </Typography>
-      ) : (
-        ready &&
-        dateSections.map(([date, records]) => (
-          <DateSection key={date} title={date}>
-            {records.map((transaction) => {
-              const id = String(transaction.id ?? transaction._id ?? transaction.cloudId ?? '');
-              const category = categoryById.get(transaction.categoryId ?? '');
-              const account = accountById.get(transaction.accountId ?? '');
-              const type = transaction.type as TransactionType;
-              return (
-                <TransactionRow
-                  key={id}
-                  title={transaction.title || transaction.merchant || 'Transaction'}
-                  merchant={transaction.merchant}
-                  category={category?.name}
-                  categoryIcon={category?.icon}
-                  account={account?.name}
-                  date={
-                    transaction.occurredAt
-                      ? new Intl.DateTimeFormat('en-US', {
-                          day: 'numeric',
-                          month: 'short',
-                          timeZone,
-                        }).format(transaction.occurredAt)
-                      : 'Saved offline'
-                  }
-                  status={transaction.status}
-                  amountMinor={asMinor(transaction.amountMinor)}
-                  currency={transaction.currency ?? currency}
-                  type={type}
-                  semanticType={transaction.groupId ? 'split' : undefined}
-                  onPress={() => router.push(`/transaction/${encodeURIComponent(id)}`)}
-                />
-              );
-            })}
-          </DateSection>
-        ))
       )}
-      {rangeError && !isConnected && (
-        <p className="finance-data-footnote">
-          Offline mode shows matching records already downloaded to this browser.
-        </p>
-      )}
+
+      <div className="activity-content-grid">
+        <ActivityTransactionList
+          items={transactionItems}
+          loading={!ready && !allError}
+          query={query}
+          onSelect={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+        />
+        <aside className="activity-sidebar">
+          <ActivityActions
+            onAddTransaction={() => router.push('/transaction/new')}
+            onOpenAnalytics={() => router.push('/analytics')}
+          />
+          <ActivityTopCategories
+            items={categoryItems}
+            rangeLabel={range ? formatRange(range, timeZone) : 'Loading range'}
+            onSelect={(id) =>
+              router.push(
+                categoryById.has(id) ? `/category/${encodeURIComponent(id)}` : '/analytics',
+              )
+            }
+          />
+        </aside>
+      </div>
     </div>
   );
 }

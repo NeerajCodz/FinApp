@@ -161,7 +161,6 @@ export default function NotificationsPage() {
     }
   }
 
-
   return (
     <div className="finance-page" style={{ gap: 22 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -288,7 +287,9 @@ export default function NotificationsPage() {
         <section aria-label="Notification updates" style={{ display: 'grid', gap: 22 }}>
           {days.map(({ key, label, events: dayEvents }) => (
             <section key={key} aria-label={label} style={{ display: 'grid', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
                 <Typography variant="label">{label}</Typography>
                 <Typography variant="caption">{dayEvents.length} updates</Typography>
               </div>
@@ -333,7 +334,8 @@ export default function NotificationsPage() {
                         disabled={busy}
                         onClick={() => {
                           void markRead(event).then((marked) => {
-                            if (marked && destination !== '/notifications') router.push(destination);
+                            if (marked && destination !== '/notifications')
+                              router.push(destination);
                           });
                         }}
                         style={{
@@ -441,11 +443,7 @@ export default function NotificationsPage() {
           icon={<Bell size={20} aria-hidden="true" />}
         />
       )}
-      {!isConnected && (
-        <Text>
-          Offline · showing saved activity
-        </Text>
-      )}
+      {!isConnected && <Text>Offline · showing saved activity</Text>}
     </div>
   );
 }

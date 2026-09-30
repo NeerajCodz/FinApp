@@ -21,6 +21,7 @@ import {
   House as LucideHouse,
   Info as LucideInfo,
   KeyRound as LucideLockKey,
+  Filter as LucideFilter,
   Landmark as LucideLandmark,
   MoreHorizontal as LucideMoreHorizontal,
   LoaderCircle as LucideLoaderCircle,
@@ -63,6 +64,7 @@ export const ArrowUpRight = withWeight(LucideArrowUpRight);
 export const Bell = withWeight(LucideBell);
 export const Check = withWeight(LucideCheck);
 export const ChartLineUp = withWeight(LucideChartLineUp);
+export const Filter = withWeight(LucideFilter);
 export const CalendarDays = withWeight(LucideCalendarDays);
 export const Car = withWeight(LucideCar);
 export const CaretRight = withWeight(LucideCaretRight);

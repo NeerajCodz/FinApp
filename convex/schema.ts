@@ -134,6 +134,7 @@ export default defineSchema({
     groupId: optionalText,
     transferAccountId: optionalText,
     occurredAt: timestamp,
+    hasTime: v.optional(v.boolean()),
     receiptId: optionalText,
     status: v.union(v.literal('pending'), v.literal('posted'), v.literal('voided')),
     createdAt: timestamp,
@@ -196,6 +197,8 @@ export default defineSchema({
     ownerId: v.id('users'),
     name: v.string(),
     currency,
+    icon: optionalText,
+    messageRetentionMs: optionalTime,
     archivedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -218,6 +221,19 @@ export default defineSchema({
     status: v.union(v.literal('pending'), v.literal('accepted'), v.literal('declined')),
     createdAt: timestamp,
   }).index('by_group', ['groupId']),
+  groupMessages: defineTable({
+    groupId: v.id('groups'),
+    senderId: v.id('users'),
+    kind: v.union(v.literal('text'), v.literal('bill')),
+    text: optionalText,
+    storageId: v.optional(v.id('_storage')),
+    mimeType: optionalText,
+    size: v.optional(v.number()),
+    createdAt: timestamp,
+    expiresAt: optionalTime,
+  })
+    .index('by_group_createdAt', ['groupId', 'createdAt'])
+    .index('by_storage', ['storageId']),
   expensePayers: defineTable({
     transactionId: v.id('transactions'),
     userId: v.id('users'),
@@ -272,6 +288,7 @@ export default defineSchema({
   goals: defineTable({
     ownerId: v.id('users'),
     name: v.string(),
+    icon: optionalText,
     targetAmountMinor: v.int64(),
     currency,
     targetDate: optionalTime,

@@ -13,3 +13,12 @@ export { GroupCard } from './GroupCard';
 export { SettlementEditor } from './SettlementEditor';
 export { semanticLabels, type MoneySize, type SemanticType, type TransactionType } from '../types';
 export { signedMinor } from '../money';
+export { MobileFinanceNav } from './MobileFinanceNav';
+export { DateTimePicker } from './DateTimePicker';
+export {
+  EntityIcon,
+  EntityIconPicker,
+  type EntityIconPickerMode,
+  type EntityIconPickerProps,
+} from './EntityIconPicker';
+export { formatTransactionDate } from '../datetime';

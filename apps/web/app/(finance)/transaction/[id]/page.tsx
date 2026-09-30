@@ -12,6 +12,7 @@ import {
   SettingsRow,
   type SemanticType,
   type TransactionType,
+  formatTransactionDate,
 } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -36,6 +37,7 @@ type Transaction = LocalRecord & {
   transferAccountId?: string;
   groupId?: string;
   occurredAt?: number;
+  hasTime?: boolean;
   status?: string;
   deletedAt?: number;
   merchant?: string;
@@ -81,6 +83,7 @@ export default function PersonalTransactionDetailPage() {
   const account = findAlias(accounts, transaction?.accountId);
   const category = findAlias(categories, transaction?.categoryId);
   const destination = findAlias(accounts, transaction?.transferAccountId);
+  const currency = transaction?.currency ?? account?.currency ?? 'INR';
   const type = transaction?.type;
   const duplicable =
     !!transaction &&
@@ -100,6 +103,7 @@ export default function PersonalTransactionDetailPage() {
       accountId: transaction.accountId ?? '',
       occurredAt: String(transaction.occurredAt ?? Date.now()),
       note: transaction.note ?? '',
+      hasTime: String(transaction.hasTime === true),
     });
     if (transaction.categoryId) query.set('categoryId', transaction.categoryId);
     if (transaction.transferAccountId) query.set('destinationId', transaction.transferAccountId);
@@ -175,7 +179,6 @@ export default function PersonalTransactionDetailPage() {
         />
       </div>
     );
-  const currency = transaction.currency ?? 'INR';
   const semanticType: SemanticType = transaction.groupId
     ? 'split'
     : transaction.type === 'income' ||
@@ -212,9 +215,7 @@ export default function PersonalTransactionDetailPage() {
           type={amountType}
           size="display"
         />
-        <h2 style={{ margin: 0, textAlign: 'center' }}>
-          {transaction.title || 'Transaction'}
-        </h2>
+        <h2 style={{ margin: 0, textAlign: 'center' }}>{transaction.title || 'Transaction'}</h2>
         <div
           style={{
             display: 'flex',
@@ -257,11 +258,7 @@ export default function PersonalTransactionDetailPage() {
           label="Date"
           value={
             transaction.occurredAt
-              ? new Intl.DateTimeFormat('en-US', {
-                  dateStyle: 'long',
-                  timeStyle: 'short',
-                  timeZone,
-                }).format(transaction.occurredAt)
+              ? formatTransactionDate(transaction.occurredAt, transaction.hasTime, timeZone)
               : 'Date unavailable'
           }
         />

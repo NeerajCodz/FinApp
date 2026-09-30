@@ -1,67 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { Check, ClockCounterClockwise, TriangleAlert } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
+import { useQueries, type RequestForQueries } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import {
-  CalendarDays,
-  ClockCounterClockwise,
-  ReceiptText,
-  ShieldCheck,
-  TriangleAlert,
-  UsersThree,
-} from '@finapp/ui/icons/native';
+  normalizeNotificationPreferences,
+  notificationTypes,
+  type NotificationType,
+} from '@convex/notifications/domain';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SpendingLineChart } from '@finapp/ui/analytics';
-import {
-  BalanceHero,
-  CategoryIcon,
-  MetricPair,
-  SettingsRow,
-  TransactionRow,
-} from '@finapp/ui/finance';
-import { PeopleRail } from '@/components/finance/PeopleRail';
-import {
-  Button,
-  IconButton,
-  Input,
-  SectionHeader,
-  Separator,
-  Sheet,
-  Text,
-  Typography,
-} from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { HomeDashboard, buildHomeDashboard, type HomeRecord } from '@finapp/ui/home';
+import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
-import { formatMinor } from '@/lib/money';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
-import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-
-type HomeAccount = LocalRecord & {
-  id?: string;
-  _id?: string;
-  cloudId?: string;
-  currency?: string;
-  balanceMinor?: bigint;
-  openingBalanceMinor?: bigint;
-};
-type HomeCategory = LocalRecord & { id?: string; _id?: string; name: string; icon?: string };
-type HomeGroup = LocalRecord & { id?: string; _id?: string; name: string; currency: string };
-type HomeTransaction = LocalRecord & {
-  id?: string;
-  _id?: string;
-  accountId: string;
-  transferAccountId?: string;
-  categoryId?: string;
-  title: string;
-  amountMinor: bigint;
-  currency: string;
-  type: 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
-  status: 'pending' | 'posted' | 'voided';
-  occurredAt: number;
-  deletedAt?: number;
-  groupId?: string;
-  clientUpdatedAt?: number;
-};
 
 export default function HomeScreen() {
   const { tokens } = useTheme();
@@ -85,116 +38,211 @@ export default function HomeScreen() {
   const [customDate, setCustomDate] = useState('');
   const [appliedDate, setAppliedDate] = useState<Date | null>(null);
   const [dateError, setDateError] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [search, setSearch] = useState('');
+  const [now] = useState(() => Date.now());
   const periodOptions = ['Today', 'This week', 'This month', 'Custom date'];
   const range = useMemo(() => {
-    const today = new Date();
-    const start = period === 'Custom date' && appliedDate ? new Date(appliedDate) : new Date(today);
-    if (period === 'This week') start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    if (period === 'This month' || (period === 'Custom date' && !appliedDate)) start.setDate(1);
-    start.setHours(0, 0, 0, 0);
+    const start = period === 'Custom date' && appliedDate ? new Date(appliedDate) : new Date(now);
+    if (period === 'Today') start.setHours(0, 0, 0, 0);
+    else if (period === 'This week') {
+      start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+      start.setHours(0, 0, 0, 0);
+    } else if (period === 'This month' || (period === 'Custom date' && !appliedDate)) {
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+    } else start.setHours(0, 0, 0, 0);
     const end = new Date(start);
-    if (period === 'This week') end.setDate(end.getDate() + 7);
-    else if (period === 'This month' || (period === 'Custom date' && !appliedDate))
-      end.setMonth(end.getMonth() + 1);
-    else end.setDate(end.getDate() + 1);
+    if (period === 'Today' || (period === 'Custom date' && appliedDate))
+      end.setDate(end.getDate() + 1);
+    else if (period === 'This week') end.setDate(end.getDate() + 7);
+    else end.setMonth(end.getMonth() + 1);
     return { startAt: start.getTime(), endAt: end.getTime() };
-  }, [period, appliedDate]);
-  const { data: groups } = useLocalRecords<HomeGroup>(userId, 'group');
-  const { data: accounts } = useLocalRecords<HomeAccount>(userId, 'account');
-  const { data: categories } = useLocalRecords<HomeCategory>(userId, 'category');
-  const { data: profiles } = useLocalRecords<LocalRecord>(userId, 'profile');
-  const { data: transactions } = useLocalRecords<HomeTransaction>(userId, 'transaction');
-  const transactionRange = useLocalTransactionRange<HomeTransaction>(
+  }, [appliedDate, now, period]);
+  const { data: groups } = useLocalRecords<HomeRecord>(userId, 'group');
+  const { data: groupMembers } = useLocalRecords<HomeRecord>(userId, 'groupMember');
+  const { data: accounts } = useLocalRecords<HomeRecord>(userId, 'account');
+  const { data: categories } = useLocalRecords<HomeRecord>(userId, 'category');
+  const { data: profiles } = useLocalRecords<HomeRecord>(userId, 'profile');
+  const { data: transactions } = useLocalRecords<HomeRecord>(userId, 'transaction');
+  const { data: budgets } = useLocalRecords<HomeRecord>(userId, 'budget');
+  const { data: recurringRules } = useLocalRecords<HomeRecord>(userId, 'recurringRule');
+  const { data: goals } = useLocalRecords<HomeRecord>(userId, 'goal');
+  const { data: goalContributions } = useLocalRecords<HomeRecord>(userId, 'goalContribution');
+  const { data: notificationRecords } = useLocalRecords<HomeRecord>(userId, 'notification');
+  const { data: settings } = useLocalRecords<HomeRecord>(userId, 'settings');
+  const transactionRange = useLocalTransactionRange<HomeRecord>(
     userId,
     range.startAt,
     range.endAt,
     fetchTransactionRange,
   );
+  const peopleQueries = useMemo<RequestForQueries>(() => {
+    const queries: RequestForQueries = {};
+    if (isConnected) {
+      queries.frequentPeople = { query: api.dashboard.queries.frequentPeople, args: {} };
+    }
+    return queries;
+  }, [isConnected]);
+  const peopleQuery = useQueries(peopleQueries).frequentPeople;
+  const peopleQueryError = peopleQuery instanceof Error;
+  const people = Array.isArray(peopleQuery) ? peopleQuery.filter((person) => person !== null) : [];
   const profile = profiles?.[0];
   const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
-  const summary = useMemo(() => {
-    if (!transactionRange.data) return undefined;
-    const chart = Array<number>(8).fill(0);
-    let incomeMinor = 0n;
-    let spentMinor = 0n;
-    for (const transaction of transactionRange.data) {
-      if (
-        transaction.status !== 'posted' ||
-        transaction.deletedAt !== undefined ||
-        transaction.currency !== currency ||
-        transaction.occurredAt < range.startAt ||
-        transaction.occurredAt >= range.endAt
-      )
-        continue;
-      if (transaction.type === 'income') incomeMinor += transaction.amountMinor;
-      if (transaction.type === 'expense') {
-        spentMinor += transaction.amountMinor;
-        const bucket = Math.min(
-          7,
-          Math.floor(
-            ((transaction.occurredAt - range.startAt) / (range.endAt - range.startAt)) * 8,
-          ),
-        );
-        chart[bucket] = (chart[bucket] ?? 0) + Number(transaction.amountMinor) / 100;
-      }
+  const timeZone = typeof profile?.timezone === 'string' ? profile.timezone : undefined;
+  const unreadNotificationCount = useMemo(() => {
+    if (!settings) return 0;
+    const preferences = normalizeNotificationPreferences(settings[0]?.notificationPreferences);
+    return (notificationRecords ?? []).filter((record) => {
+      const type = record.type;
+      return (
+        record.readAt === undefined &&
+        typeof type === 'string' &&
+        notificationTypes.includes(type as NotificationType) &&
+        preferences[type as NotificationType]
+      );
+    }).length;
+  }, [notificationRecords, settings]);
+  const allTransactions = useMemo(() => {
+    const byId = new Map<string, HomeRecord>();
+    for (const transaction of [...(transactions ?? []), ...(transactionRange.data ?? [])]) {
+      const id = String(transaction.id ?? transaction._id ?? transaction.cloudId ?? '');
+      if (id) byId.set(id, transaction);
     }
-    return { chart, incomeMinor, spentMinor };
-  }, [currency, range, transactionRange.data]);
-  const recentTransactions = useMemo(
+    return [...byId.values()];
+  }, [transactions, transactionRange.data]);
+  const data = useMemo(
     () =>
-      [...(transactions ?? [])]
-        .sort((left, right) => right.occurredAt - left.occurredAt)
-        .slice(0, 4),
-    [transactions],
+      buildHomeDashboard({
+        now,
+        startAt: range.startAt,
+        endAt: range.endAt,
+        currency,
+        timeZone,
+        accountId: selectedAccountId,
+        search,
+        accounts: accounts ?? [],
+        transactions: allTransactions,
+        categories: categories ?? [],
+        groups: groups ?? [],
+        groupMembers: groupMembers ?? [],
+        budgets: budgets ?? [],
+        recurringRules: recurringRules ?? [],
+        goals: goals ?? [],
+        goalContributions: goalContributions ?? [],
+      }),
+    [
+      selectedAccountId,
+      accounts,
+      allTransactions,
+      budgets,
+      categories,
+      currency,
+      timeZone,
+      goalContributions,
+      goals,
+      groupMembers,
+      groups,
+      now,
+      range.endAt,
+      range.startAt,
+      recurringRules,
+      search,
+    ],
   );
-  const currencyAccounts = accounts?.filter((account) => account.currency === currency) ?? [];
-  const accountIds = new Set(
-    currencyAccounts.flatMap((account) =>
-      [account.id, account._id, account.cloudId].filter(
-        (value): value is string => typeof value === 'string',
-      ),
-    ),
-  );
-  const balanceMinor =
-    currencyAccounts.reduce(
-      (total, account) => total + (account.balanceMinor ?? account.openingBalanceMinor ?? 0n),
-      0n,
-    ) +
-    (transactions ?? []).reduce((delta, transaction) => {
-      if (
-        typeof transaction.clientUpdatedAt !== 'number' ||
-        transaction.status !== 'posted' ||
-        transaction.deletedAt !== undefined ||
-        transaction.currency !== currency
-      )
-        return delta;
-      const sourceDelta = accountIds.has(transaction.accountId)
-        ? transaction.type === 'expense' || transaction.type === 'transfer'
-          ? -transaction.amountMinor
-          : transaction.amountMinor
-        : 0n;
-      const destinationDelta =
-        transaction.type === 'transfer' &&
-        transaction.transferAccountId &&
-        accountIds.has(transaction.transferAccountId)
-          ? transaction.amountMinor
-          : 0n;
-      return delta + sourceDelta + destinationDelta;
-    }, 0n);
-  const syncHasIssue = status.failed > 0 || status.conflicts > 0;
-  const SyncIcon = syncHasIssue
-    ? TriangleAlert
+  const accountOptions = (accounts ?? [])
+    .filter((account) => account.currency === currency && account.archivedAt === undefined)
+    .map((account) => ({
+      id: String(account.id ?? account._id ?? account.cloudId ?? ''),
+      name: typeof account.name === 'string' ? account.name : 'Account',
+      currency,
+    }))
+    .filter((account) => account.id.length > 0);
+  const startLabel = new Date(range.startAt).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+  const endLabel = new Date(range.endAt - 1).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+  const dateLabel = `${startLabel} – ${endLabel}`;
+  const syncHasIssue = status.failed > 0 || status.conflicts > 0 || Boolean(syncError);
+  const syncState = syncHasIssue
+    ? 'attention'
     : !isConnected
-      ? ClockCounterClockwise
-      : isSyncing || status.pending > 0
-        ? ClockCounterClockwise
-        : ShieldCheck;
-  const syncIconColor = syncHasIssue
-    ? tokens.destructive
-    : isConnected
-      ? tokens.primary
-      : tokens.foregroundMuted;
-  const syncAccessibilityLabel = `Local sync, ${isConnected ? 'online' : 'offline'}, ${status.pending} pending, ${status.failed} failed, ${status.conflicts} conflicts`;
+      ? 'offline'
+      : isSyncing
+        ? 'syncing'
+        : status.pending > 0
+          ? 'pending'
+          : 'synced';
+  const syncTitle =
+    syncState === 'attention'
+      ? 'Needs attention'
+      : syncState === 'offline'
+        ? 'Offline'
+        : syncState === 'syncing'
+          ? 'Syncing now'
+          : syncState === 'pending'
+            ? 'Changes waiting'
+            : 'Up to date';
+  const syncDescription =
+    syncState === 'attention'
+      ? 'Some changes need a retry or conflict decision.'
+      : syncState === 'offline'
+        ? 'Changes stay on this device and sync after you reconnect.'
+        : syncState === 'syncing'
+          ? 'Your latest changes are moving to your cloud account.'
+          : syncState === 'pending'
+            ? 'Changes are saved on this device and waiting to sync.'
+            : 'Your changes are synced across your devices.';
+  const SyncIcon =
+    syncState === 'synced'
+      ? Check
+      : syncState === 'attention' || syncState === 'offline'
+        ? TriangleAlert
+        : ClockCounterClockwise;
+  const syncColor =
+    syncState === 'synced'
+      ? tokens.positive
+      : syncState === 'offline'
+        ? tokens.warning
+        : syncState === 'attention'
+          ? tokens.destructive
+          : tokens.primary;
+  const connectionColor = isConnected ? tokens.positive : tokens.warning;
+  const lastSynced = status.lastSyncedAt
+    ? new Date(status.lastSyncedAt).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'Never';
+  const syncMetrics = [
+    {
+      label: 'Pending',
+      value: String(status.pending),
+      color: status.pending ? tokens.warning : tokens.foreground,
+    },
+    {
+      label: 'Failed',
+      value: String(status.failed),
+      color: status.failed ? tokens.destructive : tokens.foreground,
+    },
+    {
+      label: 'Conflicts',
+      value: String(status.conflicts),
+      color: status.conflicts ? tokens.destructive : tokens.foreground,
+    },
+    { label: 'Active sync', value: isSyncing ? 'Running' : 'Idle', color: tokens.foreground },
+  ];
+  const { height: windowHeight } = useWindowDimensions();
+  const peopleLoading = isConnected && peopleQuery === undefined;
+  if (!userId) return null;
+
   return (
     <>
       <ScrollView
@@ -203,231 +251,41 @@ export default function HomeScreen() {
           paddingHorizontal: 20,
           paddingTop: insets.top + 16,
           paddingBottom: layoutTokens.sectionGap,
-          gap: 36,
+          gap: 18,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <Typography variant="label">Overview</Typography>
-          <IconButton
-            label={syncAccessibilityLabel}
-            variant="ghost"
-            onPress={() => setSyncOpen(true)}
-          >
-            <SyncIcon size={20} color={syncIconColor} />
-          </IconButton>
-        </View>
-        <BalanceHero amountMinor={balanceMinor} currency={currency} />
-        <MetricPair
-          left={{ label: 'Income', value: formatMinor(summary?.incomeMinor ?? 0n, currency) }}
-          right={{ label: 'Spent', value: formatMinor(summary?.spentMinor ?? 0n, currency) }}
+        <HomeDashboard
+          data={data}
+          people={people}
+          peopleLoading={peopleLoading}
+          peopleError={peopleQueryError}
+          accounts={accountOptions}
+          selectedAccountId={selectedAccountId}
+          search={search}
+          dateLabel={dateLabel}
+          currency={currency}
+          onSearchChange={setSearch}
+          onAccountChange={setSelectedAccountId}
+          onChooseDate={() => setPeriodOpen(true)}
+          onOpenSync={() => setSyncOpen(true)}
+          syncLabel={syncTitle}
+          syncIcon={<SyncIcon size={19} color={syncColor} />}
+          notificationCount={unreadNotificationCount}
+          onOpenNotifications={() => router.push('/notifications' as never)}
+          onOpenTransaction={(id) => router.push(`/transaction/${id}` as never)}
+          onSeeAllTransactions={() => router.push('/(tabs)/activity' as never)}
+          onOpenBudget={(id) => router.push(`/budget/${id}` as never)}
+          onSeeAllBudgets={() => router.push('/budget' as never)}
+          onOpenGoal={(id) => router.push(`/goals/${id}` as never)}
+          onSeeAllGoals={() => router.push('/goals' as never)}
+          onOpenCategory={(id) => router.push(`/category/${id}` as never)}
+          onSeeAllCategories={() => router.push('/category' as never)}
+          onOpenGroup={(id) => router.push(`/group/${id}` as never)}
+          onSeeAllGroups={() => router.push('/(tabs)/groups' as never)}
+          onOpenPerson={(username) => router.push(`/person/${username}` as never)}
+          onSeeAllBills={() => router.push('/recurring' as never)}
         />
-
-        <View style={{ gap: 18 }}>
-          <SectionHeader
-            title="Spending"
-            action={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Button variant="ghost" size="sm" onPress={() => setPeriodOpen(true)}>
-                  {period}
-                </Button>
-                <IconButton label="Choose date" variant="ghost" onPress={() => setPeriodOpen(true)}>
-                  <CalendarDays size={19} color={tokens.foreground} />
-                </IconButton>
-              </View>
-            }
-          />
-          {summary ? (
-            <SpendingLineChart
-              values={summary.chart}
-              labels={[
-                new Date(range.startAt).toLocaleDateString(undefined, {
-                  day: 'numeric',
-                  month: 'short',
-                }),
-                new Date(range.endAt - 1).toLocaleDateString(undefined, {
-                  day: 'numeric',
-                  month: 'short',
-                }),
-              ]}
-            />
-          ) : (
-            <Typography variant="small">Loading spending…</Typography>
-          )}
-        </View>
-
-        <View style={{ gap: 16 }}>
-          <SectionHeader
-            title="Categories"
-            action={
-              <Button variant="ghost" size="sm" onPress={() => router.push('/category' as never)}>
-                See all
-              </Button>
-            }
-          />
-          {categories === undefined ? (
-            <Typography variant="small">Loading categories…</Typography>
-          ) : categories.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
-              <CategoryIcon label="Categories" />
-              <Typography variant="bodyLarge">No categories yet</Typography>
-              <Typography variant="small" style={{ textAlign: 'center', maxWidth: 290 }}>
-                Create a category to organize transactions.
-              </Typography>
-              <Button
-                size="sm"
-                variant="outline"
-                onPress={() => router.push('/category/new' as never)}
-              >
-                Add category
-              </Button>
-            </View>
-          ) : (
-            <View style={{ gap: 4 }}>
-              {categories.slice(0, 4).map((category) => (
-                <Button
-                  key={String(category.id ?? category._id)}
-                  variant="ghost"
-                  onPress={() =>
-                    router.push(`/category/${String(category.id ?? category._id)}` as never)
-                  }
-                  accessibilityLabel={`Open ${category.name} category`}
-                  style={{
-                    width: '100%',
-                    minHeight: 64,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: tokens.borderSubtle,
-                    backgroundColor: tokens.surfaceSubtle,
-                    justifyContent: 'flex-start',
-                    paddingHorizontal: 12,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                    <CategoryIcon label={category.name} icon={category.icon} />
-                    <Typography
-                      variant="bodyLarge"
-                      numberOfLines={2}
-                      style={{ color: tokens.foreground, flex: 1 }}
-                    >
-                      {category.name}
-                    </Typography>
-                  </View>
-                </Button>
-              ))}
-            </View>
-          )}
-        </View>
-
-        <Separator />
-        <PeopleRail onSelect={() => router.push('/group/new' as never)} />
-
-        <View style={{ gap: 14 }}>
-          <SectionHeader
-            title="Groups"
-            action={
-              <Button variant="ghost" size="sm" onPress={() => router.push('/(tabs)/groups')}>
-                See all
-              </Button>
-            }
-          />
-          {groups === undefined ? (
-            <Typography variant="small">Loading groups…</Typography>
-          ) : groups.length > 0 ? (
-            groups.slice(0, 2).map((group) => {
-              const groupId = String(group.id ?? group._id);
-              return (
-                <SettingsRow
-                  key={groupId}
-                  label={group.name}
-                  value={group.currency}
-                  onPress={() => router.push(`/group/${groupId}` as never)}
-                />
-              );
-            })
-          ) : (
-            <View
-              style={{
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingVertical: 16,
-                gap: 8,
-              }}
-            >
-              <UsersThree size={22} color={tokens.foregroundMuted} />
-              <Text style={{ color: tokens.foregroundMuted, textAlign: 'center' }}>
-                Create a group to split money with people you know.
-              </Text>
-              <Button
-                size="sm"
-                variant="outline"
-                onPress={() => router.push('/group/new' as never)}
-              >
-                Create group
-              </Button>
-            </View>
-          )}
-        </View>
-
-        <Separator />
-        <View style={{ gap: 12 }}>
-          <SectionHeader
-            title="Recent"
-            action={
-              <Button variant="ghost" size="sm" onPress={() => router.push('/(tabs)/activity')}>
-                All
-              </Button>
-            }
-          />
-          {transactions === undefined ? (
-            <Typography variant="small">Loading activity…</Typography>
-          ) : recentTransactions.length ? (
-            recentTransactions.map((transaction) => {
-              const transactionId = String(transaction.id ?? transaction._id);
-              const category = categories?.find(
-                (item) => String(item.id ?? item._id) === transaction.categoryId,
-              );
-              return (
-                <TransactionRow
-                  key={transactionId}
-                  title={transaction.title}
-                  category={category?.name}
-                  categoryIcon={typeof category?.icon === 'string' ? category.icon : undefined}
-                  amountMinor={transaction.amountMinor}
-                  currency={transaction.currency}
-                  type={transaction.type}
-                  semanticType={transaction.groupId ? 'split' : undefined}
-                  date={new Date(transaction.occurredAt).toLocaleDateString()}
-                  onPress={() => router.push(`/transaction/${transactionId}` as never)}
-                />
-              );
-            })
-          ) : (
-            <View
-              style={{
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingVertical: 18,
-                gap: 8,
-              }}
-            >
-              <ReceiptText size={22} color={tokens.foregroundMuted} />
-              <Typography variant="bodyLarge">No transactions yet</Typography>
-              <Typography variant="small" style={{ textAlign: 'center', maxWidth: 290 }}>
-                Record an expense or income to start your ledger.
-              </Typography>
-              <Button
-                size="sm"
-                variant="outline"
-                onPress={() => router.push('/transaction/new' as never)}
-              >
-                Add transaction
-              </Button>
-            </View>
-          )}
-        </View>
       </ScrollView>
 
       <Sheet visible={periodOpen} onClose={() => setPeriodOpen(false)} title="Spending period">
@@ -488,117 +346,268 @@ export default function HomeScreen() {
         </View>
       </Sheet>
       <Sheet visible={syncOpen} onClose={() => setSyncOpen(false)} title="Local sync">
-        <View style={{ gap: 14 }}>
-          <View style={{ gap: 4 }}>
-            <Typography variant="heading">
-              {!isConnected
-                ? 'Offline'
-                : isSyncing
-                  ? 'Syncing changes'
-                  : syncHasIssue
-                    ? 'Action needed'
-                    : status.pending > 0
-                      ? 'Changes pending'
-                      : 'Up to date'}
-            </Typography>
-            <Text style={{ color: tokens.foregroundMuted }}>
-              {!isConnected
-                ? 'Your cached records stay available. New edits are queued on this device.'
-                : 'Local changes sync to your cloud account when connected.'}
-            </Text>
-          </View>
-          <View style={{ gap: 6 }}>
-            <Text>Connection: {isConnected ? 'Online' : 'Offline'}</Text>
-            <Text>Pending: {status.pending}</Text>
-            <Text>Active sync: {isSyncing ? 'Yes' : 'No'}</Text>
-            <Text>Failed: {status.failed}</Text>
-            <Text>Conflicts: {status.conflicts}</Text>
-            <Text>
-              Last successful cloud sync:{' '}
-              {status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleString() : 'Never'}
-            </Text>
-          </View>
-          {failedEntries.length > 0 && (
-            <ScrollView style={{ maxHeight: 220 }} contentContainerStyle={{ gap: 10 }}>
-              {failedEntries.map((entry) => (
-                <View key={entry.localId} style={{ gap: 5 }}>
-                  <Typography variant="small">{entry.operation}</Typography>
-                  <Text style={{ color: tokens.destructive }}>
-                    {entry.lastError ?? 'Cloud rejected this change.'}
-                  </Text>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isSyncing}
-                    onPress={() => void retryEntry(entry.localId)}
-                    style={{ alignSelf: 'flex-start' }}
+        <View style={{ gap: 12 }}>
+          <ScrollView
+            style={{ maxHeight: windowHeight * 0.54 }}
+            contentContainerStyle={{ gap: 12, paddingBottom: 2 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                borderRadius: 16,
+                padding: 14,
+                backgroundColor: tokens.surfaceRaised,
+              }}
+            >
+              <View
+                style={{
+                  width: 42,
+                  height: 42,
+                  flex: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.borderSubtle,
+                  backgroundColor: tokens.surfaceSubtle,
+                }}
+              >
+                <SyncIcon size={20} color={syncColor} />
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Typography
+                  variant="caption"
+                  style={{
+                    color: syncColor,
+                    fontSize: 10,
+                    letterSpacing: 1.1,
+                    fontWeight: '600',
+                  }}
+                >
+                  SYNC STATUS
+                </Typography>
+                <Typography variant="heading" style={{ fontSize: 18, lineHeight: 23 }}>
+                  {syncTitle}
+                </Typography>
+                <Text style={{ color: tokens.foregroundMuted, lineHeight: 20 }}>
+                  {syncDescription}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {syncMetrics.map((metric) => (
+                <View
+                  key={metric.label}
+                  style={{
+                    flexBasis: '48%',
+                    flexGrow: 1,
+                    minHeight: 66,
+                    justifyContent: 'center',
+                    gap: 4,
+                    borderWidth: 1,
+                    borderColor: tokens.borderSubtle,
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    backgroundColor: tokens.surfaceSubtle,
+                  }}
+                >
+                  <Typography variant="caption">{metric.label}</Typography>
+                  <Text
+                    style={{
+                      color: metric.color,
+                      fontSize: 17,
+                      lineHeight: 21,
+                      fontFamily: 'SpaceGrotesk_600SemiBold',
+                      fontVariant: ['tabular-nums'],
+                    }}
                   >
-                    Retry this change
-                  </Button>
+                    {metric.value}
+                  </Text>
                 </View>
               ))}
-            </ScrollView>
-          )}
-          {conflicts.length > 0 && (
-            <ScrollView style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 12 }}>
-              {conflicts.map((conflict) => {
-                const localValue = String(
-                  conflict.localRecord.title ??
-                    conflict.localRecord.name ??
-                    conflict.localRecord.amountMinor ??
-                    'Local version',
-                );
-                const cloudValue = String(
-                  conflict.cloudRecord.title ??
-                    conflict.cloudRecord.name ??
-                    conflict.cloudRecord.amountMinor ??
-                    'Cloud version',
-                );
-                return (
-                  <View key={conflict.id} style={{ gap: 6 }}>
-                    <Typography variant="small">
-                      {conflict.entityType} · {conflict.recordId}
-                    </Typography>
-                    <Text style={{ color: tokens.foregroundMuted }}>Local: {localValue}</Text>
-                    <Text style={{ color: tokens.foregroundMuted }}>Cloud: {cloudValue}</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isSyncing}
-                        onPress={() => void resolveConflict(conflict.id, 'local')}
-                      >
-                        Keep local
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isSyncing}
-                        onPress={() => void resolveConflict(conflict.id, 'cloud')}
-                      >
-                        Use cloud
-                      </Button>
-                    </View>
+            </View>
+
+            <View
+              style={{
+                gap: 9,
+                borderTopWidth: 1,
+                borderColor: tokens.borderSubtle,
+                paddingTop: 10,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ color: tokens.foregroundMuted }}>Connection</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  <View
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 4,
+                      backgroundColor: connectionColor,
+                    }}
+                  />
+                  <Text style={{ color: connectionColor }}>
+                    {isConnected ? 'Online' : 'Offline'}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <Text style={{ color: tokens.foregroundMuted, flexShrink: 0 }}>
+                  Last successful sync
+                </Text>
+                <Text style={{ flexShrink: 1, textAlign: 'right' }}>{lastSynced}</Text>
+              </View>
+            </View>
+
+            {failedEntries.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Typography variant="small" style={{ fontFamily: 'SpaceGrotesk_600SemiBold' }}>
+                  Failed changes
+                </Typography>
+                {failedEntries.map((entry) => (
+                  <View
+                    key={entry.localId}
+                    style={{
+                      gap: 6,
+                      borderTopWidth: 1,
+                      borderColor: tokens.borderSubtle,
+                      paddingTop: 10,
+                    }}
+                  >
+                    <Typography variant="small">{entry.operation}</Typography>
+                    <Text style={{ color: tokens.destructive }}>
+                      {entry.lastError ?? 'Cloud rejected this change.'}
+                    </Text>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isSyncing}
+                      onPress={() => void retryEntry(entry.localId)}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      Retry this change
+                    </Button>
                   </View>
-                );
-              })}
-            </ScrollView>
-          )}
-          {!!syncError && (
-            <Typography style={{ color: tokens.destructive }}>{syncError}</Typography>
-          )}
-          <Button size="lg" disabled={isSyncing} onPress={() => void retryNow()}>
-            Retry now
-          </Button>
-          <Button
-            variant="outline"
-            onPress={() => {
-              setSyncOpen(false);
-              router.push('/settings/sync' as never);
-            }}
-          >
-            Local sync settings
-          </Button>
+                ))}
+              </View>
+            )}
+
+            {conflicts.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Typography variant="small" style={{ fontFamily: 'SpaceGrotesk_600SemiBold' }}>
+                  Conflicts
+                </Typography>
+                {conflicts.map((conflict) => {
+                  const localValue = String(
+                    conflict.localRecord.title ??
+                      conflict.localRecord.name ??
+                      conflict.localRecord.amountMinor ??
+                      'Local version',
+                  );
+                  const cloudValue = String(
+                    conflict.cloudRecord.title ??
+                      conflict.cloudRecord.name ??
+                      conflict.cloudRecord.amountMinor ??
+                      'Cloud version',
+                  );
+                  return (
+                    <View
+                      key={conflict.id}
+                      style={{
+                        gap: 6,
+                        borderTopWidth: 1,
+                        borderColor: tokens.borderSubtle,
+                        paddingTop: 10,
+                      }}
+                    >
+                      <Typography variant="small">
+                        {conflict.entityType} · {conflict.recordId}
+                      </Typography>
+                      <Text style={{ color: tokens.foregroundMuted }}>
+                        On this device: {localValue}
+                      </Text>
+                      <Text style={{ color: tokens.foregroundMuted }}>In cloud: {cloudValue}</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isSyncing}
+                          onPress={() => void resolveConflict(conflict.id, 'local')}
+                        >
+                          Keep this device
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isSyncing}
+                          onPress={() => void resolveConflict(conflict.id, 'cloud')}
+                        >
+                          Use cloud
+                        </Button>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {!!syncError && (
+              <View
+                accessibilityRole="alert"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: `${tokens.destructive}55`,
+                  borderRadius: 12,
+                  padding: 11,
+                  backgroundColor: `${tokens.destructive}12`,
+                }}
+              >
+                <TriangleAlert size={16} color={tokens.destructive} />
+                <Text style={{ flex: 1, color: tokens.destructive }}>{syncError}</Text>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={{ gap: 8 }}>
+            <Button size="lg" disabled={isSyncing} onPress={() => void retryNow()}>
+              <ClockCounterClockwise size={17} color={tokens.primaryForeground} />
+              <Text style={{ color: tokens.primaryForeground }}>
+                {status.failed > 0 ? 'Retry now' : 'Sync now'}
+              </Text>
+            </Button>
+            <Button
+              variant="outline"
+              onPress={() => {
+                setSyncOpen(false);
+                router.push('/settings/sync' as never);
+              }}
+            >
+              <Text style={{ color: tokens.foreground }}>Local sync settings</Text>
+            </Button>
+          </View>
         </View>
       </Sheet>
     </>

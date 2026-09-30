@@ -4,7 +4,7 @@ import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button, Empty, IconButton, Text, Typography } from '@finapp/ui/web';
-import { CategoryIcon, TransactionRow } from '@finapp/ui/finance';
+import { CategoryIcon, TransactionRow, formatTransactionDate } from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
   getAnalyticsRange,
@@ -19,13 +19,7 @@ import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-import {
-  aliasesOf,
-  asMinor,
-  belongsToUser,
-  idOf,
-  SignInGate,
-} from '../../../_personal';
+import { aliasesOf, asMinor, belongsToUser, idOf, SignInGate } from '../../../_personal';
 
 type Profile = LocalRecord & { defaultCurrency?: string; timezone?: string };
 type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
@@ -300,9 +294,7 @@ export default function AnalyticsBreakdownPage() {
               </Button>
             </div>
           )}
-          {rangeLoading && (
-            <Typography variant="caption">Refreshing transactions…</Typography>
-          )}
+          {rangeLoading && <Typography variant="caption">Refreshing transactions…</Typography>}
           {loading ? (
             <Typography variant="heading">Loading breakdown…</Typography>
           ) : result?.item ? (
@@ -352,11 +344,11 @@ export default function AnalyticsBreakdownPage() {
                       account={account?.name}
                       date={
                         typeof record.occurredAt === 'number'
-                          ? new Intl.DateTimeFormat('en-US', {
-                              day: 'numeric',
-                              month: 'short',
+                          ? formatTransactionDate(
+                              record.occurredAt,
+                              record.hasTime === true,
                               timeZone,
-                            }).format(record.occurredAt)
+                            )
                           : undefined
                       }
                       status={record.status}

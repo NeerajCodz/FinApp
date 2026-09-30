@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Target } from 'lucide-react';
 import { formatMinor, parseMinor } from '@convex/shared/money';
-import { Money } from '@finapp/ui/finance';
+import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
 import { Button, Empty, Input, Progress, Typography } from '@finapp/ui/web';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -20,6 +20,8 @@ type Goal = LocalRecord & {
   completedAt?: number;
   archivedAt?: number;
   cloudId?: string;
+  icon?: string;
+  updatedAt?: number;
 };
 type Contribution = LocalRecord & {
   goalId?: string;
@@ -56,8 +58,12 @@ export default function GoalDetailPage() {
   const [amount, setAmount] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [iconSaving, setIconSaving] = React.useState(false);
+  const [iconError, setIconError] = React.useState('');
   const goal = goals.find((entry) => aliases(entry).includes(routeId));
   const goalIds = goal ? aliases(goal) : [routeId];
+  const goalLocalId = goal ? idOf(goal) : '';
+  const goalId = goal ? String(goal._id ?? goal.cloudId ?? goal.id ?? '') : '';
   const history = contributions
     .filter((entry) => typeof entry.goalId === 'string' && goalIds.includes(entry.goalId))
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
@@ -100,6 +106,29 @@ export default function GoalDetailPage() {
       setSaving(false);
     }
   }
+  async function saveIcon(icon?: string) {
+    if (!userId || !goal || iconSaving || !goalLocalId || !goalId) return;
+    setIconSaving(true);
+    setIconError('');
+    try {
+      await commitLocalWrite(
+        userId,
+        'goal',
+        'goal.setIcon',
+        { ...goal, icon: icon ?? undefined },
+        { goalId, icon: icon ?? null },
+        {
+          recordId: goalLocalId,
+          dependencies: goal._id || goal.cloudId ? [] : [`goal:${goalId}`],
+          baseUpdatedAt: goal.updatedAt,
+        },
+      );
+    } catch (cause) {
+      setIconError(cause instanceof Error ? cause.message : 'Could not update this goal icon.');
+    } finally {
+      setIconSaving(false);
+    }
+  }
 
   if (!userId)
     return (
@@ -121,11 +150,17 @@ export default function GoalDetailPage() {
         <h1 style={{ margin: 0 }}>Goal</h1>
       </div>
       {loading ? (
-        <Typography variant="small" role="status">Loading goal…</Typography>
+        <Typography variant="small" role="status">
+          Loading goal…
+        </Typography>
       ) : loadError ? (
         <div style={{ display: 'grid', gap: 10 }}>
-          <Typography variant="small" role="alert">Saved goal details could not be loaded.</Typography>
-          <Button variant="outline" onPress={() => window.location.reload()}>Retry</Button>
+          <Typography variant="small" role="alert">
+            Saved goal details could not be loaded.
+          </Typography>
+          <Button variant="outline" onPress={() => window.location.reload()}>
+            Retry
+          </Button>
         </div>
       ) : !goal || goal.archivedAt !== undefined ? (
         <Empty
@@ -135,8 +170,40 @@ export default function GoalDetailPage() {
         />
       ) : (
         <>
+          <section style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'grid',
+                width: 44,
+                height: 44,
+                placeItems: 'center',
+                borderRadius: 14,
+                background: 'var(--finapp-surface-raised)',
+              }}
+            >
+              <EntityIcon
+                value={goal.icon ?? 'lucide:Target'}
+                size={22}
+                color="var(--finapp-primary)"
+              />
+            </span>
+            <Typography variant="title" style={{ flex: 1 }}>
+              {goal.name}
+            </Typography>
+            <EntityIconPicker
+              mode="lucide"
+              value={goal.icon}
+              onChange={(icon) => void saveIcon(icon)}
+              label="Change goal icon"
+            />
+          </section>
+          {iconError && (
+            <Typography variant="small" role="alert" style={{ color: 'var(--finapp-destructive)' }}>
+              {iconError}
+            </Typography>
+          )}
           <section style={{ display: 'grid', gap: 8 }}>
-            <Typography variant="title">{goal.name}</Typography>
             <Typography variant="label">Saved so far</Typography>
             <Money amountMinor={saved} currency={currency} size="display" />
             <Typography variant="small">of {formatMinor(target, currency)} target</Typography>
@@ -144,7 +211,9 @@ export default function GoalDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography variant="caption">{percent}% reached</Typography>
               <Typography variant="caption">
-                {goal.targetDate ? new Date(goal.targetDate).toLocaleDateString() : 'No target date'}
+                {goal.targetDate
+                  ? new Date(goal.targetDate).toLocaleDateString()
+                  : 'No target date'}
               </Typography>
             </div>
           </section>

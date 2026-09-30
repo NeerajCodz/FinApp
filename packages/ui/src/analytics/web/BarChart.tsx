@@ -18,7 +18,10 @@ export function BarChart({
         {values.map((value, index) => {
           const highlighted = index === highlightIndex;
           return (
-            <div key={`${labels[index] ?? index}-${index}`} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end' }}>
+            <div
+              key={`${labels[index] ?? index}-${index}`}
+              style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end' }}
+            >
               <div
                 style={{
                   width: '100%',
@@ -34,7 +37,11 @@ export function BarChart({
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         {values.map((_, index) => (
-          <Typography key={`${labels[index] ?? index}-${index}`} variant="caption" style={{ flex: 1, textAlign: 'center' }}>
+          <Typography
+            key={`${labels[index] ?? index}-${index}`}
+            variant="caption"
+            style={{ flex: 1, textAlign: 'center' }}
+          >
             {labels[index] ?? ''}
           </Typography>
         ))}
