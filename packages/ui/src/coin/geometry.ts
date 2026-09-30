@@ -1,6 +1,6 @@
 import earcut from 'earcut';
 
-export type CoinMesh = { vertices: Float32Array; vertexCount: number };
+export type CoinMesh = { vertices: Float32Array<ArrayBuffer>; vertexCount: number };
 type Point = readonly [number, number, number];
 type Color = readonly [number, number, number];
 

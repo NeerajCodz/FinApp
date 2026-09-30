@@ -1,54 +1,141 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import Image from 'next/image';
-import { createCoinRenderer, type CoinRenderer } from '@finapp/ui/coin';
+import { createCoinRenderer, type CoinInteraction, type CoinRenderer } from '@finapp/ui/coin';
 import { createCoinFloat } from '@finapp/ui/coin/motion';
 import appIcon from '../../../mobile/assets/icon.png';
 
 export function CoinLogo({
   className = '',
   paused = false,
+  interactive = false,
 }: {
   className?: string;
   paused?: boolean;
+  interactive?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [available, setAvailable] = useState(false);
+  const fallbackCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [rendererMode, setRendererMode] = useState<'pending' | 'webgpu' | 'webgl' | 'fallback'>(
+    'pending',
+  );
+  const interaction = useRef<CoinInteraction>({
+    rotationX: 0,
+    rotationY: 0,
+    lightX: 0,
+    lightY: 0,
+  });
+  const hoverRotation = useRef({ x: 0, y: 0 });
+  const drag = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const syncRef = useRef<() => void>(() => {});
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!interactive) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const lightX = Math.max(
+      -1,
+      Math.min(1, ((event.clientX - bounds.left) / bounds.width) * 2 - 1),
+    );
+    const lightY = Math.max(
+      -1,
+      Math.min(1, 1 - ((event.clientY - bounds.top) / bounds.height) * 2),
+    );
+    interaction.current.lightX = lightX;
+    interaction.current.lightY = lightY;
+    if (drag.current?.pointerId === event.pointerId) {
+      interaction.current.rotationY += (event.clientX - drag.current.x) * 0.012;
+      interaction.current.rotationX += (event.clientY - drag.current.y) * 0.012;
+      drag.current.x = event.clientX;
+      drag.current.y = event.clientY;
+      hoverRotation.current.x = 0;
+      hoverRotation.current.y = 0;
+      syncRef.current();
+      return;
+    }
+    hoverRotation.current.x = -lightY * 0.16;
+    hoverRotation.current.y = lightX * 0.2;
+    syncRef.current();
+  };
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!interactive || event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.dataset.dragging = 'true';
+    drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+  };
+  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    drag.current = null;
+    delete event.currentTarget.dataset.dragging;
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    syncRef.current();
+  };
+  const handlePointerLeave = () => {
+    if (!interactive || drag.current) return;
+    interaction.current.lightX = 0;
+    interaction.current.lightY = 0;
+    hoverRotation.current.x = 0;
+    hoverRotation.current.y = 0;
+    syncRef.current();
+  };
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!interactive) return;
+    const step = event.shiftKey ? 0.25 : 0.1;
+    if (event.key === 'ArrowLeft') interaction.current.rotationY -= step;
+    else if (event.key === 'ArrowRight') interaction.current.rotationY += step;
+    else if (event.key === 'ArrowUp') interaction.current.rotationX -= step;
+    else if (event.key === 'ArrowDown') interaction.current.rotationX += step;
+    else return;
+    event.preventDefault();
+    syncRef.current();
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const gl = canvas.getContext('webgl', {
-      alpha: true,
-      antialias: true,
-      powerPreference: 'low-power',
-    });
-    if (!gl) return;
+    const fallbackCanvas = fallbackCanvasRef.current;
+    if (!canvas || !fallbackCanvas) return;
     let renderer: CoinRenderer | null = null;
+    let renderCanvas: HTMLCanvasElement = canvas;
     let frame = 0;
+    let initializationFrame = 0;
     let visible = true;
+    let disposed = false;
     let elapsed = 0;
     let previous = 0;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const float = createCoinFloat();
     const draw = () => {
-      const bounds = canvas.getBoundingClientRect();
+      const bounds = renderCanvas.getBoundingClientRect();
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      const width = Math.round(bounds.width * ratio),
-        height = Math.round(bounds.height * ratio);
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
+      const width = Math.round(bounds.width * ratio);
+      const height = Math.round(bounds.height * ratio);
+      if (renderCanvas.width !== width || renderCanvas.height !== height) {
+        renderCanvas.width = width;
+        renderCanvas.height = height;
       }
-      renderer?.render(paused || motion.matches ? 0 : float.sample(elapsed), width, height);
+      const pose = interaction.current;
+      const tilt = hoverRotation.current;
+      renderer?.render(paused || motion.matches ? 0 : float.sample(elapsed), width, height, {
+        ...pose,
+        rotationX: pose.rotationX + tilt.x,
+        rotationY: pose.rotationY + tilt.y,
+      });
     };
     const tick = (timestamp: number) => {
       frame = 0;
       if (!renderer || !visible || document.hidden) return;
       if (previous) elapsed += Math.min((timestamp - previous) / 1000, 0.1);
       previous = timestamp;
-      renderer.render(float.sample(elapsed), canvas.width, canvas.height);
+      draw();
       if (!paused && !motion.matches) frame = requestAnimationFrame(tick);
     };
     const sync = () => {
@@ -59,24 +146,41 @@ export function CoinLogo({
       draw();
       if (!paused && !motion.matches) frame = requestAnimationFrame(tick);
     };
-    const initialise = () => {
+    syncRef.current = sync;
+    const initialiseWebGL = () => {
+      if (disposed) return;
       try {
+        const gl = fallbackCanvas.getContext('webgl', {
+          alpha: true,
+          antialias: true,
+          powerPreference: 'low-power',
+        });
+        if (!gl) throw new Error('WebGL is unavailable.');
         renderer = createCoinRenderer(gl);
-        setAvailable(true);
+        renderCanvas = fallbackCanvas;
+        setRendererMode('webgl');
         sync();
       } catch {
-        setAvailable(false);
+        setRendererMode('fallback');
       }
     };
-    const lost = (event: Event) => {
-      event.preventDefault();
-      cancelAnimationFrame(frame);
-      frame = 0;
-      renderer?.dispose();
-      renderer = null;
-      setAvailable(false);
+    const initialise = async () => {
+      try {
+        // The WebGPU renderer is browser-only; keep it out of Next's server render.
+        const { createVgpuCoinRenderer } = await import('./createVgpuCoinRenderer');
+        const nextRenderer = await createVgpuCoinRenderer(canvas);
+        if (disposed) {
+          nextRenderer.dispose();
+          return;
+        }
+        renderer = nextRenderer;
+        renderCanvas = canvas;
+        setRendererMode('webgpu');
+        sync();
+      } catch {
+        initialiseWebGL();
+      }
     };
-    const restored = () => initialise();
     const resize = new ResizeObserver(sync);
     resize.observe(canvas);
     const intersection = new IntersectionObserver(([entry]) => {
@@ -86,34 +190,49 @@ export function CoinLogo({
     intersection.observe(canvas);
     document.addEventListener('visibilitychange', sync);
     motion.addEventListener('change', sync);
-    canvas.addEventListener('webglcontextlost', lost);
-    canvas.addEventListener('webglcontextrestored', restored);
-    initialise();
+    initializationFrame = requestAnimationFrame(() => void initialise());
     return () => {
+      disposed = true;
+      cancelAnimationFrame(initializationFrame);
       cancelAnimationFrame(frame);
       resize.disconnect();
       intersection.disconnect();
       document.removeEventListener('visibilitychange', sync);
       motion.removeEventListener('change', sync);
-      canvas.removeEventListener('webglcontextlost', lost);
-      canvas.removeEventListener('webglcontextrestored', restored);
       renderer?.dispose();
+      syncRef.current = () => {};
       float.dispose();
     };
   }, [paused]);
 
   return (
     <div
-      className={`finapp-coin ${className}`}
+      className={`finapp-coin${interactive ? ' finapp-coin-interactive' : ''}${className ? ` ${className}` : ''}`}
       role="img"
-      aria-label="Finapp volt coin with a black F"
+      aria-label={
+        interactive
+          ? 'Interactive Finapp volt coin. Drag to spin or use the arrow keys.'
+          : 'Finapp volt coin with a black F'
+      }
+      tabIndex={interactive ? 0 : undefined}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerLeave={handlePointerLeave}
+      onKeyDown={handleKeyDown}
     >
       <canvas
         ref={canvasRef}
         aria-hidden="true"
-        className={available ? 'finapp-coin-canvas' : 'finapp-coin-canvas finapp-coin-pending'}
+        className={`finapp-coin-canvas${rendererMode === 'webgpu' ? '' : ' finapp-coin-hidden'}`}
       />
-      {!available && (
+      <canvas
+        ref={fallbackCanvasRef}
+        aria-hidden="true"
+        className={`finapp-coin-canvas${rendererMode === 'webgl' ? '' : ' finapp-coin-hidden'}`}
+      />
+      {rendererMode !== 'webgpu' && rendererMode !== 'webgl' && (
         <Image className="finapp-coin-fallback" src={appIcon} alt="" width={512} height={512} />
       )}
     </div>

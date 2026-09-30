@@ -1,4 +1,5 @@
 import { createCoinMesh } from './geometry';
+export { createCoinMesh } from './geometry';
 
 const vertexSource = `
 attribute vec3 aPosition;
@@ -20,12 +21,13 @@ void main() {
 }`;
 const fragmentSource = `
 precision mediump float;
+uniform vec3 uLightPosition;
 varying vec3 vNormal;
 varying vec3 vColor;
 varying vec3 vPosition;
 void main() {
   vec3 normal = normalize(vNormal);
-  vec3 light = normalize(vec3(-0.65, 0.9, 1.4));
+  vec3 light = normalize(uLightPosition - vPosition);
   vec3 viewDirection = normalize(-vPosition);
   float diffuse = max(dot(normal, light), 0.);
   float rimLight = max(dot(normal, normalize(vec3(0.9, -0.1, -0.5))), 0.);
@@ -36,12 +38,24 @@ void main() {
   gl_FragColor = vec4(color, 1.);
 }`;
 
+export type CoinInteraction = {
+  rotationX: number;
+  rotationY: number;
+  lightX: number;
+  lightY: number;
+};
+
 export type CoinRenderer = {
-  render: (offsetY: number, width: number, height: number) => void;
+  render: (
+    offsetY: number,
+    width: number,
+    height: number,
+    interaction?: Partial<CoinInteraction>,
+  ) => void;
   dispose: () => void;
 };
 
-/** Browser WebGL and Expo GLView share the same flat engraving and fixed camera pose. */
+/** Browser WebGL and Expo GLView share the same engraved coin and live lighting. */
 export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
   const shaders: WebGLShader[] = [];
   let program: WebGLProgram | null = null;
@@ -93,37 +107,42 @@ export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
     const rotation = gl.getUniformLocation(program, 'uRotation');
     const floating = gl.getUniformLocation(program, 'uFloat');
     const aspect = gl.getUniformLocation(program, 'uAspect');
-    // Fixed pose only. Animation can translate the coin, never rotate it.
-    const x = -0.1,
-      y = -0.24,
-      z = 0.025;
-    const sx = Math.sin(x),
-      cx = Math.cos(x);
-    const sy = Math.sin(y),
-      cy = Math.cos(y);
-    const sz = Math.sin(z),
-      cz = Math.cos(z);
-    const matrix = new Float32Array([
-      cz * cy - sz * sx * sy,
-      sz * cy + cz * sx * sy,
-      -cx * sy,
-      -sz * cx,
-      cz * cx,
-      sx,
-      cz * sy + sz * sx * cy,
-      sz * sy - cz * sx * cy,
-      cx * cy,
-    ]);
-    gl.uniformMatrix3fv(rotation, false, matrix);
+    const lightPosition = gl.getUniformLocation(program, 'uLightPosition');
+    const rotationMatrix = new Float32Array(9);
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0, 0, 0, 0);
     return {
-      render(offsetY, width, height) {
+      render(offsetY, width, height, interaction = {}) {
         if (!program || width <= 0 || height <= 0) return;
         gl.viewport(0, 0, width, height);
         gl.useProgram(program);
         gl.uniform1f(floating, offsetY);
         gl.uniform1f(aspect, width / height);
+        const x = -0.1 + (interaction.rotationX ?? 0);
+        const y = -0.24 + (interaction.rotationY ?? 0);
+        const z = 0.025;
+        const sx = Math.sin(x),
+          cx = Math.cos(x);
+        const sy = Math.sin(y),
+          cy = Math.cos(y);
+        const sz = Math.sin(z),
+          cz = Math.cos(z);
+        rotationMatrix[0] = cz * cy - sz * sx * sy;
+        rotationMatrix[1] = sz * cy + cz * sx * sy;
+        rotationMatrix[2] = -cx * sy;
+        rotationMatrix[3] = -sz * cx;
+        rotationMatrix[4] = cz * cx;
+        rotationMatrix[5] = sx;
+        rotationMatrix[6] = cz * sy + sz * sx * cy;
+        rotationMatrix[7] = sz * sy - cz * sx * cy;
+        rotationMatrix[8] = cx * cy;
+        gl.uniformMatrix3fv(rotation, false, rotationMatrix);
+        gl.uniform3f(
+          lightPosition,
+          (interaction.lightX ?? 0) * 4.2,
+          (interaction.lightY ?? 0) * 3.4,
+          0.2,
+        );
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount);
         gl.flush();
