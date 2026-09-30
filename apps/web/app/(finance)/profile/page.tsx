@@ -9,6 +9,7 @@ import {
   Bell,
   ChartNoAxesCombined,
   Coins,
+  Info,
   LogOut,
   Palette,
   ReceiptText,
@@ -251,6 +252,11 @@ export default function ProfilePage() {
             />
           ))}
         </section>
+        <SettingsRow
+          leadingIcon={<Info size={19} color={tokens.foreground} />}
+          label="About"
+          onPress={() => router.push('/about')}
+        />
         {!!message && <Text role="status">{message}</Text>}
         <Button variant="destructive" size="lg" onPress={() => void leave()}>
           <LogOut size={16} aria-hidden="true" /> Sign out{' '}

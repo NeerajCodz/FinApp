@@ -19,6 +19,7 @@ import {
   Settings as LucideGear,
   History as LucideClockCounterClockwise,
   House as LucideHouse,
+  Heart as LucideHeart,
   Info as LucideInfo,
   KeyRound as LucideLockKey,
   Filter as LucideFilter,
@@ -74,6 +75,7 @@ export const Coins = withWeight(LucideCoins);
 export const Gear = withWeight(LucideGear);
 export const ClockCounterClockwise = withWeight(LucideClockCounterClockwise);
 export const House = withWeight(LucideHouse);
+export const Heart = withWeight(LucideHeart);
 export const Eye = withWeight(LucideEye);
 export const EyeOff = withWeight(LucideEyeOff);
 export const Info = withWeight(LucideInfo);

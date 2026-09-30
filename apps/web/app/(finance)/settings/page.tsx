@@ -7,6 +7,7 @@ import {
   CircleUserRound,
   Coins,
   Eye,
+  Info,
   Palette,
   RefreshCw,
   ShieldCheck,
@@ -102,6 +103,13 @@ export default function SettingsPage() {
           label="Privacy and export"
           leadingIcon={<Eye size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/privacy')}
+        />
+      </section>
+      <section>
+        <SettingsRow
+          label="About"
+          leadingIcon={<Info size={19} color={tokens.primary} />}
+          onPress={() => router.push('/about')}
         />
       </section>
     </div>
