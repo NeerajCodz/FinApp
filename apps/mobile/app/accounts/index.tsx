@@ -35,7 +35,6 @@ type AccountTransaction = LocalRecord & {
 };
 
 export default function AccountsScreen() {
-  const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId } = useLocalSync();
   const accountState = useLocalRecords<AccountRecord>(userId, 'account');

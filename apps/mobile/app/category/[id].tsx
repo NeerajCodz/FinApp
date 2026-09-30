@@ -9,7 +9,7 @@ import {
   type CategoryDetailTransaction,
 } from '@finapp/ui/finance';
 import { parseMinor } from '@/lib/money';
-import { Button, Empty, IconButton, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Empty, IconButton, useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
