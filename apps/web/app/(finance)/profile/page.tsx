@@ -67,11 +67,6 @@ const links = [
   },
 ];
 
-const preferences = [
-  { label: 'Appearance', href: '/settings/appearance', icon: Palette },
-  { label: 'Notifications', href: '/settings/notifications', icon: Bell },
-  { label: 'Security', href: '/settings/security', icon: ShieldCheck },
-];
 
 const privacyLinks = [
   { label: 'Export data', href: '/settings/privacy', icon: ReceiptText },

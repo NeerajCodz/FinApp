@@ -291,11 +291,13 @@ export default function NewPersonalTransactionPage() {
       </SignInGate>
     );
   const dataError = accountError ?? categoryError;
-  let amountValid = false;
+  let amountValid: boolean;
   try {
     const amountMinor = parseMinor(amount, source?.currency ?? profile?.defaultCurrency ?? 'INR');
     amountValid = amountMinor > 0n && amountMinor <= maxInt64;
-  } catch {}
+  } catch {
+    amountValid = false;
+  }
   return (
     <div className="finance-page" style={{ gap: 24 }}>
       <header style={{ display: 'flex', alignItems: 'center' }}>
