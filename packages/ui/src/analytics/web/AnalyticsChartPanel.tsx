@@ -14,9 +14,9 @@ export function AnalyticsChartPanel({
 }: {
   title: string;
   description: string;
-  chartType: string;
-  chartTypes: readonly ChartTypeOption[];
-  onChartTypeChange: (value: string) => void;
+  chartType?: string;
+  chartTypes?: readonly ChartTypeOption[];
+  onChartTypeChange?: (value: string) => void;
   children: ReactNode;
 }) {
   return (
@@ -26,12 +26,14 @@ export function AnalyticsChartPanel({
           <Typography variant="bodyLarge">{title}</Typography>
           <Typography variant="caption">{description}</Typography>
         </div>
-        <ChartTypeSelect
-          label={title}
-          value={chartType}
-          options={chartTypes}
-          onChange={onChartTypeChange}
-        />
+        {chartType && chartTypes && onChartTypeChange && (
+          <ChartTypeSelect
+            label={title}
+            value={chartType}
+            options={chartTypes}
+            onChange={onChartTypeChange}
+          />
+        )}
       </header>
       {children}
     </Card>
