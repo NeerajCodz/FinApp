@@ -36,6 +36,7 @@
     "typescript-eslint": "^8.68.0"
   },
   "overrides": {
+    "expo-constants": "~57.0.20",
     "vite": "^7"
   },
   "dependencies": {
