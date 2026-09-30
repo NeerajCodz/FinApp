@@ -39,11 +39,7 @@ export function HomeFlowBudgets({
           value={cashFlowRange}
           onChange={(value) => setCashFlowRange(value as CashFlowRange)}
         />
-        <CashFlowChart
-          buckets={data.cashFlowRanges[cashFlowRange]}
-          currency={currency}
-          variant="lines"
-        />
+        <CashFlowChart buckets={data.cashFlowRanges[cashFlowRange]} currency={currency} />
       </Card>
       <Card style={{ gap: 8 }}>
         <SectionHeader

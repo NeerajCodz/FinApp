@@ -27,7 +27,7 @@ export function HomeFlowBudgets({
             Analytics <ArrowUpRight size={14} aria-hidden="true" />
           </a>
         </div>
-        <CashFlowChart buckets={data.cashFlow} currency={currency} variant="lines" />
+        <CashFlowChart buckets={data.cashFlow} currency={currency} />
       </section>
       <section className="finance-home-panel finance-home-budget-panel">
         <div className="finance-home-section-heading">
