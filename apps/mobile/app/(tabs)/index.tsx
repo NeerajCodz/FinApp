@@ -280,7 +280,7 @@ export default function HomeScreen() {
           onOpenGoal={(id) => router.push(`/goals/${id}` as never)}
           onSeeAllGoals={() => router.push('/goals' as never)}
           onOpenCategory={(id) => router.push(`/category/${id}` as never)}
-          onSeeAllCategories={() => router.push('/category' as never)}
+          onSeeAllCategories={() => router.push('/categories' as never)}
           onOpenGroup={(id) => router.push(`/group/${id}` as never)}
           onSeeAllGroups={() => router.push('/(tabs)/groups' as never)}
           onOpenPerson={(username) => router.push(`/person/${username}` as never)}

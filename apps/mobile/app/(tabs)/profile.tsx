@@ -363,13 +363,13 @@ export default function ProfileScreen() {
               icon={Wallet}
               label="Accounts"
               description="Balances and activity"
-              onPress={() => router.push('/account' as never)}
+              onPress={() => router.push('/accounts' as never)}
             />
             <ProfileTile
               icon={ReceiptText}
               label="Categories"
               description="Spending structure"
-              onPress={() => router.push('/category' as never)}
+              onPress={() => router.push('/categories' as never)}
             />
             <ProfileTile
               icon={Coins}

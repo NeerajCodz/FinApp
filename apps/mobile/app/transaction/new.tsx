@@ -679,7 +679,7 @@ export default function NewTransactionScreen() {
                   router.push(
                     pickerOptions?.length === 0
                       ? ('/category/new' as never)
-                      : ('/category' as never),
+                      : ('/categories' as never),
                   );
                 }}
               >

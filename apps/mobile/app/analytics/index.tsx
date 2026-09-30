@@ -1087,7 +1087,7 @@ function AnalyticsContent() {
             <Panel
               title="Accounts & balances"
               action={
-                <Button size="sm" variant="ghost" onPress={() => router.push('/account' as never)}>
+                <Button size="sm" variant="ghost" onPress={() => router.push('/accounts' as never)}>
                   All accounts
                 </Button>
               }
