@@ -56,23 +56,44 @@ export default function CategoriesPage() {
     if (!userId || !isConnected) return;
     let active = true;
     setRangeError('');
-    void fetchTransactionRange(monthRange.fetchStartAt, monthRange.monthEndAt).catch((cause: unknown) => {
-      if (active) setRangeError(cause instanceof Error ? cause.message : 'Could not refresh monthly category activity.');
-    });
-    return () => { active = false; };
+    void fetchTransactionRange(monthRange.fetchStartAt, monthRange.monthEndAt).catch(
+      (cause: unknown) => {
+        if (active)
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Could not refresh monthly category activity.',
+          );
+      },
+    );
+    return () => {
+      active = false;
+    };
   }, [fetchTransactionRange, isConnected, monthRange, userId]);
 
   const categories = categoryState.records
     .filter((item) => userId && belongsToUser(item, userId) && item.archivedAt === undefined)
-    .sort((left, right) => Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) || idOf(left).localeCompare(idOf(right)));
+    .sort(
+      (left, right) =>
+        Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) ||
+        idOf(left).localeCompare(idOf(right)),
+    );
   const profile = profileState.records.find((item) => userId && belongsToUser(item, userId));
   const categoryByAlias = new Map<string, Category>();
-  for (const category of categories) for (const alias of aliasesOf(category)) categoryByAlias.set(alias, category);
+  for (const category of categories)
+    for (const alias of aliasesOf(category)) categoryByAlias.set(alias, category);
   const monthly = new Map<string, { spent: bigint; received: bigint; count: number }>();
   const recent = new Map<string, { spent: bigint; lastActivityAt?: number }>();
   for (const transaction of transactionState.records) {
     const occurredAt = Number(transaction.occurredAt ?? 0);
-    if (!userId || !belongsToUser(transaction, userId) || transaction.status !== 'posted' || transaction.deletedAt !== undefined || (transaction.type !== 'expense' && transaction.type !== 'income') || occurredAt < monthRange.fetchStartAt || occurredAt >= monthRange.monthEndAt) continue;
+    if (
+      !userId ||
+      !belongsToUser(transaction, userId) ||
+      transaction.status !== 'posted' ||
+      transaction.deletedAt !== undefined ||
+      (transaction.type !== 'expense' && transaction.type !== 'income') ||
+      occurredAt < monthRange.fetchStartAt ||
+      occurredAt >= monthRange.monthEndAt
+    )
+      continue;
     const category = categoryByAlias.get(String(transaction.categoryId ?? ''));
     const currency = category?.limitCurrency ?? profile?.defaultCurrency;
     if (!category || !currency || transaction.currency !== currency) continue;
@@ -95,11 +116,14 @@ export default function CategoriesPage() {
     const id = idOf(category);
     const monthlyTotals = monthly.get(id) ?? { spent: 0n, received: 0n, count: 0 };
     const recentTotals = recent.get(id);
-    const inferredKind = category.kind === 'income' || category.kind === 'expense'
-      ? category.kind
-      : monthlyTotals.received > 0n && monthlyTotals.spent === 0n || profile?.defaultIncomeCategoryId !== undefined && aliasesOf(category).includes(profile.defaultIncomeCategoryId)
-        ? 'income'
-        : 'expense';
+    const inferredKind =
+      category.kind === 'income' || category.kind === 'expense'
+        ? category.kind
+        : (monthlyTotals.received > 0n && monthlyTotals.spent === 0n) ||
+            (profile?.defaultIncomeCategoryId !== undefined &&
+              aliasesOf(category).includes(profile.defaultIncomeCategoryId))
+          ? 'income'
+          : 'expense';
     return {
       id,
       name: category.name ?? 'Category',
@@ -109,7 +133,8 @@ export default function CategoriesPage() {
       monthSpentMinor: monthlyTotals.spent,
       monthReceivedMinor: monthlyTotals.received,
       recentSpendMinor: recentTotals?.spent ?? 0n,
-      monthlyLimitMinor: category.monthlyLimitMinor === undefined ? undefined : asMinor(category.monthlyLimitMinor),
+      monthlyLimitMinor:
+        category.monthlyLimitMinor === undefined ? undefined : asMinor(category.monthlyLimitMinor),
       transactionCount: monthlyTotals.count,
       lastActivityAt: recentTotals?.lastActivityAt,
     };
@@ -117,6 +142,27 @@ export default function CategoriesPage() {
   const loading = categoryState.loading || profileState.loading || transactionState.loading;
   const error = categoryState.error ?? profileState.error ?? transactionState.error;
 
-  if (!userId) return <SignInGate eyebrow="CATEGORIES" title="Make every expense clearer.">Sign in to view and manage your private category list.</SignInGate>;
-  return <CategoriesOverview items={items} defaultCurrency={profile?.defaultCurrency ?? 'INR'} loading={loading} error={error ? `Category data could not be opened: ${error}` : rangeError ? 'Category activity could not be refreshed. Showing saved activity.' : undefined} onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}`)} onAddCategory={() => router.push('/category/new')} onOpenAnalytics={() => router.push('/categories/analytics')}/>;
+  if (!userId)
+    return (
+      <SignInGate eyebrow="CATEGORIES" title="Make every expense clearer.">
+        Sign in to view and manage your private category list.
+      </SignInGate>
+    );
+  return (
+    <CategoriesOverview
+      items={items}
+      defaultCurrency={profile?.defaultCurrency ?? 'INR'}
+      loading={loading}
+      error={
+        error
+          ? `Category data could not be opened: ${error}`
+          : rangeError
+            ? 'Category activity could not be refreshed. Showing saved activity.'
+            : undefined
+      }
+      onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}`)}
+      onAddCategory={() => router.push('/category/new')}
+      onOpenAnalytics={() => router.push('/categories/analytics')}
+    />
+  );
 }

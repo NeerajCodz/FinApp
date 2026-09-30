@@ -82,7 +82,9 @@ export function AccountsIndexView({
       const matchesFilter =
         filter === 'all' ||
         (filter === 'custom'
-          ? account.type === 'other' || account.type === 'loan' || !['bank', 'card', 'wallet', 'cash'].includes(account.type)
+          ? account.type === 'other' ||
+            account.type === 'loan' ||
+            !['bank', 'card', 'wallet', 'cash'].includes(account.type)
           : account.type === filter);
       const matchesSearch =
         !query ||
@@ -153,7 +155,12 @@ export function AccountsIndexView({
                 {totals.length ? (
                   <div className={styles.totalValues}>
                     {totals.map(({ currency, amountMinor }) => (
-                      <Money key={currency} amountMinor={amountMinor} currency={currency} size="display" />
+                      <Money
+                        key={currency}
+                        amountMinor={amountMinor}
+                        currency={currency}
+                        size="display"
+                      />
                     ))}
                   </div>
                 ) : (
@@ -191,19 +198,27 @@ export function AccountsIndexView({
 
           {accounts.length === 0 ? (
             <section className={styles.statePanel}>
-              <span className={styles.emptyIcon} aria-hidden="true"><Wallet size={25} /></span>
+              <span className={styles.emptyIcon} aria-hidden="true">
+                <Wallet size={25} />
+              </span>
               <Typography variant="title">Start with an account</Typography>
               <Typography variant="small">
                 Add cash, a bank account, or a card to keep balances and activity in one place.
               </Typography>
-              <Button onPress={onAddAccount}><Plus size={17} aria-hidden="true" /> Add your first account</Button>
+              <Button onPress={onAddAccount}>
+                <Plus size={17} aria-hidden="true" /> Add your first account
+              </Button>
             </section>
           ) : (
             <section className={styles.accountsPanel} aria-labelledby="accounts-heading">
               <div className={styles.listHeader}>
                 <div className={styles.listTitle}>
-                  <Typography variant="title" id="accounts-heading">Your accounts</Typography>
-                  <Typography variant="small">{filtered.length} shown · {accounts.length} active</Typography>
+                  <Typography variant="title" id="accounts-heading">
+                    Your accounts
+                  </Typography>
+                  <Typography variant="small">
+                    {filtered.length} shown · {accounts.length} active
+                  </Typography>
                 </div>
                 <div className={styles.filters} role="group" aria-label="Filter accounts by type">
                   {filters.map(([value, label]) => (
@@ -229,44 +244,69 @@ export function AccountsIndexView({
                 <div className={styles.accountRows}>
                   {filtered.map((account) => {
                     const color = account.color?.trim() || 'var(--finapp-primary)';
-                    const TypeIcon = account.type === 'cash'
-                      ? Banknote
-                      : account.type === 'bank'
-                        ? Landmark
-                        : account.type === 'card'
-                          ? CreditCard
-                          : account.type === 'loan'
-                            ? CircleDollarSign
-                            : account.type === 'wallet'
-                              ? Wallet
-                              : Building2;
-                    const kind = account.type === 'other' && account.customType
-                      ? account.customType
-                      : account.type.replace(/^./, (letter) => letter.toUpperCase());
+                    const TypeIcon =
+                      account.type === 'cash'
+                        ? Banknote
+                        : account.type === 'bank'
+                          ? Landmark
+                          : account.type === 'card'
+                            ? CreditCard
+                            : account.type === 'loan'
+                              ? CircleDollarSign
+                              : account.type === 'wallet'
+                                ? Wallet
+                                : Building2;
+                    const kind =
+                      account.type === 'other' && account.customType
+                        ? account.customType
+                        : account.type.replace(/^./, (letter) => letter.toUpperCase());
                     return (
                       <a
                         className={styles.accountRow}
                         key={account.id}
                         href={`/account/${encodeURIComponent(account.id)}`}
                         onClick={(event) => {
-                          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                          if (
+                            event.button !== 0 ||
+                            event.metaKey ||
+                            event.ctrlKey ||
+                            event.shiftKey ||
+                            event.altKey
+                          )
+                            return;
                           event.preventDefault();
                           onOpenAccount(account.id);
                         }}
                         aria-label={`Open ${account.name} account`}
                       >
-                        <span className={styles.accountIcon} style={{ '--account-color': color } as React.CSSProperties} aria-hidden="true">
-                          {account.icon ? <EntityIcon value={account.icon} size={22} color={color} /> : <TypeIcon size={22} color={color} />}
+                        <span
+                          className={styles.accountIcon}
+                          style={{ '--account-color': color } as React.CSSProperties}
+                          aria-hidden="true"
+                        >
+                          {account.icon ? (
+                            <EntityIcon value={account.icon} size={22} color={color} />
+                          ) : (
+                            <TypeIcon size={22} color={color} />
+                          )}
                         </span>
                         <span className={styles.accountMeta}>
                           <span className={styles.accountName}>{account.name}</span>
-                          <span className={styles.accountKind}>{kind} · {account.currency}</span>
+                          <span className={styles.accountKind}>
+                            {kind} · {account.currency}
+                          </span>
                         </span>
                         <span className={styles.accountBalance}>
                           <Money amountMinor={account.balanceMinor} currency={account.currency} />
                         </span>
-                        <span className={`${styles.inclusion} ${account.isIncludedInTotal ? styles.included : ''}`}>
-                          {account.isIncludedInTotal ? <Check size={13} aria-hidden="true" /> : <EyeOff size={13} aria-hidden="true" />}
+                        <span
+                          className={`${styles.inclusion} ${account.isIncludedInTotal ? styles.included : ''}`}
+                        >
+                          {account.isIncludedInTotal ? (
+                            <Check size={13} aria-hidden="true" />
+                          ) : (
+                            <EyeOff size={13} aria-hidden="true" />
+                          )}
                           {account.isIncludedInTotal ? 'In total' : 'Excluded'}
                         </span>
                         <ChevronRight size={18} className={styles.chevron} aria-hidden="true" />
@@ -278,12 +318,22 @@ export function AccountsIndexView({
             </section>
           )}
           <aside className={styles.totalNote}>
-            <span className={styles.noteIcon} aria-hidden="true"><CircleDollarSign size={22} /></span>
+            <span className={styles.noteIcon} aria-hidden="true">
+              <CircleDollarSign size={22} />
+            </span>
             <div>
               <Typography variant="small">Included balances</Typography>
-              {totals.length ? totals.map(({ currency, amountMinor }) => (
-                <span key={currency} className={styles.noteTotal}><Money amountMinor={amountMinor} currency={currency} size="body" /></span>
-              )) : <Typography variant="caption">No accounts are currently included in your overall balance.</Typography>}
+              {totals.length ? (
+                totals.map(({ currency, amountMinor }) => (
+                  <span key={currency} className={styles.noteTotal}>
+                    <Money amountMinor={amountMinor} currency={currency} size="body" />
+                  </span>
+                ))
+              ) : (
+                <Typography variant="caption">
+                  No accounts are currently included in your overall balance.
+                </Typography>
+              )}
             </div>
             <p>Only accounts marked “In total” count toward your overall balance.</p>
           </aside>
@@ -338,9 +388,10 @@ export function AccountDetailView({
   const [nameDraft, setNameDraft] = useState(account.name);
   const [renameError, setRenameError] = useState<string | null>(null);
   const isArchived = account.archivedAt !== undefined;
-  const accountKind = account.type === 'other' && account.customType
-    ? account.customType
-    : account.type.replace(/^./, (letter) => letter.toUpperCase());
+  const accountKind =
+    account.type === 'other' && account.customType
+      ? account.customType
+      : account.type.replace(/^./, (letter) => letter.toUpperCase());
   const chartDays = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -360,8 +411,16 @@ export function AccountDetailView({
     }
     return [...byDay.values()];
   }, [flowActivity]);
-  const incoming = flowActivity.reduce((total, transaction) => total + (transaction.cashFlowMinor > 0n ? transaction.cashFlowMinor : 0n), 0n);
-  const outgoing = flowActivity.reduce((total, transaction) => total + (transaction.cashFlowMinor < 0n ? -transaction.cashFlowMinor : 0n), 0n);
+  const incoming = flowActivity.reduce(
+    (total, transaction) =>
+      total + (transaction.cashFlowMinor > 0n ? transaction.cashFlowMinor : 0n),
+    0n,
+  );
+  const outgoing = flowActivity.reduce(
+    (total, transaction) =>
+      total + (transaction.cashFlowMinor < 0n ? -transaction.cashFlowMinor : 0n),
+    0n,
+  );
   const net = incoming - outgoing;
   const maxBar = chartDays.reduce((maximum, day) => {
     const magnitude = day.amount < 0n ? -day.amount : day.amount;
@@ -382,27 +441,68 @@ export function AccountDetailView({
   return (
     <div className={styles.page}>
       <nav className={styles.breadcrumb} aria-label="Breadcrumb">
-        <a href="/accounts"><ArrowLeft size={16} aria-hidden="true" /> Accounts</a>
+        <a href="/accounts">
+          <ArrowLeft size={16} aria-hidden="true" /> Accounts
+        </a>
         <ChevronRight size={14} aria-hidden="true" />
         <span aria-current="page">{account.name}</span>
       </nav>
       <header className={styles.detailHeader}>
-        <span className={styles.detailIcon} style={{ '--account-color': account.color?.trim() || 'var(--finapp-primary)' } as React.CSSProperties} aria-hidden="true">
-          {account.icon ? <EntityIcon value={account.icon} size={27} color={account.color?.trim() || 'var(--finapp-primary)'} /> : <Landmark size={27} color={account.color?.trim() || 'var(--finapp-primary)'} />}
+        <span
+          className={styles.detailIcon}
+          style={
+            {
+              '--account-color': account.color?.trim() || 'var(--finapp-primary)',
+            } as React.CSSProperties
+          }
+          aria-hidden="true"
+        >
+          {account.icon ? (
+            <EntityIcon
+              value={account.icon}
+              size={27}
+              color={account.color?.trim() || 'var(--finapp-primary)'}
+            />
+          ) : (
+            <Landmark size={27} color={account.color?.trim() || 'var(--finapp-primary)'} />
+          )}
         </span>
         <div className={styles.detailTitle}>
           <Typography variant="hero">{account.name}</Typography>
           <div className={styles.detailMeta}>
-            <span>{accountKind}</span><span aria-hidden="true">·</span><span>{account.currency}</span>
-            <span className={`${styles.inclusion} ${account.isIncludedInTotal ? styles.included : ''}`}>
+            <span>{accountKind}</span>
+            <span aria-hidden="true">·</span>
+            <span>{account.currency}</span>
+            <span
+              className={`${styles.inclusion} ${account.isIncludedInTotal ? styles.included : ''}`}
+            >
               {account.isIncludedInTotal ? 'In total' : 'Excluded from total'}
             </span>
           </div>
         </div>
         <div className={styles.detailActions}>
-          {!isArchived && <Button variant="outline" onPress={() => { setNameDraft(account.name); setRenameError(null); setRenameOpen(true); }}>Rename</Button>}
-          {!isArchived && <Button onPress={onAddTransaction}><Plus size={17} aria-hidden="true" /> Add transaction</Button>}
-          {!isArchived && <Button variant="destructive" onPress={() => setArchiveOpen(true)}>Archive</Button>}
+          {!isArchived && (
+            <Button
+              variant="outline"
+              onPress={() => {
+                setNameDraft(account.name);
+                setRenameError(null);
+                setRenameOpen(true);
+              }}
+            >
+              Rename
+            </Button>
+          )}
+          {!isArchived && (
+            <Button onPress={onAddTransaction}>
+              <Plus size={17} aria-hidden="true" /> Add transaction
+            </Button>
+          )}
+          {!isArchived && (
+            <Button variant="destructive" onPress={() => setArchiveOpen(true)}>
+              Archive
+            </Button>
+          )}
         </div>
       </header>
 
@@ -411,76 +511,339 @@ export function AccountDetailView({
           <Typography variant="small">Current balance</Typography>
           <Money amountMinor={account.balanceMinor} currency={account.currency} size="hero" />
           <div className={styles.flowCards} aria-label="Account cash flow for the last 30 days">
-            <div><span className={`${styles.flowIcon} ${styles.flowIn}`}><ArrowUpRight size={17} aria-hidden="true" /></span><Typography variant="caption">Money in</Typography><Money amountMinor={incoming} currency={account.currency} size="body" /></div>
-            <div><span className={`${styles.flowIcon} ${styles.flowOut}`}><ArrowUpRight size={17} aria-hidden="true" /></span><Typography variant="caption">Money out</Typography><Money amountMinor={outgoing} currency={account.currency} size="body" /></div>
-            <div><span className={styles.flowIcon}><CircleDollarSign size={17} aria-hidden="true" /></span><Typography variant="caption">Net change</Typography><span className={net >= 0n ? styles.positive : styles.negative}>{net >= 0n ? '+' : '−'}<Money amountMinor={net >= 0n ? net : -net} currency={account.currency} size="body" /></span></div>
+            <div>
+              <span className={`${styles.flowIcon} ${styles.flowIn}`}>
+                <ArrowUpRight size={17} aria-hidden="true" />
+              </span>
+              <Typography variant="caption">Money in</Typography>
+              <Money amountMinor={incoming} currency={account.currency} size="body" />
+            </div>
+            <div>
+              <span className={`${styles.flowIcon} ${styles.flowOut}`}>
+                <ArrowUpRight size={17} aria-hidden="true" />
+              </span>
+              <Typography variant="caption">Money out</Typography>
+              <Money amountMinor={outgoing} currency={account.currency} size="body" />
+            </div>
+            <div>
+              <span className={styles.flowIcon}>
+                <CircleDollarSign size={17} aria-hidden="true" />
+              </span>
+              <Typography variant="caption">Net change</Typography>
+              <span className={net >= 0n ? styles.positive : styles.negative}>
+                {net >= 0n ? '+' : '−'}
+                <Money
+                  amountMinor={net >= 0n ? net : -net}
+                  currency={account.currency}
+                  size="body"
+                />
+              </span>
+            </div>
           </div>
         </div>
         <section className={styles.chartPanel} aria-labelledby="cashflow-heading">
           <div className={styles.chartHeader}>
-            <div><Typography variant="title" id="cashflow-heading">Account cash flow</Typography><Typography variant="caption">Last 30 days · {flowActivity.length} posted transactions</Typography></div>
-            <span className={styles.periodLabel}><CalendarDays size={15} aria-hidden="true" /> Last 30 days</span>
+            <div>
+              <Typography variant="title" id="cashflow-heading">
+                Account cash flow
+              </Typography>
+              <Typography variant="caption">
+                Last 30 days · {flowActivity.length} posted transactions
+              </Typography>
+            </div>
+            <span className={styles.periodLabel}>
+              <CalendarDays size={15} aria-hidden="true" /> Last 30 days
+            </span>
           </div>
-          <div className={styles.chart} role="img" aria-label={`Daily net cash flow across the last 30 days. Net change ${net >= 0n ? 'positive' : 'negative'}.`}>
-            <div className={styles.chartGrid} aria-hidden="true"><span>High</span><span>0</span><span>Low</span></div>
+          <div
+            className={styles.chart}
+            role="img"
+            aria-label={`Daily net cash flow across the last 30 days. Net change ${net >= 0n ? 'positive' : 'negative'}.`}
+          >
+            <div className={styles.chartGrid} aria-hidden="true">
+              <span>High</span>
+              <span>0</span>
+              <span>Low</span>
+            </div>
             <div className={styles.chartPlot}>
               <div className={styles.zeroLine} />
               {chartDays.map(({ date, amount }, index) => {
                 const magnitude = amount < 0n ? -amount : amount;
                 const height = maxBar === 0n ? 0 : Math.max(4, Number((magnitude * 44n) / maxBar));
-                return <span key={date.toISOString()} className={`${styles.chartBar} ${amount >= 0n ? styles.chartPositive : styles.chartNegative}`} style={{ left: `${(index / chartDays.length) * 100 + 0.2}%`, top: amount >= 0n ? `${48 - height}%` : '48%', height: `${height}%` }} title={`${date.toLocaleDateString()}: ${amount >= 0n ? '+' : '−'}${amount >= 0n ? amount : -amount} minor units`} />;
+                return (
+                  <span
+                    key={date.toISOString()}
+                    className={`${styles.chartBar} ${amount >= 0n ? styles.chartPositive : styles.chartNegative}`}
+                    style={{
+                      left: `${(index / chartDays.length) * 100 + 0.2}%`,
+                      top: amount >= 0n ? `${48 - height}%` : '48%',
+                      height: `${height}%`,
+                    }}
+                    title={`${date.toLocaleDateString()}: ${amount >= 0n ? '+' : '−'}${amount >= 0n ? amount : -amount} minor units`}
+                  />
+                );
               })}
             </div>
-            <div className={styles.chartDates} aria-hidden="true"><span>{chartDays[0]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span><span>{chartDays[7]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span><span>{chartDays[14]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span><span>{chartDays[21]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span><span>Today</span></div>
+            <div className={styles.chartDates} aria-hidden="true">
+              <span>
+                {chartDays[0]?.date.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+              <span>
+                {chartDays[7]?.date.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+              <span>
+                {chartDays[14]?.date.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+              <span>
+                {chartDays[21]?.date.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+              <span>Today</span>
+            </div>
           </div>
-          <div className={styles.chartLegend}><span><i className={styles.legendIncome} /> Money in</span><span><i className={styles.legendExpense} /> Money out</span><span className={styles.netLegend}>Bars show daily net</span></div>
+          <div className={styles.chartLegend}>
+            <span>
+              <i className={styles.legendIncome} /> Money in
+            </span>
+            <span>
+              <i className={styles.legendExpense} /> Money out
+            </span>
+            <span className={styles.netLegend}>Bars show daily net</span>
+          </div>
         </section>
       </section>
 
       <section className={styles.propertiesPanel} aria-labelledby="account-properties-heading">
-        <div className={styles.propertiesHeading}><Typography variant="title" id="account-properties-heading">Account details</Typography><Typography variant="caption">Settings and identity</Typography></div>
-        <div className={styles.propertyGrid}>
-          <div className={styles.property}><span className={styles.propertyGlyph}><Building2 size={18} /></span><span><Typography variant="caption">Type</Typography><strong>{accountKind}</strong></span></div>
-          <div className={styles.property}><span className={styles.propertyGlyph}><CircleDollarSign size={18} /></span><span><Typography variant="caption">Currency</Typography><strong>{account.currency}</strong></span></div>
-          <div className={styles.property}><span className={styles.propertyGlyph}><Check size={18} /></span><span><Typography variant="caption">Included in total</Typography><strong>{account.isIncludedInTotal ? 'Counts in total balance' : 'Not counted in balance'}</strong></span></div>
-          <div className={styles.property}><span className={styles.propertyGlyph}><CalendarDays size={18} /></span><span><Typography variant="caption">Added on</Typography><strong>{typeof account.createdAt === 'number' ? new Date(account.createdAt).toLocaleDateString() : 'Date unavailable'}</strong></span></div>
+        <div className={styles.propertiesHeading}>
+          <Typography variant="title" id="account-properties-heading">
+            Account details
+          </Typography>
+          <Typography variant="caption">Settings and identity</Typography>
         </div>
-        {!isArchived && <div className={styles.customize}>
-          <div className={styles.customizeHeader}><span className={styles.customizeIcon} style={{ '--account-color': account.color?.trim() || 'var(--finapp-primary)' } as React.CSSProperties}>{account.icon ? <EntityIcon value={account.icon} size={22} color={account.color?.trim() || 'var(--finapp-primary)'} /> : <Landmark size={22} color={account.color?.trim() || 'var(--finapp-primary)'} />}</span><div><Typography variant="bodyLarge">Personalize account</Typography><Typography variant="caption">Choose a color and icon</Typography></div></div>
-          <div className={styles.colorPicker} role="group" aria-label="Account color">
-            <button type="button" className={`${styles.colorSwatch} ${account.color ? '' : styles.colorSelected}`} aria-label="Use default account color" aria-pressed={!account.color} onClick={() => onSetColor(null)} disabled={isBusy}><span className={styles.defaultSwatch} /></button>
-            {accountColors.map((color) => <button type="button" key={color.value} className={`${styles.colorSwatch} ${account.color?.toLowerCase() === color.value.toLowerCase() ? styles.colorSelected : ''}`} style={{ '--swatch-color': color.value } as React.CSSProperties} aria-label={`${color.name} account color`} aria-pressed={account.color?.toLowerCase() === color.value.toLowerCase()} onClick={() => onSetColor(color.value)} disabled={isBusy}><span /></button>)}
+        <div className={styles.propertyGrid}>
+          <div className={styles.property}>
+            <span className={styles.propertyGlyph}>
+              <Building2 size={18} />
+            </span>
+            <span>
+              <Typography variant="caption">Type</Typography>
+              <strong>{accountKind}</strong>
+            </span>
           </div>
-          <div className={isBusy ? styles.disabledPicker : undefined} aria-busy={isBusy}>
-            <EntityIconPicker mode="lucide" value={account.icon} onChange={(icon) => onSetIcon(icon ?? null)} compact label="Change account icon" />
+          <div className={styles.property}>
+            <span className={styles.propertyGlyph}>
+              <CircleDollarSign size={18} />
+            </span>
+            <span>
+              <Typography variant="caption">Currency</Typography>
+              <strong>{account.currency}</strong>
+            </span>
           </div>
-        </div>}
+          <div className={styles.property}>
+            <span className={styles.propertyGlyph}>
+              <Check size={18} />
+            </span>
+            <span>
+              <Typography variant="caption">Included in total</Typography>
+              <strong>
+                {account.isIncludedInTotal ? 'Counts in total balance' : 'Not counted in balance'}
+              </strong>
+            </span>
+          </div>
+          <div className={styles.property}>
+            <span className={styles.propertyGlyph}>
+              <CalendarDays size={18} />
+            </span>
+            <span>
+              <Typography variant="caption">Added on</Typography>
+              <strong>
+                {typeof account.createdAt === 'number'
+                  ? new Date(account.createdAt).toLocaleDateString()
+                  : 'Date unavailable'}
+              </strong>
+            </span>
+          </div>
+        </div>
+        {!isArchived && (
+          <div className={styles.customize}>
+            <div className={styles.customizeHeader}>
+              <span
+                className={styles.customizeIcon}
+                style={
+                  {
+                    '--account-color': account.color?.trim() || 'var(--finapp-primary)',
+                  } as React.CSSProperties
+                }
+              >
+                {account.icon ? (
+                  <EntityIcon
+                    value={account.icon}
+                    size={22}
+                    color={account.color?.trim() || 'var(--finapp-primary)'}
+                  />
+                ) : (
+                  <Landmark size={22} color={account.color?.trim() || 'var(--finapp-primary)'} />
+                )}
+              </span>
+              <div>
+                <Typography variant="bodyLarge">Personalize account</Typography>
+                <Typography variant="caption">Choose a color and icon</Typography>
+              </div>
+            </div>
+            <div className={styles.colorPicker} role="group" aria-label="Account color">
+              <button
+                type="button"
+                className={`${styles.colorSwatch} ${account.color ? '' : styles.colorSelected}`}
+                aria-label="Use default account color"
+                aria-pressed={!account.color}
+                onClick={() => onSetColor(null)}
+                disabled={isBusy}
+              >
+                <span className={styles.defaultSwatch} />
+              </button>
+              {accountColors.map((color) => (
+                <button
+                  type="button"
+                  key={color.value}
+                  className={`${styles.colorSwatch} ${account.color?.toLowerCase() === color.value.toLowerCase() ? styles.colorSelected : ''}`}
+                  style={{ '--swatch-color': color.value } as React.CSSProperties}
+                  aria-label={`${color.name} account color`}
+                  aria-pressed={account.color?.toLowerCase() === color.value.toLowerCase()}
+                  onClick={() => onSetColor(color.value)}
+                  disabled={isBusy}
+                >
+                  <span />
+                </button>
+              ))}
+            </div>
+            <div className={isBusy ? styles.disabledPicker : undefined} aria-busy={isBusy}>
+              <EntityIconPicker
+                mode="lucide"
+                value={account.icon}
+                onChange={(icon) => onSetIcon(icon ?? null)}
+                compact
+                label="Change account icon"
+              />
+            </div>
+          </div>
+        )}
       </section>
 
-      {error ? <p className={styles.errorMessage} role="alert">{error}</p> : null}
-      {rangeNotice ? <p className={styles.rangeNotice} role="status">{rangeNotice}</p> : null}
-      {isArchived ? <p className={styles.rangeNotice}>Archived accounts remain available for reference and cannot receive new transactions.</p> : null}
+      {error ? (
+        <p className={styles.errorMessage} role="alert">
+          {error}
+        </p>
+      ) : null}
+      {rangeNotice ? (
+        <p className={styles.rangeNotice} role="status">
+          {rangeNotice}
+        </p>
+      ) : null}
+      {isArchived ? (
+        <p className={styles.rangeNotice}>
+          Archived accounts remain available for reference and cannot receive new transactions.
+        </p>
+      ) : null}
 
       <section className={styles.activityPanel} aria-labelledby="recent-activity-heading">
-        <div className={styles.activityHeader}><div><Typography variant="title" id="recent-activity-heading">Recent activity</Typography><Typography variant="caption">Last 30 days · {flowActivity.length} posted transactions</Typography></div><Button variant="outline" onPress={onAddTransaction} disabled={isArchived}><Plus size={16} aria-hidden="true" /> Add transaction</Button></div>
-        {activity.length === 0 ? <div className={styles.activityEmpty}><Typography variant="bodyLarge">No posted activity yet</Typography><Typography variant="small">Record a transaction to see it here.</Typography>{!isArchived && <Button onPress={onAddTransaction}><Plus size={16} aria-hidden="true" /> Add transaction</Button>}</div> : <div className={styles.activityRows}>{activity.map((transaction) => <div className={styles.activityRow} key={transaction.id}><TransactionRow title={transaction.title} category={transaction.category} categoryIcon={transaction.categoryIcon} date={transaction.date} status={transaction.status} amountMinor={transaction.amountMinor} currency={transaction.currency} type={transaction.type} semanticType={transaction.semanticType} onPress={() => onOpenTransaction(transaction.id)} /></div>)}</div>}
+        <div className={styles.activityHeader}>
+          <div>
+            <Typography variant="title" id="recent-activity-heading">
+              Recent activity
+            </Typography>
+            <Typography variant="caption">
+              Last 30 days · {flowActivity.length} posted transactions
+            </Typography>
+          </div>
+          <Button variant="outline" onPress={onAddTransaction} disabled={isArchived}>
+            <Plus size={16} aria-hidden="true" /> Add transaction
+          </Button>
+        </div>
+        {activity.length === 0 ? (
+          <div className={styles.activityEmpty}>
+            <Typography variant="bodyLarge">No posted activity yet</Typography>
+            <Typography variant="small">Record a transaction to see it here.</Typography>
+            {!isArchived && (
+              <Button onPress={onAddTransaction}>
+                <Plus size={16} aria-hidden="true" /> Add transaction
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className={styles.activityRows}>
+            {activity.map((transaction) => (
+              <div className={styles.activityRow} key={transaction.id}>
+                <TransactionRow
+                  title={transaction.title}
+                  category={transaction.category}
+                  categoryIcon={transaction.categoryIcon}
+                  date={transaction.date}
+                  status={transaction.status}
+                  amountMinor={transaction.amountMinor}
+                  currency={transaction.currency}
+                  type={transaction.type}
+                  semanticType={transaction.semanticType}
+                  onPress={() => onOpenTransaction(transaction.id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <Sheet visible={renameOpen} title="Rename account" onClose={() => setRenameOpen(false)}>
         <form className={styles.sheetForm} onSubmit={(event) => void submitRename(event)}>
           <Label htmlFor="account-name">Account name</Label>
-          <Input id="account-name" accessibilityLabel="Account name" value={nameDraft} onChangeText={setNameDraft} maxLength={80} autoFocus required />
-          {renameError || error ? <p className={styles.errorMessage} role="alert">{renameError ?? error}</p> : null}
-          <Button type="submit" disabled={isBusy || !nameDraft.trim()}>{isBusy ? 'Saving…' : 'Save name'}</Button>
-          <Button type="button" variant="outline" onPress={() => setRenameOpen(false)}>Cancel</Button>
+          <Input
+            id="account-name"
+            accessibilityLabel="Account name"
+            value={nameDraft}
+            onChangeText={setNameDraft}
+            maxLength={80}
+            autoFocus
+            required
+          />
+          {renameError || error ? (
+            <p className={styles.errorMessage} role="alert">
+              {renameError ?? error}
+            </p>
+          ) : null}
+          <Button type="submit" disabled={isBusy || !nameDraft.trim()}>
+            {isBusy ? 'Saving…' : 'Save name'}
+          </Button>
+          <Button type="button" variant="outline" onPress={() => setRenameOpen(false)}>
+            Cancel
+          </Button>
         </form>
       </Sheet>
       <Sheet visible={archiveOpen} title="Archive account?" onClose={() => setArchiveOpen(false)}>
         <div className={styles.sheetForm}>
-          <Typography variant="small">Past transactions and balances remain in your history. This account will no longer be available for new activity.</Typography>
-          {error ? <p className={styles.errorMessage} role="alert">{error}</p> : null}
-          <Button variant="destructive" disabled={isBusy} onPress={() => void onArchive()}>{isBusy ? 'Archiving…' : `Archive ${account.name}`}</Button>
-          <Button variant="outline" onPress={() => setArchiveOpen(false)}>Cancel</Button>
+          <Typography variant="small">
+            Past transactions and balances remain in your history. This account will no longer be
+            available for new activity.
+          </Typography>
+          {error ? (
+            <p className={styles.errorMessage} role="alert">
+              {error}
+            </p>
+          ) : null}
+          <Button variant="destructive" disabled={isBusy} onPress={() => void onArchive()}>
+            {isBusy ? 'Archiving…' : `Archive ${account.name}`}
+          </Button>
+          <Button variant="outline" onPress={() => setArchiveOpen(false)}>
+            Cancel
+          </Button>
         </div>
       </Sheet>
     </div>

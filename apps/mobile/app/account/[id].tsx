@@ -79,38 +79,63 @@ export default function AccountDetailScreen() {
       (record.id === id || record._id === id || record.cloudId === id),
   );
   const accountIds = useMemo(
-    () => new Set([id, account?.id, account?._id, account?.cloudId].filter((value): value is string => typeof value === 'string' && value.length > 0)),
+    () =>
+      new Set(
+        [id, account?.id, account?._id, account?.cloudId].filter(
+          (value): value is string => typeof value === 'string' && value.length > 0,
+        ),
+      ),
     [id, account],
   );
   const accountTransactions = useMemo(
-    () => (transactionRange.data ?? [])
-      .filter((transaction) =>
-        transaction.status === 'posted' &&
-        transaction.deletedAt === undefined &&
-        (accountIds.has(transaction.accountId) ||
-          (transaction.type === 'transfer' && !!transaction.transferAccountId && accountIds.has(transaction.transferAccountId))),
-      )
-      .sort((left, right) => right.occurredAt - left.occurredAt),
+    () =>
+      (transactionRange.data ?? [])
+        .filter(
+          (transaction) =>
+            transaction.status === 'posted' &&
+            transaction.deletedAt === undefined &&
+            (accountIds.has(transaction.accountId) ||
+              (transaction.type === 'transfer' &&
+                !!transaction.transferAccountId &&
+                accountIds.has(transaction.transferAccountId))),
+        )
+        .sort((left, right) => right.occurredAt - left.occurredAt),
     [transactionRange.data, accountIds],
   );
   const flowActivity = accountTransactions.map((transaction) => {
     const isOutgoing = accountIds.has(transaction.accountId);
     return {
       occurredAt: transaction.occurredAt,
-      cashFlowMinor: transaction.type === 'transfer'
-        ? isOutgoing ? -transaction.amountMinor : transaction.amountMinor
-        : transaction.type === 'expense' ? -transaction.amountMinor : transaction.amountMinor,
+      cashFlowMinor:
+        transaction.type === 'transfer'
+          ? isOutgoing
+            ? -transaction.amountMinor
+            : transaction.amountMinor
+          : transaction.type === 'expense'
+            ? -transaction.amountMinor
+            : transaction.amountMinor,
     };
   });
-  const balanceMinor = (account?.balanceMinor ?? account?.openingBalanceMinor ?? 0n) +
+  const balanceMinor =
+    (account?.balanceMinor ?? account?.openingBalanceMinor ?? 0n) +
     (localTransactions.data ?? []).reduce((delta, transaction) => {
-      if (typeof transaction.clientUpdatedAt !== 'number' || transaction.status !== 'posted' || transaction.deletedAt !== undefined) return delta;
+      if (
+        typeof transaction.clientUpdatedAt !== 'number' ||
+        transaction.status !== 'posted' ||
+        transaction.deletedAt !== undefined
+      )
+        return delta;
       const sourceDelta = accountIds.has(transaction.accountId)
-        ? transaction.type === 'expense' || transaction.type === 'transfer' ? -transaction.amountMinor : transaction.amountMinor
+        ? transaction.type === 'expense' || transaction.type === 'transfer'
+          ? -transaction.amountMinor
+          : transaction.amountMinor
         : 0n;
-      const destinationDelta = transaction.type === 'transfer' && transaction.transferAccountId && accountIds.has(transaction.transferAccountId)
-        ? transaction.amountMinor
-        : 0n;
+      const destinationDelta =
+        transaction.type === 'transfer' &&
+        transaction.transferAccountId &&
+        accountIds.has(transaction.transferAccountId)
+          ? transaction.amountMinor
+          : 0n;
       return delta + sourceDelta + destinationDelta;
     }, 0n);
   const activity: AccountActivityEntry[] = accountTransactions.slice(0, 50).map((transaction) => {
@@ -118,10 +143,16 @@ export default function AccountDetailScreen() {
     const isOutgoing = accountIds.has(transaction.accountId);
     const category = categories.get(transaction.categoryId ?? '');
     const cashFlowMinor = isTransfer
-      ? isOutgoing ? -transaction.amountMinor : transaction.amountMinor
-      : transaction.type === 'expense' ? -transaction.amountMinor : transaction.amountMinor;
+      ? isOutgoing
+        ? -transaction.amountMinor
+        : transaction.amountMinor
+      : transaction.type === 'expense'
+        ? -transaction.amountMinor
+        : transaction.amountMinor;
     const type: TransactionType = isTransfer
-      ? isOutgoing ? 'expense' : 'income'
+      ? isOutgoing
+        ? 'expense'
+        : 'income'
       : transaction.type;
     const transactionId = String(transaction._id ?? transaction.id ?? transaction.cloudId ?? '');
     return {
@@ -167,7 +198,11 @@ export default function AccountDetailScreen() {
       );
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : `Could not save this account ${operation === 'account.setColor' ? 'color' : 'change'}.`);
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : `Could not save this account ${operation === 'account.setColor' ? 'color' : 'change'}.`,
+      );
       return false;
     } finally {
       setPending(false);
@@ -188,7 +223,11 @@ export default function AccountDetailScreen() {
   }
   async function archiveAccount(): Promise<boolean> {
     if (!account) return false;
-    const didArchive = await writeAccount('account.archive', { ...account, archivedAt: Date.now() }, {});
+    const didArchive = await writeAccount(
+      'account.archive',
+      { ...account, archivedAt: Date.now() },
+      {},
+    );
     if (didArchive) router.replace('/accounts' as never);
     return didArchive;
   }
@@ -202,10 +241,27 @@ export default function AccountDetailScreen() {
     return <Empty title="Account unavailable." description="This account could not be found." />;
   }
   if (isLoading) {
-    return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: tokens.background }}><Typography variant="small">Loading account…</Typography></View>;
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24,
+          backgroundColor: tokens.background,
+        }}
+      >
+        <Typography variant="small">Loading account…</Typography>
+      </View>
+    );
   }
   if (!account) {
-    return <Empty title="Account unavailable." description="This account could not be found or is no longer available." />;
+    return (
+      <Empty
+        title="Account unavailable."
+        description="This account could not be found or is no longer available."
+      />
+    );
   }
 
   return (
@@ -234,8 +290,12 @@ export default function AccountDetailScreen() {
       onSetIcon={(icon) => void setAccountIcon(icon)}
       onSetColor={(color) => void setAccountColor(color)}
       onBack={() => router.back()}
-      onAddTransaction={() => router.push({ pathname: '/transaction/new', params: { accountId: id } } as never)}
-      onOpenTransaction={(transactionId) => router.push(`/transaction/${encodeURIComponent(transactionId)}` as never)}
+      onAddTransaction={() =>
+        router.push({ pathname: '/transaction/new', params: { accountId: id } } as never)
+      }
+      onOpenTransaction={(transactionId) =>
+        router.push(`/transaction/${encodeURIComponent(transactionId)}` as never)
+      }
     />
   );
 }
@@ -243,7 +303,15 @@ export default function AccountDetailScreen() {
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   const { tokens } = useTheme();
   return (
-    <View style={{ flex: 1, justifyContent: 'center', gap: 12, padding: 24, backgroundColor: tokens.background }}>
+    <View
+      style={{
+        flex: 1,
+        justifyContent: 'center',
+        gap: 12,
+        padding: 24,
+        backgroundColor: tokens.background,
+      }}
+    >
       <Typography variant="heading">Could not load this account.</Typography>
       <Typography variant="small">{error.message}</Typography>
       <Button onPress={retry}>Try again</Button>

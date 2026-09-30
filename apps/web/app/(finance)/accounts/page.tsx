@@ -33,10 +33,16 @@ type Transaction = LocalRecord & {
 export default function AccountsPage() {
   const router = useRouter();
   const { userId } = useBrowserSync();
-  const { records: accountRecords, loading: accountLoading, error: accountError } =
-    useLocalRecords<Account>('account');
-  const { records: transactionRecords, loading: transactionLoading, error: transactionError } =
-    useLocalRecords<Transaction>('transaction');
+  const {
+    records: accountRecords,
+    loading: accountLoading,
+    error: accountError,
+  } = useLocalRecords<Account>('account');
+  const {
+    records: transactionRecords,
+    loading: transactionLoading,
+    error: transactionError,
+  } = useLocalRecords<Transaction>('transaction');
   const error = accountError ?? transactionError;
 
   if (!userId) {
@@ -58,16 +64,18 @@ export default function AccountsPage() {
           transaction.status !== 'posted' ||
           transaction.deletedAt !== undefined ||
           typeof transaction.clientUpdatedAt !== 'number'
-        ) return delta;
+        )
+          return delta;
         const amount = asMinor(transaction.amountMinor);
         const source = ids.has(String(transaction.accountId ?? ''))
           ? transaction.type === 'expense' || transaction.type === 'transfer'
             ? -amount
             : amount
           : 0n;
-        const destination = transaction.type === 'transfer' && ids.has(String(transaction.transferAccountId ?? ''))
-          ? amount
-          : 0n;
+        const destination =
+          transaction.type === 'transfer' && ids.has(String(transaction.transferAccountId ?? ''))
+            ? amount
+            : 0n;
         return delta + source + destination;
       }, 0n);
       return {
@@ -87,11 +95,14 @@ export default function AccountsPage() {
   const totalsByCurrency = new Map<string, bigint>();
   for (const account of accounts) {
     if (!account.isIncludedInTotal) continue;
-    totalsByCurrency.set(account.currency, (totalsByCurrency.get(account.currency) ?? 0n) + account.balanceMinor);
+    totalsByCurrency.set(
+      account.currency,
+      (totalsByCurrency.get(account.currency) ?? 0n) + account.balanceMinor,
+    );
   }
-  const totals = [...totalsByCurrency].sort(([left], [right]) => left.localeCompare(right)).map(
-    ([currency, amountMinor]) => ({ currency, amountMinor }),
-  );
+  const totals = [...totalsByCurrency]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([currency, amountMinor]) => ({ currency, amountMinor }));
 
   return (
     <AccountsIndexView

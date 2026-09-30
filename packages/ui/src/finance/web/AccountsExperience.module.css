@@ -122,7 +122,11 @@
   border-radius: 17px;
   padding: 18px;
   background:
-    radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--finapp-primary) 7%, transparent), transparent 58%),
+    radial-gradient(
+      ellipse at 0 0,
+      color-mix(in srgb, var(--finapp-primary) 7%, transparent),
+      transparent 58%
+    ),
     var(--finapp-card);
 }
 
@@ -216,7 +220,10 @@
   font: inherit;
   font-size: 0.82rem;
   cursor: pointer;
-  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
 }
 
 .filterButton:hover {
@@ -251,7 +258,10 @@
   padding: 10px 13px;
   color: inherit;
   text-decoration: none;
-  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
 }
 
 .accountRow:hover {
@@ -475,7 +485,13 @@
   display: grid;
   align-content: start;
   gap: 15px;
-  background: radial-gradient(ellipse at 100% 0, color-mix(in srgb, var(--finapp-primary) 9%, transparent), transparent 56%), var(--finapp-card);
+  background:
+    radial-gradient(
+      ellipse at 100% 0,
+      color-mix(in srgb, var(--finapp-primary) 9%, transparent),
+      transparent 56%
+    ),
+    var(--finapp-card);
 }
 
 .balancePanel > :first-child {
@@ -600,7 +616,11 @@
   position: relative;
   min-width: 0;
   overflow: hidden;
-  background: repeating-linear-gradient(to bottom, transparent 0 calc(25% - 1px), var(--finapp-border-subtle) calc(25% - 1px) 25%);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(25% - 1px),
+    var(--finapp-border-subtle) calc(25% - 1px) 25%
+  );
 }
 
 .zeroLine {
@@ -791,7 +811,12 @@
 
 .defaultSwatch {
   border: 1px dashed var(--finapp-foreground-muted);
-  background: linear-gradient(135deg, var(--finapp-primary) 0 46%, var(--finapp-surface-raised) 46% 54%, var(--finapp-foreground-muted) 54%) !important;
+  background: linear-gradient(
+    135deg,
+    var(--finapp-primary) 0 46%,
+    var(--finapp-surface-raised) 46% 54%,
+    var(--finapp-foreground-muted) 54%
+  ) !important;
 }
 
 .colorSwatch:disabled {
@@ -844,8 +869,12 @@
 }
 
 @keyframes pulse {
-  from { opacity: 0.5; }
-  to { opacity: 1; }
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .visuallyHidden {

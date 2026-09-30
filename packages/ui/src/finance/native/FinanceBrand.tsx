@@ -51,4 +51,3 @@ export function FinanceBrand({ syncTone }: { syncTone?: FinanceSyncTone }) {
     </View>
   );
 }
-

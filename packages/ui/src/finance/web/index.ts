@@ -9,7 +9,11 @@ export {
   type AccountCurrencyTotal,
   type AccountActivityEntry,
 } from './AccountsExperience';
-export { CategoriesOverview, type CategoriesOverviewProps, type CategoryOverviewItem } from './CategoriesOverview';
+export {
+  CategoriesOverview,
+  type CategoriesOverviewProps,
+  type CategoryOverviewItem,
+} from './CategoriesOverview';
 export {
   CategoryAnalyticsScreen,
   type CategoryAnalyticsScreenProps,

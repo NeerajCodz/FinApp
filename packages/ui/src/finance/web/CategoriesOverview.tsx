@@ -41,9 +41,11 @@ const filters: { value: Filter; label: string }[] = [
 
 function dateLabel(timestamp?: number) {
   if (timestamp === undefined) return 'No activity in last 30 days';
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(
-    timestamp,
-  );
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(timestamp);
 }
 
 function percent(spent: bigint, limit?: bigint) {
@@ -86,7 +88,9 @@ export function CategoriesOverview({
       <header className={styles.header}>
         <div>
           <Typography variant="title">Categories</Typography>
-          <p className={styles.lede}>Organize your spending and income, one clear view at a time.</p>
+          <p className={styles.lede}>
+            Organize your spending and income, one clear view at a time.
+          </p>
         </div>
         <div className={styles.actions}>
           <label className={styles.search}>
@@ -110,13 +114,32 @@ export function CategoriesOverview({
         </div>
       </header>
 
-      {error && <p className={styles.error} role="alert">{error}</p>}
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
 
       <section className={styles.summary} aria-label="Category totals">
         <Summary label="Active categories" value={summary.total} hint="Available now" tone="lime" />
-        <Summary label="Categories with limits" value={summary.limited} hint="Monthly limits set" tone="warning" />
-        <Summary label="Spent in last 30 days" value={recentSpendLabel} hint={defaultCurrency} tone="expense" />
-        <Summary label="No recent activity" value={summary.inactive} hint="In the last 30 days" tone="income" />
+        <Summary
+          label="Categories with limits"
+          value={summary.limited}
+          hint="Monthly limits set"
+          tone="warning"
+        />
+        <Summary
+          label="Spent in last 30 days"
+          value={recentSpendLabel}
+          hint={defaultCurrency}
+          tone="expense"
+        />
+        <Summary
+          label="No recent activity"
+          value={summary.inactive}
+          hint="In the last 30 days"
+          tone="income"
+        />
       </section>
 
       <section className={styles.panel}>
@@ -141,7 +164,9 @@ export function CategoriesOverview({
         </div>
 
         {loading ? (
-          <div className={styles.status} role="status">Loading your categories…</div>
+          <div className={styles.status} role="status">
+            Loading your categories…
+          </div>
         ) : items.length === 0 ? (
           <Empty
             title="No categories yet."
@@ -151,17 +176,26 @@ export function CategoriesOverview({
         ) : visible.length === 0 ? (
           <Empty
             title="No matching categories."
-            description={query ? 'Try a different search or filter.' : 'No categories match this filter yet.'}
+            description={
+              query ? 'Try a different search or filter.' : 'No categories match this filter yet.'
+            }
           />
         ) : (
           <div className={styles.tableWrap}>
             <div className={styles.tableHead} aria-hidden="true">
-              <span>Category</span><span>Kind</span><span>This month</span><span>Limit</span><span>Last activity</span><span />
+              <span>Category</span>
+              <span>Kind</span>
+              <span>This month</span>
+              <span>Limit</span>
+              <span>Last activity</span>
+              <span />
             </div>
             <div className={styles.rows}>
               {visible.map((item) => {
                 const activePercent = percent(item.monthSpentMinor, item.monthlyLimitMinor);
-                const isOver = item.monthlyLimitMinor !== undefined && item.monthSpentMinor > item.monthlyLimitMinor;
+                const isOver =
+                  item.monthlyLimitMinor !== undefined &&
+                  item.monthSpentMinor > item.monthlyLimitMinor;
                 return (
                   <button
                     className={styles.row}
@@ -172,17 +206,46 @@ export function CategoriesOverview({
                   >
                     <span className={styles.categoryName}>
                       <CategoryIcon label={item.name} icon={item.icon} />
-                      <span><strong>{item.name}</strong><small>{item.transactionCount} {item.transactionCount === 1 ? 'transaction' : 'transactions'} this month</small></span>
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>
+                          {item.transactionCount}{' '}
+                          {item.transactionCount === 1 ? 'transaction' : 'transactions'} this month
+                        </small>
+                      </span>
                     </span>
-                    <span className={`${styles.kind} ${item.kind === 'income' ? styles.income : styles.expense}`}>{item.kind}</span>
-                    <span className={`${styles.amount} ${item.kind === 'income' ? styles.incomeAmount : styles.expenseAmount}`}>
-                      {formatMinor(item.kind === 'income' ? item.monthReceivedMinor : item.monthSpentMinor, item.currency)}
+                    <span
+                      className={`${styles.kind} ${item.kind === 'income' ? styles.income : styles.expense}`}
+                    >
+                      {item.kind}
+                    </span>
+                    <span
+                      className={`${styles.amount} ${item.kind === 'income' ? styles.incomeAmount : styles.expenseAmount}`}
+                    >
+                      {formatMinor(
+                        item.kind === 'income' ? item.monthReceivedMinor : item.monthSpentMinor,
+                        item.currency,
+                      )}
                     </span>
                     <span className={styles.limitCell}>
-                      {item.monthlyLimitMinor === undefined ? <span className={styles.muted}>No limit</span> : <>
-                        <span>{activePercent}% of {formatMinor(item.monthlyLimitMinor, item.currency)}</span>
-                        <span className={styles.track} aria-label={`${activePercent}% of limit used`}><span className={isOver ? styles.overTrack : undefined} style={{ width: `${activePercent}%` }} /></span>
-                      </>}
+                      {item.monthlyLimitMinor === undefined ? (
+                        <span className={styles.muted}>No limit</span>
+                      ) : (
+                        <>
+                          <span>
+                            {activePercent}% of {formatMinor(item.monthlyLimitMinor, item.currency)}
+                          </span>
+                          <span
+                            className={styles.track}
+                            aria-label={`${activePercent}% of limit used`}
+                          >
+                            <span
+                              className={isOver ? styles.overTrack : undefined}
+                              style={{ width: `${activePercent}%` }}
+                            />
+                          </span>
+                        </>
+                      )}
                     </span>
                     <span className={styles.activity}>{dateLabel(item.lastActivityAt)}</span>
                     <ArrowRight size={17} className={styles.arrow} aria-hidden="true" />
@@ -195,14 +258,42 @@ export function CategoriesOverview({
       </section>
 
       <aside className={styles.note}>
-        <span className={styles.noteIcon}><Tag size={17} aria-hidden="true" /></span>
-        <div><strong>Keep limits close to your habits</strong><p>Category limits use the currency and monthly amount saved with each category.</p></div>
-        <button type="button" onClick={onOpenAnalytics}>Explore activity <ArrowRight size={15} aria-hidden="true" /></button>
+        <span className={styles.noteIcon}>
+          <Tag size={17} aria-hidden="true" />
+        </span>
+        <div>
+          <strong>Keep limits close to your habits</strong>
+          <p>Category limits use the currency and monthly amount saved with each category.</p>
+        </div>
+        <button type="button" onClick={onOpenAnalytics}>
+          Explore activity <ArrowRight size={15} aria-hidden="true" />
+        </button>
       </aside>
     </main>
   );
 }
 
-function Summary({ label, value, hint, tone }: { label: string; value: string | number; hint: string; tone: string }) {
-  return <article className={styles.metric} data-tone={tone}><span className={styles.metricMark}><Tag size={17} aria-hidden="true" /></span><div><span>{label}</span><strong>{value}</strong><small>{hint}</small></div></article>;
+function Summary({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  hint: string;
+  tone: string;
+}) {
+  return (
+    <article className={styles.metric} data-tone={tone}>
+      <span className={styles.metricMark}>
+        <Tag size={17} aria-hidden="true" />
+      </span>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{hint}</small>
+      </div>
+    </article>
+  );
 }

@@ -55,7 +55,6 @@ type Transaction = LocalRecord & {
 };
 const maxInt64 = 9_223_372_036_854_775_807n;
 
-
 export default function PersonalCategoryDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -124,7 +123,9 @@ export default function PersonalCategoryDetailPage() {
     void fetchTransactionRange(historyRange.startAt, historyRange.endAt).catch((cause: unknown) => {
       if (active)
         setRangeError(
-          cause instanceof Error ? cause.message : 'Could not refresh this category’s activity range.',
+          cause instanceof Error
+            ? cause.message
+            : 'Could not refresh this category’s activity range.',
         );
     });
     return () => {
@@ -343,7 +344,9 @@ export default function PersonalCategoryDetailPage() {
         isSystem: category.isSystem,
         archivedAt: category.archivedAt,
         monthlyLimitMinor:
-          category.monthlyLimitMinor === undefined ? undefined : asMinor(category.monthlyLimitMinor),
+          category.monthlyLimitMinor === undefined
+            ? undefined
+            : asMinor(category.monthlyLimitMinor),
         limitCurrency: category.limitCurrency,
         updatedAt: category.updatedAt,
       }

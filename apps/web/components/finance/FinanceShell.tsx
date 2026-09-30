@@ -100,7 +100,6 @@ function QuickAddActions({ onClose }: { onClose: () => void }) {
   );
 }
 
-
 export function FinanceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();

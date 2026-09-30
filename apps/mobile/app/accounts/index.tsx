@@ -43,19 +43,39 @@ export default function AccountsScreen() {
   if (transactionState.error) throw transactionState.error;
 
   const accounts = (accountState.data ?? [])
-    .filter((account) => account.archivedAt === undefined && (account.id ?? account._id ?? account.cloudId) !== undefined)
-    .sort((left, right) => displayAccountName(left.name).localeCompare(displayAccountName(right.name)))
+    .filter(
+      (account) =>
+        account.archivedAt === undefined &&
+        (account.id ?? account._id ?? account.cloudId) !== undefined,
+    )
+    .sort((left, right) =>
+      displayAccountName(left.name).localeCompare(displayAccountName(right.name)),
+    )
     .map((account) => {
       const id = account.id ?? account._id ?? account.cloudId!;
-      const ids = new Set([account.id, account._id, account.cloudId].filter((value): value is string => typeof value === 'string' && value.length > 0));
+      const ids = new Set(
+        [account.id, account._id, account.cloudId].filter(
+          (value): value is string => typeof value === 'string' && value.length > 0,
+        ),
+      );
       const optimisticDelta = (transactionState.data ?? []).reduce((delta, transaction) => {
-        if (typeof transaction.clientUpdatedAt !== 'number' || transaction.status !== 'posted' || transaction.deletedAt !== undefined) return delta;
+        if (
+          typeof transaction.clientUpdatedAt !== 'number' ||
+          transaction.status !== 'posted' ||
+          transaction.deletedAt !== undefined
+        )
+          return delta;
         const sourceDelta = ids.has(transaction.accountId)
-          ? transaction.type === 'expense' || transaction.type === 'transfer' ? -transaction.amountMinor : transaction.amountMinor
+          ? transaction.type === 'expense' || transaction.type === 'transfer'
+            ? -transaction.amountMinor
+            : transaction.amountMinor
           : 0n;
-        const destinationDelta = transaction.type === 'transfer' && transaction.transferAccountId && ids.has(transaction.transferAccountId)
-          ? transaction.amountMinor
-          : 0n;
+        const destinationDelta =
+          transaction.type === 'transfer' &&
+          transaction.transferAccountId &&
+          ids.has(transaction.transferAccountId)
+            ? transaction.amountMinor
+            : 0n;
         return delta + sourceDelta + destinationDelta;
       }, 0n);
       return {
@@ -73,7 +93,10 @@ export default function AccountsScreen() {
   const totalsByCurrency = new Map<string, bigint>();
   for (const account of accounts) {
     if (!account.isIncludedInTotal) continue;
-    totalsByCurrency.set(account.currency, (totalsByCurrency.get(account.currency) ?? 0n) + account.balanceMinor);
+    totalsByCurrency.set(
+      account.currency,
+      (totalsByCurrency.get(account.currency) ?? 0n) + account.balanceMinor,
+    );
   }
   const totals = [...totalsByCurrency.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
@@ -96,7 +119,15 @@ export default function AccountsScreen() {
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   const { tokens } = useTheme();
   return (
-    <View style={{ flex: 1, justifyContent: 'center', gap: 12, padding: 24, backgroundColor: tokens.background }}>
+    <View
+      style={{
+        flex: 1,
+        justifyContent: 'center',
+        gap: 12,
+        padding: 24,
+        backgroundColor: tokens.background,
+      }}
+    >
       <Typography variant="heading">Could not load accounts.</Typography>
       <Typography variant="small">{error.message}</Typography>
       <Button onPress={retry}>Try again</Button>

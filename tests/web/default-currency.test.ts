@@ -15,7 +15,10 @@ describe('resolveDefaultCurrency', () => {
     expect(
       resolveDefaultCurrency(
         [{ defaultCurrency: 'EUR', updatedAt: 20 }],
-        [{ currency: 'INR', updatedAt: 30 }, { defaultCurrency: '??', updatedAt: 40 }],
+        [
+          { currency: 'INR', updatedAt: 30 },
+          { defaultCurrency: '??', updatedAt: 40 },
+        ],
       ),
     ).toBe('INR');
   });

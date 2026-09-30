@@ -80,18 +80,27 @@ export default function PersonalAccountDetailPage() {
     if (!userId || !isConnected) return;
     let active = true;
     setRangeError('');
-    void fetchTransactionRange(timelineRange.startAt, timelineRange.endAt).catch((cause: unknown) => {
-      if (active) setRangeError(cause instanceof Error ? cause.message : 'Could not refresh recent activity.');
-    });
-    return () => { active = false; };
+    void fetchTransactionRange(timelineRange.startAt, timelineRange.endAt).catch(
+      (cause: unknown) => {
+        if (active)
+          setRangeError(
+            cause instanceof Error ? cause.message : 'Could not refresh recent activity.',
+          );
+      },
+    );
+    return () => {
+      active = false;
+    };
   }, [fetchTransactionRange, isConnected, timelineRange, userId]);
 
   const accountAliases = new Set(account ? aliasesOf(account) : []);
   const matchingActivity = transactions
-    .filter((item) =>
-      item.status === 'posted' &&
-      item.deletedAt === undefined &&
-      (accountAliases.has(String(item.accountId ?? '')) || accountAliases.has(String(item.transferAccountId ?? ''))),
+    .filter(
+      (item) =>
+        item.status === 'posted' &&
+        item.deletedAt === undefined &&
+        (accountAliases.has(String(item.accountId ?? '')) ||
+          accountAliases.has(String(item.transferAccountId ?? ''))),
     )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
   const rangeTransactions = matchingActivity.filter((item) => {
@@ -105,27 +114,39 @@ export default function PersonalAccountDetailPage() {
     return {
       occurredAt: Number(item.occurredAt ?? 0),
       cashFlowMinor: isTransfer
-        ? isOutgoing ? -amountMinor : amountMinor
-        : item.type === 'expense' ? -amountMinor : amountMinor,
+        ? isOutgoing
+          ? -amountMinor
+          : amountMinor
+        : item.type === 'expense'
+          ? -amountMinor
+          : amountMinor,
     };
   });
   const activity: AccountActivityEntry[] = rangeTransactions.slice(0, 50).map((item) => {
     const isTransfer = item.type === 'transfer';
     const isOutgoing = accountAliases.has(String(item.accountId ?? ''));
-    const category = categories.find((candidate) => aliasesOf(candidate).includes(String(item.categoryId ?? '')));
+    const category = categories.find((candidate) =>
+      aliasesOf(candidate).includes(String(item.categoryId ?? '')),
+    );
     const amountMinor = asMinor(item.amountMinor);
     const cashFlowMinor = isTransfer
-      ? isOutgoing ? -amountMinor : amountMinor
-      : item.type === 'expense' ? -amountMinor : amountMinor;
+      ? isOutgoing
+        ? -amountMinor
+        : amountMinor
+      : item.type === 'expense'
+        ? -amountMinor
+        : amountMinor;
     const rowType: TransactionType = isTransfer
-      ? isOutgoing ? 'expense' : 'income'
+      ? isOutgoing
+        ? 'expense'
+        : 'income'
       : (item.type as TransactionType);
     const id = idOf(item);
     return {
       id,
       title: isTransfer
         ? `${isOutgoing ? 'Transfer out' : 'Transfer in'} · ${item.title ?? 'Transfer'}`
-        : item.title ?? item.type ?? 'Transaction',
+        : (item.title ?? item.type ?? 'Transaction'),
       category: category?.name,
       categoryIcon: category?.icon,
       date: item.occurredAt
@@ -270,13 +291,30 @@ export default function PersonalAccountDetailPage() {
     );
   }
   if (loading || transactionLoading) {
-    return <div className="finance-page" style={{ gap: 28 }}><Typography variant="small">Loading account…</Typography></div>;
+    return (
+      <div className="finance-page" style={{ gap: 28 }}>
+        <Typography variant="small">Loading account…</Typography>
+      </div>
+    );
   }
   if (error) {
-    return <div className="finance-page" style={{ gap: 28 }}><p className="finance-form-error" role="alert">Account data could not be opened: {error}</p></div>;
+    return (
+      <div className="finance-page" style={{ gap: 28 }}>
+        <p className="finance-form-error" role="alert">
+          Account data could not be opened: {error}
+        </p>
+      </div>
+    );
   }
   if (!account) {
-    return <div className="finance-page" style={{ gap: 28 }}><Empty title="Account unavailable." description="This account could not be found or is no longer available." /></div>;
+    return (
+      <div className="finance-page" style={{ gap: 28 }}>
+        <Empty
+          title="Account unavailable."
+          description="This account could not be found or is no longer available."
+        />
+      </div>
+    );
   }
 
   const currency = account.currency ?? 'INR';
@@ -284,9 +322,15 @@ export default function PersonalAccountDetailPage() {
     if (typeof transaction.clientUpdatedAt !== 'number') return delta;
     const amount = asMinor(transaction.amountMinor);
     const source = accountAliases.has(String(transaction.accountId ?? ''))
-      ? transaction.type === 'expense' || transaction.type === 'transfer' ? -amount : amount
+      ? transaction.type === 'expense' || transaction.type === 'transfer'
+        ? -amount
+        : amount
       : 0n;
-    const destination = transaction.type === 'transfer' && accountAliases.has(String(transaction.transferAccountId ?? '')) ? amount : 0n;
+    const destination =
+      transaction.type === 'transfer' &&
+      accountAliases.has(String(transaction.transferAccountId ?? ''))
+        ? amount
+        : 0n;
     return delta + source + destination;
   }, 0n);
 
@@ -298,7 +342,8 @@ export default function PersonalAccountDetailPage() {
         type: account.type ?? 'other',
         customType: account.customType,
         currency,
-        balanceMinor: asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta,
+        balanceMinor:
+          asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta,
         icon: account.icon,
         color: account.color,
         isIncludedInTotal: account.isIncludedInTotal === true,
@@ -308,13 +353,22 @@ export default function PersonalAccountDetailPage() {
       activity={activity}
       flowActivity={flowActivity}
       isBusy={pending}
-      error={formError ?? (transactionError ? `Saved activity could not be refreshed: ${transactionError}` : null)}
-      rangeNotice={rangeError ? 'Recent activity refresh unavailable. Showing records already saved in this browser.' : null}
+      error={
+        formError ??
+        (transactionError ? `Saved activity could not be refreshed: ${transactionError}` : null)
+      }
+      rangeNotice={
+        rangeError
+          ? 'Recent activity refresh unavailable. Showing records already saved in this browser.'
+          : null
+      }
       onRename={updateName}
       onArchive={archive}
       onSetIcon={(icon) => void updateIcon(icon)}
       onSetColor={(color) => void updateColor(color)}
-      onAddTransaction={() => router.push(`/transaction/new?accountId=${encodeURIComponent(routeId ?? '')}`)}
+      onAddTransaction={() =>
+        router.push(`/transaction/new?accountId=${encodeURIComponent(routeId ?? '')}`)
+      }
       onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
     />
   );

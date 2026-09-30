@@ -23,7 +23,6 @@
   background: #b7ff4a;
 }
 
-
 .syncing {
   background: var(--finapp-warning, #e5ac3f);
   box-shadow: 0 0 10px color-mix(in srgb, var(--finapp-warning, #e5ac3f) 31%, transparent);

@@ -33,7 +33,13 @@ type ProfileRecord = LocalRecord & {
   defaultIncomeCategoryId?: string;
   timezone?: string;
 };
-type AccountRecord = LocalRecord & { id?: string; _id?: string; cloudId?: string; name?: string; archivedAt?: number };
+type AccountRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  name?: string;
+  archivedAt?: number;
+};
 type TransactionRecord = LocalRecord & {
   id?: string;
   _id?: string;
@@ -59,8 +65,6 @@ function recordAliases(record: LocalRecord) {
 function recordId(record: LocalRecord) {
   return String(record.id ?? record._id ?? record.cloudId ?? '');
 }
-
-
 
 export default function CategoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -91,17 +95,21 @@ export default function CategoryDetailScreen() {
   if (transactionState.error) throw transactionState.error;
   if (transactionRecordsState.error) throw transactionRecordsState.error;
 
-  const owns = (record: LocalRecord) => !!userId && (typeof record.ownerId !== 'string' || record.ownerId === userId);
+  const owns = (record: LocalRecord) =>
+    !!userId && (typeof record.ownerId !== 'string' || record.ownerId === userId);
   const selectedCategory = categoryState.data?.find(
     (item) => owns(item) && recordAliases(item).includes(id ?? ''),
   );
   const categoryLocalId = selectedCategory?.id ?? selectedCategory?._id;
-  const categoryPayloadId = selectedCategory?._id ?? selectedCategory?.cloudId ?? selectedCategory?.id;
+  const categoryPayloadId =
+    selectedCategory?._id ?? selectedCategory?.cloudId ?? selectedCategory?.id;
   const categoryIdentifiers = new Set(selectedCategory ? recordAliases(selectedCategory) : []);
-  const profile = profileState.data === undefined ? undefined : (profileState.data.find(owns) ?? null);
+  const profile =
+    profileState.data === undefined ? undefined : (profileState.data.find(owns) ?? null);
   const accounts = (accountState.data ?? []).filter(owns);
   const accountByAlias = new Map<string, AccountRecord>();
-  for (const account of accounts) for (const alias of recordAliases(account)) accountByAlias.set(alias, account);
+  for (const account of accounts)
+    for (const alias of recordAliases(account)) accountByAlias.set(alias, account);
   const currency = selectedCategory?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
   const categoryTransactions = (transactionRecordsState.data ?? [])
     .filter(
@@ -316,20 +324,22 @@ export default function CategoryDetailScreen() {
     }
   }
 
-  const detailTransactions: CategoryDetailTransaction[] = categoryTransactions.map((transaction) => ({
-    id: recordId(transaction),
-    type: transaction.type,
-    title: transaction.title,
-    merchant: transaction.merchant,
-    account: accountByAlias.get(String(transaction.accountId ?? ''))?.name,
-    amountMinor: transaction.amountMinor,
-    currency: transaction.currency,
-    occurredAt: transaction.occurredAt,
-    hasTime: transaction.hasTime,
-    status: transaction.status,
-    deletedAt: transaction.deletedAt,
-    groupId: transaction.groupId,
-  }));
+  const detailTransactions: CategoryDetailTransaction[] = categoryTransactions.map(
+    (transaction) => ({
+      id: recordId(transaction),
+      type: transaction.type,
+      title: transaction.title,
+      merchant: transaction.merchant,
+      account: accountByAlias.get(String(transaction.accountId ?? ''))?.name,
+      amountMinor: transaction.amountMinor,
+      currency: transaction.currency,
+      occurredAt: transaction.occurredAt,
+      hasTime: transaction.hasTime,
+      status: transaction.status,
+      deletedAt: transaction.deletedAt,
+      groupId: transaction.groupId,
+    }),
+  );
   const transactionKind = categoryTransactions.reduce(
     (types, transaction) => ({
       expense: types.expense || transaction.type === 'expense',
