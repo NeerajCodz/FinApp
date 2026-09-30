@@ -15,7 +15,11 @@ export function ActivityStatus({
     <div className="activity-status" role={alert ? 'alert' : 'status'}>
       <span className={`activity-status-dot${alert ? ' attention' : ''}`} aria-hidden="true" />
       <span>{message}</span>
-      {onRetry && <Button variant="outline" onPress={onRetry}>Retry</Button>}
+      {onRetry && (
+        <Button variant="outline" onPress={onRetry}>
+          Retry
+        </Button>
+      )}
     </div>
   );
 }

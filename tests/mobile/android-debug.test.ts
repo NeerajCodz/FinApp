@@ -9,9 +9,7 @@ describe('Convex deployment configuration', () => {
   });
 
   it('preserves an explicitly configured local emulator endpoint', () => {
-    expect(resolveConvexUrl('http://10.0.2.2:2608', 'android')).toBe(
-      'http://10.0.2.2:2608',
-    );
+    expect(resolveConvexUrl('http://10.0.2.2:2608', 'android')).toBe('http://10.0.2.2:2608');
   });
 
   it('fails closed when configuration is missing or invalid', () => {

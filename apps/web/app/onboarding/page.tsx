@@ -403,7 +403,11 @@ export default function OnboardingPage() {
                 value={currencySearch}
                 onChangeText={setCurrencySearch}
               />
-              <div className="auth-currency-list" role="listbox" aria-label="Choose country and currency">
+              <div
+                className="auth-currency-list"
+                role="listbox"
+                aria-label="Choose country and currency"
+              >
                 {currencyOptions.map((item) => (
                   <button
                     key={item}

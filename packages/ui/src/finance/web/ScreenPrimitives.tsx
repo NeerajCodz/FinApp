@@ -7,8 +7,13 @@ export function BrandMark() {
   const { tokens } = useTheme();
   return (
     <span aria-label="Finapp" style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-      <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: tokens.primary }} />
-      <Typography variant="bodyLarge" style={{ fontSize: 19, lineHeight: '24px', letterSpacing: -0.4 }}>
+      <span
+        style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: tokens.primary }}
+      />
+      <Typography
+        variant="bodyLarge"
+        style={{ fontSize: 19, lineHeight: '24px', letterSpacing: -0.4 }}
+      >
         finapp
       </Typography>
     </span>
@@ -82,7 +87,12 @@ export function SettingsRow({
     textDecoration: 'none',
   };
   return onPress ? (
-    <button type="button" aria-label={value ? `${label}, ${value}` : label} onClick={onPress} style={{ ...style, cursor: 'pointer' }}>
+    <button
+      type="button"
+      aria-label={value ? `${label}, ${value}` : label}
+      onClick={onPress}
+      style={{ ...style, cursor: 'pointer' }}
+    >
       {contents}
     </button>
   ) : (

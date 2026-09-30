@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  ArrowDownRight,
-  ArrowLeftRight,
-  ArrowUpRight,
-  Check,
-  UsersRound,
-} from 'lucide-react';
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, Check, UsersRound } from 'lucide-react';
 import { Typography, useTheme } from '@finapp/ui/web';
 import { semanticLabels, type SemanticType } from '../types';
 

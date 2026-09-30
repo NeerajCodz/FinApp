@@ -26,7 +26,12 @@ export function AnalyticsChartPanel({
           <Typography variant="bodyLarge">{title}</Typography>
           <Typography variant="caption">{description}</Typography>
         </div>
-        <ChartTypeSelect label={title} value={chartType} options={chartTypes} onChange={onChartTypeChange} />
+        <ChartTypeSelect
+          label={title}
+          value={chartType}
+          options={chartTypes}
+          onChange={onChartTypeChange}
+        />
       </header>
       {children}
     </Card>
