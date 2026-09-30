@@ -116,7 +116,7 @@ export function HomeGoalsCategories({
           <div className="finance-home-empty-block">
             <span aria-hidden="true">◌</span>
             <p>No spending recorded in this period.</p>
-            <a href="/category">Browse categories</a>
+            <a href="/categories">Browse categories</a>
           </div>
         )}
       </section>
