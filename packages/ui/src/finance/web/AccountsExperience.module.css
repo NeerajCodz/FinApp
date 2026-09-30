@@ -1,0 +1,1101 @@
+.page {
+  --account-accent: var(--finapp-primary);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+  width: 100%;
+  max-width: 1460px;
+  margin: 0 auto;
+  padding: 4px 0 36px;
+  color: var(--finapp-foreground);
+}
+
+.indexHeader,
+.headerActions,
+.listHeader,
+.detailHeader,
+.chartHeader,
+.activityHeader,
+.detailActions,
+.detailMeta,
+.listTitle,
+.accountRow,
+.accountMeta,
+.accountBalance,
+.inclusion,
+.summaryCard,
+.summaryIcon,
+.totalNote,
+.propertiesHeading,
+.property,
+.customizeHeader,
+.chartLegend,
+.chartDates,
+.periodLabel {
+  display: flex;
+  align-items: center;
+}
+
+.indexHeader {
+  justify-content: space-between;
+  gap: 24px;
+  min-width: 0;
+}
+
+.headingBlock,
+.summaryCopy,
+.detailTitle,
+.propertiesHeading,
+.accountMeta {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.headingBlock :global(h1),
+.detailTitle :global(h1) {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  letter-spacing: -0.045em;
+}
+
+.headingBlock > :last-child,
+.summaryCopy > :last-child,
+.propertiesHeading > :last-child {
+  color: var(--finapp-foreground-muted);
+}
+
+.headerActions {
+  gap: 12px;
+  min-width: 0;
+}
+
+.searchBox {
+  display: flex;
+  width: min(280px, 34vw);
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 12px;
+  padding: 0 13px;
+  background: var(--finapp-card);
+  color: var(--finapp-foreground-subtle);
+}
+
+.searchBox:focus-within {
+  border-color: var(--finapp-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--finapp-primary) 20%, transparent);
+}
+
+.searchBox input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--finapp-foreground);
+  font: inherit;
+}
+
+.searchBox input::placeholder {
+  color: var(--finapp-foreground-subtle);
+}
+
+.addButton {
+  display: inline-flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summaryCard {
+  min-height: 116px;
+  gap: 17px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 17px;
+  padding: 18px;
+  background:
+    radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--finapp-primary) 7%, transparent), transparent 58%),
+    var(--finapp-card);
+}
+
+.summaryIcon {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  justify-content: center;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--finapp-primary) 12%, var(--finapp-surface-raised));
+  color: var(--finapp-primary);
+}
+
+.neutralIcon {
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground-muted);
+}
+
+.summaryCopy :global(h3) {
+  margin: 0;
+  font-size: clamp(1.5rem, 2vw, 1.9rem);
+  letter-spacing: -0.04em;
+}
+
+.totalValues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 15px;
+}
+
+.totalValues > * {
+  white-space: nowrap;
+}
+
+.accountsPanel,
+.balancePanel,
+.chartPanel,
+.propertiesPanel,
+.activityPanel,
+.totalNote,
+.statePanel {
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 17px;
+  background: var(--finapp-card);
+}
+
+.accountsPanel {
+  display: grid;
+  gap: 0;
+  padding: 15px 16px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.listHeader {
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 1px 13px;
+  min-width: 0;
+}
+
+.listTitle {
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.listTitle :global(h2) {
+  margin: 0;
+}
+
+.listTitle > :last-child {
+  color: var(--finapp-foreground-muted);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.filterButton {
+  min-height: 36px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 10px;
+  padding: 0 13px;
+  background: transparent;
+  color: var(--finapp-foreground-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.filterButton:hover {
+  border-color: var(--finapp-border);
+  color: var(--finapp-foreground);
+}
+
+.filterButton:focus-visible,
+.colorSwatch:focus-visible,
+.accountRow:focus-visible {
+  outline: 2px solid var(--finapp-primary);
+  outline-offset: 2px;
+}
+
+.filterActive {
+  border-color: var(--finapp-foreground);
+  background: var(--finapp-foreground);
+  color: var(--finapp-background);
+  font-weight: 600;
+}
+
+.accountRows {
+  display: grid;
+  gap: 5px;
+}
+
+.accountRow {
+  min-height: 72px;
+  gap: 15px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 13px;
+  padding: 10px 13px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.accountRow:hover {
+  border-color: var(--finapp-border);
+  background: var(--finapp-surface-subtle);
+  transform: translateY(-1px);
+}
+
+.accountIcon,
+.detailIcon,
+.customizeIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--account-color) 72%, transparent);
+  background: color-mix(in srgb, var(--account-color) 18%, var(--finapp-surface-raised));
+  color: var(--account-color);
+}
+
+.accountIcon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+}
+
+.accountMeta {
+  flex: 1;
+  gap: 3px;
+}
+
+.accountName {
+  overflow: hidden;
+  color: var(--finapp-foreground);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountKind {
+  overflow: hidden;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountBalance {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  min-width: 100px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.inclusion {
+  width: fit-content;
+  flex: 0 0 auto;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground-muted);
+  font-size: 0.75rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.included {
+  background: color-mix(in srgb, var(--finapp-income) 12%, var(--finapp-surface-raised));
+  color: var(--finapp-income);
+}
+
+.chevron {
+  flex: 0 0 auto;
+  color: var(--finapp-foreground-subtle);
+}
+
+.totalNote {
+  min-height: 86px;
+  gap: 18px;
+  padding: 16px 20px;
+  color: var(--finapp-foreground-muted);
+}
+
+.totalNote > div {
+  display: grid;
+  gap: 4px;
+}
+
+.noteIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-primary);
+}
+
+.noteTotal {
+  color: var(--finapp-foreground);
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.totalNote p {
+  margin: 0 0 0 auto;
+  max-width: 52ch;
+  border-left: 1px solid var(--finapp-border-subtle);
+  padding-left: 22px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.statePanel,
+.noResults,
+.activityEmpty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 34px 24px;
+  text-align: center;
+}
+
+.statePanel > :global(p),
+.noResults > :global(p),
+.activityEmpty > :global(p) {
+  max-width: 52ch;
+  color: var(--finapp-foreground-muted);
+}
+
+.statePanel :global(button) {
+  margin-top: 5px;
+}
+
+.emptyIcon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--finapp-primary) 12%, var(--finapp-surface-raised));
+  color: var(--finapp-primary);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--finapp-foreground-subtle);
+  font-size: 0.82rem;
+}
+
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--finapp-foreground-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--finapp-primary);
+}
+
+.breadcrumb [aria-current] {
+  overflow: hidden;
+  max-width: 34ch;
+  color: var(--finapp-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailHeader {
+  gap: 16px;
+}
+
+.detailIcon {
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+}
+
+.detailTitle {
+  flex: 1;
+}
+
+.detailTitle :global(h1) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailMeta {
+  flex-wrap: wrap;
+  gap: 9px;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.84rem;
+}
+
+.detailActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.balanceAndFlow {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.86fr) minmax(0, 1.3fr);
+  gap: 13px;
+}
+
+.balancePanel,
+.chartPanel {
+  min-width: 0;
+  padding: 19px;
+}
+
+.balancePanel {
+  display: grid;
+  align-content: start;
+  gap: 15px;
+  background: radial-gradient(ellipse at 100% 0, color-mix(in srgb, var(--finapp-primary) 9%, transparent), transparent 56%), var(--finapp-card);
+}
+
+.balancePanel > :first-child {
+  color: var(--finapp-foreground-muted);
+}
+
+.flowCards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 1px;
+}
+
+.flowCards > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--finapp-surface-raised);
+}
+
+.flowCards :global(p) {
+  overflow: hidden;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.73rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowCards :global(p:last-child) {
+  color: var(--finapp-foreground);
+  font-size: 0.93rem;
+  font-weight: 650;
+}
+
+.flowIcon {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--finapp-primary) 12%, transparent);
+  color: var(--finapp-primary);
+}
+
+.flowIn {
+  background: color-mix(in srgb, var(--finapp-income) 14%, transparent);
+  color: var(--finapp-income);
+}
+
+.flowOut {
+  background: color-mix(in srgb, var(--finapp-expense) 14%, transparent);
+  color: var(--finapp-expense);
+  transform: rotate(180deg);
+}
+
+.positive {
+  display: flex;
+  align-items: baseline;
+  color: var(--finapp-income);
+}
+
+.negative {
+  display: flex;
+  align-items: baseline;
+  color: var(--finapp-expense);
+}
+
+.chartPanel {
+  display: grid;
+  gap: 13px;
+}
+
+.chartHeader,
+.activityHeader {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.chartHeader > div,
+.activityHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.chartHeader :global(h2),
+.activityHeader :global(h2) {
+  margin: 0;
+}
+
+.chartHeader :global(p:last-child),
+.activityHeader :global(p:last-child) {
+  color: var(--finapp-foreground-muted);
+}
+
+.periodLabel {
+  flex: 0 0 auto;
+  gap: 7px;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.8rem;
+}
+
+.chart {
+  display: grid;
+  grid-template-columns: 33px minmax(0, 1fr);
+  grid-template-rows: 138px 19px;
+  align-items: stretch;
+  column-gap: 9px;
+}
+
+.chartGrid {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 5px 0;
+  color: var(--finapp-foreground-subtle);
+  font-size: 0.68rem;
+}
+
+.chartPlot {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: repeating-linear-gradient(to bottom, transparent 0 calc(25% - 1px), var(--finapp-border-subtle) calc(25% - 1px) 25%);
+}
+
+.zeroLine {
+  position: absolute;
+  z-index: 1;
+  top: 48%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--finapp-border);
+}
+
+.chartBar {
+  position: absolute;
+  z-index: 2;
+  width: max(2px, 1.8%);
+  min-height: 0;
+  border-radius: 3px;
+  opacity: 0.84;
+}
+
+.chartPositive {
+  background: var(--finapp-income);
+}
+
+.chartNegative {
+  background: var(--finapp-expense);
+}
+
+.chartDates {
+  grid-column: 2;
+  justify-content: space-between;
+  gap: 2px;
+  color: var(--finapp-foreground-subtle);
+  font-size: 0.67rem;
+  white-space: nowrap;
+}
+
+.chartLegend {
+  flex-wrap: wrap;
+  gap: 15px;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.76rem;
+}
+
+.chartLegend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chartLegend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legendIncome {
+  background: var(--finapp-income);
+}
+
+.legendExpense {
+  background: var(--finapp-expense);
+}
+
+.netLegend {
+  margin-left: auto;
+  color: var(--finapp-foreground-subtle);
+}
+
+.propertiesPanel {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) minmax(230px, 0.68fr);
+  align-items: center;
+  gap: 20px;
+  padding: 17px 20px;
+}
+
+.propertiesHeading :global(h2) {
+  margin: 0;
+}
+
+.propertyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.property {
+  min-width: 0;
+  gap: 10px;
+}
+
+.propertyGlyph {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-primary);
+}
+
+.property > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.property :global(p) {
+  color: var(--finapp-foreground-muted);
+  font-size: 0.72rem;
+}
+
+.property strong {
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customize {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 13px;
+  padding: 11px;
+}
+
+.customizeHeader {
+  gap: 10px;
+}
+
+.customizeHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.customizeHeader :global(p:last-child) {
+  color: var(--finapp-foreground-muted);
+}
+
+.customizeIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.colorPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.colorSwatch {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  padding: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.colorSwatch span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--swatch-color);
+}
+
+.colorSwatch:hover {
+  border-color: var(--finapp-foreground-subtle);
+}
+
+.colorSelected {
+  border-color: var(--finapp-foreground);
+}
+
+.colorSelected span {
+  box-shadow: inset 0 0 0 2px var(--finapp-background);
+}
+
+.defaultSwatch {
+  border: 1px dashed var(--finapp-foreground-muted);
+  background: linear-gradient(135deg, var(--finapp-primary) 0 46%, var(--finapp-surface-raised) 46% 54%, var(--finapp-foreground-muted) 54%) !important;
+}
+
+.colorSwatch:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.disabledPicker {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.activityPanel {
+  display: grid;
+  gap: 10px;
+  padding: 18px 18px 8px;
+}
+
+.activityRows {
+  display: grid;
+}
+
+.activityRow {
+  border-top: 1px solid var(--finapp-border-subtle);
+}
+
+.errorMessage {
+  margin: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--finapp-expense) 11%, var(--finapp-card));
+  color: var(--finapp-expense);
+  font-size: 0.86rem;
+}
+
+.rangeNotice {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.84rem;
+}
+
+.sheetForm {
+  display: grid;
+  gap: 12px;
+}
+
+.skeleton {
+  min-height: 116px;
+  animation: pulse 1.3s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 1120px) {
+  .propertiesPanel {
+    grid-template-columns: 1fr minmax(0, 2fr);
+  }
+  .propertiesHeading {
+    grid-column: 1 / -1;
+  }
+  .customize {
+    align-self: stretch;
+  }
+  .balanceAndFlow {
+    grid-template-columns: minmax(270px, 0.9fr) minmax(0, 1.1fr);
+  }
+  .detailActions :global(button) {
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 820px) {
+  .indexHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .headerActions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .searchBox {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 160px;
+  }
+  .balanceAndFlow {
+    grid-template-columns: 1fr;
+  }
+  .propertiesPanel {
+    grid-template-columns: 1fr;
+  }
+  .propertiesHeading {
+    grid-column: auto;
+  }
+  .detailHeader {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .detailTitle {
+    flex-basis: calc(100% - 82px);
+  }
+  .detailActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .page {
+    gap: 16px;
+    padding-bottom: 24px;
+  }
+  .summaryGrid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .summaryCard {
+    min-height: 82px;
+    padding: 12px 14px;
+  }
+  .summaryIcon {
+    width: 43px;
+    height: 43px;
+    flex-basis: 43px;
+  }
+  .summaryCopy :global(h2) {
+    font-size: 1.45rem;
+  }
+  .totalValues :global(p) {
+    font-size: 1.3rem;
+  }
+  .accountsPanel {
+    padding: 12px 10px 9px;
+  }
+  .listHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .filters {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 2px 0 5px;
+    flex-wrap: nowrap;
+  }
+  .filterButton {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 11px;
+  }
+  .accountRow {
+    min-height: 71px;
+    gap: 9px;
+    padding: 9px 8px;
+  }
+  .accountIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .accountBalance {
+    min-width: 0;
+    font-size: 0.83rem;
+  }
+  .inclusion {
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    gap: 0;
+    overflow: hidden;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 0;
+  }
+  .inclusion svg {
+    flex: 0 0 auto;
+  }
+  .chevron {
+    width: 15px;
+  }
+  .totalNote {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+  }
+  .totalNote p {
+    display: none;
+  }
+  .detailHeader {
+    gap: 11px;
+  }
+  .detailIcon {
+    width: 51px;
+    height: 51px;
+    border-radius: 15px;
+  }
+  .detailTitle {
+    flex-basis: calc(100% - 64px);
+  }
+  .detailTitle :global(h1) {
+    font-size: 1.65rem;
+  }
+  .detailMeta {
+    gap: 6px;
+    font-size: 0.76rem;
+  }
+  .detailMeta .inclusion {
+    width: auto;
+    height: auto;
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 0.7rem;
+  }
+  .detailActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .detailActions :global(button) {
+    width: 100%;
+    min-height: 40px;
+    justify-content: center;
+    padding-inline: 9px;
+    font-size: 0.82rem;
+  }
+  .balancePanel,
+  .chartPanel {
+    padding: 15px;
+  }
+  .flowCards {
+    gap: 5px;
+  }
+  .flowCards > div {
+    padding: 8px 7px;
+  }
+  .flowCards :global(p:last-child) {
+    font-size: 0.82rem;
+  }
+  .chartHeader {
+    align-items: flex-start;
+  }
+  .periodLabel {
+    font-size: 0.7rem;
+  }
+  .chart {
+    grid-template-rows: 122px 18px;
+  }
+  .chartDates {
+    font-size: 0.61rem;
+  }
+  .propertiesPanel,
+  .activityPanel {
+    padding: 14px 12px 10px;
+  }
+  .propertyGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 7px;
+  }
+  .property {
+    align-items: flex-start;
+    gap: 7px;
+  }
+  .propertyGlyph {
+    width: 29px;
+    height: 29px;
+    flex-basis: 29px;
+  }
+  .property strong {
+    font-size: 0.73rem;
+  }
+  .customize {
+    padding: 10px;
+  }
+  .activityHeader {
+    align-items: flex-start;
+  }
+  .activityHeader :global(button) {
+    min-height: 37px;
+    padding-inline: 10px;
+    font-size: 0.75rem;
+  }
+  .activityRow {
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accountRow,
+  .skeleton {
+    animation: none;
+    transition: none;
+  }
+}
