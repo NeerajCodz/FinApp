@@ -18,6 +18,7 @@ export { SettlementEditor } from './SettlementEditor';
 export { SettlementRow } from './SettlementRow';
 export { SplitMemberRow } from './SplitMemberRow';
 export { TransactionRow } from './TransactionRow';
+export { InfoDescription, type InfoDescriptionProps } from './InfoDescription';
 export { semanticLabels, type MoneySize, type SemanticType, type TransactionType } from '../types';
 export { signedMinor } from '../money';
 export { DateTimePicker } from './DateTimePicker';
