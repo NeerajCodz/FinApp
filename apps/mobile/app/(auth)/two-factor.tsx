@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
-import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from '@finapp/ui/icons/native';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { BrandMark } from '@finapp/ui/finance';
-import { Button, IconButton, InputOTP, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { Button, InputOTP, Label, Typography } from '@finapp/ui/native';
+import { AuthScaffold } from '@/components/auth/AuthScaffold';
+import { AuthError, AuthSubmit } from '@/components/auth/AuthFields';
 
 export default function TwoFactorScreen() {
   const { challengeId: rawChallengeId } = useLocalSearchParams<{ challengeId?: string }>();
@@ -16,8 +13,6 @@ export default function TwoFactorScreen() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const { signIn } = useAuthActions();
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
 
   async function verify() {
     if (pending || code.length !== 6 || !challengeId) return;
@@ -41,58 +36,42 @@ export default function TwoFactorScreen() {
   }
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: tokens.background,
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 24,
-        paddingBottom: insets.bottom + 20,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton
-          label="Go back"
-          variant="ghost"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in'))}
-        >
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <BrandMark />
-      </View>
-      <View style={{ flex: 1, justifyContent: 'center', gap: 32 }}>
-        <View style={{ gap: 12 }}>
-          <Typography variant="title">One last step.</Typography>
-          <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
-            Enter the six-digit sign-in code sent to the email on your account. It expires in 10
-            minutes.
-          </Text>
-        </View>
-        <InputOTP value={code} onChangeText={setCode} />
-        {!!error && (
-          <Typography
-            variant="small"
-            accessibilityLiveRegion="polite"
-            style={{ color: tokens.destructive }}
-          >
-            {error}
-          </Typography>
-        )}
-        <View style={{ gap: 4 }}>
-          <Typography variant="small" style={{ color: tokens.foreground }}>
-            Didn&apos;t get a code?
-          </Typography>
-          <Typography variant="caption">Return to sign in and request another code.</Typography>
-        </View>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Button disabled={pending || code.length !== 6 || !challengeId} size="lg" onPress={verify}>
-          {pending ? 'Verifying…' : 'Verify and sign in'}
-        </Button>
+    <AuthScaffold
+      eyebrow="One last step"
+      title={<>Keep it{`\n`}in your hands.</>}
+      description="Enter the six-digit sign-in code sent to the email on your account. It expires in 10 minutes."
+      onBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in'))}
+      footer={
         <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-in')}>
           Return to sign in
         </Button>
-      </View>
-    </View>
+      }
+    >
+      <Typography variant="heading">Confirm it’s you</Typography>
+      <Label>Six-digit sign-in code</Label>
+      <InputOTP
+        value={code}
+        onChangeText={(value) => {
+          if (!pending) {
+            setCode(value);
+            setError('');
+          }
+        }}
+      />
+      <AuthError
+        message={
+          error || (!challengeId ? 'Return to sign in to request a new sign-in code.' : undefined)
+        }
+      />
+      <AuthSubmit
+        label={pending ? 'Verifying…' : 'Verify and sign in'}
+        pending={pending}
+        disabled={code.length !== 6 || !challengeId}
+        onPress={verify}
+      />
+      <Typography variant="small">
+        Didn’t get a code? Return to sign in and request another.
+      </Typography>
+    </AuthScaffold>
   );
 }
