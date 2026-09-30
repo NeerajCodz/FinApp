@@ -32,10 +32,9 @@ home header; they are not repeated across other screens.
 - `apps/web/components/brand/createVgpuCoinRenderer.ts`: WebGPU lighting and a
   cursor-responsive shadow masked behind the coin silhouette, with the shared
   WebGL renderer as a fallback.
-- Platform `CoinLogo` components support pointer drag and arrow-key rotation on
-  web, touch drag on native, and stop animation for reduced motion or when hidden.
-  They dispose GPU resources on teardown and retain the app icon when WebGL is
-  unavailable.
+- Platform `CoinLogo` components support drag-to-spin with release momentum that
+  eases to rest, plus arrow-key rotation on web. They respect reduced motion and
+  visibility, dispose GPU resources on teardown, and retain the app icon fallback.
 
 The native coin requires a build containing `expo-gl`.
 

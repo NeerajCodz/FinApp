@@ -9,7 +9,14 @@ import {
 } from 'react';
 import Image from 'next/image';
 import { createCoinRenderer, type CoinInteraction, type CoinRenderer } from '@finapp/ui/coin';
-import { createCoinFloat } from '@finapp/ui/coin/motion';
+import {
+  advanceCoinSpin,
+  applyCoinDrag,
+  createCoinFloat,
+  releaseCoinMomentum,
+  stopCoinMomentum,
+  type CoinAngularVelocity,
+} from '@finapp/ui/coin/motion';
 import appIcon from '../../../mobile/assets/icon.png';
 
 export function CoinLogo({
@@ -32,8 +39,9 @@ export function CoinLogo({
     lightX: 0,
     lightY: 0,
   });
+  const angularVelocity = useRef<CoinAngularVelocity>({ x: 0, y: 0 });
   const hoverRotation = useRef({ x: 0, y: 0 });
-  const drag = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const drag = useRef<{ pointerId: number; x: number; y: number; time: number } | null>(null);
   const syncRef = useRef<() => void>(() => {});
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -51,10 +59,16 @@ export function CoinLogo({
     interaction.current.lightX = lightX;
     interaction.current.lightY = lightY;
     if (drag.current?.pointerId === event.pointerId) {
-      interaction.current.rotationY += (event.clientX - drag.current.x) * 0.012;
-      interaction.current.rotationX -= (event.clientY - drag.current.y) * 0.012;
-      drag.current.x = event.clientX;
-      drag.current.y = event.clientY;
+      const deltaX = event.clientX - drag.current.x;
+      const deltaY = event.clientY - drag.current.y;
+      applyCoinDrag(
+        interaction.current,
+        angularVelocity.current,
+        deltaX,
+        deltaY,
+        (event.timeStamp - drag.current.time) / 1000,
+      );
+      drag.current = { ...drag.current, x: event.clientX, y: event.clientY, time: event.timeStamp };
       hoverRotation.current.x = 0;
       hoverRotation.current.y = 0;
       syncRef.current();
@@ -66,13 +80,21 @@ export function CoinLogo({
   };
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!interactive || event.button !== 0) return;
+    stopCoinMomentum(angularVelocity.current);
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     event.currentTarget.dataset.dragging = 'true';
-    drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    drag.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      time: event.timeStamp,
+    };
   };
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (drag.current?.pointerId !== event.pointerId) return;
+    const pointerDrag = drag.current;
+    if (pointerDrag?.pointerId !== event.pointerId) return;
+    releaseCoinMomentum(angularVelocity.current, (event.timeStamp - pointerDrag.time) / 1000);
     drag.current = null;
     delete event.currentTarget.dataset.dragging;
     if (event.currentTarget.hasPointerCapture(event.pointerId))
@@ -133,8 +155,11 @@ export function CoinLogo({
     const tick = (timestamp: number) => {
       frame = 0;
       if (!renderer || !visible || document.hidden) return;
-      if (previous) elapsed += Math.min((timestamp - previous) / 1000, 0.1);
+      const deltaSeconds = previous ? Math.min((timestamp - previous) / 1000, 0.1) : 0;
+      elapsed += deltaSeconds;
       previous = timestamp;
+      if (!paused && !motion.matches && interactive && !drag.current)
+        advanceCoinSpin(interaction.current, angularVelocity.current, deltaSeconds);
       draw();
       if (!paused && !motion.matches) frame = requestAnimationFrame(tick);
     };
@@ -142,6 +167,7 @@ export function CoinLogo({
       cancelAnimationFrame(frame);
       frame = 0;
       previous = 0;
+      if (paused || motion.matches) stopCoinMomentum(angularVelocity.current);
       if (!renderer || !visible || document.hidden) return;
       draw();
       if (!paused && !motion.matches) frame = requestAnimationFrame(tick);

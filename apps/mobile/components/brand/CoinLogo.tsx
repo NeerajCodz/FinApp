@@ -10,7 +10,15 @@ import {
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { useFocusEffect } from 'expo-router';
 import { createCoinRenderer, type CoinInteraction, type CoinRenderer } from '@finapp/ui/coin';
-import { createCoinFloat } from '@finapp/ui/coin/motion';
+import {
+  advanceCoinSpin,
+  applyCoinDrag,
+  createCoinFloat,
+  hasCoinMomentum,
+  stopCoinMomentum,
+  releaseCoinMomentum,
+  type CoinAngularVelocity,
+} from '@finapp/ui/coin/motion';
 import appIcon from '../../assets/icon.png';
 
 export function CoinLogo({
@@ -39,25 +47,39 @@ export function CoinLogo({
     lightX: 0,
     lightY: 0,
   });
-  const previousTouch = useRef<{ x: number; y: number } | null>(null);
+  const angularVelocity = useRef<CoinAngularVelocity>({ x: 0, y: 0 });
+  const previousTouch = useRef<{ x: number; y: number; time: number } | null>(null);
   const onTouchStart = (event: GestureResponderEvent) => {
     if (!interactive) return;
+    stopCoinMomentum(angularVelocity.current);
     previousTouch.current = {
       x: event.nativeEvent.pageX,
       y: event.nativeEvent.pageY,
+      time: Date.now(),
     };
   };
   const onTouchMove = (event: GestureResponderEvent) => {
     if (!interactive || !previousTouch.current) return;
     const { pageX, pageY, locationX, locationY } = event.nativeEvent;
-    interaction.current.rotationY += (pageX - previousTouch.current.x) * 0.012;
-    interaction.current.rotationX -= (pageY - previousTouch.current.y) * 0.012;
+    const time = Date.now();
+    applyCoinDrag(
+      interaction.current,
+      angularVelocity.current,
+      pageX - previousTouch.current.x,
+      pageY - previousTouch.current.y,
+      (time - previousTouch.current.time) / 1000,
+    );
     interaction.current.lightX = Math.max(-1, Math.min(1, (locationX / size) * 2 - 1));
     interaction.current.lightY = Math.max(-1, Math.min(1, 1 - (locationY / size) * 2));
-    previousTouch.current = { x: pageX, y: pageY };
+    previousTouch.current = { x: pageX, y: pageY, time };
     synchronise.current();
   };
   const onTouchEnd = () => {
+    if (previousTouch.current)
+      releaseCoinMomentum(
+        angularVelocity.current,
+        (Date.now() - previousTouch.current.time) / 1000,
+      );
     previousTouch.current = null;
     interaction.current.lightX = 0;
     interaction.current.lightY = 0;
@@ -81,19 +103,35 @@ export function CoinLogo({
     const tick = (timestamp: number) => {
       frame.current = 0;
       if (!mounted.current || !focused.current || AppState.currentState !== 'active') return;
-      if (previous.current) elapsed.current += Math.min((timestamp - previous.current) / 1000, 0.1);
+      const deltaSeconds = previous.current
+        ? Math.min((timestamp - previous.current) / 1000, 0.1)
+        : 0;
+      elapsed.current += deltaSeconds;
       previous.current = timestamp;
+      if (interactive && !reduced.current && !previousTouch.current)
+        advanceCoinSpin(interaction.current, angularVelocity.current, deltaSeconds);
       draw();
-      if (moving.current && !reduced.current) frame.current = requestAnimationFrame(tick);
+      if (
+        (moving.current && !reduced.current) ||
+        (interactive &&
+          !reduced.current &&
+          !previousTouch.current &&
+          hasCoinMomentum(angularVelocity.current))
+      )
+        frame.current = requestAnimationFrame(tick);
     };
     const sync = () => {
       cancelAnimationFrame(frame.current);
       frame.current = 0;
       previous.current = 0;
+      if (reduced.current) stopCoinMomentum(angularVelocity.current);
       if (!mounted.current || !focused.current || AppState.currentState !== 'active') return;
       draw();
-      if (renderer.current && moving.current && !reduced.current)
-        frame.current = requestAnimationFrame(tick);
+      const shouldAnimate =
+        !reduced.current &&
+        (moving.current ||
+          (!previousTouch.current && interactive && hasCoinMomentum(angularVelocity.current)));
+      if (renderer.current && shouldAnimate) frame.current = requestAnimationFrame(tick);
     };
     synchronise.current = sync;
     const motionSubscription = AccessibilityInfo.addEventListener(
