@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { accentPalette, createTokens, neutralOpacity } from '@finapp/ui/tokens';
 
 describe('Finapp visual identity', () => {
-  it('exposes Volt as the only application accent', () => {
-    expect(Object.keys(accentPalette)).toEqual(['volt']);
-    expect(accentPalette.volt).toBe('#B7FF4A');
+  it('exposes the supported named application accents', () => {
+    expect(accentPalette).toEqual({
+      volt: '#B7FF4A',
+      white: '#FFFFFF',
+      blue: '#5B8CFF',
+    });
   });
 
   it('builds dark surfaces from white opacity over pure black', () => {
