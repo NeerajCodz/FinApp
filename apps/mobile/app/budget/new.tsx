@@ -14,6 +14,7 @@ import type { LocalRecord } from '@/local/repository';
 import { displayAccountName } from '@/lib/ledger';
 
 type ProfileRecord = LocalRecord & { defaultCurrency?: string };
+type SettingsRecord = LocalRecord & { currency?: string; defaultCurrency?: string };
 type AccountRecord = LocalRecord & {
   id?: string;
   _id?: string;
@@ -79,11 +80,13 @@ export default function NewBudgetScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useLocalSync();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const settingsState = useLocalRecords<SettingsRecord>(userId, 'settings');
   const accountState = useLocalRecords<AccountRecord>(userId, 'account');
   const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
   if (profileState.error) throw profileState.error;
   if (accountState.error) throw accountState.error;
   if (categoryState.error) throw categoryState.error;
+  if (settingsState.error) throw settingsState.error;
   const profile = profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
   const accounts = accountState.data?.filter((account) => account.archivedAt === undefined);
   const categories = categoryState.data
@@ -103,7 +106,15 @@ export default function NewBudgetScreen() {
       : undefined;
   const selectedCategoryId = selectedCategory?._id ?? selectedCategory?.id;
   const selectedAccountId = selectedAccount?._id ?? selectedAccount?.id;
-  const currency = selectedAccount?.currency ?? profile?.defaultCurrency;
+  const currency =
+    selectedAccount?.currency ??
+    profile?.defaultCurrency ??
+    settingsState.data?.[0]?.defaultCurrency ??
+    settingsState.data?.[0]?.currency;
+  const currencyLoading =
+    profileState.data === undefined ||
+    settingsState.data === undefined ||
+    (period === 'account' && accountState.data === undefined);
   const amountMinor = currency ? amountInMinor(limit, currency) : null;
   const startAt =
     period === 'custom'
@@ -177,7 +188,7 @@ export default function NewBudgetScreen() {
   }
 
   const ready =
-    !!profile &&
+    !currencyLoading &&
     !!currency &&
     amountMinor !== null &&
     startAt !== null &&
@@ -225,7 +236,7 @@ export default function NewBudgetScreen() {
         </View>
         {currency ? (
           <CurrencyInput currency={currency} value={limit} onChangeText={setLimit} />
-        ) : profile === undefined ? (
+        ) : currencyLoading ? (
           <Text style={{ color: tokens.foregroundMuted }}>Loading your default currency…</Text>
         ) : (
           <Button variant="outline" onPress={() => router.push('/settings/currency' as never)}>
