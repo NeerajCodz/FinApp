@@ -67,9 +67,9 @@ export default function WelcomePage() {
               </div>
             )}
           </div>
-          <div className="auth-welcome-visual" aria-hidden="true">
-            <div className="auth-welcome-orbit" />
-            <CoinLogo className="auth-welcome-coin" />
+          <div className="auth-welcome-visual">
+            <div className="auth-welcome-orbit" aria-hidden="true" />
+            <CoinLogo className="auth-welcome-coin" interactive />
             <span className="auth-welcome-caption">A fresh perspective on everyday money.</span>
           </div>
         </section>
