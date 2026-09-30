@@ -178,6 +178,12 @@ async function sendMutation(
         accountId: await mapId('account', payload.accountId),
       } as never);
       return;
+    case 'account.setColor':
+      await convex.mutation(api.accounts.mutations.setColor, {
+        ...payload,
+        accountId: await mapId('account', payload.accountId),
+      } as never);
+      return;
     case 'account.archive':
       await convex.mutation(api.accounts.mutations.archive, payload as never);
       return;

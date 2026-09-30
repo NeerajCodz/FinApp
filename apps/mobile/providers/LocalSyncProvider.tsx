@@ -180,6 +180,14 @@ async function sendMutation(
         accountId: mappedAccountId ?? accountId,
       } as never);
     }
+    case 'account.setColor': {
+      const accountId = String(payload.accountId);
+      const mappedAccountId = await getMappedCloudId(userId, 'account', accountId);
+      return convex.mutation(api.accounts.mutations.setColor, {
+        ...payload,
+        accountId: mappedAccountId ?? accountId,
+      } as never);
+    }
     case 'account.archive':
       return convex.mutation(api.accounts.mutations.archive, payload as never);
     case 'category.create':
