@@ -8,6 +8,7 @@ describe('Finapp visual identity', () => {
       white: '#FFFFFF',
       blue: '#5B8CFF',
     });
+    expect(createTokens('dark', 'blue').primary).toBe(accentPalette.blue);
   });
 
   it('builds dark surfaces from white opacity over pure black', () => {
