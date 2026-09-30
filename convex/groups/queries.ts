@@ -2,6 +2,7 @@ import { query } from '../_generated/server';
 import { v } from 'convex/values';
 import { getOptionalUser } from '../shared/auth';
 import { normalizeUsername } from '../users/domain';
+import { avatarUrlForUser } from '../avatars/helpers';
 
 export const list = query({
   args: {},
@@ -83,16 +84,20 @@ export const detail = query({
       .query('groupMembers')
       .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
       .collect();
-    const members = [];
-    for (const member of memberships) {
-      const profile = await ctx.db.get(member.userId);
-      members.push({
-        id: member.userId,
-        displayName: profile?.displayName ?? profile?.name ?? 'Finapp user',
-        username: profile?.username,
-        role: member.role,
-      });
-    }
+    const members = await Promise.all(
+      memberships.map(async (member) => {
+        const profile = await ctx.db.get(member.userId);
+        return {
+          id: member.userId,
+          displayName: profile?.displayName ?? profile?.name ?? 'Finapp user',
+          username: profile?.username,
+          avatarId: profile?.avatarId,
+          gender: profile?.gender,
+          avatarUrl: profile ? await avatarUrlForUser(ctx, profile) : null,
+          role: member.role,
+        };
+      }),
+    );
     const expenses = await ctx.db
       .query('transactions')
       .withIndex('by_group_occurredAt', (query) => query.eq('groupId', args.groupId))
@@ -141,6 +146,9 @@ export const chatMessages = query({
           ...(message.text === undefined ? {} : { text: message.text }),
           senderId: message.senderId,
           senderName: sender?.displayName ?? sender?.name ?? 'Member',
+          senderAvatarId: sender?.avatarId,
+          senderGender: sender?.gender,
+          senderAvatarUrl: sender ? await avatarUrlForUser(ctx, sender) : null,
           createdAt: message.createdAt,
           attachmentUrl,
           ...(message.mimeType === undefined ? {} : { mimeType: message.mimeType }),

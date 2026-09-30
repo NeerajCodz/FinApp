@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
+import type { GroupSettlementRangeResult, GroupTransactionRangeResult } from '@convex/sync/types';
 import { useConvex, useConvexAuth, useConvexConnectionState, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import type {
@@ -112,7 +113,6 @@ const bootstrapSections = [
 ] as const;
 type ChangesPage = FunctionReturnType<typeof api.sync.queries.changes>;
 type TransactionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapTransactions>;
-type GroupRangePage = FunctionReturnType<typeof api.sync.queries.groupRange>;
 type SectionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapSection>;
 type TransactionRangePage = FunctionReturnType<typeof api.sync.queries.transactionRange>;
 
@@ -482,40 +482,52 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
       const groups = await upsertAndReadGroupIds(targetUserId);
       for (const groupId of groups) {
         let transactionCursor: string | null = null;
-        let settlementCursor: string | null = null;
-        let transactionDone = false;
-        let settlementDone = false;
-        while (!transactionDone || !settlementDone) {
-          const page: GroupRangePage = await convex.query(api.sync.queries.groupRange, {
-            groupId: groupId as never,
-            startAt,
-            endAt,
-            paginationOpts: { numItems: 100, cursor: transactionCursor },
-            settlementPaginationOpts: { numItems: 100, cursor: settlementCursor },
-          });
+        while (true) {
+          const page: GroupTransactionRangeResult = await convex.query(
+            api.sync.queries.groupTransactionRange,
+            {
+              groupId: groupId as never,
+              startAt,
+              endAt,
+              paginationOpts: { numItems: 100, cursor: transactionCursor },
+            },
+          );
           await upsert(targetUserId, 'group', page.group ? [page.group] : []);
           await upsert(targetUserId, 'groupMember', page.groupMembers);
-          await upsert(targetUserId, 'transaction', page.transactions.page);
+          await persistTransactionPage(targetUserId, {
+            page: page.transactions.page as LocalRecord[],
+            related: page.related,
+          });
+          if (page.transactions.isDone) break;
+          if (
+            !page.transactions.continueCursor ||
+            page.transactions.continueCursor === transactionCursor
+          )
+            throw new Error('INVALID_SYNC_CURSOR');
+          transactionCursor = page.transactions.continueCursor;
+        }
+
+        let settlementCursor: string | null = null;
+        while (true) {
+          const page: GroupSettlementRangeResult = await convex.query(
+            api.sync.queries.groupSettlementRange,
+            {
+              groupId: groupId as never,
+              startAt,
+              endAt,
+              paginationOpts: { numItems: 100, cursor: settlementCursor },
+            },
+          );
+          await upsert(targetUserId, 'group', page.group ? [page.group] : []);
+          await upsert(targetUserId, 'groupMember', page.groupMembers);
           await upsert(targetUserId, 'settlement', page.settlements.page);
-          await persistTransactionPage(targetUserId, { page: [], related: page.related });
-          transactionDone = page.transactions.isDone;
-          settlementDone = page.settlements.isDone;
-          if (!transactionDone) {
-            if (
-              !page.transactions.continueCursor ||
-              page.transactions.continueCursor === transactionCursor
-            )
-              throw new Error('INVALID_SYNC_CURSOR');
-            transactionCursor = page.transactions.continueCursor;
-          }
-          if (!settlementDone) {
-            if (
-              !page.settlements.continueCursor ||
-              page.settlements.continueCursor === settlementCursor
-            )
-              throw new Error('INVALID_SYNC_CURSOR');
-            settlementCursor = page.settlements.continueCursor;
-          }
+          if (page.settlements.isDone) break;
+          if (
+            !page.settlements.continueCursor ||
+            page.settlements.continueCursor === settlementCursor
+          )
+            throw new Error('INVALID_SYNC_CURSOR');
+          settlementCursor = page.settlements.continueCursor;
         }
         await recordCoverage(targetUserId, `group:${groupId}`, startAt, endAt);
       }
@@ -687,31 +699,44 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
       const mappedGroupId = userId ? await getMappedCloudId(userId, 'group', groupId) : null;
       if (!validatedOnline) throw new Error('SYNC_OFFLINE');
       if (groupId.startsWith('local-') && !mappedGroupId) throw new Error('SYNC_PARENT_PENDING');
-      const page: GroupRangePage = await convex.query(api.sync.queries.groupRange, {
-        groupId: (mappedGroupId ?? groupId) as never,
-        startAt,
-        endAt,
-        paginationOpts: { numItems: 100, cursor: transactionCursor },
-        settlementPaginationOpts: { numItems: 100, cursor: settlementCursor },
-      });
+      const cloudGroupId = (mappedGroupId ?? groupId) as never;
+      const [transactionPage, settlementPage]: [
+        GroupTransactionRangeResult,
+        GroupSettlementRangeResult,
+      ] = await Promise.all([
+        convex.query(api.sync.queries.groupTransactionRange, {
+          groupId: cloudGroupId,
+          startAt,
+          endAt,
+          paginationOpts: { numItems: 100, cursor: transactionCursor },
+        }),
+        convex.query(api.sync.queries.groupSettlementRange, {
+          groupId: cloudGroupId,
+          startAt,
+          endAt,
+          paginationOpts: { numItems: 100, cursor: settlementCursor },
+        }),
+      ]);
       const records: Partial<Record<LocalEntity, readonly LocalRecord[]>> = {
-        group: page.group ? [page.group] : [],
-        groupMember: page.groupMembers,
-        transaction: page.transactions.page,
-        settlement: page.settlements.page,
-        account: page.related.accounts.filter((account) => account.ownerId === userId),
-        category: page.related.categories.filter((category) => category.ownerId === userId),
-        expensePayer: page.related.payers,
-        expenseParticipant: page.related.participants,
-        transactionTag: page.related.tags,
-        receiptMetadata: page.related.receipts,
+        group: transactionPage.group ? [transactionPage.group] : [],
+        groupMember: transactionPage.groupMembers,
+        transaction: transactionPage.transactions.page,
+        settlement: settlementPage.settlements.page,
+        account: transactionPage.related.accounts.filter((account) => account.ownerId === userId),
+        category: transactionPage.related.categories.filter(
+          (category) => category.ownerId === userId,
+        ),
+        expensePayer: transactionPage.related.payers,
+        expenseParticipant: transactionPage.related.participants,
+        transactionTag: transactionPage.related.tags,
+        receiptMetadata: transactionPage.related.receipts,
       };
       return {
         records,
-        transactionCursor: page.transactions.continueCursor,
-        settlementCursor: page.settlements.continueCursor,
-        transactionsDone: page.transactions.isDone,
-        settlementsDone: page.settlements.isDone,
+        transactionCursor: transactionPage.transactions.continueCursor,
+        settlementCursor: settlementPage.settlements.continueCursor,
+        transactionsDone: transactionPage.transactions.isDone,
+        settlementsDone: settlementPage.settlements.isDone,
       };
     },
     [convex, userId, validatedOnline],

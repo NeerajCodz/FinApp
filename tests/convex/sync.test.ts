@@ -143,4 +143,129 @@ describe('authenticated local-first sync contract', () => {
     const cleared = await authenticated.query(api.accounts.queries.detail, { accountId });
     expect(cleared?.account.color).toBeUndefined();
   });
+  it('paginates group transactions and settlements through separate queries', async () => {
+    const { t, userId, authenticated } = await makeAuthenticatedUser();
+    const groupId = await authenticated.mutation(api.groups.mutations.create, {
+      name: 'Range group',
+      currency: 'INR',
+      memberUsernames: [],
+      clientMutationId: 'group-range-create',
+    });
+    const accountId = await authenticated.mutation(api.accounts.mutations.create, {
+      name: 'Range account',
+      type: 'cash',
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+      isIncludedInTotal: true,
+    });
+    await t.run(async (ctx) => {
+      for (const occurredAt of [1_000, 2_000]) {
+        await ctx.db.insert('transactions', {
+          ownerId: userId,
+          accountId,
+          type: 'expense',
+          amountMinor: 100n,
+          currency: 'INR',
+          groupId: String(groupId),
+          title: `Group transaction ${occurredAt}`,
+          occurredAt,
+          status: 'posted',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        });
+        await ctx.db.insert('settlements', {
+          groupId,
+          fromUserId: userId,
+          toUserId: userId,
+          amountMinor: 100n,
+          currency: 'INR',
+          accountId,
+          occurredAt,
+          createdAt: occurredAt,
+        });
+      }
+    });
+
+    const firstTransactions = await authenticated.query(api.sync.queries.groupTransactionRange, {
+      groupId,
+      startAt: 0,
+      endAt: 3_000,
+      paginationOpts: { numItems: 1, cursor: null },
+    });
+    const firstSettlements = await authenticated.query(api.sync.queries.groupSettlementRange, {
+      groupId,
+      startAt: 0,
+      endAt: 3_000,
+      paginationOpts: { numItems: 1, cursor: null },
+    });
+    expect(firstTransactions.transactions.page).toHaveLength(1);
+    expect(firstTransactions.transactions.isDone).toBe(false);
+    expect(firstSettlements.settlements.page).toHaveLength(1);
+    expect(firstSettlements.settlements.isDone).toBe(false);
+
+    const secondTransactions = await authenticated.query(api.sync.queries.groupTransactionRange, {
+      groupId,
+      startAt: 0,
+      endAt: 3_000,
+      paginationOpts: { numItems: 1, cursor: firstTransactions.transactions.continueCursor },
+    });
+    const secondSettlements = await authenticated.query(api.sync.queries.groupSettlementRange, {
+      groupId,
+      startAt: 0,
+      endAt: 3_000,
+      paginationOpts: { numItems: 1, cursor: firstSettlements.settlements.continueCursor },
+    });
+    expect(secondTransactions.transactions.page).toHaveLength(1);
+    expect(secondTransactions.transactions.isDone).toBe(true);
+    expect(secondSettlements.settlements.page).toHaveLength(1);
+    expect(secondSettlements.settlements.isDone).toBe(true);
+  });
+  it('persists a gender-matched avatar and exposes its catalog URL', async () => {
+    const { t, authenticated } = await makeAuthenticatedUser();
+    const storageId = await t.run((ctx) =>
+      ctx.storage.store(new Blob([new Uint8Array([1])], { type: 'image/png' })),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert('avatars', {
+        avatarId: 'AV1',
+        gender: 'male',
+        storageId,
+        url: 'https://avatars.example/AV1.png',
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    );
+
+    const updated = await authenticated.mutation(api.users.mutations.update, {
+      avatarId: 'AV1',
+      gender: 'male',
+    });
+    expect(updated.avatarId).toBe('AV1');
+    const profile = await authenticated.query(api.users.queries.current, {});
+    expect(profile?.avatarId).toBe('AV1');
+    expect(profile?.gender).toBe('male');
+    expect(profile?.avatarUrl).toBe('https://avatars.example/AV1.png');
+    const groupId = await authenticated.mutation(api.groups.mutations.create, {
+      name: 'Avatar group',
+      currency: 'INR',
+      memberUsernames: [],
+      clientMutationId: 'avatar-group-create',
+    });
+    const group = await authenticated.query(api.groups.queries.detail, { groupId });
+    expect(group?.members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          avatarId: 'AV1',
+          gender: 'male',
+          avatarUrl: 'https://avatars.example/AV1.png',
+        }),
+      ]),
+    );
+    await expect(
+      authenticated.mutation(api.users.mutations.update, {
+        avatarId: 'AV1',
+        gender: 'female',
+      }),
+    ).rejects.toThrow('AVATAR_GENDER_MISMATCH');
+  });
 });

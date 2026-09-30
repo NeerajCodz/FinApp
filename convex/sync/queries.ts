@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 import type { Id } from '../_generated/dataModel';
 import { query } from '../_generated/server';
 import { getOptionalUser } from '../shared/auth';
+import { avatarUrlForUser } from '../avatars/helpers';
 
 const MAX_PAGE_SIZE = 100;
 const sectionValidator = v.union(
@@ -45,7 +46,10 @@ export const bootstrapIdentity = query({
       phoneVerificationTime: _phoneVerificationTime,
       ...profile
     } = user;
-    return { profile, settings };
+    void _identityId;
+    void _emailVerificationTime;
+    void _phoneVerificationTime;
+    return { profile: { ...profile, avatarUrl: await avatarUrlForUser(ctx, user) }, settings };
   },
 });
 
@@ -286,11 +290,14 @@ async function relatedTransactionData(
             _id: person._id,
             displayName: person.displayName,
             username: person.username,
+            avatarId: person.avatarId,
+            gender: person.gender,
+            avatarUrl: await avatarUrlForUser(ctx, person),
             avatarStorageId: person.avatarStorageId,
           }
         : null;
     }),
-  ).then((items) => items.filter(Boolean));
+  ).then((items) => items.filter((item): item is NonNullable<typeof item> => item !== null));
   const publicAccounts = accounts.flatMap((account) =>
     account
       ? [
@@ -360,72 +367,96 @@ export const transactionRange = query({
   },
 });
 
-export const groupRange = query({
+async function groupRangeContext(
+  ctx: Parameters<typeof getOptionalUser>[0],
+  groupId: Id<'groups'>,
+  userId: Id<'users'>,
+) {
+  const membership = await ctx.db
+    .query('groupMembers')
+    .withIndex('by_group_user', (index) => index.eq('groupId', groupId).eq('userId', userId))
+    .unique();
+  if (!membership) throw new Error('INSUFFICIENT_PERMISSION');
+  const [group, memberships] = await Promise.all([
+    ctx.db.get(groupId),
+    ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (index) => index.eq('groupId', groupId))
+      .collect(),
+  ]);
+  const groupMembers = await Promise.all(
+    memberships.map(async (member) => {
+      const person = await ctx.db.get(member.userId);
+      return {
+        ...member,
+        displayName: person?.displayName ?? person?.name ?? 'Finapp user',
+        username: person?.username,
+        avatarId: person?.avatarId,
+        gender: person?.gender,
+        avatarUrl: person ? await avatarUrlForUser(ctx, person) : null,
+      };
+    }),
+  );
+  return { group, groupMembers };
+}
+
+export const groupTransactionRange = query({
   args: {
     groupId: v.id('groups'),
     startAt: v.number(),
     endAt: v.number(),
     paginationOpts: paginationOptsValidator,
-    settlementPaginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, { groupId, startAt, endAt, paginationOpts, settlementPaginationOpts }) => {
+  handler: async (ctx, { groupId, startAt, endAt, paginationOpts }) => {
     const user = await authenticatedUser(ctx);
     assertRange(startAt, endAt);
-    assertPageSize(settlementPaginationOpts.numItems);
     assertPageSize(paginationOpts.numItems);
-    const membership = await ctx.db
-      .query('groupMembers')
-      .withIndex('by_group_user', (index) => index.eq('groupId', groupId).eq('userId', user._id))
-      .unique();
-    if (!membership) throw new Error('INSUFFICIENT_PERMISSION');
-    const [transactions, settlements] = await Promise.all([
-      ctx.db
-        .query('transactions')
-        .withIndex('by_group_occurredAt', (index) =>
-          index.eq('groupId', groupId).gte('occurredAt', startAt).lt('occurredAt', endAt),
-        )
-        .paginate(paginationOpts),
-      ctx.db
-        .query('settlements')
-        .withIndex('by_group_occurredAt', (index) =>
-          index.eq('groupId', groupId).gte('occurredAt', startAt).lt('occurredAt', endAt),
-        )
-        .paginate(settlementPaginationOpts),
-    ]);
+    const context = await groupRangeContext(ctx, groupId, user._id);
+    const transactions = await ctx.db
+      .query('transactions')
+      .withIndex('by_group_occurredAt', (index) =>
+        index.eq('groupId', groupId).gte('occurredAt', startAt).lt('occurredAt', endAt),
+      )
+      .paginate(paginationOpts);
     const related = await relatedTransactionData(ctx, transactions.page);
-    const memberships = await ctx.db
-      .query('groupMembers')
-      .withIndex('by_group', (index) => index.eq('groupId', groupId))
-      .collect();
-    const groupMembers = await Promise.all(
-      memberships.map(async (member) => {
-        const person = await ctx.db.get(member.userId);
-        return {
-          ...member,
-          displayName: person?.displayName ?? 'Finapp user',
-          username: person?.username,
-        };
+    const payersAndParticipants = await Promise.all(
+      transactions.page.map(async (transaction) => {
+        const [payers, participants] = await Promise.all([
+          ctx.db
+            .query('expensePayers')
+            .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+            .collect(),
+          ctx.db
+            .query('expenseParticipants')
+            .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
+            .collect(),
+        ]);
+        return { transactionId: transaction._id, payers, participants };
       }),
     );
-    const [group, payersAndParticipants] = await Promise.all([
-      ctx.db.get(groupId),
-      Promise.all(
-        transactions.page.map(async (transaction) => {
-          const [payers, participants] = await Promise.all([
-            ctx.db
-              .query('expensePayers')
-              .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
-              .collect(),
-            ctx.db
-              .query('expenseParticipants')
-              .withIndex('by_transaction', (index) => index.eq('transactionId', transaction._id))
-              .collect(),
-          ]);
-          return { transactionId: transaction._id, payers, participants };
-        }),
-      ),
-    ]);
-    return { group, groupMembers, transactions, settlements, related, payersAndParticipants };
+    return { ...context, transactions, related, payersAndParticipants };
+  },
+});
+
+export const groupSettlementRange = query({
+  args: {
+    groupId: v.id('groups'),
+    startAt: v.number(),
+    endAt: v.number(),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, { groupId, startAt, endAt, paginationOpts }) => {
+    const user = await authenticatedUser(ctx);
+    assertRange(startAt, endAt);
+    assertPageSize(paginationOpts.numItems);
+    const context = await groupRangeContext(ctx, groupId, user._id);
+    const settlements = await ctx.db
+      .query('settlements')
+      .withIndex('by_group_occurredAt', (index) =>
+        index.eq('groupId', groupId).gte('occurredAt', startAt).lt('occurredAt', endAt),
+      )
+      .paginate(paginationOpts);
+    return { ...context, settlements };
   },
 });
 

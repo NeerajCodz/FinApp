@@ -2,6 +2,7 @@ import { query } from '../_generated/server';
 import { v } from 'convex/values';
 import { getOptionalUser, requireIdentity } from '../shared/auth';
 import { composeDashboard, type DashboardInput } from './domain';
+import { avatarUrlForUser } from '../avatars/helpers';
 
 export function getDashboard(input: DashboardInput) {
   return composeDashboard(input);
@@ -113,13 +114,13 @@ export const frequentPeople = query({
       ranked.map(async ([id, activity]) => {
         const profile = await ctx.db.get(id as typeof user._id);
         if (!profile) return null;
-        const image =
-          profile.image ??
-          (profile.avatarStorageId ? await ctx.storage.getUrl(profile.avatarStorageId) : null);
+        const image = await avatarUrlForUser(ctx, profile);
         return {
           id,
           username: profile.username,
           name: profile.displayName ?? profile.name ?? profile.username ?? 'Finapp user',
+          avatarId: profile.avatarId,
+          gender: profile.gender,
           image,
           transactionCount: activity.count,
           amountMinor: activity.amountMinor,

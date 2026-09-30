@@ -22,6 +22,8 @@ export default defineSchema({
     displayName: v.optional(v.string()),
     username: optionalText,
     accent: optionalText,
+    avatarId: optionalText,
+    gender: v.optional(v.union(v.literal('neutral'), v.literal('male'), v.literal('female'))),
     avatarStorageId: optionalText,
     defaultCurrency: v.optional(currency),
     defaultAccountId: v.optional(v.id('accounts')),
@@ -355,4 +357,14 @@ export default defineSchema({
     lastSeenAt: timestamp,
     disabledAt: optionalTime,
   }).index('by_user', ['userId']),
+  avatars: defineTable({
+    avatarId: v.string(),
+    gender: v.union(v.literal('neutral'), v.literal('male'), v.literal('female')),
+    storageId: v.id('_storage'),
+    url: v.string(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+    .index('by_avatarId', ['avatarId'])
+    .index('by_gender_avatarId', ['gender', 'avatarId']),
 });
