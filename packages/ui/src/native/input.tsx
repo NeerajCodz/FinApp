@@ -89,8 +89,9 @@ export function InputOTP({
             <View
               key={index}
               style={{
-                width: 48,
-                height: 56,
+                flex: 1,
+                minWidth: 0,
+                minHeight: 56,
                 borderRadius: 12,
                 borderWidth: 1,
                 borderColor: active ? tokens.ring : tokens.borderSubtle,
