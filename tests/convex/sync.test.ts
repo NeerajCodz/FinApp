@@ -105,4 +105,42 @@ describe('authenticated local-first sync contract', () => {
     );
     expect(page.latestRevision).toBe(1n);
   });
+
+  it('persists, validates, and clears account colors', async () => {
+    const { authenticated } = await makeAuthenticatedUser();
+    const accountId = await authenticated.mutation(api.accounts.mutations.create, {
+      name: 'Color test account',
+      type: 'bank',
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+      isIncludedInTotal: true,
+    });
+    const setColor = {
+      accountId,
+      color: '#B7FF4A',
+      clientMutationId: 'account-color-set',
+    };
+    await authenticated.mutation(api.accounts.mutations.setColor, setColor);
+    await authenticated.mutation(api.accounts.mutations.setColor, setColor);
+    const colored = await authenticated.query(api.accounts.queries.detail, { accountId });
+    expect(colored?.account.color).toBe('#B7FF4A');
+
+    await expect(
+      authenticated.mutation(api.accounts.mutations.setColor, {
+        accountId,
+        color: 'lime',
+        clientMutationId: 'account-color-invalid',
+      }),
+    ).rejects.toThrow('INVALID_ACCOUNT');
+    const unchanged = await authenticated.query(api.accounts.queries.detail, { accountId });
+    expect(unchanged?.account.color).toBe('#B7FF4A');
+
+    await authenticated.mutation(api.accounts.mutations.setColor, {
+      accountId,
+      color: null,
+      clientMutationId: 'account-color-clear',
+    });
+    const cleared = await authenticated.query(api.accounts.queries.detail, { accountId });
+    expect(cleared?.account.color).toBeUndefined();
+  });
 });
