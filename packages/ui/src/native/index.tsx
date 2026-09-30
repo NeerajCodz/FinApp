@@ -78,6 +78,7 @@ export const Tooltip = ({ children, label }: { children: React.ReactNode; label:
   <View accessibilityLabel={label}>{children}</View>
 );
 export { View, getTouchTargetStyle };
+export { OnboardingAvatarPicker, ProfilePreview } from './OnboardingIdentity';
 export { ThemeProvider, useTheme } from './ThemeProvider';
 export function Toast({ message }: { message: string }) {
   const { tokens } = useTheme();

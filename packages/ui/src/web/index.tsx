@@ -86,6 +86,7 @@ export {
   type ToggleGroupOption,
   type ToggleGroupProps,
 } from './ToggleGroup';
+export { OnboardingAvatarPicker, ProfilePreview } from './OnboardingIdentity';
 export type { ThemeTokens } from '../tokens';
 export function Tooltip({
   children,
