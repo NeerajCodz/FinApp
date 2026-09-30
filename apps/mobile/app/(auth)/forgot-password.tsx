@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { Button, Input, InputOTP, Label, Typography } from '@finapp/ui/native';
@@ -40,7 +41,7 @@ export default function ForgotPasswordScreen() {
       setCode('');
       toast.success('Reset code sent');
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not send a reset code.';
+      const message = formatAuthError(cause, 'password-reset-request');
       setError(message);
       toast.error('Reset code could not be sent', { description: message });
     } finally {
@@ -70,7 +71,7 @@ export default function ForgotPasswordScreen() {
       toast.success('Password updated');
       router.replace('/(tabs)');
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not reset the password.';
+      const message = formatAuthError(cause, 'password-reset');
       setError(message);
       toast.error('Password reset failed', { description: message });
     } finally {

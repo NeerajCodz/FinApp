@@ -101,34 +101,6 @@
 .finance-topbar-brand {
   display: none;
 }
-.finance-topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.finance-notification-link {
-  position: relative;
-  display: grid;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  place-items: center;
-  border: 1px solid var(--finance-line);
-  border-radius: 50%;
-  background: var(--finance-panel);
-  color: var(--finance-muted);
-  text-decoration: none;
-  transition:
-    background 150ms ease,
-    color 150ms ease,
-    border-color 150ms ease;
-}
-.finance-notification-link:hover,
-.finance-notification-link[aria-current='page'] {
-  border-color: var(--finance-lime);
-  background: var(--finance-panel-raise);
-  color: var(--finance-lime);
-}
 .finance-content {
   width: min(100%, 1430px);
   margin-inline: auto;
@@ -623,11 +595,6 @@
   }
   .finance-topbar .finance-brand {
     font-size: 1.1875rem;
-  }
-  .finance-notification-link {
-    width: 38px;
-    height: 38px;
-    flex-basis: 38px;
   }
   .finance-sync-window-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2022,12 +1989,22 @@
   gap: 18px;
 }
 .finance-home-toolbar {
+  position: relative;
   display: flex;
   min-width: 0;
   align-items: flex-end;
   justify-content: space-between;
   gap: 22px;
-  padding: 4px 0 3px;
+  padding: 4px 90px 3px 0;
+}
+.finance-home-status-actions {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .finance-home-title {
   display: grid;
@@ -2063,7 +2040,8 @@
 }
 .finance-home-controls button,
 .finance-home-controls select,
-.finance-home-search {
+.finance-home-search,
+.finance-home-status-actions button {
   min-height: 39px;
   border: 1px solid var(--finance-line);
   border-radius: 11px;
@@ -2073,7 +2051,8 @@
   font-size: 0.75rem;
 }
 .finance-home-filter,
-.finance-home-sync {
+.finance-home-sync,
+.finance-home-status-actions button {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -2115,6 +2094,7 @@
   color: var(--finance-muted);
 }
 .finance-home-controls button:hover,
+.finance-home-status-actions button:hover,
 .finance-home-section-heading button:hover,
 .finance-home-section-heading a:hover {
   border-color: var(--finance-lime);

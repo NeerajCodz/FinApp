@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAction } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { api } from '@convex/_generated/api';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { Button, Input, Label } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
 import { PasswordField } from './PasswordField';
@@ -62,7 +63,7 @@ export function SignInForm() {
         router.replace(`/two-factor?challengeId=${encodeURIComponent(result.challengeId)}`);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to sign in. Try again.');
+      setError(formatAuthError(cause, 'sign-in'));
     } finally {
       setPending(false);
     }

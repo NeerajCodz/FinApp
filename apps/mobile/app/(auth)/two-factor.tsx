@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { Button, InputOTP, Label, Typography } from '@finapp/ui/native';
@@ -27,7 +28,7 @@ export default function TwoFactorScreen() {
       if (!result.signingIn) throw new Error('That code could not be verified.');
       router.replace('/(tabs)');
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not verify this code.';
+      const message = formatAuthError(cause, 'verification');
       setError(message);
       toast.error('Sign-in verification failed', { description: message });
     } finally {

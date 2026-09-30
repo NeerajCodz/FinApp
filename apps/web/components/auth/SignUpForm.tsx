@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { Button, Input, Label } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
 import { PasswordField } from './PasswordField';
@@ -54,9 +55,7 @@ export function SignUpForm() {
           : `/verify?email=${encodeURIComponent(normalizedEmail)}&next=onboarding`,
       );
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'Unable to create your account. Try again.',
-      );
+      setError(formatAuthError(cause, 'sign-up'));
     } finally {
       setPending(false);
     }

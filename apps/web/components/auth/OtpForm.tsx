@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { Button, InputOTP } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
 
@@ -33,7 +34,7 @@ export function EmailVerificationForm({
       if (!result.signingIn) throw new Error('That code could not be verified.');
       router.replace(next === 'onboarding' ? '/onboarding' : '/dashboard');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not verify this code.');
+      setError(formatAuthError(cause, 'verification'));
     } finally {
       setPending(false);
     }
@@ -97,7 +98,7 @@ export function TwoFactorVerificationForm({ challengeId }: { challengeId: string
       if (!result.signingIn) throw new Error('That code could not be verified.');
       router.replace('/dashboard');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not verify this code.');
+      setError(formatAuthError(cause, 'verification'));
     } finally {
       setPending(false);
     }

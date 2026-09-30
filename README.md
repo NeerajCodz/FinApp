@@ -16,6 +16,11 @@ Account creation asks for email and password, followed by email verification. It
 does not offer or submit a two-factor enrollment option. Onboarding retains display
 name, username, gender, and avatar selection from the current application.
 
+Profile details are edited at `/profile/edit` on web and native, reachable from
+both the Profile page and Settings. Profile name, username, phone, and avatar edits
+use the existing offline-first sync flow. Notification and sync actions live in the
+home header; they are not repeated across other screens.
+
 ### Coin implementation
 
 - `packages/ui/src/coin/geometry.ts`: flat volt faces, a thin beveled/reeded edge,

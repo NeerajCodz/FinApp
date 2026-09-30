@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { Button, InputOTP, Label, Typography } from '@finapp/ui/native';
@@ -32,7 +33,7 @@ export default function VerifyScreen() {
       toast.success('Email verified');
       router.replace(next === 'onboarding' ? '/(auth)/onboarding' : '/(tabs)');
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not verify this code.';
+      const message = formatAuthError(cause, 'verification');
       setError(message);
       toast.error('Verification failed', { description: message });
     } finally {

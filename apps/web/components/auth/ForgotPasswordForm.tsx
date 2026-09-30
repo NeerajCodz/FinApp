@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { formatAuthError, isValidAuthEmail } from '@convex/shared/auth-errors';
 import { Button, Input, InputOTP, Label } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
 
@@ -20,6 +21,10 @@ export function ForgotPasswordForm({ initialEmail = '' }: { initialEmail?: strin
   async function requestCode(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!email.trim() || pending) return;
+    if (!isValidAuthEmail(email)) {
+      setError('Enter a valid email address.');
+      return;
+    }
     setPending(true);
     setError('');
     const form = new FormData();
@@ -30,7 +35,7 @@ export function ForgotPasswordForm({ initialEmail = '' }: { initialEmail?: strin
       setRequested(true);
       setCode('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send a reset code.');
+      setError(formatAuthError(cause, 'password-reset-request'));
     } finally {
       setPending(false);
     }
@@ -51,7 +56,7 @@ export function ForgotPasswordForm({ initialEmail = '' }: { initialEmail?: strin
       if (!result.signingIn) throw new Error('That code could not be verified.');
       router.replace('/dashboard');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not reset the password.');
+      setError(formatAuthError(cause, 'password-reset'));
     } finally {
       setPending(false);
     }

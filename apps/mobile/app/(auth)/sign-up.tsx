@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { Button, Input, Label, Typography } from '@finapp/ui/native';
@@ -40,7 +41,7 @@ export default function SignUpScreen() {
         });
       }
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Unable to create account';
+      const message = formatAuthError(cause, 'sign-up');
       setError(message);
       toast.error('Account creation failed', { description: message });
     } finally {

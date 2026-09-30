@@ -8,6 +8,7 @@ import {
   Eye,
   LockKey,
   Palette,
+  UserCircle,
 } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -51,6 +52,12 @@ export default function SettingsScreen() {
           value={`${appearance.charAt(0).toUpperCase()}${appearance.slice(1)}`}
           leadingIcon={<Palette size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/appearance' as never)}
+        />
+        <Separator />
+        <SettingsRow
+          label="Edit profile"
+          leadingIcon={<UserCircle size={19} color={tokens.primary} />}
+          onPress={() => router.push('/profile/edit' as never)}
         />
         <Separator />
         <SettingsRow

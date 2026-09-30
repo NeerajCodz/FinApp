@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { Button, Input, Label, Typography } from '@finapp/ui/native';
@@ -60,7 +61,7 @@ export default function SignInScreen() {
         });
       }
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Unable to sign in';
+      const message = formatAuthError(cause, 'sign-in');
       setError(message);
       toast.error('Sign in failed', { description: message });
     } finally {

@@ -1,41 +1,26 @@
-import { api } from '@convex/_generated/api';
 import { ArrowRight } from '@finapp/ui/icons/native';
 import { currencies } from '@convex/shared/validators';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useMutation, useQuery } from 'convex/react';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
-import { upsertCloudPage, type LocalRecord } from '@/local/repository';
+import { type LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { normalizeUsername } from '@convex/users/domain';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Avatar,
-  Button,
-  IconButton,
-  Input,
-  Label,
-  Sheet,
-  Text,
-  Typography,
-} from '@finapp/ui/native';
+import { Avatar, Button, IconButton, Sheet, Text, Typography } from '@finapp/ui/native';
 import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import {
   ArrowLeft,
   Bell,
   CaretRight,
   ChartLineUp,
-  Check,
   Coins,
-  ContactRound,
   CurrencyDollar,
   Gear,
   NotePencil,
   Palette,
-  Phone,
   ReceiptText,
   ShieldCheck,
   UsersThree,
@@ -45,8 +30,6 @@ import { useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
 import { clearValidatedLocalUserId } from '@/local/identity';
 
-const usernamePattern = /^[a-z0-9_]{3,32}$/;
-type Editor = 'username' | 'phone' | null;
 type ProfileRecord = LocalRecord & {
   displayName?: string;
   username?: string;
@@ -166,9 +149,7 @@ function ProfileActionRow({
 
 export default function ProfileScreen() {
   const { signOut } = useAuthActions();
-  const updateUser = useMutation(api.users.mutations.update);
-  const avatarCatalog = useQuery(api.avatars.queries.list, {});
-  const { userId, isConnected } = useLocalSync();
+  const { userId } = useLocalSync();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
   const settingsState = useLocalRecords<LocalRecord>(userId, 'settings');
   const defaultCurrency =
@@ -176,90 +157,17 @@ export default function ProfileScreen() {
   const profile = profileState.data?.[0];
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const [editor, setEditor] = useState<Editor>(null);
-  const [draft, setDraft] = useState('');
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const currencyOptions = useMemo(() => [...currencies], []);
-  const username = profile?.username ? `@${profile.username}` : 'Set username';
-  const phone = profile?.phone
-    ? profile.phoneVerificationTime
-      ? 'Verified'
-      : 'Unverified'
-    : 'Add phone number';
-  const [saveError, setSaveError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const normalizedUsername = normalizeUsername(draft);
-  const usernameError =
-    editor === 'username' && draft.trim().length > 0 && !usernamePattern.test(normalizedUsername)
-      ? 'Use 3–32 letters, numbers, or underscores.'
-      : '';
-  const editorDisabled =
-    !draft.trim() || saving || (editor === 'username' && !usernamePattern.test(normalizedUsername));
 
+  const [saveError, setSaveError] = useState('');
   async function saveProfile(update: Partial<ProfileRecord>) {
     if (!userId) throw new Error('AUTH_REQUIRED');
-    if (update.username !== undefined && isConnected) {
-      const savedProfile = await updateUser({ username: update.username });
-      await upsertCloudPage(userId, 'profile', [savedProfile as unknown as LocalRecord]);
-      return;
-    }
     const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
     const nextProfile: ProfileRecord = { ...currentProfile, ...update };
-    if (update.phone !== undefined && update.phone !== profile?.phone)
-      nextProfile.phoneVerificationTime = undefined;
     await commitLocalWrite(userId, 'profile', 'user.update', nextProfile, update, {
       recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
     });
-  }
-
-  function openEditor(next: Editor) {
-    setSaveError('');
-    setEditor(next);
-    setDraft(next === 'username' ? (profile?.username ?? '') : (profile?.phone ?? ''));
-  }
-  async function saveEditor() {
-    if (saving) return;
-    const update =
-      editor === 'username'
-        ? { username: normalizedUsername }
-        : editor === 'phone'
-          ? { phone: draft }
-          : null;
-    if (!update) return;
-    if (editor === 'username' && !usernamePattern.test(normalizedUsername)) return;
-    setSaveError('');
-    setSaving(true);
-    try {
-      await saveProfile(update);
-      setEditor(null);
-    } catch (cause) {
-      setSaveError(cause instanceof Error ? cause.message : 'Could not save profile.');
-    } finally {
-      setSaving(false);
-    }
-  }
-  async function selectAvatar(avatarId: string, gender: 'neutral' | 'male' | 'female') {
-    if (!userId || saving) return;
-    const avatar = (avatarCatalog ?? []).find((entry) => entry.avatarId === avatarId);
-    if (!avatar) return;
-    setSaving(true);
-    setSaveError('');
-    try {
-      const update = { avatarId, gender };
-      const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
-      await commitLocalWrite(
-        userId,
-        'profile',
-        'user.update',
-        { ...currentProfile, ...update, avatarUrl: avatar.url },
-        update,
-        { recordId: String(currentProfile.id ?? currentProfile._id ?? userId) },
-      );
-    } catch (cause) {
-      setSaveError(cause instanceof Error ? cause.message : 'Could not save avatar.');
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function leave() {
@@ -357,81 +265,13 @@ export default function ProfileScreen() {
                 variant="bodyLarge"
                 style={{ color: profile?.username ? tokens.primary : tokens.foreground }}
               >
-                {username}
+                {profile?.username ? `@${profile.username}` : 'Set username'}
               </Typography>
             </View>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => openEditor('username')}
-              style={{ width: 82 }}
-            >
-              <NotePencil size={15} color={tokens.foreground} />
-              <Text
-                style={{
-                  marginLeft: 6,
-                  color: tokens.foreground,
-                  fontFamily: 'SpaceGrotesk_600SemiBold',
-                  fontSize: 13,
-                }}
-              >
-                Edit
-              </Text>
-            </Button>
           </View>
-        </View>
-        <View
-          style={{
-            padding: 18,
-            gap: 14,
-            borderRadius: 20,
-            backgroundColor: tokens.surfaceSubtle,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-          }}
-        >
-          <View style={{ gap: 3 }}>
-            <Typography variant="heading">Your avatar</Typography>
-            <Text style={{ color: tokens.foregroundMuted }}>
-              Choose how you appear in groups and shared activity.
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {(['neutral', 'male', 'female'] as const).map((gender) => (
-              <Button
-                key={gender}
-                variant={(profile?.gender ?? 'neutral') === gender ? 'primary' : 'outline'}
-                disabled={saving || !avatarCatalog}
-                onPress={() => {
-                  const first = (avatarCatalog ?? []).find((entry) => entry.gender === gender);
-                  if (first) void selectAvatar(first.avatarId, gender);
-                }}
-                accessibilityLabel={`Choose ${gender} avatar category`}
-              >
-                {gender.charAt(0).toUpperCase() + gender.slice(1)}
-              </Button>
-            ))}
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-              {(avatarCatalog ?? [])
-                .filter((entry) => entry.gender === (profile?.gender ?? 'neutral'))
-                .map((entry) => (
-                  <Button
-                    key={entry.avatarId}
-                    variant={profile?.avatarId === entry.avatarId ? 'primary' : 'outline'}
-                    accessibilityLabel={`Select avatar ${entry.avatarId}`}
-                    accessibilityState={{ selected: profile?.avatarId === entry.avatarId }}
-                    disabled={saving}
-                    onPress={() => void selectAvatar(entry.avatarId, entry.gender)}
-                    style={{ width: 58, height: 58, padding: 3, borderRadius: 999 }}
-                  >
-                    <Avatar initials="" label={entry.avatarId} imageUrl={entry.url} size={48} />
-                  </Button>
-                ))}
-            </View>
-          </ScrollView>
-          {!!saveError && <Text accessibilityRole="alert">{saveError}</Text>}
+          <Button size="lg" variant="outline" onPress={() => router.push('/profile/edit' as never)}>
+            <Text>Edit profile</Text>
+          </Button>
         </View>
 
         <View style={{ gap: 12 }}>
@@ -475,18 +315,6 @@ export default function ProfileScreen() {
           <Typography variant="label" style={{ marginBottom: 4 }}>
             Profile details
           </Typography>
-          <ProfileActionRow
-            icon={ContactRound}
-            label="Username"
-            value={username}
-            onPress={() => openEditor('username')}
-          />
-          <ProfileActionRow
-            icon={Phone}
-            label="Phone number"
-            value={phone}
-            onPress={() => openEditor('phone')}
-          />
           <ProfileActionRow
             icon={CurrencyDollar}
             label="Default currency"
@@ -550,59 +378,6 @@ export default function ProfileScreen() {
         </Button>
       </ScrollView>
 
-      <Sheet
-        visible={editor !== null}
-        onClose={() => setEditor(null)}
-        title={editor === 'username' ? 'Edit username' : 'Add phone number'}
-      >
-        <View style={{ gap: 12 }}>
-          <Label>{editor === 'username' ? 'Username' : 'Phone number'}</Label>
-          <Input
-            autoFocus
-            accessibilityLabel={editor === 'username' ? 'Username' : 'Phone number'}
-            keyboardType={editor === 'username' ? 'default' : 'phone-pad'}
-            autoCapitalize={editor === 'username' ? 'none' : 'words'}
-            textContentType={editor === 'username' ? 'username' : 'telephoneNumber'}
-            placeholder={editor === 'username' ? '@neeraj' : '+91 98765 43210'}
-            value={draft}
-            maxLength={editor === 'username' ? 64 : 24}
-            onChangeText={(value) => {
-              setDraft(value);
-              setSaveError('');
-            }}
-          />
-          {!!usernameError && (
-            <Typography style={{ color: tokens.destructive }}>{usernameError}</Typography>
-          )}
-          <Typography variant="caption">
-            {editor === 'username'
-              ? '3–32 letters, numbers, or underscores.'
-              : profile?.phone
-                ? `Current number: ${profile.phone} · ${profile.phoneVerificationTime ? 'Verified' : 'Unverified'}. Contacts require a manually verified number.`
-                : 'Use an international format. Contacts require a manually verified number.'}
-          </Typography>
-          {!!saveError && (
-            <Typography style={{ color: tokens.destructive }}>{saveError}</Typography>
-          )}
-          <Button size="lg" onPress={saveEditor} disabled={editorDisabled}>
-            <Check
-              size={18}
-              color={editorDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
-            />
-            <Text
-              style={{
-                marginLeft: 8,
-                color: editorDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
-                fontFamily: 'SpaceGrotesk_600SemiBold',
-                fontSize: 15,
-              }}
-            >
-              Save changes
-            </Text>
-          </Button>
-        </View>
-      </Sheet>
-
       <Sheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} title="Default currency">
         <ScrollView
           style={{ maxHeight: 420 }}
@@ -628,6 +403,7 @@ export default function ProfileScreen() {
             </Button>
           ))}
         </ScrollView>
+        {!!saveError && <Text accessibilityRole="alert">{saveError}</Text>}
       </Sheet>
     </>
   );

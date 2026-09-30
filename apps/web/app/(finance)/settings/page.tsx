@@ -1,7 +1,16 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Bell, Coins, Eye, Palette, RefreshCw, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bell,
+  CircleUserRound,
+  Coins,
+  Eye,
+  Palette,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 import { IconButton, Separator, Typography, useTheme } from '@finapp/ui/web';
 import { SettingsRow } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
@@ -40,6 +49,12 @@ export default function SettingsPage() {
         <Typography variant="label" style={{ display: 'block', marginBottom: 8 }}>
           General
         </Typography>
+        <SettingsRow
+          label="Edit profile"
+          leadingIcon={<CircleUserRound size={19} color={tokens.primary} />}
+          onPress={() => router.push('/profile/edit')}
+        />
+        <Separator />
         <SettingsRow
           label="Appearance"
           value={`${appearance.charAt(0).toUpperCase()}${appearance.slice(1)}`}
