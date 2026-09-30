@@ -171,4 +171,48 @@ describe('group chat retention', () => {
     expect(message?.text).toBe('Keep this message');
     expect(message?.expiresAt).toBeUndefined();
   });
+
+  it('omits unset optional fields from bill message results', async () => {
+    const { t, fixture, member } = await seedGroup();
+    await t.run((ctx) =>
+      ctx.db.insert('groupMessages', {
+        groupId: fixture.groupId,
+        senderId: fixture.memberId,
+        kind: 'bill',
+        mimeType: 'image/jpeg',
+        size: 1,
+        createdAt: Date.now(),
+      }),
+    );
+
+    const messages = await member.query(api.groups.queries.chatMessages, {
+      groupId: fixture.groupId,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      kind: 'bill',
+      senderName: 'Member',
+      attachmentUrl: null,
+      mimeType: 'image/jpeg',
+      size: 1,
+    });
+    expect(messages[0]).not.toHaveProperty('text');
+  });
+
+  it('returns no messages for unauthenticated or archived-group queries', async () => {
+    const { t, fixture, member } = await seedGroup();
+    expect(
+      await t.query(api.groups.queries.chatMessages, {
+        groupId: fixture.groupId,
+      }),
+    ).toEqual([]);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(fixture.groupId, { archivedAt: Date.now() });
+    });
+    expect(
+      await member.query(api.groups.queries.chatMessages, {
+        groupId: fixture.groupId,
+      }),
+    ).toEqual([]);
+  });
 });
