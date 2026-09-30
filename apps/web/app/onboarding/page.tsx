@@ -76,6 +76,16 @@ export default function OnboardingPage() {
   const { records: profiles } = useLocalRecords<Profile>('profile');
   const profile = profiles[0];
   const router = useRouter();
+  const verification = useQuery(api.users.queries.current, {});
+  React.useEffect(() => {
+    if (auth.isLoading || verification === undefined) return;
+    if (!auth.isAuthenticated) router.replace('/sign-in');
+    else if (verification?.emailVerificationTime === undefined) {
+      router.replace(
+        `/verify?email=${encodeURIComponent(verification?.email ?? '')}&next=onboarding`,
+      );
+    }
+  }, [auth.isAuthenticated, auth.isLoading, router, verification]);
   const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const [currencyOpen, setCurrencyOpen] = React.useState(false);
   const [currency, setCurrency] = React.useState<Currency>(
@@ -249,6 +259,7 @@ export default function OnboardingPage() {
       </main>
     );
   }
+  if (auth.isAuthenticated && verification?.emailVerificationTime === undefined) return null;
 
   const copy = [
     [

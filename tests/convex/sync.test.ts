@@ -10,6 +10,7 @@ async function makeAuthenticatedUser() {
   const identity = { subject: 'sync-contract-user', email: 'sync@example.com', name: 'Sync User' };
   const userId = await t.run((ctx) =>
     ctx.db.insert('users', {
+      emailVerificationTime: 1,
       identityId: identity.subject,
       email: identity.email,
       displayName: identity.name,

@@ -17,11 +17,35 @@ describe('Convex public runtime functions', () => {
     await expect(t.query(api.accounts.queries.list, {})).rejects.toThrow('AUTH_REQUIRED');
     await expect(t.query(api.categories.queries.list, {})).rejects.toThrow('AUTH_REQUIRED');
   });
+  it('rejects onboarding writes until email verification completes', async () => {
+    const t = convexTest(schema, modules);
+    const email = 'unverified@example.com';
+    const userId = await t.run((ctx) => ctx.db.insert('users', { email, name: 'Unverified User' }));
+    const authenticated = t.withIdentity({
+      subject: `${userId}|session-id`,
+      email,
+      name: 'Unverified User',
+    });
+
+    await expect(
+      authenticated.mutation(api.users.mutations.update, { displayName: 'Unverified User' }),
+    ).rejects.toThrow('EMAIL_NOT_VERIFIED');
+    await expect(
+      authenticated.mutation(api.accounts.mutations.create, {
+        name: 'Cash',
+        type: 'cash',
+        currency: 'INR',
+        openingBalanceMinor: 0n,
+        isIncludedInTotal: true,
+      }),
+    ).rejects.toThrow('EMAIL_NOT_VERIFIED');
+  });
 
   it('resolves Convex Auth session subjects to profile users', async () => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         email: 'auth-session@example.com',
         name: 'Auth Session User',
       }),
@@ -51,6 +75,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         email: 'custom-type@example.com',
         name: 'Custom Type User',
       }),
@@ -84,6 +109,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: 'username-login-user',
         email: 'login-user@example.com',
         name: 'Login User',
@@ -94,6 +120,41 @@ describe('Convex public runtime functions', () => {
     await expect(
       t.query(internal.users.queries.loginEmailForUsername, { username: '@NEERAJ' }),
     ).resolves.toBe('login-user@example.com');
+  });
+
+  it('returns actionable errors for existing accounts and incorrect passwords', async () => {
+    const t = convexTest(schema, modules);
+    const email = 'auth-errors@example.com';
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        email,
+        name: 'Existing User',
+      }),
+    );
+    const secret = await new Scrypt().hash('correct-runtime-password');
+    await t.run((ctx) =>
+      ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: email,
+        secret,
+        emailVerified: '1',
+      }),
+    );
+
+    await expect(
+      t.action(api.auth.signIn, {
+        provider: 'password',
+        params: { email, password: 'another-runtime-password', flow: 'signUp' },
+      }),
+    ).rejects.toMatchObject({ data: { code: 'ACCOUNT_EXISTS' } });
+    await expect(
+      t.action(api.auth.signIn, {
+        provider: 'password',
+        params: { email, password: 'incorrect-runtime-password', flow: 'signIn' },
+      }),
+    ).rejects.toMatchObject({ data: { code: 'INVALID_CREDENTIALS' } });
   });
 
   it('skips email OTP and accepts password sign-in by default', async () => {
@@ -488,6 +549,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
@@ -551,12 +613,14 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
       await ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
         defaultCurrency: 'INR',
       });
       await ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: 'other-owner',
         email: 'other-owner@example.com',
         defaultCurrency: 'INR',
@@ -609,10 +673,10 @@ describe('Convex public runtime functions', () => {
     ).rejects.toThrow('INVALID_CATEGORY');
 
     const now = new Date();
-    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+    const previousMonth = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15);
     for (const [amountMinor, occurredAt, clientMutationId] of [
-      [25000n, Date.now(), 'this-month'],
-      [60000n, previousMonth.getTime(), 'previous-month'],
+      [25000n, now.getTime(), 'this-month'],
+      [60000n, previousMonth, 'previous-month'],
     ] as const) {
       await owner.mutation(api.transactions.mutations.create, {
         accountId,
@@ -696,6 +760,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
@@ -740,12 +805,14 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
       await ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
         defaultCurrency: 'INR',
       });
       await ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: 'other-budget-owner',
         email: 'other-budget@example.com',
         defaultCurrency: 'INR',
@@ -811,6 +878,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
@@ -879,6 +947,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
@@ -902,6 +971,7 @@ describe('Convex public runtime functions', () => {
     );
     const otherUserId = await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: 'other-runtime-user',
         email: 'rahul@example.com',
         name: 'Rahul',
@@ -999,6 +1069,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     const ownerId = await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
@@ -1029,6 +1100,7 @@ describe('Convex public runtime functions', () => {
     const t = convexTest(schema, modules);
     const ownerId = await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: identity.subject,
         email: identity.email,
         name: identity.name,
@@ -1037,6 +1109,7 @@ describe('Convex public runtime functions', () => {
     );
     const memberId = await t.run((ctx) =>
       ctx.db.insert('users', {
+        emailVerificationTime: 1,
         identityId: 'group-member',
         email: 'rahul@example.com',
         name: 'Rahul',

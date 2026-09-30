@@ -8,6 +8,7 @@ export { Text, Typography, Label, Badge, SectionHeader } from './typography';
 export { Button, IconButton } from './button';
 export { Card, Popover, Calendar } from './card';
 export { Input, Textarea, Command, InputOTP } from './input';
+export { PasswordField } from './PasswordField';
 export { Avatar, Separator, Progress, Skeleton, Empty } from './feedback';
 export { Checkbox, RadioGroup, Switch, Tabs, Select, Slider } from './controls';
 export {

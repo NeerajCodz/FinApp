@@ -4,8 +4,8 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { formatAuthError, isValidAuthEmail } from '@convex/shared/auth-errors';
-import { Button, Input, InputOTP, Label } from '@finapp/ui/web';
+import { formatAuthError, isValidAuthEmail } from '@convex/shared/authErrors';
+import { Button, Input, InputOTP, Label, PasswordField } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
 
 export function ForgotPasswordForm({ initialEmail = '' }: { initialEmail?: string }) {
@@ -110,9 +110,8 @@ export function ForgotPasswordForm({ initialEmail = '' }: { initialEmail?: strin
           </div>
           <div className="auth-field">
             <Label htmlFor="new-password">New password</Label>
-            <Input
+            <PasswordField
               id="new-password"
-              type="password"
               autoComplete="new-password"
               placeholder="At least eight characters"
               value={password}

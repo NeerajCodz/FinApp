@@ -68,6 +68,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
+    if (user.emailVerificationTime === undefined) throw new Error('EMAIL_NOT_VERIFIED');
     const replay = await replayMutationResult(
       ctx,
       user._id,

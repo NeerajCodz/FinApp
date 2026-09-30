@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
-import { useQuery } from 'convex/react';
+import { useConvexAuth, useQuery } from 'convex/react';
 import { currencies } from '@convex/shared/validators';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -95,6 +95,18 @@ export default function OnboardingScreen() {
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
   const avatarCatalog = useQuery(api.avatars.queries.list, {});
+  const auth = useConvexAuth();
+  const verification = useQuery(api.users.queries.current, {});
+  React.useEffect(() => {
+    if (auth.isLoading || verification === undefined) return;
+    if (!auth.isAuthenticated) router.replace('/(auth)/sign-in');
+    else if (verification?.emailVerificationTime === undefined) {
+      router.replace({
+        pathname: '/(auth)/verify',
+        params: { email: verification?.email ?? '', next: 'onboarding' },
+      });
+    }
+  }, [auth.isAuthenticated, auth.isLoading, verification]);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const { tokens } = useTheme();
@@ -218,6 +230,12 @@ export default function OnboardingScreen() {
     'Start with personal finances or keep shared expenses ready from day one.',
   ];
 
+  if (
+    auth.isLoading ||
+    verification === undefined ||
+    verification?.emailVerificationTime === undefined
+  )
+    return null;
   return (
     <>
       <AuthScaffold

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatAuthError } from '@convex/shared/auth-errors';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { Button, Input, InputOTP, Label, Typography } from '@finapp/ui/native';
+import { Button, Input, InputOTP, Label, PasswordField, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
-import { AuthError, AuthSubmit, isEmail, PasswordField } from '@/components/auth/AuthFields';
+import { AuthError, AuthSubmit, isEmail } from '@/components/auth/AuthFields';
 
 export default function ForgotPasswordScreen() {
   const { email: initialEmail } = useLocalSearchParams<{ email?: string }>();

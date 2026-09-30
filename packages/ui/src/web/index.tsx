@@ -27,6 +27,7 @@ export {
   Progress,
   type InputProps,
 } from './fields';
+export { PasswordField } from './PasswordField';
 export { Checkbox, RadioGroup, Switch, Tabs, Select } from './choices';
 export { Popover, Sheet, Dialog, AlertDialog, Drawer, type AlertDialogProps } from './overlay';
 export { FilterOptionPopover, type FilterOptionPopoverOption } from './FilterOptionPopover';

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatAuthError } from '@convex/shared/auth-errors';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { Button, InputOTP, Label, Typography } from '@finapp/ui/native';

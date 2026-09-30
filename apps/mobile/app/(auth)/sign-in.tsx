@@ -3,12 +3,12 @@ import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { formatAuthError } from '@convex/shared/auth-errors';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { Button, Input, Label, Typography } from '@finapp/ui/native';
+import { Button, Input, Label, PasswordField, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
-import { AuthError, AuthSubmit, isIdentifier, PasswordField } from '@/components/auth/AuthFields';
+import { AuthError, AuthSubmit, isIdentifier } from '@/components/auth/AuthFields';
 
 export default function SignInScreen() {
   const { email: initialIdentifier } = useLocalSearchParams<{ email?: string }>();

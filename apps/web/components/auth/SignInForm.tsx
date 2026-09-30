@@ -6,10 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useAction } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { api } from '@convex/_generated/api';
-import { formatAuthError } from '@convex/shared/auth-errors';
-import { Button, Input, Label } from '@finapp/ui/web';
+import { formatAuthError } from '@convex/shared/authErrors';
+import { Button, Input, Label, PasswordField } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
-import { PasswordField } from './PasswordField';
 
 export function SignInForm() {
   const [identifier, setIdentifier] = useState('');

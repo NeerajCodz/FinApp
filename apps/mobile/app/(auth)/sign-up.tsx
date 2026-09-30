@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
-import { formatAuthError } from '@convex/shared/auth-errors';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { Button, Input, Label, Typography } from '@finapp/ui/native';
+import { Button, Input, Label, PasswordField, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
-import { AuthError, AuthSubmit, isEmail, PasswordField } from '@/components/auth/AuthFields';
+import { AuthError, AuthSubmit, isEmail } from '@/components/auth/AuthFields';
 
 export default function SignUpScreen() {
   const [email, setEmail] = useState('');
@@ -31,15 +31,11 @@ export default function SignUpScreen() {
     form.append('password', password);
     form.append('flow', 'signUp');
     try {
-      const result = await signIn('password', form);
-      if (result.signingIn) {
-        router.replace('/(auth)/onboarding');
-      } else {
-        router.replace({
-          pathname: '/(auth)/verify',
-          params: { email: email.trim().toLowerCase(), next: 'onboarding' },
-        });
-      }
+      await signIn('password', form);
+      router.replace({
+        pathname: '/(auth)/verify',
+        params: { email: email.trim().toLowerCase(), next: 'onboarding' },
+      });
     } catch (cause) {
       const message = formatAuthError(cause, 'sign-up');
       setError(message);

@@ -71,6 +71,7 @@ function profilePatch(user: { phone?: string }, update: ProfileUpdate, updatedAt
 export async function updateProfile(ctx: UserMutationContext, update: ProfileUpdate) {
   const user = await requireUser(ctx);
   if (!user) throw new Error('AUTH_REQUIRED');
+  if (user.emailVerificationTime === undefined) throw new Error('EMAIL_NOT_VERIFIED');
   const normalized = normalizeProfileUpdate(update);
   validateProfileUpdate(normalized);
   const profileUpdate = await validateAvatarSelection(ctx, user, normalized);
@@ -96,6 +97,7 @@ export const update = mutation({
   handler: async (ctx, args: ProfileUpdateArgs) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
+    if (user.emailVerificationTime === undefined) throw new Error('EMAIL_NOT_VERIFIED');
     const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'user.update');
     if (replay.found) return replay.result;
     const normalized = normalizeProfileUpdate(args);

@@ -18,12 +18,22 @@ export function isValidAuthEmail(value: string): boolean {
 
 function errorText(cause: unknown): string {
   if (typeof cause === 'string') return cause;
-  if (cause instanceof Error) return cause.message;
-  if (cause && typeof cause === 'object' && 'message' in cause) {
-    const message = cause.message;
-    return typeof message === 'string' ? message : '';
+  if (!cause || typeof cause !== 'object') return '';
+  const values: string[] = [];
+  const pending: unknown[] = [cause];
+  const seen = new Set<object>();
+  while (pending.length) {
+    const value = pending.pop();
+    if (!value || typeof value !== 'object' || seen.has(value)) continue;
+    seen.add(value);
+    const record = value as Record<string, unknown>;
+    for (const key of ['message', 'data', 'code', 'error', 'reason']) {
+      const nested = record[key];
+      if (typeof nested === 'string') values.push(nested);
+      else if (nested && typeof nested === 'object') pending.push(nested);
+    }
   }
-  return '';
+  return values.join(' ');
 }
 
 export function formatAuthError(cause: unknown, context: AuthFailureContext): string {
@@ -37,7 +47,7 @@ export function formatAuthError(cause: unknown, context: AuthFailureContext): st
 
   if (
     context === 'sign-up' &&
-    /(account|email|user).{0,50}(already exists|already registered)|(already exists|already registered).{0,50}(account|email|user)/.test(
+    /account_exists|account.{0,50}(already exists|already registered)|email.{0,50}(already exists|already registered)|user.{0,50}(already exists|already registered)|(already exists|already registered).{0,50}(account|email|user)/.test(
       message,
     )
   ) {
@@ -46,7 +56,7 @@ export function formatAuthError(cause: unknown, context: AuthFailureContext): st
 
   if (
     context === 'sign-in' &&
-    /invalid credentials|invalidaccountid|invalidsecret|incorrect (email|username|password)|wrong password/.test(
+    /invalid_credentials|invalid credentials|invalidaccountid|invalidsecret|incorrect (email|username|password)|wrong password/.test(
       message,
     )
   ) {
