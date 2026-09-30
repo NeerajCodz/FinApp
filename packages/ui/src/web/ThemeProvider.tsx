@@ -68,7 +68,14 @@ function tokenVariables(tokens: ThemeTokens): React.CSSProperties {
   } as React.CSSProperties;
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({
+  children,
+  forcedMode,
+}: {
+  children: React.ReactNode;
+  forcedMode?: ThemeMode;
+}) {
+  // Keep the server and first client render identical; storage is read after hydration.
   const [appearance, updateAppearance] = useState<Appearance>('dark');
   const [accent, updateAccent] = useState<AccentValue>('volt');
   const [systemIsDark, setSystemIsDark] = useState(true);
@@ -111,7 +118,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   const setAccent = useCallback((next: AccentValue) => updateAccent(next), []);
-  const isDark = appearance === 'system' ? systemIsDark : appearance === 'dark';
+  const isDark = forcedMode
+    ? forcedMode === 'dark'
+    : appearance === 'system' ? systemIsDark : appearance === 'dark';
   const tokens = useMemo(() => createTokens(isDark ? 'dark' : 'light', accent), [accent, isDark]);
   const contextValue = useMemo(
     () => ({ appearance, setAppearance, accent, setAccent, tokens, isDark }),

@@ -29,7 +29,13 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({
+  children,
+  forcedMode,
+}: {
+  children: React.ReactNode;
+  forcedMode?: ThemeMode;
+}) {
   const system = useColorScheme();
   const [appearance, updateAppearance] = useState<Appearance>(savedAppearance);
   const [accent, updateAccent] = useState<AccentValue>('volt');
@@ -46,7 +52,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
   });
-  const isDark = appearance === 'dark' || (appearance === 'system' && system !== 'light');
+  const isDark = forcedMode
+    ? forcedMode === 'dark'
+    : appearance === 'dark' || (appearance === 'system' && system !== 'light');
   const tokens = useMemo(() => createTokens(isDark ? 'dark' : 'light', accent), [accent, isDark]);
   const value = useMemo(
     () => ({ appearance, setAppearance, accent, setAccent, tokens, isDark }),
