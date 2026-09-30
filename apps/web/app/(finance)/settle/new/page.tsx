@@ -424,10 +424,7 @@ function NewSettlementForm() {
           Retry all-time range
         </Button>
       )}
-      <div
-        className="finance-accounts-layout"
-        style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}
-      >
+      <div className="finance-accounts-layout" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
         <Card className="finance-form-panel">
           <div className="finance-form">
             <RadioGroup

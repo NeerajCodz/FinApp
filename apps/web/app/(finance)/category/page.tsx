@@ -124,7 +124,9 @@ export default function PersonalCategoriesPage() {
         </IconButton>
       </header>
       {loading || profileLoading || transactionLoading ? (
-        <Typography variant="small" role="status">Loading categories…</Typography>
+        <Typography variant="small" role="status">
+          Loading categories…
+        </Typography>
       ) : error ? (
         <p className="finance-form-error" role="alert">
           Category data could not be opened: {error}
@@ -162,7 +164,15 @@ export default function PersonalCategoriesPage() {
                   >
                     <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />
                     <span style={{ display: 'grid', minWidth: 0, flex: 1, gap: 2 }}>
-                      <Typography variant="bodyLarge" style={{ overflow: 'hidden', fontSize: 15, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Typography
+                        variant="bodyLarge"
+                        style={{
+                          overflow: 'hidden',
+                          fontSize: 15,
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {category.name ?? 'Category'}
                       </Typography>
                       <Typography variant="caption">Monthly activity</Typography>

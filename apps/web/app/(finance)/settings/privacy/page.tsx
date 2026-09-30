@@ -28,11 +28,7 @@ export default function PrivacySettingsPage() {
     groups.loading ||
     settlements.loading;
   const dataError =
-    accounts.error ??
-    transactions.error ??
-    categories.error ??
-    groups.error ??
-    settlements.error;
+    accounts.error ?? transactions.error ?? categories.error ?? groups.error ?? settlements.error;
   if (!userId)
     return (
       <FinanceSignedOut

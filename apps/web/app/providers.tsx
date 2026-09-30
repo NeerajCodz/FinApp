@@ -25,9 +25,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <ThemeProvider>
         <main className="configuration-error" role="alert">
           <h1>Finapp needs a Convex deployment URL.</h1>
-          <p>
-            Set NEXT_PUBLIC_CONVEX_URL to a valid Convex HTTP endpoint in the app environment.
-          </p>
+          <p>Set NEXT_PUBLIC_CONVEX_URL to a valid Convex HTTP endpoint in the app environment.</p>
         </main>
       </ThemeProvider>
     );

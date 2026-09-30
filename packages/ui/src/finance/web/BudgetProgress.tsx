@@ -28,7 +28,10 @@ export function BudgetProgress({
             {formatMinor(spentMinor, currency)} of {formatMinor(limitMinor, currency)}
           </Typography>
         </div>
-        <Typography variant="small" style={{ color: over ? tokens.destructive : tokens.foreground }}>
+        <Typography
+          variant="small"
+          style={{ color: over ? tokens.destructive : tokens.foreground }}
+        >
           {over ? `${formatMinor(left, currency)} over` : `${formatMinor(left, currency)} left`}
         </Typography>
       </div>

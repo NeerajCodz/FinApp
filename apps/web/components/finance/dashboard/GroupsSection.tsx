@@ -34,14 +34,16 @@ export function GroupsSection({
       {loading ? (
         <Typography variant="small">Loading groups…</Typography>
       ) : groups.length > 0 ? (
-        groups.slice(0, 2).map((group) => (
-          <SettingsRow
-            key={group.id}
-            label={group.name}
-            value={group.currency || currency}
-            onPress={() => onOpen(group.id)}
-          />
-        ))
+        groups
+          .slice(0, 2)
+          .map((group) => (
+            <SettingsRow
+              key={group.id}
+              label={group.name}
+              value={group.currency || currency}
+              onPress={() => onOpen(group.id)}
+            />
+          ))
       ) : (
         <div
           style={{

@@ -11,7 +11,6 @@ import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { FinanceInput } from '@/components/finance/FinanceInput';
 import { SignInGate } from '../../_personal';
 
-
 export default function NewPersonalCategoryPage() {
   const router = useRouter();
   const { userId } = useBrowserSync();

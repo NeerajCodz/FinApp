@@ -241,11 +241,7 @@ export default function GroupBalancesPage() {
         <>
           <section style={{ display: 'grid', gap: 8 }}>
             <strong>Your balance · {group.name ?? 'Group'}</strong>
-            <Money
-              amountMinor={myBalance}
-              currency={group.currency ?? 'INR'}
-              size="display"
-            />
+            <Money amountMinor={myBalance} currency={group.currency ?? 'INR'} size="display" />
             <p className="finance-muted">
               {myBalance > 0n ? 'Owed to you' : myBalance < 0n ? 'You owe' : 'You are settled'}
             </p>

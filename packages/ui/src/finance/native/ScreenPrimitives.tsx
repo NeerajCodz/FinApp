@@ -7,7 +7,10 @@ import { Money } from './Money';
 export function BrandMark() {
   const { tokens } = useTheme();
   return (
-    <View accessibilityLabel="Finapp" style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+    <View
+      accessibilityLabel="Finapp"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}
+    >
       <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: tokens.primary }} />
       <Text
         style={{

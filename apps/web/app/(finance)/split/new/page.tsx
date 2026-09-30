@@ -289,24 +289,19 @@ function NewSplitForm() {
         <h1 style={{ flex: 1, margin: 0 }}>Split expense</h1>
         <SemanticMarker type="split" />
       </header>
-      <div
-        className="finance-accounts-layout"
-        style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}
-      >
+      <div className="finance-accounts-layout" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
         <Card className="finance-form-panel">
           <form className="finance-form" onSubmit={saveExpense}>
-          <RadioGroup
-            label="Group"
-            options={activeGroups.map((item) => ({
-              value: idOf(item),
-              label: `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
-            }))}
-            value={group ? idOf(group) : ''}
-            onChange={chooseGroup}
-          />
-            {!activeGroups.length && (
-              <p className="finance-form-note">No saved groups yet.</p>
-            )}
+            <RadioGroup
+              label="Group"
+              options={activeGroups.map((item) => ({
+                value: idOf(item),
+                label: `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
+              }))}
+              value={group ? idOf(group) : ''}
+              onChange={chooseGroup}
+            />
+            {!activeGroups.length && <p className="finance-form-note">No saved groups yet.</p>}
             <Link className="finance-secondary-action" href="/group/new">
               Create a group
             </Link>
@@ -365,22 +360,22 @@ function NewSplitForm() {
                       const share = shares.find((item) => item.userId === member.userId);
                       return (
                         <li key={member.userId}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <Checkbox
-                            checked={selectedIds.includes(member.userId)}
-                            onChange={(checked) =>
-                              setSelectedIds((current) =>
-                                checked
-                                  ? current.includes(member.userId)
-                                    ? current
-                                    : [...current, member.userId]
-                                  : current.filter((id) => id !== member.userId),
-                              )
-                            }
-                            label={member.name}
-                          />
-                          {share && <small>{formatMinor(share.amountMinor, currency)}</small>}
-                        </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <Checkbox
+                              checked={selectedIds.includes(member.userId)}
+                              onChange={(checked) =>
+                                setSelectedIds((current) =>
+                                  checked
+                                    ? current.includes(member.userId)
+                                      ? current
+                                      : [...current, member.userId]
+                                    : current.filter((id) => id !== member.userId),
+                                )
+                              }
+                              label={member.name}
+                            />
+                            {share && <small>{formatMinor(share.amountMinor, currency)}</small>}
+                          </div>
                         </li>
                       );
                     })}

@@ -67,7 +67,6 @@ const links = [
   },
 ];
 
-
 const privacyLinks = [
   { label: 'Export data', href: '/settings/privacy', icon: ReceiptText },
   { label: 'Privacy', href: '/settings/privacy', icon: ShieldCheck },
