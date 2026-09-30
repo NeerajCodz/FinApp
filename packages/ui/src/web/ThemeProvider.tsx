@@ -120,7 +120,9 @@ export function ThemeProvider({
   const setAccent = useCallback((next: AccentValue) => updateAccent(next), []);
   const isDark = forcedMode
     ? forcedMode === 'dark'
-    : appearance === 'system' ? systemIsDark : appearance === 'dark';
+    : appearance === 'system'
+      ? systemIsDark
+      : appearance === 'dark';
   const tokens = useMemo(() => createTokens(isDark ? 'dark' : 'light', accent), [accent, isDark]);
   const contextValue = useMemo(
     () => ({ appearance, setAppearance, accent, setAccent, tokens, isDark }),

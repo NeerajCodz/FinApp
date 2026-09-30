@@ -56,7 +56,9 @@ export function SignUpForm() {
           : `/verify?email=${encodeURIComponent(normalizedEmail)}&next=onboarding`,
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to create your account. Try again.');
+      setError(
+        cause instanceof Error ? cause.message : 'Unable to create your account. Try again.',
+      );
     } finally {
       setPending(false);
     }
@@ -67,9 +69,18 @@ export function SignUpForm() {
       eyebrow="YOUR NEXT CHAPTER"
       title="Make room for clarity."
       description="A private space for your everyday money. Start with your email and a password."
-      footer={<span>Already have an account? <Link href="/sign-in">Sign in</Link></span>}
+      footer={
+        <span>
+          Already have an account? <Link href="/sign-in">Sign in</Link>
+        </span>
+      }
     >
-      <form onSubmit={submit} noValidate aria-busy={pending} aria-describedby={error ? 'sign-up-error' : undefined}>
+      <form
+        onSubmit={submit}
+        noValidate
+        aria-busy={pending}
+        aria-describedby={error ? 'sign-up-error' : undefined}
+      >
         <div className="auth-field">
           <Label htmlFor="email">Email address</Label>
           <Input
@@ -93,7 +104,11 @@ export function SignUpForm() {
             disabled={pending}
             required
           />
-          {fieldErrors.email && <p id="email-error" className="auth-field-error" role="alert">{fieldErrors.email}</p>}
+          {fieldErrors.email && (
+            <p id="email-error" className="auth-field-error" role="alert">
+              {fieldErrors.email}
+            </p>
+          )}
         </div>
         <div className="auth-field">
           <Label htmlFor="password">Password</Label>
@@ -114,8 +129,14 @@ export function SignUpForm() {
             disabled={pending}
             required
           />
-          <span id="password-help" className="auth-helper">Use at least eight characters.</span>
-          {fieldErrors.password && <p id="password-error" className="auth-field-error" role="alert">{fieldErrors.password}</p>}
+          <span id="password-help" className="auth-helper">
+            Use at least eight characters.
+          </span>
+          {fieldErrors.password && (
+            <p id="password-error" className="auth-field-error" role="alert">
+              {fieldErrors.password}
+            </p>
+          )}
         </div>
         <div className="auth-two-factor-option">
           <Checkbox
@@ -126,10 +147,16 @@ export function SignUpForm() {
           />
           <p>Optional. Require a code sent to your email after your password.</p>
         </div>
-        {error && <p id="sign-up-error" className="auth-error" role="alert">{error}</p>}
+        {error && (
+          <p id="sign-up-error" className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
         <Button type="submit" size="lg" disabled={pending} aria-busy={pending}>
           {pending ? 'Creating your account…' : 'Create account'}
-          <span className="auth-button-arrow" aria-hidden="true">↗</span>
+          <span className="auth-button-arrow" aria-hidden="true">
+            ↗
+          </span>
         </Button>
         <p className="auth-form-note">We’ll send a one-time code to confirm your email.</p>
       </form>

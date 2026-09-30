@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
+import appIcon from '../../mobile/assets/icon.png';
 import '@finapp/ui/web/styles.css';
 import './globals.css';
 import './coin.css';
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
   title: 'Finapp — Money, in sync',
   description: 'A calmer way to keep spending, saving, and shared expenses in sync.',
   applicationName: 'Finapp',
-  icons: { icon: '/icon.png' },
+  icons: { icon: appIcon.src },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

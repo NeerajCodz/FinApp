@@ -34,7 +34,9 @@ export function SignInForm() {
     setFieldErrors(errors);
     setError('');
     if (errors.identifier || errors.password) {
-      const input = event.currentTarget.elements.namedItem(errors.identifier ? 'identifier' : 'password');
+      const input = event.currentTarget.elements.namedItem(
+        errors.identifier ? 'identifier' : 'password',
+      );
       if (input instanceof HTMLInputElement) input.focus();
       return;
     }
@@ -71,9 +73,18 @@ export function SignInForm() {
       eyebrow="WELCOME BACK"
       title="Back in focus."
       description="Sign in to your money, your plans, and the people you share them with."
-      footer={<span>New to Finapp? <Link href="/sign-up">Create an account</Link></span>}
+      footer={
+        <span>
+          New to Finapp? <Link href="/sign-up">Create an account</Link>
+        </span>
+      }
     >
-      <form onSubmit={submit} noValidate aria-busy={pending} aria-describedby={error ? 'sign-in-error' : undefined}>
+      <form
+        onSubmit={submit}
+        noValidate
+        aria-busy={pending}
+        aria-describedby={error ? 'sign-in-error' : undefined}
+      >
         <div className="auth-field">
           <Label htmlFor="identifier">Email or username</Label>
           <Input
@@ -96,12 +107,20 @@ export function SignInForm() {
             disabled={pending}
             required
           />
-          {fieldErrors.identifier && <p id="identifier-error" className="auth-field-error" role="alert">{fieldErrors.identifier}</p>}
+          {fieldErrors.identifier && (
+            <p id="identifier-error" className="auth-field-error" role="alert">
+              {fieldErrors.identifier}
+            </p>
+          )}
         </div>
         <div className="auth-field">
           <div className="auth-label-row">
             <Label htmlFor="password">Password</Label>
-            <Link href={`/forgot-password${identifier.includes('@') ? `?email=${encodeURIComponent(identifier.trim().toLowerCase())}` : ''}`}>Forgot password?</Link>
+            <Link
+              href={`/forgot-password${identifier.includes('@') ? `?email=${encodeURIComponent(identifier.trim().toLowerCase())}` : ''}`}
+            >
+              Forgot password?
+            </Link>
           </div>
           <PasswordField
             id="password"
@@ -119,14 +138,26 @@ export function SignInForm() {
             disabled={pending}
             required
           />
-          {fieldErrors.password && <p id="password-error" className="auth-field-error" role="alert">{fieldErrors.password}</p>}
+          {fieldErrors.password && (
+            <p id="password-error" className="auth-field-error" role="alert">
+              {fieldErrors.password}
+            </p>
+          )}
         </div>
-        {error && <p id="sign-in-error" className="auth-error" role="alert">{error}</p>}
+        {error && (
+          <p id="sign-in-error" className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
         <Button type="submit" size="lg" disabled={pending} aria-busy={pending}>
           {pending ? 'Signing you in…' : 'Sign in'}
-          <span className="auth-button-arrow" aria-hidden="true">↗</span>
+          <span className="auth-button-arrow" aria-hidden="true">
+            ↗
+          </span>
         </Button>
-        <p className="auth-form-note">If you use email two-factor sign-in, we’ll ask for your code next.</p>
+        <p className="auth-form-note">
+          If you use email two-factor sign-in, we’ll ask for your code next.
+        </p>
       </form>
     </AuthFrame>
   );

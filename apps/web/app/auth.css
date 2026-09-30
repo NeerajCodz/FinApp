@@ -14,7 +14,7 @@
   --finapp-surface-raised: #151613;
   --finapp-destructive: #ff9898;
   display: flex;
-  min-height: 100svh;
+  min-height: 100dvh;
   flex-direction: column;
   padding: calc(28px + env(safe-area-inset-top)) clamp(20px, 4.4vw, 80px)
     calc(22px + env(safe-area-inset-bottom));
@@ -205,7 +205,9 @@ form.auth-form {
   background: #ffffff05;
   color: #fff;
   font-size: 1rem;
-  transition: border-color 180ms cubic-bezier(0.22, 1, 0.36, 1), background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .auth-form .finapp-input::placeholder {
   color: #90918a;
@@ -275,7 +277,9 @@ form.auth-form {
   border-radius: 12px;
   font-size: 0.88rem;
   font-weight: 600;
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), background 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .auth-form .finapp-button--primary,
 .auth-welcome-actions .finapp-button--primary {
@@ -591,11 +595,13 @@ form.auth-form {
   animation: auth-status-pulse 1.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 @keyframes auth-status-pulse {
-  50% { opacity: 0.3; }
+  50% {
+    opacity: 0.3;
+  }
 }
 .configuration-error {
   display: grid;
-  min-height: 100svh;
+  min-height: 100dvh;
   align-content: center;
   justify-items: center;
   gap: 10px;

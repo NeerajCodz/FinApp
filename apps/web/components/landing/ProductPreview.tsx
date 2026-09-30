@@ -28,7 +28,9 @@ export function ProductPreview() {
   return (
     <div className="landing-product" aria-label="Interactive Finapp preview with sample data">
       <div className="landing-product-header">
-        <span className="landing-product-brand">finapp<span>.</span></span>
+        <span className="landing-product-brand">
+          finapp<span>.</span>
+        </span>
         <span className="landing-sample-label">Sample account</span>
       </div>
       <div className="landing-balance-label">
@@ -46,27 +48,68 @@ export function ProductPreview() {
         <Money amountMinor={12485000n} currency="INR" size="hero" hidden={hidden} />
       </div>
       <div className="landing-product-flow">
-        <div><ArrowDownLeft size={16} /><span>Income</span><Money amountMinor={4800000n} currency="INR" hidden={hidden} /></div>
-        <div><ArrowUpRight size={16} /><span>Expenses</span><Money amountMinor={898000n} currency="INR" hidden={hidden} /></div>
+        <div>
+          <ArrowDownLeft size={16} />
+          <span>Income</span>
+          <Money amountMinor={4800000n} currency="INR" hidden={hidden} />
+        </div>
+        <div>
+          <ArrowUpRight size={16} />
+          <span>Expenses</span>
+          <Money amountMinor={898000n} currency="INR" hidden={hidden} />
+        </div>
       </div>
       <div className="landing-chart-header">
         <div>
           <span>Spending this {period.toLowerCase()}</span>
-          <div aria-live="polite"><Money amountMinor={data.amountMinor} currency="INR" size="display" /></div>
+          <div aria-live="polite">
+            <Money amountMinor={data.amountMinor} currency="INR" size="display" />
+          </div>
         </div>
         <div className="landing-periods" role="group" aria-label="Sample spending period">
           {(Object.keys(periods) as Period[]).map((item) => (
-            <button key={item} type="button" aria-pressed={period === item} onClick={() => setPeriod(item)}>{item}</button>
+            <button
+              key={item}
+              type="button"
+              aria-pressed={period === item}
+              onClick={() => setPeriod(item)}
+            >
+              {item}
+            </button>
           ))}
         </div>
       </div>
-      <div className="landing-chart" role="img" aria-label={`Sample ${period.toLowerCase()} spending: ${data.values.join(', ')} rupees`}>
-        <BarChart values={data.values} labels={data.labels} highlightIndex={data.values.length - 1} />
+      <div
+        className="landing-chart"
+        role="img"
+        aria-label={`Sample ${period.toLowerCase()} spending: ${data.values.join(', ')} rupees`}
+      >
+        <BarChart
+          values={data.values}
+          labels={data.labels}
+          highlightIndex={data.values.length - 1}
+        />
       </div>
       <div className="landing-recent">
         <span>Recent activity</span>
-        <div><span className="landing-activity-icon"><Coffee size={18} /></span><span>Coffee break<small>Food & drinks</small></span><Money amountMinor={24000n} currency="INR" type="expense" /></div>
-        <div><span className="landing-activity-icon"><Wallet size={18} /></span><span>Monthly salary<small>Income</small></span><Money amountMinor={4800000n} currency="INR" type="income" /></div>
+        <div>
+          <span className="landing-activity-icon">
+            <Coffee size={18} />
+          </span>
+          <span>
+            Coffee break<small>Food & drinks</small>
+          </span>
+          <Money amountMinor={24000n} currency="INR" type="expense" />
+        </div>
+        <div>
+          <span className="landing-activity-icon">
+            <Wallet size={18} />
+          </span>
+          <span>
+            Monthly salary<small>Income</small>
+          </span>
+          <Money amountMinor={4800000n} currency="INR" type="income" />
+        </div>
       </div>
     </div>
   );
