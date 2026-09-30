@@ -83,13 +83,16 @@ struct ShadowParams {
   rotationY: f32,
 }
 @group(0) @binding(0) var<uniform> params: ShadowParams;
+@group(0) @binding(1) var coinScene: texture_2d<f32>;
+@group(0) @binding(2) var coinSampler: sampler;
 
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let center = vec2f(0.5 - params.lightX * 0.045, 0.67 + params.offsetY * 0.3 + params.lightY * 0.035);
   let local = (uv - center) / vec2f(0.31, 0.058);
   let softness = exp(-dot(local, local) * 2.4);
   let edgeFade = clamp(1.0 - abs(params.rotationY) * 0.045, 0.3, 1.0);
-  let alpha = softness * 0.42 * edgeFade;
+  let coinAlpha = textureSampleLevel(coinScene, coinSampler, uv, 0.0).a;
+  let alpha = softness * 0.42 * edgeFade * (1.0 - coinAlpha);
   return vec4f(vec3f(0.035, 0.065, 0.008) * alpha, alpha);
 }
 `;
@@ -160,13 +163,15 @@ export async function createVgpuCoinRenderer(canvas: HTMLCanvasElement): Promise
       vertexCount: coinMesh.vertexCount,
     });
     coin = draw(gpu, { shader: coinShader, geometry: mesh, label: 'finapp-coin', cull: 'none' });
+    const sceneSampler = sampler(gpu);
     shadow = effect(gpu, shadowShader, {
       label: 'finapp-coin-cursor-shadow',
       blend: 'premultiplied',
+      set: { coinScene: scene, coinSampler: sceneSampler },
     });
     composite = effect(gpu, compositeShader, {
       label: 'finapp-coin-composite',
-      set: { source: scene, sourceSampler: sampler(gpu) },
+      set: { source: scene, sourceSampler: sceneSampler },
     });
     unsubscribeResize = canvasSurface.onResize(({ width, height }) =>
       scene?.resize([width, height]),

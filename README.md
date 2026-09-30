@@ -25,12 +25,13 @@ home header; they are not repeated across other screens.
 ### Coin implementation
 
 - `packages/ui/src/coin/geometry.ts`: volt faces, a beveled/reeded edge, shallow
-  circular grooves, and a recessed black F. Earcut triangulates the face around
-  the engraving rather than drawing a letter on top of an uncut face.
+  circular grooves, and an F-shaped cavity with a chamfered inner bevel. Earcut
+  removes the letter from each face; its dark floor sits below the beveled rim.
 - `packages/ui/src/coin/renderer.ts`: shared WebGL / Expo GLView renderer with
   interactive rotation and cursor- or touch-responsive lighting.
 - `apps/web/components/brand/createVgpuCoinRenderer.ts`: WebGPU lighting and a
-  cursor-responsive soft shadow, with the shared WebGL renderer as a fallback.
+  cursor-responsive shadow masked behind the coin silhouette, with the shared
+  WebGL renderer as a fallback.
 - Platform `CoinLogo` components support pointer drag and arrow-key rotation on
   web, touch drag on native, and stop animation for reduced motion or when hidden.
   They dispose GPU resources on teardown and retain the app icon when WebGL is
