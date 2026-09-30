@@ -14,7 +14,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { BarChart, BreakdownDonut, CashFlowChart, SpendingLineChart } from '@finapp/ui/analytics';
 import { DateRangePopover } from '@finapp/ui/activity';
-import { BudgetProgress, Metric, MetricPair, TransactionRow } from '@finapp/ui/finance';
+import {
+  BudgetProgress,
+  InfoDescription,
+  Metric,
+  MetricPair,
+  TransactionRow,
+} from '@finapp/ui/finance';
 import {
   Button,
   Empty,
@@ -179,7 +185,6 @@ function AnalyticsContent() {
   const [currencyFilter, setCurrencyFilter] = useState('');
   const [accountFilter, setAccountFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [cashFlowChartType, setCashFlowChartType] = useState<'lines' | 'bars'>('lines');
   const [categoryChartType, setCategoryChartType] = useState<'donut' | 'bars'>('donut');
   const [dailyChartType, setDailyChartType] = useState<'bars' | 'line'>('bars');
   const { tokens } = useTheme();
@@ -719,14 +724,28 @@ function AnalyticsContent() {
     },
   ];
   const trendBuckets = analytics?.buckets ?? [];
-  const trendStride = Math.max(1, Math.ceil(trendBuckets.length / 7));
-  const trendLabels = trendBuckets.map((bucket, index) => {
-    if (index % trendStride !== 0 && index !== trendBuckets.length - 1) return '';
-    if (period === 'year') return bucket.label;
-    return period === 'week'
-      ? (bucket.label.split(' ')[0] ?? bucket.label)
-      : (bucket.label.split(' ').at(-1) ?? bucket.label);
-  });
+  const trendAxisFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        ...(period === 'year' ? { month: 'short' } : { day: 'numeric' }),
+      }),
+    [period, timeZone],
+  );
+  const trendDetailFormatter = useMemo(
+    () => new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeZone }),
+    [timeZone],
+  );
+  const trendLabels = trendBuckets.map((bucket) => trendAxisFormatter.format(bucket.startAt));
+  const trendDetails = trendBuckets.map((bucket) => trendDetailFormatter.format(bucket.startAt));
+  const trendAmounts = trendBuckets.map((bucket) => formatMinor(bucket.amountMinor, currency));
+  const categoryAmounts = (analytics?.categoryBreakdown ?? []).map((item) =>
+    formatMinor(item.amountMinor, currency),
+  );
+  const categoryDetails = (analytics?.categoryBreakdown ?? []).map(
+    (item) =>
+      `${analytics && analytics.spentMinor > 0n ? Number((item.amountMinor * 1000n) / analytics.spentMinor) / 10 : 0}% of spending`,
+  );
   const currentBucket = trendBuckets.findIndex(
     (bucket) => Date.now() >= bucket.startAt && Date.now() < bucket.endAt,
   );
@@ -796,8 +815,10 @@ function AnalyticsContent() {
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
         <View style={{ flex: 1, gap: 2 }}>
-          <Typography variant="title">Analytics</Typography>
-          <Typography variant="caption">A closer look at your local ledger</Typography>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Typography variant="title">Analytics</Typography>
+            <InfoDescription title="Analytics" description="A closer look at your local ledger" />
+          </View>
         </View>
         <Button size="sm" variant="outline" onPress={exportAnalytics}>
           Export
@@ -973,20 +994,10 @@ function AnalyticsContent() {
               />
             )}
             <Panel title="Cash flow">
-              <FilterSheet
-                label="Chart"
-                title="Cash flow chart type"
-                options={[
-                  { label: 'Lines', value: 'lines' },
-                  { label: 'Bars', value: 'bars' },
-                ]}
-                value={cashFlowChartType}
-                onChange={(value) => setCashFlowChartType(value as 'lines' | 'bars')}
-              />
               <CashFlowChart
-                variant={cashFlowChartType}
                 buckets={analytics.buckets}
                 currency={currency}
+                timeZone={timeZone}
                 onSelectBucket={(bucket) =>
                   router.push({
                     pathname: '/(tabs)/activity',
@@ -1015,6 +1026,8 @@ function AnalyticsContent() {
                   <BarChart
                     values={chartValues(analytics.buckets.map((bucket) => bucket.amountMinor))}
                     labels={trendLabels}
+                    details={trendDetails}
+                    amounts={trendAmounts}
                     highlightIndex={currentBucket >= 0 ? currentBucket : undefined}
                   />
                 ) : (
@@ -1024,6 +1037,9 @@ function AnalyticsContent() {
                       trendBuckets[0]?.label ?? 'Start',
                       trendBuckets.at(-1)?.label ?? 'End',
                     ]}
+                    xLabels={trendLabels}
+                    details={trendDetails}
+                    amounts={trendAmounts}
                   />
                 )
               ) : (
@@ -1060,6 +1076,9 @@ function AnalyticsContent() {
                       : 0,
                   )}
                   labels={analytics.categoryBreakdown.map((item) => item.label)}
+                  details={categoryDetails}
+                  amounts={categoryAmounts}
+                  orientation="horizontal"
                 />
               ) : (
                 <Typography variant="small">No posted expenses in this period.</Typography>
