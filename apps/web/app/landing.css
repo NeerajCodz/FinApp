@@ -92,8 +92,7 @@
 .landing-hero-description { margin: 28px 0 0; color: #aaa; font-size: 16px; line-height: 1.7; }
 .landing-hero-actions { display: flex; align-items: center; gap: 28px; margin-top: 34px; }
 .landing-hero-visual { position: relative; display: grid; min-width: 0; min-height: 566px; place-items: center; isolation: isolate; }
-.landing-hero-visual::before { position: absolute; z-index: -2; width: 460px; height: 460px; border: 1px solid #b7ff4a45; border-radius: 50%; content: ''; }
-.landing-hero-monogram { position: absolute; z-index: -1; top: -65px; right: -38px; color: var(--landing-volt); font-size: 640px; font-weight: 700; line-height: 1; transform: rotate(-14deg); }
+.landing-hero-coin { width: min(115%, 610px); filter: drop-shadow(0 28px 40px #b7ff4a12); }
 .landing-product {
   width: min(100%, 374px);
   padding: 24px;
@@ -101,8 +100,7 @@
   border-radius: 24px;
   background: linear-gradient(145deg, #191919, #090909 60%);
   box-shadow: 0 32px 90px #000b;
-  transform: rotate(4deg);
-  animation: landing-preview-enter 900ms 120ms both;
+  transform: none;
 }
 .landing-product-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
 .landing-product-brand { font-size: 22px; font-weight: 600; letter-spacing: -1px; }
@@ -126,10 +124,8 @@
 .landing-periods button { min-height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: #aaa; font-size: 10px; cursor: pointer; }
 .landing-periods button[aria-pressed='true'] { background: var(--landing-volt); color: #000; }
 .landing-periods button:active { transform: scale(0.98); }
-/* The live shared chart uses app semantic expense colors; marketing locks its ink to volt. */
-.landing-chart > div > div:first-child { height: 112px !important; border-color: #292929 !important; }
-.landing-chart button > span[aria-hidden='true'] { width: min(100%, 28px) !important; background-color: var(--landing-volt) !important; box-shadow: none !important; }
-.landing-chart [role='tooltip'] { background: #171717 !important; color: #fff !important; border-color: #333 !important; }
+.landing-chart > div > div:first-child { height: 112px !important; }
+.landing-chart > div > div:first-child > div > div { background-color: var(--landing-volt) !important; }
 .landing-recent { margin-top: 18px; padding-top: 18px; border-top: 1px solid #292929; }
 .landing-recent > span { color: #a4a4a4; font-size: 10px; }
 .landing-recent > div { display: flex; align-items: center; gap: 10px; padding-top: 13px; }
@@ -151,12 +147,9 @@
 .landing-feature-symbol { display: inline-flex; color: var(--landing-volt); }
 .landing-feature h3 { margin: 22px 0 12px; font-size: 24px; font-weight: 500; letter-spacing: -0.8px; }
 .landing-feature p { max-width: 350px; margin: 0; color: #aaa; font-size: 13px; line-height: 1.7; }
-.landing-category-visual { margin-top: 36px; }
-.landing-category-visual > span { color: #a5b197; font-size: 9px; letter-spacing: 1.2px; }
-.landing-category-visual > div { display: flex; align-items: center; justify-content: space-between; padding-top: 20px; color: #e2e8da; font-size: clamp(24px, 3vw, 38px); letter-spacing: -1.5px; }
-.landing-category-visual > div:nth-child(3) { color: var(--landing-volt); }
-.landing-category-visual > div svg { color: var(--landing-volt); }
-.landing-goal-image { height: 214px; margin: 30px -32px -32px; overflow: hidden; }
+.landing-feature-preview { display: grid; justify-items: center; margin-top: 30px; }
+.landing-feature-goals { display: flex; flex-direction: column; }
+.landing-goal-image { flex: 1; min-height: 300px; margin: 30px -32px -32px; overflow: hidden; }
 .landing-goal-image img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1); }
 .landing-feature-budgets { display: grid; grid-column: 1 / -1; grid-template-columns: 48px 1fr 0.8fr; align-items: center; gap: 26px; min-height: 230px; background: repeating-linear-gradient(135deg, #ffffff03 0, #ffffff03 1px, transparent 1px, transparent 14px), #0b0b0b; }
 .landing-feature-budgets h3 { margin-top: 0; }
@@ -197,12 +190,10 @@
 .landing-footer nav a:hover { color: var(--landing-volt); }
 
 @keyframes landing-enter { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes landing-preview-enter { from { opacity: 0; transform: translateY(28px) rotate(0); } to { opacity: 1; transform: translateY(0) rotate(4deg); } }
 
 @media (min-width: 768px) and (max-height: 760px) {
   .landing-hero { min-height: 570px; padding-block: 24px 40px; }
   .landing-hero-visual { min-height: 510px; }
-  .landing-product { zoom: 0.9; }
 }
 @media (max-width: 1100px) {
   .landing-container { width: calc(100% - 64px); }
@@ -211,7 +202,6 @@
   .landing-hero { grid-template-columns: 1.1fr 0.9fr; gap: 28px; }
   .landing-hero h1 { font-size: clamp(42px, 5.35vw, 60px); }
   .landing-hero-actions { align-items: flex-start; flex-direction: column; gap: 22px; }
-  .landing-hero-monogram { right: -50px; }
   .landing-together, .landing-faq { gap: 40px; }
   .landing-product { padding: 20px; }
   .landing-product-balance > span { font-size: 35px !important; }
@@ -233,9 +223,8 @@
   .landing-button { min-height: 50px; padding-inline: 22px; }
   .landing-button-small { min-height: 38px; padding-inline: 14px; }
   .landing-text-link { font-size: 12px; }
-  .landing-hero-visual { min-height: 566px; margin-inline: 6px; }
-  .landing-hero-visual::before { width: 360px; height: 360px; }
-  .landing-hero-monogram { top: -25px; right: -10px; font-size: 560px; }
+  .landing-hero-visual { min-height: 330px; margin-inline: 0; }
+  .landing-hero-coin { width: min(100%, 440px); }
   .landing-product { width: min(100% - 16px, 374px); padding: 22px; }
   .landing-product-balance > span { font-size: 38px !important; }
   .landing-capabilities { grid-template-columns: 1fr 1fr; gap: 22px 12px; padding-block: 26px; }
@@ -246,8 +235,7 @@
   .landing-feature-grid { grid-template-columns: 1fr; gap: 16px; }
   .landing-feature { padding: 26px; }
   .landing-feature h3 { font-size: 23px; }
-  .landing-category-visual > div { font-size: 32px; }
-  .landing-goal-image { height: 220px; margin: 28px -26px -26px; }
+  .landing-goal-image { flex: none; height: 240px; min-height: 0; margin: 28px -26px -26px; }
   .landing-feature-budgets { grid-template-columns: 1fr; gap: 22px; padding-block: 30px; }
   .landing-budget-art { justify-self: end; padding-right: 12px; font-size: 55px; }
   .landing-together { grid-template-columns: 1fr; gap: 32px; padding-block: 32px 64px; }

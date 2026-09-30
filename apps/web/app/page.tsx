@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import appIcon from '../../mobile/assets/icon.png';
 import { ProductPreview } from '@/components/landing/ProductPreview';
+import { CoinLogo } from '@/components/brand/CoinLogo';
 
 export const metadata: Metadata = {
   title: 'Finapp | Your money. Your people. One clear place.',
@@ -93,8 +94,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="landing-hero-visual">
-            <span className="landing-hero-monogram" aria-hidden="true">f</span>
-            <ProductPreview />
+            <CoinLogo className="landing-hero-coin" />
           </div>
         </section>
 
@@ -115,11 +115,8 @@ export default function HomePage() {
               <div className="landing-feature-symbol"><ReceiptText size={24} aria-hidden="true" /></div>
               <h3>See the whole picture.</h3>
               <p>Accounts, categories, and transactions. Know what’s coming in and where it’s going.</p>
-              <div className="landing-category-visual" aria-label="Organise your spending into categories">
-                <span>YOUR EVERYDAY, ORGANISED</span>
-                <div><span>Food & drinks</span><ArrowUpRight size={20} aria-hidden="true" /></div>
-                <div><span>Getting around</span><ArrowUpRight size={20} aria-hidden="true" /></div>
-                <div><span>The good stuff</span><ArrowUpRight size={20} aria-hidden="true" /></div>
+              <div className="landing-feature-preview">
+                <ProductPreview />
               </div>
             </article>
             <article className="landing-feature landing-feature-goals">

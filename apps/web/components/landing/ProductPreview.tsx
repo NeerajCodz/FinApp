@@ -9,13 +9,11 @@ const periods = {
   Week: {
     values: [420, 180, 640, 280, 820, 540, 360],
     labels: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
-    details: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     amountMinor: 324000n,
   },
   Month: {
     values: [1680, 2240, 1820, 3240],
     labels: ['W1', 'W2', 'W3', 'W4'],
-    details: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
     amountMinor: 898000n,
   },
 } as const;
@@ -62,8 +60,8 @@ export function ProductPreview() {
           ))}
         </div>
       </div>
-      <div className="landing-chart">
-        <BarChart key={period} values={data.values} labels={data.labels} detailLabels={data.details} currency="INR" />
+      <div className="landing-chart" role="img" aria-label={`Sample ${period.toLowerCase()} spending: ${data.values.join(', ')} rupees`}>
+        <BarChart values={data.values} labels={data.labels} highlightIndex={data.values.length - 1} />
       </div>
       <div className="landing-recent">
         <span>Recent activity</span>
