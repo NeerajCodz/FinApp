@@ -1,10 +1,15 @@
+'use client';
+
 import React from 'react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { Typography, useTheme } from '@finapp/ui/web';
 import { CategoryIcon } from '@finapp/ui/finance';
 import { formatMinor } from '@convex/shared/money';
 import type { AnalyticsBreakdownItem } from '@convex/analytics/domain';
 
 const chartColors = ['volt', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
+
+type DonutPoint = AnalyticsBreakdownItem & { chartValue: number; percentage: number };
 
 export function BreakdownDonut({
   items,
@@ -21,58 +26,74 @@ export function BreakdownDonut({
 }) {
   const { tokens } = useTheme();
   const colors = chartColors.map((name) => tokens.chart[name]);
-  const radius = 48;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+  const data: DonutPoint[] = items.map((item) => ({
+    ...item,
+    chartValue:
+      totalMinor > 0n ? Math.max(1, Number((item.amountMinor * 1_000_000_000n) / totalMinor)) : 0,
+    percentage: totalMinor > 0n ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0,
+  }));
+  const tooltipStyle: React.CSSProperties = {
+    display: 'grid',
+    gap: 4,
+    padding: '10px 12px',
+    border: `1px solid ${tokens.border}`,
+    borderRadius: 12,
+    color: tokens.foreground,
+    background: tokens.popover,
+    boxShadow: `0 8px 24px ${tokens.overlay}`,
+  };
+
   return (
     <div style={{ display: 'grid', gap: 18 }}>
-      {totalMinor > 0n && (
+      {totalMinor > 0n && data.length > 0 && (
         <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 142,
-          }}
+          role="group"
+          aria-label="Expenses by category"
+          style={{ position: 'relative', height: 190 }}
         >
-          <svg
-            width={142}
-            height={142}
-            viewBox="0 0 142 142"
-            role="img"
-            aria-label="Expense share by category"
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart accessibilityLayer>
+              <Pie
+                data={data}
+                dataKey="chartValue"
+                nameKey="label"
+                innerRadius={53}
+                outerRadius={76}
+                paddingAngle={1}
+                minAngle={1}
+                stroke={tokens.background}
+                strokeWidth={2}
+              >
+                {data.map((item, index) => (
+                  <Cell key={item.id} fill={colors[index % colors.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                content={({ active, payload }) => {
+                  const item = payload?.[0]?.payload as DonutPoint | undefined;
+                  if (!active || !item) return null;
+                  return (
+                    <div role="tooltip" style={tooltipStyle}>
+                      <strong>{item.label}</strong>
+                      <span>{formatMinor(item.amountMinor, currency)}</span>
+                      <span>{item.percentage}% of spending</span>
+                    </div>
+                  );
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              alignContent: 'center',
+              justifyItems: 'center',
+              pointerEvents: 'none',
+            }}
           >
-            <circle
-              cx={71}
-              cy={71}
-              r={radius}
-              stroke={tokens.borderSubtle}
-              strokeWidth={19}
-              fill="none"
-            />
-            {items.map((item, index) => {
-              const fraction = Number((item.amountMinor * 10000n) / totalMinor) / 10000;
-              const length = circumference * fraction;
-              const segment = (
-                <circle
-                  key={item.id}
-                  cx={71}
-                  cy={71}
-                  r={radius}
-                  stroke={colors[index % colors.length]}
-                  strokeWidth={19}
-                  fill="none"
-                  strokeDasharray={`${length} ${circumference - length}`}
-                  strokeDashoffset={-offset}
-                  transform="rotate(-90 71 71)"
-                />
-              );
-              offset += length;
-              return segment;
-            })}
-          </svg>
-          <div style={{ position: 'absolute', display: 'grid', justifyItems: 'center' }}>
             <Typography variant="caption">Total spent</Typography>
             <Typography variant="small">{formatMinor(totalMinor, currency)}</Typography>
           </div>
@@ -82,8 +103,7 @@ export function BreakdownDonut({
         <Typography variant="small">No posted expenses in this period.</Typography>
       ) : (
         items.map((item, index) => {
-          const percentage =
-            totalMinor > 0n ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0;
+          const percentage = data[index]?.percentage ?? 0;
           return (
             <button
               key={item.id}
