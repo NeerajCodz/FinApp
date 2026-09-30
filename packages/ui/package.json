@@ -7,6 +7,7 @@
     "./web": "./src/web/index.tsx",
     "./web/styles.css": "./src/web/styles.css",
     "./tokens": "./src/tokens.ts",
+    "./coin": "./src/coin/renderer.ts",
     "./quick-add": "./src/quick-add.ts",
     "./category-emoji": "./src/category-emoji.ts",
     "./finance": {
