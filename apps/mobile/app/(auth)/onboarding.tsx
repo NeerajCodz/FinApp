@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowRight, Phone, UsersThree, Wallet } from '@finapp/ui/icons/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
 import { useQuery } from 'convex/react';
@@ -10,21 +16,18 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
-import { BrandMark } from '@finapp/ui/finance';
 import {
+  Avatar,
   Button,
-  IconButton,
   Input,
   Label,
   Progress,
   Tabs,
-  Text,
-  Sheet,
   Typography,
-  Avatar,
+  useTheme,
 } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
-
+import { AuthScaffold } from '@/components/auth/AuthScaffold';
+import { AuthError, AuthSubmit } from '@/components/auth/AuthFields';
 type CurrencyCode = (typeof currencies)[number];
 const localeCurrency: CurrencyCode = Intl.NumberFormat()
   .resolvedOptions()
@@ -92,8 +95,9 @@ export default function OnboardingScreen() {
   const profile = profileState.data?.[0];
   const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
   const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   React.useEffect(() => {
     if (typeof profile?.displayName === 'string' && !displayName)
       setDisplayName(profile.displayName);
@@ -119,20 +123,32 @@ export default function OnboardingScreen() {
   const selectedAvatar = visibleAvatars.find((avatar) => avatar.avatarId === avatarId);
   const canContinue =
     step !== 1 || (!!displayName.trim() && /^[a-z0-9_]{3,32}$/.test(handle) && !!selectedAvatar);
-  const continueDisabled = !canContinue;
+  const continueDisabled =
+    pending ||
+    (step === totalSteps - 1 && (!userId || profileState.loading || !!profileState.error));
 
   function goBack() {
-    if (step === 0) router.back();
-    else setStep((current) => current - 1);
+    if (pending) return;
+    if (step === 0) {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(auth)/sign-in');
+    } else {
+      setStep((current) => current - 1);
+    }
   }
 
   async function goForward() {
     setError('');
-    if (!canContinue) return;
+    if (pending || continueDisabled) return;
+    if (!canContinue) {
+      setError('Enter your display name, a valid username, and choose an avatar.');
+      return;
+    }
     if (step < totalSteps - 1) {
       setStep((current) => current + 1);
       return;
     }
+    setPending(true);
     try {
       if (!userId) throw new Error('AUTH_REQUIRED');
       const profileUpdate = {
@@ -181,344 +197,294 @@ export default function OnboardingScreen() {
       router.replace(mode === 'shared' ? '/(tabs)/groups' : '/(tabs)');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile');
+    } finally {
+      setPending(false);
     }
   }
 
+  const titles = [
+    'Your money.\nYour format.',
+    'Make it\nyours.',
+    'Stay easy\nto find.',
+    'Start with\none account.',
+    'Your money.\nYour people.',
+  ];
+  const descriptions = [
+    'Choose the currency you use every day. You can change it later.',
+    'Your @handle helps people find you for groups and split expenses.',
+    'Optional. Add a phone number so people can find you when sharing expenses.',
+    'Optional for now. A simple account name is enough to get started.',
+    'Start with personal finances or keep shared expenses ready from day one.',
+  ];
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1, backgroundColor: tokens.background }}
-    >
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
-          paddingBottom: 24,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <IconButton label="Go back" variant="ghost" onPress={goBack}>
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          <BrandMark />
-          <Typography variant="caption" style={{ marginLeft: 'auto' }}>
+    <>
+      <AuthScaffold
+        eyebrow="Make it yours"
+        title={titles[step]}
+        description={descriptions[step]}
+        onBack={goBack}
+        headerRight={
+          <Typography
+            variant="small"
+            style={{ fontVariant: ['tabular-nums'], color: tokens.primary }}
+          >
             {step + 1} / {totalSteps}
           </Typography>
-        </View>
-        <Progress value={((step + 1) / totalSteps) * 100} color={tokens.primary} height={2} />
-
-        <View style={{ flex: 1, justifyContent: 'center', gap: 28, paddingVertical: 32 }}>
-          {step === 0 && (
-            <>
-              <View style={{ gap: 12 }}>
-                <Typography variant="title">Your money,{`\n`}your format.</Typography>
-                <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Choose the country and currency you use every day. You can change it later.
-                </Text>
-              </View>
-              <View style={{ gap: 10 }}>
-                <Label>Country — currency</Label>
-                <Button
-                  accessibilityLabel="Choose country and currency"
-                  size="lg"
-                  variant="outline"
-                  onPress={() => setCurrencyOpen(true)}
-                  style={{ justifyContent: 'flex-start' }}
-                >
-                  {currencyCountries[currency]} — {currency}
-                </Button>
-                <Typography variant="caption" style={{ color: tokens.primary }}>
-                  SELECTED CURRENCY
-                </Typography>
-              </View>
-            </>
-          )}
-
-          {step === 1 && (
-            <>
-              <View style={{ gap: 12 }}>
-                <Typography variant="title">Make it yours.</Typography>
-                <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Choose your display name, username, gender, and the avatar people will see across
-                  Finapp.
-                </Text>
-              </View>
-              <View style={{ gap: 14 }}>
-                <View>
-                  <Label>Display name</Label>
-                  <Input
-                    accessibilityLabel="Display name"
-                    autoComplete="name"
-                    placeholder="Your name"
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                    returnKeyType="next"
-                  />
-                </View>
-                <View>
-                  <Label>Username</Label>
-                  <Input
-                    accessibilityLabel="Username"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="@neeraj"
-                    value={username}
-                    onChangeText={setUsername}
-                    returnKeyType="next"
-                    onSubmitEditing={goForward}
-                  />
-                  {handle && (
-                    <Typography variant="small" style={{ color: tokens.primary, marginTop: 8 }}>
-                      You will share as @{handle}
-                    </Typography>
-                  )}
-                </View>
-                <View>
-                  <Label>Gender</Label>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {(['neutral', 'male', 'female'] as const).map((option) => (
-                      <Button
-                        key={option}
-                        variant={gender === option ? 'primary' : 'outline'}
-                        onPress={() => {
-                          setGender(option);
-                          const first = (avatarCatalog ?? []).find(
-                            (avatar) => avatar.gender === option,
-                          );
-                          if (first) setAvatarId(first.avatarId);
-                        }}
-                        accessibilityLabel={`Choose ${option} avatar category`}
-                      >
-                        {option.charAt(0).toUpperCase() + option.slice(1)}
-                      </Button>
-                    ))}
-                  </View>
-                </View>
-                <View style={{ gap: 8 }}>
-                  <Label>Choose an avatar</Label>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-                      {visibleAvatars.map((avatar) => (
-                        <Button
-                          key={avatar.avatarId}
-                          variant={avatarId === avatar.avatarId ? 'primary' : 'outline'}
-                          accessibilityLabel={`Select avatar ${avatar.avatarId}`}
-                          accessibilityState={{ selected: avatarId === avatar.avatarId }}
-                          onPress={() => setAvatarId(avatar.avatarId)}
-                          style={{ width: 58, height: 58, padding: 3, borderRadius: 999 }}
-                        >
-                          <Avatar
-                            initials=""
-                            label={avatar.avatarId}
-                            imageUrl={avatar.url}
-                            size={48}
-                          />
-                        </Button>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-              </View>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <View style={{ gap: 12 }}>
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    backgroundColor: tokens.surfaceRaised,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Phone size={21} color={tokens.foreground} />
-                </View>
-                <Typography variant="title">Add a phone{`\n`}number.</Typography>
-                <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Optional. It helps people find you when sharing a split or inviting you to a
-                  group.
-                </Text>
-              </View>
-              <View>
-                <Label>Phone number · optional</Label>
-                <Input
-                  accessibilityLabel="Phone number"
-                  autoFocus
-                  keyboardType="phone-pad"
-                  textContentType="telephoneNumber"
-                  autoComplete="tel"
-                  placeholder="+91 98765 43210"
-                  value={phone}
-                  onChangeText={setPhone}
-                  returnKeyType="next"
-                  onSubmitEditing={goForward}
-                />
-              </View>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <View style={{ gap: 12 }}>
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    backgroundColor: tokens.surfaceRaised,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Wallet size={21} color={tokens.foreground} />
-                </View>
-                <Typography variant="title">Add your first{`\n`}account.</Typography>
-                <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
-                  Optional for now. A simple name is enough to make your balance useful.
-                </Text>
-              </View>
-              <View>
-                <Label>Account name · optional</Label>
-                <Input
-                  accessibilityLabel="Account name"
-                  autoFocus
-                  placeholder="HDFC, Cash, Savings"
-                  value={accountName}
-                  onChangeText={setAccountName}
-                  returnKeyType="next"
-                  onSubmitEditing={goForward}
-                />
-              </View>
-            </>
-          )}
-
-          {step === 4 && (
-            <>
-              <View style={{ gap: 12 }}>
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    backgroundColor: tokens.surfaceRaised,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <UsersThree size={21} color={tokens.foreground} />
-                </View>
-                <Typography variant="title">How will you{`\n`}use Finapp?</Typography>
-                <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Start personal-only or keep shared expenses ready from day one.
-                </Text>
-              </View>
-              <Tabs
-                value={mode}
-                onChange={setMode}
-                tabs={[
-                  { label: 'Personal', value: 'personal' },
-                  { label: 'Personal + groups', value: 'shared' },
-                ]}
-              />
-              <Typography variant="caption">
-                {mode === 'shared'
-                  ? 'Groups and split tools will stay close at hand.'
-                  : 'Shared finance remains available whenever you need it.'}
-              </Typography>
-            </>
-          )}
-          {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
-        </View>
-      </ScrollView>
-
-      <View
-        style={{
-          gap: 8,
-          paddingHorizontal: 20,
-          paddingTop: 12,
-          paddingBottom: insets.bottom + 14,
-          borderTopWidth: 1,
-          borderTopColor: tokens.borderSubtle,
-          backgroundColor: tokens.background,
-        }}
+        }
       >
-        <Button
-          accessibilityLabel={step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}
-          size="lg"
+        <Progress value={((step + 1) / totalSteps) * 100} color={tokens.primary} height={3} />
+        {step === 0 && (
+          <View style={{ gap: 12 }}>
+            <Label>Country — currency</Label>
+            <Button
+              accessibilityLabel="Choose country and currency"
+              size="lg"
+              variant="outline"
+              onPress={() => setCurrencyOpen(true)}
+              style={{ justifyContent: 'flex-start' }}
+            >
+              {currencyCountries[currency]} — {currency}
+            </Button>
+            <Typography variant="small" style={{ color: tokens.primary }}>
+              {currencyLabel(currency)}
+            </Typography>
+          </View>
+        )}
+        {step === 1 && (
+          <View style={{ gap: 8 }}>
+            <Label style={{ marginBottom: 0 }}>Display name</Label>
+            <Input
+              accessibilityLabel="Display name"
+              autoComplete="name"
+              placeholder="Your name"
+              value={displayName}
+              onChangeText={(value) => {
+                setDisplayName(value);
+                setError('');
+              }}
+              editable={!pending}
+              returnKeyType="next"
+            />
+            <Label style={{ marginBottom: 0 }}>Username</Label>
+            <Input
+              accessibilityLabel="Username"
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="username-new"
+              textContentType="username"
+              placeholder="@yourname"
+              value={username}
+              onChangeText={(value) => {
+                setUsername(value);
+                setError('');
+              }}
+              returnKeyType="next"
+              onSubmitEditing={goForward}
+              error={!!error}
+            />
+            <Typography variant="small">
+              {handle && canContinue
+                ? `You’ll share as @${handle}`
+                : 'Use 3–32 letters, numbers or underscores.'}
+            </Typography>
+            <Label style={{ marginBottom: 0 }}>Gender</Label>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(['neutral', 'male', 'female'] as const).map((option) => (
+                <Button
+                  key={option}
+                  variant={gender === option ? 'primary' : 'outline'}
+                  disabled={pending}
+                  onPress={() => {
+                    setGender(option);
+                    const first = (avatarCatalog ?? []).find((avatar) => avatar.gender === option);
+                    if (first) setAvatarId(first.avatarId);
+                  }}
+                  accessibilityLabel={`Choose ${option} avatar category`}
+                  style={{ flex: 1, minWidth: 0, paddingHorizontal: 8 }}
+                >
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                </Button>
+              ))}
+            </View>
+            <Label style={{ marginBottom: 0 }}>Choose an avatar</Label>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                {visibleAvatars.map((avatar) => (
+                  <Button
+                    key={avatar.avatarId}
+                    variant={avatarId === avatar.avatarId ? 'primary' : 'outline'}
+                    disabled={pending}
+                    accessibilityLabel={`Select avatar ${avatar.avatarId}`}
+                    accessibilityState={{ selected: avatarId === avatar.avatarId }}
+                    onPress={() => setAvatarId(avatar.avatarId)}
+                    style={{ width: 58, height: 58, padding: 3, borderRadius: 999 }}
+                  >
+                    <Avatar initials="" label={avatar.avatarId} imageUrl={avatar.url} size={48} />
+                  </Button>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+        {step === 2 && (
+          <View style={{ gap: 8 }}>
+            <Label style={{ marginBottom: 0 }}>Phone number · optional</Label>
+            <Input
+              accessibilityLabel="Phone number"
+              autoFocus
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
+              placeholder="+91 98765 43210"
+              value={phone}
+              onChangeText={setPhone}
+              returnKeyType="next"
+              onSubmitEditing={goForward}
+            />
+          </View>
+        )}
+        {step === 3 && (
+          <View style={{ gap: 8 }}>
+            <Label style={{ marginBottom: 0 }}>Account name · optional</Label>
+            <Input
+              accessibilityLabel="Account name"
+              autoFocus
+              autoComplete="off"
+              placeholder="Cash, savings, everyday"
+              value={accountName}
+              onChangeText={setAccountName}
+              returnKeyType="next"
+              onSubmitEditing={goForward}
+            />
+          </View>
+        )}
+        {step === 4 && (
+          <View style={{ gap: 16 }}>
+            <Tabs
+              value={mode}
+              onChange={(value) => {
+                if (!pending) setMode(value);
+              }}
+              tabs={[
+                { label: 'Personal', value: 'personal' },
+                { label: 'Personal + groups', value: 'shared' },
+              ]}
+            />
+            <Typography variant="small">
+              {mode === 'shared'
+                ? 'Groups and split tools will stay close at hand.'
+                : 'Shared finance is available whenever you need it.'}
+            </Typography>
+            {(!userId || profileState.loading) && (
+              <Typography variant="small" accessibilityLiveRegion="polite">
+                Preparing your account…
+              </Typography>
+            )}
+            {profileState.error && (
+              <>
+                <AuthError message={profileState.error.message} />
+                <Button variant="ghost" onPress={profileState.retry}>
+                  Reload profile
+                </Button>
+              </>
+            )}
+          </View>
+        )}
+        <AuthError message={error} />
+        <AuthSubmit
+          label={
+            pending ? 'Saving your setup…' : step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'
+          }
+          pending={pending}
           disabled={continueDisabled}
           onPress={goForward}
-        >
-          <Text
-            style={{
-              color: continueDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
-              fontFamily: 'SpaceGrotesk_600SemiBold',
-              fontSize: 15,
-            }}
-          >
-            {step === totalSteps - 1 ? 'Enter Finapp' : 'Continue'}
-          </Text>
-          <ArrowRight
-            size={18}
-            color={continueDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
-            style={{ marginLeft: 8 }}
-          />
-        </Button>
+        />
         {(step === 2 || step === 3) && (
           <Button variant="ghost" onPress={goForward}>
             Skip for now
           </Button>
         )}
-      </View>
-
-      <Sheet
+      </AuthScaffold>
+      <Modal
         visible={currencyOpen}
-        onClose={() => {
+        animationType="slide"
+        onRequestClose={() => {
           setCurrencyOpen(false);
           setCurrencySearch('');
         }}
-        title="Choose country and currency"
       >
-        <Input
-          accessibilityLabel="Search countries and currencies"
-          autoFocus
-          placeholder="Search India, INR, rupee…"
-          value={currencySearch}
-          onChangeText={setCurrencySearch}
-        />
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          style={{ maxHeight: 460 }}
-          contentContainerStyle={{ gap: 4, paddingBottom: 8 }}
-        >
-          {currencyOptions.map((option) => (
-            <Button
-              key={option}
-              variant={currency === option ? 'primary' : 'ghost'}
-              onPress={() => {
-                setCurrency(option);
-                setCurrencyOpen(false);
-                setCurrencySearch('');
+        <SafeAreaView style={{ flex: 1, backgroundColor: tokens.background }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <View
+              style={{
+                flex: 1,
+                width: '100%',
+                maxWidth: 560,
+                alignSelf: 'center',
+                paddingHorizontal: width < 360 ? 16 : 24,
+                paddingTop: 12,
+                paddingBottom: 16,
+                gap: 16,
               }}
-              style={{ justifyContent: 'flex-start' }}
             >
-              {currencyCountries[option]} — {option}
-            </Button>
-          ))}
-          {currencyOptions.length === 0 && (
-            <Typography variant="small" style={{ paddingVertical: 24, textAlign: 'center' }}>
-              No matching country or currency.
-            </Typography>
-          )}
-        </ScrollView>
-      </Sheet>
-    </KeyboardAvoidingView>
+              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <Typography accessibilityRole="header" variant="heading" style={{ flex: 1 }}>
+                  Country and currency
+                </Typography>
+                <Button
+                  variant="ghost"
+                  onPress={() => {
+                    setCurrencyOpen(false);
+                    setCurrencySearch('');
+                  }}
+                >
+                  Done
+                </Button>
+              </View>
+              <Input
+                accessibilityLabel="Search countries and currencies"
+                autoFocus
+                autoCorrect={false}
+                placeholder="Search India, INR, rupee…"
+                value={currencySearch}
+                onChangeText={setCurrencySearch}
+              />
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                style={{ flex: 1 }}
+                contentContainerStyle={{ gap: 6, paddingBottom: 16 }}
+              >
+                {currencyOptions.map((option) => (
+                  <Button
+                    key={option}
+                    variant={currency === option ? 'primary' : 'ghost'}
+                    accessibilityState={{ selected: currency === option }}
+                    onPress={() => {
+                      setCurrency(option);
+                      setCurrencyOpen(false);
+                      setCurrencySearch('');
+                    }}
+                    style={{ justifyContent: 'flex-start', minHeight: 52 }}
+                  >
+                    {currencyCountries[option]} — {option}
+                  </Button>
+                ))}
+                {currencyOptions.length === 0 && (
+                  <Typography variant="small" style={{ paddingVertical: 24, textAlign: 'center' }}>
+                    No matching country or currency.
+                  </Typography>
+                )}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+    </>
   );
 }

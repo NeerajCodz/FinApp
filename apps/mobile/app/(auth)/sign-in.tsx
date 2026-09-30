@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowRight } from '@finapp/ui/icons/native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
+import { formatAuthError } from '@convex/shared/auth-errors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { BrandMark } from '@finapp/ui/finance';
-import { Button, IconButton, Input, Label, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { Button, Input, Label, Typography } from '@finapp/ui/native';
+import { AuthScaffold } from '@/components/auth/AuthScaffold';
+import { AuthError, AuthSubmit, isIdentifier, PasswordField } from '@/components/auth/AuthFields';
 
 export default function SignInScreen() {
   const { email: initialIdentifier } = useLocalSearchParams<{ email?: string }>();
@@ -18,19 +17,25 @@ export default function SignInScreen() {
   );
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ identifier?: string; password?: string }>({});
+  const [pending, setPending] = useState(false);
   const { signIn } = useAuthActions();
   const requestEmailTwoFactor = useAction(api.auth.requestEmailTwoFactor);
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
-  const signInDisabled = !identifier.trim() || !password;
 
   async function submit() {
+    if (pending) return;
     setError('');
+    const errors = {
+      identifier: !isIdentifier(identifier)
+        ? 'Enter a valid email or a username with 3–32 letters, numbers or underscores.'
+        : undefined,
+      password: !password ? 'Enter your password.' : undefined,
+    };
+    setFieldErrors(errors);
+    if (errors.identifier || errors.password) return;
+    setPending(true);
     try {
-      const result = await requestEmailTwoFactor({
-        identifier: identifier.trim(),
-        password,
-      });
+      const result = await requestEmailTwoFactor({ identifier: identifier.trim(), password });
       if (result.status === 'verification-required') {
         const form = new FormData();
         form.append('email', result.email);
@@ -56,127 +61,83 @@ export default function SignInScreen() {
         });
       }
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Unable to sign in';
+      const message = formatAuthError(cause, 'sign-in');
       setError(message);
       toast.error('Sign in failed', { description: message });
+    } finally {
+      setPending(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1, backgroundColor: tokens.background }}
-    >
-      <ScrollView
-        style={{ flex: 1 }}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
-          paddingBottom: 24,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          <BrandMark />
-        </View>
-
-        <View style={{ flex: 1, justifyContent: 'center', gap: 28, paddingVertical: 40 }}>
-          <View style={{ gap: 10 }}>
-            <Typography variant="title">Welcome back.</Typography>
-            <Typography variant="display">Your money,{`\n`}back in focus.</Typography>
-          </View>
-
-          <View style={{ gap: 18 }}>
-            <View>
-              <Label>Email or username</Label>
-              <Input
-                accessibilityLabel="Email or username"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="username"
-                textContentType="username"
-                placeholder="you@example.com or @neeraj"
-                value={identifier}
-                onChangeText={setIdentifier}
-                returnKeyType="next"
-                error={!!error}
-              />
-            </View>
-            <View>
-              <Label>Password</Label>
-              <Input
-                accessibilityLabel="Password"
-                autoComplete="current-password"
-                textContentType="password"
-                secureTextEntry
-                placeholder="Your password"
-                value={password}
-                onChangeText={setPassword}
-                returnKeyType="go"
-                onSubmitEditing={submit}
-                error={!!error}
-              />
-            </View>
-            {!!error && (
-              <Typography
-                variant="small"
-                accessibilityLiveRegion="polite"
-                style={{ color: tokens.destructive }}
-              >
-                {error}
-              </Typography>
-            )}
-          </View>
-        </View>
-      </ScrollView>
-      <View
-        style={{
-          gap: 12,
-          paddingHorizontal: 20,
-          paddingTop: 12,
-          paddingBottom: insets.bottom + 14,
-          borderTopWidth: 1,
-          borderTopColor: tokens.borderSubtle,
-          backgroundColor: tokens.background,
-        }}
-      >
-        <Button
-          variant="ghost"
-          onPress={() =>
-            router.push({
-              pathname: '/(auth)/forgot-password',
-              params: {
-                email: identifier.includes('@') ? identifier.trim().toLowerCase() : '',
-              },
-            })
-          }
-        >
-          Forgot password?
-        </Button>
-        <Button size="lg" disabled={signInDisabled} onPress={submit}>
-          <Text
-            style={{
-              color: signInDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground,
-              fontFamily: 'SpaceGrotesk_600SemiBold',
-              fontSize: 15,
-            }}
-          >
-            Sign in
-          </Text>
-          <ArrowRight
-            size={18}
-            color={signInDisabled ? tokens.controlDisabledForeground : tokens.primaryForeground}
-            style={{ marginLeft: 8 }}
-          />
-        </Button>
+    <AuthScaffold
+      eyebrow="Welcome back"
+      title={<>Back in{`\n`}your corner.</>}
+      description="Your spending, your plans, your people. Pick up right where you left off."
+      footer={
         <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-up')}>
-          New to Finapp? Create account
+          New here? Create an account
         </Button>
+      }
+    >
+      <View style={{ gap: 6 }}>
+        <Typography variant="heading">Sign in to Finapp</Typography>
+        <Typography variant="small">A little clarity starts here.</Typography>
       </View>
-    </KeyboardAvoidingView>
+      <View style={{ gap: 8 }}>
+        <Label style={{ marginBottom: 0 }}>Email or username</Label>
+        <Input
+          accessibilityLabel="Email or username"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="username"
+          textContentType="username"
+          placeholder="you@example.com or @yourname"
+          value={identifier}
+          onChangeText={(value) => {
+            setIdentifier(value);
+            setFieldErrors((current) => ({ ...current, identifier: undefined }));
+            setError('');
+          }}
+          returnKeyType="done"
+          editable={!pending}
+          error={!!fieldErrors.identifier}
+        />
+        <AuthError message={fieldErrors.identifier} />
+      </View>
+      <PasswordField
+        placeholder="Your password"
+        value={password}
+        onChangeText={(value) => {
+          setPassword(value);
+          setFieldErrors((current) => ({ ...current, password: undefined }));
+          setError('');
+        }}
+        returnKeyType="go"
+        onSubmitEditing={submit}
+        editable={!pending}
+        error={fieldErrors.password}
+      />
+      <Button
+        variant="ghost"
+        disabled={pending}
+        style={{ alignSelf: 'flex-end', paddingHorizontal: 0 }}
+        onPress={() =>
+          router.push({
+            pathname: '/(auth)/forgot-password',
+            params: {
+              email:
+                identifier.includes('@') && !identifier.startsWith('@')
+                  ? identifier.trim().toLowerCase()
+                  : '',
+            },
+          })
+        }
+      >
+        Forgot password?
+      </Button>
+      <AuthError message={error} />
+      <AuthSubmit label={pending ? 'Signing in…' : 'Sign in'} pending={pending} onPress={submit} />
+    </AuthScaffold>
   );
 }

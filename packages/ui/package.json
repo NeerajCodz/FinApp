@@ -7,6 +7,8 @@
     "./web": "./src/web/index.tsx",
     "./web/styles.css": "./src/web/styles.css",
     "./tokens": "./src/tokens.ts",
+    "./coin": "./src/coin/renderer.ts",
+    "./coin/motion": "./src/coin/motion.ts",
     "./quick-add": "./src/quick-add.ts",
     "./category-emoji": "./src/category-emoji.ts",
     "./finance": {
@@ -45,6 +47,11 @@
     "react-native": ">=0.86.0"
   },
   "dependencies": {
-    "@emoji-mart/data": "^1.2.1"
+    "@emoji-mart/data": "^1.2.1",
+    "animejs": "^4.5.0",
+    "earcut": "^3.2.4"
+  },
+  "devDependencies": {
+    "@types/earcut": "^3.0.0"
   }
 }

@@ -12,6 +12,7 @@ export function HomeHeader({
   onChooseDate,
   onOpenSync,
   onOpenNotifications,
+  notificationCount = 0,
 }: {
   accounts: readonly HomeAccountOption[];
   selectedAccountId: string;
@@ -22,9 +23,32 @@ export function HomeHeader({
   onChooseDate: () => void;
   onOpenSync: () => void;
   onOpenNotifications?: () => void;
+  notificationCount?: number;
 }) {
   return (
     <header className="finance-home-toolbar">
+      <div className="finance-home-status-actions">
+        {onOpenNotifications && (
+          <button
+            className="finance-home-sync"
+            type="button"
+            aria-label={
+              notificationCount > 0 ? `Notifications, ${notificationCount} unread` : 'Notifications'
+            }
+            onClick={onOpenNotifications}
+          >
+            <Bell size={18} aria-hidden="true" />
+          </button>
+        )}
+        <button
+          className="finance-home-sync"
+          type="button"
+          aria-label="Open sync status"
+          onClick={onOpenSync}
+        >
+          <ShieldCheck size={18} aria-hidden="true" />
+        </button>
+      </div>
       <div className="finance-home-title">
         <span className="finance-eyebrow">PERSONAL FINANCE</span>
         <h1>Home</h1>
@@ -59,26 +83,6 @@ export function HomeHeader({
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {onOpenNotifications && (
-            <button
-              className="finance-home-sync"
-              type="button"
-              aria-label="Notifications"
-              onClick={onOpenNotifications}
-            >
-              <Bell size={18} aria-hidden="true" />
-            </button>
-          )}
-          <button
-            className="finance-home-sync"
-            type="button"
-            aria-label="Open sync status"
-            onClick={onOpenSync}
-          >
-            <ShieldCheck size={18} aria-hidden="true" />
-          </button>
-        </div>
       </div>
     </header>
   );

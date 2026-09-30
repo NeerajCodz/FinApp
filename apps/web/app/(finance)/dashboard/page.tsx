@@ -5,11 +5,18 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@convex/_generated/api';
 import { HomeDashboard, buildHomeDashboard, type HomeRecord } from '@finapp/ui/home';
+import {
+  normalizeNotificationPreferences,
+  notificationTypes,
+  type NotificationType,
+} from '@convex/notifications/domain';
 import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { LocalSyncSheet } from '@/components/finance/dashboard/LocalSyncSheet';
 import { SpendingPeriodSheet } from '@/components/finance/dashboard/SpendingPeriodSheet';
+
+type HomeNotification = HomeRecord & { type?: string; readAt?: number };
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -37,6 +44,8 @@ export default function DashboardPage() {
   const { records: recurringRules } = useLocalRecords<HomeRecord>('recurringRule');
   const { records: goals } = useLocalRecords<HomeRecord>('goal');
   const { records: goalContributions } = useLocalRecords<HomeRecord>('goalContribution');
+  const { records: notifications } = useLocalRecords<HomeNotification>('notification');
+  const { records: userSettings } = useLocalRecords<HomeRecord>('settings');
   const [now] = React.useState(() => Date.now());
   const [period, setPeriod] = React.useState('This month');
   const [periodOpen, setPeriodOpen] = React.useState(false);
@@ -69,6 +78,17 @@ export default function DashboardPage() {
   }, [authLoading, identityReady, isAuthenticated, router, userId]);
   const currency = resolveDefaultCurrency(profiles) ?? 'INR';
   const timeZone = typeof profiles[0]?.timezone === 'string' ? profiles[0].timezone : undefined;
+  const notificationPreferences = normalizeNotificationPreferences(
+    userSettings[0]?.notificationPreferences,
+  );
+  const unreadNotificationCount = notifications.reduce((count, event) => {
+    const type = event.type as NotificationType;
+    return event.readAt === undefined &&
+      notificationTypes.includes(type) &&
+      notificationPreferences[type]
+      ? count + 1
+      : count;
+  }, 0);
   const peopleQueries = React.useMemo<RequestForQueries>(() => {
     const queries: RequestForQueries = {};
     if (isConnected) {
@@ -142,6 +162,7 @@ export default function DashboardPage() {
         search={search}
         dateLabel={dateLabel}
         currency={currency}
+        notificationCount={unreadNotificationCount}
         onSearchChange={setSearch}
         onAccountChange={setSelectedAccountId}
         onChooseDate={() => setPeriodOpen(true)}

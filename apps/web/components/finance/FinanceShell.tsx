@@ -8,7 +8,6 @@ import {
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
-  Bell,
   CalendarClock,
   ChartNoAxesCombined,
   CircleUserRound,
@@ -23,23 +22,13 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import {
-  normalizeNotificationPreferences,
-  notificationTypes,
-  type NotificationType,
-} from '@convex/notifications/domain';
-import { useLocalRecords } from '@/lib/offline/hooks';
-import type { LocalRecord } from '@/lib/offline/repository';
-import { LocalSyncSheet } from '@/components/finance/dashboard/LocalSyncSheet';
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Button, Sheet } from '@finapp/ui/web';
 import { FinanceBrand, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
-type HeaderNotification = LocalRecord & { type?: string; readAt?: number };
-type HeaderSettings = LocalRecord & { notificationPreferences?: unknown };
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
@@ -103,58 +92,13 @@ function QuickAddActions({ onClose }: { onClose: () => void }) {
 export function FinanceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const {
-    userId,
-    identityReady,
-    isConnected,
-    isSyncing,
-    syncError,
-    status,
-    failedEntries,
-    conflicts,
-    retryNow,
-    retryEntry,
-    resolveConflict,
-  } = useBrowserSync();
-  const notifications = useLocalRecords<HeaderNotification>('notification');
-  const settings = useLocalRecords<HeaderSettings>('settings');
+  const { userId, identityReady } = useBrowserSync();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [syncDetailsOpen, setSyncDetailsOpen] = useState(false);
-  const lastNotifiedError = useRef<string | null>(null);
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
-  const closeSyncDetails = useCallback(() => setSyncDetailsOpen(false), []);
-  useEffect(() => {
-    if (!syncError || !('Notification' in window) || Notification.permission !== 'granted') return;
-    if (lastNotifiedError.current === syncError) return;
-    lastNotifiedError.current = syncError;
-    new Notification('Finapp sync needs attention', {
-      body: 'A saved change could not sync. Open Finapp and retry.',
-      tag: 'finapp-sync-error',
-    });
-  }, [syncError]);
   useEffect(() => {
     if (identityReady && !userId) router.replace('/sign-in');
   }, [identityReady, router, userId]);
-  const hasSyncIssue = status.failed > 0 || status.conflicts > 0 || Boolean(syncError);
-  const syncTone = !userId
-    ? 'idle'
-    : hasSyncIssue || !isConnected
-      ? 'attention'
-      : isSyncing || status.pending > 0
-        ? 'syncing'
-        : 'connected';
-  const notificationPreferences = normalizeNotificationPreferences(
-    settings.records[0]?.notificationPreferences,
-  );
-  const unreadNotifications = notifications.records.reduce((count, event) => {
-    const type = event.type as NotificationType;
-    return event.readAt === undefined &&
-      notificationTypes.includes(type) &&
-      notificationPreferences[type]
-      ? count + 1
-      : count;
-  }, 0);
   if (!identityReady || !userId) return null;
 
   const profileHref = userId ? '/profile' : '/sign-in';
@@ -173,7 +117,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         <aside className="finance-sidebar" aria-label="Finapp">
           <div className="finance-brand-lockup">
             <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-              <FinanceBrand syncTone={syncTone} />
+              <FinanceBrand />
             </Link>
           </div>
           <p className="finance-sidebar-label">YOUR MONEY</p>
@@ -207,18 +151,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
           <header className="finance-topbar">
             <div className="finance-topbar-brand finance-brand-lockup">
               <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-                <FinanceBrand syncTone={syncTone} />
-              </Link>
-            </div>
-            <div className="finance-topbar-actions">
-              <Link
-                href="/notifications"
-                className="finance-notification-link"
-                aria-label={`Notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`}
-                aria-current={isActive('/notifications') ? 'page' : undefined}
-                title="Notifications"
-              >
-                <Bell size={19} aria-hidden="true" />
+                <FinanceBrand />
               </Link>
             </div>
           </header>
@@ -275,24 +208,6 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       <Sheet visible={quickAddOpen} onClose={closeQuickAdd} title="Add">
         <QuickAddActions onClose={closeQuickAdd} />
       </Sheet>
-      <LocalSyncSheet
-        visible={syncDetailsOpen}
-        isSignedIn={Boolean(userId)}
-        isConnected={Boolean(userId) && isConnected}
-        isSyncing={isSyncing}
-        status={status}
-        failedEntries={failedEntries}
-        conflicts={conflicts}
-        syncError={syncError}
-        onClose={closeSyncDetails}
-        onRetry={() => void retryNow()}
-        onRetryEntry={(localId) => void retryEntry(localId)}
-        onResolveConflict={(conflictId, winner) => void resolveConflict(conflictId, winner)}
-        onOpenSettings={() => {
-          closeSyncDetails();
-          router.push('/settings/sync');
-        }}
-      />
     </QuickAddContext.Provider>
   );
 }

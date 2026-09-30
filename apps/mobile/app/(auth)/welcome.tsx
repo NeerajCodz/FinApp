@@ -1,102 +1,76 @@
 import React from 'react';
-import { Image, View } from 'react-native';
-import appIcon from '../../assets/icon.png';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 import { router } from 'expo-router';
-import { Button, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { Button, Text, Typography, useTheme } from '@finapp/ui/native';
+import { AuthScaffold } from '@/components/auth/AuthScaffold';
+import { AuthSubmit } from '@/components/auth/AuthFields';
 
 export default function WelcomeScreen() {
   const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
-
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: tokens.background,
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 20,
-        paddingBottom: insets.bottom + 16,
-      }}
+    <AuthScaffold
+      hero
+      back={false}
+      eyebrow="Money, on your terms"
+      title={
+        <>
+          Less noise.{`\n`}More{' '}
+          <Text
+            style={{
+              color: tokens.primary,
+              fontFamily: 'SpaceGrotesk_600SemiBold',
+              fontSize: 48,
+              lineHeight: 52,
+              letterSpacing: -1.8,
+            }}
+          >
+            control.
+          </Text>
+        </>
+      }
+      description="Spending, accounts, budgets and shared expenses. One clear place to make sense of it all."
+      footer={
+        <>
+          <AuthSubmit label="Create your account" onPress={() => router.push('/(auth)/sign-up')} />
+          <Button
+            size="lg"
+            variant="outline"
+            style={{ borderRadius: 32, minHeight: 56 }}
+            onPress={() => router.push('/(auth)/sign-in')}
+          >
+            I already have an account
+          </Button>
+          <Typography variant="caption" style={{ textAlign: 'center', paddingTop: 6 }}>
+            Start with your email. Make it yours.
+          </Typography>
+        </>
+      }
     >
-      <Typography variant="caption" style={{ color: tokens.foregroundMuted, letterSpacing: 0.8 }}>
-        PRIVATE MONEY, CLEARLY
-      </Typography>
-
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingBottom: 28,
-        }}
-      >
-        <View
-          style={{
-            width: 176,
-            height: 176,
-            borderRadius: 88,
-            overflow: 'hidden',
-            backgroundColor: tokens.background,
-            marginBottom: 30,
-          }}
-        >
-          <Image
-            accessibilityLabel="Finapp app icon"
-            source={appIcon}
-            resizeMode="contain"
-            style={{ width: '100%', height: '100%', transform: [{ scale: 2.12 }] }}
-          />
-        </View>
-
-        <Typography
-          style={{
-            color: tokens.foreground,
-            fontFamily: 'SpaceGrotesk_600SemiBold',
-            fontSize: 52,
-            lineHeight: 58,
-            letterSpacing: -2.2,
-          }}
-        >
-          finapp
-        </Typography>
-        <Typography
-          variant="bodyLarge"
-          style={{
-            color: tokens.foregroundMuted,
-            textAlign: 'center',
-            marginTop: 12,
-            maxWidth: 290,
-          }}
-        >
-          Your money. Your people. One clear place.
-        </Typography>
+      <View style={{ gap: 18 }}>
+        <Typography variant="heading">A clearer everyday.</Typography>
+        {[
+          ['01', 'Know where it goes', 'Keep spending and balances in view.'],
+          ['02', 'Plan what comes next', 'Give your budgets a place to live.'],
+          ['03', 'Share without the guesswork', 'Track groups and split expenses.'],
+        ].map(([number, title, description]) => (
+          <View key={number} style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+            <Text
+              style={{
+                color: tokens.primary,
+                fontSize: 12,
+                lineHeight: 24,
+                fontVariant: ['tabular-nums'],
+              }}
+            >
+              {number}
+            </Text>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={{ fontFamily: 'SpaceGrotesk_500Medium' }}>{title}</Text>
+              <Typography variant="small">{description}</Typography>
+            </View>
+          </View>
+        ))}
       </View>
-
-      <View style={{ gap: 10 }}>
-        <Button
-          accessibilityLabel="Create account"
-          size="lg"
-          onPress={() => router.push('/(auth)/sign-up')}
-        >
-          Create account
-        </Button>
-        <Button
-          accessibilityLabel="Log in"
-          size="lg"
-          variant="outline"
-          onPress={() => router.push('/(auth)/sign-in')}
-        >
-          Log in
-        </Button>
-        <Typography
-          variant="caption"
-          style={{ color: tokens.foregroundSubtle, textAlign: 'center', marginTop: 6 }}
-        >
-          Private by default. Built for everyday money.
-        </Typography>
-      </View>
-    </View>
+    </AuthScaffold>
   );
 }

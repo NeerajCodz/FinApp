@@ -50,13 +50,13 @@ export function HomeHeader({
           gap: 10,
         }}
       >
-        <View style={{ gap: 4, flex: 1 }}>
+        <View style={{ gap: 4, flex: 1, paddingRight: 88 }}>
           <Typography variant="title" style={{ fontSize: 28, lineHeight: 32 }}>
             Home
           </Typography>
           <Typography variant="small">Your money, clearly in view.</Typography>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <View style={{ position: 'absolute', top: 0, right: 0, flexDirection: 'row', gap: 4 }}>
           <IconButton label={syncLabel ?? 'Open sync status'} variant="ghost" onPress={onOpenSync}>
             {syncIcon ?? <ClockCounterClockwise size={19} color={tokens.foregroundMuted} />}
           </IconButton>

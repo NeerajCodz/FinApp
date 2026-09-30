@@ -173,14 +173,6 @@ function ThemedStack() {
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => subscription.remove();
   }, []);
-  const { userId, isConnected, isSyncing, status, syncError } = useLocalSync();
-  const syncTone = !userId
-    ? 'idle'
-    : status.failed > 0 || status.conflicts > 0 || Boolean(syncError) || !isConnected
-      ? 'attention'
-      : isSyncing || status.pending > 0
-        ? 'syncing'
-        : 'connected';
 
   return (
     <>
@@ -189,7 +181,7 @@ function ThemedStack() {
         screenOptions={{
           headerShown: true,
           headerTitle: '',
-          headerLeft: () => <FinanceBrand syncTone={syncTone} />,
+          headerLeft: () => <FinanceBrand />,
           headerBackVisible: false,
           headerShadowVisible: false,
           headerStyle: { backgroundColor: tokens.background },
