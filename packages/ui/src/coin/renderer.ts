@@ -37,11 +37,11 @@ void main() {
 }`;
 
 export type CoinRenderer = {
-  render: (seconds: number, width: number, height: number) => void;
+  render: (offsetY: number, width: number, height: number) => void;
   dispose: () => void;
 };
 
-/** Browser WebGL and Expo GLView share the same geometry, lighting, and motion. */
+/** Browser WebGL and Expo GLView share the same flat engraving and fixed camera pose. */
 export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
   const shaders: WebGLShader[] = [];
   let program: WebGLProgram | null = null;
@@ -55,7 +55,10 @@ export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
     shaders.length = 0;
   };
   try {
-    for (const [type, source] of [[gl.VERTEX_SHADER, vertexSource], [gl.FRAGMENT_SHADER, fragmentSource]] as const) {
+    for (const [type, source] of [
+      [gl.VERTEX_SHADER, vertexSource],
+      [gl.FRAGMENT_SHADER, fragmentSource],
+    ] as const) {
       const shader = gl.createShader(type);
       if (!shader) throw new Error('Coin shader allocation failed.');
       shaders.push(shader);
@@ -78,7 +81,11 @@ export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
     if (!buffer) throw new Error('Coin geometry allocation failed.');
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
-    for (const [name, offset] of [['aPosition', 0], ['aNormal', 12], ['aColor', 24]] as const) {
+    for (const [name, offset] of [
+      ['aPosition', 0],
+      ['aNormal', 12],
+      ['aColor', 24],
+    ] as const) {
       const location = gl.getAttribLocation(program, name);
       gl.enableVertexAttribArray(location);
       gl.vertexAttribPointer(location, 3, gl.FLOAT, false, 36, offset);
@@ -86,31 +93,36 @@ export function createCoinRenderer(gl: WebGLRenderingContext): CoinRenderer {
     const rotation = gl.getUniformLocation(program, 'uRotation');
     const floating = gl.getUniformLocation(program, 'uFloat');
     const aspect = gl.getUniformLocation(program, 'uAspect');
-    const matrix = new Float32Array(9);
+    // Fixed pose only. Animation can translate the coin, never rotate it.
+    const x = -0.1,
+      y = -0.24,
+      z = 0.025;
+    const sx = Math.sin(x),
+      cx = Math.cos(x);
+    const sy = Math.sin(y),
+      cy = Math.cos(y);
+    const sz = Math.sin(z),
+      cz = Math.cos(z);
+    const matrix = new Float32Array([
+      cz * cy - sz * sx * sy,
+      sz * cy + cz * sx * sy,
+      -cx * sy,
+      -sz * cx,
+      cz * cx,
+      sx,
+      cz * sy + sz * sx * cy,
+      sz * sy - cz * sx * cy,
+      cx * cy,
+    ]);
+    gl.uniformMatrix3fv(rotation, false, matrix);
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0, 0, 0, 0);
     return {
-      render(seconds, width, height) {
+      render(offsetY, width, height) {
         if (!program || width <= 0 || height <= 0) return;
         gl.viewport(0, 0, width, height);
         gl.useProgram(program);
-        const x = -0.18 + Math.sin(seconds * 0.45) * 0.08;
-        const y = -0.42 + seconds * 0.65;
-        const z = 0.1 + Math.sin(seconds * 0.3) * 0.065;
-        const sx = Math.sin(x), cx = Math.cos(x);
-        const sy = Math.sin(y), cy = Math.cos(y);
-        const sz = Math.sin(z), cz = Math.cos(z);
-        matrix[0] = cz * cy - sz * sx * sy;
-        matrix[1] = sz * cy + cz * sx * sy;
-        matrix[2] = -cx * sy;
-        matrix[3] = -sz * cx;
-        matrix[4] = cz * cx;
-        matrix[5] = sx;
-        matrix[6] = cz * sy + sz * sx * cy;
-        matrix[7] = sz * sy - cz * sx * cy;
-        matrix[8] = cx * cy;
-        gl.uniformMatrix3fv(rotation, false, matrix);
-        gl.uniform1f(floating, Math.sin(seconds * 0.9) * 0.085);
+        gl.uniform1f(floating, offsetY);
         gl.uniform1f(aspect, width / height);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount);

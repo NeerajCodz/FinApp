@@ -3,6 +3,8 @@ import { AccessibilityInfo, AppState, Image, StyleSheet, View } from 'react-nati
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { useFocusEffect } from 'expo-router';
 import { createCoinRenderer, type CoinRenderer } from '@finapp/ui/coin';
+import { createCoinFloat } from '@finapp/ui/coin/motion';
+import appIcon from '../../assets/icon.png';
 
 export function CoinLogo({ size = 240, animated = true }: { size?: number; animated?: boolean }) {
   const [available, setAvailable] = useState(false);
@@ -19,11 +21,15 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
 
   useEffect(() => {
     mounted.current = true;
+    const float = createCoinFloat();
     const draw = () => {
       const gl = context.current;
       if (!gl || !renderer.current) return;
-      renderer.current.render(moving.current && !reduced.current ? elapsed.current : 0,
-        gl.drawingBufferWidth, gl.drawingBufferHeight);
+      renderer.current.render(
+        moving.current && !reduced.current ? float.sample(elapsed.current) : 0,
+        gl.drawingBufferWidth,
+        gl.drawingBufferHeight,
+      );
       gl.endFrameEXP();
     };
     const tick = (timestamp: number) => {
@@ -40,18 +46,24 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
       previous.current = 0;
       if (!mounted.current || !focused.current || AppState.currentState !== 'active') return;
       draw();
-      if (renderer.current && moving.current && !reduced.current) frame.current = requestAnimationFrame(tick);
+      if (renderer.current && moving.current && !reduced.current)
+        frame.current = requestAnimationFrame(tick);
     };
     synchronise.current = sync;
-    const motionSubscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (value) => {
-      reduced.current = value;
-      sync();
-    });
-    void AccessibilityInfo.isReduceMotionEnabled().then((value) => {
-      if (!mounted.current) return;
-      reduced.current = value;
-      sync();
-    }).catch(() => {});
+    const motionSubscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      (value) => {
+        reduced.current = value;
+        sync();
+      },
+    );
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then((value) => {
+        if (!mounted.current) return;
+        reduced.current = value;
+        sync();
+      })
+      .catch(() => {});
     const appSubscription = AppState.addEventListener('change', sync);
     sync();
     return () => {
@@ -62,6 +74,7 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
       renderer.current?.dispose();
       renderer.current = null;
       context.current = null;
+      float.dispose();
     };
   }, []);
 
@@ -70,14 +83,16 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
     synchronise.current();
   }, [animated]);
 
-  useFocusEffect(useCallback(() => {
-    focused.current = true;
-    synchronise.current();
-    return () => {
-      focused.current = false;
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
       synchronise.current();
-    };
-  }, []));
+      return () => {
+        focused.current = false;
+        synchronise.current();
+      };
+    }, []),
+  );
 
   function onContextCreate(gl: ExpoWebGLRenderingContext) {
     if (!mounted.current) return;
@@ -94,9 +109,19 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
   }
 
   return (
-    <View style={{ width: size, height: size }} accessible accessibilityRole="image" accessibilityLabel="Finapp volt coin with a black F" pointerEvents="none">
-      {!available && <Image source={require('../../assets/icon.png')} style={styles.fallback} accessibilityElementsHidden />}
-      <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} onLayout={() => synchronise.current()} />
+    <View
+      style={{ width: size, height: size }}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel="Finapp volt coin with a black F"
+      pointerEvents="none"
+    >
+      {!available && <Image source={appIcon} style={styles.fallback} accessibilityElementsHidden />}
+      <GLView
+        style={StyleSheet.absoluteFill}
+        onContextCreate={onContextCreate}
+        onLayout={() => synchronise.current()}
+      />
     </View>
   );
 }

@@ -3,16 +3,27 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { createCoinRenderer, type CoinRenderer } from '@finapp/ui/coin';
+import { createCoinFloat } from '@finapp/ui/coin/motion';
 import appIcon from '../../../mobile/assets/icon.png';
 
-export function CoinLogo({ className = '', paused = false }: { className?: string; paused?: boolean }) {
+export function CoinLogo({
+  className = '',
+  paused = false,
+}: {
+  className?: string;
+  paused?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [available, setAvailable] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const gl = canvas.getContext('webgl', { alpha: true, antialias: true, powerPreference: 'low-power' });
+    const gl = canvas.getContext('webgl', {
+      alpha: true,
+      antialias: true,
+      powerPreference: 'low-power',
+    });
     if (!gl) return;
     let renderer: CoinRenderer | null = null;
     let frame = 0;
@@ -20,22 +31,24 @@ export function CoinLogo({ className = '', paused = false }: { className?: strin
     let elapsed = 0;
     let previous = 0;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const float = createCoinFloat();
     const draw = () => {
       const bounds = canvas.getBoundingClientRect();
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      const width = Math.round(bounds.width * ratio), height = Math.round(bounds.height * ratio);
+      const width = Math.round(bounds.width * ratio),
+        height = Math.round(bounds.height * ratio);
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
       }
-      renderer?.render(paused || motion.matches ? 0 : elapsed, width, height);
+      renderer?.render(paused || motion.matches ? 0 : float.sample(elapsed), width, height);
     };
     const tick = (timestamp: number) => {
       frame = 0;
       if (!renderer || !visible || document.hidden) return;
       if (previous) elapsed += Math.min((timestamp - previous) / 1000, 0.1);
       previous = timestamp;
-      renderer.render(elapsed, canvas.width, canvas.height);
+      renderer.render(float.sample(elapsed), canvas.width, canvas.height);
       if (!paused && !motion.matches) frame = requestAnimationFrame(tick);
     };
     const sync = () => {
@@ -85,13 +98,24 @@ export function CoinLogo({ className = '', paused = false }: { className?: strin
       canvas.removeEventListener('webglcontextlost', lost);
       canvas.removeEventListener('webglcontextrestored', restored);
       renderer?.dispose();
+      float.dispose();
     };
   }, [paused]);
 
   return (
-    <div className={`finapp-coin ${className}`} role="img" aria-label="Finapp volt coin with a black F">
-      <canvas ref={canvasRef} aria-hidden="true" className={available ? 'finapp-coin-canvas' : 'finapp-coin-canvas finapp-coin-pending'} />
-      {!available && <Image className="finapp-coin-fallback" src={appIcon} alt="" width={512} height={512} />}
+    <div
+      className={`finapp-coin ${className}`}
+      role="img"
+      aria-label="Finapp volt coin with a black F"
+    >
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        className={available ? 'finapp-coin-canvas' : 'finapp-coin-canvas finapp-coin-pending'}
+      />
+      {!available && (
+        <Image className="finapp-coin-fallback" src={appIcon} alt="" width={512} height={512} />
+      )}
     </div>
   );
 }
