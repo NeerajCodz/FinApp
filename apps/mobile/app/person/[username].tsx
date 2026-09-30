@@ -31,6 +31,7 @@ type GroupMemberRecord = LocalRecord & {
   userId?: string;
   memberId?: string;
   username?: string;
+  avatarUrl?: string | null;
 };
 type TimelineRecord = LocalRecord & {
   id?: string;
@@ -192,7 +193,12 @@ export default function PersonTimelineScreen() {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <Avatar initials={handle.slice(0, 2).toUpperCase()} label={`@${handle}`} size={60} />
+          <Avatar
+            initials={handle.slice(0, 2).toUpperCase()}
+            label={`@${handle}`}
+            size={60}
+            imageUrl={matchingMembers[0]?.avatarUrl}
+          />
           <View style={{ flex: 1, gap: 3 }}>
             <Typography variant="heading">@{handle}</Typography>
             <Typography variant="small">Shared money timeline</Typography>

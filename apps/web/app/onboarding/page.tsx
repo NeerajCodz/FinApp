@@ -3,9 +3,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useConvexAuth } from 'convex/react';
+import { useConvexAuth, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button, Input, Label, Sheet, Tabs } from '@finapp/ui/web';
+import { Avatar, Button, Input, Label, Sheet, Tabs } from '@finapp/ui/web';
 import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -17,8 +18,11 @@ type Profile = LocalRecord & {
   defaultCurrency?: string;
   timezone?: string;
   phone?: string;
+  avatarId?: string;
+  gender?: 'neutral' | 'male' | 'female';
 };
 type Currency = (typeof currencies)[number];
+type AvatarGender = NonNullable<Profile['gender']>;
 const totalSteps = 5;
 const currencyCountries: Record<Currency, string> = {
   INR: 'India',
@@ -64,28 +68,54 @@ export default function OnboardingPage() {
   const { records: profiles } = useLocalRecords<Profile>('profile');
   const profile = profiles[0];
   const router = useRouter();
+  const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const [currencyOpen, setCurrencyOpen] = React.useState(false);
   const [currency, setCurrency] = React.useState<Currency>(
     Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US') ? 'USD' : 'INR',
   );
   const [currencySearch, setCurrencySearch] = React.useState('');
+  const [displayName, setDisplayName] = React.useState('');
   const [username, setUsername] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [accountName, setAccountName] = React.useState('');
+  const [gender, setGender] = React.useState<AvatarGender>('neutral');
+  const [avatarId, setAvatarId] = React.useState('AV0');
   const [mode, setMode] = React.useState<'personal' | 'shared'>('personal');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => {
+    if (profile?.displayName && !displayName) setDisplayName(profile.displayName);
+    if (profile?.username && !username) setUsername(profile.username);
+    if (profile?.gender) setGender(profile.gender);
+    if (profile?.avatarId) setAvatarId(profile.avatarId);
+  }, [
+    displayName,
+    profile?.avatarId,
+    profile?.displayName,
+    profile?.gender,
+    profile?.username,
+    username,
+  ]);
   const handle = username.replace(/^@+/, '').toLowerCase();
   const query = currencySearch.trim().toLowerCase();
   const currencyOptions = currencies.filter((code) =>
     `${currencyCountries[code]} ${code} ${currencyLabel(code)}`.toLowerCase().includes(query),
   );
-  const canContinue = step !== 1 || /^[a-z0-9_]{3,32}$/.test(handle);
+  const visibleAvatars = (avatarCatalog ?? []).filter((avatar) => avatar.gender === gender);
+  const selectedAvatar = visibleAvatars.find((avatar) => avatar.avatarId === avatarId);
+  const canContinue =
+    step !== 1 || (!!displayName.trim() && /^[a-z0-9_]{3,32}$/.test(handle) && !!selectedAvatar);
 
   function advance() {
     setError('');
     if (!canContinue) {
-      setError('Usernames must be 3–32 letters, numbers, or underscores.');
+      setError(
+        !displayName.trim()
+          ? 'Enter the name people will see.'
+          : !/^[a-z0-9_]{3,32}$/.test(handle)
+            ? 'Usernames must be 3–32 letters, numbers, or underscores.'
+            : 'Choose an avatar before continuing.',
+      );
       return;
     }
     if (step < totalSteps - 1) setStep((current) => current + 1);
@@ -97,15 +127,16 @@ export default function OnboardingPage() {
     setSaving(true);
     setError('');
     try {
-      const displayName = String(profile?.displayName ?? 'Your profile');
       const timezone =
         profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       const update = {
-        displayName,
+        displayName: displayName.trim(),
         username: handle,
         defaultCurrency: currency,
         timezone,
         phone: phone.trim() || undefined,
+        avatarId,
+        gender,
       };
       const profileId = String(profile?.id ?? profile?._id ?? userId);
       await commitLocalWrite(
@@ -116,6 +147,7 @@ export default function OnboardingPage() {
           ...(profile ?? {}),
           id: profileId,
           ownerId: userId,
+          avatarUrl: selectedAvatar?.url,
           ...update,
         },
         update,
@@ -216,8 +248,8 @@ export default function OnboardingPage() {
       'Choose the country and currency you use every day. You can change it later.',
     ],
     [
-      'Choose your username.',
-      'Your @handle makes sharing groups and split expenses instant. Use letters, numbers, or underscores.',
+      'Make it yours.',
+      'Set your display name, username, gender, and the avatar people will see across Finapp.',
     ],
     [
       'Add a phone number.',
@@ -296,21 +328,111 @@ export default function OnboardingPage() {
                 </div>
               )}
               {step === 1 && (
-                <div className="auth-field">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    placeholder="@neeraj"
-                    value={username}
-                    onChangeText={setUsername}
-                    error={!!error}
-                  />
-                  {handle && (
-                    <span className="auth-helper auth-handle">You will share as @{handle}</span>
-                  )}
+                <div style={{ display: 'grid', gap: 18 }}>
+                  <div className="auth-field">
+                    <Label htmlFor="display-name">Display name</Label>
+                    <Input
+                      id="display-name"
+                      autoComplete="name"
+                      placeholder="Your name"
+                      value={displayName}
+                      onChangeText={setDisplayName}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      placeholder="@neeraj"
+                      value={username}
+                      onChangeText={setUsername}
+                      error={!!error}
+                    />
+                    {handle && (
+                      <span className="auth-helper auth-handle">You will share as @{handle}</span>
+                    )}
+                  </div>
+                  <div className="auth-field">
+                    <Label>Gender</Label>
+                    <div
+                      role="group"
+                      aria-label="Choose gender"
+                      style={{ display: 'flex', gap: 8 }}
+                    >
+                      {(['neutral', 'male', 'female'] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          aria-pressed={gender === option}
+                          onClick={() => {
+                            setGender(option);
+                            const first = (avatarCatalog ?? []).find(
+                              (avatar) => avatar.gender === option,
+                            );
+                            if (first) setAvatarId(first.avatarId);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: 999,
+                            border: `1px solid ${gender === option ? 'var(--primary)' : 'var(--border-subtle)'}`,
+                            background: gender === option ? 'var(--surface-raised)' : 'transparent',
+                            color: 'inherit',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {option[0].toUpperCase() + option.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="auth-field">
+                    <Label>Choose an avatar</Label>
+                    {visibleAvatars.length ? (
+                      <div
+                        role="group"
+                        aria-label={`${gender} avatars`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+                          gap: 9,
+                          maxHeight: 248,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {visibleAvatars.map((avatar) => (
+                          <button
+                            key={avatar.avatarId}
+                            type="button"
+                            aria-label={`Select avatar ${avatar.avatarId}`}
+                            aria-pressed={avatarId === avatar.avatarId}
+                            onClick={() => setAvatarId(avatar.avatarId)}
+                            style={{
+                              padding: 3,
+                              borderRadius: '50%',
+                              border:
+                                avatarId === avatar.avatarId
+                                  ? '2px solid var(--primary)'
+                                  : '2px solid transparent',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Avatar
+                              initials=""
+                              label={avatar.avatarId}
+                              imageUrl={avatar.url}
+                              size={42}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="auth-helper">Avatar choices are loading.</span>
+                    )}
+                  </div>
                 </div>
               )}
               {step === 2 && (

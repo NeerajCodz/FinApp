@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import { upsertCloudPage, type LocalRecord } from '@/local/repository';
@@ -54,6 +54,9 @@ type ProfileRecord = LocalRecord & {
   phone?: string;
   phoneVerificationTime?: number;
   defaultCurrency?: string;
+  avatarId?: string;
+  gender?: 'neutral' | 'male' | 'female';
+  avatarUrl?: string | null;
 };
 
 type ActionIcon = React.ComponentType<{ size?: number; color?: string }>;
@@ -164,10 +167,12 @@ function ProfileActionRow({
 export default function ProfileScreen() {
   const { signOut } = useAuthActions();
   const updateUser = useMutation(api.users.mutations.update);
+  const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const { userId, isConnected } = useLocalSync();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
   const settingsState = useLocalRecords<LocalRecord>(userId, 'settings');
-  const defaultCurrency = resolveDefaultCurrency(profileState.data ?? [], settingsState.data ?? []) ?? 'INR';
+  const defaultCurrency =
+    resolveDefaultCurrency(profileState.data ?? [], settingsState.data ?? []) ?? 'INR';
   const profile = profileState.data?.[0];
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -233,6 +238,29 @@ export default function ProfileScreen() {
       setSaving(false);
     }
   }
+  async function selectAvatar(avatarId: string, gender: 'neutral' | 'male' | 'female') {
+    if (!userId || saving) return;
+    const avatar = (avatarCatalog ?? []).find((entry) => entry.avatarId === avatarId);
+    if (!avatar) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const update = { avatarId, gender };
+      const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.update',
+        { ...currentProfile, ...update, avatarUrl: avatar.url },
+        update,
+        { recordId: String(currentProfile.id ?? currentProfile._id ?? userId) },
+      );
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Could not save avatar.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function leave() {
     await clearValidatedLocalUserId();
@@ -291,6 +319,7 @@ export default function ProfileScreen() {
               initials={(profile?.displayName ?? 'NS').slice(0, 2)}
               label="Your profile"
               size={68}
+              imageUrl={profile?.avatarUrl}
             />
             <View style={{ flex: 1, gap: 3 }}>
               <Typography variant="heading">{profile?.displayName ?? 'Your profile'}</Typography>
@@ -350,6 +379,59 @@ export default function ProfileScreen() {
               </Text>
             </Button>
           </View>
+        </View>
+        <View
+          style={{
+            padding: 18,
+            gap: 14,
+            borderRadius: 20,
+            backgroundColor: tokens.surfaceSubtle,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+          }}
+        >
+          <View style={{ gap: 3 }}>
+            <Typography variant="heading">Your avatar</Typography>
+            <Text style={{ color: tokens.foregroundMuted }}>
+              Choose how you appear in groups and shared activity.
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {(['neutral', 'male', 'female'] as const).map((gender) => (
+              <Button
+                key={gender}
+                variant={(profile?.gender ?? 'neutral') === gender ? 'primary' : 'outline'}
+                disabled={saving || !avatarCatalog}
+                onPress={() => {
+                  const first = (avatarCatalog ?? []).find((entry) => entry.gender === gender);
+                  if (first) void selectAvatar(first.avatarId, gender);
+                }}
+                accessibilityLabel={`Choose ${gender} avatar category`}
+              >
+                {gender.charAt(0).toUpperCase() + gender.slice(1)}
+              </Button>
+            ))}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+              {(avatarCatalog ?? [])
+                .filter((entry) => entry.gender === (profile?.gender ?? 'neutral'))
+                .map((entry) => (
+                  <Button
+                    key={entry.avatarId}
+                    variant={profile?.avatarId === entry.avatarId ? 'primary' : 'outline'}
+                    accessibilityLabel={`Select avatar ${entry.avatarId}`}
+                    accessibilityState={{ selected: profile?.avatarId === entry.avatarId }}
+                    disabled={saving}
+                    onPress={() => void selectAvatar(entry.avatarId, entry.gender)}
+                    style={{ width: 58, height: 58, padding: 3, borderRadius: 999 }}
+                  >
+                    <Avatar initials="" label={entry.avatarId} imageUrl={entry.url} size={48} />
+                  </Button>
+                ))}
+            </View>
+          </ScrollView>
+          {!!saveError && <Text accessibilityRole="alert">{saveError}</Text>}
         </View>
 
         <View style={{ gap: 12 }}>

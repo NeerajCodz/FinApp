@@ -521,6 +521,7 @@ export default function GroupSettingsScreen() {
                           .toUpperCase()}
                         label={name}
                         size={42}
+                        imageUrl={typeof member.avatarUrl === 'string' ? member.avatarUrl : null}
                       />
                       <View style={{ flex: 1, gap: 4 }}>
                         <Typography variant="bodyLarge" numberOfLines={1}>

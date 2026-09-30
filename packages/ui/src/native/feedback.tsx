@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccessibilityInfo, Animated, Easing, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Image, View } from 'react-native';
 import { ReceiptText } from 'lucide-react-native';
 import { useTheme } from './ThemeProvider';
 import { Text, Typography } from './typography';
@@ -8,10 +8,12 @@ export function Avatar({
   initials,
   label,
   size = 42,
+  imageUrl,
 }: {
   initials: string;
   label?: string;
   size?: number;
+  imageUrl?: string | null;
 }) {
   const { tokens } = useTheme();
   return (
@@ -27,17 +29,26 @@ export function Avatar({
         borderColor: tokens.borderSubtle,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
       }}
     >
-      <Text
-        style={{
-          color: tokens.foreground,
-          fontFamily: 'SpaceGrotesk_600SemiBold',
-          fontSize: size * 0.32,
-        }}
-      >
-        {initials.slice(0, 2).toUpperCase()}
-      </Text>
+      {imageUrl ? (
+        <Image
+          source={{ uri: imageUrl }}
+          resizeMode="cover"
+          style={{ width: size, height: size }}
+        />
+      ) : (
+        <Text
+          style={{
+            color: tokens.foreground,
+            fontFamily: 'SpaceGrotesk_600SemiBold',
+            fontSize: size * 0.32,
+          }}
+        >
+          {initials.slice(0, 2).toUpperCase()}
+        </Text>
+      )}
     </View>
   );
 }

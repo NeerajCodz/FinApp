@@ -3,6 +3,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowRight, Phone, UsersThree, Wallet } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { api } from '@convex/_generated/api';
+import { useQuery } from 'convex/react';
 import { currencies } from '@convex/shared/validators';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -19,6 +21,7 @@ import {
   Text,
   Sheet,
   Typography,
+  Avatar,
 } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 
@@ -77,23 +80,45 @@ export default function OnboardingScreen() {
   const [currency, setCurrency] = useState<CurrencyCode>(localeCurrency);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [currencySearch, setCurrencySearch] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [accountName, setAccountName] = useState('');
+  const [gender, setGender] = useState<'neutral' | 'male' | 'female'>('neutral');
+  const [avatarId, setAvatarId] = useState('AV0');
   const [mode, setMode] = useState('personal');
   const { userId } = useLocalSync();
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
+  const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  React.useEffect(() => {
+    if (typeof profile?.displayName === 'string' && !displayName)
+      setDisplayName(profile.displayName);
+    if (typeof profile?.username === 'string' && !username) setUsername(profile.username);
+    if (profile?.gender === 'neutral' || profile?.gender === 'male' || profile?.gender === 'female')
+      setGender(profile.gender);
+    if (typeof profile?.avatarId === 'string') setAvatarId(profile.avatarId);
+  }, [
+    displayName,
+    profile?.avatarId,
+    profile?.displayName,
+    profile?.gender,
+    profile?.username,
+    username,
+  ]);
   const handle = normalizeHandle(username);
   const normalizedCurrencySearch = currencySearch.trim().toLowerCase();
   const currencyOptions = currencies.filter((code) => {
     const searchable = `${currencyCountries[code]} ${code} ${currencyLabel(code)}`.toLowerCase();
     return searchable.includes(normalizedCurrencySearch);
   });
-  const canContinue = step !== 1 || /^[a-z0-9_]{3,32}$/.test(handle);
+  const visibleAvatars = (avatarCatalog ?? []).filter((avatar) => avatar.gender === gender);
+  const selectedAvatar = visibleAvatars.find((avatar) => avatar.avatarId === avatarId);
+  const canContinue =
+    step !== 1 || (!!displayName.trim() && /^[a-z0-9_]{3,32}$/.test(handle) && !!selectedAvatar);
   const continueDisabled = !canContinue;
 
   function goBack() {
@@ -110,24 +135,20 @@ export default function OnboardingScreen() {
     }
     try {
       if (!userId) throw new Error('AUTH_REQUIRED');
-      const displayName = String(profile?.displayName ?? 'Your profile');
+      const profileUpdate = {
+        displayName: displayName.trim(),
+        username: handle,
+        phone: phone.trim() || undefined,
+        defaultCurrency: currency,
+        avatarId,
+        gender,
+      };
       await commitLocalWrite(
         userId,
         'profile',
         'user.update',
-        {
-          ...(profile ?? {}),
-          displayName,
-          username: handle,
-          phone: phone.trim() || undefined,
-          defaultCurrency: currency,
-        },
-        {
-          displayName,
-          username: handle,
-          phone: phone.trim() || undefined,
-          defaultCurrency: currency,
-        },
+        { ...(profile ?? {}), ...profileUpdate, avatarUrl: selectedAvatar?.url },
+        profileUpdate,
         { recordId: String(profile?.id ?? profile?._id ?? userId) },
       );
       const trimmedAccountName = accountName.trim();
@@ -219,30 +240,87 @@ export default function OnboardingScreen() {
           {step === 1 && (
             <>
               <View style={{ gap: 12 }}>
-                <Typography variant="title">Choose your{`\n`}username.</Typography>
+                <Typography variant="title">Make it yours.</Typography>
                 <Text style={{ color: tokens.foregroundMuted, maxWidth: 310 }}>
-                  Your @handle makes sharing groups and split expenses instant. Use letters,
-                  numbers, or underscores.
+                  Choose your display name, username, gender, and the avatar people will see across
+                  Finapp.
                 </Text>
               </View>
-              <View>
-                <Label>Username</Label>
-                <Input
-                  accessibilityLabel="Username"
-                  autoFocus
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="@neeraj"
-                  value={username}
-                  onChangeText={setUsername}
-                  returnKeyType="next"
-                  onSubmitEditing={goForward}
-                />
-                {handle && (
-                  <Typography variant="small" style={{ color: tokens.primary, marginTop: 8 }}>
-                    You will share as @{handle}
-                  </Typography>
-                )}
+              <View style={{ gap: 14 }}>
+                <View>
+                  <Label>Display name</Label>
+                  <Input
+                    accessibilityLabel="Display name"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    returnKeyType="next"
+                  />
+                </View>
+                <View>
+                  <Label>Username</Label>
+                  <Input
+                    accessibilityLabel="Username"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="@neeraj"
+                    value={username}
+                    onChangeText={setUsername}
+                    returnKeyType="next"
+                    onSubmitEditing={goForward}
+                  />
+                  {handle && (
+                    <Typography variant="small" style={{ color: tokens.primary, marginTop: 8 }}>
+                      You will share as @{handle}
+                    </Typography>
+                  )}
+                </View>
+                <View>
+                  <Label>Gender</Label>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {(['neutral', 'male', 'female'] as const).map((option) => (
+                      <Button
+                        key={option}
+                        variant={gender === option ? 'primary' : 'outline'}
+                        onPress={() => {
+                          setGender(option);
+                          const first = (avatarCatalog ?? []).find(
+                            (avatar) => avatar.gender === option,
+                          );
+                          if (first) setAvatarId(first.avatarId);
+                        }}
+                        accessibilityLabel={`Choose ${option} avatar category`}
+                      >
+                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                      </Button>
+                    ))}
+                  </View>
+                </View>
+                <View style={{ gap: 8 }}>
+                  <Label>Choose an avatar</Label>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                      {visibleAvatars.map((avatar) => (
+                        <Button
+                          key={avatar.avatarId}
+                          variant={avatarId === avatar.avatarId ? 'primary' : 'outline'}
+                          accessibilityLabel={`Select avatar ${avatar.avatarId}`}
+                          accessibilityState={{ selected: avatarId === avatar.avatarId }}
+                          onPress={() => setAvatarId(avatar.avatarId)}
+                          style={{ width: 58, height: 58, padding: 3, borderRadius: 999 }}
+                        >
+                          <Avatar
+                            initials=""
+                            label={avatar.avatarId}
+                            imageUrl={avatar.url}
+                            size={48}
+                          />
+                        </Button>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
               </View>
             </>
           )}
