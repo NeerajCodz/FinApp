@@ -6,6 +6,11 @@ import { router } from 'expo-router';
 import { Button, IconButton, Input, Sheet, Text, Typography } from '@finapp/ui/native';
 import { isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { useTheme } from '@finapp/ui/native';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { commitLocalWrite } from '@/local/commands';
+import type { LocalRecord } from '@/local/repository';
+import Storage from 'expo-sqlite/kv-store';
 const accents: { value: AccentName; label: string; color: string }[] = [
   { value: 'volt', label: 'Volt', color: '#B7FF4A' },
   { value: 'white', label: 'White', color: '#FFFFFF' },
@@ -20,6 +25,33 @@ export default function AppearanceSettingsScreen() {
   const [customColor, setCustomColor] = useState<string>(
     isAccentColor(accent) ? accent : '#B7FF4A',
   );
+  const { userId } = useLocalSync();
+  const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
+  const profile = profileState.data?.[0];
+  const [accentError, setAccentError] = useState('');
+  async function chooseAccent(next: string) {
+    if (!userId) return;
+    setAccent(next as typeof accent);
+    setAccentError('');
+    try {
+      Storage.setItemSync(`finapp.appearance.accent.v1:${userId}`, next);
+    } catch {
+      // Cloud persistence remains available if local cache storage is blocked.
+    }
+    try {
+      const current = profile ?? { id: userId };
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.update',
+        { ...current, accent: next },
+        { accent: next },
+        { recordId: String(current.id ?? current._id ?? userId) },
+      );
+    } catch {
+      setAccentError('Could not save this accent on this device.');
+    }
+  }
   return (
     <>
       <ScrollView
@@ -71,6 +103,11 @@ export default function AppearanceSettingsScreen() {
 
         <View style={{ gap: 12 }}>
           <Typography variant="label">Accent color</Typography>
+          {accentError ? (
+            <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
+              {accentError}
+            </Text>
+          ) : null}
           <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
             Choose the color used for primary actions and highlights.
           </Text>
@@ -82,7 +119,7 @@ export default function AppearanceSettingsScreen() {
                   key={option.value}
                   variant={selected ? 'primary' : 'outline'}
                   accessibilityState={{ selected }}
-                  onPress={() => setAccent(option.value)}
+                  onPress={() => void chooseAccent(option.value)}
                   style={{ justifyContent: 'space-between', minHeight: 56 }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -188,7 +225,7 @@ export default function AppearanceSettingsScreen() {
             disabled={!isAccentColor(customColor)}
             onPress={() => {
               if (!isAccentColor(customColor)) return;
-              setAccent(customColor);
+              void chooseAccent(customColor);
               setColorPickerOpen(false);
             }}
           >
