@@ -120,8 +120,12 @@ export default function OnboardingScreen() {
 
   function goBack() {
     if (pending) return;
-    if (step === 0) router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in');
-    else setStep((current) => current - 1);
+    if (step === 0) {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(auth)/sign-in');
+    } else {
+      setStep((current) => current - 1);
+    }
   }
 
   async function goForward() {
