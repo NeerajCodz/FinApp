@@ -971,7 +971,7 @@ export default function AnalyticsPage() {
                   description="Accounts in this currency will appear here."
                 />
               )}
-              <Link className="finance-inline-link" href="/account">
+              <Link className="finance-inline-link" href="/accounts">
                 All accounts
               </Link>
             </Card>

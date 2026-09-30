@@ -63,7 +63,7 @@ export default function NewPersonalCategoryPage() {
     );
   return (
     <div className="finance-page">
-      <Link className="finance-secondary-action" href="/category" aria-label="Go back">
+      <Link className="finance-secondary-action" href="/categories" aria-label="Go back">
         <ArrowLeft size={19} />
       </Link>
       <div style={{ display: 'grid', gap: 30, flex: 1, alignContent: 'center' }}>

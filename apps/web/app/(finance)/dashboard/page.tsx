@@ -154,7 +154,7 @@ export default function DashboardPage() {
         onOpenGoal={(id) => router.push(`/goals/${encodeURIComponent(id)}`)}
         onSeeAllGoals={() => router.push('/goals')}
         onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}`)}
-        onSeeAllCategories={() => router.push('/category')}
+        onSeeAllCategories={() => router.push('/categories')}
         onOpenGroup={(id) => router.push(`/group/${encodeURIComponent(id)}`)}
         onSeeAllGroups={() => router.push('/groups')}
         onOpenPerson={(username) => router.push(`/person/${encodeURIComponent(username)}`)}

@@ -661,7 +661,7 @@ export default function NewPersonalTransactionPage() {
                 variant="outline"
                 onPress={() => {
                   setPicker(null);
-                  router.push(categories.length === 0 ? '/category/new' : '/category');
+                  router.push(categories.length === 0 ? '/category/new' : '/categories');
                 }}
               >
                 {categories.length === 0 ? 'Create category' : 'Manage categories'}

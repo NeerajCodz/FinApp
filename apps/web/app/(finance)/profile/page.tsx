@@ -53,11 +53,11 @@ type Editor = 'username' | 'phone' | null;
 const usernamePattern = /^[a-z0-9_]{3,32}$/;
 
 const links = [
-  { label: 'Accounts', description: 'Balances and activity', href: '/account', icon: Wallet },
+  { label: 'Accounts', description: 'Balances and activity', href: '/accounts', icon: Wallet },
   {
     label: 'Categories',
     description: 'Spending structure',
-    href: '/category',
+    href: '/categories',
     icon: ReceiptText,
   },
   { label: 'Budget', description: 'Limits and progress', href: '/budget', icon: Coins },
