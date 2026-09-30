@@ -586,7 +586,12 @@ export default function GroupHomeScreen() {
                       onPress={() => username && router.push(`/person/${username}` as never)}
                       style={{ alignItems: 'center', gap: 7, width: 96 }}
                     >
-                      <Avatar initials={displayName.slice(0, 2)} label={displayName} size={48} />
+                      <Avatar
+                        initials={displayName.slice(0, 2)}
+                        label={displayName}
+                        size={48}
+                        imageUrl={typeof member.avatarUrl === 'string' ? member.avatarUrl : null}
+                      />
                       <Typography
                         variant="caption"
                         numberOfLines={1}

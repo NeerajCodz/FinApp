@@ -8,7 +8,6 @@ import {
 } from '@finapp/ui/icons/native';
 import { Button, IconButton, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import type { HomeAccountOption } from '../types';
-import { BrandMark } from '../../finance/native/ScreenPrimitives';
 
 export function HomeHeader({
   accounts,
@@ -52,7 +51,6 @@ export function HomeHeader({
         }}
       >
         <View style={{ gap: 4, flex: 1 }}>
-          <BrandMark />
           <Typography variant="title" style={{ fontSize: 28, lineHeight: 32 }}>
             Home
           </Typography>
@@ -63,50 +61,21 @@ export function HomeHeader({
             {syncIcon ?? <ClockCounterClockwise size={19} color={tokens.foregroundMuted} />}
           </IconButton>
           {onOpenNotifications && (
-            <View style={{ position: 'relative' }}>
-              <IconButton
-                label={
-                  notificationCount > 0
-                    ? `Notifications, ${notificationCount} unread`
-                    : 'Notifications'
-                }
-                variant="outline"
-                onPress={onOpenNotifications}
-                style={{ borderRadius: 22 }}
-              >
-                <Bell
-                  size={18}
-                  color={notificationCount > 0 ? tokens.primary : tokens.foregroundMuted}
-                />
-              </IconButton>
-              {notificationCount > 0 && (
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -4,
-                    minWidth: 19,
-                    height: 19,
-                    paddingHorizontal: 4,
-                    borderRadius: 10,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: tokens.destructive,
-                    borderWidth: 2,
-                    borderColor: tokens.background,
-                    elevation: 2,
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    style={{ color: tokens.background, fontSize: 9, lineHeight: 11 }}
-                  >
-                    {notificationCount > 99 ? '99+' : notificationCount}
-                  </Typography>
-                </View>
-              )}
-            </View>
+            <IconButton
+              label={
+                notificationCount > 0
+                  ? `Notifications, ${notificationCount} unread`
+                  : 'Notifications'
+              }
+              variant="outline"
+              onPress={onOpenNotifications}
+              style={{ borderRadius: 22 }}
+            >
+              <Bell
+                size={18}
+                color={notificationCount > 0 ? tokens.primary : tokens.foregroundMuted}
+              />
+            </IconButton>
           )}
         </View>
       </View>

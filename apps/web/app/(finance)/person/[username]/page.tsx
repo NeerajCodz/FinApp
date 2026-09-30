@@ -41,7 +41,13 @@ type Entry = LocalRecord & {
   payerUserId?: string;
   payerAmountMinor?: bigint | number | string;
 };
-type UserSearchResult = { id: string; username?: string; displayName?: string; image?: string };
+type UserSearchResult = {
+  id: string;
+  username?: string;
+  displayName?: string;
+  image?: string;
+  avatarUrl?: string | null;
+};
 const asMinor = (value: unknown) =>
   typeof value === 'bigint'
     ? value
@@ -233,7 +239,12 @@ export default function PersonPage() {
       </header>
       <Card className="finance-record-panel">
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Avatar initials={handle.slice(0, 2).toUpperCase()} label={`@${handle}`} size={60} />
+          <Avatar
+            initials={handle.slice(0, 2).toUpperCase()}
+            label={`@${handle}`}
+            size={60}
+            imageUrl={person?.avatarUrl ?? person?.image}
+          />
           <div style={{ display: 'grid', gap: 3 }}>
             <strong style={{ fontSize: '1.25rem' }}>@{handle}</strong>
             <small>Shared money timeline</small>

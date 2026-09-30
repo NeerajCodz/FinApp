@@ -70,20 +70,37 @@ export function Avatar({
   label,
   size = 42,
   className,
+  imageUrl,
 }: {
   initials: string;
   label?: string;
   size?: number;
   className?: string;
+  imageUrl?: string | null;
 }) {
   return (
     <span
       role="img"
       aria-label={label ?? initials}
       className={['finapp-avatar', className].filter(Boolean).join(' ')}
-      style={{ width: size, height: size, fontSize: size * 0.32 }}
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.32,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
     >
-      {initials.slice(0, 2).toUpperCase()}
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          aria-hidden="true"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        initials.slice(0, 2).toUpperCase()
+      )}
     </span>
   );
 }

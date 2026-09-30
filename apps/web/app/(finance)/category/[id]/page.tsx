@@ -1,22 +1,16 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { Button, Empty, SectionHeader, Separator, Sheet, Typography } from '@finapp/ui/web';
 import {
-  BudgetProgress,
-  CategoryEmojiPicker,
-  CategoryIcon,
-  formatTransactionDate,
-  TransactionRow,
+  CategoryDetailScreen,
+  type CategoryDetailRecord,
+  type CategoryDetailTransaction,
 } from '@finapp/ui/finance';
-import { formatMinor, parseMinor } from '@convex/shared/money';
+import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceInput } from '@/components/finance/FinanceInput';
 import {
   aliasesOf,
   asMinor,
@@ -31,6 +25,7 @@ import {
 type Category = LocalRecord & {
   name?: string;
   icon?: string;
+  kind?: string;
   isSystem?: boolean;
   archivedAt?: number;
   limitCurrency?: string;
@@ -43,8 +38,11 @@ type Profile = LocalRecord & {
   defaultIncomeCategoryId?: string;
   timezone?: string;
 };
+type Account = LocalRecord & { name?: string; archivedAt?: number };
 type Transaction = LocalRecord & {
   categoryId?: string;
+  accountId?: string;
+  merchant?: string;
   type?: string;
   groupId?: string;
   amountMinor?: bigint | number | string;
@@ -72,11 +70,20 @@ export default function PersonalCategoryDetailPage() {
     loading: transactionLoading,
     error: transactionError,
   } = useLocalRecords<Transaction>('transaction');
+  const {
+    records: accountRecords,
+    loading: accountLoading,
+    error: accountError,
+  } = useLocalRecords<Account>('account');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const category = records.find(
     (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
   );
-  const profile = profiles[0];
+  const profile = profiles.find((record) => userId && belongsToUser(record, userId));
+  const accounts = accountRecords.filter((record) => userId && belongsToUser(record, userId));
+  const accountByAlias = new Map<string, Account>();
+  for (const account of accounts)
+    for (const alias of aliasesOf(account)) accountByAlias.set(alias, account);
   const currency = category?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
   const [name, setName] = React.useState('');
   const [icon, setIcon] = React.useState('');
@@ -86,10 +93,10 @@ export default function PersonalCategoryDetailPage() {
   const [editingName, setEditingName] = React.useState(false);
   const [confirmingArchive, setConfirmingArchive] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
-  const monthRange = React.useMemo(() => {
+  const historyRange = React.useMemo(() => {
     const now = new Date();
     return {
-      startAt: Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+      startAt: Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1),
       endAt: Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
     };
   }, []);
@@ -113,16 +120,18 @@ export default function PersonalCategoryDetailPage() {
     if (!userId || !isConnected) return;
     let active = true;
     setRangeError('');
-    void fetchTransactionRange(monthRange.startAt, monthRange.endAt).catch((cause: unknown) => {
+    void fetchTransactionRange(historyRange.startAt, historyRange.endAt).catch((cause: unknown) => {
       if (active)
         setRangeError(
-          cause instanceof Error ? cause.message : 'Could not refresh this month’s saved range.',
+          cause instanceof Error
+            ? cause.message
+            : 'Could not refresh this category’s activity range.',
         );
     });
     return () => {
       active = false;
     };
-  }, [fetchTransactionRange, isConnected, monthRange, userId]);
+  }, [fetchTransactionRange, historyRange, isConnected, userId]);
 
   const categoryIdentifiers = new Set(category ? aliasesOf(category) : []);
   const isDefaultExpense =
@@ -134,25 +143,13 @@ export default function PersonalCategoryDetailPage() {
   const matching = transactions
     .filter(
       (transaction) =>
+        userId &&
+        belongsToUser(transaction, userId) &&
         categoryIdentifiers.has(String(transaction.categoryId ?? '')) &&
         transaction.status === 'posted' &&
         transaction.deletedAt === undefined,
     )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
-  const thisMonth = matching.filter(
-    (transaction) =>
-      Number(transaction.occurredAt ?? 0) >= monthRange.startAt &&
-      Number(transaction.occurredAt ?? 0) < monthRange.endAt &&
-      transaction.currency === currency,
-  );
-  const spent = thisMonth
-    .filter((item) => item.type === 'expense')
-    .reduce((total, item) => total + asMinor(item.amountMinor), 0n);
-  const income = thisMonth
-    .filter((item) => item.type === 'income')
-    .reduce((total, item) => total + asMinor(item.amountMinor), 0n);
-  const monthlyLimitMinor =
-    category?.monthlyLimitMinor === undefined ? null : asMinor(category.monthlyLimitMinor);
   const categoryMutationId = category
     ? String(category._id ?? category.cloudId ?? category.id ?? '')
     : '';
@@ -219,8 +216,8 @@ export default function PersonalCategoryDetailPage() {
     }
   }
 
-  async function saveName(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveName(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
       setFormError('Enter a category name.');
@@ -230,8 +227,8 @@ export default function PersonalCategoryDetailPage() {
       setEditingName(false);
     }
   }
-  async function saveLimit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveLimit(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     try {
       const amountMinor = parseMinor(limitInput, currency);
       if (amountMinor > maxInt64) throw new Error('Enter a valid monthly limit.');
@@ -298,7 +295,7 @@ export default function PersonalCategoryDetailPage() {
           { recordId: idOf(profile) },
         );
       }
-      router.replace('/category');
+      router.replace('/categories');
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Could not archive this category.');
     } finally {
@@ -312,293 +309,90 @@ export default function PersonalCategoryDetailPage() {
         Sign in to view and update categories in this browser workspace.
       </SignInGate>
     );
-  if (loading || profileLoading || transactionLoading)
-    return (
-      <div className="finance-page">
-        <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/category" aria-label="Go back">
-            <ArrowLeft size={19} />
-          </Link>
-          <Typography variant="heading">Category</Typography>
-        </header>
-        <Typography variant="small" role="status">
-          Loading category…
-        </Typography>
-      </div>
-    );
-  if (error || profileError || transactionError)
-    return (
-      <div className="finance-page">
-        <p className="finance-form-error" role="alert">
-          Category data could not be opened: {error ?? profileError ?? transactionError}
-        </p>
-      </div>
-    );
-  if (!category)
-    return (
-      <div className="finance-page">
-        <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/category" aria-label="Go back">
-            <ArrowLeft size={19} />
-          </Link>
-          <Typography variant="heading">Category</Typography>
-        </header>
-        <Empty
-          title="Category unavailable."
-          description="This category could not be found or is no longer available."
-        />
-      </div>
-    );
+  const detailTransactions: CategoryDetailTransaction[] = matching.map((transaction) => ({
+    id: idOf(transaction),
+    type: transaction.type ?? 'expense',
+    title: transaction.title ?? transaction.type ?? 'Transaction',
+    merchant: transaction.merchant,
+    account: accountByAlias.get(String(transaction.accountId ?? ''))?.name,
+    amountMinor: asMinor(transaction.amountMinor),
+    currency: transaction.currency ?? currency,
+    occurredAt: Number(transaction.occurredAt ?? 0),
+    hasTime: transaction.hasTime,
+    status: transaction.status ?? 'posted',
+    deletedAt: transaction.deletedAt,
+    groupId: transaction.groupId,
+  }));
+  const activity = matching.reduce(
+    (value, transaction) => ({
+      expense: value.expense || transaction.type === 'expense',
+      income: value.income || transaction.type === 'income',
+    }),
+    { expense: false, income: false },
+  );
+  const detailCategory: CategoryDetailRecord | null = category
+    ? {
+        id: idOf(category),
+        name: category.name ?? 'Category',
+        icon: icon || undefined,
+        kind:
+          category.kind === 'income' || category.kind === 'expense'
+            ? category.kind
+            : activity.income && !activity.expense
+              ? 'income'
+              : 'expense',
+        isSystem: category.isSystem,
+        archivedAt: category.archivedAt,
+        monthlyLimitMinor:
+          category.monthlyLimitMinor === undefined
+            ? undefined
+            : asMinor(category.monthlyLimitMinor),
+        limitCurrency: category.limitCurrency,
+        updatedAt: category.updatedAt,
+      }
+    : null;
+  const pageLoading = loading || profileLoading || transactionLoading || accountLoading;
+  const pageError = error ?? profileError ?? transactionError ?? accountError;
+
   return (
-    <div className="finance-page">
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Link className="finance-secondary-action" href="/category" aria-label="Go back">
-          <ArrowLeft size={19} />
-        </Link>
-        <CategoryIcon label={category.name ?? 'Category'} icon={category.icon} />
-        <Typography variant="heading" style={{ minWidth: 0, flex: 1 }}>
-          {category.name ?? 'Category'}
-        </Typography>
-        {!category.isSystem && category.archivedAt === undefined && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onPress={() => {
-              setName(category.name ?? '');
-              setEditingName(true);
-            }}
-          >
-            Edit
-          </Button>
-        )}
-      </header>
-      {category.archivedAt !== undefined ? (
-        <Typography variant="small">
-          This category is archived and remains available to explain older transactions.
-        </Typography>
-      ) : (
-        <>
-          <section style={{ display: 'grid', gap: 12 }}>
-            <CategoryEmojiPicker
-              value={icon || undefined}
-              onChange={(emoji) => {
-                setIcon(emoji ?? '');
-                void mutate('category.setIcon', { icon: emoji }, { icon: emoji ?? null });
-              }}
-            />
-            {editingName && !category.isSystem && (
-              <form className="finance-form" onSubmit={saveName}>
-                <FinanceInput
-                  label="Category name"
-                  value={name}
-                  onChangeText={setName}
-                  maxLength={80}
-                  required
-                />
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <Button type="submit" disabled={pending || !name.trim()}>
-                    {pending ? 'Saving…' : 'Save name'}
-                  </Button>
-                  <Button type="button" variant="ghost" onPress={() => setEditingName(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            )}
-          </section>
-        </>
-      )}
-      {formError && (
-        <p className="finance-form-error" role="alert">
-          {formError}
-        </p>
-      )}
-      <section style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <Typography variant="label">Spent this month</Typography>
-          <Typography variant="heading">{formatMinor(spent, currency)}</Typography>
-        </div>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <Typography variant="label">Received this month</Typography>
-          <Typography variant="heading">{formatMinor(income, currency)}</Typography>
-        </div>
-      </section>
-      <section style={{ display: 'grid', gap: 18 }}>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <Typography variant="heading">Monthly limit</Typography>
-          {monthlyLimitMinor !== null ? (
-            <BudgetProgress
-              spentMinor={spent}
-              limitMinor={monthlyLimitMinor}
-              currency={currency}
-              title="This month"
-            />
-          ) : (
-            <Typography variant="small">No monthly limit set.</Typography>
-          )}
-        </div>
-        {category.archivedAt === undefined && (
-          <>
-            <form className="finance-form" onSubmit={saveLimit}>
-              <FinanceInput
-                label={`${monthlyLimitMinor === null ? 'Set a monthly limit' : 'Change monthly limit'} · ${currency}`}
-                type="number"
-                min="0.01"
-                step={currency === 'JPY' || currency === 'KRW' ? '1' : '0.01'}
-                value={limitInput}
-                onChangeText={setLimitInput}
-              />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <Button type="submit" disabled={pending || !limitInput.trim()}>
-                  Save limit
-                </Button>
-                {monthlyLimitMinor !== null && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={pending}
-                    onPress={() => void clearLimit()}
-                  >
-                    Clear limit
-                  </Button>
-                )}
-              </div>
-            </form>
-          </>
-        )}
-      </section>
-      <section style={{ display: 'grid', gap: 10 }}>
-        <SectionHeader title="Default category" />
-        {profileLoading ? (
-          <Typography variant="small">Loading preferences…</Typography>
-        ) : !profile ? (
-          <Typography variant="small">Sign in to change your default category.</Typography>
-        ) : (
-          <>
-            <Typography variant="small">
-              Choose separate defaults for expenses and income.
-            </Typography>
-            {(['expense', 'income'] as const).map((transactionType) => {
-              const isDefault = transactionType === 'expense' ? isDefaultExpense : isDefaultIncome;
-              return (
-                <div
-                  key={transactionType}
-                  style={{
-                    display: 'flex',
-                    minHeight: 52,
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    borderBottom: '1px solid var(--finance-line)',
-                  }}
-                >
-                  <Typography variant="bodyLarge">
-                    {transactionType === 'expense' ? 'Expenses' : 'Income'}
-                  </Typography>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={pending || category.archivedAt !== undefined}
-                    onPress={() => void toggleDefault(transactionType)}
-                  >
-                    {isDefault ? 'Default' : 'Set default'}
-                  </Button>
-                </div>
-              );
-            })}
-          </>
-        )}
-      </section>
-      <section style={{ display: 'grid', gap: 12 }}>
-        <SectionHeader title="Transactions" />
-        {transactionLoading ? (
-          <Typography variant="small" role="status">
-            Loading category…
-          </Typography>
-        ) : transactionError ? (
-          <p className="finance-form-error" role="alert">
-            Activity could not be opened: {transactionError}
-          </p>
-        ) : matching.length === 0 ? (
-          <Empty
-            title="No transactions in this category."
-            description="Choose this category when you add an expense or income to see it here."
-            action={
-              <Link
-                className="finance-inline-link"
-                href={`/transaction/new?categoryId=${encodeURIComponent(routeId ?? '')}`}
-              >
-                Add transaction
-              </Link>
-            }
-          />
-        ) : (
-          <div>
-            {matching.map((transaction, index) => (
-              <React.Fragment key={idOf(transaction)}>
-                <TransactionRow
-                  title={transaction.title ?? transaction.type ?? 'Transaction'}
-                  category={category.name}
-                  categoryIcon={category.icon}
-                  amountMinor={asMinor(transaction.amountMinor)}
-                  currency={transaction.currency ?? currency}
-                  type={
-                    (transaction.type ?? 'expense') as
-                      'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'
-                  }
-                  date={
-                    transaction.occurredAt
-                      ? formatTransactionDate(
-                          transaction.occurredAt,
-                          transaction.hasTime,
-                          profile?.timezone,
-                        )
-                      : 'Date unavailable'
-                  }
-                  semanticType={transaction.groupId ? 'split' : undefined}
-                  onPress={() =>
-                    router.push(`/transaction/${encodeURIComponent(idOf(transaction))}`)
-                  }
-                />
-                {index < matching.length - 1 && <Separator />}
-              </React.Fragment>
-            ))}
-          </div>
-        )}
-        {rangeError && (
-          <p className="finance-muted" role="status">
-            Range refresh unavailable: {rangeError}
-          </p>
-        )}
-      </section>
-      {category.archivedAt === undefined && !category.isSystem && (
-        <Button
-          type="button"
-          variant="destructive"
-          disabled={pending}
-          onPress={() => setConfirmingArchive(true)}
-        >
-          Archive category
-        </Button>
-      )}
-      <Sheet
-        visible={confirmingArchive}
-        title="Archive category?"
-        onClose={() => setConfirmingArchive(false)}
-      >
-        <Typography variant="small">
-          Past transactions remain in your history. This category will no longer appear in new
-          transactions.
-        </Typography>
-        <Button variant="destructive" disabled={pending} onPress={() => void archive()}>
-          Archive {category.name}
-        </Button>
-        <Button variant="outline" onPress={() => setConfirmingArchive(false)}>
-          Cancel
-        </Button>
-      </Sheet>
-    </div>
+    <CategoryDetailScreen
+      category={detailCategory}
+      profile={profile ?? null}
+      transactions={detailTransactions}
+      currency={currency}
+      loading={pageLoading}
+      error={pageError ? `Category data could not be opened: ${pageError}` : undefined}
+      pending={pending}
+      formError={formError ?? (rangeError ? `Activity refresh unavailable: ${rangeError}` : null)}
+      editingName={editingName}
+      nameValue={name}
+      limitValue={limitInput}
+      isDefaultExpense={isDefaultExpense}
+      isDefaultIncome={isDefaultIncome}
+      confirmingArchive={confirmingArchive}
+      onBack={() => router.push('/categories')}
+      onAddTransaction={() =>
+        router.push(`/transaction/new?categoryId=${encodeURIComponent(routeId ?? '')}`)
+      }
+      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      onEditName={() => {
+        setName(category?.name ?? '');
+        setEditingName(true);
+      }}
+      onNameChange={setName}
+      onSaveName={() => void saveName()}
+      onCancelName={() => setEditingName(false)}
+      onIconChange={(emoji) => {
+        setIcon(emoji ?? '');
+        void mutate('category.setIcon', { icon: emoji }, { icon: emoji ?? null });
+      }}
+      onLimitChange={setLimitInput}
+      onSaveLimit={() => void saveLimit()}
+      onClearLimit={() => void clearLimit()}
+      onToggleDefault={(type) => void toggleDefault(type)}
+      onRequestArchive={() => setConfirmingArchive(true)}
+      onConfirmArchive={() => void archive()}
+      onCancelArchive={() => setConfirmingArchive(false)}
+    />
   );
 }

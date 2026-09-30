@@ -458,6 +458,7 @@ export default function GroupSettingsPage() {
                       .toUpperCase()}
                     label={memberName}
                     size={42}
+                    imageUrl={typeof member.avatarUrl === 'string' ? member.avatarUrl : null}
                   />
                   <span className="finance-record-copy">
                     <strong>{memberName}</strong>

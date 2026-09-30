@@ -2,6 +2,7 @@ import { internalQuery, query } from '../_generated/server';
 import { v } from 'convex/values';
 import { getOptionalUser } from '../shared/auth';
 import { normalizeUsername } from './domain';
+import { avatarUrlForUser } from '../avatars/helpers';
 
 export const loginEmailForUsername = internalQuery({
   args: { username: v.string() },
@@ -17,7 +18,11 @@ export const loginEmailForUsername = internalQuery({
 });
 export const current = query({
   args: {},
-  handler: async (ctx) => getOptionalUser(ctx),
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return null;
+    return { ...user, avatarUrl: await avatarUrlForUser(ctx, user) };
+  },
 });
 
 export const twoFactorEnabledForUser = internalQuery({
@@ -72,19 +77,23 @@ export const search = query({
     const searchTerm = normalizeUsername(args.query);
     if (!searchTerm) return [];
     const users = await ctx.db.query('users').collect();
-    return users
-      .filter(
-        (user) =>
-          user._id !== current._id &&
-          user.deletedAt === undefined &&
-          user.username?.startsWith(searchTerm),
-      )
-      .slice(0, 20)
-      .map((user) => ({
-        id: user._id,
-        displayName: user.displayName ?? user.name ?? 'Finapp user',
-        username: user.username,
-        image: user.image,
-      }));
+    return Promise.all(
+      users
+        .filter(
+          (user) =>
+            user._id !== current._id &&
+            user.deletedAt === undefined &&
+            user.username?.startsWith(searchTerm),
+        )
+        .slice(0, 20)
+        .map(async (user) => ({
+          id: user._id,
+          displayName: user.displayName ?? user.name ?? 'Finapp user',
+          username: user.username,
+          gender: user.gender,
+          avatarId: user.avatarId,
+          image: (await avatarUrlForUser(ctx, user)) ?? undefined,
+        })),
+    );
   },
 });

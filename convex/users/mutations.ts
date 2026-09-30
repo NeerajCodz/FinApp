@@ -10,6 +10,7 @@ import {
   type ProfileUpdate,
   type UserSettings,
 } from './domain';
+import type { AvatarGender } from '../avatars/domain';
 import { publishMutationResult, replayMutationResult, recordSyncChange } from '../sync/common';
 
 type UserMutationContext = Parameters<typeof requireUser>[0];
@@ -21,6 +22,8 @@ type ProfileUpdateArgs = {
   defaultCurrency?: string;
   timezone?: string;
   accent?: AccentValue;
+  avatarId?: string;
+  gender?: AvatarGender;
   clientMutationId?: string;
 };
 
@@ -33,7 +36,26 @@ function normalizeProfileUpdate(update: ProfileUpdate): ProfileUpdate {
     normalized.defaultCurrency = update.defaultCurrency.toUpperCase();
   if (update.timezone !== undefined) normalized.timezone = update.timezone.trim();
   if (update.accent !== undefined) normalized.accent = update.accent.trim() as AccentValue;
+  if (update.avatarId !== undefined) normalized.avatarId = update.avatarId.trim().toUpperCase();
+  if (update.gender !== undefined) normalized.gender = update.gender;
   return normalized;
+}
+async function validateAvatarSelection(
+  ctx: UserMutationContext,
+  user: { avatarId?: string },
+  update: ProfileUpdate,
+): Promise<ProfileUpdate> {
+  if (update.avatarId === undefined && update.gender === undefined) return update;
+  const avatarId = update.avatarId ?? user.avatarId;
+  if (!avatarId) throw new Error('INVALID_AVATAR');
+  const avatar = await ctx.db
+    .query('avatars')
+    .withIndex('by_avatarId', (query) => query.eq('avatarId', avatarId))
+    .unique();
+  if (!avatar) throw new Error('INVALID_AVATAR');
+  if (update.gender !== undefined && update.gender !== avatar.gender)
+    throw new Error('AVATAR_GENDER_MISMATCH');
+  return { ...update, avatarId, gender: avatar.gender };
 }
 
 function profilePatch(user: { phone?: string }, update: ProfileUpdate, updatedAt: number) {
@@ -51,9 +73,10 @@ export async function updateProfile(ctx: UserMutationContext, update: ProfileUpd
   if (!user) throw new Error('AUTH_REQUIRED');
   const normalized = normalizeProfileUpdate(update);
   validateProfileUpdate(normalized);
-  if (normalized.defaultCurrency !== undefined) assertCurrency(normalized.defaultCurrency);
+  const profileUpdate = await validateAvatarSelection(ctx, user, normalized);
+  if (profileUpdate.defaultCurrency !== undefined) assertCurrency(profileUpdate.defaultCurrency);
   const updatedAt = Date.now();
-  const patch = profilePatch(user, normalized, updatedAt);
+  const patch = profilePatch(user, profileUpdate, updatedAt);
   await ctx.db.patch(user._id, patch);
   return { ...user, ...patch };
 }
@@ -66,6 +89,8 @@ export const update = mutation({
     defaultCurrency: v.optional(v.string()),
     timezone: v.optional(v.string()),
     accent: v.optional(v.string()),
+    avatarId: v.optional(v.string()),
+    gender: v.optional(v.union(v.literal('neutral'), v.literal('male'), v.literal('female'))),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args: ProfileUpdateArgs) => {
@@ -75,19 +100,20 @@ export const update = mutation({
     if (replay.found) return replay.result;
     const normalized = normalizeProfileUpdate(args);
     validateProfileUpdate(normalized);
-    if (normalized.defaultCurrency !== undefined) assertCurrency(normalized.defaultCurrency);
-    if (normalized.username !== undefined && normalized.username !== user.username) {
+    const profileUpdate = await validateAvatarSelection(ctx, user, normalized);
+    if (profileUpdate.defaultCurrency !== undefined) assertCurrency(profileUpdate.defaultCurrency);
+    if (profileUpdate.username !== undefined && profileUpdate.username !== user.username) {
       const taken = await ctx.db
         .query('users')
-        .withIndex('by_username', (query) => query.eq('username', normalized.username))
+        .withIndex('by_username', (query) => query.eq('username', profileUpdate.username))
         .unique();
       if (taken && taken._id !== user._id) throw new Error('USERNAME_TAKEN');
     }
     const updatedAt = Date.now();
-    const patch = profilePatch(user, normalized, updatedAt);
+    const patch = profilePatch(user, profileUpdate, updatedAt);
     await ctx.db.patch(user._id, patch);
     let settingsSyncChange: { id: string; document: unknown } | null = null;
-    if (normalized.defaultCurrency !== undefined || normalized.timezone !== undefined) {
+    if (profileUpdate.defaultCurrency !== undefined || profileUpdate.timezone !== undefined) {
       const settings = await ctx.db
         .query('userSettings')
         .withIndex('by_user', (query) => query.eq('userId', user._id))

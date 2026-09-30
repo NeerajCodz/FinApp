@@ -88,60 +88,6 @@
   align-items: center;
   gap: 10px;
 }
-.finance-brand-status {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.finance-brand-status:hover {
-  background: var(--finance-panel-raise);
-}
-.finance-brand-status:focus-visible,
-.finance-notification-link:focus-visible {
-  outline: 2px solid var(--finance-lime);
-  outline-offset: 3px;
-}
-.sync-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--finance-dim);
-}
-.finance-brand-status .sync-dot {
-  width: 10px;
-  height: 10px;
-}
-.sync-dot.connected {
-  background: var(--finance-lime);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--finance-lime) 44%, transparent);
-}
-.sync-dot.syncing {
-  background: var(--finapp-warning);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--finapp-warning) 31%, transparent);
-  animation: finance-sync-pulse 1.25s ease-in-out infinite;
-}
-.sync-dot.attention {
-  background: var(--finapp-destructive);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--finapp-destructive) 32%, transparent);
-}
-@keyframes finance-sync-pulse {
-  50% {
-    opacity: 0.45;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sync-dot.syncing {
-    animation: none;
-  }
-}
 .finance-main {
   min-width: 0;
 }
@@ -154,6 +100,11 @@
 }
 .finance-topbar-brand {
   display: none;
+}
+.finance-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 .finance-notification-link {
   position: relative;
@@ -177,23 +128,6 @@
   border-color: var(--finance-lime);
   background: var(--finance-panel-raise);
   color: var(--finance-lime);
-}
-.finance-notification-badge {
-  position: absolute;
-  top: -4px;
-  right: -5px;
-  display: grid;
-  min-width: 18px;
-  height: 18px;
-  place-items: center;
-  border: 2px solid var(--finance-background);
-  border-radius: 999px;
-  padding: 0 4px;
-  background: var(--finapp-destructive);
-  color: var(--finapp-on-destructive, #fff);
-  font-size: 0.62rem;
-  font-weight: 700;
-  line-height: 1;
 }
 .finance-content {
   width: min(100%, 1430px);

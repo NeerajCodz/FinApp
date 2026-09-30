@@ -186,6 +186,50 @@ export const setIcon = mutation({
   },
 });
 
+export const setColor = mutation({
+  args: {
+    accountId: v.id('accounts'),
+    color: v.union(v.string(), v.null()),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.setColor',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('accounts', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
+      throw new Error('ACCOUNT_UNAVAILABLE');
+    if (args.color !== null && !/^#[\da-f]{6}$/i.test(args.color))
+      throw new Error('INVALID_ACCOUNT');
+    const updatedAt = Date.now();
+    await ctx.db.patch(args.accountId, { color: args.color ?? undefined, updatedAt });
+    const updated = await ctx.db.get(args.accountId);
+    if (!updated) throw new Error('ACCOUNT_UNAVAILABLE');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.setColor',
+      args.accountId,
+      'accounts',
+      String(args.accountId),
+      updatedAt,
+      { ...updated, _id: args.accountId },
+    );
+    return args.accountId;
+  },
+});
+
 export const archive = mutation({
   args: { accountId: v.id('accounts'), clientMutationId: v.optional(v.string()) },
   handler: async (ctx, args) => {

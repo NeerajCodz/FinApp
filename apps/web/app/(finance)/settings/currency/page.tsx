@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button, IconButton, Text, Typography } from '@finapp/ui/web';
+import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import { currencies } from '@convex/shared/validators';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -11,6 +12,7 @@ import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
 type Profile = LocalRecord & { displayName?: string; defaultCurrency?: string };
+type Settings = LocalRecord & { currency?: string; defaultCurrency?: string };
 
 function currencyLabel(currency: string) {
   try {
@@ -23,9 +25,17 @@ function currencyLabel(currency: string) {
 export default function CurrencySettingsPage() {
   const { userId } = useBrowserSync();
   const router = useRouter();
-  const { records, loading, error } = useLocalRecords<Profile>('profile');
-  const profile = records[0];
-  const selected = profile?.defaultCurrency ?? 'INR';
+  const profileState = useLocalRecords<Profile>('profile');
+  const settingsState = useLocalRecords<Settings>('settings');
+  const selected = resolveDefaultCurrency(profileState.records, settingsState.records) ?? 'INR';
+  const profile =
+    profileState.records.find(
+      (record) =>
+        typeof record.defaultCurrency === 'string' &&
+        record.defaultCurrency.trim().toUpperCase() === selected,
+    ) ?? profileState.records[0];
+  const loading = profileState.loading || settingsState.loading;
+  const error = profileState.error ?? settingsState.error;
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState('');
 

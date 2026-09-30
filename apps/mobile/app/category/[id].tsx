@@ -1,28 +1,15 @@
 import React, { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  BudgetProgress,
-  CategoryEmojiPicker,
-  CategoryIcon,
-  formatTransactionDate,
-  Money,
-  TransactionRow,
+  CategoryDetailScreen as CategoryDetailView,
+  type CategoryDetailRecord,
+  type CategoryDetailTransaction,
 } from '@finapp/ui/finance';
 import { parseMinor } from '@/lib/money';
-import {
-  Button,
-  Empty,
-  IconButton,
-  Input,
-  Label,
-  Separator,
-  Sheet,
-  Typography,
-} from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { Button, Empty, IconButton, useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -31,7 +18,9 @@ import type { LocalRecord } from '@/local/repository';
 type CategoryRecord = LocalRecord & {
   id?: string;
   _id?: string;
+  cloudId?: string;
   name: string;
+  kind?: string;
   icon?: string;
   isSystem?: boolean;
   archivedAt?: number;
@@ -44,10 +33,20 @@ type ProfileRecord = LocalRecord & {
   defaultIncomeCategoryId?: string;
   timezone?: string;
 };
+type AccountRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  name?: string;
+  archivedAt?: number;
+};
 type TransactionRecord = LocalRecord & {
   id?: string;
   _id?: string;
+  cloudId?: string;
   categoryId?: string;
+  accountId?: string;
+  merchant?: string;
   occurredAt: number;
   hasTime?: boolean;
   amountMinor: bigint;
@@ -58,17 +57,24 @@ type TransactionRecord = LocalRecord & {
   groupId?: string;
   deletedAt?: number;
 };
+function recordAliases(record: LocalRecord) {
+  return [record.id, record._id, record.cloudId].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+}
+function recordId(record: LocalRecord) {
+  return String(record.id ?? record._id ?? record.cloudId ?? '');
+}
 
 export default function CategoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
   const { userId, fetchTransactionRange } = useLocalSync();
   const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const accountState = useLocalRecords<AccountRecord>(userId, 'account');
   const transactionRecordsState = useLocalRecords<TransactionRecord>(userId, 'transaction');
   const now = new Date();
-  const startAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const startAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1);
   const endAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
   const transactionState = useLocalTransactionRange<TransactionRecord>(
     userId,
@@ -85,24 +91,30 @@ export default function CategoryDetailScreen() {
 
   if (categoryState.error) throw categoryState.error;
   if (profileState.error) throw profileState.error;
+  if (accountState.error) throw accountState.error;
   if (transactionState.error) throw transactionState.error;
   if (transactionRecordsState.error) throw transactionRecordsState.error;
 
+  const owns = (record: LocalRecord) =>
+    !!userId && (typeof record.ownerId !== 'string' || record.ownerId === userId);
   const selectedCategory = categoryState.data?.find(
-    (item) => item.archivedAt === undefined && (item.id === id || item._id === id),
+    (item) => owns(item) && recordAliases(item).includes(id ?? ''),
   );
   const categoryLocalId = selectedCategory?.id ?? selectedCategory?._id;
-  const categoryPayloadId = selectedCategory?._id ?? selectedCategory?.id;
-  const categoryIdentifiers = new Set(
-    [selectedCategory?.id, selectedCategory?._id].filter(
-      (value): value is string => typeof value === 'string',
-    ),
-  );
-  const profile = profileState.data === undefined ? undefined : (profileState.data[0] ?? null);
+  const categoryPayloadId =
+    selectedCategory?._id ?? selectedCategory?.cloudId ?? selectedCategory?.id;
+  const categoryIdentifiers = new Set(selectedCategory ? recordAliases(selectedCategory) : []);
+  const profile =
+    profileState.data === undefined ? undefined : (profileState.data.find(owns) ?? null);
+  const accounts = (accountState.data ?? []).filter(owns);
+  const accountByAlias = new Map<string, AccountRecord>();
+  for (const account of accounts)
+    for (const alias of recordAliases(account)) accountByAlias.set(alias, account);
   const currency = selectedCategory?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
   const categoryTransactions = (transactionRecordsState.data ?? [])
     .filter(
       (transaction) =>
+        owns(transaction) &&
         transaction.status === 'posted' &&
         transaction.deletedAt === undefined &&
         transaction.categoryId !== undefined &&
@@ -113,37 +125,6 @@ export default function CategoryDetailScreen() {
         right.occurredAt - left.occurredAt ||
         (right._id ?? right.id ?? '').localeCompare(left._id ?? left.id ?? ''),
     );
-  const monthlyTransactions = (transactionState.data ?? []).filter(
-    (transaction) =>
-      transaction.status === 'posted' &&
-      transaction.deletedAt === undefined &&
-      transaction.categoryId !== undefined &&
-      categoryIdentifiers.has(transaction.categoryId),
-  );
-  const reportingCurrency = selectedCategory?.limitCurrency ?? profile?.defaultCurrency;
-  const monthTotals = monthlyTransactions.reduce(
-    (totals, transaction) => {
-      if (!reportingCurrency || transaction.currency !== reportingCurrency) return totals;
-      if (transaction.type === 'expense') totals.spentMinor += transaction.amountMinor;
-      if (transaction.type === 'income') totals.receivedMinor += transaction.amountMinor;
-      return totals;
-    },
-    { spentMinor: 0n, receivedMinor: 0n },
-  );
-  const detail =
-    categoryState.data === undefined ||
-    profileState.data === undefined ||
-    transactionState.data === undefined ||
-    transactionRecordsState.data === undefined
-      ? undefined
-      : selectedCategory
-        ? {
-            category: selectedCategory,
-            monthSpentMinor: monthTotals.spentMinor,
-            monthReceivedMinor: monthTotals.receivedMinor,
-            transactions: categoryTransactions,
-          }
-        : null;
   const category = selectedCategory;
 
   async function saveIcon(icon?: string) {
@@ -334,7 +315,7 @@ export default function CategoryDetailScreen() {
         },
       );
       setConfirmingArchive(false);
-      router.replace('/category' as never);
+      router.replace('/categories' as never);
     } catch (cause) {
       setConfirmingArchive(false);
       setError(cause instanceof Error ? cause.message : 'Could not archive category.');
@@ -343,261 +324,106 @@ export default function CategoryDetailScreen() {
     }
   }
 
+  const detailTransactions: CategoryDetailTransaction[] = categoryTransactions.map(
+    (transaction) => ({
+      id: recordId(transaction),
+      type: transaction.type,
+      title: transaction.title,
+      merchant: transaction.merchant,
+      account: accountByAlias.get(String(transaction.accountId ?? ''))?.name,
+      amountMinor: transaction.amountMinor,
+      currency: transaction.currency,
+      occurredAt: transaction.occurredAt,
+      hasTime: transaction.hasTime,
+      status: transaction.status,
+      deletedAt: transaction.deletedAt,
+      groupId: transaction.groupId,
+    }),
+  );
+  const transactionKind = categoryTransactions.reduce(
+    (types, transaction) => ({
+      expense: types.expense || transaction.type === 'expense',
+      income: types.income || transaction.type === 'income',
+    }),
+    { expense: false, income: false },
+  );
+  const detailCategory: CategoryDetailRecord | null = category
+    ? {
+        id: recordId(category),
+        name: category.name,
+        icon: category.icon,
+        kind:
+          category.kind === 'income' || category.kind === 'expense'
+            ? category.kind
+            : transactionKind.income && !transactionKind.expense
+              ? 'income'
+              : 'expense',
+        isSystem: category.isSystem,
+        archivedAt: category.archivedAt,
+        monthlyLimitMinor: category.monthlyLimitMinor,
+        limitCurrency: category.limitCurrency,
+        updatedAt: typeof category.updatedAt === 'number' ? category.updatedAt : undefined,
+      }
+    : null;
+  const isDefaultExpense =
+    typeof profile?.defaultExpenseCategoryId === 'string' &&
+    categoryIdentifiers.has(profile.defaultExpenseCategoryId);
+  const isDefaultIncome =
+    typeof profile?.defaultIncomeCategoryId === 'string' &&
+    categoryIdentifiers.has(profile.defaultIncomeCategoryId);
+  const loading =
+    categoryState.loading ||
+    profileState.loading ||
+    accountState.loading ||
+    transactionState.loading ||
+    transactionRecordsState.loading;
+
+  if (!userId)
+    return (
+      <Empty
+        title="Sign in to view this category."
+        description="Your categories and transactions are private to your account."
+      />
+    );
+
   return (
-    <>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, backgroundColor: tokens.background }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 32,
-          gap: 32,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          {category && <CategoryIcon label={category.name} icon={category.icon} />}
-          <Typography variant="heading" numberOfLines={1} style={{ flex: 1 }}>
-            {category?.name ?? 'Category'}
-          </Typography>
-          {category && !category.isSystem && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onPress={() => {
-                setNameInput(category.name);
-                setEditingName(true);
-              }}
-            >
-              Edit
-            </Button>
-          )}
-        </View>
-        {category && (
-          <CategoryEmojiPicker value={category.icon} onChange={(icon) => void saveIcon(icon)} />
-        )}
-
-        {editingName && (
-          <View style={{ gap: 10 }}>
-            <Label>Category name</Label>
-            <Input
-              accessibilityLabel="Category name"
-              value={nameInput}
-              onChangeText={setNameInput}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={saveName}
-            />
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Button size="sm" disabled={pending || !nameInput.trim()} onPress={saveName}>
-                Save name
-              </Button>
-              <Button size="sm" variant="ghost" onPress={() => setEditingName(false)}>
-                Cancel
-              </Button>
-            </View>
-          </View>
-        )}
-        {!id ? (
-          <Empty title="Category unavailable." description="Open a category from your list." />
-        ) : detail === undefined ? (
-          <Typography variant="small">Loading category…</Typography>
-        ) : detail === null ? (
-          <Empty
-            title="Category unavailable."
-            description="This category could not be found or is no longer available."
-          />
-        ) : (
-          <>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
-              <View style={{ gap: 8 }}>
-                <Typography variant="label">Spent this month</Typography>
-                <Money amountMinor={detail.monthSpentMinor} currency={currency} size="display" />
-              </View>
-              <View style={{ gap: 8 }}>
-                <Typography variant="label">Received this month</Typography>
-                <Money amountMinor={detail.monthReceivedMinor} currency={currency} size="display" />
-              </View>
-            </View>
-
-            <View style={{ gap: 18 }}>
-              <View style={{ gap: 8 }}>
-                <Typography variant="heading">Monthly limit</Typography>
-                {detail.category.monthlyLimitMinor !== undefined ? (
-                  <BudgetProgress
-                    spentMinor={detail.monthSpentMinor}
-                    limitMinor={detail.category.monthlyLimitMinor}
-                    currency={currency}
-                    title="This month"
-                  />
-                ) : (
-                  <Typography variant="small">No monthly limit set.</Typography>
-                )}
-              </View>
-              <View>
-                <Label>
-                  {detail.category.monthlyLimitMinor === undefined
-                    ? 'Set a monthly limit'
-                    : 'Change monthly limit'}{' '}
-                  · {currency}
-                </Label>
-                <Input
-                  accessibilityLabel={`Monthly limit in ${currency}`}
-                  keyboardType="decimal-pad"
-                  value={limitInput}
-                  onChangeText={setLimitInput}
-                  placeholder="Amount"
-                />
-              </View>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Button size="sm" disabled={pending || !limitInput.trim()} onPress={saveLimit}>
-                  Save limit
-                </Button>
-                {detail.category.monthlyLimitMinor !== undefined && (
-                  <Button size="sm" variant="outline" disabled={pending} onPress={clearLimit}>
-                    Clear limit
-                  </Button>
-                )}
-              </View>
-            </View>
-
-            <View style={{ gap: 10 }}>
-              <Separator />
-              <Typography variant="heading">Default category</Typography>
-              {profile === undefined ? (
-                <Typography variant="small">Loading preferences…</Typography>
-              ) : profile === null ? (
-                <Typography variant="small">Sign in to change your default category.</Typography>
-              ) : (
-                <>
-                  <Typography variant="small">
-                    Choose separate defaults for expenses and income.
-                  </Typography>
-                  {(['expense', 'income'] as const).map((transactionType) => {
-                    const isDefault =
-                      (transactionType === 'expense'
-                        ? profile.defaultExpenseCategoryId
-                        : profile.defaultIncomeCategoryId) !== undefined &&
-                      categoryIdentifiers.has(
-                        transactionType === 'expense'
-                          ? profile.defaultExpenseCategoryId!
-                          : profile.defaultIncomeCategoryId!,
-                      );
-                    return (
-                      <View
-                        key={transactionType}
-                        style={{
-                          minHeight: 52,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          borderBottomWidth: 1,
-                          borderBottomColor: tokens.borderSubtle,
-                        }}
-                      >
-                        <Typography variant="bodyLarge">
-                          {transactionType === 'expense' ? 'Expenses' : 'Income'}
-                        </Typography>
-                        <Button
-                          accessibilityLabel={
-                            isDefault
-                              ? `Remove ${transactionType} default category`
-                              : `Set ${category?.name ?? 'category'} as default for ${transactionType}`
-                          }
-                          accessibilityState={{ selected: isDefault, disabled: pending }}
-                          size="sm"
-                          variant="ghost"
-                          disabled={pending}
-                          onPress={() => toggleDefault(transactionType)}
-                          style={{ minHeight: 36, paddingHorizontal: 8 }}
-                        >
-                          {isDefault ? 'Default' : 'Set default'}
-                        </Button>
-                      </View>
-                    );
-                  })}
-                </>
-              )}
-            </View>
-
-            {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
-
-            <View style={{ gap: 12 }}>
-              <Typography variant="heading">Transactions</Typography>
-              {detail.transactions.length === 0 ? (
-                <Empty
-                  title="No transactions in this category."
-                  description="Choose this category when you add an expense or income to see it here."
-                  action={
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onPress={() => router.push('/transaction/new' as never)}
-                    >
-                      Add transaction
-                    </Button>
-                  }
-                />
-              ) : (
-                <View>
-                  {detail.transactions.map((transaction, index) => (
-                    <React.Fragment key={transaction.id ?? transaction._id}>
-                      <TransactionRow
-                        title={transaction.title}
-                        category={category?.name}
-                        categoryIcon={category?.icon}
-                        amountMinor={transaction.amountMinor}
-                        currency={transaction.currency}
-                        type={transaction.type}
-                        date={formatTransactionDate(
-                          transaction.occurredAt,
-                          transaction.hasTime,
-                          profileState.data?.[0]?.timezone,
-                        )}
-                        semanticType={transaction.groupId ? 'split' : undefined}
-                        onPress={() =>
-                          router.push(`/transaction/${transaction._id ?? transaction.id}` as never)
-                        }
-                      />
-                      {index < detail.transactions.length - 1 && <Separator />}
-                    </React.Fragment>
-                  ))}
-                </View>
-              )}
-            </View>
-            {!category?.isSystem && (
-              <Button
-                variant="destructive"
-                onPress={() => setConfirmingArchive(true)}
-                style={{ alignSelf: 'flex-start' }}
-              >
-                Archive category
-              </Button>
-            )}
-          </>
-        )}
-      </ScrollView>
-      <Sheet
-        visible={confirmingArchive}
-        title="Archive category?"
-        onClose={() => setConfirmingArchive(false)}
-      >
-        <Typography variant="small">
-          Past transactions remain in your history. This category will no longer appear in new
-          transactions.
-        </Typography>
-        <Button variant="destructive" disabled={pending} onPress={archive}>
-          Archive {category?.name}
-        </Button>
-        <Button variant="outline" onPress={() => setConfirmingArchive(false)}>
-          Cancel
-        </Button>
-      </Sheet>
-    </>
+    <CategoryDetailView
+      category={detailCategory}
+      profile={profile ?? null}
+      transactions={detailTransactions}
+      currency={currency}
+      loading={loading}
+      pending={pending}
+      formError={error}
+      editingName={editingName}
+      nameValue={nameInput}
+      limitValue={limitInput}
+      isDefaultExpense={isDefaultExpense}
+      isDefaultIncome={isDefaultIncome}
+      confirmingArchive={confirmingArchive}
+      onBack={() => router.push('/categories' as never)}
+      onAddTransaction={() =>
+        router.push(`/transaction/new?categoryId=${encodeURIComponent(id ?? '')}` as never)
+      }
+      onOpenTransaction={(transactionId) =>
+        router.push(`/transaction/${encodeURIComponent(transactionId)}` as never)
+      }
+      onEditName={() => {
+        setNameInput(category?.name ?? '');
+        setEditingName(true);
+      }}
+      onNameChange={setNameInput}
+      onSaveName={() => void saveName()}
+      onCancelName={() => setEditingName(false)}
+      onIconChange={(emoji) => void saveIcon(emoji)}
+      onLimitChange={setLimitInput}
+      onSaveLimit={() => void saveLimit()}
+      onClearLimit={() => void clearLimit()}
+      onToggleDefault={(type) => void toggleDefault(type)}
+      onRequestArchive={() => setConfirmingArchive(true)}
+      onConfirmArchive={() => void archive()}
+      onCancelArchive={() => setConfirmingArchive(false)}
+    />
   );
 }
 

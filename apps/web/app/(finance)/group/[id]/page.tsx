@@ -38,6 +38,7 @@ type Member = LocalRecord & {
   username?: string;
   displayName?: string;
   name?: string;
+  avatarUrl?: string | null;
 };
 type LedgerRecord = LocalRecord & {
   groupId?: string;
@@ -246,6 +247,7 @@ export default function GroupHomePage() {
   const memberNames = groupMembers.map((member) => ({
     id: String(member.userId ?? member.memberId ?? recordId(member)),
     username: member.username,
+    avatarUrl: member.avatarUrl,
     name: String(
       member.userId === userId
         ? 'You'
@@ -257,7 +259,7 @@ export default function GroupHomePage() {
     ),
   }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
-    memberNames.unshift({ id: userId, username: undefined, name: 'You' });
+    memberNames.unshift({ id: userId, username: undefined, avatarUrl: null, name: 'You' });
   const recentSettlements = settlements
     .filter(
       (record) =>
@@ -731,6 +733,7 @@ export default function GroupHomePage() {
                         .slice(0, 2)}
                       label={member.name}
                       size={48}
+                      imageUrl={member.avatarUrl}
                     />
                     <small>
                       {member.username ? `@${member.username.replace(/^@+/, '')}` : member.name}

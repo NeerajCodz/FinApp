@@ -25,7 +25,8 @@
     "lint": "bun run --cwd apps/mobile lint && bun run --cwd apps/web lint",
     "format:check": "bunx prettier --check .",
     "expo:doctor": "bun run --cwd apps/mobile expo:doctor",
-    "validate": "bun run typecheck && bun run test && bun run lint && bun run format:check && bun run expo:doctor"
+    "validate": "bun run typecheck && bun run test && bun run lint && bun run format:check && bun run expo:doctor",
+    "upload:avatars": "bun scripts/upload-avatars.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

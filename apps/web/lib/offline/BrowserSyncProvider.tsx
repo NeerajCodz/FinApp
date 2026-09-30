@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { api } from '@convex/_generated/api';
+import type { GroupSettlementRangeResult, GroupTransactionRangeResult } from '@convex/sync/types';
 import { useConvex, useConvexAuth, useConvexConnectionState, useQuery } from 'convex/react';
 import type { ConvexReactClient } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
@@ -41,7 +42,6 @@ import { syncOutbox } from './sync';
 type ChangesPage = FunctionReturnType<typeof api.sync.queries.changes>;
 type SectionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapSection>;
 type TransactionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapTransactions>;
-type GroupRangePage = FunctionReturnType<typeof api.sync.queries.groupRange>;
 type TransactionRangePage = FunctionReturnType<typeof api.sync.queries.transactionRange>;
 
 const localUserKey = 'finapp.web.validated-user.v1';
@@ -174,6 +174,12 @@ async function sendMutation(
       return;
     case 'account.setIcon':
       await convex.mutation(api.accounts.mutations.setIcon, {
+        ...payload,
+        accountId: await mapId('account', payload.accountId),
+      } as never);
+      return;
+    case 'account.setColor':
+      await convex.mutation(api.accounts.mutations.setColor, {
         ...payload,
         accountId: await mapId('account', payload.accountId),
       } as never);
@@ -469,13 +475,13 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
         const mappedGroupId = await getMappedCloudId(userId, 'group', groupId);
         if (groupId.startsWith('local-') && !mappedGroupId) throw new Error('SYNC_PARENT_PENDING');
         const cloudGroupId = mappedGroupId ?? groupId;
-        const persistGroup = async (page: GroupRangePage) => {
+        const persistGroup = async (page: GroupTransactionRangeResult) => {
           await Promise.all([
             upsert(userId, 'group', page.group ? [page.group as LocalRecord] : []),
             upsert(userId, 'groupMember', page.groupMembers as LocalRecord[]),
           ]);
         };
-        const persistTransactionPage = async (page: GroupRangePage) => {
+        const persistTransactionPage = async (page: GroupTransactionRangeResult) => {
           await persistGroup(page);
           await Promise.all([
             upsert(userId, 'transaction', page.transactions.page as LocalRecord[]),
@@ -503,13 +509,15 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
         const fetchTransactions = async () => {
           let cursor: string | null = null;
           while (true) {
-            const page: GroupRangePage = await convex.query(api.sync.queries.groupRange, {
-              groupId: cloudGroupId as never,
-              startAt,
-              endAt,
-              paginationOpts: { numItems: 100, cursor },
-              settlementPaginationOpts: { numItems: 100, cursor: null },
-            });
+            const page: GroupTransactionRangeResult = await convex.query(
+              api.sync.queries.groupTransactionRange,
+              {
+                groupId: cloudGroupId as never,
+                startAt,
+                endAt,
+                paginationOpts: { numItems: 100, cursor },
+              },
+            );
             await persistTransactionPage(page);
             if (page.transactions.isDone) break;
             if (!page.transactions.continueCursor || page.transactions.continueCursor === cursor)
@@ -520,14 +528,15 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
         const fetchSettlements = async () => {
           let cursor: string | null = null;
           while (true) {
-            const page: GroupRangePage = await convex.query(api.sync.queries.groupRange, {
-              groupId: cloudGroupId as never,
-              startAt,
-              endAt,
-              paginationOpts: { numItems: 100, cursor: null },
-              settlementPaginationOpts: { numItems: 100, cursor },
-            });
-            await persistGroup(page);
+            const page: GroupSettlementRangeResult = await convex.query(
+              api.sync.queries.groupSettlementRange,
+              {
+                groupId: cloudGroupId as never,
+                startAt,
+                endAt,
+                paginationOpts: { numItems: 100, cursor },
+              },
+            );
             await upsert(userId, 'settlement', page.settlements.page as LocalRecord[]);
             if (page.settlements.isDone) break;
             if (!page.settlements.continueCursor || page.settlements.continueCursor === cursor)

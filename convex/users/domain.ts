@@ -1,3 +1,4 @@
+import { avatarGenderForId, avatarGenders, type AvatarGender } from '../avatars/domain';
 export type AccentValue = 'volt' | 'white' | 'blue' | `#${string}`;
 
 export type UserProfile = {
@@ -8,6 +9,8 @@ export type UserProfile = {
   email: string;
   phone?: string;
   avatarStorageId?: string;
+  avatarId?: string;
+  gender?: AvatarGender;
   defaultCurrency: string;
   timezone: string;
   createdAt: number;
@@ -31,7 +34,14 @@ export type UserSettings = {
 export type ProfileUpdate = Partial<
   Pick<
     UserProfile,
-    'displayName' | 'username' | 'phone' | 'defaultCurrency' | 'timezone' | 'accent'
+    | 'displayName'
+    | 'username'
+    | 'phone'
+    | 'defaultCurrency'
+    | 'timezone'
+    | 'accent'
+    | 'avatarId'
+    | 'gender'
   >
 >;
 
@@ -69,6 +79,16 @@ export function validateProfileUpdate(update: ProfileUpdate): void {
       throw new Error('INVALID_TIMEZONE');
     }
   }
+  if (update.avatarId !== undefined && !avatarGenderForId(update.avatarId))
+    throw new Error('INVALID_AVATAR');
+  if (update.gender !== undefined && !avatarGenders.includes(update.gender))
+    throw new Error('INVALID_GENDER');
+  if (
+    update.avatarId !== undefined &&
+    update.gender !== undefined &&
+    avatarGenderForId(update.avatarId) !== update.gender
+  )
+    throw new Error('AVATAR_GENDER_MISMATCH');
 }
 
 export function canCompleteOnboarding(

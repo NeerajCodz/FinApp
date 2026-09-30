@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -48,16 +48,19 @@ type Profile = LocalRecord & {
   phone?: string;
   phoneVerificationTime?: number;
   defaultCurrency?: string;
+  avatarId?: string;
+  gender?: 'neutral' | 'male' | 'female';
+  avatarUrl?: string | null;
 };
 type Editor = 'username' | 'phone' | null;
 const usernamePattern = /^[a-z0-9_]{3,32}$/;
 
 const links = [
-  { label: 'Accounts', description: 'Balances and activity', href: '/account', icon: Wallet },
+  { label: 'Accounts', description: 'Balances and activity', href: '/accounts', icon: Wallet },
   {
     label: 'Categories',
     description: 'Spending structure',
-    href: '/category',
+    href: '/categories',
     icon: ReceiptText,
   },
   { label: 'Budget', description: 'Limits and progress', href: '/budget', icon: Coins },
@@ -77,6 +80,7 @@ const privacyLinks = [
 export default function ProfilePage() {
   const { signOut } = useAuthActions();
   const updateUser = useMutation(api.users.mutations.update);
+  const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const router = useRouter();
   const { userId, isConnected } = useBrowserSync();
   const { tokens, appearance } = useTheme();
@@ -154,6 +158,30 @@ export default function ProfilePage() {
       setMessage(cause instanceof Error ? cause.message : 'Could not save currency.');
     }
   }
+  async function selectAvatar(avatarId: string, gender: 'neutral' | 'male' | 'female') {
+    if (!userId || busy) return;
+    const avatar = (avatarCatalog ?? []).find((entry) => entry.avatarId === avatarId);
+    if (!avatar) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const update = { avatarId, gender };
+      const current: Profile = profile ?? { id: userId, displayName: 'Your profile' };
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.update',
+        { ...current, ...update, avatarUrl: avatar.url },
+        update,
+        { recordId: String(current.id ?? current._id ?? userId) },
+      );
+      setMessage('Avatar saved.');
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Could not save avatar.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function leave() {
     await signOut();
@@ -189,6 +217,7 @@ export default function ProfilePage() {
               initials={(profile?.displayName ?? 'NS').slice(0, 2)}
               label="Your profile"
               size={68}
+              imageUrl={profile?.avatarUrl}
             />
             <div style={{ display: 'grid', minWidth: 0, gap: 3 }}>
               <Typography variant="heading">{profile?.displayName ?? 'Your profile'}</Typography>
@@ -237,6 +266,66 @@ export default function ProfilePage() {
             >
               Edit
             </Button>
+          </div>
+        </Card>
+        <Card variant="subtle" style={{ display: 'grid', gap: 16, padding: 18, borderRadius: 20 }}>
+          <div>
+            <Typography variant="heading">Your avatar</Typography>
+            <Text>Choose how you appear in groups and shared activity.</Text>
+          </div>
+          <div role="group" aria-label="Choose gender" style={{ display: 'flex', gap: 8 }}>
+            {(['neutral', 'male', 'female'] as const).map((gender) => (
+              <Button
+                key={gender}
+                variant={(profile?.gender ?? 'neutral') === gender ? 'primary' : 'outline'}
+                aria-pressed={(profile?.gender ?? 'neutral') === gender}
+                disabled={busy || !avatarCatalog}
+                onPress={() => {
+                  const first = (avatarCatalog ?? []).find((entry) => entry.gender === gender);
+                  if (first) void selectAvatar(first.avatarId, gender);
+                }}
+              >
+                {gender[0].toUpperCase() + gender.slice(1)}
+              </Button>
+            ))}
+          </div>
+          <div
+            role="group"
+            aria-label={`${profile?.gender ?? 'neutral'} avatar choices`}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(54px, 1fr))',
+              gap: 8,
+              maxHeight: 246,
+              overflowY: 'auto',
+            }}
+          >
+            {(avatarCatalog ?? [])
+              .filter((entry) => entry.gender === (profile?.gender ?? 'neutral'))
+              .map((entry) => (
+                <button
+                  key={entry.avatarId}
+                  type="button"
+                  aria-label={`Select avatar ${entry.avatarId}`}
+                  aria-pressed={profile?.avatarId === entry.avatarId}
+                  disabled={busy}
+                  onClick={() => void selectAvatar(entry.avatarId, entry.gender)}
+                  style={{
+                    display: 'grid',
+                    placeItems: 'center',
+                    padding: 3,
+                    borderRadius: '50%',
+                    border:
+                      profile?.avatarId === entry.avatarId
+                        ? `2px solid ${tokens.primary}`
+                        : '2px solid transparent',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Avatar initials="" label={entry.avatarId} imageUrl={entry.url} size={46} />
+                </button>
+              ))}
           </div>
         </Card>
 

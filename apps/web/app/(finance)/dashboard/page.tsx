@@ -5,6 +5,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@convex/_generated/api';
 import { HomeDashboard, buildHomeDashboard, type HomeRecord } from '@finapp/ui/home';
+import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { LocalSyncSheet } from '@/components/finance/dashboard/LocalSyncSheet';
@@ -66,8 +67,7 @@ export default function DashboardPage() {
   React.useEffect(() => {
     if (identityReady && !userId && !authLoading && !isAuthenticated) router.replace('/welcome');
   }, [authLoading, identityReady, isAuthenticated, router, userId]);
-  const currency =
-    typeof profiles[0]?.defaultCurrency === 'string' ? profiles[0].defaultCurrency : 'INR';
+  const currency = resolveDefaultCurrency(profiles) ?? 'INR';
   const timeZone = typeof profiles[0]?.timezone === 'string' ? profiles[0].timezone : undefined;
   const peopleQueries = React.useMemo<RequestForQueries>(() => {
     const queries: RequestForQueries = {};
@@ -154,7 +154,7 @@ export default function DashboardPage() {
         onOpenGoal={(id) => router.push(`/goals/${encodeURIComponent(id)}`)}
         onSeeAllGoals={() => router.push('/goals')}
         onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}`)}
-        onSeeAllCategories={() => router.push('/category')}
+        onSeeAllCategories={() => router.push('/categories')}
         onOpenGroup={(id) => router.push(`/group/${encodeURIComponent(id)}`)}
         onSeeAllGroups={() => router.push('/groups')}
         onOpenPerson={(username) => router.push(`/person/${encodeURIComponent(username)}`)}
