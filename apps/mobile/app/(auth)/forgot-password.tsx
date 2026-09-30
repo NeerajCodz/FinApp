@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft } from '@finapp/ui/icons/native';
 import { toast } from '@/lib/toast';
-import { BrandMark } from '@finapp/ui/finance';
-import { Button, IconButton, Input, InputOTP, Label, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { Button, Input, InputOTP, Label, Typography } from '@finapp/ui/native';
+import { AuthScaffold } from '@/components/auth/AuthScaffold';
+import { AuthError, AuthSubmit, isEmail, PasswordField } from '@/components/auth/AuthFields';
 
 export default function ForgotPasswordScreen() {
   const { email: initialEmail } = useLocalSearchParams<{ email?: string }>();
@@ -18,11 +16,19 @@ export default function ForgotPasswordScreen() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const { signIn } = useAuthActions();
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
+  const [fieldErrors, setFieldErrors] = useState<{
+    email?: string;
+    code?: string;
+    password?: string;
+  }>({});
 
   async function requestCode() {
-    if (!email.trim() || pending) return;
+    if (pending) return;
+    if (!isEmail(email)) {
+      setFieldErrors({ email: 'Enter a valid email address.' });
+      return;
+    }
+    setFieldErrors({});
     setPending(true);
     setError('');
     const form = new FormData();
@@ -43,7 +49,14 @@ export default function ForgotPasswordScreen() {
   }
 
   async function resetPassword() {
-    if (code.length !== 6 || password.length < 8 || pending) return;
+    if (pending) return;
+    const errors = {
+      code: code.length !== 6 ? 'Enter the six-digit code from your email.' : undefined,
+      password:
+        password.length < 8 ? 'Use at least 8 characters for your new password.' : undefined,
+    };
+    setFieldErrors(errors);
+    if (errors.code || errors.password) return;
     setPending(true);
     setError('');
     const form = new FormData();
@@ -66,98 +79,92 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1, backgroundColor: tokens.background }}
-    >
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 24,
-          gap: 28,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          <BrandMark />
-        </View>
-        <View style={{ flex: 1, justifyContent: 'center', gap: 28 }}>
-          <View style={{ gap: 10 }}>
-            <Typography variant="title">
-              {requested ? 'Choose a new password.' : 'Reset your password.'}
-            </Typography>
-            <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
-              {requested
-                ? `Enter the six-digit code sent to ${email}. It expires in 10 minutes.`
-                : 'We will email you a short-lived code to reset your password.'}
-            </Text>
-          </View>
-          {!requested ? (
-            <View>
-              <Label>Email</Label>
-              <Input
-                accessibilityLabel="Email"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                placeholder="you@example.com"
-                value={email}
-                onChangeText={setEmail}
-                returnKeyType="go"
-                onSubmitEditing={requestCode}
-                error={!!error}
-              />
-            </View>
-          ) : (
-            <View style={{ gap: 22 }}>
-              <InputOTP value={code} onChangeText={setCode} />
-              <View>
-                <Label>New password</Label>
-                <Input
-                  accessibilityLabel="New password"
-                  autoComplete="new-password"
-                  textContentType="newPassword"
-                  secureTextEntry
-                  placeholder="At least eight characters"
-                  value={password}
-                  onChangeText={setPassword}
-                  returnKeyType="go"
-                  onSubmitEditing={resetPassword}
-                  error={!!error}
-                />
-              </View>
-              <Button variant="ghost" disabled={pending} onPress={requestCode}>
-                {pending ? 'Sending…' : 'Send a new code'}
-              </Button>
-            </View>
-          )}
-          {!!error && (
-            <Typography
-              variant="small"
-              accessibilityLiveRegion="polite"
-              style={{ color: tokens.destructive }}
-            >
-              {error}
-            </Typography>
-          )}
-        </View>
+    <AuthScaffold
+      eyebrow={requested ? 'Make a fresh start' : 'Let’s get you back'}
+      title={requested ? <>New password.{`\n`}Same clarity.</> : <>A reset,{`\n`}not a restart.</>}
+      description={
+        requested
+          ? `Enter the six-digit code sent to ${email}. It expires in 10 minutes.`
+          : 'We’ll email you a short-lived code so you can choose a new password.'
+      }
+      footer={
         <Button
-          size="lg"
-          disabled={
-            pending || (requested ? code.length !== 6 || password.length < 8 : !email.trim())
-          }
-          onPress={requested ? resetPassword : requestCode}
+          variant="ghost"
+          onPress={() => router.replace({ pathname: '/(auth)/sign-in', params: { email } })}
         >
-          {pending ? 'Please wait…' : requested ? 'Update password' : 'Send reset code'}
+          Return to sign in
         </Button>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      }
+    >
+      <Typography variant="heading">
+        {requested ? 'Choose a new password' : 'Reset your password'}
+      </Typography>
+      {!requested ? (
+        <View style={{ gap: 8 }}>
+          <Label style={{ marginBottom: 0 }}>Email address</Label>
+          <Input
+            accessibilityLabel="Email address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            placeholder="you@example.com"
+            value={email}
+            onChangeText={(value) => {
+              setEmail(value);
+              setFieldErrors({});
+              setError('');
+            }}
+            returnKeyType="go"
+            editable={!pending}
+            onSubmitEditing={requestCode}
+            error={!!fieldErrors.email}
+          />
+          <AuthError message={fieldErrors.email} />
+        </View>
+      ) : (
+        <>
+          <View style={{ gap: 8 }}>
+            <Label style={{ marginBottom: 0 }}>Six-digit reset code</Label>
+            <InputOTP
+              value={code}
+              onChangeText={(value) => {
+                if (!pending) {
+                  setCode(value);
+                  setFieldErrors((current) => ({ ...current, code: undefined }));
+                  setError('');
+                }
+              }}
+            />
+            <AuthError message={fieldErrors.code} />
+          </View>
+          <PasswordField
+            label="New password"
+            newPassword
+            placeholder="Create a new password"
+            value={password}
+            onChangeText={(value) => {
+              setPassword(value);
+              setFieldErrors((current) => ({ ...current, password: undefined }));
+              setError('');
+            }}
+            returnKeyType="go"
+            editable={!pending}
+            onSubmitEditing={resetPassword}
+            error={fieldErrors.password}
+          />
+          <Button variant="ghost" disabled={pending} onPress={requestCode}>
+            Send a new code
+          </Button>
+        </>
+      )}
+      <AuthError message={error} />
+      <AuthSubmit
+        label={pending ? 'Please wait…' : requested ? 'Update password' : 'Send reset code'}
+        pending={pending}
+        onPress={requested ? resetPassword : requestCode}
+      />
+    </AuthScaffold>
   );
 }
