@@ -11,6 +11,7 @@ import {
 } from '@convex/notifications/domain';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeDashboard, buildHomeDashboard, type HomeRecord } from '@finapp/ui/home';
+import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
@@ -64,6 +65,7 @@ export default function HomeScreen() {
   const { data: accounts } = useLocalRecords<HomeRecord>(userId, 'account');
   const { data: categories } = useLocalRecords<HomeRecord>(userId, 'category');
   const { data: profiles } = useLocalRecords<HomeRecord>(userId, 'profile');
+  const profile = profiles?.[0];
   const { data: transactions } = useLocalRecords<HomeRecord>(userId, 'transaction');
   const { data: budgets } = useLocalRecords<HomeRecord>(userId, 'budget');
   const { data: recurringRules } = useLocalRecords<HomeRecord>(userId, 'recurringRule');
@@ -87,8 +89,7 @@ export default function HomeScreen() {
   const peopleQuery = useQueries(peopleQueries).frequentPeople;
   const peopleQueryError = peopleQuery instanceof Error;
   const people = Array.isArray(peopleQuery) ? peopleQuery.filter((person) => person !== null) : [];
-  const profile = profiles?.[0];
-  const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
+  const currency = resolveDefaultCurrency(profiles, settings) ?? 'INR';
   const timeZone = typeof profile?.timezone === 'string' ? profile.timezone : undefined;
   const unreadNotificationCount = useMemo(() => {
     if (!settings) return 0;

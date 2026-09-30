@@ -8,7 +8,6 @@ import {
 } from '@finapp/ui/icons/native';
 import { Button, IconButton, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import type { HomeAccountOption } from '../types';
-import { FinanceBrand } from '../../finance/native/FinanceBrand';
 
 export function HomeHeader({
   accounts,
@@ -52,7 +51,6 @@ export function HomeHeader({
         }}
       >
         <View style={{ gap: 4, flex: 1 }}>
-          <FinanceBrand />
           <Typography variant="title" style={{ fontSize: 28, lineHeight: 32 }}>
             Home
           </Typography>

@@ -4,7 +4,6 @@ import { ArrowRight, ChartLineUp as BarChart3, Plus, MagnifyingGlass as Search, 
 import { Button, Empty, Input, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
-import { FinanceBrand } from './FinanceBrand';
 
 export type CategoryOverviewItem = {
   id: string;
@@ -64,7 +63,6 @@ export function CategoriesOverview({
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: tokens.background }} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-      <FinanceBrand />
       <View style={styles.header}>
         <View style={{ flex: 1, minWidth: 0 }}><Typography variant="title">Categories</Typography><Typography variant="small" style={{ color: tokens.foregroundMuted }}>A clear view of where money goes and where it comes from.</Typography></View>
         <View style={styles.actions}><Button size="sm" variant="outline" onPress={onOpenAnalytics}><BarChart3 size={16} color={tokens.foreground}/><Typography variant="small">Analytics</Typography></Button><Button size="sm" onPress={onAddCategory}><Plus size={16} color={tokens.primaryForeground}/><Typography variant="small" style={{ color: tokens.primaryForeground }}>Add</Typography></Button></View>

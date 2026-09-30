@@ -9,7 +9,6 @@ import { CategoryEmojiPicker } from './CategoryEmojiPicker';
 import { BudgetProgress } from './BudgetProgress';
 import { TransactionRow } from './TransactionRow';
 import { formatTransactionDate } from '../datetime';
-import { FinanceBrand } from './FinanceBrand';
 
 export type CategoryDetailRecord = { id: string; name: string; icon?: string; kind: 'expense' | 'income'; isSystem?: boolean; archivedAt?: number; monthlyLimitMinor?: bigint; limitCurrency?: string; updatedAt?: number };
 export type CategoryDetailTransaction = { id: string; type: string; title: string; merchant?: string; account?: string; amountMinor: bigint; currency: string; occurredAt: number; hasTime?: boolean; status: string; deletedAt?: number; groupId?: string };
@@ -116,7 +115,6 @@ export function CategoryDetailScreen({
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: tokens.background }} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-      <FinanceBrand />
       <View style={styles.header}><IconButton label="Back to categories" variant="ghost" onPress={onBack}><ArrowLeft size={20} color={tokens.foreground}/></IconButton>{category && <CategoryIcon label={category.name} icon={category.icon}/>}<View style={{ flex: 1, minWidth: 0 }}><Typography variant="caption" style={{ color: tokens.foregroundMuted }}>CATEGORIES  /</Typography><Typography variant="title" numberOfLines={1} style={{ fontSize: 22 }}>{category?.name ?? 'Category'}</Typography><Typography variant="caption" style={{ color: tokens.foregroundMuted }}>Spending, limits, defaults, and activity.</Typography></View>{category && !category.isSystem && category.archivedAt === undefined && <Button size="sm" variant="ghost" onPress={onEditName}>Edit</Button>}</View>
       {category && category.archivedAt === undefined && <View style={styles.iconPicker}><CategoryEmojiPicker value={category.icon} onChange={onIconChange}/><Button size="sm" onPress={onAddTransaction}><Typography variant="caption" style={{ color: tokens.primaryForeground }}>Add transaction</Typography></Button></View>}
       {error ? <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>{error}</Typography> : null}{formError ? <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>{formError}</Typography> : null}

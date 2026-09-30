@@ -1,4 +1,5 @@
 export { FinanceBrand } from './FinanceBrand';
+export { resolveDefaultCurrency, type CurrencyPreferenceRecord } from '../defaultCurrency';
 export {
   AccountsIndexView,
   AccountDetailView,

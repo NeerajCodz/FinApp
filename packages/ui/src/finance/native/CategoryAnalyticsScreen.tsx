@@ -5,7 +5,6 @@ import { ArrowDownRight, ArrowRight, ArrowUpRight, ChartLineUp as BarChart3, Mag
 import { Empty, Input, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
-import { FinanceBrand } from './FinanceBrand';
 
 export type AnalyticsCategory = { id: string; name: string; icon?: string; kind: 'expense' | 'income'; currency: string; monthlyLimitMinor?: bigint };
 export type AnalyticsAccount = { id: string; name: string; currency?: string };
@@ -131,7 +130,6 @@ export function CategoryAnalyticsScreen({ categories, accounts, transactions, bu
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: tokens.background }} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-      <FinanceBrand />
       <View style={styles.heading}><Typography variant="title">Category analytics</Typography><Typography variant="small" style={{ color: tokens.foregroundMuted }}>See where money goes across your categories.</Typography></View>
       <View style={styles.search}><Search size={16} color={tokens.foregroundMuted}/><Input accessibilityLabel="Search categories" placeholder="Search categories" value={search} onChangeText={setSearch} style={styles.searchInput}/></View>
       <FilterRail label="Period" values={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} value={period} onChange={(value) => setPeriod(value as Period)}/>

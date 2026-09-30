@@ -8,7 +8,7 @@ import { formatMinor, parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
+import { EntityIcon, EntityIconPicker, Money, resolveDefaultCurrency } from '@finapp/ui/finance';
 
 type Profile = LocalRecord & { defaultCurrency?: string };
 type Settings = LocalRecord & { currency?: string; defaultCurrency?: string };
@@ -64,8 +64,7 @@ export default function GoalsPage() {
   const [adding, setAdding] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
-  const selectedCurrency =
-    profiles[0]?.defaultCurrency ?? settings[0]?.defaultCurrency ?? settings[0]?.currency ?? '';
+  const selectedCurrency = resolveDefaultCurrency(profiles, settings) ?? '';
   const activeGoals = goals
     .filter((goal) => goal.archivedAt === undefined)
     .sort(

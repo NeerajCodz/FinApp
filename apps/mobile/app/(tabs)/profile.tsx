@@ -22,6 +22,7 @@ import {
   Text,
   Typography,
 } from '@finapp/ui/native';
+import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import {
   ArrowLeft,
   Bell,
@@ -165,6 +166,8 @@ export default function ProfileScreen() {
   const updateUser = useMutation(api.users.mutations.update);
   const { userId, isConnected } = useLocalSync();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
+  const settingsState = useLocalRecords<LocalRecord>(userId, 'settings');
+  const defaultCurrency = resolveDefaultCurrency(profileState.data ?? [], settingsState.data ?? []) ?? 'INR';
   const profile = profileState.data?.[0];
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -405,7 +408,7 @@ export default function ProfileScreen() {
           <ProfileActionRow
             icon={CurrencyDollar}
             label="Default currency"
-            value={profile?.defaultCurrency ?? 'INR'}
+            value={defaultCurrency}
             onPress={() => setCurrencyOpen(true)}
             last
           />
@@ -527,7 +530,7 @@ export default function ProfileScreen() {
             <Button
               key={option}
               size="sm"
-              variant={profile?.defaultCurrency === option ? 'primary' : 'outline'}
+              variant={defaultCurrency === option ? 'primary' : 'outline'}
               onPress={async () => {
                 setSaveError('');
                 try {

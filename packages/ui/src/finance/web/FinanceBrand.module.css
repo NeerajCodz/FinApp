@@ -19,3 +19,35 @@
   background: #b7ff4a;
   box-shadow: 0 0 11px rgb(183 255 74 / 34%);
 }
+.connected {
+  background: #b7ff4a;
+}
+
+
+.syncing {
+  background: var(--finapp-warning, #e5ac3f);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--finapp-warning, #e5ac3f) 31%, transparent);
+  animation: finance-brand-sync-pulse 1.25s ease-in-out infinite;
+}
+
+.attention {
+  background: var(--finapp-destructive, #ef6473);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--finapp-destructive, #ef6473) 32%, transparent);
+}
+
+.idle {
+  background: var(--finapp-foreground-subtle, #6b7280);
+  box-shadow: none;
+}
+
+@keyframes finance-brand-sync-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .syncing {
+    animation: none;
+  }
+}

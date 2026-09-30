@@ -26,7 +26,6 @@ import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
 import { Money } from './Money';
 import { TransactionRow } from './TransactionRow';
 import type { SemanticType, TransactionType } from '../types';
-import { FinanceBrand } from './FinanceBrand';
 
 export type AccountListEntry = {
   id: string;
@@ -189,7 +188,6 @@ export function AccountsIndexView({
       contentContainerStyle={[styles.pageContent, { paddingTop: topInset + 10, paddingBottom: bottomInset + 30 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <FinanceBrand />
       <View style={styles.headerStack}>
         <View style={styles.header}>
           <View style={styles.headingBlock}>
@@ -441,7 +439,6 @@ export function AccountDetailView({
   return (
     <>
       <ScrollView style={[styles.scroll, { backgroundColor: tokens.background }]} contentContainerStyle={[styles.detailContent, { paddingTop: topInset + 10, paddingBottom: bottomInset + 32 }]}>
-        <FinanceBrand />
         <TouchableOpacity accessibilityRole="link" accessibilityLabel="Back to accounts" onPress={onBack} style={styles.breadcrumb}>
           <ArrowLeft size={16} color={tokens.foregroundMuted} />
           <Text style={{ color: tokens.foregroundMuted }}>Accounts</Text>

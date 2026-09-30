@@ -3,7 +3,7 @@ import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { ArrowLeft, CaretRight, Plus, Wallet } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
+import { EntityIcon, EntityIconPicker, Money, resolveDefaultCurrency } from '@finapp/ui/finance';
 import { Button, IconButton, Input, Progress, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -38,11 +38,7 @@ export default function GoalsScreen() {
   const [target, setTarget] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
-  const preferredCurrency =
-    profiles.data?.[0]?.defaultCurrency ??
-    settings.data?.[0]?.defaultCurrency ??
-    settings.data?.[0]?.currency;
-  const currency = typeof preferredCurrency === 'string' ? preferredCurrency : null;
+  const currency = resolveDefaultCurrency(profiles.data, settings.data) ?? null;
   const active = goals.data
     ?.filter((goal) => goal.archivedAt === undefined)
     .sort(

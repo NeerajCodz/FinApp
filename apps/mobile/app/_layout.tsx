@@ -10,6 +10,7 @@ import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from '@finapp/ui/native';
 import { Button, View } from '@finapp/ui/native';
+import { FinanceBrand } from '@finapp/ui/finance';
 import type { AccentValue } from '@finapp/ui/tokens';
 import Storage from 'expo-sqlite/kv-store';
 import { api } from '@convex/_generated/api';
@@ -172,12 +173,27 @@ function ThemedStack() {
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => subscription.remove();
   }, []);
+  const { userId, isConnected, isSyncing, status, syncError } = useLocalSync();
+  const syncTone = !userId
+    ? 'idle'
+    : status.failed > 0 || status.conflicts > 0 || Boolean(syncError) || !isConnected
+      ? 'attention'
+      : isSyncing || status.pending > 0
+        ? 'syncing'
+        : 'connected';
+
   return (
     <>
       <StatusBar style={tokens.background === '#000000' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerShown: false,
+          headerShown: true,
+          headerTitle: '',
+          headerLeft: () => <FinanceBrand syncTone={syncTone} />,
+          headerBackVisible: false,
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: tokens.background },
+          headerTintColor: tokens.foreground,
           contentStyle: { backgroundColor: tokens.background },
           animation: reduceMotion ? 'none' : 'fade_from_bottom',
           animationDuration: reduceMotion ? 0 : 280,

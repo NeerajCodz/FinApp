@@ -100,28 +100,6 @@ function QuickAddActions({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SyncDotButton({
-  state,
-  tone,
-  onPress,
-}: {
-  state: string;
-  tone: 'connected' | 'syncing' | 'attention' | 'idle';
-  onPress: () => void;
-}) {
-  return (
-    <button
-      className="finance-brand-status"
-      type="button"
-      aria-label={`Sync status: ${state}. Open sync details.`}
-      aria-haspopup="dialog"
-      title={`Sync status: ${state}`}
-      onClick={onPress}
-    >
-      <span className={`sync-dot ${tone}`} aria-hidden="true" />
-    </button>
-  );
-}
 
 export function FinanceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -160,17 +138,6 @@ export function FinanceShell({ children }: { children: ReactNode }) {
     if (identityReady && !userId) router.replace('/sign-in');
   }, [identityReady, router, userId]);
   const hasSyncIssue = status.failed > 0 || status.conflicts > 0 || Boolean(syncError);
-  const state = !userId
-    ? 'Sign in to sync'
-    : hasSyncIssue
-      ? 'Needs attention'
-      : !isConnected
-        ? 'Offline'
-        : isSyncing
-          ? 'Syncing'
-          : status.pending > 0
-            ? 'Saved locally'
-            : 'All changes synced';
   const syncTone = !userId
     ? 'idle'
     : hasSyncIssue || !isConnected
@@ -207,7 +174,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         <aside className="finance-sidebar" aria-label="Finapp">
           <div className="finance-brand-lockup">
             <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-              <FinanceBrand />
+              <FinanceBrand syncTone={syncTone} />
             </Link>
           </div>
           <p className="finance-sidebar-label">YOUR MONEY</p>
@@ -241,15 +208,10 @@ export function FinanceShell({ children }: { children: ReactNode }) {
           <header className="finance-topbar">
             <div className="finance-topbar-brand finance-brand-lockup">
               <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-                <FinanceBrand />
+                <FinanceBrand syncTone={syncTone} />
               </Link>
             </div>
             <div className="finance-topbar-actions">
-              <SyncDotButton
-                state={state}
-                tone={syncTone}
-                onPress={() => setSyncDetailsOpen(true)}
-              />
               <Link
                 href="/notifications"
                 className="finance-notification-link"
