@@ -21,8 +21,9 @@ import {
 } from '../../_personal';
 
 type Profile = LocalRecord & { defaultCurrency?: string };
-type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
+type Settings = LocalRecord & { currency?: string; defaultCurrency?: string };
 type Category = LocalRecord & { name?: string; archivedAt?: number };
+type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
 type Period = 'monthly' | 'category' | 'account' | 'custom';
 const maxInt64 = 9_223_372_036_854_775_807n;
 
@@ -39,6 +40,11 @@ export default function NewPersonalBudgetPage() {
     loading: accountLoading,
     error: accountError,
   } = useLocalRecords<Account>('account');
+  const {
+    records: settings,
+    loading: settingsLoading,
+    error: settingsError,
+  } = useLocalRecords<Settings>('settings');
   const {
     records: categoryRecords,
     loading: categoryLoading,
@@ -69,8 +75,11 @@ export default function NewPersonalBudgetPage() {
   const category = categories.find((item) => idOf(item) === categoryId);
   const currency =
     period === 'account'
-      ? (account?.currency ?? profile?.defaultCurrency)
-      : profile?.defaultCurrency;
+      ? (account?.currency ??
+        profile?.defaultCurrency ??
+        settings[0]?.defaultCurrency ??
+        settings[0]?.currency)
+      : (profile?.defaultCurrency ?? settings[0]?.defaultCurrency ?? settings[0]?.currency);
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -156,8 +165,8 @@ export default function NewPersonalBudgetPage() {
         Sign in to save a budget into your private, local-first finance data.
       </SignInGate>
     );
-  const loading = profileLoading || accountLoading || categoryLoading;
-  const dataError = profileError ?? accountError ?? categoryError;
+  const loading = profileLoading || settingsLoading || accountLoading || categoryLoading;
+  const dataError = profileError ?? settingsError ?? accountError ?? categoryError;
   return (
     <div className="finance-page">
       <Link className="finance-secondary-action" href="/budget" aria-label="Go back">
@@ -192,10 +201,6 @@ export default function NewPersonalBudgetPage() {
             />
             {currency ? (
               <CurrencyInput currency={currency} value={amount} onChangeText={setAmount} />
-            ) : profile === undefined ? (
-              <p className="finance-muted" role="status">
-                Loading your default currency…
-              </p>
             ) : (
               <p className="finance-muted">
                 Choose a default currency before creating this budget.{' '}
