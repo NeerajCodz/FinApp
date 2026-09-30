@@ -1,18 +1,29 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useState } from 'react';
+import { AccessibilityInfo, TouchableOpacity, View } from 'react-native';
 import { Text, Typography, useTheme } from '@finapp/ui/native';
 
-export function InsightBars({
-  items,
-}: {
-  items: readonly { label: string; value: number; amount: string; color?: string }[];
-}) {
+type InsightPoint = { label: string; value: number; amount: string; color?: string };
+
+export function InsightBars({ items }: { items: readonly InsightPoint[] }) {
   const { tokens } = useTheme();
-  const maximum = Math.max(...items.map((item) => item.value), 1);
+  const [selected, setSelected] = useState<number | null>(null);
+  const maximum = Math.max(...items.map((item) => Math.max(0, item.value)), 1);
+  if (!items.length) return <Typography variant="small">No spending to compare.</Typography>;
   return (
-    <View accessibilityLabel="Spending categories" style={{ gap: 20 }}>
-      {items.map((item) => (
-        <View key={item.label} style={{ gap: 8 }}>
+    <View accessibilityLabel="Spending categories chart" style={{ gap: 16 }}>
+      {items.map((item, index) => (
+        <TouchableOpacity
+          key={item.label}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.label}: ${item.amount}`}
+          accessibilityState={{ selected: selected === index }}
+          activeOpacity={0.65}
+          onPress={() => {
+            setSelected(index);
+            AccessibilityInfo.announceForAccessibility(`${item.label}: ${item.amount}`);
+          }}
+          style={{ gap: 8, minHeight: 44, justifyContent: 'center' }}
+        >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
             <Typography variant="small" style={{ color: tokens.foreground }}>
               {item.label}
@@ -38,8 +49,13 @@ export function InsightBars({
               }}
             />
           </View>
-        </View>
+        </TouchableOpacity>
       ))}
+      {selected !== null && items[selected] && (
+        <Typography variant="small" accessibilityLiveRegion="polite">
+          {items[selected].label} · {items[selected].amount}
+        </Typography>
+      )}
     </View>
   );
 }
