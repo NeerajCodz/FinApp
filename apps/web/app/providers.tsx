@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from '
 import { Toaster } from 'sonner';
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { ConvexReactClient, useQuery } from 'convex/react';
+import { usePathname } from 'next/navigation';
 import { api } from '@convex/_generated/api';
 import { ThemeProvider, useTheme } from '@finapp/ui/web';
 import type { AccentValue } from '@finapp/ui/tokens';
@@ -78,7 +79,7 @@ function AccentSync({ children }: { children: ReactNode }) {
   return children;
 }
 
-export function Providers({ children }: { children: ReactNode }) {
+function ApplicationProviders({ children }: { children: ReactNode }) {
   const client = useMemo(() => {
     if (!convexUrl) return null;
     try {
@@ -111,4 +112,10 @@ export function Providers({ children }: { children: ReactNode }) {
       </ThemeProvider>
     </ConvexAuthProvider>
   );
+}
+
+export function Providers({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  if (pathname === '/') return <ThemeProvider forcedMode="dark">{children}</ThemeProvider>;
+  return <ApplicationProviders>{children}</ApplicationProviders>;
 }
