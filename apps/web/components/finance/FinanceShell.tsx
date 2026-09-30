@@ -33,7 +33,7 @@ import type { LocalRecord } from '@/lib/offline/repository';
 import { LocalSyncSheet } from '@/components/finance/dashboard/LocalSyncSheet';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Button, Sheet } from '@finapp/ui/web';
-import { MobileFinanceNav } from '@finapp/ui/finance';
+import { FinanceBrand, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
@@ -43,11 +43,11 @@ type HeaderSettings = LocalRecord & { notificationPreferences?: unknown };
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
-  { href: '/account', label: 'Accounts', icon: Landmark },
+  { href: '/accounts', label: 'Accounts', icon: Landmark },
   { href: '/budget', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/groups', label: 'Groups', icon: UsersRound },
-  { href: '/category', label: 'Categories', icon: Tags },
+  { href: '/categories', label: 'Categories', icon: Tags },
   { href: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
 ];
@@ -206,9 +206,8 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       <div className={`finance-app${guestHome ? ' finance-guest-home' : ''}`}>
         <aside className="finance-sidebar" aria-label="Finapp">
           <div className="finance-brand-lockup">
-            <SyncDotButton state={state} tone={syncTone} onPress={() => setSyncDetailsOpen(true)} />
             <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-              finapp
+              <FinanceBrand />
             </Link>
           </div>
           <p className="finance-sidebar-label">YOUR MONEY</p>
@@ -241,29 +240,26 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         <div className="finance-main">
           <header className="finance-topbar">
             <div className="finance-topbar-brand finance-brand-lockup">
+              <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
+                <FinanceBrand />
+              </Link>
+            </div>
+            <div className="finance-topbar-actions">
               <SyncDotButton
                 state={state}
                 tone={syncTone}
                 onPress={() => setSyncDetailsOpen(true)}
               />
-              <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-                finapp
+              <Link
+                href="/notifications"
+                className="finance-notification-link"
+                aria-label={`Notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`}
+                aria-current={isActive('/notifications') ? 'page' : undefined}
+                title="Notifications"
+              >
+                <Bell size={19} aria-hidden="true" />
               </Link>
             </div>
-            <Link
-              href="/notifications"
-              className="finance-notification-link"
-              aria-label={`Notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`}
-              aria-current={isActive('/notifications') ? 'page' : undefined}
-              title="Notifications"
-            >
-              <Bell size={19} aria-hidden="true" />
-              {unreadNotifications > 0 && (
-                <span className="finance-notification-badge" aria-hidden="true">
-                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                </span>
-              )}
-            </Link>
           </header>
           <main className="finance-content">{children}</main>
           <MobileFinanceNav
