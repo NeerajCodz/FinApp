@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import '@finapp/ui/web/styles.css';
 import './globals.css';
+import './coin.css';
 import './landing.css';
 import './auth.css';
 import './finance.css';
