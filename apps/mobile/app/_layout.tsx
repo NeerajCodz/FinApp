@@ -2,7 +2,7 @@ import '../global.css';
 import React from 'react';
 import Constants from 'expo-constants';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { ConvexReactClient, useConvexConnectionState } from 'convex/react';
+import { ConvexReactClient, useConvexConnectionState, useQuery } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,6 +10,9 @@ import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from '@finapp/ui/native';
 import { Button, View } from '@finapp/ui/native';
+import type { AccentValue } from '@finapp/ui/tokens';
+import Storage from 'expo-sqlite/kv-store';
+import { api } from '@convex/_generated/api';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
@@ -21,6 +24,50 @@ const configuredConvexUrl =
   Constants.expoConfig?.extra?.convexUrl ?? process.env.EXPO_PUBLIC_CONVEX_URL;
 const platform = Platform.OS === 'android' ? 'android' : Platform.OS === 'web' ? 'web' : 'ios';
 const convexClient = new ConvexReactClient(resolveConvexUrl(configuredConvexUrl, platform));
+
+function AccentSync({ children }: { children: React.ReactNode }) {
+  const { userId } = useLocalSync();
+  const profile = useQuery(api.users.queries.current);
+  const { setAccent } = useTheme();
+  const activeUser = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    activeUser.current = userId;
+    if (!userId) {
+      setAccent('volt');
+      return;
+    }
+    const cached = Storage.getItemSync(`finapp.appearance.accent.v1:${userId}`);
+    setAccent(
+      cached === 'volt' ||
+        cached === 'white' ||
+        cached === 'blue' ||
+        (cached !== null && /^#[\da-f]{6}$/i.test(cached))
+        ? (cached as AccentValue)
+        : 'volt',
+    );
+  }, [userId, setAccent]);
+
+  React.useEffect(() => {
+    const profileId = String(profile?._id ?? '');
+    const accent = profile?.accent;
+    if (
+      !userId ||
+      activeUser.current !== userId ||
+      profileId !== userId ||
+      !(
+        accent === 'volt' ||
+        accent === 'white' ||
+        accent === 'blue' ||
+        (typeof accent === 'string' && /^#[\da-f]{6}$/i.test(accent))
+      )
+    )
+      return;
+    setAccent(accent as AccentValue);
+    Storage.setItemSync(`finapp.appearance.accent.v1:${userId}`, accent);
+  }, [profile, userId, setAccent]);
+
+  return children;
+}
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -147,11 +194,13 @@ export default function RootLayout() {
   const content = (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AppErrorBoundary>
-          <AuthGate>
-            <ThemedStack />
-          </AuthGate>
-        </AppErrorBoundary>
+        <AccentSync>
+          <AppErrorBoundary>
+            <AuthGate>
+              <ThemedStack />
+            </AuthGate>
+          </AppErrorBoundary>
+        </AccentSync>
       </ThemeProvider>
     </SafeAreaProvider>
   );
