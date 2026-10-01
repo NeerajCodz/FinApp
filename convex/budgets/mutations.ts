@@ -89,6 +89,71 @@ export const create = mutation({
   },
 });
 
+export const update = mutation({
+  args: {
+    budgetId: v.id('budgets'),
+    name: v.string(),
+    amountMinor: v.int64(),
+    currency: v.string(),
+    categoryId: v.id('categories'),
+    startAt: v.number(),
+    endAt: v.number(),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'budget.update',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('budgets', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const budget = await ctx.db.get(args.budgetId);
+    if (!budget) throw new Error('BUDGET_NOT_FOUND');
+    if (budget.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
+    if (budget.archivedAt !== undefined) throw new Error('BUDGET_ARCHIVED');
+    const category = await ctx.db.get(args.categoryId);
+    if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
+      throw new Error('INSUFFICIENT_PERMISSION');
+    const name = args.name.trim();
+    assertPositiveAmount(args.amountMinor);
+    assertCurrency(args.currency);
+    if (!name || args.endAt <= args.startAt) throw new Error('INVALID_BUDGET');
+    const now = Date.now();
+    await ctx.db.patch(args.budgetId, {
+      name,
+      amountMinor: args.amountMinor,
+      currency: args.currency,
+      period: 'category',
+      categoryId: args.categoryId,
+      accountId: undefined,
+      startAt: args.startAt,
+      endAt: args.endAt,
+      updatedAt: now,
+    });
+    const updated = await ctx.db.get(args.budgetId);
+    if (!updated) throw new Error('BUDGET_NOT_FOUND');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'budget.update',
+      args.budgetId,
+      'budgets',
+      String(args.budgetId),
+      now,
+      updated,
+    );
+    return args.budgetId;
+  },
+});
+
 export const archive = mutation({
   args: { budgetId: v.id('budgets'), clientMutationId: v.optional(v.string()) },
   handler: async (ctx, args) => {
