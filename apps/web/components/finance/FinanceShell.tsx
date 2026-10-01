@@ -15,6 +15,7 @@ import {
   HandCoins,
   History,
   House,
+  Plus,
   Landmark,
   Tags,
   Target,
@@ -22,13 +23,20 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Sheet } from '@finapp/ui/web';
+import { Fragment, createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Avatar, Sheet } from '@finapp/ui/web';
 import { FinanceBrand, FinanceWorkspace, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
+import { useLocalRecords } from '@/lib/offline/hooks';
+import type { LocalRecord } from '@/lib/offline/repository';
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
+type SidebarProfile = LocalRecord & {
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string | null;
+};
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
@@ -36,9 +44,7 @@ const navigation: NavItem[] = [
   { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/groups', label: 'Groups', icon: UsersRound },
-  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/categories', label: 'Categories', icon: Tags },
-  { href: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
@@ -95,6 +101,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { userId, identityReady } = useBrowserSync();
+  const { records: profiles } = useLocalRecords<SidebarProfile>('profile');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
@@ -102,6 +109,15 @@ export function FinanceShell({ children }: { children: ReactNode }) {
     if (identityReady && !userId) router.replace('/sign-in');
   }, [identityReady, router, userId]);
   if (!identityReady || !userId) return null;
+  const profile = profiles[0];
+  const profileName = profile?.displayName?.trim() || profile?.username?.trim() || 'Your profile';
+  const profileInitials =
+    (profile?.displayName?.trim() || profile?.username?.trim() || 'U')
+      .split(/\s+/)
+      .map((part) => part[0] ?? '')
+      .slice(0, 2)
+      .join('')
+      .toLocaleUpperCase() || 'U';
 
   const profileHref = '/profile';
   const isActive = (href: string) =>
@@ -116,18 +132,62 @@ export function FinanceShell({ children }: { children: ReactNode }) {
     <QuickAddContext.Provider value={openQuickAdd}>
       <FinanceWorkspace
         onAdd={openQuickAdd}
-        brandLink={<Link href="/dashboard" aria-label="Finapp overview"><FinanceBrand /></Link>}
+        brandLink={
+          <Link href="/dashboard" aria-label="Finapp overview">
+            <FinanceBrand />
+          </Link>
+        }
         navigation={
           <>
             {navigation.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined}>
-                <Icon size={22} aria-hidden="true" />
-                <span>{label}</span>
-              </Link>
+              <Fragment key={href}>
+                <Link href={href} aria-current={isActive(href) ? 'page' : undefined}>
+                  <Icon size={22} aria-hidden="true" />
+                  <span>{label}</span>
+                </Link>
+                {href === '/activity' && (
+                  <div
+                    className="finance-sidebar-activity-actions"
+                    role="group"
+                    aria-label="Activity shortcuts"
+                  >
+                    <Link className="finance-sidebar-add-transaction" href="/transaction/new">
+                      <Plus size={18} aria-hidden="true" />
+                      <span>Add transaction</span>
+                    </Link>
+                    <Link
+                      href="/transactions"
+                      aria-current={isActive('/transactions') ? 'page' : undefined}
+                    >
+                      <ArrowLeftRight size={18} aria-hidden="true" />
+                      <span>Transactions</span>
+                    </Link>
+                    <Link
+                      href="/analytics"
+                      aria-current={isActive('/analytics') ? 'page' : undefined}
+                    >
+                      <ChartNoAxesCombined size={18} aria-hidden="true" />
+                      <span>Analytics</span>
+                    </Link>
+                  </div>
+                )}
+              </Fragment>
             ))}
-            <Link href={profileHref} aria-current={isProfileActive ? 'page' : undefined}>
-              <CircleUserRound size={22} aria-hidden="true" />
-              <span>Profile</span>
+            <Link
+              href={profileHref}
+              className="finance-sidebar-profile"
+              aria-current={isProfileActive ? 'page' : undefined}
+            >
+              <Avatar
+                initials={profileInitials}
+                label={profileName}
+                size={40}
+                imageUrl={profile?.avatarUrl}
+              />
+              <span className="finance-sidebar-profile-copy">
+                <span className="finance-sidebar-profile-name">{profileName}</span>
+                <span className="finance-sidebar-profile-label">Profile</span>
+              </span>
             </Link>
           </>
         }

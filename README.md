@@ -29,6 +29,9 @@ native presentations. Account and category editors, transaction forms and detail
 recurring-payment views, goal editors and analytics, budget views, and group
 experiences use the apps' live Convex/offline-first records.
 
+The web sidebar keeps the add-transaction, transactions, and analytics shortcuts
+under Activity and shows the signed-in profile name and avatar at the bottom.
+
 Account and category creation use `/accounts/new` and `/categories/new`.
 Transactions use `/transactions`, `/transaction/new`, `/transaction/:id`, and
 `/transaction/:id/edit`; recurring rules use `/recurring` and
