@@ -334,6 +334,7 @@ form.auth-form {
 .auth-form .finapp-otp,
 .auth-otp {
   width: 100%;
+  grid-template-columns: minmax(0, 1fr);
   justify-content: flex-start;
 }
 .auth-form .finapp-otp__cells {
