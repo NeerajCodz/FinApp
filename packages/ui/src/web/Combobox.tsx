@@ -62,7 +62,7 @@ export function Combobox({
           ? 0
           : enabledIndices.length - 1
         : (position + direction + enabledIndices.length) % enabledIndices.length;
-    const nextIndex = enabledIndices[nextPosition];
+    const nextIndex = enabledIndices[nextPosition]!;
     setActiveIndex(nextIndex);
     optionRefs.current[nextIndex]?.scrollIntoView({ block: 'nearest' });
   };
@@ -114,10 +114,10 @@ export function Combobox({
             moveActive(-1);
           } else if (event.key === 'Home' && open && enabledIndices.length) {
             event.preventDefault();
-            setActiveIndex(enabledIndices[0]);
+            setActiveIndex(enabledIndices[0]!);
           } else if (event.key === 'End' && open && enabledIndices.length) {
             event.preventDefault();
-            setActiveIndex(enabledIndices[enabledIndices.length - 1]);
+            setActiveIndex(enabledIndices[enabledIndices.length - 1]!);
           } else if (event.key === 'Enter' && open && activeIndex >= 0) {
             event.preventDefault();
             const option = filtered[activeIndex];

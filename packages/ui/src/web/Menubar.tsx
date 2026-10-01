@@ -50,6 +50,7 @@ export function Menubar({
     const nextIndex =
       currentIndex < 0 ? 0 : (currentIndex + direction + enabledItems.length) % enabledItems.length;
     const next = enabledItems[nextIndex];
+    if (!next) return;
     refs.current.get(next.value)?.focus();
     select(next.value);
   };
