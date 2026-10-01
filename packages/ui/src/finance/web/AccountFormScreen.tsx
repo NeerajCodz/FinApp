@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ArrowLeft, Banknote, CreditCard, Info, Landmark, Wallet, HandCoins, Boxes } from 'lucide-react';
-import { Button, Input, Label, Typography } from '@finapp/ui/web';
+import { Button, Input, Label, Select, Typography } from '@finapp/ui/web';
 import { CurrencyInput } from './CurrencyInput';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
@@ -31,8 +31,8 @@ export function AccountFormScreen({ title, subtitle, value, currencies, loading 
   const edit = mode === 'edit';
   const set = (patch: Partial<AccountFormValue>) => onChange({ ...value, ...patch });
   const icon = <span className={styles.iconTile} style={{ color: value.color ?? 'var(--finapp-primary)' }}>{value.icon ? <EntityIcon value={value.icon} size={36} color={value.color} /> : <Landmark size={36} />}</span>;
-  const selector = <select id="account-type" value={value.type} onChange={event => set({ type: event.target.value as AccountFormValue['type'], customType: event.target.value === 'other' ? value.customType : '' })}>{accountTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select>;
-  const currency = <select id="account-currency" value={value.currency} onChange={event => set({ currency: event.target.value })}>{!value.currency && <option value="">Choose currency</option>}{currencies.map(code => <option key={code} value={code}>{code} – {new Intl.DisplayNames(['en'], { type: 'currency' }).of(code)}</option>)}</select>;
+  const selector = <Select label="" id="account-type" value={value.type} onChange={next => set({ type: next as AccountFormValue['type'], customType: next === 'other' ? value.customType : '' })} options={accountTypes.map(type => ({ value: type.value, label: type.label }))} />;
+  const currency = <Select label="" id="account-currency" value={value.currency} onChange={next => set({ currency: next })} options={[...(!value.currency ? [{ value: '', label: 'Choose currency' }] : []), ...currencies.map(code => ({ value: code, label: `${code} – ${new Intl.DisplayNames(['en'], { type: 'currency' }).of(code)}` }))]} />;
   const [revealNumber, setRevealNumber] = useState(false);
   const inclusion = <label className={styles.setting}><span><strong>Include in total</strong><small>Include this account in your total balance.</small></span><input type="checkbox" role="switch" checked={value.isIncludedInTotal} onChange={event => set({ isIncludedInTotal: event.target.checked })} /></label>;
   const appearance = <div className={styles.appearance}>{icon}<EntityIconPicker mode="lucide" value={value.icon} onChange={icon => set({ icon })} label={edit ? 'Change account icon' : 'Choose account icon'} /><EntityColorPicker value={value.color} onChange={color => set({ color })} label="Choose color" /></div>;

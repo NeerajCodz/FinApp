@@ -19,10 +19,10 @@
 .nameType .field { margin-bottom: 14px; }
 .editLayout .field { gap: 6px; margin-bottom: 14px; }
 .editLayout .field label { font-size: 13px; }
-.page textarea, .page select { width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--finapp-border); background: var(--finapp-surface-raised); color: var(--finapp-foreground); padding: 12px 14px; font: inherit; font-size: 14px; }
+.page textarea, .page .finapp-select-trigger { width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--finapp-border); background: var(--finapp-surface-raised); color: var(--finapp-foreground); padding: 12px 14px; font: inherit; font-size: 14px; }
 .page textarea { resize: vertical; }
-.page select { min-height: 40px; padding: 8px 12px; }
-.page textarea:focus-visible, .page select:focus-visible, .back:focus-visible { outline: 2px solid var(--finapp-primary); outline-offset: 2px; }
+.page .finapp-select-trigger { min-height: 40px; padding: 8px 12px; }
+.page textarea:focus-visible, .page .finapp-select-trigger:focus-visible, .back:focus-visible { outline: 2px solid var(--finapp-primary); outline-offset: 2px; }
 .segment { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .segment button { display: flex; align-items: center; gap: 22px; min-height: 66px; padding: 0 22px; border-radius: 10px; border: 1px solid var(--finapp-border); background: transparent; color: var(--finapp-foreground); font: inherit; cursor: pointer; }
 .segment button svg { color: var(--finapp-expense); }

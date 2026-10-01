@@ -1,6 +1,7 @@
 'use client';
 
 import { DateRangePopover } from '../../activity/web/DateRangePopover';
+import { CustomSelect } from '@finapp/ui/web';
 import styles from './Dashboard.module.css';
 
 export type AnalyticsFilterOption = {
@@ -61,28 +62,102 @@ export function AnalyticsFilters({
     <section className={styles.toolbar} aria-label="Analytics filters">
       <div className={styles.range}>
         <div className={styles.periods} aria-label="Period">
-          {periods.map(option => <button key={option.value} type="button" className={styles.period} aria-pressed={period === option.value} onClick={() => onPeriodChange(option.value)}>{option.label}</button>)}
+          {periods.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={styles.period}
+              aria-pressed={period === option.value}
+              onClick={() => onPeriodChange(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-        <DateRangePopover label={rangeLabel} startDate={rangeStartDate} endDate={rangeEndDate} presets={periods} onPresetSelect={onPeriodChange} onRangeApply={onRangeApply} />
+        <DateRangePopover
+          label={rangeLabel}
+          startDate={rangeStartDate}
+          endDate={rangeEndDate}
+          presets={periods}
+          onPresetSelect={onPeriodChange}
+          onRangeApply={onRangeApply}
+        />
         <div className={styles.periods} aria-label="Navigate periods">
-          <button type="button" className={styles.period} aria-label="Previous period" disabled={!canNavigate} onClick={onPrevious}>‹</button>
-          <button type="button" className={styles.period} aria-label="Next period" disabled={!canNavigate} onClick={onNext}>›</button>
-          <button type="button" className={styles.period} onClick={onToday}>Today</button>
+          <button
+            type="button"
+            className={styles.period}
+            aria-label="Previous period"
+            disabled={!canNavigate}
+            onClick={onPrevious}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className={styles.period}
+            aria-label="Next period"
+            disabled={!canNavigate}
+            onClick={onNext}
+          >
+            ›
+          </button>
+          <button type="button" className={styles.period} onClick={onToday}>
+            Today
+          </button>
         </div>
       </div>
       <div className={styles.selects}>
-        <select className={styles.select} aria-label="Account" value={account} onChange={event => onAccountChange(event.target.value)}>
-          <option value="all">All accounts</option>{accounts.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-        <select className={styles.select} aria-label="Category" value={category} onChange={event => onCategoryChange(event.target.value)}>
-          <option value="all">All categories</option>{categories.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-        <select className={styles.select} aria-label="Type" value={type} onChange={event => onTypeChange(event.target.value)}>
-          <option value="all">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option><option value="refund">Refunds</option><option value="adjustment">Adjustments</option>
-        </select>
-        <select className={styles.select} aria-label="Currency" value={currency} onChange={event => onCurrencyChange(event.target.value)}>
-          {currencies.map(value => <option key={value} value={value}>{value}</option>)}
-        </select>
+        <CustomSelect
+          className={styles.select}
+          aria-label="Account"
+          value={account}
+          onChange={(event) => onAccountChange(event.currentTarget.value)}
+        >
+          <option value="all">All accounts</option>
+          {accounts.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </CustomSelect>
+        <CustomSelect
+          className={styles.select}
+          aria-label="Category"
+          value={category}
+          onChange={(event) => onCategoryChange(event.currentTarget.value)}
+        >
+          <option value="all">All categories</option>
+          {categories.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </CustomSelect>
+        <CustomSelect
+          className={styles.select}
+          aria-label="Type"
+          value={type}
+          onChange={(event) => onTypeChange(event.currentTarget.value)}
+        >
+          <option value="all">All types</option>
+          <option value="expense">Expenses</option>
+          <option value="income">Income</option>
+          <option value="transfer">Transfers</option>
+          <option value="refund">Refunds</option>
+          <option value="adjustment">Adjustments</option>
+        </CustomSelect>
+        <CustomSelect
+          className={styles.select}
+          aria-label="Currency"
+          value={currency}
+          onChange={(event) => onCurrencyChange(event.currentTarget.value)}
+        >
+          {currencies.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </CustomSelect>
       </div>
     </section>
   );

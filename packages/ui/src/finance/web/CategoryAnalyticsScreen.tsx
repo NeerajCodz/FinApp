@@ -10,7 +10,7 @@ import {
   Wallet,
   AlertTriangle,
 } from 'lucide-react';
-import { Empty, Input, Typography } from '@finapp/ui/web';
+import { Empty, Input, Select, Typography } from '@finapp/ui/web';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import styles from './CategoryAnalyticsScreen.module.css';
@@ -308,46 +308,10 @@ export function CategoryAnalyticsScreen({
               accessibilityLabel="Search categories"
             />
           </label>
-          <label className={styles.selectLabel}>
-            <span>Period</span>
-            <select value={period} onChange={(event) => setPeriod(event.target.value as Period)}>
-              <option value="week">This week</option>
-              <option value="month">This month</option>
-              <option value="year">This year</option>
-            </select>
-          </label>
-          <label className={styles.selectLabel}>
-            <span>Account</span>
-            <select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
-              <option value="all">All accounts</option>
-              {accounts.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.selectLabel}>
-            <span>Category</span>
-            <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-              <option value="all">All categories</option>
-              {categories.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.selectLabel}>
-            <span>Currency</span>
-            <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
-              {currencyOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select label="Period" className={styles.selectLabel} value={period} onChange={value => setPeriod(value as Period)} options={[{value:'week',label:'This week'},{value:'month',label:'This month'},{value:'year',label:'This year'}]} />
+          <Select label="Account" className={styles.selectLabel} value={accountId} onChange={setAccountId} options={[{value:'all',label:'All accounts'},...accounts.map(item => ({value:item.id,label:item.name}))]} />
+          <Select label="Category" className={styles.selectLabel} value={categoryId} onChange={setCategoryId} options={[{value:'all',label:'All categories'},...categories.map(item => ({value:item.id,label:item.name}))]} />
+          <Select label="Currency" className={styles.selectLabel} value={currency} onChange={setCurrency} options={currencyOptions} />
         </div>
       </header>
       <div className={styles.toolbar} role="group" aria-label="Category type filter">

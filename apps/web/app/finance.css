@@ -2094,9 +2094,9 @@
 .finance-home-filter span {
   white-space: nowrap;
 }
-.finance-home-account-filter select {
+.finance-home-account-filter {
   width: 130px;
-  padding: 0 9px;
+  min-width: 0;
 }
 .finance-home-search {
   display: flex;
@@ -2557,7 +2557,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .finance-home-account-filter select {
+  .finance-home-account-filter {
     width: 100%;
     min-width: 0;
   }

@@ -16,9 +16,9 @@
 .basic { display: grid; align-content: start; gap: 13px; }
 .basic .row { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 0; border: 0; }
 .basic .row label { font-size: 13px; }
-.page select, .page textarea, .readonly { box-sizing: border-box; width: 100%; border: 1px solid var(--finapp-border); border-radius: 8px; background: var(--finapp-surface-raised); color: var(--finapp-foreground); padding: 10px 13px; font: inherit; font-size: 14px; min-height: 42px; }
+.page .finapp-select-trigger, .page textarea, .readonly { box-sizing: border-box; width: 100%; border: 1px solid var(--finapp-border); border-radius: 8px; background: var(--finapp-surface-raised); color: var(--finapp-foreground); padding: 10px 13px; font: inherit; font-size: 14px; min-height: 42px; }
 .page textarea { resize: vertical; }
-.page select:focus-visible, .page textarea:focus-visible, .back:focus-visible { outline: 2px solid var(--finapp-primary); outline-offset: 2px; }
+.page .finapp-select-trigger:focus-visible, .page textarea:focus-visible, .back:focus-visible { outline: 2px solid var(--finapp-primary); outline-offset: 2px; }
 .iconTile { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 12px; background: var(--finapp-surface-raised); flex: 0 0 auto; }
 .appearance { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .rowForm .appearance { margin-top: 0; }
