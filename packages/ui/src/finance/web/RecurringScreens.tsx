@@ -6,12 +6,13 @@ import { CurrencyInput } from './CurrencyInput';
 import { formatMinor } from '../money';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import styles from './Transactions.module.css';
-export type RecurringRuleView={id:string;name?:string;frequency?:string;interval?:number;nextOccurrence?:number;enabled?:boolean;autoCreate?:boolean;createdAt?:number;archivedAt?:number;template?:{type?:string;amountMinor?:bigint|number|string;currency?:string;accountId?:string}};
+export type RecurringRuleView={id:string;name?:string;frequency?:string;interval?:number;nextOccurrence?:number;enabled?:boolean;autoCreate?:boolean;createdAt?:number;archivedAt?:number;template?:{type?:string;amountMinor?:bigint|number|string;currency?:string;accountId?:string;categoryId?:string;merchant?:string;note?:string}};
 export type RecurringAccountView={id:string;name?:string;currency?:string;archivedAt?:number;cloudId?:string};
+export type RecurringCategoryView={id:string;name?:string;icon?:string;archivedAt?:number;cloudId?:string};
 export type RecurringCreateValues={name:string;amount:string;accountId:string;frequency:'daily'|'weekly'|'monthly'|'yearly'};
 type SharedProps={loading?:boolean;error?:string;pending?:boolean;onRetry?:()=>void};
-export type RecurringIndexViewProps=SharedProps&{rules:readonly RecurringRuleView[];accounts:readonly RecurringAccountView[];connected?:boolean;actionError?:string|null;onOpen:(id:string)=>void;onToggle:(rule:RecurringRuleView)=>void;onCreate:(values:RecurringCreateValues)=>Promise<boolean>;onAddAccount?:()=>void};
-export type RecurringDetailViewProps=SharedProps&{rule:RecurringRuleView|null;accountName?:string;actionError?:string|null;onBack:()=>void;onToggle:(rule:RecurringRuleView)=>void};
+export type RecurringIndexViewProps=SharedProps&{rules:readonly RecurringRuleView[];accounts:readonly RecurringAccountView[];categories?:readonly RecurringCategoryView[];connected?:boolean;actionError?:string|null;onOpen:(id:string)=>void;onToggle:(rule:RecurringRuleView)=>void;onCreate:(values:RecurringCreateValues)=>Promise<boolean>;onAddAccount?:()=>void};
+export type RecurringDetailViewProps=SharedProps&{rule:RecurringRuleView|null;accountName?:string;categoryName?:string;categoryIcon?:string;merchant?:string;note?:string;actionError?:string|null;onBack:()=>void;onToggle:(rule:RecurringRuleView)=>void};
 const frequencies=['daily','weekly','monthly','yearly'] as const;
 function upcoming(rule:RecurringRuleView,now:number,count:number){let at=Number(rule.nextOccurrence??0);if(!at||!['daily','weekly','monthly','yearly','custom'].includes(rule.frequency??''))return [];let guard=0;while(at<=now&&guard++<1024)at=nextOccurrence(at,rule.frequency as Recurrence,Math.max(1,Number(rule.interval??1)));const dates:number[]=[];while(at>now&&dates.length<count){dates.push(at);at=nextOccurrence(at,rule.frequency as Recurrence,Math.max(1,Number(rule.interval??1)));}return dates;}
 function amountText(rule:RecurringRuleView){try{return rule.template?.amountMinor!==undefined&&rule.template.currency?formatMinor(BigInt(rule.template.amountMinor),rule.template.currency):'—';}catch{return '—';}}

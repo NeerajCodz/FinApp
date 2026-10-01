@@ -7,7 +7,7 @@ import { formatTransactionDate, type TransactionType } from '@finapp/ui/finance'
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import type { LocalRecord } from '@/lib/offline/repository';
+import { readLocal, type LocalRecord } from '@/lib/offline/repository';
 import { aliasesOf, asMinor, belongsToUser, idOf, SignInGate } from '../_personal';
 
 type Transaction = LocalRecord & {
@@ -52,7 +52,28 @@ export default function TransactionsPage() {
   const [year, monthNumber] = month.split('-').map(Number);
   const startAt = new Date(year!, monthNumber! - 1, 1).getTime();
   const endAt = new Date(year!, monthNumber!, 1).getTime();
+  const previousStartAt = new Date(year!, monthNumber! - 2, 1).getTime();
 
+  const [previousRecords, setPreviousRecords] = React.useState<Transaction[]>();
+  React.useEffect(() => {
+    if (!userId || !isConnected) {
+      setPreviousRecords(undefined);
+      return;
+    }
+    let active = true;
+    setPreviousRecords(undefined);
+    void fetchTransactionRange(previousStartAt, startAt)
+      .then(() => readLocal<Transaction>(userId, 'transaction'))
+      .then((records) => {
+        if (active) setPreviousRecords(records);
+      })
+      .catch(() => {
+        if (active) setPreviousRecords(undefined);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fetchTransactionRange, isConnected, previousStartAt, startAt, userId]);
   React.useEffect(() => {
     if (!userId) return;
     let active = true;
@@ -139,6 +160,34 @@ export default function TransactionsPage() {
     ];
   });
   const currency = String(profile?.defaultCurrency ?? transactions[0]?.currency ?? 'INR');
+  const previousTransactions = previousRecords?.filter(
+    (record) =>
+      userId &&
+      belongsToUser(record, userId) &&
+      record.deletedAt === undefined &&
+      record.status !== 'voided' &&
+      Number.isFinite(Number(record.occurredAt)) &&
+      Number(record.occurredAt) >= previousStartAt &&
+      Number(record.occurredAt) < startAt,
+  );
+  const previousExpenses = previousTransactions?.filter(
+    (record) =>
+      record.type === 'expense' &&
+      record.status === 'posted' &&
+      String(record.currency ?? profile?.defaultCurrency ?? 'INR') === currency,
+  );
+  const previousTotalExpense = previousExpenses?.reduce(
+    (sum, record) => sum + asMinor(record.amountMinor),
+    0n,
+  );
+  const previousTotalIncome = previousTransactions
+    ?.filter(
+      (record) =>
+        record.type === 'income' &&
+        record.status === 'posted' &&
+        String(record.currency ?? profile?.defaultCurrency ?? 'INR') === currency,
+    )
+    .reduce((sum, record) => sum + asMinor(record.amountMinor), 0n);
   const totalExpense = transactions.reduce(
     (sum, record) =>
       record.type === 'expense' &&
@@ -171,13 +220,36 @@ export default function TransactionsPage() {
       </SignInGate>
     );
 
-  return <TransactionsScreen items={items} query={query} month={month} typeFilter={typeFilter}
-    currency={currency} totalExpense={totalExpense} totalIncome={totalIncome}
-    transactionCount={transactions.length}
-    expenseCount={transactions.filter(record => record.type === 'expense' && record.status === 'posted' && String(record.currency ?? profile?.defaultCurrency ?? 'INR') === currency).length}
-    incomeCount={transactions.filter(record => record.type === 'income').length}
-    loading={loading} error={error} rangeError={rangeError}
-    onQueryChange={setQuery} onMonthChange={setMonth} onTypeFilterChange={setTypeFilter}
-    onSelect={id => router.push(`/transaction/${encodeURIComponent(id)}`)}
-    onCreate={() => router.push('/transaction/new')} />;
+  return (
+    <TransactionsScreen
+      items={items}
+      query={query}
+      month={month}
+      typeFilter={typeFilter}
+      currency={currency}
+      totalExpense={totalExpense}
+      totalIncome={totalIncome}
+      previousTotalExpense={previousTotalExpense}
+      previousTotalIncome={previousTotalIncome}
+      previousExpenseCount={previousExpenses?.length}
+      transactionCount={transactions.length}
+      expenseCount={
+        transactions.filter(
+          (record) =>
+            record.type === 'expense' &&
+            record.status === 'posted' &&
+            String(record.currency ?? profile?.defaultCurrency ?? 'INR') === currency,
+        ).length
+      }
+      incomeCount={transactions.filter((record) => record.type === 'income').length}
+      loading={loading}
+      error={error}
+      rangeError={rangeError}
+      onQueryChange={setQuery}
+      onMonthChange={setMonth}
+      onTypeFilterChange={setTypeFilter}
+      onSelect={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      onCreate={() => router.push('/transaction/new')}
+    />
+  );
 }

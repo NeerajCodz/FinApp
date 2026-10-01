@@ -21,6 +21,7 @@ export default function TransactionDetailRoute() {
   const accountState = useLocalRecords<LocalRecord>(userId, 'account');
   const categoryState = useLocalRecords<LocalRecord>(userId, 'category');
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
+  const tagState = useLocalRecords<LocalRecord>(userId, 'transactionTag');
   const record = transactionState.data?.find((item) => id && recordIds(item).includes(id));
   const transaction = record ? ledgerTransaction(record) : null;
   const accounts = useMemo(() => recordIndex(accountState.data ?? []), [accountState.data]);
@@ -35,9 +36,17 @@ export default function TransactionDetailRoute() {
       ? profileState.data[0].timezone
       : undefined;
   const error =
-    transactionState.error || accountState.error || categoryState.error || profileState.error;
+    transactionState.error ||
+    accountState.error ||
+    categoryState.error ||
+    profileState.error ||
+    tagState.error;
   const loading =
-    !transactionState.data || !accountState.data || !categoryState.data || !profileState.data;
+    !transactionState.data ||
+    !accountState.data ||
+    !categoryState.data ||
+    !profileState.data ||
+    !tagState.data;
   const type = (transaction?.type ?? 'expense') as TransactionType;
   const semanticType: SemanticType =
     record?.groupId && transaction?.type === 'expense' ? 'split' : type;
@@ -81,6 +90,14 @@ export default function TransactionDetailRoute() {
       referenceId={id}
       relatedTransactions={transactionViews((transactionState.data??[]).filter(item => !recordIds(item).includes(String(id)) && ((record?.categoryId && item.categoryId === record.categoryId) || (record?.merchant && item.merchant === record.merchant))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,5),accountState.data??[],categoryState.data??[],timeZone)}
       onOpenTransaction={value => router.push(`/transaction/${encodeURIComponent(value)}` as never)}
+      tags={(tagState.data ?? []).flatMap((tag) =>
+        record &&
+        typeof tag.transactionId === 'string' &&
+        typeof tag.tag === 'string' &&
+        recordIds(record).includes(tag.transactionId)
+          ? [tag.tag]
+          : [],
+      )}
       title={transaction?.title || transaction?.merchant || 'Transaction'}
       amountMinor={transaction?.amountMinor ?? 0n}
       currency={transaction?.currency ?? String(account?.currency ?? 'INR')}
@@ -126,6 +143,7 @@ export default function TransactionDetailRoute() {
         accountState.retry();
         categoryState.retry();
         profileState.retry();
+        tagState.retry();
       }}
     />
   );

@@ -44,6 +44,7 @@ export type TransactionDetailScreenProps = {
   referenceId?: string;
   relatedTransactions?: readonly TransactionTableItem[];
   onOpenTransaction?: (id: string) => void;
+  tags?: readonly string[];
 };
 
 export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
@@ -218,6 +219,12 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
             <SettingsRow label="Merchant / Payee" value={merchant} />
           </>
         )}
+        {props.tags?.length ? (
+          <>
+            <Separator />
+            <SettingsRow label="Tags & metadata" value={props.tags.join(' · ')} />
+          </>
+        ) : null}
       </View>
       <View style={{padding:16,borderWidth:1,borderColor:tokens.borderSubtle,borderRadius:12,backgroundColor:tokens.surfaceRaised}}>
         <Typography variant="heading">Related transactions</Typography>

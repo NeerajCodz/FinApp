@@ -48,6 +48,7 @@ export default function PersonalTransactionDetailPage() {
   const accountState = useLocalRecords<Account>('account');
   const categoryState = useLocalRecords<Category>('category');
   const profileState = useLocalRecords<Profile>('profile');
+  const tagState = useLocalRecords('transactionTag');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const transaction = transactionState.records.find(
     (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
@@ -79,9 +80,14 @@ export default function PersonalTransactionDetailPage() {
     transactionState.loading ||
     accountState.loading ||
     categoryState.loading ||
-    profileState.loading;
+    profileState.loading ||
+    tagState.loading;
   const error =
-    transactionState.error ?? accountState.error ?? categoryState.error ?? profileState.error;
+    transactionState.error ??
+    accountState.error ??
+    categoryState.error ??
+    profileState.error ??
+    tagState.error;
   const canEdit = Boolean(
     transaction &&
     !transaction.groupId &&
@@ -127,6 +133,18 @@ export default function PersonalTransactionDetailPage() {
       referenceId={routeId}
       relatedTransactions={transactionViews(transactionState.records.filter(record => userId && belongsToUser(record, userId) && !matchesId(record, routeId) && ((transaction?.categoryId && record.categoryId === transaction.categoryId) || (transaction?.merchant && record.merchant === transaction.merchant))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,5),accounts,categories,profile?.timezone)}
       onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      tags={tagState.records.flatMap((tag) => {
+        if (
+          !transaction ||
+          !userId ||
+          !belongsToUser(tag, userId) ||
+          typeof tag.tag !== 'string' ||
+          typeof tag.transactionId !== 'string' ||
+          !aliasesOf(transaction).includes(tag.transactionId)
+        )
+          return [];
+        return [tag.tag];
+      })}
       title={transaction?.title || transaction?.merchant || 'Transaction'}
       amountMinor={asMinor(transaction?.amountMinor)}
       currency={String(
