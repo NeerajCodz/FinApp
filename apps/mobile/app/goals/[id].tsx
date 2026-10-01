@@ -1,296 +1,156 @@
 import React from 'react';
-import { ScrollView, View } from 'react-native';
-import { ArrowLeft, Wallet } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EntityIcon, EntityIconPicker, Money } from '@finapp/ui/finance';
-import { Button, IconButton, Input, Progress, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import {
+  GoalDetailScreen,
+  type GoalHistoryItem,
+  type GoalDetailScreenProps,
+} from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
-import { formatMinor, parseMinor } from '@/lib/money';
+import { parseMinor } from '@/lib/money';
 import type { LocalRecord } from '@/local/repository';
 
 type Goal = LocalRecord & {
-  id: string;
-  name: string;
-  targetAmountMinor: bigint;
-  currency: string;
+  id?: string;
+  name?: string;
+  targetAmountMinor?: bigint | number | string;
+  currency?: string;
   targetDate?: number;
   completedAt?: number;
   archivedAt?: number;
   icon?: string;
+  color?: string;
   updatedAt?: number;
+  cloudId?: string;
 };
 type Contribution = LocalRecord & {
-  id: string;
-  goalId: string;
-  amountMinor: bigint;
-  occurredAt: number;
+  id?: string;
+  goalId?: string;
+  amountMinor?: bigint | number | string;
+  occurredAt?: number;
+};
+const toMinor = (value: unknown): bigint => {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value);
+  return 0n;
 };
 
-export default function GoalDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
+export default function GoalDetailScreenRoute() {
+  const { id: routeId } = useLocalSearchParams<{ id: string }>();
   const { userId } = useLocalSync();
   const goals = useLocalRecords<Goal>(userId, 'goal');
   const contributions = useLocalRecords<Contribution>(userId, 'goalContribution');
-  const [amount, setAmount] = React.useState('');
   const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const [iconSaving, setIconSaving] = React.useState(false);
-  const [iconError, setIconError] = React.useState('');
-  const goal = goals.data?.find((item) => item.id === id || item._id === id);
-  const history =
-    contributions.data
-      ?.filter((entry) => entry.goalId === goal?.id || entry.goalId === goal?._id)
-      .sort((a, b) => b.occurredAt - a.occurredAt) ?? [];
-  const saved = history.reduce((sum, entry) => sum + BigInt(entry.amountMinor), 0n);
-  const percent =
-    goal && goal.targetAmountMinor > 0n
-      ? Number((saved * 100n) / BigInt(goal.targetAmountMinor))
-      : 0;
-  const target = goal ? BigInt(goal.targetAmountMinor) : 0n;
-  const remaining = target > saved ? target - saved : 0n;
-  const targetDate = goal?.targetDate ? new Date(goal.targetDate) : null;
-  const targetDateLabel =
-    percent >= 100
-      ? 'Target reached'
-      : targetDate
-        ? targetDate.getTime() < Date.now()
-          ? `Target date passed · ${targetDate.toLocaleDateString()}`
-          : `Target date · ${targetDate.toLocaleDateString()}`
-        : 'No target date set';
+  const [actionError, setActionError] = React.useState('');
+  const goal = goals.data?.find((item) => [item.id, item._id, item.cloudId].includes(routeId));
+  const aliases = goal
+    ? [goal.id, goal._id, goal.cloudId].filter(
+        (value): value is string => typeof value === 'string',
+      )
+    : [routeId];
+  const localId = String(goal?.id ?? goal?._id ?? goal?.cloudId ?? '');
+  const historyRecords = (contributions.data ?? [])
+    .filter((entry) => typeof entry.goalId === 'string' && aliases.includes(entry.goalId))
+    .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0));
+  const saved = historyRecords.reduce((sum, entry) => sum + toMinor(entry.amountMinor), 0n);
+  const target = toMinor(goal?.targetAmountMinor);
+  const currency = goal?.currency ?? 'INR';
+  const percent = target > 0n ? Number((saved * 100n) / target) : 0;
+  const screenGoal = {
+    id: localId || routeId,
+    name: goal?.name ?? 'Goal',
+    icon: goal?.icon,
+    color: goal?.color,
+    saved,
+    target,
+    currency,
+    percent,
+    targetDate: goal?.targetDate,
+    completed: goal?.completedAt !== undefined,
+  };
+  const history: GoalHistoryItem[] = historyRecords.map((entry) => ({
+    id: String(entry.id ?? entry._id ?? ''),
+    occurredAt: Number(entry.occurredAt ?? 0),
+    amount: toMinor(entry.amountMinor),
+  }));
+  const available = Boolean(goal && goal.archivedAt === undefined);
+  const loading = goals.loading || contributions.loading;
+  const loadError = goals.error || contributions.error;
 
-  async function contribute() {
-    if (!userId || !goal || saving) return;
-    let amountMinor: bigint;
-    try {
-      amountMinor = parseMinor(amount, goal.currency);
-    } catch {
-      setError('Enter a valid amount.');
-      return;
-    }
-    if (amountMinor <= 0n) {
-      setError('Enter a positive amount.');
-      return;
-    }
+  async function contribute(amount: string) {
+    if (!userId || !goal || !available || saving) return;
     setSaving(true);
-    setError('');
+    setActionError('');
     try {
+      const amountMinor = parseMinor(amount, currency);
+      if (amountMinor <= 0n) throw new Error('Enter a positive contribution amount.');
       const now = Date.now();
       await commitLocalWrite(
         userId,
         'goalContribution',
         'goal.contribute',
         {
-          goalId: goal.id,
+          goalId: localId,
           ownerId: userId,
           amountMinor,
-          currency: goal.currency,
+          currency,
           occurredAt: now,
           createdAt: now,
         },
-        { goalId: goal.id, amountMinor },
-        { dependencies: goal.id.startsWith('local-') ? [`goal:${goal.id}`] : [] },
+        { goalId: localId, amountMinor },
+        { dependencies: goal._id || goal.cloudId ? [] : [`goal:${localId}`] },
       );
-      setAmount('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not record contribution.');
+      setActionError(cause instanceof Error ? cause.message : 'Could not record contribution.');
     } finally {
       setSaving(false);
     }
   }
+
   async function saveIcon(icon?: string) {
-    if (!userId || !goal || iconSaving) return;
-    const goalLocalId = goal.id ?? goal._id ?? goal.cloudId;
-    const goalId = goal._id ?? goal.cloudId ?? goal.id;
-    if (!goalLocalId || !goalId) return;
-    setIconSaving(true);
-    setIconError('');
+    if (!userId || !goal || saving || !localId) return;
+    const goalId = String(goal._id ?? goal.cloudId ?? goal.id ?? '');
+    setSaving(true);
+    setActionError('');
     try {
       await commitLocalWrite(
         userId,
         'goal',
         'goal.setIcon',
-        { ...goal, icon: icon ?? undefined },
+        { ...goal, icon },
         { goalId, icon: icon ?? null },
         {
-          recordId: goalLocalId,
+          recordId: localId,
           dependencies: goal._id || goal.cloudId ? [] : [`goal:${goalId}`],
           baseUpdatedAt: goal.updatedAt,
         },
       );
     } catch (cause) {
-      setIconError(cause instanceof Error ? cause.message : 'Could not update goal icon.');
+      setActionError(cause instanceof Error ? cause.message : 'Could not update goal icon.');
     } finally {
-      setIconSaving(false);
+      setSaving(false);
     }
   }
 
-  return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 25,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="heading">Goal</Typography>
-      </View>
-      {(goals.loading || contributions.loading) && (
-        <Typography variant="small">Loading goal…</Typography>
-      )}
-      {(goals.error || contributions.error) && (
-        <View style={{ gap: 10 }}>
-          <Text style={{ color: tokens.destructive }}>Saved goal details could not be loaded.</Text>
-          <Button
-            variant="outline"
-            onPress={() => {
-              goals.retry();
-              contributions.retry();
-            }}
-          >
-            Retry
-          </Button>
-        </View>
-      )}
-      {!goals.loading &&
-        !contributions.loading &&
-        !goals.error &&
-        !contributions.error &&
-        (!goal || goal.archivedAt !== undefined) && (
-          <View style={{ alignItems: 'center', gap: 12, paddingVertical: 80 }}>
-            <Wallet size={32} color={tokens.foregroundMuted} />
-            <Typography variant="heading">Goal unavailable</Typography>
-            <Text style={{ color: tokens.foregroundMuted, textAlign: 'center' }}>
-              It may have been archived or is not saved on this device.
-            </Text>
-          </View>
-        )}
-      {goal && !goals.loading && !contributions.loading && !goals.error && !contributions.error && (
-        <>
-          <View style={{ gap: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
-                  backgroundColor: tokens.surfaceRaised,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <EntityIcon value={goal.icon ?? 'lucide:Target'} size={22} color={tokens.primary} />
-              </View>
-              <Typography variant="title" style={{ flex: 1 }} numberOfLines={1}>
-                {goal.name}
-              </Typography>
-              <EntityIconPicker
-                mode="lucide"
-                value={goal.icon}
-                onChange={(icon) => void saveIcon(icon)}
-                label="Change goal icon"
-              />
-            </View>
-            {!!iconError && (
-              <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
-                {iconError}
-              </Text>
-            )}
-            <View
-              accessibilityLabel="Goal progress"
-              style={{
-                gap: 10,
-                padding: 18,
-                borderRadius: 20,
-                backgroundColor: tokens.surfaceRaised,
-              }}
-            >
-              <Typography variant="label">Saved so far</Typography>
-              <Money amountMinor={saved} currency={goal.currency} size="display" />
-              <Text style={{ color: tokens.foregroundMuted }}>
-                of {formatMinor(target, goal.currency)} target
-              </Text>
-              <Progress value={Math.min(100, Math.max(0, percent))} color={tokens.primary} />
-              <View
-                style={{
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <Typography variant="caption">{percent}% reached</Typography>
-                <Typography variant="caption">{targetDateLabel}</Typography>
-              </View>
-              {remaining > 0n && (
-                <Text style={{ color: tokens.foregroundMuted }}>
-                  {formatMinor(remaining, goal.currency)} left to reach your target
-                </Text>
-              )}
-            </View>
-          </View>
-          <View
-            style={{ gap: 12, paddingTop: 18, borderTopWidth: 1, borderColor: tokens.borderSubtle }}
-          >
-            <Typography variant="heading">Record a contribution</Typography>
-            <Text style={{ color: tokens.foregroundMuted }}>
-              This tracks progress; it does not move money between accounts.
-            </Text>
-            <Input
-              accessibilityLabel={`Contribution amount in ${goal.currency}`}
-              placeholder={`Amount · ${goal.currency}`}
-              keyboardType="decimal-pad"
-              value={amount}
-              onChangeText={setAmount}
-            />
-            <Button disabled={saving || !amount.trim()} onPress={() => void contribute()}>
-              {saving ? 'Saving…' : 'Add contribution'}
-            </Button>
-          </View>
-          <View style={{ gap: 10 }}>
-            <Typography variant="heading">History</Typography>
-            {history.length === 0 ? (
-              <Text style={{ color: tokens.foregroundMuted }}>No contributions recorded yet.</Text>
-            ) : (
-              history.map((entry) => (
-                <View
-                  key={entry.id}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 13,
-                    borderBottomWidth: 1,
-                    borderColor: tokens.borderSubtle,
-                  }}
-                >
-                  <Typography variant="small">
-                    {new Date(entry.occurredAt).toLocaleDateString()}
-                  </Typography>
-                  <Money amountMinor={BigInt(entry.amountMinor)} currency={goal.currency} />
-                </View>
-              ))
-            )}
-          </View>
-        </>
-      )}
-      {!!error && (
-        <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
-          {error}
-        </Text>
-      )}
-    </ScrollView>
-  );
+  const props: GoalDetailScreenProps = {
+    goal: screenGoal,
+    available,
+    history,
+    loading,
+    error: loadError ? 'Saved goal details could not be loaded.' : undefined,
+    actionError: actionError || undefined,
+    saving,
+    onContribute: (amount) => void contribute(amount),
+    onIconChange: (icon) => void saveIcon(icon),
+    onBack: () => router.back(),
+    onRetry: () => {
+      goals.retry();
+      contributions.retry();
+    },
+    onEdit: () => router.push(`/goals/${localId || routeId}/edit` as never),
+    onAnalytics: () => router.push(`/goals/${localId || routeId}/analytics` as never),
+  };
+  return <GoalDetailScreen {...props} />;
 }

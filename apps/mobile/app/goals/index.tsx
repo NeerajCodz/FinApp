@@ -1,328 +1,94 @@
-import React from 'react';
-import { ScrollView, TouchableOpacity, View } from 'react-native';
-import { ArrowLeft, CaretRight, Plus, Wallet } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EntityIcon, EntityIconPicker, Money, resolveDefaultCurrency } from '@finapp/ui/finance';
-import { Button, IconButton, Input, Progress, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import {
+  GoalsOverviewScreen,
+  resolveDefaultCurrency,
+  type GoalOverviewItem,
+} from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
-import { commitLocalWrite } from '@/local/commands';
-import { formatMinor, parseMinor } from '@/lib/money';
 import type { LocalRecord } from '@/local/repository';
 
 type Goal = LocalRecord & {
-  id: string;
-  name: string;
-  targetAmountMinor: bigint;
-  currency: string;
+  id?: string;
+  name?: string;
+  targetAmountMinor?: bigint | number | string;
+  currency?: string;
   archivedAt?: number;
   completedAt?: number;
   targetDate?: number;
   icon?: string;
+  color?: string;
+  cloudId?: string;
 };
-type Contribution = LocalRecord & { goalId: string; amountMinor: bigint };
+type Contribution = LocalRecord & { goalId?: string; amountMinor?: bigint | number | string };
+const toMinor = (value: unknown): bigint => {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value);
+  return 0n;
+};
 
 export default function GoalsScreen() {
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
   const { userId, isConnected } = useLocalSync();
   const goals = useLocalRecords<Goal>(userId, 'goal');
   const contributions = useLocalRecords<Contribution>(userId, 'goalContribution');
-  const profiles = useLocalRecords<LocalRecord>(userId, 'profile');
-  const settings = useLocalRecords<LocalRecord>(userId, 'settings');
-  const [adding, setAdding] = React.useState(false);
-  const [name, setName] = React.useState('');
-  const [icon, setIcon] = React.useState<string>();
-  const [target, setTarget] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const currency = resolveDefaultCurrency(profiles.data, settings.data) ?? null;
-  const active = goals.data
-    ?.filter((goal) => goal.archivedAt === undefined)
+  const profiles = useLocalRecords<LocalRecord & { defaultCurrency?: string }>(userId, 'profile');
+  const settings = useLocalRecords<LocalRecord & { currency?: string; defaultCurrency?: string }>(
+    userId,
+    'settings',
+  );
+  const currency = resolveDefaultCurrency(profiles.data, settings.data) ?? '';
+  const activeGoals = (goals.data ?? [])
+    .filter((goal) => goal.archivedAt === undefined)
     .sort(
-      (a, b) =>
-        Number(Boolean(a.completedAt)) - Number(Boolean(b.completedAt)) ||
-        a.name.localeCompare(b.name),
+      (left, right) =>
+        Number(Boolean(left.completedAt)) - Number(Boolean(right.completedAt)) ||
+        (left.name ?? '').localeCompare(right.name ?? ''),
     );
-  const saved = new Map<string, bigint>();
-  for (const contribution of contributions.data ?? [])
-    saved.set(
-      contribution.goalId,
-      (saved.get(contribution.goalId) ?? 0n) + BigInt(contribution.amountMinor),
+  const rows: GoalOverviewItem[] = activeGoals.map((goal) => {
+    const aliases = [goal.id, goal._id, goal.cloudId].filter(
+      (value): value is string => typeof value === 'string',
     );
-  const currencies = new Set(active?.map((goal) => goal.currency) ?? []);
-  const total =
-    currencies.size === 1
-      ? active!.reduce(
-          (sum, goal) => sum + (saved.get(goal.id) ?? saved.get(String(goal._id)) ?? 0n),
-          0n,
-        )
-      : null;
+    const saved = (contributions.data ?? [])
+      .filter((entry) => typeof entry.goalId === 'string' && aliases.includes(entry.goalId))
+      .reduce((sum, entry) => sum + toMinor(entry.amountMinor), 0n);
+    const target = toMinor(goal.targetAmountMinor);
+    return {
+      id: String(goal.id ?? goal._id ?? goal.cloudId ?? ''),
+      name: goal.name ?? 'Savings goal',
+      icon: goal.icon,
+      color: goal.color,
+      saved,
+      target,
+      currency: goal.currency ?? currency ?? 'INR',
+      percent: target > 0n ? Number((saved * 100n) / target) : 0,
+      targetDate: goal.targetDate,
+      completed: goal.completedAt !== undefined,
+    };
+  });
+  const currencies = new Set(rows.map((row) => row.currency));
+  const totalSaved = currencies.size === 1 ? rows.reduce((sum, row) => sum + row.saved, 0n) : null;
   const loading = goals.loading || contributions.loading || profiles.loading || settings.loading;
-  const loadError = goals.error || contributions.error || profiles.error || settings.error;
-
-  async function createGoal() {
-    if (!userId || !currency || saving || !name.trim()) return;
-    let targetAmountMinor: bigint;
-    try {
-      targetAmountMinor = parseMinor(target, currency);
-      if (targetAmountMinor <= 0n) throw new Error('Enter a positive target.');
-    } catch {
-      setError('Enter a valid positive target amount.');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      const now = Date.now();
-      await commitLocalWrite(
-        userId,
-        'goal',
-        'goal.create',
-        {
-          ownerId: userId,
-          ...(icon ? { icon } : {}),
-          name: name.trim(),
-          targetAmountMinor,
-          currency,
-          createdAt: now,
-          updatedAt: now,
-        },
-        { name: name.trim(), ...(icon ? { icon } : {}), targetAmountMinor, currency },
-      );
-      setAdding(false);
-      setName('');
-      setIcon(undefined);
-      setTarget('');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save this goal.');
-    } finally {
-      setSaving(false);
-    }
-  }
+  const hasError = Boolean(goals.error || contributions.error || profiles.error || settings.error);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 24,
-        flexGrow: 1,
+    <GoalsOverviewScreen
+      goals={rows}
+      totalSaved={totalSaved}
+      currencyCount={currencies.size}
+      loading={loading}
+      error={hasError}
+      connected={isConnected}
+      defaultCurrency={currency}
+      onAdd={() => router.push('/goals/new' as never)}
+      onOpen={(id) => router.push(`/goals/${id}` as never)}
+      onRetry={() => {
+        goals.retry();
+        contributions.retry();
+        profiles.retry();
+        settings.retry();
       }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="title" style={{ flex: 1 }}>
-          Goals
-        </Typography>
-        {!loading && active && !adding && currency && (
-          <IconButton label="Add goal" variant="ghost" onPress={() => setAdding(true)}>
-            <Plus size={21} color={tokens.foreground} />
-          </IconButton>
-        )}
-      </View>
-      {!loading && active && active.length > 0 && (
-        <View style={{ gap: 8 }}>
-          <Typography variant="label">
-            Saved toward {active.length} {active.length === 1 ? 'goal' : 'goals'}
-          </Typography>
-          {currencies.size === 1 && total !== null ? (
-            <Money amountMinor={total} currency={active[0]!.currency} size="display" />
-          ) : (
-            <Typography variant="heading">Across {currencies.size} currencies</Typography>
-          )}
-          <Typography variant="small">
-            Contributions recorded separately from your account balance.
-          </Typography>
-        </View>
-      )}
-      {loadError && (
-        <View style={{ gap: 10 }} accessibilityRole="alert">
-          <Text style={{ color: tokens.destructive }}>Saved goals could not be loaded.</Text>
-          <Button
-            variant="outline"
-            onPress={() => {
-              goals.retry();
-              contributions.retry();
-              profiles.retry();
-              settings.retry();
-            }}
-          >
-            Retry
-          </Button>
-        </View>
-      )}
-      {loading && !loadError && <Typography variant="small">Loading saved goals…</Typography>}
-      {!loading && active?.length === 0 && !loadError && (
-        <View
-          style={{
-            flex: 1,
-            minHeight: 300,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-            paddingHorizontal: 24,
-          }}
-        >
-          <View
-            style={{
-              width: 76,
-              height: 76,
-              borderRadius: 24,
-              backgroundColor: tokens.surfaceRaised,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Wallet size={32} color={tokens.primary} />
-          </View>
-          <Typography variant="heading" style={{ textAlign: 'center' }}>
-            No goals yet
-          </Typography>
-          <Text style={{ color: tokens.foregroundMuted, textAlign: 'center', maxWidth: 280 }}>
-            Set a target and track each contribution in one place.
-          </Text>
-          {!adding && currency && <Button onPress={() => setAdding(true)}>Create a goal</Button>}
-          {!currency && (
-            <Typography variant="small" style={{ textAlign: 'center' }}>
-              Choose a default currency in settings before creating a goal.
-            </Typography>
-          )}
-          {!currency && (
-            <Button variant="outline" onPress={() => router.push('/settings/currency')}>
-              Set default currency
-            </Button>
-          )}
-          {!isConnected && <Typography variant="small">Offline · showing saved goals</Typography>}
-        </View>
-      )}
-      {!loading && active && active.length > 0 && (
-        <View style={{ gap: 6 }}>
-          <Typography variant="label">Your goals</Typography>
-          {active.map((goal) => {
-            const amount = saved.get(goal.id) ?? saved.get(String(goal._id)) ?? 0n;
-            const percent =
-              goal.targetAmountMinor > 0n
-                ? Number((amount * 100n) / BigInt(goal.targetAmountMinor))
-                : 0;
-            const targetDate = goal.targetDate ? new Date(goal.targetDate) : null;
-            const dateLabel =
-              percent >= 100
-                ? 'Target reached'
-                : targetDate
-                  ? targetDate.getTime() < Date.now()
-                    ? `Target date passed · ${targetDate.toLocaleDateString()}`
-                    : `Target · ${targetDate.toLocaleDateString()}`
-                  : 'No target date';
-            return (
-              <TouchableOpacity
-                key={goal.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${goal.name}, ${percent}% of target saved`}
-                onPress={() => router.push(`/goals/${goal.id}` as never)}
-                activeOpacity={0.65}
-                style={{
-                  paddingVertical: 18,
-                  gap: 10,
-                  borderBottomWidth: 1,
-                  borderColor: tokens.borderSubtle,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 16,
-                      backgroundColor: tokens.surfaceRaised,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <EntityIcon
-                      value={goal.icon ?? 'lucide:Target'}
-                      size={21}
-                      color={tokens.primary}
-                    />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                    <Typography variant="bodyLarge" numberOfLines={1}>
-                      {goal.name}
-                    </Typography>
-                    <Typography variant="small">{dateLabel}</Typography>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Money amountMinor={amount} currency={goal.currency} />
-                    <Typography variant="caption">saved</Typography>
-                  </View>
-                  <CaretRight size={17} color={tokens.foregroundSubtle} />
-                </View>
-                <Progress value={Math.min(100, Math.max(0, percent))} color={tokens.primary} />
-                <Typography variant="caption">
-                  {percent}% of {formatMinor(BigInt(goal.targetAmountMinor), goal.currency)}
-                </Typography>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
-      {adding && (
-        <View
-          style={{ gap: 14, paddingTop: 16, borderTopWidth: 1, borderColor: tokens.borderSubtle }}
-        >
-          <Typography variant="heading">New goal</Typography>
-          <Input
-            accessibilityLabel="Goal name"
-            placeholder="What are you saving for?"
-            value={name}
-            onChangeText={setName}
-          />
-          <EntityIconPicker
-            mode="lucide"
-            value={icon}
-            onChange={setIcon}
-            label="Choose goal icon"
-          />
-          <Input
-            accessibilityLabel={`Target amount${currency ? ` in ${currency}` : ''}`}
-            placeholder={currency ? `Target amount · ${currency}` : 'Loading currency…'}
-            keyboardType="decimal-pad"
-            value={target}
-            onChangeText={setTarget}
-          />
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Button
-              style={{ flex: 1 }}
-              variant="outline"
-              onPress={() => {
-                setAdding(false);
-                setError('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              style={{ flex: 1 }}
-              disabled={saving || !currency || !name.trim() || !target.trim()}
-              onPress={() => void createGoal()}
-            >
-              {saving ? 'Saving…' : 'Save goal'}
-            </Button>
-          </View>
-        </View>
-      )}
-      {!!error && (
-        <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
-          {error}
-        </Text>
-      )}
-    </ScrollView>
+      onSetCurrency={() => router.push('/settings/currency' as never)}
+    />
   );
 }
