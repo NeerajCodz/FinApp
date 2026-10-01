@@ -28,6 +28,8 @@ Finance screens are shared from `packages/ui/src/finance`, with separate web and
 native presentations. Account and category editors, transaction forms and details,
 recurring-payment views, goal editors and analytics, budget views, and group
 experiences use the apps' live Convex/offline-first records.
+Shared entity pickers provide popup color palettes with custom hue and hex controls,
+emoji skin-tone choices, and compact Lucide/Phosphor icon grids across web and native.
 
 The Activity page's right rail provides Add transaction, Transactions, and
 Analytics actions. The web sidebar shows the signed-in profile name and avatar
