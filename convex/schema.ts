@@ -147,6 +147,7 @@ export default defineSchema({
     .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
     .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
     .index('by_account', ['accountId'])
+    .index('by_transferAccountId', ['transferAccountId'])
     .index('by_group_occurredAt', ['groupId', 'occurredAt']),
   transactionTags: defineTable({ transactionId: v.id('transactions'), tag: v.string() }).index(
     'by_transaction',
@@ -201,6 +202,7 @@ export default defineSchema({
     name: v.string(),
     currency,
     icon: optionalText,
+    color: optionalText,
     messageRetentionMs: optionalTime,
     archivedAt: optionalTime,
     createdAt: timestamp,
@@ -292,6 +294,7 @@ export default defineSchema({
     ownerId: v.id('users'),
     name: v.string(),
     icon: optionalText,
+    color: optionalText,
     targetAmountMinor: v.int64(),
     currency,
     targetDate: optionalTime,

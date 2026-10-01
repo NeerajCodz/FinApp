@@ -32,7 +32,9 @@ function validateGroupIcon(icon: string | undefined) {
   if (
     icon.startsWith('lucide:')
       ? !/^lucide:[A-Z][A-Za-z0-9]*$/.test(icon)
-      : !icon.trim() || icon.length > 16 || /[\u0000-\u001f]/.test(icon)
+      : icon.startsWith('phosphor:')
+        ? !/^phosphor:[A-Z][A-Za-z0-9]*$/.test(icon)
+        : !icon.trim() || icon.length > 16 || /[\u0000-\u001f]/.test(icon)
   )
     throw new Error('INVALID_GROUP_ICON');
 }
@@ -67,6 +69,7 @@ export const create = mutation({
     clientMutationId: v.optional(v.string()),
     memberPhones: v.optional(v.array(v.string())),
     icon: v.optional(v.string()),
+    color: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
@@ -89,6 +92,8 @@ export const create = mutation({
     assertCurrency(currency);
     const name = args.name.trim();
     validateGroupIcon(args.icon);
+    if (args.color !== undefined && !/^#[\da-f]{6}$/i.test(args.color))
+      throw new Error('INVALID_GROUP_COLOR');
     if (!name) throw new Error('INVALID_GROUP');
     const now = Date.now();
     const groupId = await ctx.db.insert('groups', {
@@ -96,6 +101,7 @@ export const create = mutation({
       name,
       currency,
       ...(args.icon === undefined ? {} : { icon: args.icon }),
+      ...(args.color === undefined ? {} : { color: args.color }),
       createdAt: now,
       updatedAt: now,
     });
@@ -199,6 +205,7 @@ export const updateSettings = mutation({
     groupId: v.id('groups'),
     name: v.optional(v.string()),
     icon: v.optional(v.union(v.string(), v.null())),
+    color: v.optional(v.string()),
     messageRetentionMs: v.optional(v.union(v.number(), v.null())),
     clientMutationId: v.optional(v.string()),
   },
@@ -231,6 +238,8 @@ export const updateSettings = mutation({
     requireAdmin(actor._id, String(group.ownerId), roles);
     if (args.name !== undefined && !args.name.trim()) throw new Error('INVALID_GROUP');
     if (args.icon !== undefined && args.icon !== null) validateGroupIcon(args.icon);
+    if (args.color !== undefined && !/^#[\da-f]{6}$/i.test(args.color))
+      throw new Error('INVALID_GROUP_COLOR');
     if (
       args.messageRetentionMs !== undefined &&
       args.messageRetentionMs !== null &&
@@ -242,6 +251,7 @@ export const updateSettings = mutation({
     const patch = {
       ...(args.name === undefined ? {} : { name: args.name.trim() }),
       ...(args.icon === undefined ? {} : { icon: args.icon ?? undefined }),
+      ...(args.color === undefined ? {} : { color: args.color }),
       ...(args.messageRetentionMs === undefined
         ? {}
         : { messageRetentionMs: args.messageRetentionMs ?? undefined }),
