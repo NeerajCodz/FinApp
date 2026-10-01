@@ -68,6 +68,7 @@ export function SignUpForm() {
       }
     >
       <form
+        method="post"
         onSubmit={submit}
         noValidate
         aria-busy={pending}

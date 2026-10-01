@@ -62,7 +62,7 @@ export default function TwoFactorPage() {
             minutes.
           </p>
           <div className="auth-form">
-            <form onSubmit={submit} noValidate className="auth-form">
+            <form method="post" onSubmit={submit} noValidate className="auth-form">
               <div className="auth-field">
                 <span className="auth-label">Six-digit code</span>
                 <InputOTP value={code} onChangeText={setCode} />

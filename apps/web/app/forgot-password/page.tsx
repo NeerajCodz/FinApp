@@ -83,7 +83,12 @@ export default function ForgotPasswordPage() {
           </p>
           <div className="auth-form">
             {!requested ? (
-              <form onSubmit={(event) => void requestCode(event)} noValidate className="auth-form">
+              <form
+                method="post"
+                onSubmit={(event) => void requestCode(event)}
+                noValidate
+                className="auth-form"
+              >
                 <div className="auth-field">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -114,7 +119,7 @@ export default function ForgotPasswordPage() {
                 </Button>
               </form>
             ) : (
-              <form onSubmit={resetPassword} noValidate className="auth-form">
+              <form method="post" onSubmit={resetPassword} noValidate className="auth-form">
                 <div className="auth-field">
                   <span className="auth-label">Six-digit code</span>
                   <InputOTP value={code} onChangeText={setCode} />

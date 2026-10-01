@@ -78,7 +78,7 @@ export function ForgotPasswordForm({ initialEmail = '' }: { initialEmail?: strin
       }
     >
       {!requested ? (
-        <form onSubmit={requestCode}>
+        <form method="post" onSubmit={requestCode}>
           <div className="auth-field">
             <Label htmlFor="email">Email address</Label>
             <Input
@@ -103,7 +103,7 @@ export function ForgotPasswordForm({ initialEmail = '' }: { initialEmail?: strin
           </Button>
         </form>
       ) : (
-        <form onSubmit={resetPassword}>
+        <form method="post" onSubmit={resetPassword}>
           <div className="auth-field">
             <span className="auth-label">Six-digit code</span>
             <InputOTP value={code} onChangeText={setCode} />

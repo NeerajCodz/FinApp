@@ -80,6 +80,7 @@ export function SignInForm() {
       }
     >
       <form
+        method="post"
         onSubmit={submit}
         noValidate
         aria-busy={pending}
