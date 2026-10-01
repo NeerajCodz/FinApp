@@ -102,7 +102,10 @@ export function EntityIcon({
   const { tokens } = useTheme();
   if (!value) return null;
   const Phosphor = value.startsWith('phosphor:') ? phosphorComponentFor(value) : undefined;
-  if (Phosphor) return <Phosphor size={size} color={color ?? tokens.primary} weight="fill" aria-hidden="true" />;
+  if (Phosphor)
+    return (
+      <Phosphor size={size} color={color ?? tokens.primary} weight="fill" aria-hidden="true" />
+    );
   const Icon = componentFor(value);
   if (Icon) return <Icon size={size} color={color ?? tokens.primary} aria-hidden="true" />;
   if (value.startsWith('lucide:')) {
@@ -210,6 +213,9 @@ export function EntityIconPicker({
   const [kind, setKind] = useState<PickerKind>(
     mode === 'emoji' ? 'emoji' : mode === 'phosphor' ? 'phosphor' : 'lucide',
   );
+  const [activeCategory, setActiveCategory] = useState('recent');
+  const [activeIconPurpose, setActiveIconPurpose] = useState<IconPurpose>('finance');
+  const [visibleIconCount, setVisibleIconCount] = useState(120);
   const triggerLabel = label ?? (value ? 'Change icon' : 'Choose icon');
   const matchingEmojis = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -330,7 +336,10 @@ export function EntityIconPicker({
       >
         {(mode === 'either' || mode === 'all') && (
           <div role="tablist" aria-label="Icon type" style={{ display: 'flex', gap: 6 }}>
-            {(mode === 'all' ? ['emoji', 'lucide', 'phosphor'] as const : ['emoji', 'lucide'] as const).map((choice) => (
+            {(mode === 'all'
+              ? (['emoji', 'lucide', 'phosphor'] as const)
+              : (['emoji', 'lucide'] as const)
+            ).map((choice) => (
               <button
                 key={choice}
                 type="button"
@@ -347,7 +356,9 @@ export function EntityIconPicker({
                   cursor: 'pointer',
                 }}
               >
-                {choice === 'emoji' ? 'Emoji' : `${choice[0]!.toUpperCase()}${choice.slice(1)} icons`}
+                {choice === 'emoji'
+                  ? 'Emoji'
+                  : `${choice[0]!.toUpperCase()}${choice.slice(1)} icons`}
               </button>
             ))}
           </div>
@@ -386,8 +397,10 @@ export function EntityIconPicker({
                   flex: '0 0 auto',
                   border: 0,
                   borderRadius: 9,
-                  background: activeIconPurpose === category.id ? tokens.surfaceSubtle : 'transparent',
-                  color: activeIconPurpose === category.id ? tokens.primary : tokens.foregroundMuted,
+                  background:
+                    activeIconPurpose === category.id ? tokens.surfaceSubtle : 'transparent',
+                  color:
+                    activeIconPurpose === category.id ? tokens.primary : tokens.foregroundMuted,
                   cursor: 'pointer',
                   fontSize: 12,
                 }}
@@ -500,7 +513,11 @@ export function EntityIconPicker({
           <>
             <div
               role="grid"
-              aria-label={search ? 'Phosphor icon search results' : `${iconPurposeCategories.find((category) => category.id === activeIconPurpose)?.label ?? 'All icons'} Phosphor catalog`}
+              aria-label={
+                search
+                  ? 'Phosphor icon search results'
+                  : `${iconPurposeCategories.find((category) => category.id === activeIconPurpose)?.label ?? 'All icons'} Phosphor catalog`
+              }
               style={{
                 maxHeight: 356,
                 overflowY: 'auto',
@@ -527,7 +544,10 @@ export function EntityIconPicker({
                       placeItems: 'center',
                       border: `1px solid ${value === `phosphor:${icon.name}` ? tokens.primary : tokens.borderSubtle}`,
                       borderRadius: 11,
-                      background: value === `phosphor:${icon.name}` ? tokens.surfaceSubtle : tokens.surfaceRaised,
+                      background:
+                        value === `phosphor:${icon.name}`
+                          ? tokens.surfaceSubtle
+                          : tokens.surfaceRaised,
                       color: tokens.primary,
                       cursor: 'pointer',
                     }}
@@ -541,7 +561,8 @@ export function EntityIconPicker({
               <Typography variant="small">No Phosphor icon matches that search.</Typography>
             ) : matchingPhosphorIcons.length > displayedPhosphorIcons.length ? (
               <Button variant="ghost" onPress={() => setVisibleIconCount((count) => count + 120)}>
-                Show more icons ({matchingPhosphorIcons.length - displayedPhosphorIcons.length} remaining)
+                Show more icons ({matchingPhosphorIcons.length - displayedPhosphorIcons.length}{' '}
+                remaining)
               </Button>
             ) : null}
           </>

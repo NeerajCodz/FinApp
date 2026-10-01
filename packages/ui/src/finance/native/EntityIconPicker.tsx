@@ -4,6 +4,7 @@ import type { LucideProps } from 'lucide-react-native';
 import * as PhosphorIcons from 'phosphor-react-native';
 import type { IconProps as PhosphorProps } from 'phosphor-react-native';
 import { FlatList, Pressable, ScrollView, View } from 'react-native';
+import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import {
   allEmojiPickerOptions,
   emojiPickerCategories,
@@ -53,11 +54,7 @@ const lucideIcons = Object.entries(LucideIcons)
   .sort((left, right) => left.name.localeCompare(right.name));
 
 const phosphorIcons = Object.entries(PhosphorIcons)
-  .filter(
-    ([name, icon]) =>
-      /^[A-Z]/.test(name) &&
-      typeof icon === 'function',
-  )
+  .filter(([name, icon]) => /^[A-Z]/.test(name) && typeof icon === 'function')
   .map(([name, icon]) => ({
     name,
     searchText: name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase(),
@@ -192,6 +189,9 @@ export function EntityIconPicker({
   const [kind, setKind] = useState<PickerKind>(
     mode === 'emoji' ? 'emoji' : mode === 'phosphor' ? 'phosphor' : 'lucide',
   );
+  const [activeCategory, setActiveCategory] = useState('recent');
+  const [activeIconPurpose, setActiveIconPurpose] = useState<IconPurpose>('finance');
+  const [visibleIconCount, setVisibleIconCount] = useState(120);
   const triggerLabel = label ?? (value ? 'Change icon' : 'Choose icon');
   const matchingEmojis = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -289,7 +289,8 @@ export function EntityIconPicker({
           borderWidth: 1,
           borderColor: value === `phosphor:${item.name}` ? tokens.primary : tokens.borderSubtle,
           borderRadius: 11,
-          backgroundColor: value === `phosphor:${item.name}` ? tokens.surfaceSubtle : tokens.surfaceRaised,
+          backgroundColor:
+            value === `phosphor:${item.name}` ? tokens.surfaceSubtle : tokens.surfaceRaised,
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -347,7 +348,10 @@ export function EntityIconPicker({
         <View style={{ maxHeight: 540, gap: 12 }}>
           {(mode === 'either' || mode === 'all') && (
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              {(mode === 'all' ? ['emoji', 'lucide', 'phosphor'] as const : ['emoji', 'lucide'] as const).map((choice) => (
+              {(mode === 'all'
+                ? (['emoji', 'lucide', 'phosphor'] as const)
+                : (['emoji', 'lucide'] as const)
+              ).map((choice) => (
                 <Button
                   key={choice}
                   size="sm"
@@ -356,7 +360,9 @@ export function EntityIconPicker({
                   accessibilityState={{ selected: kind === choice }}
                   onPress={() => changeKind(choice)}
                 >
-                  {choice === 'emoji' ? 'Emoji' : `${choice[0]!.toUpperCase()}${choice.slice(1)} icons`}
+                  {choice === 'emoji'
+                    ? 'Emoji'
+                    : `${choice[0]!.toUpperCase()}${choice.slice(1)} icons`}
                 </Button>
               ))}
             </View>
@@ -507,7 +513,8 @@ export function EntityIconPicker({
               )}
               {matchingPhosphorIcons.length > displayedPhosphorIcons.length && (
                 <Button variant="ghost" onPress={() => setVisibleIconCount((count) => count + 120)}>
-                  Show more icons ({matchingPhosphorIcons.length - displayedPhosphorIcons.length} remaining)
+                  Show more icons ({matchingPhosphorIcons.length - displayedPhosphorIcons.length}{' '}
+                  remaining)
                 </Button>
               )}
             </>

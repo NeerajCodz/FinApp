@@ -64,8 +64,6 @@ export type CategoryDetailScreenProps = {
   error?: string;
   pending?: boolean;
   formError?: string | null;
-  editingName: boolean;
-  nameValue: string;
   limitValue: string;
   isDefaultExpense: boolean;
   isDefaultIncome: boolean;
@@ -74,9 +72,6 @@ export type CategoryDetailScreenProps = {
   onAddTransaction: () => void;
   onOpenTransaction: (id: string) => void;
   onEditName: () => void;
-  onNameChange: (value: string) => void;
-  onSaveName: () => void;
-  onCancelName: () => void;
   onIconChange: (value?: string) => void;
   onLimitChange: (value: string) => void;
   onSaveLimit: () => void;
@@ -98,8 +93,6 @@ export function CategoryDetailScreen({
   error,
   pending = false,
   formError,
-  editingName,
-  nameValue,
   limitValue,
   isDefaultExpense,
   isDefaultIncome,
@@ -108,9 +101,6 @@ export function CategoryDetailScreen({
   onAddTransaction,
   onOpenTransaction,
   onEditName,
-  onNameChange,
-  onSaveName,
-  onCancelName,
   onIconChange,
   onLimitChange,
   onSaveLimit,
@@ -317,27 +307,6 @@ export function CategoryDetailScreen({
               <Typography variant="small">
                 Archived category · past transactions remain available.
               </Typography>
-            </View>
-          )}
-          {editingName && !category.isSystem && (
-            <View style={[styles.editName, { borderColor: tokens.borderSubtle }]}>
-              <Label>Category name</Label>
-              <Input
-                accessibilityLabel="Category name"
-                value={nameValue}
-                onChangeText={onNameChange}
-                maxLength={80}
-                returnKeyType="done"
-                onSubmitEditing={onSaveName}
-              />
-              <View style={styles.inlineButtons}>
-                <Button size="sm" disabled={pending || !nameValue.trim()} onPress={onSaveName}>
-                  Save name
-                </Button>
-                <Button size="sm" variant="ghost" onPress={onCancelName}>
-                  Cancel
-                </Button>
-              </View>
             </View>
           )}
           <View style={styles.metrics}>
@@ -799,7 +768,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   archived: { padding: 10, borderWidth: 1, borderRadius: 10, backgroundColor: '#f2be4e12' },
-  editName: { gap: 8, padding: 12, borderWidth: 1, borderRadius: 13, backgroundColor: '#101210' },
   inlineButtons: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   metric: {

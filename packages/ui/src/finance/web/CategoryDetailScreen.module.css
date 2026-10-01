@@ -107,24 +107,6 @@
   background: #f0bf4810;
   font-size: 0.78rem;
 }
-.editName {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto;
-  align-items: end;
-  gap: 9px;
-  padding: 13px;
-  border: 1px solid var(--finance-line, #282b28);
-  border-radius: 13px;
-  background: var(--finance-panel, #101210);
-}
-.editName label {
-  grid-column: 1 / -1;
-}
-.editName > div {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -590,12 +572,6 @@
   }
   .details {
     gap: 5px;
-  }
-  .editName {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .editName label {
-    grid-column: auto;
   }
 }
 @media (max-width: 380px) {

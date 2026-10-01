@@ -2,7 +2,16 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Button, Sheet, Text, useTheme } from '@finapp/ui/native';
 
-const colorSwatches = ['#B7FF4A', '#71B8FF', '#FF7777', '#BA8AFF', '#FFD44F', '#FF9C5B', '#54D6A1', '#FF80B6'];
+const colorSwatches = [
+  '#B7FF4A',
+  '#71B8FF',
+  '#FF7777',
+  '#BA8AFF',
+  '#FFD44F',
+  '#FF9C5B',
+  '#54D6A1',
+  '#FF80B6',
+];
 
 export function EntityColorPicker({
   value,
@@ -44,7 +53,10 @@ export function EntityColorPicker({
       </Button>
       <Sheet visible={open} onClose={() => setOpen(false)} title="Choose a color">
         <View style={{ gap: 12, padding: 4 }}>
-          <View accessibilityRole="grid" accessibilityLabel="Color swatches" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          <View
+            accessibilityLabel="Color swatches"
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+          >
             {colorSwatches.map((color) => {
               const selected = value?.toLowerCase() === color.toLowerCase();
               return (
