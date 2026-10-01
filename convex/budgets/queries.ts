@@ -4,12 +4,19 @@ import { v } from 'convex/values';
 import { getOptionalUser, requireIdentity } from '../shared/auth';
 import { aggregateBudgetSpending } from './domain';
 
+async function excludedCategories(ctx: QueryCtx, ownerId: Doc<'users'>['_id']) {
+  const categories = await ctx.db.query('categories')
+    .withIndex('by_owner', (q) => q.eq('ownerId', ownerId)).collect();
+  return new Set(categories.filter((category) => category.includeInBudgets === false)
+    .map((category) => String(category._id)));
+}
+
 async function withSpending(ctx: QueryCtx, ownerId: Doc<'users'>['_id'], budget: Doc<'budgets'>) {
   const transactions = await ctx.db
     .query('transactions')
     .withIndex('by_owner_occurredAt', (q) => q.eq('ownerId', ownerId))
     .collect();
-  const spentMinor = aggregateBudgetSpending(transactions, budget);
+  const spentMinor = aggregateBudgetSpending(transactions, budget, await excludedCategories(ctx, ownerId));
   return { ...budget, spentMinor, remainingMinor: budget.amountMinor - spentMinor };
 }
 
@@ -28,9 +35,10 @@ export const list = query({
       .query('transactions')
       .withIndex('by_owner_occurredAt', (q) => q.eq('ownerId', user._id))
       .collect();
+    const excludedCategoryIds = await excludedCategories(ctx, user._id);
     return active
       .map((budget) => {
-        const spentMinor = aggregateBudgetSpending(transactions, budget);
+        const spentMinor = aggregateBudgetSpending(transactions, budget, excludedCategoryIds);
         return { ...budget, spentMinor, remainingMinor: budget.amountMinor - spentMinor };
       })
       .sort((left, right) => left.startAt - right.startAt || left.name.localeCompare(right.name));

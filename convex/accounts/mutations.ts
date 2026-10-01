@@ -15,6 +15,11 @@ export type AccountDraft<OwnerId extends string = string> = {
   icon?: string;
   color?: string;
   isIncludedInTotal: boolean;
+  notes?: string;
+  provider?: string;
+  accountNumber?: string;
+  openedAt?: number;
+  includeInAnalytics?: boolean;
 };
 
 export function createAccountRecord<OwnerId extends string>(
@@ -23,6 +28,8 @@ export function createAccountRecord<OwnerId extends string>(
 ) {
   requireOwner(actorId, draft.ownerId);
   if (!draft.name.trim() || draft.openingBalanceMinor < 0n) throw new Error('INVALID_ACCOUNT');
+  if (draft.openedAt !== undefined && !Number.isFinite(draft.openedAt))
+    throw new Error('INVALID_ACCOUNT');
   const customType = draft.type === 'other' ? draft.customType?.trim() : undefined;
   if (draft.type === 'other' && (!customType || customType.length > 40))
     throw new Error('INVALID_ACCOUNT');
@@ -65,6 +72,11 @@ export const create = mutation({
     isIncludedInTotal: v.boolean(),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    provider: v.optional(v.string()),
+    accountNumber: v.optional(v.string()),
+    openedAt: v.optional(v.number()),
+    includeInAnalytics: v.optional(v.boolean()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -160,12 +172,17 @@ export const updateDetails = mutation({
       v.literal('loan'),
       v.literal('other'),
     ),
-    customType: v.optional(v.string()),
+    customType: v.optional(v.union(v.string(), v.null())),
     currency: v.string(),
     openingBalanceMinor: v.int64(),
     icon: v.optional(v.union(v.string(), v.null())),
-    color: v.union(v.string(), v.null()),
+    color: v.optional(v.union(v.string(), v.null())),
     isIncludedInTotal: v.boolean(),
+    notes: v.optional(v.union(v.string(), v.null())),
+    provider: v.optional(v.union(v.string(), v.null())),
+    accountNumber: v.optional(v.union(v.string(), v.null())),
+    openedAt: v.optional(v.union(v.number(), v.null())),
+    includeInAnalytics: v.optional(v.boolean()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -186,17 +203,20 @@ export const updateDetails = mutation({
     if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
       throw new Error('ACCOUNT_UNAVAILABLE');
     const name = args.name.trim();
-    const customType = args.type === 'other' ? args.customType?.trim() : undefined;
+    const customType = args.type === 'other'
+      ? (args.customType === undefined ? account.customType : args.customType?.trim()) : undefined;
     if (
       !name ||
       name.length > 80 ||
       args.openingBalanceMinor < 0n ||
       (args.type === 'other' && (!customType || customType.length > 40)) ||
       (args.icon !== null && args.icon !== undefined && (!args.icon || args.icon.length > 80)) ||
-      (args.color !== null && !/^#[\da-f]{6}$/i.test(args.color))
+      (args.color !== undefined && args.color !== null && !/^#[\da-f]{6}$/i.test(args.color))
     )
       throw new Error('INVALID_ACCOUNT');
     assertCurrency(args.currency);
+    if (args.openedAt !== undefined && args.openedAt !== null && !Number.isFinite(args.openedAt))
+      throw new Error('INVALID_ACCOUNT');
     if (args.currency !== account.currency) {
       const sourceTransaction = await ctx.db
         .query('transactions')
@@ -207,6 +227,15 @@ export const updateDetails = mutation({
         .withIndex('by_transferAccountId', (q) => q.eq('transferAccountId', String(args.accountId)))
         .first();
       if (sourceTransaction || destinationTransaction) throw new Error('ACCOUNT_CURRENCY_IN_USE');
+      const [goals, budgets] = await Promise.all([
+        ctx.db.query('goals').withIndex('by_owner', (q) => q.eq('ownerId', user._id)).collect(),
+        ctx.db.query('budgets').withIndex('by_owner_period', (q) => q.eq('ownerId', user._id)).collect(),
+      ]);
+      const accountId = String(args.accountId);
+      if (
+        goals.some((goal) => goal.accountId === accountId) ||
+        budgets.some((budget) => budget.accountId === accountId || budget.accountIds?.includes(accountId))
+      ) throw new Error('ACCOUNT_CURRENCY_IN_USE');
     }
     const updatedAt = Date.now();
     await ctx.db.patch(args.accountId, {
@@ -215,9 +244,14 @@ export const updateDetails = mutation({
       customType,
       currency: args.currency,
       openingBalanceMinor: args.openingBalanceMinor,
-      icon: args.icon ?? undefined,
-      color: args.color ?? undefined,
+      ...(args.icon !== undefined ? { icon: args.icon ?? undefined } : {}),
+      ...(args.color !== undefined ? { color: args.color ?? undefined } : {}),
       isIncludedInTotal: args.isIncludedInTotal,
+      ...(args.notes !== undefined ? { notes: args.notes ?? undefined } : {}),
+      ...(args.provider !== undefined ? { provider: args.provider ?? undefined } : {}),
+      ...(args.accountNumber !== undefined ? { accountNumber: args.accountNumber ?? undefined } : {}),
+      ...(args.openedAt !== undefined ? { openedAt: args.openedAt ?? undefined } : {}),
+      ...(args.includeInAnalytics !== undefined ? { includeInAnalytics: args.includeInAnalytics } : {}),
       updatedAt,
     });
     const updated = await ctx.db.get(args.accountId);

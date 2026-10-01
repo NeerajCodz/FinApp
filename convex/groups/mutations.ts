@@ -39,6 +39,18 @@ function validateGroupIcon(icon: string | undefined) {
     throw new Error('INVALID_GROUP_ICON');
 }
 
+function validateGroupMetadata(fields: {
+  description?: string | null;
+  startAt?: number | null;
+  endAt?: number | null;
+}) {
+  if (
+    (fields.description !== undefined && fields.description !== null && fields.description.length > 200) ||
+    (fields.startAt !== undefined && fields.startAt !== null && !Number.isFinite(fields.startAt)) ||
+    (fields.endAt !== undefined && fields.endAt !== null && !Number.isFinite(fields.endAt))
+  ) throw new Error('INVALID_GROUP');
+}
+
 export function createGroupRecord(ownerId: string, name: string, currency: string): Group {
   return createGroup(ownerId, name, currency);
 }
@@ -70,6 +82,12 @@ export const create = mutation({
     memberPhones: v.optional(v.array(v.string())),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
+    description: v.optional(v.string()),
+    groupType: v.optional(v.string()),
+    purpose: v.optional(v.string()),
+    location: v.optional(v.string()),
+    startAt: v.optional(v.number()),
+    endAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
@@ -92,6 +110,7 @@ export const create = mutation({
     assertCurrency(currency);
     const name = args.name.trim();
     validateGroupIcon(args.icon);
+    validateGroupMetadata(args);
     if (args.color !== undefined && !/^#[\da-f]{6}$/i.test(args.color))
       throw new Error('INVALID_GROUP_COLOR');
     if (!name) throw new Error('INVALID_GROUP');
@@ -102,6 +121,12 @@ export const create = mutation({
       currency,
       ...(args.icon === undefined ? {} : { icon: args.icon }),
       ...(args.color === undefined ? {} : { color: args.color }),
+      description: args.description,
+      groupType: args.groupType,
+      purpose: args.purpose,
+      location: args.location,
+      startAt: args.startAt,
+      endAt: args.endAt,
       createdAt: now,
       updatedAt: now,
     });
@@ -207,6 +232,12 @@ export const updateSettings = mutation({
     icon: v.optional(v.union(v.string(), v.null())),
     color: v.optional(v.string()),
     messageRetentionMs: v.optional(v.union(v.number(), v.null())),
+    description: v.optional(v.union(v.string(), v.null())),
+    groupType: v.optional(v.union(v.string(), v.null())),
+    purpose: v.optional(v.union(v.string(), v.null())),
+    location: v.optional(v.union(v.string(), v.null())),
+    startAt: v.optional(v.union(v.number(), v.null())),
+    endAt: v.optional(v.union(v.number(), v.null())),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -237,6 +268,7 @@ export const updateSettings = mutation({
     }));
     requireAdmin(actor._id, String(group.ownerId), roles);
     if (args.name !== undefined && !args.name.trim()) throw new Error('INVALID_GROUP');
+    validateGroupMetadata(args);
     if (args.icon !== undefined && args.icon !== null) validateGroupIcon(args.icon);
     if (args.color !== undefined && !/^#[\da-f]{6}$/i.test(args.color))
       throw new Error('INVALID_GROUP_COLOR');
@@ -252,6 +284,12 @@ export const updateSettings = mutation({
       ...(args.name === undefined ? {} : { name: args.name.trim() }),
       ...(args.icon === undefined ? {} : { icon: args.icon ?? undefined }),
       ...(args.color === undefined ? {} : { color: args.color }),
+      ...(args.description === undefined ? {} : { description: args.description ?? undefined }),
+      ...(args.groupType === undefined ? {} : { groupType: args.groupType ?? undefined }),
+      ...(args.purpose === undefined ? {} : { purpose: args.purpose ?? undefined }),
+      ...(args.location === undefined ? {} : { location: args.location ?? undefined }),
+      ...(args.startAt === undefined ? {} : { startAt: args.startAt ?? undefined }),
+      ...(args.endAt === undefined ? {} : { endAt: args.endAt ?? undefined }),
       ...(args.messageRetentionMs === undefined
         ? {}
         : { messageRetentionMs: args.messageRetentionMs ?? undefined }),
@@ -605,6 +643,9 @@ export const addExpense = mutation({
     amountMinor: v.int64(),
     currency: v.string(),
     occurredAt: v.number(),
+    categoryId: v.optional(v.id('categories')),
+    merchant: v.optional(v.string()),
+    note: v.optional(v.string()),
     participants: v.array(
       v.object({
         userId: v.id('users'),
@@ -648,6 +689,11 @@ export const addExpense = mutation({
       account.archivedAt !== undefined
     )
       throw new Error('CURRENCY_MISMATCH');
+    if (args.categoryId !== undefined) {
+      const category = await ctx.db.get(args.categoryId);
+      if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
+        throw new Error('INVALID_CATEGORY');
+    }
     const membership = await ctx.db
       .query('groupMembers')
       .withIndex('by_group_user', (query) =>
@@ -698,6 +744,9 @@ export const addExpense = mutation({
       currency,
       groupId: args.groupId,
       title: args.title.trim(),
+      categoryId: args.categoryId,
+      merchant: args.merchant,
+      note: args.note,
       occurredAt: args.occurredAt,
       status: 'posted',
       createdAt: now,

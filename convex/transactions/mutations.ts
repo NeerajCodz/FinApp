@@ -8,6 +8,7 @@ import { assertAccountCanReceiveTransaction, type AccountDraft } from '../accoun
 import { assertMutationAvailable, transactionSignedAmount } from './domain';
 import { getMutationReceipt, recordSyncChange, storeMutationReceipt } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
+import { aggregateBudgetSpending, budgetAlertThresholdCrossed } from '../budgets/domain';
 
 export type TransactionDraft = {
   ownerId: string;
@@ -168,6 +169,10 @@ export const create = mutation({
         .query('budgets')
         .withIndex('by_owner_period', (query) => query.eq('ownerId', user._id))
         .collect();
+      const categories = await ctx.db.query('categories')
+        .withIndex('by_owner', (query) => query.eq('ownerId', user._id)).collect();
+      const excludedCategoryIds = new Set(categories
+        .filter((entry) => entry.includeInBudgets === false).map((entry) => String(entry._id)));
       const active = budgets.filter(
         (budget) =>
           budget.archivedAt === undefined &&
@@ -175,7 +180,9 @@ export const create = mutation({
           args.occurredAt >= budget.startAt &&
           args.occurredAt < budget.endAt &&
           (budget.period !== 'category' || budget.categoryId === args.categoryId) &&
-          (budget.period !== 'account' || budget.accountId === args.accountId),
+          (budget.period !== 'account' || budget.accountId === args.accountId) &&
+          (!budget.accountIds?.length || budget.accountIds.includes(String(args.accountId))) &&
+          (args.categoryId === undefined || !excludedCategoryIds.has(String(args.categoryId))),
       );
       if (active.length) {
         const startAt = Math.min(...active.map((budget) => budget.startAt));
@@ -187,28 +194,16 @@ export const create = mutation({
           )
           .collect();
         for (const budget of active) {
-          const current = spending.reduce(
-            (sum, transaction) =>
-              transaction.type === 'expense' &&
-              transaction.status === 'posted' &&
-              transaction.deletedAt === undefined &&
-              transaction.currency === budget.currency &&
-              transaction.occurredAt >= budget.startAt &&
-              transaction.occurredAt < budget.endAt &&
-              (budget.period !== 'category' || budget.categoryId === transaction.categoryId) &&
-              (budget.period !== 'account' || budget.accountId === transaction.accountId)
-                ? sum + transaction.amountMinor
-                : sum,
-            0n,
-          );
+          const current = aggregateBudgetSpending(spending, budget, excludedCategoryIds);
           const previous = current - args.amountMinor;
+          const configuredThreshold = budget.alertThreshold ?? 80;
           const threshold =
             previous < budget.amountMinor && current >= budget.amountMinor
               ? 100
-              : previous * 5n < budget.amountMinor * 4n && current * 5n >= budget.amountMinor * 4n
-                ? 80
+              : budgetAlertThresholdCrossed(previous, current, budget.amountMinor, configuredThreshold)
+                ? configuredThreshold
                 : null;
-          if (threshold)
+          if (threshold !== null)
             await createNotification(
               ctx,
               user._id,

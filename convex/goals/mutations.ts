@@ -6,6 +6,9 @@ import { publishMutationResult, recordSyncChange, replayMutationResult } from '.
 import { createNotification } from '../notifications/mutations';
 import { applyContribution } from './domain';
 
+const priority = v.union(v.literal('low'), v.literal('medium'), v.literal('high'));
+const reminderFrequency = v.union(v.literal('none'), v.literal('weekly'), v.literal('monthly'));
+
 export const create = mutation({
   args: {
     name: v.string(),
@@ -14,6 +17,12 @@ export const create = mutation({
     targetDate: v.optional(v.number()),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
+    goalType: v.optional(v.string()),
+    monthlyContributionMinor: v.optional(v.int64()),
+    accountId: v.optional(v.id('accounts')),
+    priority: v.optional(priority),
+    notes: v.optional(v.string()),
+    reminderFrequency: v.optional(reminderFrequency),
     clientMutationId: v.string(),
   },
   handler: async (ctx, args) => {
@@ -28,12 +37,20 @@ export const create = mutation({
     const name = args.name.trim();
     assertPositiveAmount(args.targetAmountMinor);
     assertCurrency(args.currency);
+    if (args.monthlyContributionMinor !== undefined && args.monthlyContributionMinor < 0n)
+      throw new Error('INVALID_GOAL');
+    if (args.accountId !== undefined) {
+      const account = await ctx.db.get(args.accountId);
+      if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
+        throw new Error('INSUFFICIENT_PERMISSION');
+      if (account.currency !== args.currency) throw new Error('CURRENCY_MISMATCH');
+    }
     if (
       (args.icon !== undefined && (args.icon.length === 0 || args.icon.length > 80)) ||
       (args.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(args.color))
     )
       throw new Error('INVALID_GOAL');
-    if (!name || (args.targetDate !== undefined && args.targetDate <= Date.now()))
+    if (!name || (args.targetDate !== undefined && (!Number.isFinite(args.targetDate) || args.targetDate <= Date.now())))
       throw new Error('INVALID_GOAL');
     const now = Date.now();
     const record = {
@@ -45,6 +62,12 @@ export const create = mutation({
       createdAt: now,
       color: args.color,
       icon: args.icon,
+      goalType: args.goalType,
+      monthlyContributionMinor: args.monthlyContributionMinor,
+      accountId: args.accountId,
+      priority: args.priority,
+      notes: args.notes,
+      reminderFrequency: args.reminderFrequency,
       updatedAt: now,
     };
     const id = await ctx.db.insert('goals', record);
@@ -106,9 +129,15 @@ export const update = mutation({
     goalId: v.id('goals'),
     name: v.string(),
     targetAmountMinor: v.int64(),
-    targetDate: v.union(v.number(), v.null()),
-    icon: v.union(v.string(), v.null()),
-    color: v.union(v.string(), v.null()),
+    targetDate: v.optional(v.union(v.number(), v.null())),
+    icon: v.optional(v.union(v.string(), v.null())),
+    color: v.optional(v.union(v.string(), v.null())),
+    goalType: v.optional(v.union(v.string(), v.null())),
+    monthlyContributionMinor: v.optional(v.union(v.int64(), v.null())),
+    accountId: v.optional(v.union(v.id('accounts'), v.null())),
+    priority: v.optional(priority),
+    notes: v.optional(v.union(v.string(), v.null())),
+    reminderFrequency: v.optional(reminderFrequency),
     clientMutationId: v.string(),
   },
   handler: async (ctx, args) => {
@@ -125,20 +154,34 @@ export const update = mutation({
       throw new Error('INVALID_GOAL');
     const name = args.name.trim();
     assertPositiveAmount(args.targetAmountMinor);
+    if (args.monthlyContributionMinor !== undefined && args.monthlyContributionMinor !== null && args.monthlyContributionMinor < 0n)
+      throw new Error('INVALID_GOAL');
+    if (args.accountId !== undefined && args.accountId !== null) {
+      const account = await ctx.db.get(args.accountId);
+      if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
+        throw new Error('INSUFFICIENT_PERMISSION');
+      if (account.currency !== goal.currency) throw new Error('CURRENCY_MISMATCH');
+    }
     if (
       !name ||
-      (args.targetDate !== null && args.targetDate <= Date.now()) ||
-      (args.icon !== null && (args.icon.length === 0 || args.icon.length > 80)) ||
-      (args.color !== null && !/^#[0-9a-fA-F]{6}$/.test(args.color))
+      (args.targetDate !== undefined && args.targetDate !== null && (!Number.isFinite(args.targetDate) || args.targetDate <= Date.now())) ||
+      (args.icon !== undefined && args.icon !== null && (args.icon.length === 0 || args.icon.length > 80)) ||
+      (args.color !== undefined && args.color !== null && !/^#[0-9a-fA-F]{6}$/.test(args.color))
     )
       throw new Error('INVALID_GOAL');
     const updatedAt = Date.now();
     await ctx.db.patch(args.goalId, {
       name,
       targetAmountMinor: args.targetAmountMinor,
-      targetDate: args.targetDate ?? undefined,
-      icon: args.icon ?? undefined,
-      color: args.color ?? undefined,
+      ...(args.targetDate !== undefined ? { targetDate: args.targetDate ?? undefined } : {}),
+      ...(args.icon !== undefined ? { icon: args.icon ?? undefined } : {}),
+      ...(args.color !== undefined ? { color: args.color ?? undefined } : {}),
+      ...(args.goalType !== undefined ? { goalType: args.goalType ?? undefined } : {}),
+      ...(args.monthlyContributionMinor !== undefined ? { monthlyContributionMinor: args.monthlyContributionMinor ?? undefined } : {}),
+      ...(args.accountId !== undefined ? { accountId: args.accountId ?? undefined } : {}),
+      ...(args.priority !== undefined ? { priority: args.priority } : {}),
+      ...(args.notes !== undefined ? { notes: args.notes ?? undefined } : {}),
+      ...(args.reminderFrequency !== undefined ? { reminderFrequency: args.reminderFrequency } : {}),
       updatedAt,
     });
     const updated = await ctx.db.get(args.goalId);

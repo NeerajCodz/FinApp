@@ -11,6 +11,10 @@ export const create = mutation({
     color: v.optional(v.string()),
     kind: v.optional(v.union(v.literal('expense'), v.literal('income'))),
     parentId: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    includeInBudgets: v.optional(v.boolean()),
+    monthlyLimitMinor: v.optional(v.int64()),
+    limitCurrency: v.optional(v.string()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -33,11 +37,18 @@ export const create = mutation({
       if (!parent || parent.ownerId !== user._id || parent.archivedAt !== undefined)
         throw new Error('INVALID_CATEGORY');
     }
+    if (args.monthlyLimitMinor !== undefined) assertPositiveAmount(args.monthlyLimitMinor);
+    const limitCurrency = args.monthlyLimitMinor === undefined
+      ? undefined : (args.limitCurrency ?? user.defaultCurrency);
+    if (limitCurrency !== undefined) assertCurrency(limitCurrency);
+    if (args.monthlyLimitMinor !== undefined && limitCurrency === undefined)
+      throw new Error('INVALID_CURRENCY');
     const now = Date.now();
     const { clientMutationId, ...categoryFields } = args;
     const categoryId = await ctx.db.insert('categories', {
       ...categoryFields,
       name,
+      limitCurrency,
       ownerId: user._id,
       isSystem: false,
       sortOrder: now,
@@ -139,9 +150,11 @@ export const setPreferences = mutation({
     categoryId: v.id('categories'),
     kind: v.union(v.literal('expense'), v.literal('income')),
     color: v.union(v.string(), v.null()),
+    notes: v.optional(v.union(v.string(), v.null())),
+    includeInBudgets: v.optional(v.boolean()),
     clientMutationId: v.optional(v.string()),
   },
-  handler: async (ctx, { categoryId, kind, color, clientMutationId }) => {
+  handler: async (ctx, { categoryId, kind, color, notes, includeInBudgets, clientMutationId }) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
@@ -161,7 +174,13 @@ export const setPreferences = mutation({
       throw new Error('INVALID_CATEGORY');
     if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error('INVALID_CATEGORY');
     const updatedAt = Date.now();
-    await ctx.db.patch(categoryId, { kind, color: color ?? undefined, updatedAt });
+    await ctx.db.patch(categoryId, {
+      kind,
+      color: color ?? undefined,
+      ...(notes !== undefined ? { notes: notes ?? undefined } : {}),
+      ...(includeInBudgets !== undefined ? { includeInBudgets } : {}),
+      updatedAt,
+    });
     const updated = await ctx.db.get(categoryId);
     if (!updated) throw new Error('INVALID_CATEGORY');
     await publishMutationResult(
