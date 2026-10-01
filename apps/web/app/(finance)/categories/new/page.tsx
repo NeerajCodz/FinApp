@@ -6,6 +6,8 @@ import { CategoryFormScreen } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { SignInGate } from '../../_personal';
+import { useLocalRecords } from '@/lib/offline/hooks';
+import { parseMinor } from '@convex/shared/money';
 
 export default function NewCategoryPage() {
   const router = useRouter();
@@ -14,6 +16,10 @@ export default function NewCategoryPage() {
   const [icon, setIcon] = React.useState<string>();
   const [kind, setKind] = React.useState<'expense' | 'income'>('expense');
   const [color, setColor] = React.useState<string>();
+  const { records: profiles } = useLocalRecords<LocalRecord>('profile');
+  const currency = String(profiles[0]?.defaultCurrency ?? 'INR');
+  const [limitValue, setLimitValue] = React.useState('');
+  const [notes, setNotes] = React.useState('');
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -24,12 +30,16 @@ export default function NewCategoryPage() {
     setError(null);
     try {
       const now = Date.now();
+      const monthlyLimitMinor = limitValue.trim() ? parseMinor(limitValue, currency) : undefined;
+      if (monthlyLimitMinor !== undefined && monthlyLimitMinor <= 0n) throw new Error('Enter a positive monthly limit.');
       const record: LocalRecord = {
         ownerId: userId,
         name: trimmedName,
         ...(icon ? { icon } : {}),
         kind,
         ...(color ? { color } : {}),
+        notes: notes.trim() || undefined,
+        ...(monthlyLimitMinor !== undefined ? { monthlyLimitMinor, limitCurrency: currency } : {}),
         isSystem: false,
         sortOrder: now,
         createdAt: now,
@@ -40,6 +50,8 @@ export default function NewCategoryPage() {
         ...(icon ? { icon } : {}),
         kind,
         ...(color ? { color } : {}),
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
+        ...(monthlyLimitMinor !== undefined ? { monthlyLimitMinor, limitCurrency: currency } : {}),
       });
       router.replace(`/category/${encodeURIComponent(id)}`);
     } catch (cause) {
@@ -63,6 +75,11 @@ export default function NewCategoryPage() {
         icon={icon}
         kind={kind}
         color={color}
+        currency={currency}
+        limitValue={limitValue}
+        onLimitChange={setLimitValue}
+        notes={notes}
+        onNotesChange={setNotes}
         pending={pending}
         error={error}
         onNameChange={setName}

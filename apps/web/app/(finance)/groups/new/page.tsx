@@ -11,6 +11,7 @@ import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { groupMetadataDraft, groupMetadataPayload } from '../../group/formData';
 
 type ContactPicker = {
   select: (
@@ -27,6 +28,7 @@ export default function NewGroupPage() {
   const { userId } = useBrowserSync();
   const { records: profiles } = useLocalRecords<LocalRecord>('profile');
   const [name, setName] = React.useState('');
+  const [details, setDetails] = React.useState(() => groupMetadataDraft());
   const [usernameInput, setUsernameInput] = React.useState('');
   const [icon, setIcon] = React.useState<string | undefined>('phosphor:UsersThree');
   const [color, setColor] = React.useState<string | undefined>('#78e6a0');
@@ -126,6 +128,7 @@ export default function NewGroupPage() {
     setError('');
     try {
       const cleanName = name.trim();
+      const metadata = groupMetadataPayload(details);
       if (!icon || !color) {
         setError('Choose a group icon and color.');
         return;
@@ -139,6 +142,7 @@ export default function NewGroupPage() {
           icon,
           color,
           name: cleanName,
+          ...metadata,
           currency,
           participantUsernames: usernames,
           memberPhones: phones,
@@ -146,6 +150,7 @@ export default function NewGroupPage() {
         },
         {
           name: cleanName,
+          ...metadata,
           currency,
           memberUsernames: usernames,
           memberPhones: phones,
@@ -178,6 +183,13 @@ export default function NewGroupPage() {
       onBack={() => router.push('/groups')}
       name={name}
       onNameChange={setName}
+      {...details}
+      onDescriptionChange={(description) => setDetails((current) => ({ ...current, description }))}
+      onGroupTypeChange={(groupType) => setDetails((current) => ({ ...current, groupType }))}
+      onPurposeChange={(purpose) => setDetails((current) => ({ ...current, purpose }))}
+      onLocationChange={(location) => setDetails((current) => ({ ...current, location }))}
+      onStartDateChange={(startDate) => setDetails((current) => ({ ...current, startDate }))}
+      onEndDateChange={(endDate) => setDetails((current) => ({ ...current, endDate }))}
       currency={currency}
       currencies={currencies}
       onCurrencyChange={setCurrency}

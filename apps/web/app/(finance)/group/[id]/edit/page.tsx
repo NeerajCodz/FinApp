@@ -83,6 +83,7 @@ export default function GroupSettingsPage() {
         role: member.role,
         username: member.username,
         displayName: member.displayName,
+        avatarUrl: member.avatarUrl,
       }))
     : localMembers;
   const remoteRole = remoteGroup?.members.find((member) => member.id === userId)?.role;

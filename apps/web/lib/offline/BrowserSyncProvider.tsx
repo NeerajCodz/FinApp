@@ -170,7 +170,9 @@ async function sendMutation(
       await convex.mutation(api.accounts.mutations.create, payload as never);
       return;
     case 'account.rename':
-      await convex.mutation(api.accounts.mutations.rename, payload as never);
+      await convex.mutation(api.accounts.mutations.rename, {
+        ...payload, accountId: await mapId('account', payload.accountId),
+      } as never);
       return;
     case 'account.updateDetails':
       await convex.mutation(api.accounts.mutations.updateDetails, {
@@ -191,25 +193,42 @@ async function sendMutation(
       } as never);
       return;
     case 'account.archive':
-      await convex.mutation(api.accounts.mutations.archive, payload as never);
+      await convex.mutation(api.accounts.mutations.archive, {
+        ...payload, accountId: await mapId('account', payload.accountId),
+      } as never);
       return;
     case 'category.create':
-      await convex.mutation(api.categories.mutations.create, payload as never);
+      await convex.mutation(api.categories.mutations.create, {
+        ...payload,
+        ...(typeof payload.parentId === 'string'
+          ? { parentId: await mapId('category', payload.parentId) } : {}),
+      } as never);
       return;
     case 'category.rename':
-      await convex.mutation(api.categories.mutations.rename, payload as never);
+      await convex.mutation(api.categories.mutations.rename, {
+        ...payload, categoryId: await mapId('category', payload.categoryId),
+      } as never);
       return;
     case 'category.setIcon':
-      await convex.mutation(api.categories.mutations.setIcon, payload as never);
+      await convex.mutation(api.categories.mutations.setIcon, {
+        ...payload, categoryId: await mapId('category', payload.categoryId),
+      } as never);
       return;
     case 'category.setPreferences':
-      await convex.mutation(api.categories.mutations.setPreferences, payload as never);
+      await convex.mutation(api.categories.mutations.setPreferences, {
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
+      } as never);
       return;
     case 'category.setLimit':
-      await convex.mutation(api.categories.mutations.setLimit, payload as never);
+      await convex.mutation(api.categories.mutations.setLimit, {
+        ...payload, categoryId: await mapId('category', payload.categoryId),
+      } as never);
       return;
     case 'category.archive':
-      await convex.mutation(api.categories.mutations.archive, payload as never);
+      await convex.mutation(api.categories.mutations.archive, {
+        ...payload, categoryId: await mapId('category', payload.categoryId),
+      } as never);
       return;
     case 'budget.create': {
       const categoryId = typeof payload.categoryId === 'string' ? payload.categoryId : null;
@@ -218,6 +237,8 @@ async function sendMutation(
         ...payload,
         ...(categoryId ? { categoryId: await mapId('category', categoryId) } : {}),
         ...(accountId ? { accountId: await mapId('account', accountId) } : {}),
+        ...(Array.isArray(payload.accountIds)
+          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) } : {}),
       } as never);
       return;
     }
@@ -227,6 +248,8 @@ async function sendMutation(
         ...payload,
         budgetId: await mapId('budget', String(payload.budgetId)),
         categoryId: await mapId('category', categoryId),
+        ...(Array.isArray(payload.accountIds)
+          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) } : {}),
       } as never);
       return;
     }
@@ -286,6 +309,8 @@ async function sendMutation(
         ...payload,
         groupId: await mapId('group', payload.groupId),
         accountId: await mapId('account', payload.accountId),
+        ...(typeof payload.categoryId === 'string'
+          ? { categoryId: await mapId('category', payload.categoryId) } : {}),
       } as never);
       return;
     case 'settlement.create':
@@ -296,7 +321,11 @@ async function sendMutation(
       } as never);
       return;
     case 'goal.create':
-      await convex.mutation(api.goals.mutations.create, payload as never);
+      await convex.mutation(api.goals.mutations.create, {
+        ...payload,
+        ...(typeof payload.accountId === 'string'
+          ? { accountId: await mapId('account', payload.accountId) } : {}),
+      } as never);
       return;
     case 'goal.contribute':
       await convex.mutation(api.goals.mutations.contribute, {
@@ -314,6 +343,8 @@ async function sendMutation(
       await convex.mutation(api.goals.mutations.update, {
         ...payload,
         goalId: await mapId('goal', payload.goalId),
+        ...(typeof payload.accountId === 'string'
+          ? { accountId: await mapId('account', payload.accountId) } : {}),
       } as never);
       return;
     case 'goal.archive':

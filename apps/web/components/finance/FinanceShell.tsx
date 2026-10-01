@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
+  Bell,
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowRight,
@@ -15,7 +16,6 @@ import {
   History,
   House,
   Landmark,
-  Plus,
   Tags,
   Target,
   UsersRound,
@@ -23,8 +23,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Button, Sheet } from '@finapp/ui/web';
-import { FinanceBrand, MobileFinanceNav } from '@finapp/ui/finance';
+import { Sheet } from '@finapp/ui/web';
+import { FinanceBrand, FinanceWorkspace, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
@@ -32,14 +32,15 @@ type NavItem = { href: string; label: string; icon: LucideIcon };
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
-  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/accounts', label: 'Accounts', icon: Landmark },
   { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/groups', label: 'Groups', icon: UsersRound },
+  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/categories', label: 'Categories', icon: Tags },
   { href: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 const mobileNavigation = [
   { href: '/dashboard', label: 'Home', icon: House },
@@ -102,7 +103,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   }, [identityReady, router, userId]);
   if (!identityReady || !userId) return null;
 
-  const profileHref = userId ? '/profile' : '/sign-in';
+  const profileHref = '/profile';
   const isActive = (href: string) =>
     pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
   const isProfileActive =
@@ -110,53 +111,27 @@ export function FinanceShell({ children }: { children: ReactNode }) {
     pathname.startsWith('/profile/') ||
     pathname === '/settings' ||
     pathname.startsWith('/settings/');
-  const guestHome = !userId && pathname === '/dashboard';
 
   return (
     <QuickAddContext.Provider value={openQuickAdd}>
-      <div className={`finance-app${guestHome ? ' finance-guest-home' : ''}`}>
-        <aside className="finance-sidebar" aria-label="Finapp">
-          <div className="finance-brand-lockup">
-            <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-              <FinanceBrand />
-            </Link>
-          </div>
-          <p className="finance-sidebar-label">YOUR MONEY</p>
-          <nav className="finance-nav" aria-label="Main navigation">
-            {navigation.map(({ href, label, icon: Icon }) => {
-              const active = isActive(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`finance-nav-link${active ? ' active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  <Icon size={18} aria-hidden="true" />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="finance-sidebar-bottom">
-            <Link
-              href={profileHref}
-              className={`finance-nav-link${isProfileActive ? ' active' : ''}`}
-            >
-              <CircleUserRound size={18} aria-hidden="true" />
-              <span>{userId ? 'Profile' : 'Sign in'}</span>
-            </Link>
-          </div>
-        </aside>
-        <div className="finance-main">
-          <header className="finance-topbar">
-            <div className="finance-topbar-brand finance-brand-lockup">
-              <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-                <FinanceBrand />
+      <FinanceWorkspace
+        onAdd={openQuickAdd}
+        brandLink={<Link href="/dashboard" aria-label="Finapp overview"><FinanceBrand /></Link>}
+        navigation={
+          <>
+            {navigation.map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined}>
+                <Icon size={22} aria-hidden="true" />
+                <span>{label}</span>
               </Link>
-            </div>
-          </header>
-          <main className="finance-content">{children}</main>
+            ))}
+            <Link href={profileHref} aria-current={isProfileActive ? 'page' : undefined}>
+              <CircleUserRound size={22} aria-hidden="true" />
+              <span>Profile</span>
+            </Link>
+          </>
+        }
+        mobileNavigation={
           <MobileFinanceNav
             onAdd={openQuickAdd}
             beforeAdd={
@@ -201,11 +176,10 @@ export function FinanceShell({ children }: { children: ReactNode }) {
               </>
             }
           />
-        </div>
-      </div>
-      <Button className="finance-desktop-add" size="icon" aria-label="Add" onPress={openQuickAdd}>
-        <Plus size={24} strokeWidth={2.2} aria-hidden="true" />
-      </Button>
+        }
+      >
+        <main>{children}</main>
+      </FinanceWorkspace>
       <Sheet visible={quickAddOpen} onClose={closeQuickAdd} title="Add">
         <QuickAddActions onClose={closeQuickAdd} />
       </Sheet>

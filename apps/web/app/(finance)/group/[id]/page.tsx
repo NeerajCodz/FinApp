@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
@@ -13,11 +13,13 @@ import { Empty } from '@finapp/ui/web';
 import { formatTransactionDate } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { isGroupRangeCovered } from '@/lib/offline/repository';
+import { isGroupRangeCovered, readLocal } from '@/lib/offline/repository';
 import {
   GroupDetailScreen,
+  GroupChatScreen,
   type GroupDetailActivity,
   type GroupDetailMember,
+  type GroupChatScreenProps,
   type GroupDetailSettlement,
 } from '@finapp/ui/finance';
 import type { GroupChatItem } from '@finapp/ui/finance';
@@ -56,6 +58,8 @@ type LedgerRecord = LocalRecord & {
   hasTime?: boolean;
   title?: string;
   deletedAt?: number;
+  categoryId?: string;
+  accountId?: string;
   participants?: Array<{ userId: string; amountMinor: bigint | number | string }>;
   payerUserId?: string;
   payerAmountMinor?: bigint | number | string;
@@ -78,6 +82,7 @@ export default function GroupHomePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const groupId = params.id;
+  const standaloneChat = usePathname().endsWith('/chat');
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
   const {
     records: groups,
@@ -85,20 +90,32 @@ export default function GroupHomePage() {
     error: groupsError,
   } = useLocalRecords<Group>('group');
   const { records: members } = useLocalRecords<Member>('groupMember');
-  const { records: transactions } = useLocalRecords<LedgerRecord>('transaction');
-  const { records: payers } = useLocalRecords<LedgerRecord>('expensePayer');
-  const { records: participants } = useLocalRecords<LedgerRecord>('expenseParticipant');
-  const { records: settlements } = useLocalRecords<LedgerRecord>('settlement');
+  const { records: transactions, loading: transactionsLoading, error: transactionsError } = useLocalRecords<LedgerRecord>('transaction');
+  const { records: payers, loading: payersLoading, error: payersError } = useLocalRecords<LedgerRecord>('expensePayer');
+  const { records: participants, loading: participantsLoading, error: participantsError } = useLocalRecords<LedgerRecord>('expenseParticipant');
+  const { records: settlements, loading: settlementsLoading, error: settlementsError } = useLocalRecords<LedgerRecord>('settlement');
+  const { records: categories } = useLocalRecords<LocalRecord>('category');
+  const { records: accounts } = useLocalRecords<LocalRecord>('account');
   const [rangeStatus, setRangeStatus] = React.useState<
     'idle' | 'loading' | 'loaded' | 'uncached' | 'error'
   >('idle');
   const [rangeError, setRangeError] = React.useState('');
+  const [coveredScope, setCoveredScope] = React.useState('');
+  const [completeLedger, setCompleteLedger] = React.useState<{
+    scope: string;
+    transactions: LedgerRecord[];
+    payers: LedgerRecord[];
+    participants: LedgerRecord[];
+    settlements: LedgerRecord[];
+    error?: string;
+  }>();
   const group = groups.find((item) => recordIds(item).includes(groupId));
   const groupIds = group ? recordIds(group) : [groupId];
   const localGroupId = group ? recordId(group) : groupId;
   const groupReady = Boolean(group);
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
+  const ledgerScope = `${userId ?? ''}:${localGroupId}:${rangeEndAt}`;
   const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
   const canUseGroupChat = isConnected && Boolean(cloudGroupId);
   const remoteGroup = useQuery(
@@ -115,13 +132,6 @@ export default function GroupHomePage() {
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
   const [chatError, setChatError] = React.useState('');
-  const chatTimelineRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const timeline = chatTimelineRef.current;
-    if (canUseGroupChat && chatMessages?.length && timeline)
-      timeline.scrollTop = timeline.scrollHeight;
-  }, [canUseGroupChat, chatMessages?.length]);
 
   React.useEffect(() => {
     if (!userId || !group) return;
@@ -130,6 +140,7 @@ export default function GroupHomePage() {
       void isGroupRangeCovered(userId, localGroupId, 0, rangeEndAt).then(
         (covered) => {
           if (!active) return;
+          if (covered) setCoveredScope(ledgerScope);
           setRangeStatus(covered ? 'loaded' : 'uncached');
           setRangeError(
             covered ? '' : 'Offline. Showing saved records; the all-time range may be incomplete.',
@@ -151,7 +162,10 @@ export default function GroupHomePage() {
     setRangeError('');
     void fetchGroupRange(localGroupId, 0, rangeEndAt).then(
       () => {
-        if (active) setRangeStatus('loaded');
+        if (active) {
+          setCoveredScope(ledgerScope);
+          setRangeStatus('loaded');
+        }
       },
       (cause: unknown) => {
         if (active) {
@@ -165,7 +179,39 @@ export default function GroupHomePage() {
     return () => {
       active = false;
     };
-  }, [fetchGroupRange, groupReady, isConnected, localGroupId, rangeEndAt, userId]);
+  }, [fetchGroupRange, groupReady, isConnected, localGroupId, rangeEndAt, userId, ledgerScope]);
+
+  React.useEffect(() => {
+    if (!userId || rangeStatus !== 'loaded' || coveredScope !== ledgerScope) return;
+    let active = true;
+    void Promise.all([
+      readLocal<LedgerRecord>(userId, 'transaction'),
+      readLocal<LedgerRecord>(userId, 'expensePayer'),
+      readLocal<LedgerRecord>(userId, 'expenseParticipant'),
+      readLocal<LedgerRecord>(userId, 'settlement'),
+    ]).then(
+      ([completeTransactions, completePayers, completeParticipants, completeSettlements]) => {
+        if (active) setCompleteLedger({
+          scope: ledgerScope,
+          transactions: completeTransactions,
+          payers: completePayers,
+          participants: completeParticipants,
+          settlements: completeSettlements,
+        });
+      },
+      (cause: unknown) => {
+        if (active) setCompleteLedger({
+          scope: ledgerScope,
+          transactions: [],
+          payers: [],
+          participants: [],
+          settlements: [],
+          error: cause instanceof Error ? cause.message : 'Complete group records could not be read.',
+        });
+      },
+    );
+    return () => { active = false; };
+  }, [userId, rangeStatus, coveredScope, ledgerScope, transactions, payers, participants, settlements]);
 
   if (!userId)
     return (
@@ -209,7 +255,7 @@ export default function GroupHomePage() {
     );
 
   const groupMembers = members.filter(
-    (member) => typeof member.groupId === 'string' && groupIds.includes(member.groupId),
+    (member) => member.deletedAt === undefined && typeof member.groupId === 'string' && groupIds.includes(member.groupId),
   );
   const expenses = transactions.filter(
     (record) =>
@@ -224,18 +270,24 @@ export default function GroupHomePage() {
     const transactionIds = recordIds(expense);
     return transactionIds.length > 0;
   });
-  const rangeComplete = rangeStatus === 'loaded';
+  const recordsLoading = transactionsLoading || payersLoading || participantsLoading || settlementsLoading;
+  const rangeComplete = rangeStatus === 'loaded' && coveredScope === ledgerScope &&
+    completeLedger?.scope === ledgerScope && !recordsLoading;
   let balanceByUser: Record<string, bigint> = {};
-  let ledgerError = '';
-  if (rangeComplete) {
+  let ledgerError = transactionsError || payersError || participantsError || settlementsError ||
+    (completeLedger?.scope === ledgerScope ? completeLedger.error : '') || '';
+  let totalSpendMinor = 0n;
+  if (rangeComplete && completeLedger && !ledgerError) {
     try {
-      balanceByUser = projectGroupBalances(
+      const projected = projectGroupBalances(
         group,
-        transactions,
-        payers,
-        participants,
-        settlements,
-      ).balances;
+        completeLedger.transactions,
+        completeLedger.payers,
+        completeLedger.participants,
+        completeLedger.settlements,
+      );
+      balanceByUser = projected.balances;
+      totalSpendMinor = projected.expenses.reduce((sum, expense) => sum + asMinor(expense.amountMinor), 0n);
     } catch (cause) {
       ledgerError = cause instanceof Error ? cause.message : 'The group balance is incomplete.';
     }
@@ -245,20 +297,23 @@ export default function GroupHomePage() {
   const recent = [...activeExpenses]
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
     .slice(0, 5);
-  const memberNames = groupMembers.map((member) => ({
-    id: String(member.userId ?? member.memberId ?? recordId(member)),
-    username: member.username,
-    avatarUrl: member.avatarUrl,
-    name: String(
-      member.userId === userId
-        ? 'You'
-        : (member.displayName ??
-            member.name ??
-            (member.username
-              ? `@${member.username}`
-              : `Member ${String(member.userId ?? '').slice(-6)}`)),
-    ),
-  }));
+  const memberNames: GroupDetailMember[] = remoteGroup?.members
+    ? remoteGroup.members.map((member) => ({
+        id: member.id,
+        username: member.username,
+        avatarUrl: member.avatarUrl,
+        role: member.role,
+        name: member.id === userId ? 'You' : member.displayName,
+      }))
+    : groupMembers.map((member) => ({
+        id: String(member.userId ?? member.memberId ?? recordId(member)),
+        username: member.username,
+        avatarUrl: member.avatarUrl,
+        role: member.role,
+        name: member.userId === userId ? 'You' : String(
+          member.displayName ?? member.name ?? (member.username ? `@${member.username}` : `Member ${String(member.userId ?? '').slice(-6)}`),
+        ),
+      }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
     memberNames.unshift({ id: userId, username: undefined, avatarUrl: null, name: 'You' });
   const recentSettlements = settlements
@@ -278,6 +333,16 @@ export default function GroupHomePage() {
         (id ? `Member ${id.slice(-6)}` : 'Group member'));
   const formatDate = (value: unknown, hasTime?: boolean) =>
     formatTransactionDate(Number(value ?? Date.now()), hasTime);
+  const expenseMetadata = (expense: LedgerRecord) => {
+    const category = categories.find((record) => expense.categoryId && recordIds(record).includes(expense.categoryId));
+    const account = accounts.find((record) => expense.accountId && recordIds(record).includes(expense.accountId));
+    return {
+      category: typeof category?.name === 'string' ? category.name : undefined,
+      account: typeof account?.name === 'string' ? account.name : undefined,
+      icon: typeof category?.icon === 'string' ? category.icon : undefined,
+      color: typeof category?.color === 'string' ? category.color : undefined,
+    };
+  };
   const chatTimelineItems = [
     ...recent.map((expense) => ({
       id: `expense:${recordId(expense)}`,
@@ -309,6 +374,7 @@ export default function GroupHomePage() {
         date: date.toLocaleString(),
         accessibleLabel: `${ownMessage ? 'You' : message.senderName}, ${date.toLocaleString()}`,
         sender: message.senderName,
+        senderAvatarUrl: message.senderAvatarUrl,
         ownMessage,
         text: message.kind === 'text' ? message.text : undefined,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
@@ -323,6 +389,8 @@ export default function GroupHomePage() {
         accessibleLabel: `Shared expense: ${expense.title ?? 'Group expense'}`,
         title: expense.title ?? 'Group expense',
         amount: formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR'),
+        ...expenseMetadata(expense),
+        onPress: () => router.push(`/transaction/${encodeURIComponent(recordId(expense))}`),
       };
     }
     const settlement = item.settlement;
@@ -392,18 +460,14 @@ export default function GroupHomePage() {
     }
   }
 
-  const detailMembers: GroupDetailMember[] = memberNames.map((member) => ({
-    id: member.id,
-    name: member.name,
-    username: member.username,
-    avatarUrl: member.avatarUrl,
-  }));
+  const detailMembers = memberNames;
   const detailActivities: GroupDetailActivity[] = recent.map((expense) => ({
     id: recordId(expense),
     title: expense.title ?? 'Group expense',
     amountMinor: asMinor(expense.amountMinor),
     currency: group.currency ?? 'INR',
     date: formatDate(expense.occurredAt, expense.hasTime),
+    ...expenseMetadata(expense),
   }));
   const detailSettlements: GroupDetailSettlement[] = recentSettlements.map((settlement) => ({
     id: recordId(settlement),
@@ -413,6 +477,30 @@ export default function GroupHomePage() {
   }));
   const balanceMeaning =
     myBalance === 0n ? 'You are settled' : myBalance > 0n ? 'Owed to you' : 'You owe';
+  const chat: GroupChatScreenProps = {
+    group: {
+      name: group.name ?? 'Group',
+      currency: group.currency ?? 'INR',
+      icon: remoteGroup?.icon ?? group.icon,
+      color: remoteGroup?.color ?? group.color,
+    },
+    members: detailMembers.map((member) => ({ ...member, avatarUrl: member.avatarUrl ?? undefined })),
+    embedded: !standaloneChat,
+    onOpenGroup: () => router.push(`/group/${encodeURIComponent(localGroupId)}`),
+    onAddExpense: () => router.push(`/group/${encodeURIComponent(localGroupId)}/new`),
+    onOpenSettings: () => router.push(`/group/${encodeURIComponent(localGroupId)}/edit`),
+    items: groupChatItems,
+    loading: canUseGroupChat && chatMessages === undefined,
+    canSend: canUseGroupChat,
+    connected: isConnected,
+    draft: chatDraft,
+    pending: chatPending,
+    error: chatError || undefined,
+    onDraftChange: setChatDraft,
+    onSubmit: submitChatMessage,
+    onUpload: uploadBillImage,
+  };
+  if (standaloneChat) return <GroupChatScreen {...chat} />;
   return (
     <GroupDetailScreen
       group={{
@@ -423,7 +511,7 @@ export default function GroupHomePage() {
       }}
       canSettle={!ledgerUnavailable && myBalance !== 0n}
       balanceStatus={
-        rangeStatus === 'loading' && !ledgerError
+        (rangeStatus === 'loading' || recordsLoading || (rangeStatus === 'loaded' && !rangeComplete)) && !ledgerError
           ? 'loading'
           : ledgerUnavailable
             ? 'unavailable'
@@ -432,21 +520,19 @@ export default function GroupHomePage() {
       balance={formatMinor(myBalance, group.currency ?? 'INR')}
       balanceMeaning={balanceMeaning}
       balanceError={ledgerError || (rangeStatus === 'error' ? rangeError : undefined)}
+      totalSpend={ledgerUnavailable ? undefined : formatMinor(totalSpendMinor, group.currency ?? 'INR')}
+      owed={ledgerUnavailable ? undefined : formatMinor(myBalance > 0n ? myBalance : 0n, group.currency ?? 'INR')}
+      owing={ledgerUnavailable ? undefined : formatMinor(myBalance < 0n ? -myBalance : 0n, group.currency ?? 'INR')}
+      memberBalances={ledgerUnavailable ? undefined : Object.entries(balanceByUser).map(([id, amount]) => ({
+        id,
+        name: memberName(id),
+        amount: formatMinor(amount < 0n ? -amount : amount, group.currency ?? 'INR'),
+        meaning: amount > 0n ? 'Owed by group' : amount < 0n ? 'Owes group' : 'Settled',
+      }))}
       members={detailMembers}
       activities={detailActivities}
       settlements={detailSettlements}
-      chat={{
-        items: groupChatItems,
-        loading: chatMessages === undefined,
-        canSend: canUseGroupChat,
-        connected: isConnected,
-        draft: chatDraft,
-        pending: chatPending,
-        error: chatError || undefined,
-        onDraftChange: setChatDraft,
-        onSubmit: submitChatMessage,
-        onUpload: uploadBillImage,
-      }}
+      chat={chat}
       onBack={() => router.push('/groups')}
       onOpenChat={() => router.push(`/group/${encodeURIComponent(localGroupId)}/chat`)}
       onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(localGroupId)}/analytics`)}

@@ -62,6 +62,8 @@ export default function NewPersonalAccountPage() {
         openingBalanceMinor,
         balanceMinor: openingBalanceMinor,
         isIncludedInTotal: form.isIncludedInTotal,
+        notes: form.notes?.trim() || undefined,
+        includeInAnalytics: form.includeInAnalytics !== false,
         createdAt: now,
         updatedAt: now,
       };
@@ -74,6 +76,8 @@ export default function NewPersonalAccountPage() {
         currency: form.currency,
         openingBalanceMinor,
         isIncludedInTotal: form.isIncludedInTotal,
+        ...(form.notes?.trim() ? { notes: form.notes.trim() } : {}),
+        includeInAnalytics: form.includeInAnalytics !== false,
       });
       router.push(`/account/${encodeURIComponent(id)}`);
     } catch (cause) {

@@ -11,7 +11,7 @@ import {
 } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { isGroupRangeCovered, type LocalRecord } from '@/lib/offline/repository';
+import { isGroupRangeCovered, readLocal, type LocalRecord } from '@/lib/offline/repository';
 
 type GroupOverviewSummary = { currency: string; owed: string; owing: string };
 type GroupOverviewActivity = {
@@ -30,6 +30,7 @@ type Group = LocalRecord & {
   archivedAt?: number;
   icon?: string;
   color?: string;
+  description?: string;
 };
 type Member = LocalRecord & {
   groupId?: string;
@@ -37,6 +38,10 @@ type Member = LocalRecord & {
   deletedAt?: number;
   displayName?: string;
   username?: string;
+  name?: string;
+  memberId?: string;
+  avatarUrl?: string | null;
+  role?: string;
 };
 type LedgerRecord = LocalRecord & {
   groupId?: string;
@@ -54,7 +59,17 @@ type LedgerRecord = LocalRecord & {
   title?: string;
   deletedAt?: number;
 };
-type RangeState = { status: 'loading' | 'loaded' | 'unavailable'; error?: string };
+type RangeState = {
+  status: 'loading' | 'loaded' | 'unavailable';
+  error?: string;
+  userId?: string;
+  records?: {
+    transactions: LedgerRecord[];
+    payers: LedgerRecord[];
+    participants: LedgerRecord[];
+    settlements: LedgerRecord[];
+  };
+};
 const aliases = (record: LocalRecord) =>
   [record.id, record._id, record.cloudId].filter(
     (value): value is string => typeof value === 'string',
@@ -108,7 +123,20 @@ export default function GroupsPage() {
             if (!isConnected) throw new Error('OFFLINE_GROUP_RANGE_INCOMPLETE');
             await fetchGroupRange(id, 0, rangeEndAt);
           }
-          if (active) setRangeStates((current) => ({ ...current, [id]: { status: 'loaded' } }));
+          const [transactions, payers, participants, settlements] = await Promise.all([
+            readLocal<LedgerRecord>(userId, 'transaction'),
+            readLocal<LedgerRecord>(userId, 'expensePayer'),
+            readLocal<LedgerRecord>(userId, 'expenseParticipant'),
+            readLocal<LedgerRecord>(userId, 'settlement'),
+          ]);
+          if (active) setRangeStates((current) => ({
+            ...current,
+            [id]: {
+              status: 'loaded',
+              userId,
+              records: { transactions, payers, participants, settlements },
+            },
+          }));
         } catch (cause) {
           if (active)
             setRangeStates((current) => ({
@@ -152,13 +180,15 @@ export default function GroupsPage() {
       const id = idOf(group);
       const currency = typeof group.currency === 'string' ? group.currency : '';
       const groupIds = aliases(group);
-      const memberCount = membersState.records.filter(
+      const groupMembers = membersState.records.filter(
         (member) =>
           member.deletedAt === undefined &&
           typeof member.groupId === 'string' &&
           groupIds.includes(member.groupId),
-      ).length;
+      );
+      const currentMember = groupMembers.find((member) => (member.userId ?? member.memberId) === userId);
       const status = rangeStates[id]?.status;
+      const completeRecords = rangeStates[id]?.userId === userId ? rangeStates[id]?.records : undefined;
       let balance = status === 'loading' || !status ? 'Loading…' : 'Unavailable';
       let balanceMeaning =
         status === 'loading' || !status
@@ -166,19 +196,21 @@ export default function GroupsPage() {
           : 'Complete balance unavailable';
       if (
         status === 'loaded' &&
+        completeRecords &&
         currency &&
         !transactionsState.error &&
         !payersState.error &&
         !participantsState.error &&
-        !settlementsState.error
+        !settlementsState.error &&
+        !recordsLoading
       ) {
         try {
           const projected = projectGroupBalances(
             group,
-            transactionsState.records,
-            payersState.records,
-            participantsState.records,
-            settlementsState.records,
+            completeRecords.transactions,
+            completeRecords.payers,
+            completeRecords.participants,
+            completeRecords.settlements,
           );
           const net = userId ? (projected.balances[userId] ?? 0n) : 0n;
           balance = formatMinor(net < 0n ? -net : net, currency);
@@ -197,7 +229,13 @@ export default function GroupsPage() {
         currency,
         icon: typeof group.icon === 'string' ? group.icon : undefined,
         color: typeof group.color === 'string' ? group.color : undefined,
-        memberCount,
+        description: group.description,
+        members: groupMembers.map((member) => ({
+          name: member.displayName ?? member.name ?? (member.username ? `@${member.username}` : 'Group member'),
+          avatarUrl: member.avatarUrl ?? undefined,
+        })),
+        role: currentMember?.role,
+        memberCount: groupMembers.length,
         balance,
         balanceMeaning,
       };
@@ -276,6 +314,7 @@ export default function GroupsPage() {
     };
   }, [
     activeGroups,
+    recordsLoading,
     membersState.records,
     transactionsState.records,
     transactionsState.error,

@@ -125,7 +125,8 @@ export default function AnalyticsBreakdownPage() {
   }, [endAt, fetchTransactionRange, isConnected, startAt, userId, valid]);
   const categories = categoryRecords.filter((item) => userId && belongsToUser(item, userId));
   const accounts = accountRecords.filter((item) => userId && belongsToUser(item, userId));
-  const transactions = transactionRecords.filter((item) => userId && belongsToUser(item, userId));
+  const excludedAccounts = new Set(accounts.filter(account => account.includeInAnalytics === false).flatMap(aliasesOf));
+  const transactions = transactionRecords.filter((item) => userId && belongsToUser(item, userId) && !excludedAccounts.has(String(item.accountId ?? '')));
   const categoryIcon =
     dimension === 'category'
       ? categories.find((item) => query?.key && aliasesOf(item).includes(query.key))?.icon

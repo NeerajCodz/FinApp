@@ -9,7 +9,13 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
-type Group = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
+type Group = LocalRecord & {
+  name?: string;
+  currency?: string;
+  archivedAt?: number;
+  icon?: string;
+  color?: string;
+};
 type Member = LocalRecord & {
   groupId?: string;
   userId?: string;
@@ -17,6 +23,7 @@ type Member = LocalRecord & {
   username?: string;
   displayName?: string;
   name?: string;
+  avatarUrl?: string | null;
 };
 type Account = LocalRecord & {
   name?: string;
@@ -63,11 +70,12 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const group = activeGroups.find((item) => aliases(item).includes(groupId));
   const groupIds = group ? aliases(group) : [];
   const currency = group?.currency ?? '';
-  const groupMembers: Array<{ userId: string; name: string }> = [];
+  const groupMembers: Array<{ userId: string; name: string; avatarUrl?: string | null }> = [];
   if (userId)
     groupMembers.push({
       userId,
       name: String(profiles[0]?.displayName ?? profiles[0]?.name ?? 'Signed-in member'),
+      avatarUrl: typeof profiles[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null,
     });
   const seenMembers = new Set(groupMembers.map((member) => member.userId));
   for (const member of memberships) {
@@ -87,6 +95,7 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
           member.name ??
           (member.username ? `@${member.username}` : `Member ${memberUserId.slice(-6)}`),
       ),
+      avatarUrl: member.avatarUrl,
     });
   }
   const accountOptions = accounts.filter(
@@ -248,6 +257,8 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       }))}
       selectedGroupId={group ? idOf(group) : ''}
       groupName={group?.name}
+      groupIcon={group?.icon}
+      groupColor={group?.color}
       currency={currency}
       accounts={accountOptions.map((item) => ({
         id: idOf(item),

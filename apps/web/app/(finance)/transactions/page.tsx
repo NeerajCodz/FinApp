@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Input } from '@finapp/ui/web';
-import { ActivityTransactionList } from '@finapp/ui/activity';
+import { TransactionsScreen } from '@finapp/ui/finance';
 import { formatTransactionDate, type TransactionType } from '@finapp/ui/finance';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -131,6 +130,7 @@ export default function TransactionsPage() {
         categoryIcon: typeof category?.icon === 'string' ? category.icon : undefined,
         account: account?.name,
         merchant: typeof record.merchant === 'string' ? record.merchant : undefined,
+        note: typeof record.note === 'string' ? record.note : undefined,
         date: formatTransactionDate(Number(record.occurredAt), record.hasTime, profile?.timezone),
         amountMinor: asMinor(record.amountMinor),
         currency,
@@ -171,115 +171,13 @@ export default function TransactionsPage() {
       </SignInGate>
     );
 
-  return (
-    <main className="finance-page" style={{ display: 'grid', gap: 24 }}>
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 18,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0 }}>Transactions</h1>
-          <p className="finance-muted" style={{ margin: '6px 0 0' }}>
-            {new Date(year!, monthNumber! - 1, 1).toLocaleDateString(undefined, {
-              month: 'long',
-              year: 'numeric',
-            })}{' '}
-            activity.
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <input
-            aria-label="Transaction month"
-            type="month"
-            value={month}
-            onChange={(event) => {
-              if (/^\d{4}-\d{2}$/.test(event.currentTarget.value))
-                setMonth(event.currentTarget.value);
-            }}
-            className="finance-form-input"
-          />
-          <Input
-            accessibilityLabel="Search transactions"
-            placeholder="Search transactions…"
-            value={query}
-            onChangeText={setQuery}
-          />
-          <select
-            aria-label="Filter transactions by type"
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value)}
-            className="finance-form-input"
-          >
-            <option value="all">All types</option>
-            <option value="expense">Expenses</option>
-            <option value="income">Income</option>
-            <option value="transfer">Transfers</option>
-            <option value="refund">Refunds</option>
-            <option value="adjustment">Adjustments</option>
-          </select>
-          <Button onPress={() => router.push('/transaction/new')}>New transaction</Button>
-        </div>
-      </header>
-      <section
-        aria-label="Transaction totals"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 12,
-        }}
-      >
-        {[
-          ['Expenses', formatMinor(totalExpense, currency)],
-          ['Income', formatMinor(totalIncome, currency)],
-          ['Transactions', String(transactions.length)],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            style={{
-              border: '1px solid var(--finance-line)',
-              background: 'var(--finapp-surface-raised)',
-              borderRadius: 16,
-              padding: 18,
-            }}
-          >
-            <div className="finance-muted">{label}</div>
-            <strong
-              style={{
-                display: 'block',
-                marginTop: 8,
-                fontSize: 22,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {value}
-            </strong>
-          </div>
-        ))}
-      </section>
-      {error && (
-        <p className="finance-form-error" role="alert">
-          Transaction data could not be opened: {error}
-        </p>
-      )}
-      {rangeError && (
-        <p className="finance-muted" role="status">
-          {rangeError}
-        </p>
-      )}
-      <ActivityTransactionList
-        items={items}
-        loading={loading}
-        query={query || (typeFilter !== 'all' ? typeFilter : '')}
-        onSelect={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
-      />
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Button onPress={() => router.push('/transaction/new')}>Add transaction</Button>
-      </div>
-    </main>
-  );
+  return <TransactionsScreen items={items} query={query} month={month} typeFilter={typeFilter}
+    currency={currency} totalExpense={totalExpense} totalIncome={totalIncome}
+    transactionCount={transactions.length}
+    expenseCount={transactions.filter(record => record.type === 'expense' && record.status === 'posted' && String(record.currency ?? profile?.defaultCurrency ?? 'INR') === currency).length}
+    incomeCount={transactions.filter(record => record.type === 'income').length}
+    loading={loading} error={error} rangeError={rangeError}
+    onQueryChange={setQuery} onMonthChange={setMonth} onTypeFilterChange={setTypeFilter}
+    onSelect={id => router.push(`/transaction/${encodeURIComponent(id)}`)}
+    onCreate={() => router.push('/transaction/new')} />;
 }
