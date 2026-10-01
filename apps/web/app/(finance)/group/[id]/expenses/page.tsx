@@ -157,7 +157,7 @@ export default function GroupExpensesPage() {
         </div>
         <Link
           className="finance-secondary-action"
-          href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
+          href={`/group/${encodeURIComponent(groupId)}/new`}
           aria-label="Add group expense"
           title="Add group expense"
         >
@@ -215,7 +215,7 @@ export default function GroupExpensesPage() {
           action={
             <Link
               className="finance-secondary-action"
-              href={`/group/${encodeURIComponent(groupId)}/expenses/new`}
+              href={`/group/${encodeURIComponent(groupId)}/new`}
             >
               Add expense <ArrowRight size={15} />
             </Link>
