@@ -77,11 +77,9 @@ export function GoalsOverviewScreen(p: GoalsOverviewScreenProps) {
             <option value="all">All goals</option>
             <option value="completed">Achieved goals</option>
           </CustomSelect>
-          {p.defaultCurrency && (
-            <Button onPress={p.onAdd}>
-              <Plus size={16} /> Add goal
-            </Button>
-          )}
+          <Button onPress={p.defaultCurrency ? p.onAdd : p.onSetCurrency}>
+            <Plus size={16} /> {p.defaultCurrency ? 'Add goal' : 'Set default currency'}
+          </Button>
         </div>
       </header>
       {p.loading ? (
@@ -94,12 +92,80 @@ export function GoalsOverviewScreen(p: GoalsOverviewScreenProps) {
           <Button onPress={p.onRetry}>Retry</Button>
         </Panel>
       ) : !p.goals.length ? (
-        <Panel title="No goals yet">
-          <p className={s.muted}>Set a target and track each contribution in one place.</p>
-          <Button onPress={p.defaultCurrency ? p.onAdd : p.onSetCurrency}>
-            {p.defaultCurrency ? 'Create a goal' : 'Set default currency'}
-          </Button>
-        </Panel>
+        <section className={s.emptyGoals} aria-labelledby="goals-empty-title">
+          <svg className={s.goalEmptyIllustration} viewBox="0 0 240 180" aria-hidden="true">
+            <circle cx="120" cy="77" r="61" fill="var(--finapp-surface-raised)" />
+            <circle
+              cx="120"
+              cy="77"
+              r="41"
+              fill="none"
+              stroke="var(--finapp-border)"
+              strokeWidth="2"
+            />
+            <circle
+              cx="120"
+              cy="77"
+              r="27"
+              fill="none"
+              stroke="var(--finapp-primary)"
+              strokeWidth="3"
+            />
+            <circle cx="120" cy="77" r="11" fill="var(--finapp-primary)" opacity=".28" />
+            <circle cx="120" cy="77" r="4" fill="var(--finapp-primary)" />
+            <path
+              d="m153 42-30 30m20-36 16 16-7 2-2 7-16-16"
+              fill="none"
+              stroke="var(--finapp-foreground)"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
+            />
+            <path
+              d="M52 136h136"
+              stroke="var(--finapp-border)"
+              strokeLinecap="round"
+              strokeWidth="2"
+            />
+            <rect
+              x="63"
+              y="119"
+              width="45"
+              height="17"
+              rx="8.5"
+              fill="var(--finapp-card)"
+              stroke="var(--finapp-border)"
+              strokeWidth="2"
+            />
+            <path
+              d="M75 128h21"
+              stroke="var(--finapp-primary)"
+              strokeLinecap="round"
+              strokeWidth="2"
+            />
+            <rect
+              x="132"
+              y="111"
+              width="45"
+              height="25"
+              rx="12.5"
+              fill="var(--finapp-card)"
+              stroke="var(--finapp-border)"
+              strokeWidth="2"
+            />
+            <path
+              d="M145 124h19"
+              stroke="var(--finapp-primary)"
+              strokeLinecap="round"
+              strokeWidth="2"
+            />
+          </svg>
+          <h2 id="goals-empty-title">No goals</h2>
+          <p>
+            What are you looking forward to? Set a target and build progress one contribution at a
+            time.
+          </p>
+        </section>
       ) : (
         <>
           <Metrics
