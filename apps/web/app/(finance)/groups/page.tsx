@@ -2,6 +2,10 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
 import {
@@ -86,19 +90,21 @@ const asMinor = (value: unknown) =>
 
 export default function GroupsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
+  const incomingInvitations = useQuery(
+    api.groups.queries.incomingInvitations,
+    userId && isConnected ? {} : 'skip',
+  );
+  const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
   const groupsState = useLocalRecords<Group>('group');
   const membersState = useLocalRecords<Member>('groupMember');
   const transactionsState = useLocalRecords<LedgerRecord>('transaction');
   const payersState = useLocalRecords<LedgerRecord>('expensePayer');
   const participantsState = useLocalRecords<LedgerRecord>('expenseParticipant');
   const settlementsState = useLocalRecords<LedgerRecord>('settlement');
-  const { records: profiles } = useLocalRecords<LocalRecord>('profile');
   const [rangeStates, setRangeStates] = React.useState<Record<string, RangeState>>({});
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
-  const phoneVerified = Boolean(
-    profiles[0]?.phone && profiles[0]?.phoneVerificationTime !== undefined,
-  );
   const activeGroups = React.useMemo(
     () => groupsState.records.filter((group) => group.archivedAt === undefined),
     [groupsState.records],
@@ -129,14 +135,15 @@ export default function GroupsPage() {
             readLocal<LedgerRecord>(userId, 'expenseParticipant'),
             readLocal<LedgerRecord>(userId, 'settlement'),
           ]);
-          if (active) setRangeStates((current) => ({
-            ...current,
-            [id]: {
-              status: 'loaded',
-              userId,
-              records: { transactions, payers, participants, settlements },
-            },
-          }));
+          if (active)
+            setRangeStates((current) => ({
+              ...current,
+              [id]: {
+                status: 'loaded',
+                userId,
+                records: { transactions, payers, participants, settlements },
+              },
+            }));
         } catch (cause) {
           if (active)
             setRangeStates((current) => ({
@@ -186,9 +193,12 @@ export default function GroupsPage() {
           typeof member.groupId === 'string' &&
           groupIds.includes(member.groupId),
       );
-      const currentMember = groupMembers.find((member) => (member.userId ?? member.memberId) === userId);
+      const currentMember = groupMembers.find(
+        (member) => (member.userId ?? member.memberId) === userId,
+      );
       const status = rangeStates[id]?.status;
-      const completeRecords = rangeStates[id]?.userId === userId ? rangeStates[id]?.records : undefined;
+      const completeRecords =
+        rangeStates[id]?.userId === userId ? rangeStates[id]?.records : undefined;
       let balance = status === 'loading' || !status ? 'Loading…' : 'Unavailable';
       let balanceMeaning =
         status === 'loading' || !status
@@ -231,7 +241,10 @@ export default function GroupsPage() {
         color: typeof group.color === 'string' ? group.color : undefined,
         description: group.description,
         members: groupMembers.map((member) => ({
-          name: member.displayName ?? member.name ?? (member.username ? `@${member.username}` : 'Group member'),
+          name:
+            member.displayName ??
+            member.name ??
+            (member.username ? `@${member.username}` : 'Group member'),
           avatarUrl: member.avatarUrl ?? undefined,
         })),
         role: currentMember?.role,
@@ -336,13 +349,20 @@ export default function GroupsPage() {
       balancesLoading={balancesLoading}
       loading={recordsLoading}
       error={recordsError ?? undefined}
-      phoneVerified={phoneVerified}
       signedIn={Boolean(userId)}
       onSignIn={() => router.push('/sign-in')}
       onCreate={() => router.push('/groups/new')}
-      onInvite={() => router.push('/groups/new')}
       onOpenGroup={(id) => router.push(`/group/${encodeURIComponent(id)}`)}
       onOpenChat={(id) => router.push(`/group/${encodeURIComponent(id)}/chat`)}
+      invitations={incomingInvitations}
+      invitationsLoading={Boolean(userId && isConnected && incomingInvitations === undefined)}
+      invitationsError={
+        userId && !isConnected ? 'Connect to the internet to view invitations.' : undefined
+      }
+      onRespondToInvitation={async (inviteId, response) => {
+        await respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response });
+      }}
+      showInvitations={searchParams.get('invitations') === '1'}
     />
   );
 }

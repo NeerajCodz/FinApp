@@ -54,11 +54,72 @@ export default function GroupSettingsPage() {
   } = useLocalRecords<Member>('groupMember');
   const [name, setName] = React.useState('');
   const [saving, setSaving] = React.useState('');
+  const [successMessage, setSuccessMessage] = React.useState('');
   const [error, setError] = React.useState('');
   const [memberInput, setMemberInput] = React.useState('');
   const [iconDraft, setIconDraft] = React.useState<string>('phosphor:UsersThree');
   const [colorDraft, setColorDraft] = React.useState<string | undefined>();
   const [retentionDraft, setRetentionDraft] = React.useState<number | null>(null);
+  const [invitationUrl, setInvitationUrl] = React.useState('');
+  const [invitationExpiresAt, setInvitationExpiresAt] = React.useState<number>();
+  const [invitationBusy, setInvitationBusy] = React.useState(false);
+  const [invitationError, setInvitationError] = React.useState('');
+  const [invitationStatus, setInvitationStatus] = React.useState('');
+  const createInvitationLink = useMutation(api.groups.mutations.createInvitationLink);
+  const revokeInvitationLink = useMutation(api.groups.mutations.revokeInvitationLink);
+  async function createInvitation() {
+    if (!canManage || !cloudGroupId || invitationBusy) return;
+    setInvitationBusy(true);
+    setInvitationError('');
+    setInvitationStatus('');
+    try {
+      const result = await createInvitationLink({ groupId: cloudGroupId as Id<'groups'> });
+      setInvitationUrl(
+        `${window.location.origin}/group-invite?token=${encodeURIComponent(result.token)}`,
+      );
+      setInvitationExpiresAt(result.expiresAt);
+      setInvitationStatus('Invitation link created. The previous link, if any, has been revoked.');
+    } catch (cause) {
+      setInvitationError(
+        cause instanceof Error ? cause.message : 'Could not create an invitation link.',
+      );
+    } finally {
+      setInvitationBusy(false);
+    }
+  }
+  async function revokeInvitation() {
+    if (!canManage || !cloudGroupId || invitationBusy) return;
+    setInvitationBusy(true);
+    setInvitationError('');
+    setInvitationStatus('');
+    try {
+      await revokeInvitationLink({ groupId: cloudGroupId as Id<'groups'> });
+      setInvitationUrl('');
+      setInvitationExpiresAt(undefined);
+      setInvitationStatus('Invitation link revoked.');
+    } catch (cause) {
+      setInvitationError(
+        cause instanceof Error ? cause.message : 'Could not revoke the invitation link.',
+      );
+    } finally {
+      setInvitationBusy(false);
+    }
+  }
+  async function shareInvitation() {
+    if (!invitationUrl) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `Join ${group?.name ?? 'my group'}`, url: invitationUrl });
+        setInvitationStatus('Invitation link shared.');
+      } else {
+        await navigator.clipboard.writeText(invitationUrl);
+        setInvitationStatus('Invitation link copied.');
+      }
+    } catch (cause) {
+      if (cause instanceof Error && cause.name !== 'AbortError')
+        setInvitationError('Could not share the link. Select and copy it instead.');
+    }
+  }
   const updateGroupSettings = useMutation(api.groups.mutations.updateSettings);
   const updateMemberRole = useMutation(api.groups.mutations.setMemberRole);
   const addGroupMember = useMutation(api.groups.mutations.addMember);
@@ -210,13 +271,14 @@ export default function GroupSettingsPage() {
     if (!canManage || !cloudGroupId || saving) return;
     setSaving('member-add');
     setError('');
+    setSuccessMessage('');
     try {
-      const result = await addGroupMember({
+      await addGroupMember({
         groupId: cloudGroupId as Id<'groups'>,
         username: memberInput,
       });
       setMemberInput('');
-      if (!result) setError('No account matched; an invite was created for that username.');
+      setSuccessMessage('Invitation sent. The recipient can accept it from their notifications.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not add this member.');
     } finally {
@@ -304,6 +366,7 @@ export default function GroupSettingsPage() {
       membersLoading={membersLoading}
       remoteLoaded={Boolean(remoteGroup)}
       error={error || groupsError || membersError || undefined}
+      successMessage={successMessage}
       saving={saving}
       cloudGroupId={cloudGroupId}
       name={name}
@@ -324,6 +387,14 @@ export default function GroupSettingsPage() {
       onRemoveMember={(member) => void removeMember(member as Member)}
       onBack={() => router.push(`/group/${encodeURIComponent(currentGroupId)}`)}
       onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(currentGroupId)}/analytics`)}
+      invitationUrl={canManage ? invitationUrl : undefined}
+      invitationExpiresAt={canManage ? invitationExpiresAt : undefined}
+      invitationBusy={invitationBusy}
+      invitationError={invitationError}
+      invitationStatus={invitationStatus}
+      onCreateInvitation={() => void createInvitation()}
+      onRevokeInvitation={() => void revokeInvitation()}
+      onShareInvitation={() => void shareInvitation()}
     />
   );
 }

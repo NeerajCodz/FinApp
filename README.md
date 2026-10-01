@@ -22,6 +22,10 @@ both the Profile page and Settings. Profile name, username, phone, and avatar ed
 use the existing offline-first sync flow. Notification and sync actions live in the
 home header; they are not repeated across other screens.
 
+An unverified existing account returns to email verification, then completes
+onboarding before entering the app. Group-invitation links keep their destination
+through sign-in, verification, and onboarding.
+
 ### Finance workspaces
 
 Finance screens are shared from `packages/ui/src/finance`, with separate web and
@@ -48,8 +52,15 @@ and analytics derive merchant, account, category, daily, and forecast summaries
 from posted expenses. Forecasts use only transactions dated through the current
 time; future-dated expenses remain visible in full-period totals. Groups use
 `/groups`, `/groups/new`, `/group/:id`, `/group/:id/edit`, `/group/:id/chat`,
-and `/group/:id/new`. Group balances are shown only when the complete group
-ledger is available; unsupported scheduled settlements are not inferred.
+and `/group/:id/new`. Incoming invitations can be accepted or declined from the
+Groups inbox or directly from their notification. Group metadata, settings,
+member management, and invitation-link creation are admin-only. Public
+`/group-invite?token=...` links show a safe group preview, expire after seven
+days, and require sign-in before explicit acceptance; creating a replacement
+revokes the previous active link. Accepted members can contribute shared
+expenses, chat and share bill images, and record settlements. Group balances
+are shown only when the complete group ledger is available; unsupported
+scheduled settlements are not inferred.
 
 ### Coin implementation
 

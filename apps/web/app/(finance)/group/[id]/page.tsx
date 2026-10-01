@@ -90,10 +90,26 @@ export default function GroupHomePage() {
     error: groupsError,
   } = useLocalRecords<Group>('group');
   const { records: members } = useLocalRecords<Member>('groupMember');
-  const { records: transactions, loading: transactionsLoading, error: transactionsError } = useLocalRecords<LedgerRecord>('transaction');
-  const { records: payers, loading: payersLoading, error: payersError } = useLocalRecords<LedgerRecord>('expensePayer');
-  const { records: participants, loading: participantsLoading, error: participantsError } = useLocalRecords<LedgerRecord>('expenseParticipant');
-  const { records: settlements, loading: settlementsLoading, error: settlementsError } = useLocalRecords<LedgerRecord>('settlement');
+  const {
+    records: transactions,
+    loading: transactionsLoading,
+    error: transactionsError,
+  } = useLocalRecords<LedgerRecord>('transaction');
+  const {
+    records: payers,
+    loading: payersLoading,
+    error: payersError,
+  } = useLocalRecords<LedgerRecord>('expensePayer');
+  const {
+    records: participants,
+    loading: participantsLoading,
+    error: participantsError,
+  } = useLocalRecords<LedgerRecord>('expenseParticipant');
+  const {
+    records: settlements,
+    loading: settlementsLoading,
+    error: settlementsError,
+  } = useLocalRecords<LedgerRecord>('settlement');
   const { records: categories } = useLocalRecords<LocalRecord>('category');
   const { records: accounts } = useLocalRecords<LocalRecord>('account');
   const [rangeStatus, setRangeStatus] = React.useState<
@@ -113,6 +129,19 @@ export default function GroupHomePage() {
   const groupIds = group ? recordIds(group) : [groupId];
   const localGroupId = group ? recordId(group) : groupId;
   const groupReady = Boolean(group);
+  const groupOptions = groups
+    .filter((candidate) => {
+      if (candidate.deletedAt !== undefined || candidate.archivedAt !== undefined) return false;
+      return members.some(
+        (member) =>
+          member.deletedAt === undefined &&
+          (member.userId === userId || member.memberId === userId) &&
+          typeof member.groupId === 'string' &&
+          recordIds(candidate).includes(member.groupId),
+      );
+    })
+    .map((candidate) => ({ id: recordId(candidate), name: candidate.name ?? 'Group' }))
+    .filter((option) => option.id);
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
   const ledgerScope = `${userId ?? ''}:${localGroupId}:${rangeEndAt}`;
@@ -191,27 +220,41 @@ export default function GroupHomePage() {
       readLocal<LedgerRecord>(userId, 'settlement'),
     ]).then(
       ([completeTransactions, completePayers, completeParticipants, completeSettlements]) => {
-        if (active) setCompleteLedger({
-          scope: ledgerScope,
-          transactions: completeTransactions,
-          payers: completePayers,
-          participants: completeParticipants,
-          settlements: completeSettlements,
-        });
+        if (active)
+          setCompleteLedger({
+            scope: ledgerScope,
+            transactions: completeTransactions,
+            payers: completePayers,
+            participants: completeParticipants,
+            settlements: completeSettlements,
+          });
       },
       (cause: unknown) => {
-        if (active) setCompleteLedger({
-          scope: ledgerScope,
-          transactions: [],
-          payers: [],
-          participants: [],
-          settlements: [],
-          error: cause instanceof Error ? cause.message : 'Complete group records could not be read.',
-        });
+        if (active)
+          setCompleteLedger({
+            scope: ledgerScope,
+            transactions: [],
+            payers: [],
+            participants: [],
+            settlements: [],
+            error:
+              cause instanceof Error ? cause.message : 'Complete group records could not be read.',
+          });
       },
     );
-    return () => { active = false; };
-  }, [userId, rangeStatus, coveredScope, ledgerScope, transactions, payers, participants, settlements]);
+    return () => {
+      active = false;
+    };
+  }, [
+    userId,
+    rangeStatus,
+    coveredScope,
+    ledgerScope,
+    transactions,
+    payers,
+    participants,
+    settlements,
+  ]);
 
   if (!userId)
     return (
@@ -255,7 +298,10 @@ export default function GroupHomePage() {
     );
 
   const groupMembers = members.filter(
-    (member) => member.deletedAt === undefined && typeof member.groupId === 'string' && groupIds.includes(member.groupId),
+    (member) =>
+      member.deletedAt === undefined &&
+      typeof member.groupId === 'string' &&
+      groupIds.includes(member.groupId),
   );
   const expenses = transactions.filter(
     (record) =>
@@ -270,12 +316,21 @@ export default function GroupHomePage() {
     const transactionIds = recordIds(expense);
     return transactionIds.length > 0;
   });
-  const recordsLoading = transactionsLoading || payersLoading || participantsLoading || settlementsLoading;
-  const rangeComplete = rangeStatus === 'loaded' && coveredScope === ledgerScope &&
-    completeLedger?.scope === ledgerScope && !recordsLoading;
+  const recordsLoading =
+    transactionsLoading || payersLoading || participantsLoading || settlementsLoading;
+  const rangeComplete =
+    rangeStatus === 'loaded' &&
+    coveredScope === ledgerScope &&
+    completeLedger?.scope === ledgerScope &&
+    !recordsLoading;
   let balanceByUser: Record<string, bigint> = {};
-  let ledgerError = transactionsError || payersError || participantsError || settlementsError ||
-    (completeLedger?.scope === ledgerScope ? completeLedger.error : '') || '';
+  let ledgerError =
+    transactionsError ||
+    payersError ||
+    participantsError ||
+    settlementsError ||
+    (completeLedger?.scope === ledgerScope ? completeLedger.error : '') ||
+    '';
   let totalSpendMinor = 0n;
   if (rangeComplete && completeLedger && !ledgerError) {
     try {
@@ -287,7 +342,10 @@ export default function GroupHomePage() {
         completeLedger.settlements,
       );
       balanceByUser = projected.balances;
-      totalSpendMinor = projected.expenses.reduce((sum, expense) => sum + asMinor(expense.amountMinor), 0n);
+      totalSpendMinor = projected.expenses.reduce(
+        (sum, expense) => sum + asMinor(expense.amountMinor),
+        0n,
+      );
     } catch (cause) {
       ledgerError = cause instanceof Error ? cause.message : 'The group balance is incomplete.';
     }
@@ -310,9 +368,16 @@ export default function GroupHomePage() {
         username: member.username,
         avatarUrl: member.avatarUrl,
         role: member.role,
-        name: member.userId === userId ? 'You' : String(
-          member.displayName ?? member.name ?? (member.username ? `@${member.username}` : `Member ${String(member.userId ?? '').slice(-6)}`),
-        ),
+        name:
+          member.userId === userId
+            ? 'You'
+            : String(
+                member.displayName ??
+                  member.name ??
+                  (member.username
+                    ? `@${member.username}`
+                    : `Member ${String(member.userId ?? '').slice(-6)}`),
+              ),
       }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
     memberNames.unshift({ id: userId, username: undefined, avatarUrl: null, name: 'You' });
@@ -334,8 +399,12 @@ export default function GroupHomePage() {
   const formatDate = (value: unknown, hasTime?: boolean) =>
     formatTransactionDate(Number(value ?? Date.now()), hasTime);
   const expenseMetadata = (expense: LedgerRecord) => {
-    const category = categories.find((record) => expense.categoryId && recordIds(record).includes(expense.categoryId));
-    const account = accounts.find((record) => expense.accountId && recordIds(record).includes(expense.accountId));
+    const category = categories.find(
+      (record) => expense.categoryId && recordIds(record).includes(expense.categoryId),
+    );
+    const account = accounts.find(
+      (record) => expense.accountId && recordIds(record).includes(expense.accountId),
+    );
     return {
       category: typeof category?.name === 'string' ? category.name : undefined,
       account: typeof account?.name === 'string' ? account.name : undefined,
@@ -484,7 +553,10 @@ export default function GroupHomePage() {
       icon: remoteGroup?.icon ?? group.icon,
       color: remoteGroup?.color ?? group.color,
     },
-    members: detailMembers.map((member) => ({ ...member, avatarUrl: member.avatarUrl ?? undefined })),
+    members: detailMembers.map((member) => ({
+      ...member,
+      avatarUrl: member.avatarUrl ?? undefined,
+    })),
     embedded: !standaloneChat,
     onOpenGroup: () => router.push(`/group/${encodeURIComponent(localGroupId)}`),
     onAddExpense: () => router.push(`/group/${encodeURIComponent(localGroupId)}/new`),
@@ -509,9 +581,15 @@ export default function GroupHomePage() {
         icon: remoteGroup?.icon ?? group.icon,
         color: remoteGroup?.color ?? group.color,
       }}
+      groupOptions={groupOptions}
+      currentGroupId={localGroupId}
+      onSelectGroup={(selectedId) => router.push(`/group/${encodeURIComponent(selectedId)}`)}
       canSettle={!ledgerUnavailable && myBalance !== 0n}
       balanceStatus={
-        (rangeStatus === 'loading' || recordsLoading || (rangeStatus === 'loaded' && !rangeComplete)) && !ledgerError
+        (rangeStatus === 'loading' ||
+          recordsLoading ||
+          (rangeStatus === 'loaded' && !rangeComplete)) &&
+        !ledgerError
           ? 'loading'
           : ledgerUnavailable
             ? 'unavailable'
@@ -520,15 +598,29 @@ export default function GroupHomePage() {
       balance={formatMinor(myBalance, group.currency ?? 'INR')}
       balanceMeaning={balanceMeaning}
       balanceError={ledgerError || (rangeStatus === 'error' ? rangeError : undefined)}
-      totalSpend={ledgerUnavailable ? undefined : formatMinor(totalSpendMinor, group.currency ?? 'INR')}
-      owed={ledgerUnavailable ? undefined : formatMinor(myBalance > 0n ? myBalance : 0n, group.currency ?? 'INR')}
-      owing={ledgerUnavailable ? undefined : formatMinor(myBalance < 0n ? -myBalance : 0n, group.currency ?? 'INR')}
-      memberBalances={ledgerUnavailable ? undefined : Object.entries(balanceByUser).map(([id, amount]) => ({
-        id,
-        name: memberName(id),
-        amount: formatMinor(amount < 0n ? -amount : amount, group.currency ?? 'INR'),
-        meaning: amount > 0n ? 'Owed by group' : amount < 0n ? 'Owes group' : 'Settled',
-      }))}
+      totalSpend={
+        ledgerUnavailable ? undefined : formatMinor(totalSpendMinor, group.currency ?? 'INR')
+      }
+      owed={
+        ledgerUnavailable
+          ? undefined
+          : formatMinor(myBalance > 0n ? myBalance : 0n, group.currency ?? 'INR')
+      }
+      owing={
+        ledgerUnavailable
+          ? undefined
+          : formatMinor(myBalance < 0n ? -myBalance : 0n, group.currency ?? 'INR')
+      }
+      memberBalances={
+        ledgerUnavailable
+          ? undefined
+          : Object.entries(balanceByUser).map(([id, amount]) => ({
+              id,
+              name: memberName(id),
+              amount: formatMinor(amount < 0n ? -amount : amount, group.currency ?? 'INR'),
+              meaning: amount > 0n ? 'Owed by group' : amount < 0n ? 'Owes group' : 'Settled',
+            }))
+      }
       members={detailMembers}
       activities={detailActivities}
       settlements={detailSettlements}

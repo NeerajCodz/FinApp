@@ -1,4 +1,8 @@
 import React from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { router } from 'expo-router';
 import { formatMinor } from '@convex/shared/money';
 import { formatTransactionDate } from '@finapp/ui/finance';
@@ -93,14 +97,19 @@ function GroupLedgerReporter({
 }
 
 export default function GroupsScreen() {
-  const { userId } = useLocalSync();
+  const { userId, isConnected } = useLocalSync();
+  const params = useLocalSearchParams<{ invitations?: string | string[] }>();
+  const incomingInvitations = useQuery(
+    api.groups.queries.incomingInvitations,
+    userId && isConnected ? {} : 'skip',
+  );
+  const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
   const groupState = useLocalRecords<Group>(userId, 'group');
   const activeGroups = React.useMemo(
     () => (groupState.data ?? []).filter((group) => group.archivedAt === undefined),
     [groupState.data],
   );
   const memberState = useLocalRecords<Member>(userId, 'groupMember');
-  const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const transactionState = useLocalRecords<LedgerRecord>(userId, 'transaction');
   const settlementState = useLocalRecords<LedgerRecord>(userId, 'settlement');
   const [ledgerByGroup, setLedgerByGroup] = React.useState<Record<string, OverviewLedger>>({});
@@ -116,9 +125,6 @@ export default function GroupsScreen() {
       return { ...current, [id]: ledger };
     });
   }, []);
-  const phoneVerified = Boolean(
-    profileState.data?.[0]?.phone && profileState.data[0].phoneVerificationTime !== undefined,
-  );
   const groups: GroupOverviewItem[] = React.useMemo(
     () =>
       activeGroups.map((group) => {
@@ -130,7 +136,9 @@ export default function GroupsScreen() {
             typeof member.groupId === 'string' &&
             groupIds.includes(member.groupId),
         );
-        const currentMember = groupMembers.find((member) => (member.userId ?? member.memberId) === userId);
+        const currentMember = groupMembers.find(
+          (member) => (member.userId ?? member.memberId) === userId,
+        );
         const ledger = ledgerByGroup[id];
         const currency =
           ledger?.currency ?? (typeof group.currency === 'string' ? group.currency : '');
@@ -143,7 +151,10 @@ export default function GroupsScreen() {
           color: typeof group.color === 'string' ? group.color : undefined,
           description: group.description,
           members: groupMembers.map((member) => ({
-            name: member.displayName ?? member.name ?? (member.username ? `@${member.username}` : 'Group member'),
+            name:
+              member.displayName ??
+              member.name ??
+              (member.username ? `@${member.username}` : 'Group member'),
             avatarUrl: member.avatarUrl ?? undefined,
           })),
           role: currentMember?.role,
@@ -286,11 +297,18 @@ export default function GroupsScreen() {
           transactionState.error?.message ??
           settlementState.error?.message
         }
-        phoneVerified={phoneVerified}
         onCreate={() => router.push('/groups/new' as never)}
-        onInvite={() => router.push('/groups/new' as never)}
         onOpenGroup={(id) => router.push(`/group/${encodeURIComponent(id)}` as never)}
         onOpenChat={(id) => router.push(`/group/${encodeURIComponent(id)}/chat` as never)}
+        invitations={incomingInvitations}
+        invitationsLoading={Boolean(userId && isConnected && incomingInvitations === undefined)}
+        onRespondToInvitation={async (inviteId, response) => {
+          await respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response });
+        }}
+        invitationsError={
+          userId && !isConnected ? 'Connect to the internet to view invitations.' : undefined
+        }
+        showInvitations={params.invitations === '1'}
       />
     </>
   );
