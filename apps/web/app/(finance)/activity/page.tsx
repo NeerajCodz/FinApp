@@ -522,6 +522,7 @@ export default function ActivityPage() {
         <aside className="activity-sidebar">
           <ActivityActions
             onAddTransaction={() => router.push('/transaction/new')}
+            onOpenTransactions={() => router.push('/transactions')}
             onOpenAnalytics={() => router.push('/analytics')}
           />
           <ActivityTopCategories

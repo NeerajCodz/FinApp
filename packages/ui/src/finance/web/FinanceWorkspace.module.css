@@ -62,31 +62,6 @@
 .navigation > a {
   flex: 0 0 auto;
 }
-.navigation :global(.finance-sidebar-activity-actions) {
-  display: grid;
-  gap: 2px;
-  margin: 0 0 8px 14px;
-  padding-left: 10px;
-  border-left: 1px solid var(--finapp-border-subtle);
-}
-.navigation :global(.finance-sidebar-activity-actions a) {
-  min-height: 38px;
-  gap: 10px;
-  padding: 0 10px;
-  border-radius: 10px;
-  font-size: 14px;
-}
-.navigation :global(.finance-sidebar-activity-actions a svg) {
-  width: 18px;
-  height: 18px;
-  flex-basis: 18px;
-}
-.navigation :global(.finance-sidebar-activity-actions .finance-sidebar-add-transaction) {
-  margin-bottom: 4px;
-  background: var(--finapp-surface-subtle);
-  color: var(--finapp-primary);
-  font-weight: 600;
-}
 .navigation :global(.finance-sidebar-profile) {
   display: flex;
   flex: 0 0 auto;

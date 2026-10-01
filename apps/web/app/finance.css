@@ -1527,18 +1527,37 @@
   justify-content: center;
   border-radius: 10px;
 }
-.activity-analytics-link {
-  display: inline-flex;
-  width: fit-content;
+.activity-sidebar-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.activity-sidebar-link {
+  display: flex;
+  min-width: 0;
+  min-height: 40px;
   align-items: center;
-  gap: 5px;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--finance-lime);
+  gap: 8px;
+  border: 1px solid var(--finance-line);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--finance-panel);
+  color: var(--finance-text);
   font: inherit;
-  font-size: 0.77rem;
+  font-size: .74rem;
   cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.activity-sidebar-link:hover {
+  border-color: var(--finance-lime);
+  background: var(--finance-panel-raise);
+  color: var(--finance-lime);
+}
+.activity-sidebar-link svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  color: var(--finance-lime);
 }
 .activity-category-link {
   display: grid;
@@ -1918,6 +1937,9 @@
   .activity-transactions,
   .activity-side-card {
     padding: 14px;
+  }
+  .activity-sidebar-links {
+    grid-template-columns: minmax(0, 1fr);
   }
   .activity-transaction-row {
     grid-template-columns: 36px minmax(0, 1fr) auto;

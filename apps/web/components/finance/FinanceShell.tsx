@@ -10,12 +10,10 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarClock,
-  ChartNoAxesCombined,
   CircleUserRound,
   HandCoins,
   History,
   House,
-  Plus,
   Landmark,
   Tags,
   Target,
@@ -23,7 +21,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Fragment, createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Avatar, Sheet } from '@finapp/ui/web';
 import { FinanceBrand, FinanceWorkspace, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
@@ -140,38 +138,10 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         navigation={
           <>
             {navigation.map(({ href, label, icon: Icon }) => (
-              <Fragment key={href}>
-                <Link href={href} aria-current={isActive(href) ? 'page' : undefined}>
-                  <Icon size={22} aria-hidden="true" />
-                  <span>{label}</span>
-                </Link>
-                {href === '/activity' && (
-                  <div
-                    className="finance-sidebar-activity-actions"
-                    role="group"
-                    aria-label="Activity shortcuts"
-                  >
-                    <Link className="finance-sidebar-add-transaction" href="/transaction/new">
-                      <Plus size={18} aria-hidden="true" />
-                      <span>Add transaction</span>
-                    </Link>
-                    <Link
-                      href="/transactions"
-                      aria-current={isActive('/transactions') ? 'page' : undefined}
-                    >
-                      <ArrowLeftRight size={18} aria-hidden="true" />
-                      <span>Transactions</span>
-                    </Link>
-                    <Link
-                      href="/analytics"
-                      aria-current={isActive('/analytics') ? 'page' : undefined}
-                    >
-                      <ChartNoAxesCombined size={18} aria-hidden="true" />
-                      <span>Analytics</span>
-                    </Link>
-                  </div>
-                )}
-              </Fragment>
+              <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined}>
+                <Icon size={22} aria-hidden="true" />
+                <span>{label}</span>
+              </Link>
             ))}
             <Link
               href={profileHref}
