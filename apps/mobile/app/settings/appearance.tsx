@@ -3,7 +3,8 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, Check } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Button, IconButton, Input, Sheet, Text, Typography } from '@finapp/ui/native';
+import { Button, IconButton, Text, Typography } from '@finapp/ui/native';
+import { EntityColorPicker } from '@finapp/ui/finance';
 import { isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -16,15 +17,10 @@ const accents: { value: AccentName; label: string; color: string }[] = [
   { value: 'white', label: 'White', color: '#FFFFFF' },
   { value: 'blue', label: 'Blue', color: '#5B8CFF' },
 ];
-const customPalette = ['#B7FF4A', '#FFFFFF', '#5B8CFF', '#9D7BFF', '#FF9A51', '#FF6E9C'];
 
 export default function AppearanceSettingsScreen() {
   const { appearance, setAppearance, accent, setAccent, tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
-  const [customColor, setCustomColor] = useState<string>(
-    isAccentColor(accent) ? accent : '#B7FF4A',
-  );
   const { userId } = useLocalSync();
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
@@ -143,96 +139,18 @@ export default function AppearanceSettingsScreen() {
                 </Button>
               );
             })}
-            <Button
-              variant={isAccentColor(accent) ? 'primary' : 'outline'}
-              accessibilityState={{ selected: isAccentColor(accent) }}
-              onPress={() => {
-                setCustomColor(isAccentColor(accent) ? accent : '#B7FF4A');
-                setColorPickerOpen(true);
-              }}
-              style={{ justifyContent: 'space-between', minHeight: 56 }}
-            >
-              <Text
-                style={{
-                  color: isAccentColor(accent) ? tokens.primaryForeground : tokens.foreground,
-                }}
-              >
-                Custom
-              </Text>
-              {isAccentColor(accent) && <Check size={18} color={tokens.primaryForeground} />}
-            </Button>
+            <EntityColorPicker
+              value={
+                isAccentColor(accent)
+                  ? accent
+                  : accents.find((option) => option.value === accent)?.color
+              }
+              onChange={(color) => void chooseAccent(color ?? '#B7FF4A')}
+              label={isAccentColor(accent) ? 'Change custom accent' : 'Choose custom accent'}
+            />
           </View>
         </View>
       </ScrollView>
-      <Sheet
-        visible={colorPickerOpen}
-        onClose={() => setColorPickerOpen(false)}
-        title="Custom accent"
-      >
-        <View style={{ gap: 14 }}>
-          <Text style={{ color: tokens.foregroundMuted }}>
-            Choose a swatch or enter any six-digit hex color.
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            {customPalette.map((color) => (
-              <Button
-                key={color}
-                accessibilityLabel={`Choose ${color}`}
-                variant="ghost"
-                onPress={() => {
-                  setCustomColor(color);
-                }}
-                style={{
-                  width: 42,
-                  minWidth: 42,
-                  height: 42,
-                  minHeight: 42,
-                  borderRadius: 21,
-                  padding: 0,
-                  backgroundColor: color,
-                  borderWidth: customColor === color ? 2 : color === '#FFFFFF' ? 1 : 0,
-                  borderColor: customColor === color ? tokens.primary : tokens.border,
-                }}
-              >
-                <View
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: color,
-                  }}
-                />
-              </Button>
-            ))}
-          </View>
-          <Input
-            accessibilityLabel="Custom accent hex"
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={7}
-            placeholder="#B7FF4A"
-            value={customColor}
-            onChangeText={(value) => {
-              setCustomColor(value.toUpperCase());
-            }}
-          />
-          {!isAccentColor(customColor) && (
-            <Text style={{ color: tokens.destructive }}>
-              Enter a valid hex color, such as #5B8CFF.
-            </Text>
-          )}
-          <Button
-            disabled={!isAccentColor(customColor)}
-            onPress={() => {
-              if (!isAccentColor(customColor)) return;
-              void chooseAccent(customColor);
-              setColorPickerOpen(false);
-            }}
-          >
-            Use custom color
-          </Button>
-        </View>
-      </Sheet>
     </>
   );
 }

@@ -226,7 +226,6 @@
 }
 
 .filterButton:focus-visible,
-.colorSwatch:focus-visible,
 .accountRow:focus-visible {
   outline: 2px solid var(--finapp-primary);
   outline-offset: 2px;
@@ -465,7 +464,7 @@
 
 .balanceAndFlow {
   display: grid;
-  grid-template-columns: minmax(0, .85fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
   gap: 13px;
 }
 
@@ -690,7 +689,9 @@
 .propertiesHeading :global(h2) {
   margin: 0;
 }
-.propertiesHeading { grid-column: 1 / -1; }
+.propertiesHeading {
+  grid-column: 1 / -1;
+}
 
 .propertyGrid {
   display: grid;
@@ -758,59 +759,6 @@
   width: 38px;
   height: 38px;
   border-radius: 12px;
-}
-
-.colorPicker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.colorSwatch {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  place-items: center;
-  border: 2px solid transparent;
-  border-radius: 50%;
-  padding: 2px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.colorSwatch span {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--swatch-color);
-}
-
-.colorSwatch:hover {
-  border-color: var(--finapp-foreground-subtle);
-}
-
-.colorSelected {
-  border-color: var(--finapp-foreground);
-}
-
-.colorSelected span {
-  box-shadow: inset 0 0 0 2px var(--finapp-background);
-}
-
-.defaultSwatch {
-  border: 1px dashed var(--finapp-foreground-muted);
-  background: linear-gradient(
-    135deg,
-    var(--finapp-primary) 0 46%,
-    var(--finapp-surface-raised) 46% 54%,
-    var(--finapp-foreground-muted) 54%
-  ) !important;
-}
-
-.colorSwatch:disabled {
-  cursor: wait;
-  opacity: 0.55;
 }
 
 .disabledPicker {
