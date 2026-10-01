@@ -27,5 +27,12 @@ describe('Finapp critical flow contracts', () => {
     expect(
       notificationRoute({ type: 'expense', entityType: 'transaction', entityId: 'tx-1' }),
     ).toBe('/transaction/tx-1');
+    expect(
+      notificationRoute({
+        type: 'group',
+        entityType: 'groupInvitation',
+        entityId: 'invite-1',
+      }),
+    ).toBe('/groups?invitations=1');
   });
 });

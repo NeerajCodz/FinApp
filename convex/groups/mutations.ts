@@ -1,24 +1,76 @@
 import { internal } from '../_generated/api';
-import { internalMutation, mutation } from '../_generated/server';
+import { internalMutation, mutation, type MutationCtx } from '../_generated/server';
+import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireIdentity, requireUser } from '../shared/auth';
-import { assertCurrency } from '../shared/validators';
-import {
-  requireAdmin,
-  requireMember,
-  type GroupRole,
-  type Membership,
-} from '../shared/permissions';
-import {
-  changeMemberRole,
-  createGroup,
-  renameGroup,
-  type Group,
-  validateBillImageMetadata,
-} from './domain';
+import { requireAdmin, requireMember, type Membership } from '../shared/permissions';
+import { changeMemberRole, createGroup, type Group, validateBillImageMetadata } from './domain';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
 import { allocateParticipants } from '../splits/domain';
+import { assertCurrency } from '../shared/validators';
+
+type InviteTarget = {
+  userId?: Id<'users'>;
+  username?: string;
+  email?: string;
+  phone?: string;
+};
+
+async function createPendingInvite(
+  ctx: MutationCtx,
+  groupId: Id<'groups'>,
+  inviterId: Id<'users'>,
+  target: InviteTarget,
+  now: number,
+) {
+  const invites = await ctx.db
+    .query('groupInvites')
+    .withIndex('by_group', (query) => query.eq('groupId', groupId))
+    .collect();
+  const existing = invites.find(
+    (invite) =>
+      invite.status === 'pending' &&
+      (target.userId !== undefined
+        ? invite.inviteeUserId === target.userId ||
+          (target.username !== undefined && invite.inviteeUsername === target.username) ||
+          (target.email !== undefined && invite.inviteeEmail === target.email) ||
+          (target.phone !== undefined && invite.inviteePhone === target.phone)
+        : (target.username !== undefined && invite.inviteeUsername === target.username) ||
+          (target.email !== undefined && invite.inviteeEmail === target.email) ||
+          (target.phone !== undefined && invite.inviteePhone === target.phone)),
+  );
+  const inviteId =
+    existing?._id ??
+    (await ctx.db.insert('groupInvites', {
+      groupId,
+      inviterId,
+      inviteeEmail: target.email ?? '',
+      ...(target.username === undefined ? {} : { inviteeUsername: target.username }),
+      ...(target.phone === undefined ? {} : { inviteePhone: target.phone }),
+      ...(target.userId === undefined ? {} : { inviteeUserId: target.userId }),
+      status: 'pending',
+      createdAt: now,
+    }));
+  const invite = await ctx.db.get(inviteId);
+  await recordSyncChange(ctx, inviterId, 'groupInvites', String(inviteId), now, invite);
+  if (target.userId)
+    await recordSyncChange(ctx, target.userId, 'groupInvites', String(inviteId), now, invite);
+  if (target.userId) {
+    const group = await ctx.db.get(groupId);
+    await createNotification(
+      ctx,
+      target.userId,
+      `group-invitation:${inviteId}`,
+      'group',
+      'groupInvitation',
+      String(inviteId),
+      `Invitation to ${group?.name ?? 'a group'}`,
+      `${(await ctx.db.get(inviterId))?.displayName ?? 'Someone'} invited you to join a group.`,
+    );
+  }
+  return inviteId;
+}
 
 const CHAT_RETENTION_OPTIONS: Record<number, true> = {
   86_400_000: true,
@@ -45,10 +97,13 @@ function validateGroupMetadata(fields: {
   endAt?: number | null;
 }) {
   if (
-    (fields.description !== undefined && fields.description !== null && fields.description.length > 200) ||
+    (fields.description !== undefined &&
+      fields.description !== null &&
+      fields.description.length > 200) ||
     (fields.startAt !== undefined && fields.startAt !== null && !Number.isFinite(fields.startAt)) ||
     (fields.endAt !== undefined && fields.endAt !== null && !Number.isFinite(fields.endAt))
-  ) throw new Error('INVALID_GROUP');
+  )
+    throw new Error('INVALID_GROUP');
 }
 
 export function createGroupRecord(ownerId: string, name: string, currency: string): Group {
@@ -137,55 +192,85 @@ export const create = mutation({
       joinedAt: now,
     });
 
+    const ownerUsername = owner.username?.replace(/^@+/, '').trim().toLowerCase();
     const usernames = [
       ...new Set(
         args.memberUsernames.map((value) => value.replace(/^@+/, '').trim().toLowerCase()),
       ),
-    ].filter((value) => value.length > 0 && value !== owner.username);
+    ].filter((value) => value.length > 0 && value !== ownerUsername);
     for (const username of usernames) {
-      const member = await ctx.db
+      const target = await ctx.db
         .query('users')
         .withIndex('by_username', (query) => query.eq('username', username))
         .unique();
-      if (member) {
-        await ctx.db.insert('groupMembers', {
-          groupId,
-          userId: member._id,
-          role: 'member',
-          joinedAt: now,
-        });
-      } else {
-        await ctx.db.insert('groupInvites', {
-          groupId,
-          inviterId: owner._id,
-          inviteeEmail: '',
-          inviteeUsername: username,
-          status: 'pending',
-          createdAt: now,
-        });
-      }
+      if (
+        target &&
+        (await ctx.db
+          .query('groupMembers')
+          .withIndex('by_group_user', (query) =>
+            query.eq('groupId', groupId).eq('userId', target._id),
+          )
+          .unique())
+      )
+        continue;
+      await createPendingInvite(
+        ctx,
+        groupId,
+        owner._id,
+        {
+          username,
+          ...(target
+            ? {
+                userId: target._id,
+                ...(target.email === undefined ? {} : { email: target.email }),
+                ...(target.phone === undefined
+                  ? {}
+                  : { phone: target.phone.replace(/[\s().-]/g, '') }),
+              }
+            : {}),
+        },
+        now,
+      );
     }
     for (const phone of args.memberPhones ?? []) {
       const normalizedPhone = phone.replace(/[\s().-]/g, '');
-      if (normalizedPhone && normalizedPhone !== owner.phone) {
-        await ctx.db.insert('groupInvites', {
-          groupId,
-          inviterId: owner._id,
-          inviteeEmail: '',
-          inviteePhone: normalizedPhone,
-          status: 'pending',
-          createdAt: now,
-        });
-      }
+      const ownerPhone = owner.phone?.replace(/[\s().-]/g, '');
+      if (!normalizedPhone || normalizedPhone === ownerPhone) continue;
+      const target = await ctx.db
+        .query('users')
+        .withIndex('by_phone', (query) => query.eq('phone', normalizedPhone))
+        .unique();
+      if (
+        target &&
+        (await ctx.db
+          .query('groupMembers')
+          .withIndex('by_group_user', (query) =>
+            query.eq('groupId', groupId).eq('userId', target._id),
+          )
+          .unique())
+      )
+        continue;
+      await createPendingInvite(
+        ctx,
+        groupId,
+        owner._id,
+        {
+          phone: normalizedPhone,
+          ...(target
+            ? {
+                userId: target._id,
+                ...(target.username === undefined ? {} : { username: target.username }),
+                ...(target.email === undefined ? {} : { email: target.email }),
+              }
+            : {}),
+        },
+        now,
+      );
     }
-    const [group, memberships, invites] = await Promise.all([
+    const [group, memberships] = await Promise.all([
       ctx.db.get(groupId),
       ctx.db
         .query('groupMembers')
-        .withIndex('by_group', (query) => query.eq('groupId', groupId))
-        .collect(),
-      ctx.db
-        .query('groupInvites')
         .withIndex('by_group', (query) => query.eq('groupId', groupId))
         .collect(),
     ]);
@@ -206,8 +291,6 @@ export const create = mutation({
       for (const member of memberships)
         await recordSyncChange(ctx, scopeUserId, 'groupMembers', String(member._id), now, member);
     }
-    for (const invite of invites)
-      await recordSyncChange(ctx, owner._id, 'groupInvites', String(invite._id), now, invite);
     for (const member of memberships) {
       if (member.userId !== owner._id)
         await createNotification(
@@ -419,53 +502,289 @@ export const addMember = mutation({
     );
     const username = args.username.replace(/^@+/, '').trim().toLowerCase();
     if (!/^[a-z0-9_]{3,32}$/.test(username)) throw new Error('INVALID_USERNAME');
+    if (username === actor.username) throw new Error('SELF_INVITE');
     const target = await ctx.db
       .query('users')
       .withIndex('by_username', (query) => query.eq('username', username))
       .unique();
-    if (!target) {
-      const invite = await ctx.db.insert('groupInvites', {
-        groupId: args.groupId,
-        inviterId: actor._id,
-        inviteeEmail: '',
-        inviteeUsername: username,
-        status: 'pending',
-        createdAt: Date.now(),
-      });
-      const document = await ctx.db.get(invite);
-      await recordSyncChange(ctx, actor._id, 'groupInvites', String(invite), Date.now(), document);
+    if (target && memberships.some((member) => member.userId === target._id))
+      throw new Error('ALREADY_MEMBER');
+    await createPendingInvite(
+      ctx,
+      args.groupId,
+      actor._id,
+      {
+        username,
+        ...(target
+          ? {
+              userId: target._id,
+              ...(target.email === undefined ? {} : { email: target.email }),
+              ...(target.phone === undefined
+                ? {}
+                : { phone: target.phone.replace(/[\s().-]/g, '') }),
+            }
+          : {}),
+      },
+      Date.now(),
+    );
+    return null;
+  },
+});
+
+export const respondToInvitation = mutation({
+  args: {
+    inviteId: v.id('groupInvites'),
+    response: v.union(v.literal('accept'), v.literal('decline')),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const invite = await ctx.db.get(args.inviteId);
+    if (!invite) return null;
+    const username = user.username?.replace(/^@+/, '').trim().toLowerCase();
+    const email = user.email?.trim().toLowerCase();
+    const phone = user.phone?.replace(/[\s().-]/g, '');
+    const invitationUsername = invite.inviteeUsername?.replace(/^@+/, '').trim().toLowerCase();
+    const invitationEmail = invite.inviteeEmail.trim().toLowerCase();
+    const invitationPhone = invite.inviteePhone?.replace(/[\s().-]/g, '');
+    const isRecipient =
+      invite.inviteeUserId === user._id ||
+      (username !== undefined && invitationUsername === username) ||
+      (email !== undefined && invitationEmail === email) ||
+      (phone !== undefined && invitationPhone === phone);
+    if (!isRecipient) throw new Error('INVITATION_NOT_FOUND');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.respondToInvitation',
+    );
+    if (replay.found) {
+      if (replay.result === null) return null;
+      const previousGroupId = ctx.db.normalizeId('groups', String(replay.result));
+      return previousGroupId ?? null;
+    }
+    if (invite.status !== 'pending')
+      return invite.status === 'accepted' && args.response === 'accept' ? invite.groupId : null;
+    const group = await ctx.db.get(invite.groupId);
+    if (!group || group.archivedAt !== undefined) return null;
+    const now = Date.now();
+    if (args.response === 'decline') {
+      await ctx.db.patch(invite._id, { status: 'declined' });
+      const declined = await ctx.db.get(invite._id);
+      await recordSyncChange(
+        ctx,
+        invite.inviterId,
+        'groupInvites',
+        String(invite._id),
+        now,
+        declined,
+      );
+      await recordSyncChange(ctx, user._id, 'groupInvites', String(invite._id), now, declined);
+      await createNotification(
+        ctx,
+        invite.inviterId,
+        `group-invitation:${invite._id}:declined`,
+        'group',
+        'group',
+        String(group._id),
+        `${user.displayName ?? user.name ?? 'A user'} declined your invitation`,
+        `Your invitation to ${group.name} was declined.`,
+      );
+      await publishMutationResult(
+        ctx,
+        user._id,
+        args.clientMutationId,
+        'group.respondToInvitation',
+        null,
+        'groupInvites',
+        String(invite._id),
+        now,
+        declined,
+        [invite.inviterId],
+      );
       return null;
     }
-    if (memberships.some((member) => member.userId === target._id))
-      throw new Error('ALREADY_MEMBER');
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', group._id))
+      .collect();
+    let membership = memberships.find((member) => member.userId === user._id);
+    if (!membership) {
+      const membershipId = await ctx.db.insert('groupMembers', {
+        groupId: group._id,
+        userId: user._id,
+        role: 'member',
+        joinedAt: now,
+      });
+      membership = (await ctx.db.get(membershipId)) ?? undefined;
+    }
+    await ctx.db.patch(invite._id, { status: 'accepted' });
+    await ctx.db.patch(group._id, { updatedAt: now });
+    const [acceptedInvite, updatedGroup] = await Promise.all([
+      ctx.db.get(invite._id),
+      ctx.db.get(group._id),
+    ]);
+    const scopes = [...new Set([...memberships.map((member) => member.userId), user._id])];
+    if (membership) {
+      for (const scopeUserId of scopes)
+        await recordSyncChange(
+          ctx,
+          scopeUserId,
+          'groupMembers',
+          String(membership._id),
+          now,
+          membership,
+        );
+    }
+    for (const scopeUserId of scopes)
+      await recordSyncChange(ctx, scopeUserId, 'groups', String(group._id), now, updatedGroup);
+    for (const scopeUserId of [user._id, invite.inviterId])
+      await recordSyncChange(
+        ctx,
+        scopeUserId,
+        'groupInvites',
+        String(invite._id),
+        now,
+        acceptedInvite,
+      );
+    await createNotification(
+      ctx,
+      invite.inviterId,
+      `group-invitation:${invite._id}:accepted`,
+      'group',
+      'group',
+      String(group._id),
+      `${user.displayName ?? user.name ?? 'A user'} accepted your invitation`,
+      `Your invitation to ${group.name} was accepted.`,
+    );
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.respondToInvitation',
+      group._id,
+      'groups',
+      String(group._id),
+      now,
+      updatedGroup,
+      scopes,
+    );
+    return group._id;
+  },
+});
+
+async function hashInvitationToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export const createInvitationLink = mutation({
+  args: { groupId: v.id('groups') },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const [group, memberships] = await Promise.all([
+      ctx.db.get(args.groupId),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+        .collect(),
+    ]);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    requireAdmin(
+      actor._id,
+      String(group.ownerId),
+      memberships.map((member) => ({ userId: String(member.userId), role: member.role })),
+    );
+    const now = Date.now();
+    const activeLinks = await ctx.db
+      .query('groupInvitationLinks')
+      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .collect();
+    for (const link of activeLinks)
+      if (link.revokedAt === undefined && link.expiresAt > now)
+        await ctx.db.patch(link._id, { revokedAt: now });
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    const token = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    await ctx.db.insert('groupInvitationLinks', {
+      groupId: args.groupId,
+      creatorId: actor._id,
+      tokenHash: await hashInvitationToken(token),
+      expiresAt: now + 7 * 86_400_000,
+      createdAt: now,
+    });
+    return { token, expiresAt: now + 7 * 86_400_000 };
+  },
+});
+
+export const revokeInvitationLink = mutation({
+  args: { groupId: v.id('groups') },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const [group, memberships] = await Promise.all([
+      ctx.db.get(args.groupId),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+        .collect(),
+    ]);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    requireAdmin(
+      actor._id,
+      String(group.ownerId),
+      memberships.map((member) => ({ userId: String(member.userId), role: member.role })),
+    );
+    const now = Date.now();
+    const links = await ctx.db
+      .query('groupInvitationLinks')
+      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .collect();
+    for (const link of links)
+      if (link.revokedAt === undefined) await ctx.db.patch(link._id, { revokedAt: now });
+    return null;
+  },
+});
+
+export const joinByInvitationLink = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    if (!/^[\da-f]{64}$/.test(args.token)) return null;
+    const tokenHash = await hashInvitationToken(args.token);
+    const link = await ctx.db
+      .query('groupInvitationLinks')
+      .withIndex('by_token_hash', (query) => query.eq('tokenHash', tokenHash))
+      .unique();
+    if (!link || link.revokedAt !== undefined || link.expiresAt <= Date.now()) return null;
+    const group = await ctx.db.get(link.groupId);
+    if (!group || group.archivedAt !== undefined) return null;
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', group._id))
+      .collect();
+    if (memberships.some((member) => member.userId === user._id)) return group._id;
     const now = Date.now();
     const memberId = await ctx.db.insert('groupMembers', {
-      groupId: args.groupId,
-      userId: target._id,
+      groupId: group._id,
+      userId: user._id,
       role: 'member',
       joinedAt: now,
     });
-    await ctx.db.patch(args.groupId, { updatedAt: now });
-    const [member, updatedGroup] = await Promise.all([
+    await ctx.db.patch(group._id, { updatedAt: now });
+    const [membership, updatedGroup] = await Promise.all([
       ctx.db.get(memberId),
-      ctx.db.get(args.groupId),
+      ctx.db.get(group._id),
     ]);
-    const scopes = [...new Set([...memberships.map((item) => item.userId), target._id])];
+    const scopes = [...new Set([...memberships.map((member) => member.userId), user._id])];
     for (const scopeUserId of scopes) {
-      await recordSyncChange(ctx, scopeUserId, 'groupMembers', String(memberId), now, member);
-      await recordSyncChange(ctx, scopeUserId, 'groups', String(args.groupId), now, updatedGroup);
+      await recordSyncChange(ctx, scopeUserId, 'groupMembers', String(memberId), now, membership);
+      await recordSyncChange(ctx, scopeUserId, 'groups', String(group._id), now, updatedGroup);
     }
-    await createNotification(
-      ctx,
-      target._id,
-      `group:${args.groupId}:joined`,
-      'group',
-      'group',
-      String(args.groupId),
-      `Added to ${group.name}`,
-      'A new shared group is ready.',
-    );
-    return memberId;
+    return group._id;
   },
 });
 

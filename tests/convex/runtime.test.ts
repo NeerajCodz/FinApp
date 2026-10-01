@@ -1258,6 +1258,20 @@ describe('Convex public runtime functions', () => {
       icon: 'phosphor:UsersThree',
       color: '#78e6a0',
     });
+    const memberActor = t.withIdentity({
+      subject: 'group-member',
+      email: 'rahul@example.com',
+      name: 'Rahul',
+    });
+    expect(await memberActor.query(api.groups.queries.incomingInvitations, {})).toMatchObject([
+      { groupId, groupName: 'Goa Trip', currency: 'INR' },
+    ]);
+    const invitation = (await memberActor.query(api.groups.queries.incomingInvitations, {}))[0]!;
+    expect(await t.run((ctx) => ctx.db.query('groupMembers').collect())).toHaveLength(1);
+    await memberActor.mutation(api.groups.mutations.respondToInvitation, {
+      inviteId: invitation.id,
+      response: 'accept',
+    });
     expect(await authenticated.query(api.groups.queries.list, {})).toMatchObject([
       {
         _id: groupId,
@@ -1277,11 +1291,6 @@ describe('Convex public runtime functions', () => {
       groupId,
       color: '#ff0000',
       clientMutationId: 'group-color-update',
-    });
-    const memberActor = t.withIdentity({
-      subject: 'group-member',
-      email: 'rahul@example.com',
-      name: 'Rahul',
     });
     await expect(
       memberActor.mutation(api.groups.mutations.updateSettings, {

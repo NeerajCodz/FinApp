@@ -37,7 +37,8 @@ export default defineSchema({
   })
     .index('email', ['email'])
     .index('by_identityId', ['identityId'])
-    .index('by_username', ['username']),
+    .index('by_username', ['username'])
+    .index('by_phone', ['phone']),
   userSettings: defineTable({
     userId: v.id('users'),
     currency,
@@ -236,9 +237,25 @@ export default defineSchema({
     inviteeEmail: v.string(),
     inviteeUsername: optionalText,
     inviteePhone: optionalText,
+    inviteeUserId: v.optional(v.id('users')),
     status: v.union(v.literal('pending'), v.literal('accepted'), v.literal('declined')),
     createdAt: timestamp,
-  }).index('by_group', ['groupId']),
+  })
+    .index('by_group', ['groupId'])
+    .index('by_invitee_user_status', ['inviteeUserId', 'status'])
+    .index('by_invitee_username', ['inviteeUsername'])
+    .index('by_invitee_email', ['inviteeEmail'])
+    .index('by_invitee_phone', ['inviteePhone']),
+  groupInvitationLinks: defineTable({
+    groupId: v.id('groups'),
+    creatorId: v.id('users'),
+    tokenHash: v.string(),
+    expiresAt: timestamp,
+    revokedAt: optionalTime,
+    createdAt: timestamp,
+  })
+    .index('by_group', ['groupId'])
+    .index('by_token_hash', ['tokenHash']),
   groupMessages: defineTable({
     groupId: v.id('groups'),
     senderId: v.id('users'),
@@ -321,7 +338,9 @@ export default defineSchema({
     monthlyContributionMinor: v.optional(v.int64()),
     priority: v.optional(v.union(v.literal('low'), v.literal('medium'), v.literal('high'))),
     notes: optionalText,
-    reminderFrequency: v.optional(v.union(v.literal('none'), v.literal('weekly'), v.literal('monthly'))),
+    reminderFrequency: v.optional(
+      v.union(v.literal('none'), v.literal('weekly'), v.literal('monthly')),
+    ),
     completedAt: optionalTime,
     archivedAt: optionalTime,
     createdAt: timestamp,
