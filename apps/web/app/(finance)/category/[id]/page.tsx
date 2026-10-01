@@ -85,12 +85,10 @@ export default function PersonalCategoryDetailPage() {
   for (const account of accounts)
     for (const alias of aliasesOf(account)) accountByAlias.set(alias, account);
   const currency = category?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
-  const [name, setName] = React.useState('');
   const [icon, setIcon] = React.useState('');
   const [limitInput, setLimitInput] = React.useState('');
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
-  const [editingName, setEditingName] = React.useState(false);
   const [confirmingArchive, setConfirmingArchive] = React.useState(false);
   const [rangeError, setRangeError] = React.useState('');
   const historyRange = React.useMemo(() => {
@@ -101,21 +99,13 @@ export default function PersonalCategoryDetailPage() {
     };
   }, []);
   React.useEffect(() => {
-    setName(category?.name ?? '');
     setIcon(category?.icon ?? '');
     setLimitInput(
       category?.monthlyLimitMinor === undefined
         ? ''
         : minorToInput(category.monthlyLimitMinor, currency),
     );
-  }, [
-    category?.id,
-    category?._id,
-    category?.name,
-    category?.icon,
-    category?.monthlyLimitMinor,
-    currency,
-  ]);
+  }, [category?.id, category?._id, category?.icon, category?.monthlyLimitMinor, currency]);
   React.useEffect(() => {
     if (!userId || !isConnected) return;
     let active = true;
@@ -216,17 +206,6 @@ export default function PersonalCategoryDetailPage() {
     }
   }
 
-  async function saveName(event?: React.FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setFormError('Enter a category name.');
-      return;
-    }
-    if (await mutate('category.rename', { name: trimmed }, { name: trimmed })) {
-      setEditingName(false);
-    }
-  }
   async function saveLimit(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     try {
@@ -364,8 +343,6 @@ export default function PersonalCategoryDetailPage() {
       error={pageError ? `Category data could not be opened: ${pageError}` : undefined}
       pending={pending}
       formError={formError ?? (rangeError ? `Activity refresh unavailable: ${rangeError}` : null)}
-      editingName={editingName}
-      nameValue={name}
       limitValue={limitInput}
       isDefaultExpense={isDefaultExpense}
       isDefaultIncome={isDefaultIncome}
@@ -375,13 +352,7 @@ export default function PersonalCategoryDetailPage() {
         router.push(`/transaction/new?categoryId=${encodeURIComponent(routeId ?? '')}`)
       }
       onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
-      onEditName={() => {
-        setName(category?.name ?? '');
-        setEditingName(true);
-      }}
-      onNameChange={setName}
-      onSaveName={() => void saveName()}
-      onCancelName={() => setEditingName(false)}
+      onEditName={() => router.push(`/category/${encodeURIComponent(routeId ?? '')}/edit`)}
       onIconChange={(emoji) => {
         setIcon(emoji ?? '');
         void mutate('category.setIcon', { icon: emoji }, { icon: emoji ?? null });
