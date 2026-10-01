@@ -36,7 +36,10 @@ Transactions use `/transactions`, `/transaction/new`, `/transaction/:id`, and
 `/goals/:id[/edit|/analytics]`.
 
 Budgets use `/budgets` and `/budgets/new`; an individual budget uses
-`/budget/:id`, `/budget/:id/edit`, and `/budget/:id/analytics`. Groups use
+`/budget/:id`, `/budget/:id/edit`, and `/budget/:id/analytics`. Budget details
+and analytics derive merchant, account, category, daily, and forecast summaries
+from posted expenses. Forecasts use only transactions dated through the current
+time; future-dated expenses remain visible in full-period totals. Groups use
 `/groups`, `/groups/new`, `/group/:id`, `/group/:id/edit`, `/group/:id/chat`,
 and `/group/:id/new`. Group balances are shown only when the complete group
 ledger is available; unsupported scheduled settlements are not inferred.

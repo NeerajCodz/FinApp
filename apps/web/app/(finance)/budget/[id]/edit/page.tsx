@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { BudgetFormScreen } from '@finapp/ui/finance';
+import { BudgetFormScreen, type BudgetSettings } from '@finapp/ui/finance';
 import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -34,8 +34,18 @@ type Budget = LocalRecord & {
   endAt?: number;
   updatedAt?: number;
   archivedAt?: number;
+  icon?: string;
+  alertThreshold?: number;
+  notes?: string;
+  includeInAnalytics?: boolean;
+  accountIds?: string[];
 };
 type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
+type Account = LocalRecord & {
+  name?: string;
+  currency?: string;
+  archivedAt?: number;
+};
 const toDate = (value: number) => new Date(value).toISOString().slice(0, 10);
 const atUtcStart = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -52,6 +62,7 @@ export default function EditBudgetPage() {
   const { userId } = useBrowserSync();
   const budgetsState = useLocalRecords<Budget>('budget');
   const categoriesState = useLocalRecords<Category>('category');
+  const accountsState = useLocalRecords<Account>('account');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const budget = budgetsState.records.find(
     (item) =>
@@ -65,6 +76,14 @@ export default function EditBudgetPage() {
   const categories = categoriesState.records.filter(
     (item) => !!userId && belongsToUser(item, userId) && item.archivedAt === undefined,
   );
+  const currency = budget?.currency ?? 'INR';
+  const accounts = accountsState.records.filter(
+    (item) =>
+      !!userId &&
+      belongsToUser(item, userId) &&
+      item.archivedAt === undefined &&
+      item.currency === currency,
+  );
   const aliases = (row: LocalRecord) =>
     [row.id, row._id, row.cloudId].filter((value): value is string => typeof value === 'string');
   const [name, setName] = React.useState('');
@@ -75,7 +94,7 @@ export default function EditBudgetPage() {
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [initialized, setInitialized] = React.useState(false);
-  const currency = budget?.currency ?? 'INR';
+  const [budgetSettings, setBudgetSettings] = React.useState<BudgetSettings>({});
   React.useEffect(() => {
     if (!budget || initialized) return;
     setName(budget.name ?? '');
@@ -83,6 +102,13 @@ export default function EditBudgetPage() {
     setCategoryId(budget.categoryId ?? '');
     setStartDate(toDate(Number(budget.startAt ?? Date.now())));
     setEndDate(toDate(Number(budget.endAt ?? Date.now())));
+    setBudgetSettings({
+      icon: budget.icon,
+      alertThreshold: budget.alertThreshold ?? 80,
+      includeInAnalytics: budget.includeInAnalytics !== false,
+      accountIds: budget.accountIds ?? [],
+      notes: budget.notes,
+    });
     setInitialized(true);
   }, [budget, currency, initialized]);
   const category = categories.find((item) => aliases(item).includes(categoryId));
@@ -91,6 +117,9 @@ export default function EditBudgetPage() {
     name: item.name ?? 'Category',
     icon: item.icon,
   }));
+  const selectedAccounts = (budgetSettings.accountIds ?? []).map((id) =>
+    accounts.find((account) => aliases(account).includes(id)),
+  );
   async function save() {
     if (!userId || !budget || pending || !category) return;
     try {
@@ -106,10 +135,19 @@ export default function EditBudgetPage() {
         endAt <= startAt
       )
         throw new Error('Enter a name, positive limit, and valid date range.');
+      if (selectedAccounts.some((account) => !account))
+        throw new Error('Choose active accounts in this currency.');
       setPending(true);
       setFormError(null);
       const id = String(budget._id ?? budget.cloudId ?? budget.id ?? '');
       if (!id) throw new Error('This budget has no saved identifier.');
+      const settingsPayload = {
+        icon: budgetSettings.icon ?? null,
+        alertThreshold: budgetSettings.alertThreshold ?? 80,
+        includeInAnalytics: budgetSettings.includeInAnalytics !== false,
+        accountIds: selectedAccounts.map((account) => idOf(account!)),
+        notes: budgetSettings.notes?.trim() || null,
+      };
       const payload = {
         budgetId: id,
         name: name.trim(),
@@ -118,12 +156,24 @@ export default function EditBudgetPage() {
         categoryId: idOf(category),
         startAt,
         endAt,
+        ...settingsPayload,
       };
-      const record = { ...budget, ...payload, period: 'category', updatedAt: Date.now() };
-      const dependency = localDependency('category', category);
+      const record = {
+        ...budget,
+        ...payload,
+        ...settingsPayload,
+        period: 'category',
+        updatedAt: Date.now(),
+      };
+      const dependencies = [
+        localDependency('category', category),
+        ...selectedAccounts.map((account) =>
+          account ? localDependency('account', account) : undefined,
+        ),
+      ].filter((dependency): dependency is string => !!dependency);
       await commitLocalWrite(userId, 'budget', 'budget.update', record, payload, {
         recordId: id,
-        dependencies: dependency ? [dependency] : [],
+        dependencies,
         baseUpdatedAt: typeof budget.updatedAt === 'number' ? budget.updatedAt : undefined,
       });
       router.push(`/budget/${encodeURIComponent(routeId)}`);
@@ -139,12 +189,13 @@ export default function EditBudgetPage() {
         Sign in to edit this category budget.
       </SignInGate>
     );
-  if (budgetsState.loading || categoriesState.loading)
+  if (budgetsState.loading || categoriesState.loading || accountsState.loading)
     return <p role="status">Loading budget details…</p>;
-  if (budgetsState.error || categoriesState.error)
+  if (budgetsState.error || categoriesState.error || accountsState.error)
     return (
       <p role="alert">
-        Budget details could not be opened: {String(budgetsState.error ?? categoriesState.error)}
+        Budget details could not be opened:{' '}
+        {String(budgetsState.error ?? categoriesState.error ?? accountsState.error)}
       </p>
     );
   if (!budget)
@@ -161,6 +212,9 @@ export default function EditBudgetPage() {
       currency={budget.currency ?? 'INR'}
       categoryId={category ? idOf(category) : categoryId}
       categories={categoryOptions}
+      accounts={accounts.map((item) => ({ id: idOf(item), name: item.name ?? 'Account' }))}
+      settings={budgetSettings}
+      onSettingsChange={setBudgetSettings}
       startDate={startDate}
       endDate={endDate}
       loading={!initialized}
@@ -172,6 +226,7 @@ export default function EditBudgetPage() {
       onStartDateChange={setStartDate}
       onEndDateChange={setEndDate}
       onSubmit={() => void save()}
+      onAnalytics={() => router.push(`/budget/${encodeURIComponent(routeId)}/analytics`)}
       onBack={() => router.push(`/budget/${encodeURIComponent(routeId)}`)}
     />
   );

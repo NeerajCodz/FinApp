@@ -123,6 +123,7 @@ export {
   type BudgetCategoryOption,
 } from './BudgetFormScreen';
 export { BudgetOverviewScreen, type BudgetOverviewItem } from './BudgetOverviewScreen';
+export { budgetDashboard, type BudgetSettings, type BudgetDashboardTransaction } from '../budgetDashboard';
 export { BudgetDetailScreen, type BudgetDetailItem } from './BudgetDetailScreen';
 export { BudgetAnalyticsScreen, type BudgetAnalyticsTransaction } from './BudgetAnalyticsScreen';
 export {

@@ -17,6 +17,7 @@ type Budget = LocalRecord & {
   startAt?: number;
   endAt?: number;
   archivedAt?: number;
+  accountIds?: string[];
 };
 type Category = LocalRecord & {
   id?: string;
@@ -24,6 +25,13 @@ type Category = LocalRecord & {
   cloudId?: string;
   name?: string;
   icon?: string;
+  archivedAt?: number;
+};
+type Account = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  name?: string;
   archivedAt?: number;
 };
 type Transaction = LocalRecord & {
@@ -39,6 +47,7 @@ type Transaction = LocalRecord & {
   occurredAt?: number;
   title?: string;
   merchant?: string;
+  accountId?: string;
 };
 function ids(record: LocalRecord) {
   return [record.id, record._id, record.cloudId].filter(
@@ -68,6 +77,7 @@ export default function BudgetAnalyticsRoute() {
   const { userId, fetchTransactionRange } = useLocalSync();
   const budgets = useLocalRecords<Budget>(userId, 'budget');
   const categories = useLocalRecords<Category>(userId, 'category');
+  const accounts = useLocalRecords<Account>(userId, 'account');
   const [payloadPeriod, setPeriod] = useState<'week' | 'month' | 'year'>('month');
   const budget = budgets.data?.find(
     (row) =>
@@ -80,6 +90,9 @@ export default function BudgetAnalyticsRoute() {
     (row) => budget && ids(row).includes(budget.categoryId ?? ''),
   );
   const categoryIds = category ? ids(category) : budget?.categoryId ? [budget.categoryId] : [];
+  const accountAliases = new Map<string, Account>();
+  for (const account of accounts.data ?? [])
+    for (const alias of ids(account)) accountAliases.set(alias, account);
   const [baseStart, baseEnd] = selectedBounds(payloadPeriod, Date.now());
   const startAt = Math.max(baseStart, Number(budget?.startAt ?? baseStart));
   const endAt = Math.min(baseEnd, Number(budget?.endAt ?? baseEnd));
@@ -101,7 +114,14 @@ export default function BudgetAnalyticsRoute() {
         row.currency === currency &&
         Number(row.occurredAt ?? 0) >= startAt &&
         Number(row.occurredAt ?? 0) < endAt &&
-        categoryIds.includes(String(row.categoryId ?? '')),
+        categoryIds.includes(String(row.categoryId ?? '')) &&
+        (!budget?.accountIds?.length ||
+          (typeof row.accountId === 'string' &&
+            budget.accountIds.some(
+              (id) =>
+                accountAliases.has(id) &&
+                ids(accountAliases.get(id)!).includes(row.accountId!),
+            ))),
     )
     .map((row) => ({
       id: ids(row)[0] ?? '',
@@ -111,7 +131,7 @@ export default function BudgetAnalyticsRoute() {
       title: row.title ?? row.merchant ?? 'Expense',
     }))
     .filter((row) => !!row.id);
-  const error = budgets.error ?? categories.error ?? transactionState.error;
+  const error = budgets.error ?? categories.error ?? accounts.error ?? transactionState.error;
   if (!userId) return <Text>Sign in to view budget analytics.</Text>;
   if (!budgets.loading && !budget)
     return <Text>Budget unavailable. Return to budgets and choose an active category budget.</Text>;
@@ -126,7 +146,9 @@ export default function BudgetAnalyticsRoute() {
       period={payloadPeriod}
       startAt={startAt}
       endAt={endAt}
-      loading={budgets.loading || categories.loading || transactionState.loading}
+      loading={
+        budgets.loading || categories.loading || accounts.loading || transactionState.loading
+      }
       error={error ? String(error) : undefined}
       onPeriodChange={setPeriod}
       onBack={() => router.push(`/budget/${encodeURIComponent(routeId)}` as never)}

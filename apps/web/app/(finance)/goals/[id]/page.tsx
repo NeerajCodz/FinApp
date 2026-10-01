@@ -24,12 +24,20 @@ type Goal = LocalRecord & {
   cloudId?: string;
   icon?: string;
   color?: string;
+  goalType?: string;
+  monthlyContributionMinor?: bigint | number | string;
+  accountId?: string;
+  priority?: 'low' | 'medium' | 'high';
+  notes?: string;
+  reminderFrequency?: 'none' | 'weekly' | 'monthly';
   updatedAt?: number;
 };
+type GoalAccount = LocalRecord & { name?: string; cloudId?: string };
 type Contribution = LocalRecord & {
   goalId?: string;
   amountMinor?: bigint | number | string;
   occurredAt?: number;
+  accountId?: string;
 };
 const toMinor = (value: unknown): bigint => {
   if (typeof value === 'bigint') return value;
@@ -52,6 +60,7 @@ export default function GoalDetailPage() {
     loading: contributionsLoading,
     error: contributionsError,
   } = useLocalRecords<Contribution>('goalContribution');
+  const accountState = useLocalRecords<GoalAccount>('account');
   const [saving, setSaving] = React.useState(false);
   const [iconSaving, setIconSaving] = React.useState(false);
   const [actionError, setActionError] = React.useState('');
@@ -74,6 +83,15 @@ export default function GoalDetailPage() {
     name: goal?.name ?? 'Goal',
     icon: goal?.icon,
     color: goal?.color,
+    goalType: goal?.goalType,
+    monthlyContributionMinor:
+      goal?.monthlyContributionMinor !== undefined
+        ? toMinor(goal.monthlyContributionMinor)
+        : undefined,
+    accountId: goal?.accountId,
+    priority: goal?.priority,
+    notes: goal?.notes,
+    reminderFrequency: goal?.reminderFrequency,
     saved,
     target,
     currency,
@@ -85,9 +103,10 @@ export default function GoalDetailPage() {
     id: String(entry.id ?? entry._id ?? ''),
     occurredAt: Number(entry.occurredAt ?? 0),
     amount: toMinor(entry.amountMinor),
+    accountId: typeof entry.accountId === 'string' ? entry.accountId : undefined,
   }));
-  const loading = goalsLoading || contributionsLoading;
-  const loadError = goalsError ?? contributionsError;
+  const loading = goalsLoading || contributionsLoading || accountState.loading;
+  const loadError = goalsError ?? contributionsError ?? accountState.error;
   const available = Boolean(goal && goal.archivedAt === undefined);
 
   async function contribute(amount: string) {
@@ -160,6 +179,11 @@ export default function GoalDetailPage() {
     goal: screenGoal,
     available,
     history: screenHistory,
+    accounts: accountState.records.flatMap((account) =>
+      [account.id, account._id, account.cloudId]
+        .filter((value): value is string => typeof value === 'string')
+        .map((id) => ({ id, name: account.name ?? 'Account' })),
+    ),
     loading,
     error: loadError || undefined,
     actionError: actionError || undefined,

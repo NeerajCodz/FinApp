@@ -15,13 +15,17 @@ type Budget = LocalRecord & {
   startAt?: number;
   endAt?: number;
   archivedAt?: number;
+  alertThreshold?: number;
+  accountIds?: string[];
 };
 type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
+type Account = LocalRecord & { archivedAt?: number };
 type Transaction = LocalRecord & {
   type?: string;
   amountMinor?: bigint | number | string;
   currency?: string;
   categoryId?: string;
+  accountId?: string;
   occurredAt?: number;
   status?: string;
   deletedAt?: number;
@@ -37,6 +41,7 @@ export default function PersonalBudgetsPage() {
   const budgetState = useLocalRecords<Budget>('budget');
   const categoryState = useLocalRecords<Category>('category');
   const transactionState = useLocalRecords<Transaction>('transaction');
+  const accountState = useLocalRecords<Account>('account');
   const budgets = budgetState.records.filter(
     (row) =>
       !!userId &&
@@ -67,6 +72,11 @@ export default function PersonalBudgetsPage() {
   const categories = categoryState.records.filter((row) => !!userId && belongsToUser(row, userId));
   const categoryByAlias = new Map<string, Category>();
   for (const row of categories) for (const alias of ids(row)) categoryByAlias.set(alias, row);
+  const accountAliases = new Map<string, Set<string>>();
+  for (const account of accountState.records) {
+    const aliases = ids(account);
+    for (const alias of aliases) accountAliases.set(alias, new Set(aliases));
+  }
   const items = budgets
     .map((budget) => {
       const category = categoryByAlias.get(budget.categoryId ?? '');
@@ -82,7 +92,10 @@ export default function PersonalBudgetsPage() {
               row.currency === currency &&
               Number(row.occurredAt ?? 0) >= Number(budget.startAt ?? 0) &&
               Number(row.occurredAt ?? 0) < Number(budget.endAt ?? 0) &&
-              categoryByAlias.get(String(row.categoryId ?? '')) === category,
+              categoryByAlias.get(String(row.categoryId ?? '')) === category &&
+              (!budget.accountIds?.length ||
+                (typeof row.accountId === 'string' &&
+                  budget.accountIds.some((id) => accountAliases.get(id)?.has(row.accountId!)))),
           )
         : [];
       return {
@@ -95,11 +108,17 @@ export default function PersonalBudgetsPage() {
         limitMinor: asMinor(budget.amountMinor),
         startAt: Number(budget.startAt ?? 0),
         endAt: Number(budget.endAt ?? 0),
+        alertThreshold: budget.alertThreshold,
       };
     })
     .filter((row) => !!row.id)
     .sort((a, b) => a.startAt - b.startAt || a.name.localeCompare(b.name));
-  const error = budgetState.error ?? categoryState.error ?? transactionState.error ?? rangeError;
+  const error =
+    budgetState.error ??
+    categoryState.error ??
+    transactionState.error ??
+    accountState.error ??
+    rangeError;
   if (!userId)
     return (
       <SignInGate eyebrow="BUDGETS" title="Spend with intention.">
@@ -109,10 +128,19 @@ export default function PersonalBudgetsPage() {
   return (
     <BudgetOverviewScreen
       items={items}
-      loading={budgetState.loading || categoryState.loading || transactionState.loading}
+      loading={
+        budgetState.loading ||
+        categoryState.loading ||
+        transactionState.loading ||
+        accountState.loading
+      }
       error={error ? String(error) : undefined}
       onCreate={() => router.push('/budgets/new')}
       onOpen={(id) => router.push(`/budget/${encodeURIComponent(id)}`)}
+      onAnalytics={() => {
+        const first = items[0];
+        if (first) router.push(`/budget/${encodeURIComponent(first.id)}/analytics`);
+      }}
     />
   );
 }

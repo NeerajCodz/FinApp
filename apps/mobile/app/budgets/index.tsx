@@ -20,6 +20,8 @@ type Budget = LocalRecord & {
   startAt?: number;
   endAt?: number;
   archivedAt?: number;
+  alertThreshold?: number;
+  accountIds?: string[];
 };
 type Category = LocalRecord & {
   id?: string;
@@ -29,6 +31,7 @@ type Category = LocalRecord & {
   icon?: string;
   archivedAt?: number;
 };
+type Account = LocalRecord;
 type Transaction = LocalRecord & {
   id?: string;
   _id?: string;
@@ -40,6 +43,7 @@ type Transaction = LocalRecord & {
   currency?: string;
   amountMinor?: bigint | number | string;
   occurredAt?: number;
+  accountId?: string;
 };
 function aliases(row: LocalRecord) {
   return [row.id, row._id, row.cloudId].filter(
@@ -59,6 +63,7 @@ export default function BudgetScreen() {
   const { userId, fetchTransactionRange } = useLocalSync();
   const budgetState = useLocalRecords<Budget>(userId, 'budget');
   const categoryState = useLocalRecords<Category>(userId, 'category');
+  const accountState = useLocalRecords<Account>(userId, 'account');
   const active = (budgetState.data ?? []).filter(
     (row) =>
       row.period === 'category' &&
@@ -84,6 +89,11 @@ export default function BudgetScreen() {
   const categoryMap = new Map<string, Category>();
   for (const category of categoryState.data ?? [])
     for (const id of aliases(category)) categoryMap.set(id, category);
+  const accountAliases = new Map<string, Set<string>>();
+  for (const account of accountState.data ?? []) {
+    const accountIds = aliases(account);
+    for (const accountId of accountIds) accountAliases.set(accountId, new Set(accountIds));
+  }
   const items = active
     .flatMap((budget) => {
       const category = categoryMap.get(budget.categoryId ?? '');
@@ -98,7 +108,10 @@ export default function BudgetScreen() {
             row.currency === currency &&
             Number(row.occurredAt ?? 0) >= Number(budget.startAt ?? 0) &&
             Number(row.occurredAt ?? 0) < Number(budget.endAt ?? 0) &&
-            categoryIds.has(String(row.categoryId ?? '')),
+            categoryIds.has(String(row.categoryId ?? '')) &&
+            (!budget.accountIds?.length ||
+              (typeof row.accountId === 'string' &&
+                budget.accountIds.some((id) => accountAliases.get(id)?.has(row.accountId!)))),
         )
         .reduce((sum, row) => sum + minor(row.amountMinor), 0n);
       const id = aliases(budget)[0];
@@ -114,12 +127,17 @@ export default function BudgetScreen() {
               limitMinor: minor(budget.amountMinor),
               startAt: Number(budget.startAt ?? 0),
               endAt: Number(budget.endAt ?? 0),
+              alertThreshold: budget.alertThreshold,
             },
           ]
         : [];
     })
     .sort((a, b) => a.startAt - b.startAt || a.name.localeCompare(b.name));
-  const error = budgetState.error ?? categoryState.error ?? transactionState.error;
+  const error =
+    budgetState.error ??
+    categoryState.error ??
+    transactionState.error ??
+    accountState.error;
   return (
     <>
       <View
@@ -138,10 +156,19 @@ export default function BudgetScreen() {
       </View>
       <BudgetOverviewScreen
         items={items}
-        loading={budgetState.loading || categoryState.loading || transactionState.loading}
+        loading={
+          budgetState.loading ||
+          categoryState.loading ||
+          transactionState.loading ||
+          accountState.loading
+        }
         error={error ? String(error) : undefined}
         onCreate={() => router.push('/budgets/new')}
         onOpen={(id) => router.push(`/budget/${encodeURIComponent(id)}`)}
+        onAnalytics={() => {
+          const first = items[0];
+          if (first) router.push(`/budget/${encodeURIComponent(first.id)}/analytics` as never);
+        }}
       />
     </>
   );

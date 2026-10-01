@@ -17,8 +17,14 @@ type Budget = LocalRecord & {
   endAt?: number;
   archivedAt?: number;
   updatedAt?: number;
+  icon?: string;
+  alertThreshold?: number;
+  notes?: string;
+  includeInAnalytics?: boolean;
+  accountIds?: string[];
 };
 type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
+type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
 type Transaction = LocalRecord & {
   type?: string;
   amountMinor?: bigint | number | string;
@@ -27,6 +33,7 @@ type Transaction = LocalRecord & {
   occurredAt?: number;
   status?: string;
   deletedAt?: number;
+  accountId?: string;
   title?: string;
   merchant?: string;
 };
@@ -42,6 +49,7 @@ export default function PersonalBudgetDetailPage() {
   const budgets = useLocalRecords<Budget>('budget');
   const transactions = useLocalRecords<Transaction>('transaction');
   const categories = useLocalRecords<Category>('category');
+  const accountState = useLocalRecords<Account>('account');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const budget = budgets.records.find(
     (row) =>
@@ -81,6 +89,12 @@ export default function PersonalBudgetDetailPage() {
   const categoryIds = new Set(
     category ? aliases(category) : budget?.categoryId ? [budget.categoryId] : [],
   );
+  const accountAliases = new Map<string, Account>();
+  const accountRecords = accountState.records.filter(
+    (account) => !!userId && belongsToUser(account, userId),
+  );
+  for (const account of accountRecords)
+    for (const alias of aliases(account)) accountAliases.set(alias, account);
   const currency = budget?.currency ?? 'INR';
   const matching = transactions.records
     .filter(
@@ -93,7 +107,11 @@ export default function PersonalBudgetDetailPage() {
         row.currency === currency &&
         Number(row.occurredAt ?? 0) >= startAt &&
         Number(row.occurredAt ?? 0) < endAt &&
-        categoryIds.has(String(row.categoryId ?? '')),
+        categoryIds.has(String(row.categoryId ?? '')) &&
+        (!budget?.accountIds?.length ||
+          (typeof row.accountId === 'string' &&
+            budget.accountIds.some((id) => accountAliases.has(id) &&
+              aliases(accountAliases.get(id)!).includes(row.accountId!)))),
     )
     .sort((a, b) => Number(b.occurredAt ?? 0) - Number(a.occurredAt ?? 0));
   const spent = matching.reduce((sum, row) => sum + asMinor(row.amountMinor), 0n);
@@ -132,8 +150,14 @@ export default function PersonalBudgetDetailPage() {
         Sign in to review this category budget.
       </SignInGate>
     );
-  if (budgets.loading) return <p role="status">Opening budget…</p>;
-  if (budgets.error) return <p role="alert">Budget data could not be opened: {budgets.error}</p>;
+  if (budgets.loading || accountState.loading)
+    return <p role="status">Opening budget…</p>;
+  if (budgets.error || accountState.error)
+    return (
+      <p role="alert">
+        Budget data could not be opened: {String(budgets.error ?? accountState.error)}
+      </p>
+    );
   if (!budget)
     return (
       <section>
@@ -153,6 +177,11 @@ export default function PersonalBudgetDetailPage() {
       : 'Date unavailable',
     amountMinor: asMinor(row.amountMinor),
     currency: row.currency ?? currency,
+    occurredAt: Number(row.occurredAt ?? 0),
+    merchant: row.merchant,
+    accountId: row.accountId,
+    accountName: row.accountId ? accountAliases.get(row.accountId)?.name : undefined,
+    categoryName: category?.name,
   }));
   return (
     <BudgetDetailScreen
@@ -163,14 +192,48 @@ export default function PersonalBudgetDetailPage() {
       limit={asMinor(budget.amountMinor)}
       spent={spent}
       transactions={rows}
-      loading={transactions.loading}
-      error={transactions.error ? String(transactions.error) : (rangeError ?? undefined)}
+      allTransactions={matching.map((row) => ({
+        id: idOf(row),
+        amountMinor: asMinor(row.amountMinor),
+        currency: row.currency ?? currency,
+        occurredAt: Number(row.occurredAt ?? 0),
+        title: row.title ?? row.merchant ?? 'Expense',
+        merchant: row.merchant,
+        accountId: row.accountId,
+        accountName: row.accountId ? accountAliases.get(row.accountId)?.name : undefined,
+        categoryName: category?.name,
+      }))}
+      startAt={startAt}
+      endAt={endAt}
+      settings={{
+        icon: budget.icon,
+        alertThreshold: budget.alertThreshold,
+        notes: budget.notes,
+        includeInAnalytics: budget.includeInAnalytics,
+        accountIds: budget.accountIds,
+      }}
+      accounts={accountRecords.flatMap((account) =>
+        aliases(account).map((id) => ({ id, name: account.name ?? 'Account' })),
+      )}
+      loading={transactions.loading || accountState.loading}
+      error={
+        transactions.error || accountState.error
+          ? String(transactions.error ?? accountState.error)
+          : (rangeError ?? undefined)
+      }
       actionError={actionError}
       pending={pending}
       onEdit={() => router.push(`/budget/${encodeURIComponent(routeId)}/edit`)}
       onAnalytics={() => router.push(`/budget/${encodeURIComponent(routeId)}/analytics`)}
       onArchive={() => void archive()}
       onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      onAddExpense={() => {
+        const query = new URLSearchParams({
+          categoryId: String(category?._id ?? category?.id ?? budget.categoryId ?? ''),
+        });
+        if (budget.accountIds?.length === 1) query.set('accountId', budget.accountIds[0]!);
+        router.push(`/transaction/new?${query.toString()}`);
+      }}
     />
   );
 }

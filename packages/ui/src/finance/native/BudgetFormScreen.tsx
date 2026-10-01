@@ -2,6 +2,8 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeft } from '@finapp/ui/icons/native';
 import { Button, IconButton, Input, Label, Text, Typography, useTheme } from '@finapp/ui/native';
 import { CategoryIcon } from './CategoryIcon';
+import { EntityIconPicker } from './EntityIconPicker';
+import type { BudgetSettings } from '../budgetDashboard';
 
 export type BudgetCategoryOption = { id: string; name: string; icon?: string };
 export type BudgetFormScreenProps = {
@@ -23,11 +25,19 @@ export type BudgetFormScreenProps = {
   onEndDateChange: (value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
+  settings?: BudgetSettings;
+  onSettingsChange?: (settings: BudgetSettings) => void;
+  accounts?: readonly { id: string; name: string }[];
+  onAnalytics?: () => void;
+  onArchive?: () => void;
 };
 
 export function BudgetFormScreen(props: BudgetFormScreenProps) {
   const { tokens } = useTheme();
   const creating = props.mode === 'create';
+  const settings = props.settings ?? {};
+  const setSettings = (next: Partial<BudgetSettings>) =>
+    props.onSettingsChange?.({ ...settings, ...next });
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
@@ -54,6 +64,25 @@ export function BudgetFormScreen(props: BudgetFormScreenProps) {
           Set a category spending limit and review real expenses against it.
         </Text>
       </View>
+      {(props.onAnalytics || props.onArchive) && (
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {props.onAnalytics && (
+            <Button variant="outline" onPress={props.onAnalytics} style={{ flex: 1 }}>
+              View analytics
+            </Button>
+          )}
+          {props.onArchive && (
+            <Button
+              variant="outline"
+              disabled={props.pending}
+              onPress={props.onArchive}
+              style={{ flex: 1 }}
+            >
+              Archive budget
+            </Button>
+          )}
+        </View>
+      )}
       <View
         style={{
           gap: 18,
@@ -139,6 +168,83 @@ export function BudgetFormScreen(props: BudgetFormScreenProps) {
                   onChangeText={props.onEndDateChange}
                 />
               </View>
+            </View>
+            <View style={{ gap: 12, borderTopWidth: 1, borderColor: tokens.borderSubtle, paddingTop: 14 }}>
+              <Typography variant="bodyLarge">Account scope</Typography>
+              <Pressable
+                accessibilityRole="radio"
+                accessibilityState={{ checked: !settings.accountIds?.length }}
+                onPress={() => setSettings({ accountIds: [] })}
+                style={{ padding: 12, borderWidth: 1, borderColor: tokens.border, borderRadius: 12 }}
+              >
+                <Text>All accounts</Text>
+                <Text style={{ color: tokens.foregroundMuted }}>Include expenses from every linked account.</Text>
+              </Pressable>
+              {(props.accounts ?? []).map((account) => {
+                const selected = settings.accountIds?.includes(account.id) ?? false;
+                return (
+                  <Pressable
+                    key={account.id}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected }}
+                    onPress={() =>
+                      setSettings({
+                        accountIds: selected
+                          ? (settings.accountIds ?? []).filter((id) => id !== account.id)
+                          : [...(settings.accountIds ?? []), account.id],
+                      })
+                    }
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 }}
+                  >
+                    <Text style={{ color: selected ? tokens.primary : tokens.foregroundMuted }}>
+                      {selected ? '☑' : '□'}
+                    </Text>
+                    <Text>{account.name}</Text>
+                  </Pressable>
+                );
+              })}
+              <View style={{ gap: 8 }}>
+                <Label>Alert threshold (%)</Label>
+                <Input
+                  accessibilityLabel="Budget alert threshold"
+                  keyboardType="decimal-pad"
+                  value={String(settings.alertThreshold ?? 80)}
+                  onChangeText={(value) => setSettings({ alertThreshold: Number(value) })}
+                />
+              </View>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: settings.includeInAnalytics !== false }}
+                onPress={() => setSettings({ includeInAnalytics: settings.includeInAnalytics === false })}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
+              >
+                <Text style={{ color: tokens.primary }}>
+                  {settings.includeInAnalytics === false ? '□' : '☑'}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text>Include in analytics</Text>
+                  <Text style={{ color: tokens.foregroundMuted }}>Show this budget in charts and insights.</Text>
+                </View>
+              </Pressable>
+              <View style={{ gap: 8 }}>
+                <Label>Notes (optional)</Label>
+                <Input
+                  accessibilityLabel="Budget notes"
+                  multiline
+                  maxLength={300}
+                  value={settings.notes ?? ''}
+                  onChangeText={(notes) => setSettings({ notes })}
+                />
+                <Text style={{ color: tokens.foregroundMuted, textAlign: 'right' }}>
+                  {settings.notes?.length ?? 0}/300
+                </Text>
+              </View>
+              <EntityIconPicker
+                mode="all"
+                value={settings.icon}
+                onChange={(icon) => setSettings({ icon })}
+                label="Budget icon"
+              />
             </View>
           </>
         )}

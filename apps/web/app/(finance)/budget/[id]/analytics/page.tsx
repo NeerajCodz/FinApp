@@ -15,8 +15,10 @@ type Budget = LocalRecord & {
   startAt?: number;
   endAt?: number;
   archivedAt?: number;
+  accountIds?: string[];
 };
 type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
+type Account = LocalRecord & { name?: string; archivedAt?: number };
 type Transaction = LocalRecord & {
   categoryId?: string;
   type?: string;
@@ -27,6 +29,7 @@ type Transaction = LocalRecord & {
   occurredAt?: number;
   title?: string;
   merchant?: string;
+  accountId?: string;
 };
 function aliases(record: LocalRecord) {
   return [record.id, record._id, record.cloudId].filter(
@@ -61,6 +64,7 @@ export default function BudgetAnalyticsPage() {
   const budgetState = useLocalRecords<Budget>('budget');
   const categoryState = useLocalRecords<Category>('category');
   const transactionState = useLocalRecords<Transaction>('transaction');
+  const accountState = useLocalRecords<Account>('account');
   const [period, setPeriod] = React.useState<'week' | 'month' | 'year'>('month');
   const [rangeLoading, setRangeLoading] = React.useState(false);
   const [rangeError, setRangeError] = React.useState<string | null>(null);
@@ -79,6 +83,11 @@ export default function BudgetAnalyticsPage() {
   const categoryAliases = new Set(
     category ? aliases(category) : budget?.categoryId ? [budget.categoryId] : [],
   );
+  const accountAliases = new Map<string, Account>();
+  for (const account of accountState.records.filter(
+    (row) => !!userId && belongsToUser(row, userId),
+  ))
+    for (const alias of aliases(account)) accountAliases.set(alias, account);
   const [calendarStart, calendarEnd] = bounds(period, Date.now());
   const startAt = Math.max(calendarStart, Number(budget?.startAt ?? calendarStart));
   const endAt = Math.min(calendarEnd, Number(budget?.endAt ?? calendarEnd));
@@ -123,7 +132,14 @@ export default function BudgetAnalyticsPage() {
         row.currency === currency &&
         Number(row.occurredAt ?? 0) >= startAt &&
         Number(row.occurredAt ?? 0) < endAt &&
-        categoryAliases.has(String(row.categoryId ?? '')),
+        categoryAliases.has(String(row.categoryId ?? '')) &&
+        (!budget?.accountIds?.length ||
+          (typeof row.accountId === 'string' &&
+            budget.accountIds.some(
+              (id) =>
+                accountAliases.has(id) &&
+                aliases(accountAliases.get(id)!).includes(row.accountId!),
+            ))),
     )
     .map((row) => ({
       id: aliases(row)[0] ?? '',
@@ -133,7 +149,12 @@ export default function BudgetAnalyticsPage() {
       title: row.title ?? row.merchant ?? 'Expense',
     }))
     .filter((row) => !!row.id);
-  const error = budgetState.error ?? categoryState.error ?? transactionState.error ?? rangeError;
+  const error =
+    budgetState.error ??
+    categoryState.error ??
+    accountState.error ??
+    transactionState.error ??
+    rangeError;
   if (!userId) return <p role="alert">Sign in to view budget analytics.</p>;
   if (!budgetState.loading && !budget)
     return (
@@ -153,7 +174,11 @@ export default function BudgetAnalyticsPage() {
       startAt={startAt}
       endAt={endAt}
       loading={
-        budgetState.loading || categoryState.loading || transactionState.loading || rangeLoading
+        budgetState.loading ||
+        categoryState.loading ||
+        accountState.loading ||
+        transactionState.loading ||
+        rangeLoading
       }
       error={error ? String(error) : undefined}
       onPeriodChange={setPeriod}

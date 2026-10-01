@@ -21,14 +21,22 @@ type Goal = LocalRecord & {
   archivedAt?: number;
   icon?: string;
   color?: string;
+  goalType?: string;
+  monthlyContributionMinor?: bigint | number | string;
+  accountId?: string;
+  priority?: 'low' | 'medium' | 'high';
+  notes?: string;
+  reminderFrequency?: 'none' | 'weekly' | 'monthly';
   updatedAt?: number;
   cloudId?: string;
 };
+type GoalAccount = LocalRecord & { name?: string; cloudId?: string };
 type Contribution = LocalRecord & {
   id?: string;
   goalId?: string;
   amountMinor?: bigint | number | string;
   occurredAt?: number;
+  accountId?: string;
 };
 const toMinor = (value: unknown): bigint => {
   if (typeof value === 'bigint') return value;
@@ -42,6 +50,7 @@ export default function GoalDetailScreenRoute() {
   const { userId } = useLocalSync();
   const goals = useLocalRecords<Goal>(userId, 'goal');
   const contributions = useLocalRecords<Contribution>(userId, 'goalContribution');
+  const accounts = useLocalRecords<GoalAccount>(userId, 'account');
   const [saving, setSaving] = React.useState(false);
   const [actionError, setActionError] = React.useState('');
   const goal = goals.data?.find((item) => [item.id, item._id, item.cloudId].includes(routeId));
@@ -63,6 +72,15 @@ export default function GoalDetailScreenRoute() {
     name: goal?.name ?? 'Goal',
     icon: goal?.icon,
     color: goal?.color,
+    goalType: goal?.goalType,
+    monthlyContributionMinor:
+      goal?.monthlyContributionMinor !== undefined
+        ? toMinor(goal.monthlyContributionMinor)
+        : undefined,
+    accountId: goal?.accountId,
+    priority: goal?.priority,
+    notes: goal?.notes,
+    reminderFrequency: goal?.reminderFrequency,
     saved,
     target,
     currency,
@@ -74,10 +92,11 @@ export default function GoalDetailScreenRoute() {
     id: String(entry.id ?? entry._id ?? ''),
     occurredAt: Number(entry.occurredAt ?? 0),
     amount: toMinor(entry.amountMinor),
+    accountId: typeof entry.accountId === 'string' ? entry.accountId : undefined,
   }));
   const available = Boolean(goal && goal.archivedAt === undefined);
-  const loading = goals.loading || contributions.loading;
-  const loadError = goals.error || contributions.error;
+  const loading = goals.loading || contributions.loading || accounts.loading;
+  const loadError = goals.error || contributions.error || accounts.error;
 
   async function contribute(amount: string) {
     if (!userId || !goal || !available || saving) return;
@@ -138,6 +157,11 @@ export default function GoalDetailScreenRoute() {
     goal: screenGoal,
     available,
     history,
+    accounts: (accounts.data ?? []).flatMap((account) =>
+      [account.id, account._id, account.cloudId]
+        .filter((value): value is string => typeof value === 'string')
+        .map((id) => ({ id, name: account.name ?? 'Account' })),
+    ),
     loading,
     error: loadError ? 'Saved goal details could not be loaded.' : undefined,
     actionError: actionError || undefined,
@@ -148,6 +172,7 @@ export default function GoalDetailScreenRoute() {
     onRetry: () => {
       goals.retry();
       contributions.retry();
+      accounts.retry();
     },
     onEdit: () => router.push(`/goals/${localId || routeId}/edit` as never),
     onAnalytics: () => router.push(`/goals/${localId || routeId}/analytics` as never),

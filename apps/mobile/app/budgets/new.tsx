@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BudgetFormScreen } from '@finapp/ui/finance';
+import { BudgetFormScreen, type BudgetSettings } from '@finapp/ui/finance';
 import { parseMinor } from '@/lib/money';
 import { Button, IconButton, Text, Typography, useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -17,6 +17,14 @@ type CategoryRecord = LocalRecord & {
   _id?: string;
   name?: string;
   icon?: string;
+  archivedAt?: number;
+};
+type AccountRecord = LocalRecord & {
+  id?: string;
+  _id?: string;
+  cloudId?: string;
+  name?: string;
+  currency?: string;
   archivedAt?: number;
 };
 function utcMonthDate(offset: number) {
@@ -43,20 +51,33 @@ export default function NewBudgetScreen() {
   const [endDate, setEndDate] = useState(() => utcMonthDate(1));
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [budgetSettings, setBudgetSettings] = useState<BudgetSettings>({
+    alertThreshold: 80,
+    includeInAnalytics: true,
+    accountIds: [],
+  });
   const { userId } = useLocalSync();
   const profiles = useLocalRecords<ProfileRecord>(userId, 'profile');
   const settings = useLocalRecords<SettingsRecord>(userId, 'settings');
   const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
+  const accountsState = useLocalRecords<AccountRecord>(userId, 'account');
   if (profiles.error) throw profiles.error;
   if (settings.error) throw settings.error;
   if (categoryState.error) throw categoryState.error;
+  if (accountsState.error) throw accountsState.error;
   const profile = profiles.data?.[0];
   const currency =
     profile?.defaultCurrency ?? settings.data?.[0]?.defaultCurrency ?? settings.data?.[0]?.currency;
   const categories = (categoryState.data ?? []).filter((row) => row.archivedAt === undefined);
+  const accounts = (accountsState.data ?? []).filter(
+    (account) => account.archivedAt === undefined && account.currency === currency,
+  );
   const category = categories.find((row) => row.id === categoryId || row._id === categoryId);
   const loading =
-    profiles.data === undefined || settings.data === undefined || categoryState.data === undefined;
+    profiles.data === undefined ||
+    settings.data === undefined ||
+    categoryState.data === undefined ||
+    accountsState.data === undefined;
   async function submit() {
     if (!userId || !category || !currency || pending) return;
     try {
@@ -65,22 +86,27 @@ export default function NewBudgetScreen() {
       const endAt = dateAtUtcStart(endDate);
       if (amountMinor <= 0n || startAt === null || endAt === null || endAt <= startAt)
         throw new Error('Enter a positive limit and a valid date range.');
-      setPending(true);
-      setFormError(null);
+      const threshold = budgetSettings.alertThreshold ?? 80;
+      if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100)
+        throw new Error('Alert threshold must be between 0 and 100%.');
+      const selectedAccounts = (budgetSettings.accountIds ?? []).map((selectedId) =>
+        accounts.find(
+          (account) => String(account._id ?? account.id ?? '') === selectedId,
+        ),
+      );
+      if (selectedAccounts.some((account) => !account))
+        throw new Error('Choose active accounts in this currency.');
       const id = category._id ?? category.id;
       if (!id) throw new Error('Choose an available category.');
+      setPending(true);
+      setFormError(null);
       const now = Date.now();
-      const record: LocalRecord = {
-        ownerId: userId,
-        name: name.trim(),
-        amountMinor,
-        currency,
-        period: 'category',
-        categoryId: id,
-        startAt,
-        endAt,
-        createdAt: now,
-        updatedAt: now,
+      const settingsPayload = {
+        ...(budgetSettings.icon ? { icon: budgetSettings.icon } : {}),
+        alertThreshold: threshold,
+        includeInAnalytics: budgetSettings.includeInAnalytics !== false,
+        accountIds: selectedAccounts.map((account) => String(account!._id ?? account!.id)),
+        ...(budgetSettings.notes?.trim() ? { notes: budgetSettings.notes.trim() } : {}),
       };
       const payload = {
         name: name.trim(),
@@ -90,9 +116,24 @@ export default function NewBudgetScreen() {
         categoryId: id,
         startAt,
         endAt,
+        ...settingsPayload,
       };
+      const record: LocalRecord = {
+        ownerId: userId,
+        ...payload,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const dependencies = [
+        ...(id.startsWith('local-') ? [`category:${id}`] : []),
+        ...selectedAccounts.flatMap((account) =>
+          account && !account._id && !account.cloudId && account.id?.startsWith('local-')
+            ? [`account:${account.id}`]
+            : [],
+        ),
+      ];
       await commitLocalWrite(userId, 'budget', 'budget.create', record, payload, {
-        dependencies: id.startsWith('local-') ? [`category:${id}`] : [],
+        dependencies,
       });
       router.back();
     } catch (cause) {
@@ -113,6 +154,14 @@ export default function NewBudgetScreen() {
         const id = row._id ?? row.id;
         return id ? [{ id, name: row.name ?? 'Category', icon: row.icon }] : [];
       })}
+      accounts={(accountsState.data ?? [])
+        .filter((account) => account.archivedAt === undefined && account.currency === currency)
+        .flatMap((account) => {
+          const id = account._id ?? account.id;
+          return id ? [{ id, name: account.name ?? 'Account' }] : [];
+        })}
+      settings={budgetSettings}
+      onSettingsChange={setBudgetSettings}
       startDate={startDate}
       endDate={endDate}
       loading={loading}

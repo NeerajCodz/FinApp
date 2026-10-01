@@ -21,6 +21,12 @@ type Goal = LocalRecord & {
   archivedAt?: number;
   icon?: string;
   color?: string;
+  goalType?: string;
+  monthlyContributionMinor?: bigint | number | string;
+  accountId?: string;
+  priority?: 'low' | 'medium' | 'high';
+  notes?: string;
+  reminderFrequency?: 'none' | 'weekly' | 'monthly';
   cloudId?: string;
 };
 type Contribution = LocalRecord & { goalId?: string; amountMinor?: bigint | number | string };
@@ -75,6 +81,15 @@ export default function GoalsPage() {
       name: goal.name ?? 'Savings goal',
       icon: goal.icon,
       color: goal.color,
+      goalType: goal.goalType,
+      monthlyContributionMinor:
+        goal.monthlyContributionMinor !== undefined
+          ? toMinor(goal.monthlyContributionMinor)
+          : undefined,
+      accountId: goal.accountId,
+      priority: goal.priority,
+      notes: goal.notes,
+      reminderFrequency: goal.reminderFrequency,
       saved,
       target,
       currency: goal.currency ?? selectedCurrency ?? 'INR',
@@ -107,6 +122,7 @@ export default function GoalsPage() {
       defaultCurrency={selectedCurrency}
       onAdd={() => router.push('/goals/new')}
       onOpen={(id) => router.push(`/goals/${encodeURIComponent(id)}`)}
+      onAnalytics={() => router.push('/goals/analytics')}
       onRetry={() => window.location.reload()}
       onSetCurrency={() => router.push('/settings/currency')}
     />
