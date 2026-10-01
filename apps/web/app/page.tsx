@@ -118,6 +118,7 @@ export default function HomePage() {
               f
             </span>
             <ProductPreview />
+            <CoinLogo className="landing-hero-coin" interactive />
           </div>
         </section>
 
@@ -309,7 +310,6 @@ export default function HomePage() {
         </section>
 
         <section className="landing-closing landing-container" aria-labelledby="closing-title">
-          <CoinLogo className="landing-closing-coin" interactive />
           <p>YOUR MONEY. YOUR PEOPLE. ONE CLEAR PLACE.</p>
           <h2 id="closing-title">
             Life’s full.

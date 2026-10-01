@@ -3,9 +3,9 @@
 ## Landing and authentication
 
 The public web landing page lives at `/` and renders without a Convex deployment URL.
-Its black-and-volt layout includes an interactive sample spending preview, savings and
-shared-money sections, FAQs, and an interactive 3D WebGPU coin. `/welcome`, `/sign-in`,
-and `/sign-up` retain the app's authentication entry points; these routes require
+Its black-and-volt layout features an interactive sample spending preview, a prominent
+interactive 3D WebGPU coin in the hero, savings and shared-money sections, and FAQs.
+`/welcome`, `/sign-in`, and `/sign-up` retain the app's authentication entry points; these routes require
 `NEXT_PUBLIC_CONVEX_URL` in `apps/web/.env.local`.
 
 Web and mobile authentication use a scoped dark theme without changing the user's

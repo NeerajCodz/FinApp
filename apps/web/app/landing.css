@@ -214,6 +214,16 @@
   place-items: center;
   isolation: isolate;
 }
+.landing-hero-coin {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: -12px;
+  width: min(54%, 260px);
+}
+.landing-hero-coin .finapp-coin-fallback {
+  border-radius: 50%;
+}
 .landing-hero-visual::before {
   position: absolute;
   z-index: -2;
@@ -682,10 +692,6 @@
   border-top: 1px solid #252525;
   text-align: center;
 }
-.landing-closing-coin {
-  width: min(100%, 280px);
-  margin: 0 auto 24px;
-}
 .landing-closing > p {
   margin: 0 0 28px;
   color: #a4a4a4;
@@ -854,6 +860,11 @@
   .landing-hero-visual {
     min-height: 330px;
     margin-inline: 0;
+  }
+  .landing-hero-coin {
+    top: -8px;
+    right: -6px;
+    width: min(58%, 210px);
   }
   .landing-hero-visual::before {
     width: 300px;
