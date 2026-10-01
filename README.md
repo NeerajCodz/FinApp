@@ -22,6 +22,25 @@ both the Profile page and Settings. Profile name, username, phone, and avatar ed
 use the existing offline-first sync flow. Notification and sync actions live in the
 home header; they are not repeated across other screens.
 
+### Finance workspaces
+
+Finance screens are shared from `packages/ui/src/finance`, with separate web and
+native presentations. Account and category editors, transaction forms and details,
+recurring-payment views, goal editors and analytics, budget views, and group
+experiences use the apps' live Convex/offline-first records.
+
+Account and category creation use `/accounts/new` and `/categories/new`.
+Transactions use `/transactions`, `/transaction/new`, `/transaction/:id`, and
+`/transaction/:id/edit`; recurring rules use `/recurring` and
+`/recurring/:recurringId`. Goals use `/goals`, `/goals/new`, and
+`/goals/:id[/edit|/analytics]`.
+
+Budgets use `/budgets` and `/budgets/new`; an individual budget uses
+`/budget/:id`, `/budget/:id/edit`, and `/budget/:id/analytics`. Groups use
+`/groups`, `/groups/new`, `/group/:id`, `/group/:id/edit`, `/group/:id/chat`,
+and `/group/:id/new`. Group balances are shown only when the complete group
+ledger is available; unsupported scheduled settlements are not inferred.
+
 ### Coin implementation
 
 - `packages/ui/src/coin/geometry.ts`: volt faces, a beveled/reeded edge, shallow
