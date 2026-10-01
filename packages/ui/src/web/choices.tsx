@@ -268,15 +268,15 @@ export function Select({
         onInvalid={(event) => { event.preventDefault(); buttonRef.current?.focus(); }}
         onChange={() => {}}
         style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}
-      ><option value="" />{normalized.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>}
+      >{!normalized.some((option) => option.value === '') && <option key={`${selectId}-empty`} value="" />}{normalized.map((option, index) => <option key={optionId(index)} value={option.value}>{option.label}</option>)}</select>}
       {open && <ul id={listboxId} role="listbox" aria-label={label || ariaLabel} className="finapp-select-popup" style={{
         position: 'absolute', zIndex: 1000, insetInline: 0, top: 'calc(100% + 4px)', maxHeight: 280, overflowY: 'auto',
         margin: 0, padding: 4, listStyle: 'none', border: '1px solid var(--finapp-border)',
-        borderRadius: 10, background: 'var(--finapp-surface-raised, var(--finapp-input))',
-        color: 'var(--finapp-foreground)', boxShadow: '0 8px 24px rgba(0,0,0,.22)',
+        borderRadius: 10, background: 'var(--finapp-popover, var(--finapp-background))',
+        color: 'var(--finapp-popover-foreground, var(--finapp-foreground))', boxShadow: '0 8px 24px rgba(0,0,0,.22)',
       }}>
         {normalized.map((option, index) => <li
-          key={option.value} id={optionId(index)} role="option" aria-selected={option.value === value}
+          key={optionId(index)} id={optionId(index)} role="option" aria-selected={option.value === value}
           aria-disabled={option.disabled || undefined}
           onMouseMove={() => !option.disabled && setActiveIndex(index)}
           onClick={() => choose(index)}
