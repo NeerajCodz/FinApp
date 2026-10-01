@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowRight, NotePencil, ReceiptText } from '@finapp/ui/icons/native';
+import { ArrowLeft, ArrowRight, NotePencil } from '@finapp/ui/icons/native';
 import {
   Button,
   Empty,
@@ -12,6 +12,7 @@ import {
 } from '@finapp/ui/native';
 import { CategoryIcon } from './CategoryIcon';
 import { Money } from './Money';
+import { TransactionCards, type TransactionTableItem } from './TransactionsScreen';
 import { SemanticMarker } from './SemanticMarker';
 import { SettingsRow } from './ScreenPrimitives';
 import type { SemanticType, TransactionType } from '../types';
@@ -40,6 +41,9 @@ export type TransactionDetailScreenProps = {
   onEdit?: () => void;
   onDuplicate?: () => void;
   onRetry?: () => void;
+  referenceId?: string;
+  relatedTransactions?: readonly TransactionTableItem[];
+  onOpenTransaction?: (id: string) => void;
 };
 
 export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
@@ -69,7 +73,7 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
     onRetry,
   } = props;
   const { tokens } = useTheme();
-  const contentStyle = { padding: 20, gap: 20, paddingBottom: 32 } as const;
+  const contentStyle = { padding: 16, gap: 16, paddingBottom: 32 } as const;
   if (missingId)
     return (
       <View style={{ flex: 1, backgroundColor: tokens.background, padding: 20, gap: 12 }}>
@@ -132,21 +136,22 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
       </View>
       <View
         style={{
-          gap: 18,
+          gap: 16,
           padding: 18,
           borderWidth: 1,
           borderColor: tokens.borderSubtle,
-          borderRadius: 20,
+          borderRadius: 12,
           backgroundColor: tokens.surfaceRaised,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <CategoryIcon label={category} icon={categoryIcon} />
+          <View style={{width:64,height:64,borderRadius:14,backgroundColor:tokens.surfaceRaised,alignItems:'center',justifyContent:'center'}}><CategoryIcon label={category} icon={categoryIcon} /></View>
           <View style={{ flex: 1 }}>
             <Typography variant="heading">{title}</Typography>
             {merchant && <Typography variant="caption">{merchant}</Typography>}
           </View>
         </View>
+        <Money amountMinor={amountMinor} currency={currency} type={type} size="hero" color={type==='income'||type==='refund'?tokens.income:tokens.expense} />
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Button variant="outline" disabled={!canEdit || !onEdit} onPress={onEdit}>
             <NotePencil size={17} color={tokens.foreground} /> Edit
@@ -160,17 +165,6 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
           <SemanticMarker type={semanticType} />
           {status && <Typography variant="caption">{status}</Typography>}
         </View>
-        {canEdit && (
-          <Button size="lg" onPress={onEdit}>
-            <NotePencil size={17} color={tokens.foreground} /> Edit transaction
-          </Button>
-        )}
-        {canDuplicate && (
-          <Button size="lg" variant="outline" onPress={onDuplicate}>
-            <ReceiptText size={17} color={tokens.foreground} /> Duplicate transaction{' '}
-            <ArrowRight size={17} color={tokens.foregroundSubtle} />
-          </Button>
-        )}
         {note && (
           <View
             style={{
@@ -217,12 +211,18 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
         <SettingsRow label="Date & time" value={date} />
         <Separator />
         <SettingsRow label="Status" value={status ?? 'Saved'} />
+        {props.referenceId && <><Separator/><SettingsRow label="Reference ID" value={props.referenceId}/></>}
         {merchant && (
           <>
             <Separator />
             <SettingsRow label="Merchant / Payee" value={merchant} />
           </>
         )}
+      </View>
+      <View style={{padding:16,borderWidth:1,borderColor:tokens.borderSubtle,borderRadius:12,backgroundColor:tokens.surfaceRaised}}>
+        <Typography variant="heading">Related transactions</Typography>
+        <Typography variant="caption">Other transactions from this merchant or in this category.</Typography>
+        <TransactionCards items={props.relatedTransactions??[]} onSelect={props.onOpenTransaction}/>
       </View>
     </ScrollView>
   );

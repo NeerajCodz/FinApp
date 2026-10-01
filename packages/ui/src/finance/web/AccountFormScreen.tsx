@@ -1,308 +1,68 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, Check, ChevronDown, Landmark } from 'lucide-react';
-import { Button, IconButton, Input, Label, Sheet, Typography } from '@finapp/ui/web';
+import { ArrowLeft, Banknote, CreditCard, Info, Landmark, Wallet, HandCoins, Boxes } from 'lucide-react';
+import { Button, Input, Label, Typography } from '@finapp/ui/web';
 import { CurrencyInput } from './CurrencyInput';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
+import { EntityActivityTable, type EntityActivity } from './EntityActivityTable';
+import styles from './AccountFormScreen.module.css';
 
 export type AccountFormValue = {
-  name: string;
-  type: 'cash' | 'bank' | 'card' | 'wallet' | 'loan' | 'other';
-  customType: string;
-  currency: string;
-  openingBalance: string;
-  icon?: string;
-  color?: string;
-  isIncludedInTotal: boolean;
+  name: string; type: 'cash' | 'bank' | 'card' | 'wallet' | 'loan' | 'other'; customType: string;
+  currency: string; openingBalance: string; icon?: string; color?: string; isIncludedInTotal: boolean; notes?: string;
+  provider?: string; accountNumber?: string; openedAt?: number; includeInAnalytics?: boolean;
 };
-
 const accountTypes = [
-  ['Cash', 'cash'],
-  ['Bank', 'bank'],
-  ['Card', 'card'],
-  ['Wallet', 'wallet'],
-  ['Loan', 'loan'],
-  ['Custom', 'other'],
+  { label: 'Bank account', value: 'bank', icon: Landmark, text: 'Checking or savings accounts from banks and financial institutions.' },
+  { label: 'Cash', value: 'cash', icon: Banknote, text: 'Physical cash you keep with you.' },
+  { label: 'Credit card', value: 'card', icon: CreditCard, text: 'Track payments and balances on your credit cards.' },
+  { label: 'Wallet', value: 'wallet', icon: Wallet, text: 'Digital wallets and payment accounts.' },
+  { label: 'Loan', value: 'loan', icon: HandCoins, text: 'Loans you owe, such as home and personal loans.' },
+  { label: 'Custom', value: 'other', icon: Boxes, text: 'Other accounts, including savings vaults and investments.' },
 ] as const;
-
-export function AccountFormScreen({
-  title,
-  subtitle,
-  value,
-  currencies,
-  loading = false,
-  saving = false,
-  error,
-  onChange,
-  onSubmit,
-  onBack,
-  submitLabel,
-}: {
-  title: string;
-  subtitle: string;
-  value: AccountFormValue;
-  currencies: readonly string[];
-  loading?: boolean;
-  saving?: boolean;
-  error?: string | null;
-  onChange: (value: AccountFormValue) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  onBack: () => void;
-  submitLabel: string;
+export function AccountFormScreen({ title, subtitle, value, currencies, loading = false, saving = false, error, onChange, onSubmit, onBack, submitLabel, mode = 'create', createdAt, activity = [], onOpenTransaction, onViewTransactions, isPrimary, onPrimaryChange }: {
+  title: string; subtitle: string; value: AccountFormValue; currencies: readonly string[]; loading?: boolean; saving?: boolean;
+  error?: string | null; onChange: (value: AccountFormValue) => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onBack: () => void; submitLabel: string; mode?: 'create' | 'edit'; createdAt?: number; activity?: readonly EntityActivity[];
+  onOpenTransaction?: (id: string) => void; onViewTransactions?: () => void; isPrimary?: boolean; onPrimaryChange?: (value: boolean) => void;
 }) {
-  const [sheet, setSheet] = useState<'type' | 'currency' | null>(null);
+  const edit = mode === 'edit';
   const set = (patch: Partial<AccountFormValue>) => onChange({ ...value, ...patch });
-  const field = { display: 'grid', gap: 7 } as const;
-  const buttonStyle = {
-    minHeight: 48,
-    justifyContent: 'space-between',
-    paddingInline: 15,
-  } as const;
-  return (
-    <main
-      className="finance-page"
-      style={{ gap: 20, maxWidth: 1180, width: '100%', marginInline: 'auto' }}
-    >
-      <IconButton
-        label="Back to accounts"
-        variant="ghost"
-        style={{ alignSelf: 'flex-start' }}
-        onPress={onBack}
-      >
-        <ArrowLeft size={19} aria-hidden="true" />
-      </IconButton>
-      <header style={{ display: 'grid', gap: 7 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 13,
-              background: value.color ?? 'var(--finapp-surface-raised)',
-              color: value.color ? '#fff' : 'var(--finapp-foreground)',
-              display: 'grid',
-              placeItems: 'center',
-            }}
-          >
-            {value.icon ? (
-              <EntityIcon value={value.icon} size={20} color={value.color ? '#fff' : undefined} />
-            ) : (
-              <Landmark size={20} />
-            )}
-          </span>
-          <div>
-            <Typography variant="title">{title}</Typography>
-            <Typography variant="small">{subtitle}</Typography>
-          </div>
-        </div>
-      </header>
-      <form
-        onSubmit={onSubmit}
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 410px), 1fr))',
-          gap: 16,
-        }}
-      >
-        <section
-          style={{
-            display: 'grid',
-            alignContent: 'start',
-            gap: 19,
-            padding: 22,
-            border: '1px solid var(--finapp-border)',
-            borderRadius: 18,
-            background: 'var(--finapp-surface-raised)',
-          }}
-        >
-          <div style={{ display: 'grid', gap: 6 }}>
-            <Typography variant="bodyLarge">Basic information</Typography>
-            <Typography variant="small">Set the details used throughout your finances.</Typography>
-          </div>
-          <div style={field}>
-            <Label htmlFor="account-name">Account name</Label>
-            <Input
-              id="account-name"
-              accessibilityLabel="Account name"
-              value={value.name}
-              onChangeText={(name) => set({ name })}
-              placeholder="e.g. Everyday account"
-              maxLength={80}
-              required
-            />
-          </div>
-          <div style={field}>
-            <Label>Account type</Label>
-            <Button
-              type="button"
-              variant="outline"
-              aria-haspopup="dialog"
-              onPress={() => setSheet('type')}
-              style={buttonStyle}
-            >
-              <span>{accountTypes.find(([_, type]) => type === value.type)?.[0]}</span>
-              <ChevronDown size={17} aria-hidden="true" />
-            </Button>
-          </div>
-          {value.type === 'other' && (
-            <div style={field}>
-              <Label htmlFor="account-custom-type">Custom type</Label>
-              <Input
-                id="account-custom-type"
-                accessibilityLabel="Custom account type"
-                value={value.customType}
-                onChangeText={(customType) => set({ customType })}
-                maxLength={40}
-                required
-              />
-            </div>
-          )}
-          <div style={field}>
-            <Label>Currency</Label>
-            <Button
-              type="button"
-              variant="outline"
-              aria-haspopup="dialog"
-              onPress={() => setSheet('currency')}
-              style={buttonStyle}
-            >
-              <span>{value.currency || 'Choose currency'}</span>
-              <ChevronDown size={17} aria-hidden="true" />
-            </Button>
-          </div>
-          <div style={field}>
-            <Label>Opening balance · {value.currency}</Label>
-            {value.currency ? (
-              <CurrencyInput
-                currency={value.currency}
-                value={value.openingBalance}
-                onChangeText={(openingBalance) => set({ openingBalance })}
-              />
-            ) : (
-              <Typography variant="small">Choose a currency first.</Typography>
-            )}
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={value.isIncludedInTotal}
-              onChange={(event) => set({ isIncludedInTotal: event.target.checked })}
-            />
-            <span>
-              <strong>Include in total</strong>
-              <br />
-              <Typography variant="small">Count this account in your total balance.</Typography>
-            </span>
-          </label>
-        </section>
-        <aside style={{ display: 'grid', alignContent: 'start', gap: 16 }}>
-          <section
-            style={{
-              display: 'grid',
-              gap: 14,
-              padding: 22,
-              border: '1px solid var(--finapp-border)',
-              borderRadius: 18,
-              background: 'var(--finapp-surface-raised)',
-            }}
-          >
-            <div>
-              <Typography variant="bodyLarge">Account icon</Typography>
-              <Typography variant="small">
-                Choose a Lucide icon to identify this account.
-              </Typography>
-            </div>
-            <EntityIconPicker
-              mode="lucide"
-              value={value.icon}
-              onChange={(icon) => set({ icon })}
-              label="Account icon"
-            />
-          </section>
-          <section
-            style={{
-              display: 'grid',
-              gap: 12,
-              padding: 22,
-              border: '1px solid var(--finapp-border)',
-              borderRadius: 18,
-              background: 'var(--finapp-surface-raised)',
-            }}
-          >
-            <div>
-              <Typography variant="bodyLarge">Account color</Typography>
-              <Typography variant="small">Choose a color for your account.</Typography>
-            </div>
-            <EntityColorPicker
-              value={value.color}
-              onChange={(color) => set({ color })}
-              label="Account color"
-            />
-          </section>
-          <div style={{ alignSelf: 'end', display: 'grid', gap: 10 }}>
-            {error && (
-              <p className="finance-form-error" role="alert">
-                {error}
-              </p>
-            )}
-            <Button
-              type="submit"
-              size="lg"
-              disabled={
-                loading ||
-                saving ||
-                !value.name.trim() ||
-                !value.currency ||
-                !value.color ||
-                (value.type === 'other' && !value.customType.trim())
-              }
-            >
-              {saving ? 'Saving…' : submitLabel}
-            </Button>
-          </div>
-        </aside>
-      </form>
-      <Sheet
-        visible={sheet !== null}
-        title={sheet === 'type' ? 'Account type' : 'Currency'}
-        onClose={() => setSheet(null)}
-      >
-        <div style={{ display: 'grid', gap: 4, maxHeight: '60vh', overflow: 'auto' }}>
-          {(sheet === 'type'
-            ? accountTypes.map(([label, type]) => [label, type] as const)
-            : currencies.map((currency) => [currency, currency] as const)
-          ).map(([label, option]) => {
-            const selected = sheet === 'type' ? value.type === option : value.currency === option;
-            return (
-              <Button
-                key={option}
-                type="button"
-                variant={selected ? 'secondary' : 'ghost'}
-                role="radio"
-                aria-checked={selected}
-                onPress={() => {
-                  set(
-                    sheet === 'type'
-                      ? {
-                          type: option as AccountFormValue['type'],
-                          customType: option === 'other' ? value.customType : '',
-                        }
-                      : { currency: option },
-                  );
-                  setSheet(null);
-                }}
-                style={{ minHeight: 46, justifyContent: 'space-between' }}
-              >
-                <span>{label}</span>
-                {selected && <Check size={18} color="var(--finapp-primary)" />}
-              </Button>
-            );
-          })}
-        </div>
-      </Sheet>
-    </main>
-  );
+  const icon = <span className={styles.iconTile} style={{ color: value.color ?? 'var(--finapp-primary)' }}>{value.icon ? <EntityIcon value={value.icon} size={36} color={value.color} /> : <Landmark size={36} />}</span>;
+  const selector = <select id="account-type" value={value.type} onChange={event => set({ type: event.target.value as AccountFormValue['type'], customType: event.target.value === 'other' ? value.customType : '' })}>{accountTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select>;
+  const currency = <select id="account-currency" value={value.currency} onChange={event => set({ currency: event.target.value })}>{!value.currency && <option value="">Choose currency</option>}{currencies.map(code => <option key={code} value={code}>{code} – {new Intl.DisplayNames(['en'], { type: 'currency' }).of(code)}</option>)}</select>;
+  const [revealNumber, setRevealNumber] = useState(false);
+  const inclusion = <label className={styles.setting}><span><strong>Include in total</strong><small>Include this account in your total balance.</small></span><input type="checkbox" role="switch" checked={value.isIncludedInTotal} onChange={event => set({ isIncludedInTotal: event.target.checked })} /></label>;
+  const appearance = <div className={styles.appearance}>{icon}<EntityIconPicker mode="lucide" value={value.icon} onChange={icon => set({ icon })} label={edit ? 'Change account icon' : 'Choose account icon'} /><EntityColorPicker value={value.color} onChange={color => set({ color })} label="Choose color" /></div>;
+  const notes = <textarea id="account-notes" value={value.notes ?? ''} onChange={event => set({ notes: event.target.value })} maxLength={200} placeholder="e.g. Primary bank account, office expenses, etc." rows={3} />;
+  return <main className={styles.page}>
+    <button type="button" className={styles.back} onClick={onBack}><ArrowLeft size={18} /> Accounts {edit && <span>› {title} › Edit</span>}</button>
+    <header className={styles.header}>{edit && icon}<div><Typography variant="title">{title}</Typography><p>{subtitle}</p></div></header>
+    <form className={edit ? styles.editLayout : styles.createLayout} onSubmit={onSubmit}>
+      <section className={`${styles.panel} ${edit ? styles.basic : styles.rowForm}`}>
+        {edit && <div><h2>Basic information</h2><p>Update the essential details for this account.</p></div>}
+        {!edit && <div className={styles.row}><div><Label>Account icon</Label><p>Choose an icon to identify this account.</p></div>{appearance}</div>}
+        <div className={styles.row}><div><Label htmlFor="account-name">Account name</Label>{!edit && <p>Give your account a clear name.</p>}</div><Input id="account-name" accessibilityLabel="Account name" value={value.name} onChangeText={name => set({ name })} placeholder="e.g. HDFC Bank, Cash, PayPal" maxLength={80} required /></div>
+        <div className={styles.row}><div><Label htmlFor="account-type">Account type</Label>{!edit && <p>Select the type of account.</p>}</div>{selector}</div>
+        {value.type === 'other' && <div className={styles.row}><Label htmlFor="account-custom">Custom type</Label><Input id="account-custom" value={value.customType} onChangeText={customType => set({ customType })} maxLength={40} required /></div>}
+        {!edit && <div className={styles.row}><div><Label htmlFor="account-currency">Currency</Label><p>Choose the account currency.</p></div>{currency}</div>}
+        <div className={styles.row}><div><Label>Opening balance</Label>{!edit && <p>Set the initial balance in this account.</p>}</div>{value.currency ? <CurrencyInput currency={value.currency} value={value.openingBalance} onChangeText={openingBalance => set({ openingBalance })} /> : <p>Choose a currency first.</p>}</div>
+        {!edit && <div className={styles.row}><div><Label>Include in total</Label><p>Include this account in your total balance.</p></div><label className={styles.inlineSwitch}><input type="checkbox" role="switch" checked={value.isIncludedInTotal} onChange={event => set({ isIncludedInTotal: event.target.checked })} /> Include in total</label></div>}
+        {edit && <div className={styles.row}><Label htmlFor="account-number">Account number <span>(optional)</span></Label><div className={styles.secret}><Input id="account-number" type={revealNumber ? 'text' : 'password'} value={value.accountNumber ?? ''} onChangeText={accountNumber => set({ accountNumber })} autoComplete="off" maxLength={80} /><Button type="button" variant="ghost" onPress={() => setRevealNumber(!revealNumber)}>{revealNumber ? 'Hide' : 'Reveal / edit'}</Button></div></div>}
+        {edit && <div className={styles.row}><Label htmlFor="account-provider">Bank / Provider</Label><Input id="account-provider" value={value.provider ?? ''} onChangeText={provider => set({ provider })} maxLength={80} /></div>}
+        <div className={styles.row}><div><Label htmlFor="account-notes">Notes <span>(optional)</span></Label>{!edit && <p>Add any additional information.</p>}</div>{notes}</div>
+        {!edit && <div className={styles.footer}><Button type="button" variant="outline" onPress={onBack}>Cancel</Button><Button type="submit" disabled={loading || saving || !value.name.trim() || !value.currency || !value.color || (value.type === 'other' && !value.customType.trim())}>{saving ? 'Saving…' : submitLabel}</Button></div>}
+      </section>
+      {edit ? <aside className={styles.stack}>
+        <section className={styles.panel}><h2>Account icon</h2><p>Choose an icon to help you easily identify this account.</p>{appearance}</section>
+        <section className={styles.panel}><h2>Settings</h2><p>Manage how this account works in your finances.</p><label className={styles.setting}><span><strong>Include in analytics</strong><small>Show this account in charts and insights.</small></span><input type="checkbox" role="switch" checked={value.includeInAnalytics !== false} onChange={event => set({ includeInAnalytics: event.target.checked })} /></label>{inclusion}{onPrimaryChange && <label className={styles.setting}><span><strong>Set as primary account</strong><small>Use as the default account for new transactions.</small></span><input type="checkbox" role="switch" checked={isPrimary === true} onChange={event => onPrimaryChange(event.target.checked)} /></label>}</section>
+        <section className={styles.panel}><h2>Metadata</h2><p>Additional information about this account.</p><div className={styles.metadata}><div><Label htmlFor="account-opened">Opened on</Label><input id="account-opened" type="date" className={styles.readonly} value={value.openedAt ? new Date(value.openedAt).toISOString().slice(0, 10) : ''} onChange={event => set({ openedAt: event.target.value ? Date.parse(`${event.target.value}T00:00:00Z`) : undefined })} /><p>Added {createdAt ? new Date(createdAt).toLocaleDateString() : 'date unavailable'}</p></div><div><Label htmlFor="account-currency">Currency</Label>{currency}</div></div></section>
+      </aside> : <aside className={`${styles.panel} ${styles.types}`}><div className={styles.about}><Info size={26} /><div><h2>About account types</h2><p>Choose the type that best matches your account. This helps categorize and analyze your finances.</p></div></div>{accountTypes.map(type => <div className={styles.typeInfo} key={type.value}><span><type.icon size={25} /></span><div><strong>{type.label}</strong><p>{type.text}</p></div></div>)}</aside>}
+      {edit && <section className={`${styles.panel} ${styles.recent}`}><div className={styles.panelHeader}><div><h2>Recent transactions</h2><p>Showing the five most recent transactions from this account.</p></div>{onViewTransactions && <Button type="button" variant="outline" onPress={onViewTransactions}>View all transactions</Button>}</div>{activity.length ? <EntityActivityTable rows={activity.slice(0, 5)} onOpen={onOpenTransaction} /> : <p className={styles.empty}>No posted transactions in this account yet.</p>}</section>}
+      {error && <p role="alert" className={styles.error}>{error}</p>}
+      {edit && <div className={`${styles.footer} ${styles.full}`}><Button type="button" variant="outline" onPress={onBack}>Cancel</Button><Button type="submit" disabled={loading || saving || !value.name.trim() || !value.currency || !value.color || (value.type === 'other' && !value.customType.trim())}>{saving ? 'Saving…' : submitLabel}</Button></div>}
+    </form>
+  </main>;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { ChartNoAxesCombined, Search, X } from 'lucide-react';
+import { ChartNoAxesCombined, Plus, Search, X } from 'lucide-react';
 import { Input, Typography } from '@finapp/ui/web';
 
 export function ActivityHeader({
@@ -8,11 +8,13 @@ export function ActivityHeader({
   onQueryChange,
   onClearQuery,
   onOpenAnalytics,
+  onAddTransaction,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
   onClearQuery: () => void;
   onOpenAnalytics: () => void;
+  onAddTransaction?: () => void;
 }) {
   return (
     <header className="activity-header">
@@ -40,10 +42,10 @@ export function ActivityHeader({
         <button
           className="activity-analytics-icon"
           type="button"
-          aria-label="Open analytics"
-          onClick={onOpenAnalytics}
+          aria-label={onAddTransaction ? 'Add transaction' : 'Open analytics'}
+          onClick={onAddTransaction ?? onOpenAnalytics}
         >
-          <ChartNoAxesCombined size={19} aria-hidden="true" />
+          {onAddTransaction ? <Plus size={25} aria-hidden="true" /> : <ChartNoAxesCombined size={19} aria-hidden="true" />}
         </button>
       </div>
     </header>

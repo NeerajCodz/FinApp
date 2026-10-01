@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, CalendarDays } from '@finapp/ui/icons/native';
 import { Button, Card, Empty, Input, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '../money';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
+import { CurrencyInput } from './CurrencyInput';
 
 export type RecurringRuleView = {
   id: string;
@@ -202,7 +203,7 @@ export function RecurringIndexView({
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: 20, paddingBottom: 36, gap: 18 }}
+      style={{flex:1,backgroundColor:tokens.background}} contentContainerStyle={{ padding: 16, paddingBottom: 36, gap: 16 }}
     >
       <View
         style={{
@@ -214,9 +215,7 @@ export function RecurringIndexView({
       >
         <View style={{ flex: 1 }}>
           <Typography variant="title">Recurring</Typography>
-          <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-            Bills, subscriptions and regular income
-          </Typography>
+          <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>Manage your subscriptions, bills and recurring income.</Typography>
         </View>
         {!adding && (
           <Button disabled={loading || !!error || pending} onPress={() => setAdding(true)}>
@@ -224,14 +223,11 @@ export function RecurringIndexView({
           </Button>
         )}
       </View>
-      <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-        Keep upcoming payments visible. Nothing is recorded automatically.
-      </Typography>
       {!loading && !error && (
-        <View style={{ gap: 10 }}>
+        <View style={{ flexDirection:'row',flexWrap:'wrap',gap:10 }}>
           {[
             [
-              'Schedules',
+              'Total recurring',
               String(visible.length),
               `${active.length} active · ${visible.length - active.length} paused`,
             ],
@@ -263,7 +259,7 @@ export function RecurringIndexView({
             ],
             ['Upcoming this week', String(upcomingCount), 'Next 7 days'],
           ].map(([label, value, note]) => (
-            <Card key={label} style={{ padding: 16, gap: 5 }}>
+            <Card key={label} style={{ padding: 14, gap: 5, width:'48%',borderRadius:12 }}>
               <Typography variant="caption">{label}</Typography>
               <Typography variant="heading">{value}</Typography>
               <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
@@ -293,8 +289,8 @@ export function RecurringIndexView({
       )}
       {!loading && !error && visible.length === 0 && !adding && (
         <Empty
-          title="Nothing scheduled"
-          description="Add a reminder for a repeating expense or income. You choose when to record it."
+          title="No recurring reminders"
+          description="Add a reminder for a repeating expense. You choose when to record it."
           icon={<CalendarDays size={22} color={tokens.primary} />}
           action={<Button onPress={() => setAdding(true)}>Add reminder</Button>}
         />
@@ -327,11 +323,9 @@ export function RecurringIndexView({
             ))}
           </View>
           {displayed.length ? (
-            <Card style={{ padding: 16, gap: 2 }}>
-              <Typography variant="heading">Your schedules</Typography>
-              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-                Tap a schedule for details.
-              </Typography>
+            <Card style={{ padding: 16, gap: 2,borderRadius:12 }}>
+              <Typography variant="heading">Your recurring transactions</Typography>
+              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>Subscriptions, bills and recurring income.</Typography>
               <View style={{ height: 10 }} />
               {displayed.map((rule) => {
                 const money = amountText(rule);
@@ -370,30 +364,19 @@ export function RecurringIndexView({
                       onPress={() => onOpen(rule.id)}
                       style={{ flex: 1, minWidth: 0, gap: 3 }}
                     >
-                      <Typography variant="bodyLarge" numberOfLines={1}>
-                        {rule.name || 'Recurring reminder'}
-                      </Typography>
-                      <Typography
-                        variant="small"
-                        numberOfLines={2}
-                        style={{ color: tokens.foregroundMuted }}
-                      >
-                        {rule.frequency || 'Schedule'} ·{' '}
-                        {rule.enabled ? `Next ${dateText(at)}` : 'Paused'} ·{' '}
-                        {rule.autoCreate ? 'Automatic' : 'Reminder only'}
-                      </Typography>
-                      {money && <Typography variant="small">{money}</Typography>}
+                      <Typography variant="bodyLarge" numberOfLines={1}>{rule.name || 'Recurring reminder'}</Typography>
+                      <Typography variant="caption" style={{color:tokens.foregroundMuted}}>{rule.frequency || 'Schedule'} · {rule.enabled ? `Next ${dateText(at)}` : 'Paused'}</Typography>
+                      <Typography variant="caption" style={{color:tokens.foregroundMuted}}>Unassigned category · {accounts.find(account=>account.id===rule.template?.accountId||account.cloudId===rule.template?.accountId)?.name??'Account unavailable'}</Typography>
+                      {money && <Typography variant="bodyLarge" style={{color:income?tokens.income:tokens.expense}}>{income?'+':'−'}{money}</Typography>}
                     </TouchableOpacity>
                     <TouchableOpacity
                       accessibilityRole="button"
                       accessibilityLabel={`${rule.enabled ? 'Pause' : 'Resume'} ${rule.name || 'reminder'}`}
                       disabled={pending}
                       onPress={() => onToggle(rule)}
-                      style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 5 }}
+                      style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 10,borderRadius:7,backgroundColor:tokens.surfaceRaised }}
                     >
-                      <Typography variant="small" style={{ color: tokens.primary }}>
-                        {rule.enabled ? 'Pause' : 'Resume'}
-                      </Typography>
+                      <Typography variant="small" style={{ color: rule.enabled?tokens.income:tokens.warning }}>{rule.enabled ? 'Active' : 'Paused'}</Typography>
                     </TouchableOpacity>
                   </View>
                 );
@@ -440,19 +423,7 @@ export function RecurringIndexView({
               </Button>
             </View>
           )}
-          <Input
-            accessibilityLabel={
-              selectedAccount ? `Amount in ${selectedAccount.currency || 'INR'}` : 'Amount'
-            }
-            placeholder={
-              selectedAccount
-                ? `Amount · ${selectedAccount.currency || 'INR'}`
-                : 'Choose an account first'
-            }
-            keyboardType="decimal-pad"
-            value={amount}
-            onChangeText={setAmount}
-          />
+          <CurrencyInput currency={selectedAccount?.currency??'INR'} value={amount} onChangeText={setAmount}/>
           <Typography variant="label">Repeat from tomorrow</Typography>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
             {frequencies.map((option) => (
@@ -570,7 +541,7 @@ export function RecurringDetailView({
         })()
       : null;
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 36, gap: 16 }}>
+    <ScrollView style={{flex:1,backgroundColor:tokens.background}} contentContainerStyle={{ padding: 16, paddingBottom: 36, gap: 16 }}>
       <Button variant="ghost" onPress={onBack}>
         <ArrowLeft size={18} color={tokens.foreground} /> Recurring
       </Button>
@@ -590,30 +561,33 @@ export function RecurringDetailView({
           {actionError}
         </Typography>
       )}
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:10}}>
       {[
         ['Amount', amount || 'Not set'],
         ['Annual estimate', annualText || 'Not available'],
         ['Next occurrence', rule.enabled ? dateText(dates[0] ?? rule.nextOccurrence) : 'Paused'],
         ['Status', rule.enabled ? 'Active' : 'Paused'],
       ].map(([label, value]) => (
-        <Card key={label} style={{ padding: 16, gap: 5 }}>
+        <Card key={label} style={{ padding: 14, gap: 5,width:'48%',borderRadius:12 }}>
           <Typography variant="caption">{label}</Typography>
           <Typography variant="heading">{value}</Typography>
         </Card>
       ))}
-      <Card style={{ padding: 17, gap: 8 }}>
+      </View>
+      <Card style={{ padding: 17, gap: 8,borderRadius:12 }}>
         <Typography variant="heading">Recurring details</Typography>
         <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
           Information stored with this schedule.
         </Typography>
         {[
           ['Name', rule.name || 'Recurring reminder'],
+          ['Category','Unassigned'],
           ['Amount', amount || 'Not set'],
           ['Frequency', normalized],
           ['Interval', `Every ${Math.max(1, Number(rule.interval ?? 1))} ${frequency}`],
           ['Account', accountName || 'Account unavailable'],
-          ['Starts', dateText(rule.createdAt)],
-          ['Next occurrence', rule.enabled ? dateText(dates[0] ?? rule.nextOccurrence) : 'Paused'],
+          ['Created on', dateText(rule.createdAt)],
+          ['Next reminder', rule.enabled ? dateText(dates[0] ?? rule.nextOccurrence) : 'Paused'],
           ['Behavior', rule.autoCreate ? 'Automatic transaction' : 'Reminder only'],
         ].map(([key, value]) => (
           <View
@@ -636,11 +610,9 @@ export function RecurringDetailView({
           </View>
         ))}
       </Card>
-      <Card style={{ padding: 17, gap: 6 }}>
-        <Typography variant="heading">Next occurrences</Typography>
-        <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-          Upcoming dates from this schedule. Past occurrences are not transactions.
-        </Typography>
+      <Card style={{ padding: 17, gap: 6,borderRadius:12 }}>
+        <Typography variant="heading">Next reminders</Typography>
+        <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>Upcoming reminder dates, not confirmed payments.</Typography>
         {dates.length ? (
           dates.map((at) => (
             <View
@@ -658,7 +630,7 @@ export function RecurringDetailView({
               <Typography variant="small" style={{ flex: 1 }}>
                 {dateText(at)}
               </Typography>
-              <Typography variant="small">{amount || '—'}</Typography>
+              <Typography variant="bodyLarge" style={{color:rule.template?.type==='income'?tokens.income:tokens.expense}}>{amount || '—'}</Typography>
             </View>
           ))
         ) : (
@@ -672,15 +644,10 @@ export function RecurringDetailView({
           </Typography>
         )}
       </Card>
-      <Card style={{ padding: 16, gap: 6 }}>
-        <CalendarDays size={19} color={tokens.primary} />
-        <Typography variant="bodyLarge">Reminder behavior</Typography>
-        <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-          This schedule{' '}
-          {rule.autoCreate
-            ? 'is configured to create transactions automatically.'
-            : 'does not create transactions automatically. You decide when to record each expense.'}
-        </Typography>
+      <Card style={{padding:16,gap:10,borderRadius:12}}>
+        <Typography variant="heading">Transaction history</Typography>
+        <Typography variant="caption">Recorded transactions associated with this reminder.</Typography>
+        <Typography variant="small" style={{color:tokens.foregroundMuted,paddingVertical:20}}>This reminder does not have linked transaction history. Past reminder dates are not recorded payments.</Typography>
       </Card>
     </ScrollView>
   );

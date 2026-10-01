@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeft, ArrowRight, Pencil, ReceiptText } from 'lucide-react';
-import { Button, Empty, Typography } from '@finapp/ui/web';
+import { ArrowLeft, Pencil, Copy } from 'lucide-react';
+import { Button } from '@finapp/ui/web';
 import { CategoryIcon } from './CategoryIcon';
 import { Money } from './Money';
-import { SemanticMarker } from './SemanticMarker';
-import { SettingsRow } from './ScreenPrimitives';
+import { TransactionTable, type TransactionTableItem } from './TransactionsScreen';
+import styles from './Transactions.module.css';
 import type { SemanticType, TransactionType } from '../types';
 
 export type TransactionDetailScreenProps = {
@@ -33,172 +33,14 @@ export type TransactionDetailScreenProps = {
   onEdit?: () => void;
   onDuplicate?: () => void;
   onRetry?: () => void;
+  referenceId?: string;
+  relatedTransactions?: readonly TransactionTableItem[];
+  onOpenTransaction?: (id: string) => void;
 };
 
-export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
-  const {
-    title,
-    amountMinor,
-    currency,
-    type,
-    semanticType,
-    status,
-    category,
-    categoryIcon,
-    account,
-    destination,
-    date,
-    merchant,
-    note,
-    loading = false,
-    error,
-    unavailable = false,
-    missingId = false,
-    canEdit = false,
-    canDuplicate = false,
-    onBack,
-    onEdit,
-    onDuplicate,
-    onRetry,
-  } = props;
-  if (missingId)
-    return (
-      <main className="finance-page">
-        <Button variant="ghost" onPress={onBack}>
-          <ArrowLeft size={18} /> Back to transactions
-        </Button>
-        <Empty
-          title="Missing transaction ID"
-          description="Choose a transaction from your saved activity."
-        />
-      </main>
-    );
-  if (loading)
-    return (
-      <main className="finance-page">
-        <p className="finance-muted" role="status">
-          Loading transaction…
-        </p>
-      </main>
-    );
-  if (error)
-    return (
-      <main className="finance-page">
-        <Button variant="ghost" onPress={onBack}>
-          <ArrowLeft size={18} /> Back to transactions
-        </Button>
-        <p className="finance-form-error" role="alert">
-          Transaction data could not be opened: {error}
-        </p>
-        {onRetry && (
-          <Button variant="outline" onPress={onRetry}>
-            Try again
-          </Button>
-        )}
-      </main>
-    );
-  if (unavailable)
-    return (
-      <main className="finance-page">
-        <Button variant="ghost" onPress={onBack}>
-          <ArrowLeft size={18} /> Back to transactions
-        </Button>
-        <Empty
-          title="Transaction unavailable"
-          description="This transaction was removed or is no longer available in your saved data."
-        />
-      </main>
-    );
-  return (
-    <main
-      className="finance-page"
-      style={{ display: 'grid', gap: 20, maxWidth: 1240, marginInline: 'auto' }}
-    >
-      <button
-        type="button"
-        className="finance-inline-link"
-        onClick={onBack}
-        style={{ justifySelf: 'start' }}
-      >
-        <ArrowLeft size={18} /> Back to transactions
-      </button>
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0,1fr) minmax(320px,1fr)',
-          gap: 20,
-          border: '1px solid var(--finance-line)',
-          borderRadius: 20,
-          padding: 22,
-          background: 'var(--finapp-surface-raised)',
-        }}
-      >
-        <div style={{ display: 'grid', alignContent: 'start', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <CategoryIcon label={category} icon={categoryIcon} />
-            <div>
-              <h1 style={{ margin: 0 }}>{title}</h1>
-              {merchant && (
-                <p className="finance-muted" style={{ margin: '4px 0 0' }}>
-                  {merchant}
-                </p>
-              )}
-            </div>
-          </div>
-          <Money amountMinor={amountMinor} currency={currency} type={type} size="display" />
-          <Typography variant="small" style={{ color: 'var(--finapp-foreground-muted)' }}>
-            {date}
-          </Typography>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <SemanticMarker type={semanticType} />
-            {status && <span className="finance-muted">{status}</span>}
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {canEdit && (
-              <Button onPress={onEdit}>
-                <Pencil size={17} /> Edit transaction
-              </Button>
-            )}
-            {canDuplicate && (
-              <Button variant="outline" onPress={onDuplicate}>
-                <ReceiptText size={17} /> Duplicate transaction <ArrowRight size={17} />
-              </Button>
-            )}
-          </div>
-          {note && (
-            <section
-              style={{ border: '1px solid var(--finance-line)', borderRadius: 14, padding: 16 }}
-            >
-              <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Transaction notes</h2>
-              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{note}</p>
-            </section>
-          )}
-        </div>
-        <section
-          aria-label="Transaction details"
-          style={{
-            alignSelf: 'start',
-            border: '1px solid var(--finance-line)',
-            borderRadius: 16,
-            paddingInline: 14,
-          }}
-        >
-          <SettingsRow
-            label="Category"
-            leadingIcon={<CategoryIcon label={category} icon={categoryIcon} />}
-            value={category}
-          />
-          <SettingsRow
-            label="Type"
-            value={semanticType === 'split' ? 'Split expense' : semanticType}
-          />
-          <SettingsRow label="Account" value={account} />
-          {destination && <SettingsRow label="Destination" value={destination} />}
-          <SettingsRow label="Date & time" value={date} />
-          <SettingsRow label="Status" value={status ?? 'Saved'} />
-          {merchant && <SettingsRow label="Merchant / Payee" value={merchant} />}
-        </section>
-      </section>
-    </main>
-  );
+export function TransactionDetailScreen(p: TransactionDetailScreenProps) {
+  if (p.loading) return <main className={styles.page}><p role="status">Loading transaction…</p></main>;
+  if (p.error || p.unavailable || p.missingId) return <main className={styles.page}><button className={styles.back} onClick={p.onBack}><ArrowLeft size={17}/>Back to transactions</button><section className={styles.panel}><h1 className={styles.sectionTitle}>{p.error?'Transaction unavailable':p.missingId?'Missing transaction ID':'Transaction unavailable'}</h1><p role={p.error?'alert':undefined} className={p.error?styles.error:styles.subtitle}>{p.error||'Choose an available transaction from your saved activity.'}</p>{p.error&&p.onRetry&&<Button variant="outline" onPress={p.onRetry}>Try again</Button>}</section></main>;
+  const details = [['Category',p.category],['Account',p.account],...(p.destination?[['Destination',p.destination]]:[]),['Date & time',p.date],['Status',p.status??'Saved'],...(p.referenceId?[['Reference ID',p.referenceId]]:[]),...(p.note?[['Notes',p.note]]:[]),...(p.merchant?[['Merchant / Payee',p.merchant]]:[])];
+  return <main className={styles.page}><button className={styles.back} onClick={p.onBack}><ArrowLeft size={17}/>Back to transactions</button><section className={`${styles.panel} ${styles.hero}`}><div className={styles.heroLeft}><div className={styles.heroIdentity}><div className={styles.heroIcon}><CategoryIcon label={p.category} icon={p.categoryIcon}/></div><div><h1 className={styles.heroTitle}>{p.title}</h1><p className={styles.subtitle}>{p.note||p.merchant||p.category}</p></div></div><div><div className={`${styles.heroAmount} ${p.type==='income'||p.type==='refund'?styles.income:styles.expense}`}><Money amountMinor={p.amountMinor} currency={p.currency} type={p.type}/></div><p className={styles.subtitle}>{p.date}</p></div><div className={styles.controls}>{p.canEdit&&p.onEdit&&<Button variant="outline" onPress={p.onEdit}><Pencil size={17}/>Edit</Button>}{p.canDuplicate&&p.onDuplicate&&<Button variant="outline" onPress={p.onDuplicate}><Copy size={17}/>Duplicate</Button>}</div>{p.note&&<div className={styles.notePanel}><h3>Transaction notes</h3><p>{p.note}</p></div>}<div className={styles.notePanel}><h3>Transaction metadata</h3><span className={styles.chip}><CategoryIcon label={p.category} icon={p.categoryIcon}/>{p.category}</span> <span className={styles.chip}>{p.semanticType==='split'?'Split expense':p.semanticType}</span></div></div><div className={styles.notePanel}><dl className={styles.details}>{details.map(([label,value])=><React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl></div></section><section className={styles.panel}><div className={styles.sectionHeader}><div><h2 className={styles.sectionTitle}>Related transactions</h2><p className={styles.subtitle}>Other transactions from this merchant or in this category.</p></div><Button variant="ghost" onPress={p.onBack}>View all</Button></div><div style={{overflowX:'auto'}}><TransactionTable items={p.relatedTransactions??[]} onSelect={p.onOpenTransaction}/></div></section></main>;
 }

@@ -1,314 +1,53 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, CaretRight, Check, Landmark } from '@finapp/ui/icons/native';
-import {
-  Button,
-  IconButton,
-  Input,
-  Label,
-  Sheet,
-  Text,
-  Typography,
-  useTheme,
-} from '@finapp/ui/native';
+import { ArrowLeft, Landmark } from '@finapp/ui/icons/native';
+import { Button, Input, Label, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import { CurrencyInput } from './CurrencyInput';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
+import { TransactionRow } from './TransactionRow';
 
 export type AccountFormValue = {
-  name: string;
-  type: 'cash' | 'bank' | 'card' | 'wallet' | 'loan' | 'other';
-  customType: string;
-  currency: string;
-  openingBalance: string;
-  icon?: string;
-  color?: string;
-  isIncludedInTotal: boolean;
+  name: string; type: 'cash' | 'bank' | 'card' | 'wallet' | 'loan' | 'other'; customType: string;
+  currency: string; openingBalance: string; icon?: string; color?: string; isIncludedInTotal: boolean;
+  notes?: string; provider?: string; accountNumber?: string; openedAt?: number; includeInAnalytics?: boolean;
 };
-const accountTypes = [
-  { label: 'Cash', value: 'cash' },
-  { label: 'Bank', value: 'bank' },
-  { label: 'Card', value: 'card' },
-  { label: 'Wallet', value: 'wallet' },
-  { label: 'Loan', value: 'loan' },
-  { label: 'Custom', value: 'other' },
-] as const;
-
-export function AccountFormScreen({
-  title,
-  subtitle,
-  value,
-  currencies,
-  saving = false,
-  disabled = false,
-  error,
-  onChange,
-  onSubmit,
-  onBack,
-  submitLabel,
-}: {
-  title: string;
-  subtitle: string;
-  value: AccountFormValue;
-  currencies: readonly string[];
-  saving?: boolean;
-  disabled?: boolean;
-  error?: string;
-  onChange: (value: AccountFormValue) => void;
-  onSubmit: () => void;
-  onBack: () => void;
-  submitLabel: string;
+type EntityActivity = { id: string; title: string; merchant?: string; category?: string; categoryIcon?: string; account?: string; date: string; amountMinor: bigint; currency: string; type: string };
+const accountTypes = [ ['Bank account', 'bank', 'Checking or savings accounts from banks and financial institutions.'], ['Cash', 'cash', 'Physical cash you keep with you.'], ['Credit card', 'card', 'Track payments and balances on your credit cards.'], ['Wallet', 'wallet', 'Digital wallets and payment accounts.'], ['Loan', 'loan', 'Loans you owe, such as home and personal loans.'], ['Custom', 'other', 'Other accounts, including investments and savings vaults.'] ] as const;
+export function AccountFormScreen({ title, subtitle, value, currencies, saving = false, disabled = false, error, onChange, onSubmit, onBack, submitLabel, mode = 'create', createdAt, activity = [], onOpenTransaction, onViewTransactions, isPrimary, onPrimaryChange }: {
+  title: string; subtitle: string; value: AccountFormValue; currencies: readonly string[]; saving?: boolean; disabled?: boolean; error?: string;
+  onChange: (value: AccountFormValue) => void; onSubmit: () => void; onBack: () => void; submitLabel: string;
+  mode?: 'create' | 'edit'; createdAt?: number; activity?: readonly EntityActivity[]; onOpenTransaction?: (id: string) => void;
+  onViewTransactions?: () => void; isPrimary?: boolean; onPrimaryChange?: (value: boolean) => void;
 }) {
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
-  const [sheet, setSheet] = useState<'type' | 'currency' | null>(null);
+  const { tokens } = useTheme(); const insets = useSafeAreaInsets(); const edit = mode === 'edit';
+  const [sheet, setSheet] = useState<'type' | 'currency' | null>(null); const [revealNumber, setRevealNumber] = useState(false);
+  const [dateError, setDateError] = useState(''); const [openedDate, setOpenedDate] = useState(value.openedAt ? new Date(value.openedAt).toISOString().slice(0, 10) : '');
+  React.useEffect(() => setOpenedDate(value.openedAt ? new Date(value.openedAt).toISOString().slice(0, 10) : ''), [value.openedAt]);
   const set = (patch: Partial<AccountFormValue>) => onChange({ ...value, ...patch });
-  const select = (option: string) => {
-    if (sheet === 'type')
-      set({
-        type: option as AccountFormValue['type'],
-        customType: option === 'other' ? value.customType : '',
-      });
-    if (sheet === 'currency') set({ currency: option });
-    setSheet(null);
-  };
-  const panel = {
-    gap: 16,
-    padding: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.surfaceSubtle,
-  } as const;
-  return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 24,
-        gap: 18,
-      }}
-    >
-      <IconButton
-        label="Back to accounts"
-        variant="ghost"
-        style={{ alignSelf: 'flex-start' }}
-        onPress={onBack}
-      >
-        <ArrowLeft size={20} color={tokens.foreground} />
-      </IconButton>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            backgroundColor: value.color ?? tokens.surfaceRaised,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {value.icon ? (
-            <EntityIcon value={value.icon} size={20} color={value.color ? '#fff' : undefined} />
-          ) : (
-            <Landmark size={20} color={tokens.foreground} />
-          )}
-        </View>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Typography variant="title">{title}</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>{subtitle}</Text>
-        </View>
-      </View>
-      <View style={{ gap: 16 }}>
-        <View style={panel}>
-          <View>
-            <Typography variant="bodyLarge">Basic information</Typography>
-            <Typography variant="caption">
-              Set the details used throughout your finances.
-            </Typography>
-          </View>
-          <View>
-            <Label>Account name</Label>
-            <Input
-              accessibilityLabel="Account name"
-              value={value.name}
-              onChangeText={(name) => set({ name })}
-              placeholder="e.g. Everyday account"
-              maxLength={80}
-            />
-          </View>
-          <View style={{ gap: 6 }}>
-            <Label>Account type</Label>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Account type"
-              onPress={() => setSheet('type')}
-              style={{
-                minHeight: 48,
-                borderWidth: 1,
-                borderColor: tokens.border,
-                borderRadius: 13,
-                paddingHorizontal: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <Text>{accountTypes.find((item) => item.value === value.type)?.label}</Text>
-              <CaretRight
-                size={17}
-                color={tokens.foregroundMuted}
-                style={{ transform: [{ rotate: '90deg' }] }}
-              />
-            </Pressable>
-          </View>
-          {value.type === 'other' && (
-            <View>
-              <Label>Custom type</Label>
-              <Input
-                accessibilityLabel="Custom account type"
-                value={value.customType}
-                onChangeText={(customType) => set({ customType })}
-                maxLength={40}
-              />
-            </View>
-          )}
-          <View style={{ gap: 6 }}>
-            <Label>Currency</Label>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Currency"
-              onPress={() => setSheet('currency')}
-              style={{
-                minHeight: 48,
-                borderWidth: 1,
-                borderColor: tokens.border,
-                borderRadius: 13,
-                paddingHorizontal: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <Text>{value.currency || 'Choose currency'}</Text>
-              <CaretRight
-                size={17}
-                color={tokens.foregroundMuted}
-                style={{ transform: [{ rotate: '90deg' }] }}
-              />
-            </Pressable>
-          </View>
-          {!!value.currency && (
-            <View>
-              <Label>Opening balance · {value.currency}</Label>
-              <CurrencyInput
-                currency={value.currency}
-                value={value.openingBalance}
-                onChangeText={(openingBalance) => set({ openingBalance })}
-              />
-            </View>
-          )}
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: value.isIncludedInTotal }}
-            onPress={() => set({ isIncludedInTotal: !value.isIncludedInTotal })}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
-          >
-            <View
-              style={{
-                width: 21,
-                height: 21,
-                borderRadius: 6,
-                borderWidth: 1,
-                borderColor: tokens.border,
-                backgroundColor: value.isIncludedInTotal ? tokens.primary : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {value.isIncludedInTotal && <Check size={15} color={tokens.background} />}
-            </View>
-            <View>
-              <Text>Include in total</Text>
-              <Typography variant="caption">Count this account in your total balance.</Typography>
-            </View>
-          </Pressable>
-        </View>
-        <View style={panel}>
-          <View>
-            <Typography variant="bodyLarge">Account icon</Typography>
-            <Typography variant="caption">Choose a Lucide icon for quick recognition.</Typography>
-          </View>
-          <EntityIconPicker
-            mode="lucide"
-            value={value.icon}
-            onChange={(icon) => set({ icon })}
-            label="Account icon"
-          />
-        </View>
-        <View style={panel}>
-          <View>
-            <Typography variant="bodyLarge">Account color</Typography>
-            <Typography variant="caption">Choose a color for your account.</Typography>
-          </View>
-          <EntityColorPicker
-            value={value.color}
-            onChange={(color) => set({ color })}
-            label="Account color"
-          />
-        </View>
-      </View>
-      {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
-      <Button
-        size="lg"
-        disabled={
-          disabled ||
-          saving ||
-          !value.name.trim() ||
-          !value.currency ||
-          !value.color ||
-          (value.type === 'other' && !value.customType.trim())
-        }
-        onPress={onSubmit}
-      >
-        {saving ? 'Saving…' : submitLabel}
-      </Button>
-      <Sheet
-        visible={sheet !== null}
-        title={sheet === 'type' ? 'Account type' : 'Currency'}
-        onClose={() => setSheet(null)}
-      >
-        {(sheet === 'type'
-          ? accountTypes.map(({ label, value: option }) => ({ label, value: option }))
-          : currencies.map((currency) => ({ label: currency, value: currency }))
-        ).map((item) => {
-          const selected =
-            sheet === 'type' ? value.type === item.value : value.currency === item.value;
-          return (
-            <Pressable
-              key={item.value}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selected }}
-              accessibilityLabel={item.label}
-              onPress={() => select(item.value)}
-              style={{
-                minHeight: 48,
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: selected ? tokens.surfaceRaised : 'transparent',
-              }}
-            >
-              <Text>{item.label}</Text>
-              {selected && <Check size={19} color={tokens.primary} />}
-            </Pressable>
-          );
-        })}
-      </Sheet>
-    </ScrollView>
-  );
+  const panel = { gap: 14, padding: 16, borderRadius: 11, borderWidth: 1, borderColor: tokens.border, backgroundColor: tokens.surfaceSubtle } as const;
+  const field = { gap: 7 } as const;
+  const tile = <View style={{ width: 62, height: 62, borderRadius: 11, backgroundColor: tokens.surfaceRaised, alignItems: 'center', justifyContent: 'center' }}>{value.icon ? <EntityIcon value={value.icon} size={30} color={value.color ?? tokens.primary} /> : <Landmark size={30} color={value.color ?? tokens.primary} />}</View>;
+  const appearance = <View style={{ gap: 12 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>{tile}<EntityIconPicker mode="lucide" value={value.icon} onChange={icon => set({ icon })} label={edit ? 'Change account icon' : 'Choose account icon'} /></View><EntityColorPicker value={value.color} onChange={color => set({ color })} label="Choose color" /></View>;
+  const setting = (label: string, note: string, checked: boolean, change: (value: boolean) => void) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}><View style={{ flex: 1, gap: 3 }}><Text>{label}</Text><Typography variant="caption">{note}</Typography></View><Switch accessibilityLabel={label} value={checked} onValueChange={change} trackColor={{ false: tokens.border, true: tokens.primary }} thumbColor={tokens.foreground} /></View>;
+  return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: tokens.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingTop: insets.top + 10, paddingBottom: insets.bottom + 28, gap: 14 }}>
+    <Button variant="ghost" onPress={onBack} style={{ alignSelf: 'flex-start' }}><ArrowLeft size={18} color={tokens.foreground} /> Accounts</Button>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>{edit && tile}<View style={{ flex: 1, gap: 4 }}><Typography variant="title" style={{ fontSize: 29 }}>{title}</Typography><Typography variant="small">{subtitle}</Typography></View></View>
+    <View style={panel}>
+      {edit ? <View><Typography variant="heading">Basic information</Typography><Typography variant="caption">Update the essential details for this account.</Typography></View> : <View style={field}><Label>Account icon</Label><Typography variant="caption">Choose an icon to identify this account.</Typography>{appearance}</View>}
+      <View style={field}><Label>Account name</Label><Input accessibilityLabel="Account name" value={value.name} onChangeText={name => set({ name })} placeholder="e.g. HDFC Bank, Cash, PayPal" maxLength={80} /></View>
+      <View style={field}><Label>Account type</Label><Button variant="outline" onPress={() => setSheet('type')} style={{ justifyContent: 'space-between' }}>{accountTypes.find(type => type[1] === value.type)?.[0]} ▾</Button></View>
+      {value.type === 'other' && <View style={field}><Label>Custom type</Label><Input accessibilityLabel="Custom type" value={value.customType} onChangeText={customType => set({ customType })} maxLength={40} /></View>}
+      {!edit && <View style={field}><Label>Currency</Label><Button variant="outline" onPress={() => setSheet('currency')}>{value.currency || 'Choose currency'} ▾</Button></View>}
+      {edit && <><View style={field}><Label>Account number (optional)</Label><Input accessibilityLabel="Account number" secureTextEntry={!revealNumber} value={value.accountNumber ?? ''} onChangeText={accountNumber => set({ accountNumber })} maxLength={80} /><Button variant="ghost" onPress={() => setRevealNumber(!revealNumber)} style={{ alignSelf: 'flex-start' }}>{revealNumber ? 'Hide number' : 'Reveal / edit number'}</Button></View><View style={field}><Label>Bank / Provider</Label><Input accessibilityLabel="Bank or provider" value={value.provider ?? ''} onChangeText={provider => set({ provider })} maxLength={80} /></View></>}
+      {!!value.currency && <View style={field}><Label>Opening balance · {value.currency}</Label><CurrencyInput currency={value.currency} value={value.openingBalance} onChangeText={openingBalance => set({ openingBalance })} /></View>}
+      {!edit && setting('Include in total', 'Include this account in your total balance.', value.isIncludedInTotal, isIncludedInTotal => set({ isIncludedInTotal }))}
+      <View style={field}><Label>Notes (optional)</Label><Input accessibilityLabel="Account notes" value={value.notes ?? ''} onChangeText={notes => set({ notes })} placeholder="Add any additional information." multiline maxLength={200} style={{ minHeight: 82, textAlignVertical: 'top' }} /></View>
+    </View>
+    {edit ? <><View style={panel}><Typography variant="heading">Account icon</Typography><Typography variant="caption">Choose an icon to help you easily identify this account.</Typography>{appearance}</View><View style={panel}><Typography variant="heading">Settings</Typography>{setting('Include in analytics', 'Show this account in charts and insights.', value.includeInAnalytics !== false, includeInAnalytics => set({ includeInAnalytics }))}{setting('Include in total', 'Include this account in your net worth.', value.isIncludedInTotal, isIncludedInTotal => set({ isIncludedInTotal }))}{onPrimaryChange && setting('Set as primary account', 'Use as the default for new transactions.', isPrimary === true, onPrimaryChange)}</View><View style={panel}><Typography variant="heading">Metadata</Typography><View style={field}><Label>Opened on (YYYY-MM-DD)</Label><Input accessibilityLabel="Account opening date" value={openedDate} placeholder="YYYY-MM-DD" onChangeText={text => { setOpenedDate(text); const date = Date.parse(`${text}T00:00:00Z`); const valid = /^\d{4}-\d{2}-\d{2}$/.test(text) && Number.isFinite(date) && new Date(date).toISOString().slice(0, 10) === text; setDateError(text && !valid ? 'Enter a valid date as YYYY-MM-DD.' : ''); if (!text || valid) set({ openedAt: text ? date : undefined }); }} />{!!dateError && <Text style={{ color: tokens.destructive }}>{dateError}</Text>}</View><Typography variant="caption">Added {createdAt ? new Date(createdAt).toLocaleDateString() : 'date unavailable'}</Typography><Label>Currency</Label><Button variant="outline" onPress={() => setSheet('currency')}>{value.currency} ▾</Button></View><View style={panel}><Typography variant="heading">Recent transactions</Typography><Typography variant="caption">Five most recent transactions from this account.</Typography>{activity.length ? activity.slice(0, 5).map(row => <TransactionRow key={row.id} title={row.title} category={row.category} categoryIcon={row.categoryIcon} account={row.account} date={row.date} amountMinor={row.amountMinor} currency={row.currency} type={row.type as 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment'} onPress={onOpenTransaction ? () => onOpenTransaction(row.id) : undefined} />) : <Typography variant="small">No posted transactions yet.</Typography>}{onViewTransactions && <Button variant="outline" onPress={onViewTransactions}>View all transactions</Button>}</View></> : <View style={panel}><Typography variant="heading">About account types</Typography><Typography variant="small">Choose the type that best matches your account.</Typography>{accountTypes.map(type => <View key={type[1]} style={{ gap: 3, paddingVertical: 6 }}><Text style={{ fontWeight: '600' }}>{type[0]}</Text><Typography variant="caption">{type[2]}</Typography></View>)}</View>}
+    {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
+    <View style={{ flexDirection: 'row', gap: 10 }}><Button variant="outline" onPress={onBack}>Cancel</Button><Button style={{ flex: 1 }} disabled={disabled || saving || !!dateError || !value.name.trim() || !value.currency || !value.color || (value.type === 'other' && !value.customType.trim())} onPress={onSubmit}>{saving ? 'Saving…' : submitLabel}</Button></View>
+    <Sheet visible={sheet !== null} title={sheet === 'type' ? 'Account type' : 'Currency'} onClose={() => setSheet(null)}><ScrollView>{(sheet === 'type' ? accountTypes.map(type => [type[0], type[1]]) : currencies.map(code => [code, code])).map(([label, option]) => <Button key={option} variant="ghost" onPress={() => { set(sheet === 'type' ? { type: option as AccountFormValue['type'], customType: option === 'other' ? value.customType : '' } : { currency: option }); setSheet(null); }}>{label}</Button>)}</ScrollView></Sheet>
+  </ScrollView></KeyboardAvoidingView>;
 }

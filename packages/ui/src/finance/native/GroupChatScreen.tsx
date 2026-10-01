@@ -1,227 +1,69 @@
 import React, { useEffect, useRef } from 'react';
-import { Image, ScrollView, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button, IconButton, Input, Typography, useTheme } from '@finapp/ui/native';
+import { ImageSquare, PaperPlaneTilt } from 'phosphor-react-native';
 import { Money } from './Money';
-import { Button, Card, Input, SectionHeader, Typography, useTheme } from '@finapp/ui/native';
+import { GroupAvatar, GroupHeading, GroupMetadataSummary, GroupPanel, GroupTile, type GroupMetadata } from './GroupPrimitives';
 
 export type GroupChatItem = {
-  id: string;
-  kind: 'message' | 'expense' | 'settlement';
-  date: string;
-  accessibleLabel: string;
-  sender?: string;
-  ownMessage?: boolean;
-  text?: string;
-  attachmentUrl?: string | null;
-  title?: string;
-  amount?: string;
-  amountMinor?: bigint;
-  currency?: string;
+  id: string; kind: 'message' | 'expense' | 'settlement'; date: string; accessibleLabel: string;
+  sender?: string; senderAvatarUrl?: string | null; ownMessage?: boolean; text?: string;
+  attachmentUrl?: string | null; title?: string; amount?: string; amountMinor?: bigint; currency?: string;
+  icon?: string; color?: string; onPress?: () => void;
 };
 export type GroupChatScreenProps = {
-  items: readonly GroupChatItem[];
-  loading: boolean;
-  canSend: boolean;
-  connected: boolean;
-  draft: string;
-  pending: boolean;
-  error?: string;
-  onDraftChange: (value: string) => void;
-  onSend: () => void;
-  onChooseBillImage: () => void;
-  onBack?: () => void;
+  items: readonly GroupChatItem[]; loading: boolean; canSend: boolean; connected: boolean;
+  draft: string; pending: boolean; error?: string; onDraftChange: (value: string) => void;
+  onSend: () => void; onChooseBillImage: () => void; onBack?: () => void;
+  group?: GroupMetadata & { name: string; currency: string; icon?: string; color?: string };
+  members?: readonly { id: string; name: string; username?: string; avatarUrl?: string }[];
+  onOpenGroup?: () => void; onAddExpense?: () => void; onOpenSettings?: () => void; embedded?: boolean;
 };
 
-export function GroupChatScreen({
-  items,
-  loading,
-  canSend,
-  connected,
-  draft,
-  pending,
-  error,
-  onDraftChange,
-  onSend,
-  onChooseBillImage,
-  onBack,
-}: GroupChatScreenProps) {
+export function GroupChatScreen(p: GroupChatScreenProps) {
   const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
   const timelineRef = useRef<ScrollView>(null);
-  useEffect(() => {
-    if (canSend && items.length) timelineRef.current?.scrollToEnd({ animated: true });
-  }, [canSend, items.length]);
-  return (
-    <View style={{ gap: 12 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <SectionHeader title="Group chat" />
-        {onBack && (
-          <Button size="sm" variant="outline" onPress={onBack}>
-            Back to group
-          </Button>
-        )}
-      </View>
-      <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-        Messages and bill images are saved to this group when online. They are not queued for
-        offline sending.
-      </Typography>
-      {canSend ? (
-        <>
-          <ScrollView
-            ref={timelineRef}
-            accessibilityRole="list"
-            accessibilityLabel="Group messages"
-            accessibilityLiveRegion="polite"
-            nestedScrollEnabled
-            keyboardShouldPersistTaps="handled"
-            style={{
-              maxHeight: 440,
-              minHeight: 180,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: tokens.borderSubtle,
-              backgroundColor: tokens.surfaceSubtle,
-            }}
-            contentContainerStyle={{ padding: 14, gap: 10, flexGrow: 1 }}
-          >
-            {loading && (
-              <Typography variant="small" accessibilityLiveRegion="polite">
-                Loading saved messages…
-              </Typography>
-            )}
-            {items.map((item) =>
-              item.kind === 'message' ? (
-                <View
-                  key={item.id}
-                  accessibilityRole="text"
-                  accessibilityLabel={item.accessibleLabel}
-                  style={{
-                    alignSelf: item.ownMessage ? 'flex-end' : 'flex-start',
-                    maxWidth: '90%',
-                    gap: 6,
-                    paddingVertical: 10,
-                    paddingHorizontal: 13,
-                    borderWidth: 1,
-                    borderColor: tokens.borderSubtle,
-                    borderTopLeftRadius: 16,
-                    borderTopRightRadius: 16,
-                    borderBottomLeftRadius: item.ownMessage ? 16 : 5,
-                    borderBottomRightRadius: item.ownMessage ? 5 : 16,
-                    backgroundColor: item.ownMessage ? tokens.secondary : tokens.background,
-                  }}
-                >
-                  <Typography variant="caption">{item.ownMessage ? 'You' : item.sender}</Typography>
-                  {item.attachmentUrl ? (
-                    <Image
-                      source={{ uri: item.attachmentUrl }}
-                      accessibilityLabel={`Bill shared by ${item.ownMessage ? 'you' : item.sender}`}
-                      resizeMode="contain"
-                      style={{ width: 220, height: 160, borderRadius: 10 }}
-                    />
-                  ) : item.text ? (
-                    <Typography variant="body">{item.text}</Typography>
-                  ) : (
-                    <Typography variant="caption">Bill image is no longer available.</Typography>
-                  )}
-                  <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-                    {item.date}
-                  </Typography>
-                </View>
-              ) : (
-                <Card
-                  key={item.id}
-                  variant="subtle"
-                  style={{
-                    alignSelf: 'center',
-                    width: '100%',
-                    gap: 5,
-                    padding: 14,
-                    borderLeftWidth: 3,
-                    borderLeftColor: item.kind === 'expense' ? tokens.primary : tokens.income,
-                  }}
-                >
-                  <Typography variant="caption">
-                    {item.kind === 'expense' ? 'Shared expense · Split' : 'Settlement'}
-                  </Typography>
-                  <Typography variant="bodyLarge">{item.title}</Typography>
-                  {item.amountMinor !== undefined ? (
-                    <Money
-                      amountMinor={item.amountMinor}
-                      currency={item.currency ?? ''}
-                      size="body"
-                    />
-                  ) : (
-                    <Typography variant="heading">{item.amount}</Typography>
-                  )}
-                  <Typography variant="caption">{item.date}</Typography>
-                </Card>
-              ),
-            )}
-            {!loading && items.length === 0 && (
-              <View style={{ alignSelf: 'center', paddingVertical: 18, alignItems: 'center' }}>
-                <Typography variant="bodyLarge">Start the conversation</Typography>
-                <Typography variant="caption">
-                  Share a note or attach a bill for the group.
-                </Typography>
-              </View>
-            )}
-          </ScrollView>
-          <Card
-            variant="subtle"
-            style={{
-              gap: 10,
-              padding: 14,
-              borderWidth: 1,
-              borderColor: tokens.borderSubtle,
-              backgroundColor: tokens.surfaceRaised,
-            }}
-          >
-            <Input
-              accessibilityLabel="Group message"
-              value={draft}
-              onChangeText={onDraftChange}
-              multiline
-              maxLength={4_000}
-              placeholder="Write a message…"
-              editable={!pending}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-              <Button variant="outline" disabled={pending} onPress={onChooseBillImage}>
-                Attach bill image
-              </Button>
-              <Button disabled={pending || !draft.trim()} onPress={onSend}>
-                {pending ? 'Sending…' : 'Send message'}
-              </Button>
-            </View>
-            <Typography variant="caption" accessibilityLiveRegion="polite">
-              {pending ? 'Sending to the group…' : `${draft.length}/4,000 characters`}
-            </Typography>
-          </Card>
-        </>
-      ) : (
-        <Card
-          variant="subtle"
-          style={{
-            padding: 16,
-            gap: 5,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-            backgroundColor: tokens.surfaceRaised,
-          }}
-        >
-          <Typography variant="bodyLarge">
-            {connected ? 'Chat is not synced yet' : 'Group chat is offline'}
-          </Typography>
-          <Typography variant="caption">
-            {connected
-              ? 'This saved group has no connected cloud ID. Sync the group before using server chat or sharing bill images.'
-              : 'Connect to load saved messages or send a message and bill image. Group ledger data remains available offline.'}
-          </Typography>
-        </Card>
-      )}
-      {!!error && (
-        <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
-          {error}
-        </Typography>
-      )}
-    </View>
-  );
+  useEffect(() => { if (p.canSend && p.items.length) timelineRef.current?.scrollToEnd({ animated: true }); }, [p.canSend, p.items.length]);
+  const media = p.items.filter(item => item.attachmentUrl);
+  const content = <>
+    {p.embedded ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><Typography variant="heading">Recent messages</Typography>{p.onBack && <Button size="sm" variant="outline" onPress={p.onBack}>Open chat</Button>}</View> : <GroupHeading title={p.group?.name ?? 'Group chat'} subtitle="Chat and share receipts with your group." onBack={p.onBack} />}
+    {!p.embedded && p.group && <GroupPanel>
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><GroupTile icon={p.group.icon} color={p.group.color} size={68} /><View style={{ flex: 1, gap: 4 }}><Typography variant="heading">{p.group.name}</Typography><Typography variant="caption">{p.group.currency} · Shared expenses</Typography><View style={{ flexDirection: 'row' }}>{p.members?.slice(0, 5).map((member, index) => <View key={member.id} style={{ marginLeft: index ? -6 : 0 }}><GroupAvatar name={member.name} avatarUrl={member.avatarUrl} size={26} /></View>)}</View></View></View>
+      <GroupMetadataSummary group={p.group} />
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{p.onOpenGroup && <Button size="sm" variant="outline" onPress={p.onOpenGroup}>View group</Button>}{p.onAddExpense && <Button size="sm" onPress={p.onAddExpense}>+ Add expense</Button>}</View>
+    </GroupPanel>}
+    <GroupPanel style={{ padding: 10, gap: 10 }}>
+      <ScrollView ref={timelineRef} nestedScrollEnabled keyboardShouldPersistTaps="handled" accessibilityRole="list" accessibilityLabel="Group messages" accessibilityLiveRegion="polite" style={{ minHeight: p.embedded ? 160 : 300, maxHeight: p.embedded ? 340 : 520 }} contentContainerStyle={{ padding: 4, gap: 16, flexGrow: 1 }}>
+        {p.loading && <Typography variant="small">Loading saved messages…</Typography>}
+        {p.items.map(item => <View key={item.id} accessibilityLabel={item.accessibleLabel} style={{ flexDirection: item.ownMessage ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-start' }}>
+          <GroupAvatar name={item.ownMessage ? 'You' : item.sender ?? (item.kind === 'message' ? 'Member' : 'Group')} avatarUrl={item.senderAvatarUrl} size={32} />
+          <View style={{ flex: 1, gap: 5, alignItems: item.ownMessage ? 'flex-end' : 'flex-start' }}><Typography variant="caption">{item.ownMessage ? 'You' : item.sender ?? 'Group'} · {item.date}</Typography>
+            {item.kind === 'message' ? <View style={{ maxWidth: '100%', gap: 7, borderRadius: 9, padding: 10, borderWidth: 1, borderColor: item.ownMessage ? tokens.primary : tokens.borderSubtle, backgroundColor: item.ownMessage ? tokens.secondary : tokens.surfaceRaised }}>
+              {!!item.text && <Typography variant="body">{item.text}</Typography>}
+              {item.attachmentUrl && <Image source={{ uri: item.attachmentUrl }} accessibilityLabel={`Bill shared by ${item.ownMessage ? 'you' : item.sender ?? 'a member'}`} resizeMode="contain" style={{ width: 210, maxWidth: '100%', height: 170, borderRadius: 6 }} />}
+              {!item.text && !item.attachmentUrl && <Typography variant="caption">Bill image is no longer available.</Typography>}
+            </View> : <Pressable accessibilityRole={item.onPress ? 'button' : undefined} disabled={!item.onPress} onPress={item.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1, width: '100%', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: tokens.borderSubtle, backgroundColor: tokens.surfaceRaised, flexDirection: 'row', alignItems: 'center' })}><GroupTile icon={item.icon ?? (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')} color={item.color ?? (item.kind === 'expense' ? tokens.warning : tokens.income)} size={42} /><View style={{ flex: 1, gap: 3 }}><Typography variant="caption">{item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'}</Typography><Typography variant="label">{item.title}</Typography>{item.amountMinor !== undefined ? <Money amountMinor={item.amountMinor} currency={item.currency ?? p.group?.currency ?? ''} size="body" /> : <Typography variant="heading">{item.amount ?? 'Amount unavailable'}</Typography>}</View>{item.onPress && <Typography>›</Typography>}</Pressable>}
+          </View>
+        </View>)}
+        {!p.loading && !p.items.length && <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1, paddingVertical: 24, gap: 8 }}><GroupTile icon="phosphor:ChatCircle" size={42} /><Typography variant="heading">Start the conversation</Typography><Typography variant="caption">Share a note or a bill with the group.</Typography></View>}
+      </ScrollView>
+      {p.canSend ? <><View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', borderTopWidth: 1, borderColor: tokens.borderSubtle, paddingTop: 10 }}><IconButton label="Attach bill image" variant="ghost" disabled={p.pending} onPress={p.onChooseBillImage}><ImageSquare size={23} color={tokens.foreground} weight="fill" /></IconButton><Input accessibilityLabel="Group message" style={{ flex: 1 }} value={p.draft} onChangeText={p.onDraftChange} multiline maxLength={4000} placeholder={p.group ? `Message ${p.group.name}…` : 'Write a message…'} editable={!p.pending} /><IconButton variant="primary" label={p.pending ? 'Sending message' : 'Send message'} disabled={p.pending || !p.draft.trim()} onPress={p.onSend}><PaperPlaneTilt size={22} color={tokens.primaryForeground} weight="fill" /></IconButton></View><Typography variant="caption" accessibilityLiveRegion="polite">{p.pending ? 'Sending to the group…' : `${p.draft.length}/4,000 · Online sending only`}</Typography></> : <View style={{ gap: 5, borderTopWidth: 1, borderColor: tokens.borderSubtle, paddingTop: 12 }}><Typography variant="label">{p.connected ? 'Chat is not synced yet' : 'Group chat is offline'}</Typography><Typography variant="caption">{p.connected ? 'Sync the saved group to connect chat and bill sharing.' : 'Connect to load messages or send notes and bill images. Your ledger remains available offline.'}</Typography></View>}
+      {!!p.error && <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>{p.error}</Typography>}
+    </GroupPanel>
+    {!p.embedded && <>
+      <GroupPanel>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><Typography variant="heading">Group info</Typography>{p.onOpenSettings && <Button size="sm" variant="outline" onPress={p.onOpenSettings}>Edit</Button>}</View>
+        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><GroupTile icon={p.group?.icon} color={p.group?.color} size={56} /><View style={{ flex: 1, gap: 4 }}><Typography variant="heading">{p.group?.name ?? 'Group details unavailable'}</Typography><Typography variant="caption">{p.group?.currency ?? 'Currency unavailable'}</Typography></View></View>
+        {p.group && <GroupMetadataSummary group={p.group} />}
+        <Typography variant="caption">Messages and bill images save online. They are not queued for offline sending.</Typography>
+      </GroupPanel>
+      <GroupPanel><Typography variant="heading">Members ({p.members?.length ?? 0})</Typography>{p.members?.length ? p.members.map(member => <View key={member.id} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 }}><GroupAvatar name={member.name} avatarUrl={member.avatarUrl} /><View style={{ flex: 1 }}><Typography variant="label">{member.name}</Typography>{member.username && <Typography variant="caption">@{member.username.replace(/^@+/, '')}</Typography>}</View></View>) : <Typography variant="caption">Member details are not available yet.</Typography>}</GroupPanel>
+      <GroupPanel><Typography variant="heading">Group balances</Typography><Typography variant="small">Open the group to view complete member balances and record a settlement. Chat does not provide live balance totals.</Typography>{p.onOpenGroup && <Button variant="outline" onPress={p.onOpenGroup}>View group balances</Button>}</GroupPanel>
+      <GroupPanel><Typography variant="heading">Shared media & receipts</Typography>{media.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{media.map(item => <Image key={item.id} source={{ uri: item.attachmentUrl! }} accessibilityLabel={`Receipt shared by ${item.sender ?? 'a member'}`} resizeMode="cover" style={{ width: 72, height: 88, borderRadius: 6 }} />)}</View> : <Typography variant="small">No shared images in the loaded conversation.</Typography>}</GroupPanel>
+    </>}
+  </>;
+  if (p.embedded) return <View style={{ gap: 12 }}>{content}</View>;
+  return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: tokens.background }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20, gap: 16 }}>{content}</ScrollView></KeyboardAvoidingView>;
 }

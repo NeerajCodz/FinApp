@@ -2,7 +2,7 @@
   --account-accent: var(--finapp-primary);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 22px;
+  gap: 18px;
   width: 100%;
   max-width: 1460px;
   margin: 0 auto;
@@ -55,7 +55,7 @@
 .headingBlock :global(h1),
 .detailTitle :global(h1) {
   margin: 0;
-  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  font-size: clamp(2rem, 3vw, 2.8rem);
   letter-spacing: -0.045em;
 }
 
@@ -116,26 +116,20 @@
 }
 
 .summaryCard {
-  min-height: 116px;
-  gap: 17px;
+  min-height: 142px;
+  gap: 24px;
   border: 1px solid var(--finapp-border-subtle);
-  border-radius: 17px;
-  padding: 18px;
-  background:
-    radial-gradient(
-      ellipse at 0 0,
-      color-mix(in srgb, var(--finapp-primary) 7%, transparent),
-      transparent 58%
-    ),
-    var(--finapp-card);
+  border-radius: 12px;
+  padding: 20px;
+  background: var(--finapp-card);
 }
 
 .summaryIcon {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 52px;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
   justify-content: center;
-  border-radius: 15px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--finapp-primary) 12%, var(--finapp-surface-raised));
   color: var(--finapp-primary);
 }
@@ -147,7 +141,7 @@
 
 .summaryCopy :global(h3) {
   margin: 0;
-  font-size: clamp(1.5rem, 2vw, 1.9rem);
+  font-size: clamp(1.8rem, 2vw, 2.1rem);
   letter-spacing: -0.04em;
 }
 
@@ -170,14 +164,14 @@
 .totalNote,
 .statePanel {
   border: 1px solid var(--finapp-border-subtle);
-  border-radius: 17px;
+  border-radius: 12px;
   background: var(--finapp-card);
 }
 
 .accountsPanel {
   display: grid;
   gap: 0;
-  padding: 15px 16px 12px;
+  padding: 20px 20px 12px;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
@@ -251,11 +245,11 @@
 }
 
 .accountRow {
-  min-height: 72px;
-  gap: 15px;
+  min-height: 74px;
+  gap: 22px;
   border: 1px solid var(--finapp-border-subtle);
-  border-radius: 13px;
-  padding: 10px 13px;
+  border-radius: 12px;
+  padding: 10px 12px;
   color: inherit;
   text-decoration: none;
   transition:
@@ -277,14 +271,14 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--account-color) 72%, transparent);
-  background: color-mix(in srgb, var(--account-color) 18%, var(--finapp-surface-raised));
-  color: var(--account-color);
+  background: var(--account-color);
+  color: var(--finapp-background);
 }
 
 .accountIcon {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
 }
 
 .accountMeta {
@@ -320,7 +314,7 @@
   width: fit-content;
   flex: 0 0 auto;
   gap: 5px;
-  border-radius: 999px;
+  border-radius: 9px;
   padding: 6px 10px;
   background: var(--finapp-surface-raised);
   color: var(--finapp-foreground-muted);
@@ -471,7 +465,7 @@
 
 .balanceAndFlow {
   display: grid;
-  grid-template-columns: minmax(300px, 0.86fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1fr);
   gap: 13px;
 }
 
@@ -485,13 +479,7 @@
   display: grid;
   align-content: start;
   gap: 15px;
-  background:
-    radial-gradient(
-      ellipse at 100% 0,
-      color-mix(in srgb, var(--finapp-primary) 9%, transparent),
-      transparent 56%
-    ),
-    var(--finapp-card);
+  background: var(--finapp-card);
 }
 
 .balancePanel > :first-child {
@@ -693,19 +681,20 @@
 
 .propertiesPanel {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) minmax(230px, 0.68fr);
+  grid-template-columns: minmax(0, 1fr) 250px;
   align-items: center;
-  gap: 20px;
-  padding: 17px 20px;
+  gap: 14px 20px;
+  padding: 16px 20px;
 }
 
 .propertiesHeading :global(h2) {
   margin: 0;
 }
+.propertiesHeading { grid-column: 1 / -1; }
 
 .propertyGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px 18px;
 }
 

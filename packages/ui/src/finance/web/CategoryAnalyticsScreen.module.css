@@ -1,6 +1,6 @@
 .page {
   display: grid;
-  gap: 16px;
+  gap: 10px;
   min-width: 0;
   color: var(--finance-text, #f4f5f2);
 }
@@ -12,7 +12,7 @@
 }
 .header h1 {
   margin: 0;
-  font-size: clamp(1.75rem, 3vw, 2.3rem);
+  font-size: clamp(1.9rem, 3vw, 2.2rem);
   letter-spacing: -0.045em;
   line-height: 1.08;
 }
@@ -112,8 +112,8 @@
   outline-offset: 2px;
 }
 .toolbar .active {
-  background: var(--finance-lime, #b7ff4a);
-  color: #080a07;
+  background: var(--finapp-foreground);
+  color: var(--finapp-background);
   font-weight: 700;
 }
 .metrics {
@@ -126,22 +126,19 @@
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
-  padding: 15px 14px;
-  border: 1px solid var(--finance-line, #252825);
-  border-radius: 14px;
-  background: linear-gradient(
-    140deg,
-    color-mix(in srgb, var(--finance-panel, #101210) 94%, white 6%),
-    var(--finance-background, #060706)
-  );
+  min-height: 90px;
+  padding: 15px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 11px;
+  background: var(--finapp-card);
 }
 .metricIcon {
   display: grid;
   place-items: center;
-  width: 39px;
-  height: 39px;
-  flex: 0 0 39px;
-  border-radius: 11px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 10px;
   color: var(--finance-lime, #b7ff4a);
   background: color-mix(in srgb, var(--finance-lime, #b7ff4a) 12%, transparent);
 }
@@ -183,19 +180,15 @@
 }
 .chartGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(240px, 0.94fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.03fr) minmax(0, .96fr);
   gap: 10px;
 }
 .panel {
   min-width: 0;
-  padding: 15px;
-  border: 1px solid var(--finance-line, #252825);
-  border-radius: 15px;
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--finance-panel, #101210) 94%, white 6%),
-    var(--finance-background, #060706)
-  );
+  padding: 14px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 11px;
+  background: var(--finapp-card);
 }
 .panelHeading {
   display: flex;
@@ -350,7 +343,7 @@
   align-items: stretch;
   justify-content: space-around;
   gap: 10px;
-  height: 165px;
+  height: 160px;
   padding: 10px 4px 0;
   border-bottom: 1px solid var(--finance-line, #282b28);
   background: repeating-linear-gradient(
@@ -539,7 +532,7 @@
   text-align: left;
 }
 .performance td {
-  padding: 7px;
+  padding: 3px 7px;
   border-top: 1px solid var(--finance-line, #252825);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

@@ -1,6 +1,6 @@
 .page {
   display: grid;
-  gap: 13px;
+  gap: 12px;
   min-width: 0;
   padding-bottom: 24px;
   color: var(--finance-text, #f5f5f3);
@@ -43,7 +43,7 @@
 .titleCopy h1 {
   margin: 0;
   overflow: hidden;
-  font-size: clamp(1.42rem, 2vw, 1.85rem);
+  font-size: clamp(1.8rem, 2vw, 2rem);
   letter-spacing: -0.04em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -51,7 +51,7 @@
 .titleCopy p {
   margin: 3px 0 0;
   color: var(--finance-muted, #9da19c);
-  font-size: 0.76rem;
+  font-size: 0.88rem;
 }
 .back {
   display: grid;
@@ -116,22 +116,20 @@
   display: grid;
   gap: 6px;
   min-width: 0;
-  padding: 15px;
-  border: 1px solid var(--finance-line, #252825);
-  border-radius: 13px;
-  background: linear-gradient(
-    130deg,
-    color-mix(in srgb, var(--finance-panel, #101210) 93%, white 7%),
-    var(--finance-background, #060706)
-  );
+  padding: 16px 18px 16px 86px;
+  min-height: 88px;
+  position: relative;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 11px;
+  background: var(--finapp-card);
 }
 .metric > span {
   color: var(--finance-muted, #9da19c);
-  font-size: 0.7rem;
+  font-size: 0.82rem;
 }
 .metric > strong {
   overflow: hidden;
-  font-size: clamp(1rem, 1.8vw, 1.42rem);
+  font-size: 1.55rem;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -141,32 +139,28 @@
   font-size: 0.67rem;
 }
 .metric[data-tone='expense'] > strong {
-  color: var(--finance-expense, #ff6877);
+  color: var(--finapp-foreground);
 }
 .metric[data-tone='income'] > strong {
-  color: var(--finance-positive, #58dc82);
+  color: var(--finapp-foreground);
 }
 .metric[data-tone='warning'] > strong {
-  color: #f0bf48;
+  color: var(--finapp-foreground);
 }
 .metric[data-tone='lime'] > strong {
-  color: var(--finance-lime, #b7ff4a);
+  color: var(--finapp-foreground);
 }
 .contentGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 2.25fr) minmax(290px, 1fr);
   gap: 10px;
 }
 .panel {
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--finance-line, #252825);
-  border-radius: 14px;
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--finance-panel, #101210) 94%, white 6%),
-    var(--finance-background, #060706)
-  );
+  padding: 16px 18px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 11px;
+  background: var(--finapp-card);
 }
 .panelHead {
   display: flex;
@@ -230,8 +224,8 @@
 .chart {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  height: 176px;
+  gap: 5px;
+  height: 155px;
   padding: 8px 3px 0;
   border-bottom: 1px solid var(--finance-line, #282b28);
   background: repeating-linear-gradient(
@@ -301,14 +295,15 @@
 }
 .limitContent {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
+  grid-template-columns: 1fr;
+  justify-items: center;
   align-items: center;
-  gap: 10px 14px;
+  gap: 6px;
 }
 .ring {
   display: grid;
   place-items: center;
-  width: 102px;
+  width: 135px;
   aspect-ratio: 1;
   border-radius: 50%;
   background: conic-gradient(
@@ -428,22 +423,25 @@
   margin: 0;
 }
 .details > div {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid color-mix(in srgb, var(--finance-line, #252825) 76%, transparent);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--finance-panel-raise, #181b18) 50%, transparent);
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 8px;
+  background: var(--finapp-surface-raised);
 }
 .details dt {
   color: var(--finance-muted, #9da19c);
-  font-size: 0.65rem;
+  font-size: 0.76rem;
 }
 .details dd {
   overflow: hidden;
   margin: 0;
-  font-size: 0.73rem;
+  font-size: 0.78rem;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -458,16 +456,19 @@
 }
 .merchants {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 .merchant {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: 6px;
   min-width: 0;
-  padding: 7px 1px;
-  border-bottom: 1px solid var(--finance-line, #252825);
+  padding: 8px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 8px;
+  background: var(--finapp-surface-raised);
 }
 .merchant:last-child {
   border-bottom: 0;
@@ -496,6 +497,7 @@
   font-size: 0.73rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  grid-column: 2;
 }
 .transactions {
   display: grid;

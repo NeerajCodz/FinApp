@@ -1,7 +1,7 @@
 'use client';
 import { Download } from 'lucide-react';
-import { Button, Typography } from '@finapp/ui/web';
-import { InfoDescription } from '@finapp/ui/finance';
+import { Button } from '@finapp/ui/web';
+import styles from './Dashboard.module.css';
 
 type AnalyticsHeaderProps = {
   onExport: () => void;
@@ -9,17 +9,13 @@ type AnalyticsHeaderProps = {
 
 export function AnalyticsHeader({ onExport }: AnalyticsHeaderProps) {
   return (
-    <header className="analytics-page-header">
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Typography variant="title">Analytics</Typography>
-          <InfoDescription
-            title="Analytics"
-            description="Understand your spending, income and overall financial health. Track trends, discover insights and make better decisions."
-          />
-        </div>
+    <header className={styles.header}>
+      <div className={styles.headerCopy}>
+        <p className={styles.eyebrow}>A CLEARER VIEW OF YOUR MONEY</p>
+        <h1 className={styles.title}>Analytics</h1>
+        <p className={styles.description}>Understand your spending, income and overall financial health. Track trends, discover insights and make better decisions.</p>
       </div>
-      <Button variant="outline" onPress={onExport}>
+      <Button className={styles.export} variant="outline" onPress={onExport}>
         <Download size={16} aria-hidden="true" /> Export
       </Button>
     </header>

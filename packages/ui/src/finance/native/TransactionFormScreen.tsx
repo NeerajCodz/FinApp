@@ -14,6 +14,7 @@ import {
 import { CategoryIcon } from './CategoryIcon';
 import { CurrencyInput } from './CurrencyInput';
 import { DateTimePicker } from './DateTimePicker';
+import { TransactionCards, type TransactionTableItem } from './TransactionsScreen';
 
 export type TransactionFormType = 'expense' | 'income' | 'transfer';
 export type TransactionFormOption = { id: string; name: string; currency?: string; icon?: string };
@@ -58,6 +59,10 @@ export type TransactionFormScreenProps = {
   unavailableMessage?: string;
   submitDisabled?: boolean;
   onSplitExpense?: () => void;
+  status?: string;
+  referenceId?: string;
+  similarTransactions?: readonly TransactionTableItem[];
+  onOpenTransaction?: (id: string) => void;
 };
 
 export function TransactionFormScreen(props: TransactionFormScreenProps) {
@@ -145,7 +150,7 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
       <ScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingTop: 16, paddingBottom: 28, gap: 18 }}
+        contentContainerStyle={{ padding: 16, paddingTop: 16, paddingBottom: 28, gap: 16 }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <IconButton label="Back to transactions" variant="ghost" onPress={onBack}>
@@ -164,11 +169,11 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
         </View>
         <View
           style={{
-            gap: 16,
-            padding: 18,
+            gap: 14,
+            padding: 16,
             borderWidth: 1,
             borderColor: tokens.borderSubtle,
-            borderRadius: 18,
+            borderRadius: 12,
             backgroundColor: tokens.surfaceRaised,
           }}
         >
@@ -186,13 +191,9 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
             ))}
           </View>
           {type !== 'transfer' && (
-            <Input
-              accessibilityLabel="Transaction title"
-              placeholder="Transaction title"
-              value={title}
-              onChangeText={onTitleChange}
-            />
+            <View style={{gap:7}}><Typography variant="label">Title *</Typography><Input accessibilityLabel="Transaction title" placeholder="e.g. Grocery shopping, Salary, Rent…" value={title} onChangeText={onTitleChange} maxLength={120}/></View>
           )}
+          <Typography variant="label">Amount *</Typography>
           <CurrencyInput
             currency={account?.currency ?? currency}
             value={amount}
@@ -233,12 +234,14 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
           <Button size="sm" variant="outline" onPress={() => onHasTimeChange(!hasTime)}>
             {hasTime ? 'Remove time' : 'Include time'}
           </Button>
+          <Typography variant="label">Merchant / Payee</Typography>
           <Input
             accessibilityLabel="Merchant or payee"
             placeholder="Merchant / Payee (optional)"
             value={merchant}
             onChangeText={onMerchantChange}
           />
+          <Typography variant="label">Notes</Typography>
           <Input
             accessibilityLabel="Transaction note"
             placeholder="Notes (optional)"
@@ -308,6 +311,7 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
             </Button>
           </View>
         </View>
+        {mode==='edit'&&<View style={{gap:16}}><View style={{padding:16,borderWidth:1,borderColor:tokens.borderSubtle,borderRadius:12,backgroundColor:tokens.surfaceRaised,gap:6}}><Typography variant="heading">Transaction impact</Typography><Typography variant="caption">How this change affects your finances.</Typography>{[['Amount',`${amount||'0'} ${account?.currency??currency}`],['Category',type==='transfer'?'Transfer':category?.name??'Uncategorized'],['Account',account?.name??'Unassigned'],['Date',new Date(occurredAt).toLocaleDateString()],['Status',props.status??'Saved'],...(props.referenceId?[['Reference ID',props.referenceId]]:[])].map(([label,value])=><SettingsRow key={label} label={label!} value={value}/>)}<Typography variant="caption">Saving updates your account and category totals.</Typography></View><View style={{padding:16,borderWidth:1,borderColor:tokens.borderSubtle,borderRadius:12,backgroundColor:tokens.surfaceRaised}}><Typography variant="heading">Recent similar transactions</Typography><Typography variant="caption">Other transactions in this category or at this merchant.</Typography><TransactionCards items={props.similarTransactions??[]} onSelect={props.onOpenTransaction}/></View></View>}
       </ScrollView>
       <Sheet
         visible={picker !== null}
