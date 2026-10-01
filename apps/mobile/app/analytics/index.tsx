@@ -1205,7 +1205,7 @@ function AnalyticsContent() {
             <Panel
               title="Budgets"
               action={
-                <Button size="sm" variant="ghost" onPress={() => router.push('/budget' as never)}>
+                <Button size="sm" variant="ghost" onPress={() => router.push('/budgets' as never)}>
                   View all
                 </Button>
               }
@@ -1245,7 +1245,7 @@ function AnalyticsContent() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onPress={() => router.push('/budget/new' as never)}
+                      onPress={() => router.push('/budgets/new' as never)}
                     >
                       Create budget
                     </Button>

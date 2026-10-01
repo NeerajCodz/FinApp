@@ -301,7 +301,7 @@ export default function ProfileScreen() {
               icon={Coins}
               label="Budget"
               description="Limits and progress"
-              onPress={() => router.push('/budget' as never)}
+              onPress={() => router.push('/budgets' as never)}
             />
             <ProfileTile
               icon={ChartLineUp}
