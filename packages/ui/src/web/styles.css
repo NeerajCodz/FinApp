@@ -1178,10 +1178,6 @@
   cursor: pointer;
 }
 
-.finapp-onboarding-avatar-picker__choice[data-selected] {
-  border-color: var(--finapp-primary);
-}
-
 .finapp-onboarding-avatar-picker__choice:focus-visible {
   outline: 2px solid var(--finapp-ring);
   outline-offset: 3px;
