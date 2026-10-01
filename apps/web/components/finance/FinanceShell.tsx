@@ -156,7 +156,11 @@ export function FinanceShell({ children }: { children: ReactNode }) {
               />
               <span className="finance-sidebar-profile-copy">
                 <span className="finance-sidebar-profile-name">{profileName}</span>
-                <span className="finance-sidebar-profile-label">Profile</span>
+                {profile?.username?.trim() && (
+                  <span className="finance-sidebar-profile-label">
+                    @{profile.username.trim().replace(/^@+/, '')}
+                  </span>
+                )}
               </span>
             </Link>
           </>
