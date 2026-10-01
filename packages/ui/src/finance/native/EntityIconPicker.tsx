@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import * as LucideIcons from 'lucide-react-native';
 import type { LucideProps } from 'lucide-react-native';
 import * as PhosphorIcons from 'phosphor-react-native';
 import type { IconProps as PhosphorProps } from 'phosphor-react-native';
-import { FlatList, Pressable, ScrollView, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import {
   allEmojiPickerOptions,
@@ -145,33 +145,129 @@ function IconTile({
 
 function EmojiTile({
   emoji,
-  selected,
+  selectedValue,
   onSelect,
 }: {
   emoji: EmojiPickerOption;
-  selected: boolean;
-  onSelect: () => void;
+  selectedValue?: string;
+  onSelect: (value: string) => void;
 }) {
   const { tokens } = useTheme();
+  const triggerRef = useRef<View>(null);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const [tonesOpen, setTonesOpen] = useState(false);
+  const [tonePosition, setTonePosition] = useState<{ top: number; left: number } | null>(null);
+  const chosenTone = emoji.toneOptions.find((tone) => tone.native === selectedValue);
+  const hasTones = emoji.toneOptions.length > 1;
+  const chooseTone = (native: string) => {
+    onSelect(native);
+    setTonesOpen(false);
+  };
+  const toggleTones = () => {
+    if (!hasTones) {
+      chooseTone(emoji.native);
+      return;
+    }
+    if (tonesOpen) {
+      setTonesOpen(false);
+      return;
+    }
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      const popupWidth = 208;
+      const popupHeight = 44;
+      setTonePosition({
+        left: Math.max(8, Math.min(x + width / 2 - popupWidth / 2, windowWidth - popupWidth - 8)),
+        top: Math.max(
+          8,
+          Math.min(
+            y > popupHeight + 8 ? y - popupHeight - 5 : y + height + 5,
+            windowHeight - popupHeight - 8,
+          ),
+        ),
+      });
+      setTonesOpen(true);
+    });
+  };
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${emoji.native} ${emoji.name}`}
-      accessibilityState={{ selected }}
-      onPress={onSelect}
-      style={{
-        width: '15%',
-        aspectRatio: 1,
-        borderWidth: 1,
-        borderColor: selected ? tokens.primary : 'transparent',
-        borderRadius: 11,
-        backgroundColor: selected ? tokens.surfaceSubtle : tokens.surfaceRaised,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ fontSize: 24 }}>{emoji.native}</Text>
-    </Pressable>
+    <View style={{ width: '15%', aspectRatio: 1 }}>
+      <Pressable
+        ref={triggerRef}
+        accessibilityRole="button"
+        accessibilityLabel={`${emoji.name}${hasTones ? ', choose skin tone' : ''}`}
+        accessibilityState={{ selected: !!chosenTone, expanded: hasTones ? tonesOpen : undefined }}
+        onPress={toggleTones}
+        style={{
+          width: '100%',
+          height: '100%',
+          borderWidth: 1,
+          borderColor: chosenTone ? tokens.primary : 'transparent',
+          borderRadius: 11,
+          backgroundColor: chosenTone ? tokens.surfaceSubtle : tokens.surfaceRaised,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ fontSize: 24 }}>{chosenTone?.native ?? emoji.native}</Text>
+      </Pressable>
+      <Modal
+        visible={tonesOpen && !!tonePosition}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTonesOpen(false)}
+      >
+        <View style={{ flex: 1 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close skin tone picker"
+            onPress={() => setTonesOpen(false)}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+          {tonePosition && (
+            <View
+              accessibilityLabel={`${emoji.name} skin tone choices`}
+              style={{
+                position: 'absolute',
+                top: tonePosition.top,
+                left: tonePosition.left,
+                flexDirection: 'row',
+                gap: 3,
+                padding: 5,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                borderRadius: 12,
+                backgroundColor: tokens.popover,
+                elevation: 20,
+              }}
+            >
+              {emoji.toneOptions.map((tone) => (
+                <Pressable
+                  key={tone.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={tone.toneLabel}
+                  accessibilityState={{ selected: selectedValue === tone.native }}
+                  onPress={() => chooseTone(tone.native)}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor:
+                      selectedValue === tone.native ? tokens.primary : tokens.borderSubtle,
+                    borderRadius: 8,
+                    backgroundColor:
+                      selectedValue === tone.native ? tokens.surfaceSubtle : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontSize: 18 }}>{tone.native}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -266,7 +362,7 @@ export function EntityIconPicker({
   }
 
   const renderEmoji = ({ item }: { item: EmojiPickerOption }) => (
-    <EmojiTile emoji={item} selected={value === item.native} onSelect={() => select(item.native)} />
+    <EmojiTile emoji={item} selectedValue={value} onSelect={select} />
   );
   const renderIcon = ({ item }: { item: (typeof lucideIcons)[number] }) => (
     <IconTile
@@ -479,7 +575,7 @@ export function EntityIconPicker({
                   data={displayedIcons}
                   keyExtractor={(item) => item.name}
                   renderItem={renderIcon}
-                  numColumns={3}
+                  numColumns={6}
                   columnWrapperStyle={{ gap: 6 }}
                   contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
                   keyboardShouldPersistTaps="handled"

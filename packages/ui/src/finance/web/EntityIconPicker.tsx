@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as LucideIcons from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 import * as PhosphorIcons from '@phosphor-icons/react';
@@ -150,7 +151,7 @@ function IconTile({
       onClick={onSelect}
       style={{
         minWidth: 0,
-        minHeight: 46,
+        minHeight: 42,
         aspectRatio: '1',
         display: 'grid',
         placeItems: 'center',
@@ -168,34 +169,157 @@ function IconTile({
 
 function EmojiTile({
   emoji,
-  selected,
+  selectedValue,
   onSelect,
 }: {
   emoji: EmojiPickerOption;
-  selected: boolean;
-  onSelect: () => void;
+  selectedValue?: string;
+  onSelect: (value: string) => void;
 }) {
   const { tokens } = useTheme();
+  const [tonesOpen, setTonesOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const tonePanelRef = useRef<HTMLDivElement>(null);
+  const [tonePosition, setTonePosition] = useState<{ top: number; left: number } | null>(null);
+  const chosenTone = emoji.toneOptions.find((tone) => tone.native === selectedValue);
+  const hasTones = emoji.toneOptions.length > 1;
+  const chooseTone = (native: string) => {
+    onSelect(native);
+    setTonesOpen(false);
+  };
+  const toggleTones = () => {
+    if (!hasTones) {
+      chooseTone(emoji.native);
+      return;
+    }
+    if (tonesOpen) {
+      setTonesOpen(false);
+      return;
+    }
+    const bounds = triggerRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const width = 208;
+    const height = 44;
+    setTonePosition({
+      left: Math.max(
+        8,
+        Math.min(bounds.left + bounds.width / 2 - width / 2, window.innerWidth - width - 8),
+      ),
+      top: Math.max(8, Math.min(bounds.top - height - 5, window.innerHeight - height - 8)),
+    });
+    setTonesOpen(true);
+  };
+  useEffect(() => {
+    if (!tonesOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        (triggerRef.current?.contains(target) || tonePanelRef.current?.contains(target))
+      ) {
+        return;
+      }
+      setTonesOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTonesOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [tonesOpen]);
+
   return (
-    <button
-      type="button"
-      aria-label={`${emoji.native} ${emoji.name}`}
-      aria-pressed={selected}
-      onClick={onSelect}
-      style={{
-        minWidth: 0,
-        aspectRatio: '1',
-        display: 'grid',
-        placeItems: 'center',
-        border: `1px solid ${selected ? tokens.primary : 'transparent'}`,
-        borderRadius: 11,
-        background: selected ? tokens.surfaceSubtle : tokens.surfaceRaised,
-        cursor: 'pointer',
-        fontSize: 24,
-      }}
-    >
-      {emoji.native}
-    </button>
+    <div style={{ position: 'relative', zIndex: tonesOpen ? 5 : 0 }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`${emoji.native} ${emoji.name}${hasTones ? ', choose skin tone' : ''}`}
+        aria-pressed={!!chosenTone}
+        aria-haspopup={hasTones ? 'dialog' : undefined}
+        aria-expanded={hasTones ? tonesOpen : undefined}
+        onClick={toggleTones}
+        style={{
+          width: '100%',
+          minWidth: 0,
+          aspectRatio: '1',
+          display: 'grid',
+          placeItems: 'center',
+          position: 'relative',
+          border: `1px solid ${chosenTone ? tokens.primary : 'transparent'}`,
+          borderRadius: 11,
+          background: chosenTone ? tokens.surfaceSubtle : tokens.surfaceRaised,
+          cursor: 'pointer',
+          fontSize: 24,
+        }}
+      >
+        {chosenTone?.native ?? emoji.native}
+        {hasTones && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              right: 3,
+              bottom: 1,
+              fontSize: 9,
+              color: tokens.foregroundMuted,
+            }}
+          >
+            ●
+          </span>
+        )}
+      </button>
+      {tonesOpen &&
+        tonePosition &&
+        createPortal(
+          <div
+            ref={tonePanelRef}
+            role="dialog"
+            aria-label={`${emoji.name} skin tone`}
+            style={{
+              position: 'fixed',
+              zIndex: 10000,
+              top: tonePosition.top,
+              left: tonePosition.left,
+              display: 'flex',
+              gap: 3,
+              padding: 5,
+              border: `1px solid ${tokens.borderSubtle}`,
+              borderRadius: 12,
+              background: tokens.popover,
+              boxShadow: '0 10px 28px #0006',
+            }}
+          >
+            {emoji.toneOptions.map((tone) => (
+              <button
+                key={tone.id}
+                type="button"
+                aria-label={tone.toneLabel}
+                aria-pressed={selectedValue === tone.native}
+                title={tone.toneLabel}
+                onClick={() => chooseTone(tone.native)}
+                style={{
+                  width: 30,
+                  height: 30,
+                  flex: '0 0 30px',
+                  border: `1px solid ${selectedValue === tone.native ? tokens.primary : tokens.borderSubtle}`,
+                  borderRadius: 8,
+                  background: selectedValue === tone.native ? tokens.surfaceSubtle : 'transparent',
+                  cursor: 'pointer',
+                  fontSize: 18,
+                  padding: 0,
+                }}
+              >
+                {tone.native}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </div>
   );
 }
 
@@ -461,12 +585,7 @@ export function EntityIconPicker({
               }}
             >
               {matchingEmojis.map((emoji) => (
-                <EmojiTile
-                  key={emoji.id}
-                  emoji={emoji}
-                  selected={value === emoji.native}
-                  onSelect={() => select(emoji.native)}
-                />
+                <EmojiTile key={emoji.id} emoji={emoji} selectedValue={value} onSelect={select} />
               ))}
             </div>
             {matchingEmojis.length === 0 && (
@@ -486,7 +605,7 @@ export function EntityIconPicker({
                 maxHeight: 356,
                 overflowY: 'auto',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(124px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))',
                 gap: 6,
                 padding: '2px 1px',
               }}
@@ -522,7 +641,7 @@ export function EntityIconPicker({
                 maxHeight: 356,
                 overflowY: 'auto',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(124px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))',
                 gap: 6,
                 padding: '2px 1px',
               }}
