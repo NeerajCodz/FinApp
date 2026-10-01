@@ -9,6 +9,7 @@ export const create = mutation({
     name: v.string(),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
+    kind: v.optional(v.union(v.literal('expense'), v.literal('income'))),
     parentId: v.optional(v.string()),
     clientMutationId: v.optional(v.string()),
   },
@@ -24,6 +25,8 @@ export const create = mutation({
     if (replay.found) return replay.result as Id<'categories'>;
     const name = args.name.trim();
     if (!name) throw new Error('INVALID_CATEGORY');
+    if (args.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(args.color))
+      throw new Error('INVALID_CATEGORY');
     if (args.parentId !== undefined) {
       const parentId = ctx.db.normalizeId('categories', args.parentId);
       const parent = parentId ? await ctx.db.get(parentId) : null;
@@ -122,6 +125,50 @@ export const setIcon = mutation({
       user._id,
       clientMutationId,
       'category.setIcon',
+      categoryId,
+      'categories',
+      categoryId,
+      updatedAt,
+      updated,
+    );
+    return categoryId;
+  },
+});
+export const setPreferences = mutation({
+  args: {
+    categoryId: v.id('categories'),
+    kind: v.union(v.literal('expense'), v.literal('income')),
+    color: v.union(v.string(), v.null()),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, { categoryId, kind, color, clientMutationId }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      clientMutationId,
+      'category.setPreferences',
+    );
+    if (replay.found) return replay.result as typeof categoryId;
+    const category = await ctx.db.get(categoryId);
+    if (
+      !category ||
+      category.ownerId !== user._id ||
+      category.archivedAt !== undefined ||
+      category.isSystem
+    )
+      throw new Error('INVALID_CATEGORY');
+    if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error('INVALID_CATEGORY');
+    const updatedAt = Date.now();
+    await ctx.db.patch(categoryId, { kind, color: color ?? undefined, updatedAt });
+    const updated = await ctx.db.get(categoryId);
+    if (!updated) throw new Error('INVALID_CATEGORY');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      clientMutationId,
+      'category.setPreferences',
       categoryId,
       'categories',
       categoryId,
