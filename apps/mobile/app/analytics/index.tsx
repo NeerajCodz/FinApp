@@ -63,6 +63,7 @@ type BudgetRecord = LocalRecord & {
   endAt: number;
   categoryId?: string;
   accountId?: string;
+  accountIds?: string[];
   archivedAt?: number;
 };
 type AnalyticsType = 'all' | 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
@@ -102,7 +103,7 @@ function Panel({
       style={{
         gap: 14,
         padding: 16,
-        borderRadius: 18,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: tokens.borderSubtle,
         backgroundColor: tokens.surfaceSubtle,
@@ -251,6 +252,7 @@ function AnalyticsContent() {
       (budgetState.data ?? []).filter(
         (budget) =>
           budget.archivedAt === undefined &&
+          budget.includeInAnalytics !== false &&
           typeof budget.name === 'string' &&
           typeof budget.amountMinor === 'bigint' &&
           typeof budget.currency === 'string' &&
@@ -294,6 +296,7 @@ function AnalyticsContent() {
       ...(accountState.data ?? [])
         .filter(
           (account) =>
+            account.includeInAnalytics !== false &&
             account.archivedAt === undefined && (account.currency ?? defaultCurrency) === currency,
         )
         .flatMap((account) => {
@@ -330,6 +333,7 @@ function AnalyticsContent() {
     return rangeState.data.filter((record) => {
       const transaction = ledgerTransaction(record);
       if (!transaction) return false;
+      if (accounts.get(transaction.accountId ?? '')?.includeInAnalytics === false) return false;
       if (typeFilter !== 'all' && transaction.type !== typeFilter) return false;
       if (
         accountFilter !== 'all' &&
@@ -351,7 +355,7 @@ function AnalyticsContent() {
       return transaction ? [transaction] : [];
     });
     const categoriesForAnalytics = analyticsEntities(categoryState.data);
-    const accountsForAnalytics = analyticsEntities(accountState.data);
+    const accountsForAnalytics = analyticsEntities(accountState.data.filter(account => account.includeInAnalytics !== false));
     const current = aggregateAnalytics(
       transactions,
       categoriesForAnalytics,
@@ -561,6 +565,8 @@ function AnalyticsContent() {
           transaction.occurredAt >= budget.endAt
         )
           return sum;
+        if (accounts.get(transaction.accountId ?? '')?.includeInAnalytics === false ||
+          categories.get(transaction.categoryId ?? '')?.includeInBudgets === false) return sum;
         if (budget.categoryId) {
           const transactionCategory = categories.get(transaction.categoryId ?? '');
           const budgetCategory = categories.get(budget.categoryId);
@@ -579,6 +585,10 @@ function AnalyticsContent() {
               : transaction.accountId === budget.accountId;
           if (!matches) return sum;
         }
+        if (Array.isArray(budget.accountIds) && budget.accountIds.length && !budget.accountIds.some(id => {
+          const scopedAccount = typeof id === 'string' ? accounts.get(id) : undefined;
+          return typeof id === 'string' && (scopedAccount ? recordIds(scopedAccount) : [id]).includes(transaction.accountId ?? '');
+        })) return sum;
         return sum + transaction.amountMinor;
       }, 0n);
       return { budget, spentMinor };

@@ -10,7 +10,7 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { parseMinor } from '@/lib/money';
 import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
 
-type Member = { userId: string; name: string };
+type Member = { userId: string; name: string; avatarUrl?: string | null };
 function memberName(record: LocalRecord | undefined, fallback: string): string {
   return String(record?.displayName ?? record?.name ?? record?.username ?? fallback);
 }
@@ -46,7 +46,12 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const currency = typeof group?.currency === 'string' ? group.currency : '';
   const groupIds = new Set(group ? recordIds(group) : []);
   const members: Member[] = [];
-  if (userId) members.push({ userId, name: memberName(profiles?.[0], 'Signed-in member') });
+  if (userId)
+    members.push({
+      userId,
+      name: memberName(profiles?.[0], 'Signed-in member'),
+      avatarUrl: typeof profiles?.[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null,
+    });
   for (const item of memberships ?? []) {
     const memberId = item.userId ?? item.memberId;
     if (
@@ -56,7 +61,11 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
       members.some((member) => member.userId === memberId)
     )
       continue;
-    members.push({ userId: memberId, name: memberName(item, `Member ${memberId.slice(-6)}`) });
+    members.push({
+      userId: memberId,
+      name: memberName(item, `Member ${memberId.slice(-6)}`),
+      avatarUrl: typeof item.avatarUrl === 'string' ? item.avatarUrl : null,
+    });
   }
   const compatibleAccounts = (accounts ?? []).filter(
     (item) =>
@@ -214,6 +223,8 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
         }))}
       selectedGroupId={selectedGroupId}
       groupName={typeof group?.name === 'string' ? group.name : undefined}
+      groupIcon={typeof group?.icon === 'string' ? group.icon : undefined}
+      groupColor={typeof group?.color === 'string' ? group.color : undefined}
       currency={currency}
       accounts={compatibleAccounts.map((item) => ({
         id: recordId(item),

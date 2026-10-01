@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
-import { TransactionFormScreen, type TransactionFormType } from '@finapp/ui/finance';
+import { TransactionFormScreen, transactionViews, type TransactionFormType } from '@finapp/ui/finance';
+import { parseMinor } from '@convex/shared/money';
+import { minorToDecimal } from '@finapp/ui/finance';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
@@ -65,8 +67,7 @@ export default function EditTransactionScreen() {
   useEffect(() => {
     if (!transaction) return;
     setTitle(String(transaction.title ?? ''));
-    const minor = BigInt(transaction.amountMinor ?? 0n);
-    setAmount(`${minor / 100n}.${String(minor % 100n).padStart(2, '0')}`);
+    setAmount(minorToDecimal(BigInt(transaction.amountMinor ?? 0n), transaction.currency ?? 'INR'));
     setMerchant(String(transaction.merchant ?? ''));
     setNote(String(transaction.note ?? ''));
     if (
@@ -101,10 +102,8 @@ export default function EditTransactionScreen() {
         ? 'Shared, split, refund, and adjustment records retain their transaction semantics and cannot be edited here.'
         : 'This transaction is unavailable.'
       : undefined;
-  const amountMinor = /^\d+(?:\.\d{1,2})?$/.test(amount)
-    ? BigInt(amount.split('.')[0] || '0') * 100n +
-      BigInt((amount.split('.')[1] || '').padEnd(2, '0'))
-    : null;
+  let amountMinor: bigint | null = null;
+  try { amountMinor = parseMinor(amount, String(account?.currency ?? transaction?.currency ?? 'INR')); } catch { /* Invalid amounts keep save disabled. */ }
   const validTransfer =
     type !== 'transfer' ||
     Boolean(
@@ -195,6 +194,10 @@ export default function EditTransactionScreen() {
 
   return (
     <TransactionFormScreen
+      status={transaction?.status}
+      referenceId={routeId}
+      similarTransactions={transactionViews((transactionState.data??[]).filter(item => !idsOf(item).includes(String(routeId)) && ((categoryId && item.categoryId === categoryId) || (merchant.trim() && item.merchant === merchant.trim()))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,4),accounts,categories)}
+      onOpenTransaction={value => router.push(`/transaction/${encodeURIComponent(value)}` as never)}
       mode="edit"
       signedIn={Boolean(userId)}
       unavailableMessage={unavailableMessage}

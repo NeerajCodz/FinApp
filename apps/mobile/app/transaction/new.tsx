@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
 import { TransactionFormScreen, type TransactionFormType } from '@finapp/ui/finance';
+import { parseMinor } from '@convex/shared/money';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -98,10 +99,8 @@ export default function NewTransactionScreen() {
   useEffect(() => {
     if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));
   }, [category, categoryId, type]);
-  const amountMinor = /^\d+(?:\.\d{1,2})?$/.test(amount)
-    ? BigInt(amount.split('.')[0] || '0') * 100n +
-      BigInt((amount.split('.')[1] || '').padEnd(2, '0'))
-    : null;
+  let amountMinor: bigint | null = null;
+  try { amountMinor = parseMinor(amount, account?.currency ?? profile?.defaultCurrency ?? 'INR'); } catch { /* Invalid amounts keep save disabled. */ }
   const invalidTransfer =
     type === 'transfer' &&
     (!destination ||

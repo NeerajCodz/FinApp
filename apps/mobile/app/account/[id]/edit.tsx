@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { currencies } from '@convex/shared/validators';
 import { parseMinor } from '@/lib/money';
-import { AccountFormScreen, type AccountFormValue } from '@finapp/ui/finance';
+import { AccountFormScreen, deriveFormActivity, type AccountFormValue } from '@finapp/ui/finance';
 import { Button, Typography } from '@finapp/ui/native';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -19,6 +19,12 @@ type AccountRecord = LocalRecord & {
   icon?: string;
   color?: string;
   isIncludedInTotal?: boolean;
+  notes?: string;
+  provider?: string;
+  accountNumber?: string;
+  openedAt?: number;
+  includeInAnalytics?: boolean;
+  createdAt?: number;
   updatedAt?: number;
   archivedAt?: number;
   cloudId?: string;
@@ -39,6 +45,11 @@ export default function EditAccountScreen() {
   const routeId = Array.isArray(paramId) ? paramId[0] : paramId;
   const { userId } = useLocalSync();
   const { data: accounts, loading, error } = useLocalRecords<AccountRecord>(userId, 'account');
+  const { data: transactions = [] } = useLocalRecords<LocalRecord>(userId, 'transaction');
+  const { data: categories = [] } = useLocalRecords<LocalRecord>(userId, 'category');
+  const { data: profiles = [] } = useLocalRecords<LocalRecord>(userId, 'profile');
+  const profile = profiles.find(record => record.ownerId === undefined || record.ownerId === userId);
+  const [primaryDraft, setPrimaryDraft] = useState<boolean>();
   const account = accounts?.find(
     (item) =>
       item.ownerId === userId && [item.id, item._id, item.cloudId].some((id) => id === routeId),
@@ -65,6 +76,11 @@ export default function EditAccountScreen() {
       icon: account.icon,
       color: account.color,
       isIncludedInTotal: account.isIncludedInTotal !== false,
+      notes: account.notes,
+      provider: account.provider,
+      accountNumber: account.accountNumber,
+      openedAt: account.openedAt,
+      includeInAnalytics: account.includeInAnalytics !== false,
     });
   }, [account?.id, account?._id]);
   async function save() {
@@ -104,6 +120,11 @@ export default function EditAccountScreen() {
           icon: form.icon,
           color: form.color,
           isIncludedInTotal: form.isIncludedInTotal,
+          notes: form.notes?.trim() || undefined,
+          provider: form.provider?.trim() || undefined,
+          accountNumber: form.accountNumber?.trim() || undefined,
+          openedAt: form.openedAt,
+          includeInAnalytics: form.includeInAnalytics !== false,
         },
         {
           accountId,
@@ -115,6 +136,11 @@ export default function EditAccountScreen() {
           icon: form.icon ?? null,
           color: form.color,
           isIncludedInTotal: form.isIncludedInTotal,
+          notes: form.notes?.trim() || null,
+          provider: form.provider?.trim() || null,
+          accountNumber: form.accountNumber?.trim() || null,
+          openedAt: form.openedAt ?? null,
+          includeInAnalytics: form.includeInAnalytics !== false,
         },
         {
           recordId,
@@ -122,6 +148,10 @@ export default function EditAccountScreen() {
           baseUpdatedAt: typeof account.updatedAt === 'number' ? account.updatedAt : undefined,
         },
       );
+      if (profile && primaryDraft !== undefined) {
+        const nextId = primaryDraft ? accountId : null;
+        await commitLocalWrite(userId, 'profile', 'user.defaultAccount', { ...profile, defaultAccountId: nextId ?? undefined }, { accountId: nextId }, { recordId: String(profile.id ?? profile._id), dependencies: nextId && !account._id && !account.cloudId ? [`account:${accountId}`] : [] });
+      }
       router.replace(`/account/${encodeURIComponent(accountId)}` as never);
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Could not update this account.');
@@ -143,6 +173,13 @@ export default function EditAccountScreen() {
     );
   return (
     <AccountFormScreen
+      mode="edit"
+      createdAt={account.createdAt}
+      activity={deriveFormActivity(transactions, categories, accounts ?? [], account, 'accountId', userId)}
+      onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}` as never)}
+      onViewTransactions={() => router.push(`/account/${encodeURIComponent(routeId)}` as never)}
+      isPrimary={primaryDraft ?? Boolean(profile && [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string))}
+      onPrimaryChange={profile ? setPrimaryDraft : undefined}
       title={form.name.trim() || 'Edit account'}
       subtitle="Update your account details and settings."
       value={form}

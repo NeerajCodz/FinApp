@@ -3,6 +3,7 @@ import { useMutation, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
+import { formatMinor } from '@convex/shared/money';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -16,6 +17,7 @@ import {
 } from '@finapp/ui/finance';
 import { recordId, recordIds } from '@/lib/ledger';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
 
 export default function GroupHomeScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -23,10 +25,12 @@ export default function GroupHomeScreen() {
   const { group, members, ledger, error, loading, retry, userId } = useGroupLedger(id);
   const { isConnected } = useLocalSync();
   const localSettlements = useLocalRecords(userId, 'settlement');
+  const categories = useLocalRecords(userId, 'category');
+  const accounts = useLocalRecords(userId, 'account');
   const groupMembers =
     members?.filter(
       (record) =>
-        typeof record.groupId === 'string' && recordIds(group ?? {}).includes(record.groupId),
+        record.deletedAt === undefined && typeof record.groupId === 'string' && recordIds(group ?? {}).includes(record.groupId),
     ) ?? [];
   const recent = [...(ledger?.expenses ?? [])]
     .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt))
@@ -53,6 +57,16 @@ export default function GroupHomeScreen() {
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
   const [chatError, setChatError] = React.useState('');
+  const expenseMetadata = (expense: LocalRecord) => {
+    const category = categories.data?.find((record) => typeof expense.categoryId === 'string' && recordIds(record).includes(expense.categoryId));
+    const account = accounts.data?.find((record) => typeof expense.accountId === 'string' && recordIds(record).includes(expense.accountId));
+    return {
+      category: typeof category?.name === 'string' ? category.name : undefined,
+      account: typeof account?.name === 'string' ? account.name : undefined,
+      icon: typeof category?.icon === 'string' ? category.icon : undefined,
+      color: typeof category?.color === 'string' ? category.color : undefined,
+    };
+  };
 
   async function submitChatMessage() {
     if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
@@ -173,6 +187,7 @@ export default function GroupHomeScreen() {
         date,
         accessibleLabel: `${ownMessage ? 'You' : message.senderName}, ${date}`,
         sender: message.senderName,
+        senderAvatarUrl: message.senderAvatarUrl,
         ownMessage,
         text: message.kind === 'text' ? message.text : undefined,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
@@ -188,6 +203,8 @@ export default function GroupHomeScreen() {
         title: String(expense.title ?? 'Group expense'),
         amountMinor: expense.amountMinor as bigint,
         currency: String(group?.currency ?? ledger?.currency ?? ''),
+        ...expenseMetadata(expense),
+        onPress: () => router.push({ pathname: '/transaction/[id]', params: { id: recordId(expense) } }),
       };
     }
     const settlement = item.settlement;
@@ -203,18 +220,28 @@ export default function GroupHomeScreen() {
       currency: String(group?.currency ?? ledger?.currency ?? ''),
     };
   });
-  const detailMembers: GroupDetailMember[] = groupMembers.map((member) => ({
-    id: recordId(member),
-    name: String(member.displayName ?? member.name ?? member.username ?? 'Member'),
-    username: typeof member.username === 'string' ? member.username : undefined,
-    avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : null,
-  }));
+  const detailMembers: GroupDetailMember[] = remoteGroup?.members
+    ? remoteGroup.members.map((member) => ({
+        id: member.id,
+        name: member.id === userId ? 'You' : member.displayName,
+        username: member.username,
+        avatarUrl: member.avatarUrl,
+        role: member.role,
+      }))
+    : groupMembers.map((member) => ({
+        id: String(member.userId ?? member.memberId ?? recordId(member)),
+        name: member.userId === userId ? 'You' : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
+        username: typeof member.username === 'string' ? member.username : undefined,
+        avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : null,
+        role: typeof member.role === 'string' ? member.role : undefined,
+      }));
   const detailActivities: GroupDetailActivity[] = recent.map((expense) => ({
     id: recordId(expense),
     title: String(expense.title ?? 'Group expense'),
     amountMinor: expense.amountMinor as bigint,
     currency: String(group?.currency ?? ledger?.currency ?? ''),
     date: formatTransactionDate(Number(expense.occurredAt ?? 0), Boolean(expense.hasTime)),
+    ...expenseMetadata(expense),
   }));
   const detailSettlements: GroupDetailSettlement[] = recentSettlements.map((settlement) => ({
     id: recordId(settlement),
@@ -226,6 +253,8 @@ export default function GroupHomeScreen() {
         ? formatTransactionDate(settlement.occurredAt, true)
         : undefined,
   }));
+  const ledgerComplete = Boolean(ledger) && !loading && !error;
+  const currency = ledger?.currency ?? '';
   return (
     <GroupDetailScreen
       group={
@@ -254,15 +283,32 @@ export default function GroupHomeScreen() {
       balanceCurrency={ledger?.currency ?? ''}
       balanceMeaning={balance > 0n ? 'Owed to you' : balance < 0n ? 'You owe' : 'You are settled'}
       balanceError={error?.message}
-      canSettle={Boolean(ledger) && balance !== 0n}
+      canSettle={ledgerComplete && balance !== 0n}
+      totalSpend={ledgerComplete && ledger ? formatMinor(ledger.expenses.reduce((sum, expense) => sum + (expense.amountMinor as bigint), 0n), currency) : undefined}
+      owed={ledgerComplete ? formatMinor(balance > 0n ? balance : 0n, currency) : undefined}
+      owing={ledgerComplete ? formatMinor(balance < 0n ? -balance : 0n, currency) : undefined}
+      memberBalances={ledgerComplete && ledger ? Object.entries(ledger.balances).map(([memberId, amount]) => ({
+        id: memberId,
+        name: detailMembers.find((member) => member.id === memberId)?.name ?? settlementMemberName(memberId),
+        amount: formatMinor(amount < 0n ? -amount : amount, currency),
+        meaning: amount > 0n ? 'Owed by group' : amount < 0n ? 'Owes group' : 'Settled',
+      })) : undefined}
       members={detailMembers}
       activities={detailActivities}
       settlements={detailSettlements}
       settlementsLoading={localSettlements.loading}
       settlementsError={localSettlements.error?.message}
       chat={{
+        embedded: true,
+        group: group ? {
+          name: String(group.name ?? 'Group'),
+          currency: String(group.currency ?? ledger?.currency ?? ''),
+          icon: remoteGroup?.icon ?? (typeof group.icon === 'string' ? group.icon : undefined),
+          color: remoteGroup?.color ?? (typeof group.color === 'string' ? group.color : undefined),
+        } : undefined,
+        members: detailMembers.map((member) => ({ ...member, avatarUrl: member.avatarUrl ?? undefined })),
         items: groupChatItems,
-        loading: chatMessages === undefined,
+        loading: canUseGroupChat && chatMessages === undefined,
         canSend: canUseGroupChat,
         connected: isConnected,
         draft: chatDraft,

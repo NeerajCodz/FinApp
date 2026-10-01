@@ -2,10 +2,12 @@ import React, { useMemo } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   TransactionDetailScreen,
+  transactionViews,
   formatTransactionDate,
   type SemanticType,
   type TransactionType,
 } from '@finapp/ui/finance';
+import { minorToDecimal } from '@finapp/ui/finance';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import type { LocalRecord } from '@/local/repository';
@@ -62,7 +64,7 @@ export default function TransactionDetailRoute() {
       pathname: '/transaction/new',
       params: {
         type: transaction.type,
-        amount: `${amount / 100n}.${String(amount % 100n).padStart(2, '0')}`,
+        amount: minorToDecimal(amount, transaction.currency),
         accountId: transaction.accountId ?? '',
         categoryId: transaction.categoryId ?? '',
         destinationId: typeof record.transferAccountId === 'string' ? record.transferAccountId : '',
@@ -76,6 +78,9 @@ export default function TransactionDetailRoute() {
   }
   return (
     <TransactionDetailScreen
+      referenceId={id}
+      relatedTransactions={transactionViews((transactionState.data??[]).filter(item => !recordIds(item).includes(String(id)) && ((record?.categoryId && item.categoryId === record.categoryId) || (record?.merchant && item.merchant === record.merchant))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,5),accountState.data??[],categoryState.data??[],timeZone)}
+      onOpenTransaction={value => router.push(`/transaction/${encodeURIComponent(value)}` as never)}
       title={transaction?.title || transaction?.merchant || 'Transaction'}
       amountMinor={transaction?.amountMinor ?? 0n}
       currency={transaction?.currency ?? String(account?.currency ?? 'INR')}

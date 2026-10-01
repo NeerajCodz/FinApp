@@ -24,6 +24,7 @@ type Group = LocalRecord & {
   icon?: string;
   color?: string;
   archivedAt?: number;
+  description?: string;
 };
 type Member = LocalRecord & {
   groupId?: string;
@@ -31,6 +32,10 @@ type Member = LocalRecord & {
   deletedAt?: number;
   displayName?: string;
   username?: string;
+  name?: string;
+  memberId?: string;
+  avatarUrl?: string | null;
+  role?: string;
 };
 type LedgerRecord = LocalRecord & {
   groupId?: string;
@@ -119,12 +124,13 @@ export default function GroupsScreen() {
       activeGroups.map((group) => {
         const groupIds = recordIds(group);
         const id = recordId(group);
-        const memberCount = (memberState.data ?? []).filter(
+        const groupMembers = (memberState.data ?? []).filter(
           (member) =>
             member.deletedAt === undefined &&
             typeof member.groupId === 'string' &&
             groupIds.includes(member.groupId),
-        ).length;
+        );
+        const currentMember = groupMembers.find((member) => (member.userId ?? member.memberId) === userId);
         const ledger = ledgerByGroup[id];
         const currency =
           ledger?.currency ?? (typeof group.currency === 'string' ? group.currency : '');
@@ -135,7 +141,13 @@ export default function GroupsScreen() {
           currency,
           icon: typeof group.icon === 'string' ? group.icon : undefined,
           color: typeof group.color === 'string' ? group.color : undefined,
-          memberCount,
+          description: group.description,
+          members: groupMembers.map((member) => ({
+            name: member.displayName ?? member.name ?? (member.username ? `@${member.username}` : 'Group member'),
+            avatarUrl: member.avatarUrl ?? undefined,
+          })),
+          role: currentMember?.role,
+          memberCount: groupMembers.length,
           balance:
             ledger?.status === 'ready' && balance !== undefined && currency
               ? formatMinor(balance < 0n ? -balance : balance, currency)
@@ -154,7 +166,7 @@ export default function GroupsScreen() {
                   : 'Settled up',
         };
       }),
-    [activeGroups, ledgerByGroup, memberState.data],
+    [activeGroups, ledgerByGroup, memberState.data, userId],
   );
   const allLedgersReady =
     activeGroups.length > 0 &&

@@ -38,6 +38,7 @@ export default function GroupSettingsScreen() {
         role: member.role,
         username: member.username,
         displayName: member.displayName,
+        avatarUrl: member.avatarUrl,
       }))
     : localMembers;
   const [nameDraft, setNameDraft] = useState('');

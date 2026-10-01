@@ -1,31 +1,33 @@
 import React, { useState } from 'react';
-import { ScrollView } from 'react-native';
 import { useMutation, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@finapp/ui/native';
-import { GroupChatScreen, type GroupChatItem } from '@finapp/ui/finance';
+import { formatTransactionDate, GroupChatScreen, type GroupChatItem } from '@finapp/ui/finance';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
-import { recordIds } from '@/lib/ledger';
+import { recordId, recordIds } from '@/lib/ledger';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
-type Group = LocalRecord & { icon?: string; color?: string };
+type Group = LocalRecord & { name?: string; currency?: string; icon?: string; color?: string };
 
 export default function GroupChatRoute() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { userId, isConnected } = useLocalSync();
-  const insets = useSafeAreaInsets();
-  const { tokens } = useTheme();
   const groups = useLocalRecords<Group>(userId, 'group');
+  const memberships = useLocalRecords(userId, 'groupMember');
+  const transactions = useLocalRecords(userId, 'transaction');
+  const categories = useLocalRecords(userId, 'category');
   const group = groups.data?.find((record) => id && recordIds(record).includes(id));
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
   const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
   const canUseChat = Boolean(userId && isConnected && cloudGroupId);
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    canUseChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
   const chatMessages = useQuery(
     api.groups.queries.chatMessages,
     canUseChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
@@ -36,16 +38,65 @@ export default function GroupChatRoute() {
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const items: GroupChatItem[] = (chatMessages ?? []).map((message) => ({
-    id: `message:${message.id}`,
-    kind: 'message',
-    date: new Date(message.createdAt).toLocaleString(),
-    accessibleLabel: `${message.senderId === userId ? 'You' : message.senderName}, ${new Date(message.createdAt).toLocaleString()}`,
-    sender: message.senderName,
-    ownMessage: message.senderId === userId,
-    text: message.kind === 'text' ? message.text : undefined,
-    attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
-  }));
+  const members = remoteGroup?.members
+    ? remoteGroup.members.map((member) => ({
+        id: member.id,
+        name: member.id === userId ? 'You' : member.displayName,
+        username: member.username,
+        avatarUrl: member.avatarUrl ?? undefined,
+      }))
+    : (memberships.data ?? [])
+        .filter((member) => member.deletedAt === undefined && typeof member.groupId === 'string' && recordIds(group ?? {}).includes(member.groupId))
+        .map((member) => ({
+          id: String(member.userId ?? member.memberId ?? recordId(member)),
+          name: member.userId === userId ? 'You' : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
+          username: typeof member.username === 'string' ? member.username : undefined,
+          avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
+        }));
+  const expenseEvents = (transactions.data ?? [])
+    .filter((expense) =>
+      typeof expense.groupId === 'string' &&
+      recordIds(group ?? {}).includes(expense.groupId) &&
+      expense.type === 'expense' &&
+      expense.status === 'posted' &&
+      expense.deletedAt === undefined &&
+      expense.currency === group?.currency &&
+      typeof expense.amountMinor === 'bigint',
+    )
+    .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
+    .slice(0, 20)
+    .map((expense) => {
+      const category = categories.data?.find((record) => typeof expense.categoryId === 'string' && recordIds(record).includes(expense.categoryId));
+      return {
+        id: `expense:${recordId(expense)}`,
+        kind: 'expense' as const,
+        timestamp: Number(expense.occurredAt ?? 0),
+        date: formatTransactionDate(Number(expense.occurredAt ?? 0), Boolean(expense.hasTime)),
+        accessibleLabel: `Shared expense: ${String(expense.title ?? 'Group expense')}`,
+        title: String(expense.title ?? 'Group expense'),
+        amountMinor: expense.amountMinor as bigint,
+        currency: group?.currency ?? '',
+        icon: typeof category?.icon === 'string' ? category.icon : undefined,
+        color: typeof category?.color === 'string' ? category.color : undefined,
+        onPress: () => router.push({ pathname: '/transaction/[id]', params: { id: recordId(expense) } }),
+      };
+    });
+  const items: GroupChatItem[] = [
+    ...expenseEvents,
+    ...(chatMessages ?? []).map((message) => ({
+      id: `message:${message.id}`,
+      kind: 'message' as const,
+      timestamp: message.createdAt,
+      date: new Date(message.createdAt).toLocaleString(),
+      accessibleLabel: `${message.senderId === userId ? 'You' : message.senderName}, ${new Date(message.createdAt).toLocaleString()}`,
+      sender: message.senderName,
+      senderAvatarUrl: message.senderAvatarUrl,
+      ownMessage: message.senderId === userId,
+      text: message.kind === 'text' ? message.text : undefined,
+      attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+    })),
+  ].sort((left, right) => left.timestamp - right.timestamp)
+    .map(({ timestamp: _timestamp, ...item }) => item);
 
   async function sendMessage() {
     if (!canUseChat || !draft.trim() || pending) return;
@@ -111,27 +162,28 @@ export default function GroupChatRoute() {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-      }}
-    >
       <GroupChatScreen
+        group={group ? {
+          name: group.name ?? 'Group',
+          currency: group.currency ?? '',
+          icon: remoteGroup?.icon ?? group.icon,
+          color: remoteGroup?.color ?? group.color,
+        } : undefined}
+        members={members}
+        onOpenGroup={() => router.push({ pathname: '/group/[id]', params: { id: id ?? '' } })}
+        onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
+        onOpenSettings={() => router.push({ pathname: '/group/[id]/edit', params: { id: id ?? '' } })}
         items={items}
-        loading={chatMessages === undefined}
+        loading={groups.loading || transactions.loading || (canUseChat && chatMessages === undefined)}
         canSend={canUseChat}
         connected={isConnected}
         draft={draft}
         pending={pending}
-        error={error || undefined}
+        error={error || groups.error?.message || memberships.error?.message || transactions.error?.message}
         onDraftChange={setDraft}
         onSend={() => void sendMessage()}
         onChooseBillImage={() => void chooseBillImage()}
         onBack={() => router.back()}
       />
-    </ScrollView>
   );
 }

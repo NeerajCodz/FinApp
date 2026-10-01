@@ -1,181 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CategoryFormScreen } from '@finapp/ui/finance';
+import { CategoryFormScreen, deriveFormActivity } from '@finapp/ui/finance';
 import { Button, Typography, useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
+import { parseMinor } from '@/lib/money';
 import type { LocalRecord } from '@/local/repository';
-
-type Category = LocalRecord & {
-  name?: string;
-  icon?: string;
-  kind?: 'expense' | 'income';
-  color?: string;
-  isSystem?: boolean;
-  archivedAt?: number;
-  updatedAt?: number;
-};
-
+type Category = LocalRecord & { name?: string; icon?: string; kind?: 'expense' | 'income'; color?: string; notes?: string; includeInBudgets?: boolean; monthlyLimitMinor?: bigint; limitCurrency?: string; isSystem?: boolean; archivedAt?: number; updatedAt?: number };
 export default function EditCategoryScreen() {
-  const { id: routeId } = useLocalSearchParams<{ id: string }>();
-  const { userId } = useLocalSync();
-  const state = useLocalRecords<Category>(userId, 'category');
-  const { tokens } = useTheme();
-  const category = (state.data ?? []).find(
-    (record) =>
-      (typeof record.ownerId !== 'string' || record.ownerId === userId) &&
-      [record.id, record._id, record.cloudId].includes(routeId ?? ''),
-  );
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState<string>();
-  const [kind, setKind] = useState<'expense' | 'income'>('expense');
-  const [color, setColor] = useState<string>();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string>();
-  useEffect(() => {
-    setName(category?.name ?? '');
-    setIcon(category?.icon);
-    setKind(category?.kind === 'income' ? 'income' : 'expense');
-    setColor(category?.color);
-  }, [
-    category?.id,
-    category?._id,
-    category?.name,
-    category?.icon,
-    category?.kind,
-    category?.color,
-  ]);
-
+  const { id: routeId } = useLocalSearchParams<{ id: string }>(); const { userId } = useLocalSync(); const { tokens } = useTheme();
+  const { data: records = [], loading, error } = useLocalRecords<Category>(userId, 'category'); const { data: profiles = [] } = useLocalRecords<LocalRecord>(userId, 'profile'); const { data: transactions = [] } = useLocalRecords<LocalRecord>(userId, 'transaction'); const { data: accounts = [] } = useLocalRecords<LocalRecord>(userId, 'account');
+  const category = records.find(record => (record.ownerId === undefined || record.ownerId === userId) && [record.id, record._id, record.cloudId].includes(routeId)); const profile = profiles.find(record => record.ownerId === undefined || record.ownerId === userId);
+  const currency = category?.limitCurrency ?? String(profile?.defaultCurrency ?? 'INR');
+  const [name, setName] = React.useState(''); const [icon, setIcon] = React.useState<string>(); const [kind, setKind] = React.useState<'expense' | 'income'>('expense'); const [color, setColor] = React.useState<string>(); const [notes, setNotes] = React.useState(''); const [includeInBudgets, setIncludeInBudgets] = React.useState(true); const [limitValue, setLimitValue] = React.useState(''); const [defaultDraft, setDefaultDraft] = React.useState<boolean>(); const [pending, setPending] = React.useState(false); const [formError, setFormError] = React.useState<string>();
+  React.useEffect(() => { setName(category?.name ?? ''); setIcon(category?.icon); setKind(category?.kind === 'income' ? 'income' : 'expense'); setColor(category?.color); setNotes(category?.notes ?? ''); setIncludeInBudgets(category?.includeInBudgets !== false); const digits = new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2; const scale = 10n ** BigInt(digits); const minor = category?.monthlyLimitMinor === undefined ? undefined : BigInt(category.monthlyLimitMinor); setLimitValue(minor === undefined ? '' : `${minor / scale}${digits ? '.' + (minor % scale).toString().padStart(digits, '0') : ''}`); }, [category?.id, category?._id]);
+  const activity = deriveFormActivity(transactions, records, accounts, category, 'categoryId', userId); const now = new Date(); const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1); const monthEnd = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1); const aliases = [category?.id, category?._id, category?.cloudId];
+  const spentMinor = transactions.filter(row => (row.ownerId === undefined || row.ownerId === userId) && aliases.includes(row.categoryId as string) && row.status === 'posted' && row.deletedAt === undefined && row.type === 'expense' && row.currency === currency && Number(row.occurredAt) >= monthStart && Number(row.occurredAt) < monthEnd).reduce((sum, row) => sum + BigInt(String(row.amountMinor ?? 0)), 0n); const defaultField = kind === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId';
   async function save() {
-    const trimmed = name.trim();
-    if (!userId || !category || pending || !trimmed) return;
-    const categoryId = String(category._id ?? category.cloudId ?? category.id ?? '');
-    if (!categoryId) {
-      setError('This category cannot be updated yet.');
-      return;
-    }
-    setPending(true);
-    setError(undefined);
+    if (!userId || !category || pending || !name.trim()) return;
+    setPending(true); setFormError(undefined);
     try {
-      const recordId = String(category.id ?? category._id ?? categoryId);
-      const dependencies = categoryId.startsWith('local-') ? [`category:${categoryId}`] : [];
-      const options = { recordId, dependencies, baseUpdatedAt: category.updatedAt };
-      if (trimmed !== (category.name ?? '')) {
-        await commitLocalWrite(
-          userId,
-          'category',
-          'category.rename',
-          { ...category, name: trimmed },
-          { categoryId, name: trimmed },
-          options,
-        );
-      }
-      if ((icon ?? '') !== (category.icon ?? '')) {
-        await commitLocalWrite(
-          userId,
-          'category',
-          'category.setIcon',
-          { ...category, icon },
-          { categoryId, icon: icon ?? null },
-          options,
-        );
-      }
-      if (kind !== (category.kind ?? 'expense') || (color ?? '') !== (category.color ?? '')) {
-        await commitLocalWrite(
-          userId,
-          'category',
-          'category.setPreferences',
-          { ...category, kind, color },
-          { categoryId, kind, color: color ?? null },
-          options,
-        );
-      }
-      router.replace(`/category/${encodeURIComponent(routeId ?? categoryId)}` as never);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update this category.');
-    } finally {
-      setPending(false);
-    }
+      const amountMinor = limitValue.trim() ? parseMinor(limitValue, currency) : null; if (amountMinor !== null && amountMinor <= 0n) throw new Error('Enter a positive monthly limit.');
+      const categoryId = String(category._id ?? category.cloudId ?? category.id ?? ''); const recordId = String(category.id ?? category._id ?? categoryId); const dependencies = categoryId.startsWith('local-') ? [`category:${categoryId}`] : []; const options = { recordId, dependencies, baseUpdatedAt: category.updatedAt }; let updated: LocalRecord = { ...category };
+      if (name.trim() !== category.name) { updated = { ...updated, name: name.trim() }; await commitLocalWrite(userId, 'category', 'category.rename', updated, { categoryId, name: name.trim() }, options); }
+      if ((icon ?? '') !== (category.icon ?? '')) { updated = { ...updated, icon }; await commitLocalWrite(userId, 'category', 'category.setIcon', updated, { categoryId, icon: icon ?? null }, options); }
+      updated = { ...updated, kind, color, notes: notes.trim() || undefined, includeInBudgets }; await commitLocalWrite(userId, 'category', 'category.setPreferences', updated, { categoryId, kind, color: color ?? null, notes: notes.trim() || null, includeInBudgets }, options);
+      if (amountMinor !== (category.monthlyLimitMinor === undefined ? null : BigInt(category.monthlyLimitMinor))) { updated = { ...updated, monthlyLimitMinor: amountMinor ?? undefined, limitCurrency: amountMinor === null ? undefined : currency }; await commitLocalWrite(userId, 'category', 'category.setLimit', updated, { categoryId, amountMinor, ...(amountMinor === null ? {} : { currency }) }, options); }
+      if (profile && defaultDraft !== undefined) { const nextId = defaultDraft ? categoryId : null; await commitLocalWrite(userId, 'profile', 'user.defaultCategory', { ...profile, [defaultField]: nextId ?? undefined }, { transactionType: kind, categoryId: nextId }, { recordId: String(profile.id ?? profile._id), dependencies: nextId ? dependencies : [] }); }
+      router.replace(`/category/${encodeURIComponent(routeId)}` as never);
+    } catch (cause) { setFormError(cause instanceof Error ? cause.message : 'Could not update this category.'); } finally { setPending(false); }
   }
-
-  if (!userId)
-    return (
-      <View
-        style={{
-          flex: 1,
-          padding: 24,
-          justifyContent: 'center',
-          backgroundColor: tokens.background,
-        }}
-      >
-        <Typography>Sign in to edit a private category.</Typography>
-      </View>
-    );
-  if (state.loading)
-    return (
-      <View
-        style={{
-          flex: 1,
-          padding: 24,
-          justifyContent: 'center',
-          backgroundColor: tokens.background,
-        }}
-      >
-        <Typography>Loading category…</Typography>
-      </View>
-    );
-  if (state.error)
-    return (
-      <View
-        style={{
-          flex: 1,
-          padding: 24,
-          justifyContent: 'center',
-          gap: 16,
-          backgroundColor: tokens.background,
-        }}
-      >
-        <Typography style={{ color: tokens.destructive }}>
-          Category could not be opened: {String(state.error)}
-        </Typography>
-        <Button onPress={() => router.back()}>Go back</Button>
-      </View>
-    );
-  if (!category || category.archivedAt !== undefined || category.isSystem)
-    return (
-      <View
-        style={{
-          flex: 1,
-          padding: 24,
-          justifyContent: 'center',
-          gap: 16,
-          backgroundColor: tokens.background,
-        }}
-      >
-        <Typography variant="title">Category unavailable</Typography>
-        <Typography>This category could not be found or cannot be edited.</Typography>
-        <Button onPress={() => router.replace('/categories' as never)}>Back to categories</Button>
-      </View>
-    );
-  return (
-    <View style={{ flex: 1, backgroundColor: tokens.background }}>
-      <CategoryFormScreen
-        mode="edit"
-        name={name}
-        icon={icon}
-        kind={kind}
-        color={color}
-        pending={pending}
-        error={error}
-        onNameChange={setName}
-        onIconChange={setIcon}
-        onKindChange={setKind}
-        onColorChange={setColor}
-        onSubmit={() => void save()}
-        onBack={() => router.back()}
-      />
-    </View>
-  );
+  if (!userId || loading || error || !category || category.archivedAt !== undefined || category.isSystem) return <View style={{ flex: 1, padding: 24, gap: 16, justifyContent: 'center', backgroundColor: tokens.background }}><Typography>{!userId ? 'Sign in to edit a private category.' : loading ? 'Loading category…' : error ? `Category could not be opened: ${String(error)}` : 'This category could not be found or cannot be edited.'}</Typography><Button onPress={() => router.replace('/categories' as never)}>Back to categories</Button></View>;
+  return <CategoryFormScreen mode="edit" name={name} icon={icon} kind={kind} color={color} currency={currency} notes={notes} onNotesChange={setNotes} limitValue={limitValue} onLimitChange={setLimitValue} includeInBudgets={includeInBudgets} onIncludeInBudgetsChange={setIncludeInBudgets} isDefault={defaultDraft ?? aliases.includes(profile?.[defaultField] as string)} onDefaultChange={profile ? setDefaultDraft : undefined} spentMinor={spentMinor} monthlyLimitMinor={category.monthlyLimitMinor === undefined ? undefined : BigInt(category.monthlyLimitMinor)} activity={activity} onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}` as never)} onViewTransactions={() => router.push(`/category/${encodeURIComponent(routeId)}` as never)} onOpenAnalytics={() => router.push('/categories/analytics' as never)} pending={pending} error={formError} onNameChange={setName} onIconChange={setIcon} onKindChange={setKind} onColorChange={setColor} onSubmit={() => void save()} onBack={() => router.replace('/categories' as never)} />;
 }

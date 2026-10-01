@@ -9,6 +9,7 @@ import { commitLocalWrite } from '@/local/commands';
 import { pickDeviceContact, type DeviceContact } from '@/lib/contacts';
 import type { LocalRecord } from '@/local/repository';
 import { GroupCreateScreen } from '@finapp/ui/finance';
+import { groupMetadataDraft, groupMetadataPayload } from '@/components/finance/groupFormData';
 function normalizeHandle(value: string) {
   return value.replace(/^@+/, '').trim().toLowerCase();
 }
@@ -18,6 +19,7 @@ export default function NewGroupScreen() {
   const [color, setColor] = useState<string | undefined>('#78e6a0');
   const [currency, setCurrency] = useState('');
   const [name, setName] = useState('');
+  const [details, setDetails] = useState(() => groupMetadataDraft());
   const [memberInput, setMemberInput] = useState('');
   const [members, setMembers] = useState<string[]>([]);
   const [contactPhones, setContactPhones] = useState<string[]>([]);
@@ -90,6 +92,7 @@ export default function NewGroupScreen() {
     setSaving(true);
     setError('');
     try {
+      const metadata = groupMetadataPayload(details);
       const groupId = await commitLocalWrite(
         userId,
         'group',
@@ -98,6 +101,7 @@ export default function NewGroupScreen() {
           icon,
           color,
           name: cleanName,
+          ...metadata,
           currency,
           participantUsernames: members,
           contactPhones,
@@ -105,6 +109,7 @@ export default function NewGroupScreen() {
         },
         {
           name: cleanName,
+          ...metadata,
           currency,
           memberUsernames: members,
           icon,
@@ -125,6 +130,13 @@ export default function NewGroupScreen() {
       onBack={() => router.back()}
       name={name}
       onNameChange={setName}
+      {...details}
+      onDescriptionChange={(description) => setDetails((current) => ({ ...current, description }))}
+      onGroupTypeChange={(groupType) => setDetails((current) => ({ ...current, groupType }))}
+      onPurposeChange={(purpose) => setDetails((current) => ({ ...current, purpose }))}
+      onLocationChange={(location) => setDetails((current) => ({ ...current, location }))}
+      onStartDateChange={(startDate) => setDetails((current) => ({ ...current, startDate }))}
+      onEndDateChange={(endDate) => setDetails((current) => ({ ...current, endDate }))}
       currency={currency}
       currencies={currencies}
       onCurrencyChange={setCurrency}
