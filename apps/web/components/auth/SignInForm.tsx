@@ -8,6 +8,7 @@ import { useAuthActions } from '@convex-dev/auth/react';
 import { api } from '@convex/_generated/api';
 import { formatAuthError } from '@convex/shared/authErrors';
 import { Button, Input, Label, PasswordField } from '@finapp/ui/web';
+import { pendingGroupInvitationPath, unverifiedSignInVerificationUrl } from '@/lib/authRoutes';
 import { AuthFrame } from './AuthFrame';
 
 export function SignInForm() {
@@ -49,7 +50,7 @@ export function SignInForm() {
         form.set('password', password);
         form.set('flow', 'verification-required');
         await signIn('password', form);
-        router.replace(`/verify?email=${encodeURIComponent(result.email)}&next=dashboard`);
+        router.replace(unverifiedSignInVerificationUrl(result.email));
       } else if (result.status === 'two-factor-disabled') {
         const form = new FormData();
         form.set('email', identifier.trim());
@@ -57,7 +58,7 @@ export function SignInForm() {
         form.set('flow', 'signIn');
         const signInResult = await signIn('password', form);
         if (!signInResult.signingIn) throw new Error('Unable to sign in. Try again.');
-        router.replace('/dashboard');
+        router.replace(pendingGroupInvitationPath() ?? '/dashboard');
       } else {
         router.replace(`/two-factor?challengeId=${encodeURIComponent(result.challengeId)}`);
       }

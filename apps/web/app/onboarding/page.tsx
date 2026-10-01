@@ -19,6 +19,7 @@ import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { pendingGroupInvitationPath } from '@/lib/authRoutes';
 
 type Profile = LocalRecord & {
   displayName?: string;
@@ -198,7 +199,9 @@ export default function OnboardingPage() {
           },
         );
       }
-      router.replace(mode === 'shared' ? '/groups' : '/dashboard');
+      router.replace(
+        pendingGroupInvitationPath() ?? (mode === 'shared' ? '/groups' : '/dashboard'),
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile.');
     } finally {

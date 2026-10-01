@@ -9,9 +9,14 @@ import { toast } from '@/lib/toast';
 import { Button, Input, Label, PasswordField, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit, isIdentifier } from '@/components/auth/AuthFields';
+import { isGroupInvitationToken } from '@/lib/authRoutes';
 
 export default function SignInScreen() {
-  const { email: initialIdentifier } = useLocalSearchParams<{ email?: string }>();
+  const { email: initialIdentifier, nextGroupInviteToken: rawInviteToken } = useLocalSearchParams<{
+    email?: string;
+    nextGroupInviteToken?: string;
+  }>();
+  const inviteToken = isGroupInvitationToken(rawInviteToken) ? rawInviteToken : undefined;
   const [identifier, setIdentifier] = useState(() =>
     typeof initialIdentifier === 'string' ? initialIdentifier : '',
   );
@@ -44,7 +49,11 @@ export default function SignInScreen() {
         await signIn('password', form);
         router.replace({
           pathname: '/(auth)/verify',
-          params: { email: result.email, next: 'tabs' },
+          params: {
+            email: result.email,
+            next: 'onboarding',
+            ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}),
+          },
         });
       } else if (result.status === 'two-factor-disabled') {
         const form = new FormData();
@@ -53,11 +62,16 @@ export default function SignInScreen() {
         form.append('flow', 'signIn');
         const signInResult = await signIn('password', form);
         if (!signInResult.signingIn) throw new Error('Unable to sign in');
-        router.replace('/(tabs)');
+        router.replace(
+          inviteToken ? { pathname: '/group-invite', params: { token: inviteToken } } : '/(tabs)',
+        );
       } else {
         router.replace({
           pathname: '/(auth)/two-factor',
-          params: { challengeId: result.challengeId },
+          params: {
+            challengeId: result.challengeId,
+            ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}),
+          },
         });
       }
     } catch (cause) {
@@ -75,7 +89,19 @@ export default function SignInScreen() {
       title={<>Back in{`\n`}your corner.</>}
       description="Your spending, your plans, your people. Pick up right where you left off."
       footer={
-        <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-up')}>
+        <Button
+          variant="ghost"
+          onPress={() =>
+            router.replace(
+              inviteToken
+                ? {
+                    pathname: '/(auth)/sign-up',
+                    params: { nextGroupInviteToken: inviteToken },
+                  }
+                : '/(auth)/sign-up',
+            )
+          }
+        >
           New here? Create an account
         </Button>
       }

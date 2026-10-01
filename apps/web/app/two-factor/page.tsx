@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { ArrowLeft } from 'lucide-react';
 import { Button, InputOTP } from '@finapp/ui/web';
+import { pendingGroupInvitationPath } from '@/lib/authRoutes';
 
 export default function TwoFactorPage() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function TwoFactorPage() {
     try {
       const result = await signIn('password', form);
       if (!result.signingIn) throw new Error('That code could not be verified.');
-      router.replace('/dashboard');
+      router.replace(pendingGroupInvitationPath() ?? '/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not verify this code.');
     } finally {

@@ -6,9 +6,12 @@ import { toast } from '@/lib/toast';
 import { Button, InputOTP, Label, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit } from '@/components/auth/AuthFields';
+import { isGroupInvitationToken } from '@/lib/authRoutes';
 
 export default function TwoFactorScreen() {
-  const { challengeId: rawChallengeId } = useLocalSearchParams<{ challengeId?: string }>();
+  const { challengeId: rawChallengeId, nextGroupInviteToken: rawInviteToken } =
+    useLocalSearchParams<{ challengeId?: string; nextGroupInviteToken?: string }>();
+  const inviteToken = isGroupInvitationToken(rawInviteToken) ? rawInviteToken : undefined;
   const challengeId = typeof rawChallengeId === 'string' ? rawChallengeId : '';
   const [code, setCode] = useState('');
   const [pending, setPending] = useState(false);
@@ -26,7 +29,9 @@ export default function TwoFactorScreen() {
     try {
       const result = await signIn('password', form);
       if (!result.signingIn) throw new Error('That code could not be verified.');
-      router.replace('/(tabs)');
+      router.replace(
+        inviteToken ? { pathname: '/group-invite', params: { token: inviteToken } } : '/(tabs)',
+      );
     } catch (cause) {
       const message = formatAuthError(cause, 'verification');
       setError(message);
@@ -41,9 +46,24 @@ export default function TwoFactorScreen() {
       eyebrow="One last step"
       title={<>Keep it{`\n`}in your hands.</>}
       description="Enter the six-digit sign-in code sent to the email on your account. It expires in 10 minutes."
-      onBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in'))}
+      onBack={() =>
+        router.canGoBack()
+          ? router.back()
+          : router.replace({
+              pathname: '/(auth)/sign-in',
+              ...(inviteToken ? { params: { nextGroupInviteToken: inviteToken } } : {}),
+            })
+      }
       footer={
-        <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-in')}>
+        <Button
+          variant="ghost"
+          onPress={() =>
+            router.replace({
+              pathname: '/(auth)/sign-in',
+              ...(inviteToken ? { params: { nextGroupInviteToken: inviteToken } } : {}),
+            })
+          }
+        >
           Return to sign in
         </Button>
       }

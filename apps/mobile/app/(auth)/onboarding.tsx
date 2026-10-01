@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { api } from '@convex/_generated/api';
 import { useConvexAuth, useQuery } from 'convex/react';
 import { currencies } from '@convex/shared/validators';
@@ -29,6 +29,7 @@ import {
 } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit } from '@/components/auth/AuthFields';
+import { isGroupInvitationToken } from '@/lib/authRoutes';
 type CurrencyCode = (typeof currencies)[number];
 const localeCurrency: CurrencyCode = Intl.NumberFormat()
   .resolvedOptions()
@@ -80,6 +81,10 @@ function currencyLabel(currency: string) {
 }
 
 export default function OnboardingScreen() {
+  const { nextGroupInviteToken: rawInviteToken } = useLocalSearchParams<{
+    nextGroupInviteToken?: string;
+  }>();
+  const inviteToken = isGroupInvitationToken(rawInviteToken) ? rawInviteToken : undefined;
   const [step, setStep] = useState(0);
   const [currency, setCurrency] = useState<CurrencyCode>(localeCurrency);
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -99,11 +104,20 @@ export default function OnboardingScreen() {
   const verification = useQuery(api.users.queries.current, {});
   React.useEffect(() => {
     if (auth.isLoading || verification === undefined) return;
-    if (!auth.isAuthenticated) router.replace('/(auth)/sign-in');
-    else if (verification?.emailVerificationTime === undefined) {
+    if (!auth.isAuthenticated) {
+      router.replace(
+        inviteToken
+          ? { pathname: '/(auth)/sign-in', params: { nextGroupInviteToken: inviteToken } }
+          : '/(auth)/sign-in',
+      );
+    } else if (verification?.emailVerificationTime === undefined) {
       router.replace({
         pathname: '/(auth)/verify',
-        params: { email: verification?.email ?? '', next: 'onboarding' },
+        params: {
+          email: verification?.email ?? '',
+          next: 'onboarding',
+          ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}),
+        },
       });
     }
   }, [auth.isAuthenticated, auth.isLoading, verification]);
@@ -144,7 +158,12 @@ export default function OnboardingScreen() {
     if (pending) return;
     if (step === 0) {
       if (router.canGoBack()) router.back();
-      else router.replace('/(auth)/sign-in');
+      else
+        router.replace(
+          inviteToken
+            ? { pathname: '/(auth)/sign-in', params: { nextGroupInviteToken: inviteToken } }
+            : '/(auth)/sign-in',
+        );
     } else {
       setStep((current) => current - 1);
     }
@@ -207,7 +226,13 @@ export default function OnboardingScreen() {
           },
         );
       }
-      router.replace(mode === 'shared' ? '/(tabs)/groups' : '/(tabs)');
+      router.replace(
+        inviteToken
+          ? { pathname: '/group-invite', params: { token: inviteToken } }
+          : mode === 'shared'
+            ? '/(tabs)/groups'
+            : '/(tabs)',
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile');
     } finally {
