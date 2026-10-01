@@ -6,12 +6,12 @@ import { EntityIcon } from './EntityIconPicker';
 
 export function GroupPanel({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   const { tokens } = useTheme();
-  return <View style={[{ padding: 16, gap: 12, borderRadius: 12, borderWidth: 1, borderColor: tokens.borderSubtle, backgroundColor: tokens.surfaceSubtle }, style]}>{children}</View>;
+  return <View style={[{ padding: 18, gap: 14, borderRadius: 16, borderWidth: 1, borderColor: tokens.borderSubtle, backgroundColor: tokens.surfaceSubtle }, style]}>{children}</View>;
 }
 
 export function GroupTile({ icon = 'phosphor:UsersThree', color, size = 52 }: { icon?: string; color?: string; size?: number }) {
   const { tokens } = useTheme();
-  return <View style={{ width: size, height: size, borderRadius: Math.min(16, size / 4), backgroundColor: color ?? tokens.primary, alignItems: 'center', justifyContent: 'center' }}><EntityIcon value={icon} size={size * 0.54} color={tokens.primaryForeground} /></View>;
+  return <View style={{ width: size, height: size, borderRadius: Math.min(18, size / 4), backgroundColor: color ?? tokens.primary, alignItems: 'center', justifyContent: 'center' }}><EntityIcon value={icon} size={size * 0.54} color={tokens.primaryForeground} /></View>;
 }
 
 export function GroupAvatar({ name, avatarUrl, size = 34 }: { name: string; avatarUrl?: string | null; size?: number }) {
@@ -25,7 +25,7 @@ export function GroupHeading({ title, subtitle, onBack }: { title: string; subti
 
 export function GroupMetric({ title, value, detail, icon, color }: { title: string; value: string; detail?: string; icon: string; color?: string }) {
   const { tokens } = useTheme();
-  return <GroupPanel style={{ flexGrow: 1, flexBasis: '46%', padding: 14 }}><GroupTile icon={icon} color={color} size={38} /><Typography variant="caption">{title}</Typography><Typography variant="heading" style={{ fontVariant: ['tabular-nums'], color: color ?? tokens.foreground }}>{value}</Typography>{detail && <Typography variant="caption">{detail}</Typography>}</GroupPanel>;
+  return <GroupPanel style={{ flexGrow: 1, flexBasis: '46%', padding: 16, gap: 7 }}><GroupTile icon={icon} color={color} size={42} /><Typography variant="caption">{title}</Typography><Typography variant="heading" style={{ fontVariant: ['tabular-nums'], color: color ?? tokens.foreground }}>{value}</Typography>{detail && <Typography variant="caption">{detail}</Typography>}</GroupPanel>;
 }
 
 export function GroupNote({ title, text, icon = 'phosphor:Lightbulb', color }: { title: string; text: string; icon?: string; color?: string }) {
