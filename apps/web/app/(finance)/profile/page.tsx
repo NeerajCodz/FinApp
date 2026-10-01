@@ -51,7 +51,7 @@ const links = [
     href: '/categories',
     icon: ReceiptText,
   },
-  { label: 'Budget', description: 'Limits and progress', href: '/budget', icon: Coins },
+  { label: 'Budget', description: 'Limits and progress', href: '/budgets', icon: Coins },
   {
     label: 'Analytics',
     description: 'Patterns over time',

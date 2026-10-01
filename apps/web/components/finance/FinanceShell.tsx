@@ -32,8 +32,9 @@ type NavItem = { href: string; label: string; icon: LucideIcon };
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
+  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/accounts', label: 'Accounts', icon: Landmark },
-  { href: '/budget', label: 'Budgets', icon: Activity },
+  { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/groups', label: 'Groups', icon: UsersRound },
   { href: '/categories', label: 'Categories', icon: Tags },

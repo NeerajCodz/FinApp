@@ -984,7 +984,7 @@ export default function AnalyticsPage() {
                   <Typography variant="bodyLarge">Budget progress</Typography>
                   <Typography variant="caption">Spend within the selected range</Typography>
                 </div>
-                <Link className="finance-inline-link" href="/budget">
+                <Link className="finance-inline-link" href="/budgets">
                   View all
                 </Link>
               </div>
@@ -1014,7 +1014,7 @@ export default function AnalyticsPage() {
                   title="No budgets yet"
                   description="Create a budget to keep an eye on your plan."
                   action={
-                    <Link className="finance-inline-link" href="/budget/new">
+                    <Link className="finance-inline-link" href="/budgets/new">
                       Create a budget
                     </Link>
                   }
