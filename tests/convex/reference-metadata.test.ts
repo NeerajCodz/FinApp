@@ -144,7 +144,15 @@ describe('reference form persistence', () => {
     expect(await owner.query(api.budgets.queries.detail, { budgetId })).toMatchObject({
       spentMinor: 500n, accountIds: [accountId], alertThreshold: 0, includeInAnalytics: false,
     });
-    const update = { ...budgetDraft, categoryId, budgetId };
+    const update = {
+      budgetId,
+      name: budgetDraft.name,
+      amountMinor: budgetDraft.amountMinor,
+      currency: budgetDraft.currency,
+      categoryId,
+      startAt: budgetDraft.startAt,
+      endAt: budgetDraft.endAt,
+    };
     await owner.mutation(api.budgets.mutations.update, update);
     expect(await t.run((ctx) => ctx.db.get(budgetId))).toMatchObject({
       accountIds: [accountId], icon: 'wallet', notes: 'Selected accounts', alertThreshold: 0,
