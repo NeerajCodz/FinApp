@@ -59,4 +59,5 @@ export {
   type EntityIconPickerMode,
   type EntityIconPickerProps,
 } from './EntityIconPicker';
+export { EntityColorPicker } from './EntityColorPicker';
 export { formatTransactionDate } from '../datetime';

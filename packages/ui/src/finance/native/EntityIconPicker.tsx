@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import * as LucideIcons from 'lucide-react-native';
 import type { LucideProps } from 'lucide-react-native';
+import * as PhosphorIcons from 'phosphor-react-native';
+import type { IconProps as PhosphorProps } from 'phosphor-react-native';
 import { FlatList, Pressable, ScrollView, View } from 'react-native';
-import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import {
   allEmojiPickerOptions,
   emojiPickerCategories,
@@ -14,9 +15,10 @@ import {
 } from '../emoji-picker-data';
 import { getIconPurpose, iconPurposeCategories, type IconPurpose } from '../icon-picker-data';
 
-export type EntityIconPickerMode = 'emoji' | 'lucide' | 'either';
+export type EntityIconPickerMode = 'emoji' | 'lucide' | 'phosphor' | 'either' | 'all';
 type LucideIconComponent = React.ComponentType<LucideProps>;
-type PickerKind = 'emoji' | 'lucide';
+type PhosphorIconComponent = React.ComponentType<PhosphorProps>;
+type PickerKind = 'emoji' | 'lucide' | 'phosphor';
 
 const emojiTabs = [
   { id: 'recent', label: 'Recent' },
@@ -50,6 +52,23 @@ const lucideIcons = Object.entries(LucideIcons)
   }))
   .sort((left, right) => left.name.localeCompare(right.name));
 
+const phosphorIcons = Object.entries(PhosphorIcons)
+  .filter(
+    ([name, icon]) =>
+      /^[A-Z]/.test(name) &&
+      typeof icon === 'function',
+  )
+  .map(([name, icon]) => ({
+    name,
+    searchText: name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase(),
+    purpose: getIconPurpose(name),
+    Icon: icon as unknown as PhosphorIconComponent,
+  }))
+  .sort((left, right) => left.name.localeCompare(right.name));
+
+const phosphorIconsByName: Record<string, PhosphorIconComponent> = {};
+for (const { name, Icon } of phosphorIcons) phosphorIconsByName[name] = Icon;
+
 const iconsByName: Record<string, LucideIconComponent> = {};
 for (const { name, Icon } of lucideIcons) {
   iconsByName[name] = Icon;
@@ -72,6 +91,11 @@ export function EntityIcon({
 }) {
   const { tokens } = useTheme();
   if (!value) return null;
+  if (value.startsWith('phosphor:')) {
+    const Icon = phosphorIconsByName[value.slice('phosphor:'.length)];
+    if (Icon) return <Icon size={size} color={color ?? tokens.primary} weight="fill" />;
+    return null;
+  }
   const Icon = componentFor(value);
   if (Icon) return <Icon size={size} color={color ?? tokens.primary} />;
   if (value.startsWith('lucide:')) {
@@ -165,10 +189,9 @@ export function EntityIconPicker({
   const { tokens } = useTheme();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [kind, setKind] = useState<PickerKind>(mode === 'emoji' ? 'emoji' : 'lucide');
-  const [activeCategory, setActiveCategory] = useState('recent');
-  const [activeIconPurpose, setActiveIconPurpose] = useState<IconPurpose>('finance');
-  const [visibleIconCount, setVisibleIconCount] = useState(120);
+  const [kind, setKind] = useState<PickerKind>(
+    mode === 'emoji' ? 'emoji' : mode === 'phosphor' ? 'phosphor' : 'lucide',
+  );
   const triggerLabel = label ?? (value ? 'Change icon' : 'Choose icon');
   const matchingEmojis = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -198,11 +221,27 @@ export function EntityIconPicker({
         : activeIconPurpose === 'all' || icon.purpose === activeIconPurpose,
     );
   }, [activeIconPurpose, search]);
+  const matchingPhosphorIcons = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return phosphorIcons.filter((icon) =>
+      needle
+        ? icon.searchText.includes(needle)
+        : activeIconPurpose === 'all' || icon.purpose === activeIconPurpose,
+    );
+  }, [activeIconPurpose, search]);
   const displayedIcons = matchingIcons.slice(0, visibleIconCount);
+  const displayedPhosphorIcons = matchingPhosphorIcons.slice(0, visibleIconCount);
 
   function openPicker() {
-    if (mode === 'either') setKind(value?.startsWith('lucide:') ? 'lucide' : 'emoji');
-    else setKind(mode);
+    if (mode === 'either' || mode === 'all') {
+      setKind(
+        value?.startsWith('phosphor:')
+          ? 'phosphor'
+          : value?.startsWith('lucide:')
+            ? 'lucide'
+            : 'emoji',
+      );
+    } else setKind(mode);
     setActiveCategory(getRecentEmojiOptions().length ? 'recent' : 'popular');
     setActiveIconPurpose('finance');
     setVisibleIconCount(120);
@@ -210,7 +249,9 @@ export function EntityIconPicker({
   }
 
   function select(nextValue?: string) {
-    if (nextValue && !nextValue.startsWith('lucide:')) recordRecentEmoji(nextValue);
+    if (nextValue && !nextValue.startsWith('lucide:') && !nextValue.startsWith('phosphor:')) {
+      recordRecentEmoji(nextValue);
+    }
     onChange(nextValue);
     setOpen(false);
     setSearch('');
@@ -234,6 +275,29 @@ export function EntityIconPicker({
       onSelect={() => select(`lucide:${item.name}`)}
     />
   );
+  const renderPhosphorIcon = ({ item }: { item: (typeof phosphorIcons)[number] }) => {
+    const Icon = item.Icon;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={item.searchText}
+        accessibilityState={{ selected: value === `phosphor:${item.name}` }}
+        onPress={() => select(`phosphor:${item.name}`)}
+        style={{
+          width: '15%',
+          aspectRatio: 1,
+          borderWidth: 1,
+          borderColor: value === `phosphor:${item.name}` ? tokens.primary : tokens.borderSubtle,
+          borderRadius: 11,
+          backgroundColor: value === `phosphor:${item.name}` ? tokens.surfaceSubtle : tokens.surfaceRaised,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon size={20} color={tokens.primary} weight="fill" />
+      </Pressable>
+    );
+  };
 
   return (
     <>
@@ -246,6 +310,8 @@ export function EntityIconPicker({
       >
         {value ? (
           <EntityIcon value={value} size={22} color={tokens.primary} />
+        ) : mode === 'phosphor' ? (
+          <PhosphorIcons.Plus size={19} color={tokens.primary} weight="fill" />
         ) : (
           <LucideIcons.Plus size={19} color={tokens.primary} />
         )}
@@ -271,15 +337,17 @@ export function EntityIconPicker({
         title={
           mode === 'emoji'
             ? 'Choose an emoji'
-            : mode === 'lucide'
-              ? 'Choose an icon'
-              : 'Choose an emoji or icon'
+            : mode === 'phosphor'
+              ? 'Choose a Phosphor icon'
+              : mode === 'lucide'
+                ? 'Choose a Lucide icon'
+                : 'Choose an emoji or icon'
         }
       >
         <View style={{ maxHeight: 540, gap: 12 }}>
-          {mode === 'either' && (
+          {(mode === 'either' || mode === 'all') && (
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              {(['emoji', 'lucide'] as const).map((choice) => (
+              {(mode === 'all' ? ['emoji', 'lucide', 'phosphor'] as const : ['emoji', 'lucide'] as const).map((choice) => (
                 <Button
                   key={choice}
                   size="sm"
@@ -288,14 +356,14 @@ export function EntityIconPicker({
                   accessibilityState={{ selected: kind === choice }}
                   onPress={() => changeKind(choice)}
                 >
-                  {choice === 'emoji' ? 'Emoji' : 'Lucide icons'}
+                  {choice === 'emoji' ? 'Emoji' : `${choice[0]!.toUpperCase()}${choice.slice(1)} icons`}
                 </Button>
               ))}
             </View>
           )}
           <Input
-            accessibilityLabel={kind === 'emoji' ? 'Search emoji' : 'Search Lucide icons'}
-            placeholder={kind === 'emoji' ? 'Search all emoji' : 'Search all Lucide icons'}
+            accessibilityLabel={kind === 'emoji' ? 'Search emoji' : `Search ${kind} icons`}
+            placeholder={kind === 'emoji' ? 'Search all emoji' : `Search all ${kind} icons`}
             value={search}
             onChangeText={(nextSearch) => {
               setSearch(nextSearch);
@@ -304,7 +372,7 @@ export function EntityIconPicker({
             autoCapitalize="none"
             autoCorrect={false}
           />
-          {kind === 'lucide' && (
+          {kind !== 'emoji' && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -397,7 +465,7 @@ export function EntityIconPicker({
                 <Typography variant="small">No emoji match that search.</Typography>
               )}
             </>
-          ) : (
+          ) : kind === 'lucide' ? (
             <>
               {displayedIcons.length ? (
                 <FlatList
@@ -417,6 +485,29 @@ export function EntityIconPicker({
               {matchingIcons.length > displayedIcons.length && (
                 <Button variant="ghost" onPress={() => setVisibleIconCount((count) => count + 120)}>
                   Show more icons ({matchingIcons.length - displayedIcons.length} remaining)
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              {displayedPhosphorIcons.length ? (
+                <FlatList
+                  key={`phosphor-${search}`}
+                  data={displayedPhosphorIcons}
+                  keyExtractor={(item) => item.name}
+                  renderItem={renderPhosphorIcon}
+                  numColumns={6}
+                  columnWrapperStyle={{ gap: 6 }}
+                  contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
+                  keyboardShouldPersistTaps="handled"
+                  style={{ maxHeight: 340, flexGrow: 0 }}
+                />
+              ) : (
+                <Typography variant="small">No Phosphor icon matches that search.</Typography>
+              )}
+              {matchingPhosphorIcons.length > displayedPhosphorIcons.length && (
+                <Button variant="ghost" onPress={() => setVisibleIconCount((count) => count + 120)}>
+                  Show more icons ({matchingPhosphorIcons.length - displayedPhosphorIcons.length} remaining)
                 </Button>
               )}
             </>
