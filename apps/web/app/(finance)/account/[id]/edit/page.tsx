@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Landmark } from 'lucide-react';
-import { Button, IconButton, Input, Label, Typography } from '@finapp/ui/web';
+import { currencies } from '@convex/shared/validators';
+import { parseMinor } from '@convex/shared/money';
+import { AccountFormScreen, type AccountFormValue } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -11,21 +12,27 @@ import { belongsToUser, idOf, localDependency, matchesId, SignInGate } from '../
 
 type Account = LocalRecord & {
   name?: string;
-  type?: string;
+  type?: AccountFormValue['type'];
   customType?: string;
   currency?: string;
+  openingBalanceMinor?: bigint;
+  icon?: string;
+  color?: string;
+  isIncludedInTotal?: boolean;
   updatedAt?: number;
   archivedAt?: number;
 };
-
-const accountTypeLabels: Record<string, string> = {
-  cash: 'Cash',
-  bank: 'Bank',
-  card: 'Card',
-  wallet: 'Wallet',
-  loan: 'Loan',
-  other: 'Custom',
-};
+const maxInt64 = 9_223_372_036_854_775_807n;
+function decimalAmount(minor: bigint | undefined, currency: string): string {
+  if (minor === undefined || !currency) return '';
+  const digits =
+    new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
+      .maximumFractionDigits ?? 2;
+  const scale = 10n ** BigInt(digits);
+  const whole = minor / scale;
+  const fraction = (minor % scale).toString().padStart(digits, '0');
+  return digits ? `${whole}.${fraction}` : String(whole);
+}
 
 export default function EditAccountPage() {
   const router = useRouter();
@@ -36,38 +43,84 @@ export default function EditAccountPage() {
   const account = records.find(
     (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
   );
-  const [name, setName] = React.useState('');
+  const [form, setForm] = React.useState<AccountFormValue>({
+    name: '',
+    type: 'bank',
+    customType: '',
+    currency: '',
+    openingBalance: '',
+    isIncludedInTotal: true,
+  });
   const [saving, setSaving] = React.useState(false);
-  const [formError, setFormError] = React.useState('');
+  const [formError, setFormError] = React.useState<string | null>(null);
   React.useEffect(() => {
-    if (account) setName(account.name ?? '');
+    if (!account) return;
+    const currency = account.currency ?? '';
+    setForm({
+      name: account.name ?? '',
+      type: account.type ?? 'bank',
+      customType: account.customType ?? '',
+      currency,
+      openingBalance: decimalAmount(account.openingBalanceMinor as bigint | undefined, currency),
+      icon: account.icon,
+      color: account.color,
+      isIncludedInTotal: account.isIncludedInTotal !== false,
+    });
   }, [account?._id, account?.id]);
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!userId || !account || saving) return;
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setFormError('Enter an account name.');
-      return;
-    }
-    const accountId = String(account._id ?? account.cloudId ?? account.id ?? '');
-    if (!accountId) {
-      setFormError('This account has no saved identifier.');
-      return;
-    }
+    const name = form.name.trim();
+    const customType = form.customType.trim();
+    if (!name) return setFormError('Enter an account name.');
+    if (form.type === 'other' && !customType) return setFormError('Name your custom account type.');
+    if (!(currencies as readonly string[]).includes(form.currency))
+      return setFormError('Choose a supported currency.');
+    if (!form.color) return setFormError('Choose an account color.');
+    const accountId = idOf(account);
+    if (!accountId) return setFormError('This account has no saved identifier.');
     setSaving(true);
-    setFormError('');
+    setFormError(null);
     try {
+      const openingBalanceMinor = parseMinor(form.openingBalance || '0', form.currency);
+      if (openingBalanceMinor < 0n || openingBalanceMinor > maxInt64)
+        throw new Error('Enter a valid non-negative opening balance.');
       const dependency = localDependency('account', account);
+      const previousOpeningBalance =
+        typeof account.openingBalanceMinor === 'bigint' ? account.openingBalanceMinor : 0n;
+      const currentBalance =
+        typeof account.balanceMinor === 'bigint' ? account.balanceMinor : previousOpeningBalance;
+      const updated: LocalRecord = {
+        ...account,
+        name,
+        type: form.type,
+        ...(form.type === 'other' ? { customType } : { customType: undefined }),
+        currency: form.currency,
+        openingBalanceMinor,
+        balanceMinor: currentBalance + openingBalanceMinor - previousOpeningBalance,
+        icon: form.icon,
+        color: form.color,
+        isIncludedInTotal: form.isIncludedInTotal,
+      };
       await commitLocalWrite(
         userId,
         'account',
-        'account.rename',
-        { ...account, name: trimmedName },
-        { accountId, name: trimmedName },
+        'account.updateDetails',
+        updated,
         {
-          recordId: idOf(account),
+          accountId,
+          name,
+          type: form.type,
+          ...(form.type === 'other' ? { customType } : {}),
+          currency: form.currency,
+          openingBalanceMinor,
+          icon: form.icon ?? null,
+          color: form.color,
+          isIncludedInTotal: form.isIncludedInTotal,
+        },
+        {
+          recordId: accountId,
           dependencies: dependency ? [dependency] : [],
           baseUpdatedAt: typeof account.updatedAt === 'number' ? account.updatedAt : undefined,
         },
@@ -86,90 +139,34 @@ export default function EditAccountPage() {
         Sign in to edit a private account record.
       </SignInGate>
     );
-
   if (loading)
     return (
       <div className="finance-page">
-        <Typography variant="small" role="status">
-          Loading account details…
-        </Typography>
+        <p role="status">Loading account details…</p>
       </div>
     );
-
   if (!account || account.archivedAt !== undefined)
     return (
       <div className="finance-page" style={{ gap: 16 }}>
-        <Typography variant="title">Account unavailable</Typography>
-        <Typography variant="small">{error ?? 'This account could not be found.'}</Typography>
-        <Button variant="outline" onPress={() => router.replace('/accounts')}>
+        <h1>Account unavailable</h1>
+        <p>{error ?? 'This account could not be found.'}</p>
+        <button type="button" onClick={() => router.replace('/accounts')}>
           Back to accounts
-        </Button>
+        </button>
       </div>
     );
-
   return (
-    <div className="finance-page" style={{ gap: 24, minHeight: '70vh' }}>
-      <IconButton
-        label="Go back"
-        variant="ghost"
-        style={{ alignSelf: 'flex-start' }}
-        onPress={() => router.back()}
-      >
-        <ArrowLeft size={21} aria-hidden="true" />
-      </IconButton>
-      <header style={{ display: 'grid', gap: 10 }}>
-        <span
-          aria-hidden="true"
-          style={{
-            width: 44,
-            height: 44,
-            display: 'grid',
-            placeItems: 'center',
-            borderRadius: 14,
-            background: 'var(--finapp-surface-raised)',
-          }}
-        >
-          <Landmark size={21} color="var(--finapp-foreground)" />
-        </span>
-        <Typography variant="title">Edit account</Typography>
-        <Typography variant="small" style={{ maxWidth: 320 }}>
-          Update the name shown across your accounts and activity.
-        </Typography>
-      </header>
-      <form onSubmit={save} style={{ display: 'grid', flex: 1, gap: 18 }}>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <Label htmlFor="account-name">Name</Label>
-          <Input
-            id="account-name"
-            accessibilityLabel="Account name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Everyday account"
-            maxLength={80}
-            required
-          />
-        </div>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <Label>Type</Label>
-          <Typography variant="bodyLarge">
-            {accountTypeLabels[account.type ?? ''] ?? account.customType ?? 'Account'}
-          </Typography>
-        </div>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <Label>Currency</Label>
-          <Typography variant="bodyLarge">{account.currency ?? '—'}</Typography>
-        </div>
-        <div style={{ flex: 1 }} />
-        {formError && (
-          <p className="finance-form-error" role="alert">
-            {formError}
-          </p>
-        )}
-        <Button type="submit" size="lg" style={{ width: '100%' }} disabled={saving || !name.trim()}>
-          <Check size={18} aria-hidden="true" />
-          {saving ? 'Saving…' : 'Save changes'}
-        </Button>
-      </form>
-    </div>
+    <AccountFormScreen
+      title={form.name.trim() || 'Edit account'}
+      subtitle="Update your account details and settings."
+      value={form}
+      currencies={currencies}
+      saving={saving}
+      error={formError}
+      onChange={setForm}
+      onSubmit={save}
+      onBack={() => router.back()}
+      submitLabel="Save changes"
+    />
   );
 }
