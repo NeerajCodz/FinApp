@@ -943,6 +943,133 @@ describe('Convex public runtime functions', () => {
       title: 'Dinner',
     });
   });
+  it('updates only owned transactions, preserves validated ledger fields, and replays edits safely', async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        identityId: identity.subject,
+        email: identity.email,
+        name: identity.name,
+      }),
+    );
+    const otherIdentity = {
+      subject: 'other-runtime-user',
+      email: 'other-runtime@example.com',
+      name: 'Other',
+    };
+    await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        identityId: otherIdentity.subject,
+        email: otherIdentity.email,
+        name: otherIdentity.name,
+      }),
+    );
+    const authenticated = t.withIdentity(identity);
+    const other = t.withIdentity(otherIdentity);
+    const accountId = await authenticated.mutation(api.accounts.mutations.create, {
+      name: 'Cash',
+      type: 'cash',
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+      isIncludedInTotal: true,
+    });
+    const categoryId = await authenticated.mutation(api.categories.mutations.create, {
+      name: 'Meals',
+      icon: '🍜',
+    });
+    const transactionId = await authenticated.mutation(api.transactions.mutations.create, {
+      accountId,
+      categoryId,
+      type: 'expense',
+      amountMinor: 2400n,
+      currency: 'INR',
+      title: 'Lunch',
+      occurredAt: Date.UTC(2026, 8, 20),
+      clientMutationId: 'runtime-edit-create',
+    });
+    const otherAccountId = await other.mutation(api.accounts.mutations.create, {
+      name: 'Other cash',
+      type: 'cash',
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+      isIncludedInTotal: true,
+    });
+    const otherTransactionId = await other.mutation(api.transactions.mutations.create, {
+      accountId: otherAccountId,
+      type: 'expense',
+      amountMinor: 900n,
+      currency: 'INR',
+      title: 'Private',
+      occurredAt: Date.UTC(2026, 8, 18),
+      clientMutationId: 'runtime-other-create',
+    });
+    const edit = {
+      transactionId,
+      accountId,
+      categoryId,
+      type: 'income' as const,
+      amountMinor: 1177n,
+      currency: 'INR',
+      title: 'Refund from lunch',
+      merchant: 'Cafe',
+      note: 'Updated note',
+      occurredAt: Date.UTC(2026, 8, 21),
+      hasTime: true,
+      clientMutationId: 'runtime-edit-1',
+    };
+    await expect(authenticated.mutation(api.transactions.mutations.update, edit)).resolves.toBe(
+      transactionId,
+    );
+    const changed = await t.run((ctx) => ctx.db.get(transactionId));
+    expect(changed).toMatchObject({
+      ownerId: userId,
+      accountId,
+      categoryId,
+      type: 'income',
+      amountMinor: 1177n,
+      title: 'Refund from lunch',
+      merchant: 'Cafe',
+      note: 'Updated note',
+      occurredAt: Date.UTC(2026, 8, 21),
+      hasTime: true,
+      status: 'posted',
+    });
+    await expect(
+      authenticated.mutation(api.transactions.mutations.update, {
+        ...edit,
+        title: 'Changed after replay',
+        clientMutationId: 'runtime-edit-1',
+      }),
+    ).resolves.toBe(transactionId);
+    await expect(
+      authenticated.mutation(api.transactions.mutations.update, {
+        ...edit,
+        transactionId: otherTransactionId,
+        clientMutationId: 'runtime-edit-other',
+      }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+    await expect(
+      authenticated.mutation(api.transactions.mutations.update, {
+        ...edit,
+        categoryId: undefined,
+        type: 'transfer',
+        clientMutationId: 'runtime-edit-invalid-transfer',
+      }),
+    ).rejects.toThrow('INVALID_CURRENCY');
+    await expect(
+      authenticated.mutation(api.transactions.mutations.update, {
+        ...edit,
+        occurredAt: Number.MAX_SAFE_INTEGER + 1,
+        clientMutationId: 'runtime-edit-invalid-date',
+      }),
+    ).rejects.toThrow('INVALID_TRANSACTION');
+    expect(await t.run((ctx) => ctx.db.get(transactionId))).toMatchObject({
+      occurredAt: Date.UTC(2026, 8, 21),
+      amountMinor: 1177n,
+    });
+  });
   it('updates profile identity and discovers tagged users', async () => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) =>
@@ -1128,10 +1255,46 @@ describe('Convex public runtime functions', () => {
       name: 'Goa Trip',
       currency: 'INR',
       memberUsernames: ['@rahul_42'],
+      icon: 'phosphor:UsersThree',
+      color: '#78e6a0',
     });
     expect(await authenticated.query(api.groups.queries.list, {})).toMatchObject([
-      { _id: groupId, name: 'Goa Trip', currency: 'INR', ownerId },
+      {
+        _id: groupId,
+        name: 'Goa Trip',
+        currency: 'INR',
+        ownerId,
+        icon: 'phosphor:UsersThree',
+        color: '#78e6a0',
+      },
     ]);
+    await authenticated.mutation(api.groups.mutations.updateSettings, {
+      groupId,
+      color: '#9b7be8',
+      clientMutationId: 'group-color-update',
+    });
+    await authenticated.mutation(api.groups.mutations.updateSettings, {
+      groupId,
+      color: '#ff0000',
+      clientMutationId: 'group-color-update',
+    });
+    const memberActor = t.withIdentity({
+      subject: 'group-member',
+      email: 'rahul@example.com',
+      name: 'Rahul',
+    });
+    await expect(
+      memberActor.mutation(api.groups.mutations.updateSettings, {
+        groupId,
+        color: '#ff0000',
+      }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+    await expect(
+      authenticated.mutation(api.groups.mutations.updateSettings, {
+        groupId,
+        color: '#abc',
+      }),
+    ).rejects.toThrow('INVALID_GROUP_COLOR');
     const transactionId = await authenticated.mutation(api.groups.mutations.addExpense, {
       groupId,
       accountId,
@@ -1147,6 +1310,8 @@ describe('Convex public runtime functions', () => {
     const detail = await authenticated.query(api.groups.queries.detail, { groupId });
     expect(detail).toMatchObject({
       _id: groupId,
+      icon: 'phosphor:UsersThree',
+      color: '#9b7be8',
       members: [
         { id: ownerId, role: 'owner' },
         { id: memberId, username: 'rahul_42', role: 'member' },
@@ -1184,6 +1349,88 @@ describe('Convex public runtime functions', () => {
         amountMinor: 60001n,
       }),
     ).rejects.toThrow('SETTLEMENT_EXCEEDS_BALANCE');
+  });
+
+  it('updates only owned goals, persists supported fields, validates values, and replays edits safely', async () => {
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        email: 'goal-owner@example.com',
+        name: 'Goal Owner',
+      }),
+    );
+    const otherId = await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        email: 'goal-other@example.com',
+        name: 'Other User',
+      }),
+    );
+    const owner = t.withIdentity({
+      subject: `${ownerId}|session-id`,
+      email: 'goal-owner@example.com',
+    });
+    const other = t.withIdentity({
+      subject: `${otherId}|session-id`,
+      email: 'goal-other@example.com',
+    });
+    const goalId = await owner.mutation(api.goals.mutations.create, {
+      name: 'First goal',
+      targetAmountMinor: 100000n,
+      currency: 'INR',
+      clientMutationId: 'goal-create',
+    });
+    const update = {
+      goalId,
+      name: 'Updated goal',
+      targetAmountMinor: 250000n,
+      targetDate: Date.UTC(2027, 0, 1),
+      icon: 'phosphor:House',
+      color: '#12ab34',
+      clientMutationId: 'goal-update',
+    };
+    await expect(owner.mutation(api.goals.mutations.update, update)).resolves.toBe(goalId);
+    await expect(
+      owner.mutation(api.goals.mutations.update, {
+        ...update,
+        name: 'Conflicting replay',
+        targetAmountMinor: 1n,
+      }),
+    ).resolves.toBe(goalId);
+    expect(await t.run((ctx) => ctx.db.get(goalId))).toMatchObject({
+      name: 'Updated goal',
+      targetAmountMinor: 250000n,
+      targetDate: Date.UTC(2027, 0, 1),
+      icon: 'phosphor:House',
+      color: '#12ab34',
+    });
+    await expect(
+      other.mutation(api.goals.mutations.update, { ...update, clientMutationId: 'other-edit' }),
+    ).rejects.toThrow('INVALID_GOAL');
+    await expect(
+      owner.mutation(api.goals.mutations.update, {
+        ...update,
+        clientMutationId: 'invalid-color',
+        color: 'green',
+      }),
+    ).rejects.toThrow('INVALID_GOAL');
+    await expect(
+      owner.mutation(api.goals.mutations.update, {
+        ...update,
+        clientMutationId: 'invalid-date',
+        targetDate: Date.now() - 1,
+      }),
+    ).rejects.toThrow('INVALID_GOAL');
+    const archive = { goalId, clientMutationId: 'goal-archive' };
+    await expect(owner.mutation(api.goals.mutations.archive, archive)).resolves.toBe(goalId);
+    await expect(owner.mutation(api.goals.mutations.archive, archive)).resolves.toBe(goalId);
+    expect(await t.run((ctx) => ctx.db.get(goalId))).toMatchObject({
+      archivedAt: expect.any(Number),
+    });
+    await expect(
+      other.mutation(api.goals.mutations.archive, { goalId, clientMutationId: 'other-archive' }),
+    ).rejects.toThrow('INVALID_GOAL');
   });
 
   it('rejects mutation attempts without an authenticated identity', async () => {
