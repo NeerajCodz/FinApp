@@ -13,6 +13,7 @@ export type AccountDraft<OwnerId extends string = string> = {
   currency: string;
   openingBalanceMinor: bigint;
   icon?: string;
+  color?: string;
   isIncludedInTotal: boolean;
 };
 
@@ -63,6 +64,7 @@ export const create = mutation({
     openingBalanceMinor: v.int64(),
     isIncludedInTotal: v.boolean(),
     icon: v.optional(v.string()),
+    color: v.optional(v.string()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -82,6 +84,8 @@ export const create = mutation({
     }
     assertCurrency(args.currency);
     if (args.icon !== undefined && (args.icon.length === 0 || args.icon.length > 80))
+      throw new Error('INVALID_ACCOUNT');
+    if (args.color !== undefined && !/^#[\da-f]{6}$/i.test(args.color))
       throw new Error('INVALID_ACCOUNT');
     const { clientMutationId, ...accountArgs } = args;
     const record = createAccountRecord(user._id, {
@@ -134,6 +138,95 @@ export const rename = mutation({
       user._id,
       args.clientMutationId,
       'account.rename',
+      args.accountId,
+      'accounts',
+      String(args.accountId),
+      updatedAt,
+      { ...updated, _id: args.accountId },
+    );
+    return args.accountId;
+  },
+});
+
+export const updateDetails = mutation({
+  args: {
+    accountId: v.id('accounts'),
+    name: v.string(),
+    type: v.union(
+      v.literal('cash'),
+      v.literal('bank'),
+      v.literal('card'),
+      v.literal('wallet'),
+      v.literal('loan'),
+      v.literal('other'),
+    ),
+    customType: v.optional(v.string()),
+    currency: v.string(),
+    openingBalanceMinor: v.int64(),
+    icon: v.optional(v.union(v.string(), v.null())),
+    color: v.union(v.string(), v.null()),
+    isIncludedInTotal: v.boolean(),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.updateDetails',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('accounts', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
+      throw new Error('ACCOUNT_UNAVAILABLE');
+    const name = args.name.trim();
+    const customType = args.type === 'other' ? args.customType?.trim() : undefined;
+    if (
+      !name ||
+      name.length > 80 ||
+      args.openingBalanceMinor < 0n ||
+      (args.type === 'other' && (!customType || customType.length > 40)) ||
+      (args.icon !== null && args.icon !== undefined && (!args.icon || args.icon.length > 80)) ||
+      (args.color !== null && !/^#[\da-f]{6}$/i.test(args.color))
+    )
+      throw new Error('INVALID_ACCOUNT');
+    assertCurrency(args.currency);
+    if (args.currency !== account.currency) {
+      const sourceTransaction = await ctx.db
+        .query('transactions')
+        .withIndex('by_account', (q) => q.eq('accountId', args.accountId))
+        .first();
+      const destinationTransaction = await ctx.db
+        .query('transactions')
+        .withIndex('by_transferAccountId', (q) => q.eq('transferAccountId', String(args.accountId)))
+        .first();
+      if (sourceTransaction || destinationTransaction) throw new Error('ACCOUNT_CURRENCY_IN_USE');
+    }
+    const updatedAt = Date.now();
+    await ctx.db.patch(args.accountId, {
+      name,
+      type: args.type,
+      customType,
+      currency: args.currency,
+      openingBalanceMinor: args.openingBalanceMinor,
+      icon: args.icon ?? undefined,
+      color: args.color ?? undefined,
+      isIncludedInTotal: args.isIncludedInTotal,
+      updatedAt,
+    });
+    const updated = await ctx.db.get(args.accountId);
+    if (!updated) throw new Error('ACCOUNT_UNAVAILABLE');
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'account.updateDetails',
       args.accountId,
       'accounts',
       String(args.accountId),
