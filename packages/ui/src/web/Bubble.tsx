@@ -53,9 +53,7 @@ export function Bubble({
         color: sent
           ? 'var(--finapp-primary-foreground, #111)'
           : 'var(--finapp-foreground, #f5f5f5)',
-        background: sent
-          ? 'var(--finapp-primary, #b7ff4a)'
-          : 'var(--finapp-surface-raised, #202020)',
+        background: sent ? 'var(--finapp-primary)' : 'var(--finapp-surface-raised, #202020)',
         overflowWrap: 'anywhere',
         ...style,
       }}

@@ -8,7 +8,14 @@ import { AccountFormScreen, deriveFormActivity, type AccountFormValue } from '@f
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { belongsToUser, idOf, localDependency, matchesId, SignInGate } from '../../../_personal';
+import {
+  belongsToUser,
+  idOf,
+  localDependency,
+  matchesRouteId,
+  routeIdFor,
+  SignInGate,
+} from '../../../_personal';
 
 type Account = LocalRecord & {
   name?: string;
@@ -49,10 +56,10 @@ export default function EditAccountPage() {
   const { records: transactions } = useLocalRecords<LocalRecord>('transaction');
   const { records: categories } = useLocalRecords<LocalRecord>('category');
   const { records: profiles } = useLocalRecords<LocalRecord>('profile');
-  const profile = profiles.find(record => userId && belongsToUser(record, userId));
+  const profile = profiles.find((record) => userId && belongsToUser(record, userId));
   const [primaryDraft, setPrimaryDraft] = React.useState<boolean>();
   const account = records.find(
-    (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
+    (record) => userId && belongsToUser(record, userId) && matchesRouteId(record, routeId),
   );
   const [form, setForm] = React.useState<AccountFormValue>({
     name: '',
@@ -153,9 +160,16 @@ export default function EditAccountPage() {
       );
       if (profile && primaryDraft !== undefined) {
         const nextId = primaryDraft ? String(account._id ?? account.cloudId ?? account.id) : null;
-        await commitLocalWrite(userId, 'profile', 'user.defaultAccount', { ...profile, defaultAccountId: nextId ?? undefined }, { accountId: nextId }, { recordId: idOf(profile), dependencies: nextId && dependency ? [dependency] : [] });
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultAccount',
+          { ...profile, defaultAccountId: nextId ?? undefined },
+          { accountId: nextId },
+          { recordId: idOf(profile), dependencies: nextId && dependency ? [dependency] : [] },
+        );
       }
-      router.replace(`/account/${encodeURIComponent(accountId)}`);
+      router.replace(`/account/${encodeURIComponent(routeIdFor(accountId))}`);
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Could not update this account.');
     } finally {
@@ -190,9 +204,15 @@ export default function EditAccountPage() {
       mode="edit"
       createdAt={account.createdAt}
       activity={deriveFormActivity(transactions, categories, records, account, 'accountId', userId)}
-      onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
       onViewTransactions={() => router.push(`/account/${encodeURIComponent(routeId)}`)}
-      isPrimary={primaryDraft ?? Boolean(profile && [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string))}
+      isPrimary={
+        primaryDraft ??
+        Boolean(
+          profile &&
+          [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string),
+        )
+      }
       onPrimaryChange={profile ? setPrimaryDraft : undefined}
       title={form.name.trim() || 'Edit account'}
       subtitle="Update your account details and settings."

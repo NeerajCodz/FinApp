@@ -59,18 +59,12 @@ export type CategoryAnalyticsScreenProps = {
 };
 type Period = 'week' | 'month' | 'year';
 type Scope = 'all' | 'expense' | 'income' | 'with-limit';
-const palette = [
-  '#ff697a',
-  '#ffa347',
-  '#5e9bff',
-  '#a785ff',
-  '#f4d34e',
-  '#48d79b',
-  '#57d9d0',
-  '#b7ff4a',
-];
+const palette = ['#ff697a', '#ffa347', '#5e9bff', '#a785ff', '#f4d34e', '#48d79b', '#57d9d0'];
+function categoryColor(index: number, primary: string) {
+  const colorIndex = index % (palette.length + 1);
+  return colorIndex === palette.length ? primary : palette[colorIndex]!;
+}
 const day = 86_400_000;
-
 export function CategoryAnalyticsScreen({
   categories,
   accounts,
@@ -236,7 +230,7 @@ export function CategoryAnalyticsScreen({
     const segment = {
       id: item.id,
       value: item.spent,
-      color: palette[index % palette.length],
+      color: categoryColor(index, tokens.primary),
       length,
       offset,
     };
@@ -454,7 +448,10 @@ export function CategoryAnalyticsScreen({
                       style={styles.legendItem}
                     >
                       <View
-                        style={[styles.dot, { backgroundColor: palette[index % palette.length] }]}
+                        style={[
+                          styles.dot,
+                          { backgroundColor: categoryColor(index, tokens.primary) },
+                        ]}
                       />
                       <Typography variant="caption" numberOfLines={1} style={{ flex: 1 }}>
                         {item.name}
@@ -495,7 +492,7 @@ export function CategoryAnalyticsScreen({
                       width: `${Math.max(5, Number((item.spent * 100n) / (expenseRows[0]?.spent || 1n)))}%`,
                       height: 8,
                       borderRadius: 6,
-                      backgroundColor: palette[index % palette.length],
+                      backgroundColor: categoryColor(index, tokens.primary),
                     }}
                   />
                 </View>
@@ -525,12 +522,12 @@ export function CategoryAnalyticsScreen({
                           key={value.category.id}
                           style={{
                             height: `${maxMonth > 0n ? Math.max(2, Number((value.amount * 10000n) / maxMonth) / 100) : 0}%`,
-                            backgroundColor:
-                              palette[
-                                scopedCategories.findIndex(
-                                  (category) => category.id === value.category.id,
-                                ) % palette.length
-                              ],
+                            backgroundColor: categoryColor(
+                              scopedCategories.findIndex(
+                                (category) => category.id === value.category.id,
+                              ),
+                              tokens.primary,
+                            ),
                           }}
                         />
                       ))}

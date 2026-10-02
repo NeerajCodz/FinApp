@@ -160,6 +160,7 @@ export default function GroupHomePage() {
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
+  const chatLock = React.useRef(false);
   const [chatError, setChatError] = React.useState('');
 
   React.useEffect(() => {
@@ -476,7 +477,8 @@ export default function GroupHomePage() {
   });
   async function submitChatMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
+    if (!canUseGroupChat || !chatDraft.trim() || chatLock.current) return;
+    chatLock.current = true;
     setChatPending(true);
     setChatError('');
     try {
@@ -488,6 +490,7 @@ export default function GroupHomePage() {
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : 'Could not send this message.');
     } finally {
+      chatLock.current = false;
       setChatPending(false);
     }
   }
@@ -504,7 +507,8 @@ export default function GroupHomePage() {
       setChatError('Choose a JPEG, PNG, or WebP bill image up to 5 MB.');
       return;
     }
-    if (!canUseGroupChat || chatPending) return;
+    if (!canUseGroupChat || chatLock.current) return;
+    chatLock.current = true;
     setChatPending(true);
     setChatError('');
     try {
@@ -525,6 +529,7 @@ export default function GroupHomePage() {
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : 'Could not upload this bill image.');
     } finally {
+      chatLock.current = false;
       setChatPending(false);
     }
   }

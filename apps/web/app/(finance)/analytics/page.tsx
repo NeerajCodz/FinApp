@@ -33,6 +33,7 @@ import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
+import { routeIdFor } from '../_personal';
 
 type Profile = LocalRecord & { defaultCurrency?: string; timezone?: string };
 type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
@@ -983,7 +984,7 @@ export default function AnalyticsPage() {
                         href={
                           balance === null
                             ? breakdownHref('account', idOf(account))
-                            : `/account/${encodeURIComponent(idOf(account))}`
+                            : `/account/${encodeURIComponent(routeIdFor(idOf(account)))}`
                         }
                         style={{
                           display: 'grid',

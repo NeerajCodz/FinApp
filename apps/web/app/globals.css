@@ -44,11 +44,11 @@ a {
 }
 
 ::selection {
-  background: var(--finapp-primary, #b7ff4a);
+  background: var(--finapp-primary);
   color: var(--finapp-primary-foreground, #000);
 }
 
 :focus-visible {
-  outline: 2px solid var(--finapp-ring, #b7ff4a);
+  outline: 2px solid var(--finapp-ring);
   outline-offset: 3px;
 }

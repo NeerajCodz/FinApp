@@ -286,9 +286,13 @@ export function AccountsIndexView({
                           aria-hidden="true"
                         >
                           {account.icon ? (
-                            <EntityIcon value={account.icon} size={22} color={color} />
+                            <EntityIcon
+                              value={account.icon}
+                              size={22}
+                              color="var(--finapp-background)"
+                            />
                           ) : (
-                            <TypeIcon size={22} color={color} />
+                            <TypeIcon size={22} color="var(--finapp-background)" />
                           )}
                         </span>
                         <span className={styles.accountMeta}>
@@ -451,13 +455,9 @@ export function AccountDetailView({
           aria-hidden="true"
         >
           {account.icon ? (
-            <EntityIcon
-              value={account.icon}
-              size={27}
-              color={account.color?.trim() || 'var(--finapp-primary)'}
-            />
+            <EntityIcon value={account.icon} size={27} color="var(--finapp-background)" />
           ) : (
-            <Landmark size={27} color={account.color?.trim() || 'var(--finapp-primary)'} />
+            <Landmark size={27} color="var(--finapp-background)" />
           )}
         </span>
         <div className={styles.detailTitle}>

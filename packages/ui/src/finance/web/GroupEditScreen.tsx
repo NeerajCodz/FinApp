@@ -232,7 +232,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                       disabled={p.invitationBusy}
                       onPress={p.onShareInvitation}
                     >
-                      Share / copy link
+                      {p.invitationBusy ? 'Working…' : 'Share / copy link'}
                     </Button>
                   </div>
                 </>
@@ -253,7 +253,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                   disabled={p.invitationBusy || !p.cloudGroupId}
                   onPress={p.onRevokeInvitation}
                 >
-                  Reset link
+                  {p.invitationBusy ? 'Resetting…' : 'Reset link'}
                 </Button>
                 <Button
                   disabled={p.invitationBusy || !p.cloudGroupId}
@@ -339,7 +339,11 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                                   ) : (
                                     <ArrowUp size={14} />
                                   )}{' '}
-                                  {m.role === 'admin' ? 'Demote' : 'Promote'}
+                                  {p.saving === m.id
+                                    ? 'Working…'
+                                    : m.role === 'admin'
+                                      ? 'Demote'
+                                      : 'Promote'}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -347,7 +351,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                                   disabled={!!p.saving}
                                   onPress={() => p.onRemoveMember(m)}
                                 >
-                                  Remove
+                                  {p.saving === m.id ? 'Removing…' : 'Remove'}
                                 </Button>
                               </div>
                             )}

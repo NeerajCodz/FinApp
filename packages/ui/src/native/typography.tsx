@@ -108,7 +108,7 @@ export function Badge({
   const { tokens } = useTheme();
   const palette = {
     default: { backgroundColor: tokens.primary, color: tokens.primaryForeground },
-    success: { backgroundColor: '#B7FF4A1A', color: tokens.positive },
+    success: { backgroundColor: `${tokens.positive}1A`, color: tokens.positive },
     danger: { backgroundColor: '#FF5C5C1A', color: tokens.destructive },
     neutral: { backgroundColor: tokens.surfaceRaised, color: tokens.foregroundMuted },
   } as const;

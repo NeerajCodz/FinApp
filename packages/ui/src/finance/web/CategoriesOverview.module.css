@@ -85,8 +85,8 @@
   height: 58px;
   flex: 0 0 58px;
   border-radius: 11px;
-  color: var(--finance-lime, #b7ff4a);
-  background: color-mix(in srgb, var(--finance-lime, #b7ff4a) 13%, transparent);
+  color: var(--finance-lime, var(--finapp-primary));
+  background: color-mix(in srgb, var(--finance-lime, var(--finapp-primary)) 13%, transparent);
 }
 .metric[data-tone='expense'] .metricMark {
   color: var(--finance-expense, #ff6877);
@@ -177,7 +177,7 @@
 .filters button:focus-visible,
 .row:focus-visible,
 .note button:focus-visible {
-  outline: 2px solid var(--finance-lime, #b7ff4a);
+  outline: 2px solid var(--finance-lime, var(--finapp-primary));
   outline-offset: 2px;
 }
 .filters .activeFilter {
@@ -297,7 +297,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--finance-lime, #b7ff4a);
+  background: var(--finance-lime, var(--finapp-primary));
 }
 .track > .overTrack {
   background: var(--finance-expense, #ff6877);
@@ -335,8 +335,8 @@
   height: 36px;
   flex: 0 0 36px;
   border-radius: 10px;
-  color: var(--finance-lime, #b7ff4a);
-  background: color-mix(in srgb, var(--finance-lime, #b7ff4a) 12%, transparent);
+  color: var(--finance-lime, var(--finapp-primary));
+  background: color-mix(in srgb, var(--finance-lime, var(--finapp-primary)) 12%, transparent);
 }
 .note > div {
   flex: 1;
@@ -357,7 +357,7 @@
   padding: 7px 4px;
   border: 0;
   background: none;
-  color: var(--finance-lime, #b7ff4a);
+  color: var(--finance-lime, var(--finapp-primary));
   font: inherit;
   font-size: 0.77rem;
   font-weight: 650;

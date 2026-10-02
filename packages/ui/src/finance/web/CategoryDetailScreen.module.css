@@ -38,7 +38,7 @@
   cursor: pointer;
 }
 .titleCopy > small button:hover {
-  color: var(--finance-lime, #b7ff4a);
+  color: var(--finance-lime, var(--finapp-primary));
 }
 .titleCopy h1 {
   margin: 0;
@@ -66,11 +66,11 @@
   cursor: pointer;
 }
 .back:hover {
-  border-color: var(--finance-lime, #b7ff4a);
+  border-color: var(--finance-lime, var(--finapp-primary));
 }
 .back:focus-visible,
 .titleCopy > small button:focus-visible {
-  outline: 2px solid var(--finance-lime, #b7ff4a);
+  outline: 2px solid var(--finance-lime, var(--finapp-primary));
   outline-offset: 2px;
 }
 .headerActions {
@@ -218,7 +218,7 @@
   font-weight: 650;
 }
 .switch button:focus-visible {
-  outline: 2px solid var(--finance-lime, #b7ff4a);
+  outline: 2px solid var(--finance-lime, var(--finapp-primary));
   outline-offset: 1px;
 }
 .chart {

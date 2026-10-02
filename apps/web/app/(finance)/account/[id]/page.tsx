@@ -15,7 +15,7 @@ import {
   asMinor,
   belongsToUser,
   idOf,
-  matchesId,
+  matchesRouteId,
   localDependency,
   SignInGate,
 } from '../../_personal';
@@ -71,7 +71,7 @@ export default function PersonalAccountDetailPage() {
   const timeZone = profiles[0]?.timezone;
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const account = records.find(
-    (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
+    (record) => userId && belongsToUser(record, userId) && matchesRouteId(record, routeId),
   );
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -367,7 +367,7 @@ export default function PersonalAccountDetailPage() {
       onSetIcon={(icon) => void updateIcon(icon)}
       onSetColor={(color) => void updateColor(color)}
       onAddTransaction={() =>
-        router.push(`/transaction/new?accountId=${encodeURIComponent(routeId ?? '')}`)
+        router.push(`/transaction/new?accountId=${encodeURIComponent(localId)}`)
       }
       onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
     />

@@ -609,7 +609,7 @@ export default function ActivityScreen() {
             const share =
               categoryTotal > 0n ? Number((category.amountMinor * 1000n) / categoryTotal) / 10 : 0;
             const colors = [
-              tokens.chart.volt,
+              tokens.primary,
               tokens.chart.blue,
               tokens.chart.violet,
               tokens.chart.orange,

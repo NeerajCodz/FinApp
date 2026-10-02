@@ -8,7 +8,7 @@ import { AccountFormScreen, type AccountFormValue } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { SignInGate } from '../../_personal';
+import { routeIdFor, SignInGate } from '../../_personal';
 
 type Profile = LocalRecord & { defaultCurrency?: string };
 const maxInt64 = 9_223_372_036_854_775_807n;
@@ -79,7 +79,7 @@ export default function NewPersonalAccountPage() {
         ...(form.notes?.trim() ? { notes: form.notes.trim() } : {}),
         includeInAnalytics: form.includeInAnalytics !== false,
       });
-      router.push(`/account/${encodeURIComponent(id)}`);
+      router.push(`/account/${encodeURIComponent(routeIdFor(id))}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create this account.');
     } finally {

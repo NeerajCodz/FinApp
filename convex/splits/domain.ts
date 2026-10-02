@@ -76,6 +76,27 @@ type ParticipantAmountCandidate = { userId: string; amountMinor: unknown };
 type SettlementAmount = { fromUserId: string; toUserId: string; amountMinor: bigint };
 type SettlementAmountCandidate = Omit<SettlementAmount, 'amountMinor'> & { amountMinor: unknown };
 
+function toMinorUnits(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return BigInt(value);
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value);
+  return null;
+}
+
+function participantAmount(item: ParticipantAmountCandidate): ParticipantAmount | null {
+  const amountMinor = toMinorUnits(item.amountMinor);
+  return item.userId && amountMinor !== null && amountMinor >= 0n
+    ? { userId: item.userId, amountMinor }
+    : null;
+}
+
+function settlementAmount(item: SettlementAmountCandidate): SettlementAmount | null {
+  const amountMinor = toMinorUnits(item.amountMinor);
+  return item.fromUserId && item.toUserId && amountMinor !== null && amountMinor >= 0n
+    ? { fromUserId: item.fromUserId, toUserId: item.toUserId, amountMinor }
+    : null;
+}
+
 function groupRecordIds(record: GroupLedgerRecord): Set<string> {
   return new Set(
     [record.id, record._id, record.cloudId].filter(
@@ -87,19 +108,6 @@ function groupRecordIds(record: GroupLedgerRecord): Set<string> {
 function belongsToGroup(record: GroupLedgerRecord, field: string, ids: Set<string>): boolean {
   const value = record[field];
   return typeof value === 'string' && ids.has(value);
-}
-
-function isParticipantAmount(item: ParticipantAmountCandidate): item is ParticipantAmount {
-  return Boolean(item.userId) && typeof item.amountMinor === 'bigint' && item.amountMinor >= 0n;
-}
-
-function isSettlementAmount(item: SettlementAmountCandidate): item is SettlementAmount {
-  return (
-    Boolean(item.fromUserId) &&
-    Boolean(item.toUserId) &&
-    typeof item.amountMinor === 'bigint' &&
-    item.amountMinor >= 0n
-  );
 }
 
 export function projectGroupBalances(
@@ -130,19 +138,23 @@ export function projectGroupBalances(
     const sharedRows = participantRecords.filter((record) =>
       belongsToGroup(record, 'transactionId', transactionIds),
     );
-    const paidCandidates = paidRows.map((record) => ({
-      userId: String(record.userId ?? record.memberId ?? ''),
-      amountMinor: record.amountMinor,
-    }));
-    const sharedCandidates = sharedRows.map((record) => ({
-      userId: String(record.userId ?? record.memberId ?? ''),
-      amountMinor: record.amountMinor,
-    }));
-    const paid = paidCandidates.filter(isParticipantAmount);
-    const shared = sharedCandidates.filter(isParticipantAmount);
-    const expected = transaction.amountMinor;
+    const paidCandidates = paidRows.map((record) =>
+      participantAmount({
+        userId: String(record.userId ?? record.memberId ?? ''),
+        amountMinor: record.amountMinor,
+      }),
+    );
+    const sharedCandidates = sharedRows.map((record) =>
+      participantAmount({
+        userId: String(record.userId ?? record.memberId ?? ''),
+        amountMinor: record.amountMinor,
+      }),
+    );
+    const paid = paidCandidates.filter((item): item is ParticipantAmount => item !== null);
+    const shared = sharedCandidates.filter((item): item is ParticipantAmount => item !== null);
+    const expected = toMinorUnits(transaction.amountMinor);
     if (
-      typeof expected !== 'bigint' ||
+      expected === null ||
       paid.length !== paidCandidates.length ||
       shared.length !== sharedCandidates.length ||
       !paid.length ||
@@ -161,12 +173,16 @@ export function projectGroupBalances(
         record.currency === currency &&
         record.deletedAt === undefined,
     )
-    .map((record) => ({
-      fromUserId: String(record.fromUserId ?? ''),
-      toUserId: String(record.toUserId ?? ''),
-      amountMinor: record.amountMinor,
-    }));
-  const settlements = settlementCandidates.filter(isSettlementAmount);
+    .map((record) =>
+      settlementAmount({
+        fromUserId: String(record.fromUserId ?? ''),
+        toUserId: String(record.toUserId ?? ''),
+        amountMinor: record.amountMinor,
+      }),
+    );
+  const settlements = settlementCandidates.filter(
+    (item): item is SettlementAmount => item !== null,
+  );
   if (settlements.length !== settlementCandidates.length)
     throw new Error('INCOMPLETE_GROUP_SETTLEMENTS');
   return { currency, balances: calculateNetBalances(payers, participants, settlements), expenses };

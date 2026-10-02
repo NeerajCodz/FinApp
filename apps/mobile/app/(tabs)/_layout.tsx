@@ -87,7 +87,7 @@ function AddButton({ onPress }: { onPress: () => void }) {
           width: 58,
           height: 58,
           borderRadius: 29,
-          backgroundColor: '#B7FF4A',
+          backgroundColor: tokens.primary,
           zIndex: 21,
           elevation: 21,
           shadowColor: tokens.primary,

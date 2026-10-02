@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Button, IconButton, Text, Typography } from '@finapp/ui/native';
 import { EntityColorPicker } from '@finapp/ui/finance';
-import { isAccentColor, type AccentName } from '@finapp/ui/tokens';
+import { accentPalette, isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -13,7 +13,7 @@ import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
 import Storage from 'expo-sqlite/kv-store';
 const accents: { value: AccentName; label: string; color: string }[] = [
-  { value: 'volt', label: 'Volt', color: '#B7FF4A' },
+  { value: 'volt', label: 'Volt', color: accentPalette.volt },
   { value: 'white', label: 'White', color: '#FFFFFF' },
   { value: 'blue', label: 'Blue', color: '#5B8CFF' },
 ];
@@ -145,7 +145,7 @@ export default function AppearanceSettingsScreen() {
                   ? accent
                   : accents.find((option) => option.value === accent)?.color
               }
-              onChange={(color) => void chooseAccent(color ?? '#B7FF4A')}
+              onChange={(color) => void chooseAccent(color ?? accentPalette.volt)}
               label={isAccentColor(accent) ? 'Change custom accent' : 'Choose custom accent'}
             />
           </View>

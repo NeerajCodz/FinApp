@@ -95,6 +95,7 @@ function NewSettlementForm() {
   const [rangeError, setRangeError] = React.useState('');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const saveLock = React.useRef(false);
   React.useEffect(() => {
     if (!userId) return;
     setGroupId(requestedGroupId);
@@ -313,7 +314,7 @@ function NewSettlementForm() {
       !chosenAccount ||
       amountMinor <= 0n ||
       unavailable ||
-      saving
+      saveLock.current
     )
       return;
     if (amountMinor > maximum) {
@@ -322,6 +323,7 @@ function NewSettlementForm() {
       );
       return;
     }
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -364,6 +366,7 @@ function NewSettlementForm() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save settlement.');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }

@@ -8,7 +8,7 @@ import { formatMinor } from '@convex/shared/money';
 import type { AnalyticsBreakdownItem } from '@convex/analytics/domain';
 import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 
-const chartColors = ['volt', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
+const chartColors = ['primary', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
 
 type DonutPoint = AnalyticsBreakdownItem & { chartValue: number; percentage: number };
 
@@ -26,7 +26,9 @@ export function BreakdownDonut({
   iconForCategory?: (id: string) => string | undefined;
 }) {
   const { tokens } = useTheme();
-  const colors = chartColors.map((name) => tokens.chart[name]);
+  const colors = chartColors.map((name) =>
+    name === 'primary' ? tokens.primary : tokens.chart[name],
+  );
   const data: DonutPoint[] = items.map((item) => ({
     ...item,
     chartValue:

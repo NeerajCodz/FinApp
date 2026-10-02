@@ -80,7 +80,7 @@ export function Chart({
                       display: 'block',
                       width: `${width}%`,
                       height: '100%',
-                      background: 'var(--finapp-primary, #b7ff4a)',
+                      background: 'var(--finapp-primary)',
                       borderRadius: 'inherit',
                     }}
                   />
