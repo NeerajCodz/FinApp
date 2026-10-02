@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ArrowLeft, Check } from 'lucide-react';
-import { Button, IconButton, Sheet, Text, Typography, useTheme } from '@finapp/ui/web';
+import { Button, IconButton, Text, Typography, useTheme } from '@finapp/ui/web';
+import { EntityColorPicker } from '@finapp/ui/finance';
 import type { Appearance } from '@finapp/ui/web';
 import { isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
@@ -26,10 +27,6 @@ export default function AppearanceSettingsPage() {
   const router = useRouter();
   const { userId } = useBrowserSync();
   const { appearance, setAppearance, accent, setAccent } = useTheme();
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
-  const [customColor, setCustomColor] = useState<string>(
-    isAccentColor(accent) ? accent : '#B7FF4A',
-  );
   const { records } = useLocalRecords<LocalRecord>('profile');
   const profile = records[0];
   const [accentError, setAccentError] = useState('');
@@ -130,60 +127,18 @@ export default function AppearanceSettingsPage() {
                 </Button>
               );
             })}
-            <Button
-              variant={isAccentColor(accent) ? 'primary' : 'outline'}
-              aria-pressed={isAccentColor(accent)}
-              onPress={() => {
-                setCustomColor(isAccentColor(accent) ? accent : '#B7FF4A');
-                setColorPickerOpen(true);
-              }}
-              style={{ justifyContent: 'space-between', minHeight: 56 }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: '50%',
-                    background: isAccentColor(accent)
-                      ? accent
-                      : 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)',
-                  }}
-                />
-                Custom
-              </span>
-              {isAccentColor(accent) && <Check size={18} aria-hidden="true" />}
-            </Button>
+            <EntityColorPicker
+              value={
+                isAccentColor(accent)
+                  ? accent
+                  : accents.find((option) => option.value === accent)?.color
+              }
+              onChange={(color) => void chooseAccent(color ?? '#B7FF4A')}
+              label={isAccentColor(accent) ? 'Change custom accent' : 'Choose custom accent'}
+            />
           </div>
         </section>
       </div>
-      <Sheet
-        visible={colorPickerOpen}
-        onClose={() => setColorPickerOpen(false)}
-        title="Custom accent"
-      >
-        <div style={{ display: 'grid', gap: 16 }}>
-          <Text>Pick a color for primary actions and highlights.</Text>
-          <input
-            aria-label="Custom accent color"
-            type="color"
-            value={customColor}
-            onChange={(event) => setCustomColor(event.target.value.toUpperCase())}
-            style={{ width: 72, height: 54, border: 0, background: 'transparent', padding: 0 }}
-          />
-          <Button
-            disabled={!isAccentColor(customColor)}
-            onPress={() => {
-              if (!isAccentColor(customColor)) return;
-              void chooseAccent(customColor);
-              setColorPickerOpen(false);
-            }}
-          >
-            Use custom color
-          </Button>
-        </div>
-      </Sheet>
     </>
   );
 }

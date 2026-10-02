@@ -34,12 +34,16 @@ export const summary = query({
       .query('accounts')
       .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
       .collect();
-    const accountNames = accounts.map((account) => ({ id: account._id, name: account.name }));
+    const excludedAccountIds = new Set(accounts
+      .filter((account) => account.includeInAnalytics === false).map((account) => String(account._id)));
+    const includedTransactions = transactions.filter((transaction) => !excludedAccountIds.has(String(transaction.accountId)));
+    const accountNames = accounts.filter((account) => account.includeInAnalytics !== false)
+      .map((account) => ({ id: account._id, name: account.name }));
     const categoryNames = categories.map((category) => ({ id: category._id, name: category.name }));
     const analyticsPeriod = period as AnalyticsPeriod;
     const timeZone = user.timezone ?? 'UTC';
     const current = aggregateAnalytics(
-      transactions,
+      includedTransactions,
       categoryNames,
       currency,
       analyticsPeriod,
@@ -49,7 +53,7 @@ export const summary = query({
       accountNames,
     );
     const previous = aggregateAnalytics(
-      transactions,
+      includedTransactions,
       categoryNames,
       currency,
       analyticsPeriod,

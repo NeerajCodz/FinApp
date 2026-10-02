@@ -110,7 +110,7 @@ export default function AccountsScreen() {
       topInset={insets.top}
       bottomInset={insets.bottom}
       onRetry={() => router.replace('/accounts' as never)}
-      onAddAccount={() => router.push('/account/new' as never)}
+      onAddAccount={() => router.push('/accounts/new' as never)}
       onOpenAccount={(id) => router.push({ pathname: '/account/[id]', params: { id } } as never)}
     />
   );

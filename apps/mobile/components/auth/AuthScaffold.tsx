@@ -95,13 +95,11 @@ export function AuthScaffold({
             >
               <View style={[styles.story, { flex: wide ? 1 : undefined }]}>
                 <View
-                  pointerEvents="none"
+                  pointerEvents="auto"
                   accessible={false}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no-hide-descendants"
                   style={{ alignSelf: hero || wide ? 'center' : 'flex-start' }}
                 >
-                  <CoinLogo size={coinSize} />
+                  <CoinLogo size={coinSize} interactive />
                 </View>
                 <View style={{ gap: 14 }}>
                   <Typography variant="caption" style={{ color: tokens.primary, letterSpacing: 2 }}>

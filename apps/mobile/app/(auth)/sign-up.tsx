@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
-import { formatAuthError } from '@convex/shared/auth-errors';
+import { router, useLocalSearchParams } from 'expo-router';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { Button, Input, Label, Typography } from '@finapp/ui/native';
+import { Button, Input, Label, PasswordField, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
-import { AuthError, AuthSubmit, isEmail, PasswordField } from '@/components/auth/AuthFields';
+import { AuthError, AuthSubmit, isEmail } from '@/components/auth/AuthFields';
+import { isGroupInvitationToken } from '@/lib/authRoutes';
 
 export default function SignUpScreen() {
+  const { nextGroupInviteToken: rawInviteToken } = useLocalSearchParams<{
+    nextGroupInviteToken?: string;
+  }>();
+  const inviteToken = isGroupInvitationToken(rawInviteToken) ? rawInviteToken : undefined;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -31,15 +36,15 @@ export default function SignUpScreen() {
     form.append('password', password);
     form.append('flow', 'signUp');
     try {
-      const result = await signIn('password', form);
-      if (result.signingIn) {
-        router.replace('/(auth)/onboarding');
-      } else {
-        router.replace({
-          pathname: '/(auth)/verify',
-          params: { email: email.trim().toLowerCase(), next: 'onboarding' },
-        });
-      }
+      await signIn('password', form);
+      router.replace({
+        pathname: '/(auth)/verify',
+        params: {
+          email: email.trim().toLowerCase(),
+          next: 'onboarding',
+          ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}),
+        },
+      });
     } catch (cause) {
       const message = formatAuthError(cause, 'sign-up');
       setError(message);
@@ -55,7 +60,19 @@ export default function SignUpScreen() {
       title={<>Make room{`\n`}for clarity.</>}
       description="Build a money habit that works for you. Start with an account, then set your own pace."
       footer={
-        <Button variant="ghost" onPress={() => router.replace('/(auth)/sign-in')}>
+        <Button
+          variant="ghost"
+          onPress={() =>
+            router.replace(
+              inviteToken
+                ? {
+                    pathname: '/(auth)/sign-in',
+                    params: { nextGroupInviteToken: inviteToken },
+                  }
+                : '/(auth)/sign-in',
+            )
+          }
+        >
           Already a member? Sign in
         </Button>
       }

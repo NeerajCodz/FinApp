@@ -44,12 +44,15 @@
     "lucide-react": "^0.468.0",
     "lucide-react-native": "^1.34.0",
     "react": ">=19.0.0",
+    "react-dom": ">=19.0.0",
     "react-native": ">=0.86.0"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
+    "@phosphor-icons/react": "^2.1.10",
     "animejs": "^4.5.0",
-    "earcut": "^3.2.4"
+    "earcut": "^3.2.4",
+    "phosphor-react-native": "^3.0.6"
   },
   "devDependencies": {
     "@types/earcut": "^3.0.0"

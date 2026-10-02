@@ -72,7 +72,7 @@ export function HomeFlowBudgets({
           <div className="finance-home-empty-block">
             <Target size={21} aria-hidden="true" />
             <p>No active budgets for this period.</p>
-            <a href="/budget">Create a budget</a>
+            <a href="/budgets/new">Create a budget</a>
           </div>
         )}
       </section>

@@ -1,0 +1,18 @@
+.wrap { width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th { padding: 8px 10px; background: var(--finapp-surface-raised); color: var(--finapp-foreground-muted); text-align: left; font-size: 12px; font-weight: 400; }
+.table td { padding: 5px 10px; border-bottom: 1px solid var(--finapp-border-subtle); height: 43px; }
+.table tr:last-child td { border-bottom: 0; }
+.number { width: 32px; color: var(--finapp-foreground-muted); }
+.description { display: flex; align-items: center; gap: 10px; border: 0; padding: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; min-width: 160px; font: inherit; }
+.description:disabled { cursor: default; opacity: 1; }
+.description > span:first-child { width: 30px !important; height: 30px !important; border-radius: 7px !important; }
+.description > span:last-child { display: grid; gap: 1px; }
+.description strong { font-weight: 500; }
+.description small { color: var(--finapp-foreground-muted); font-size: 11px; }
+.date { white-space: nowrap; }
+.table .amount { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+.income { color: var(--finapp-income); }
+.expense { color: var(--finapp-expense); }
+.open { display: grid; place-items: center; background: transparent; color: var(--finapp-foreground-muted); border: 0; cursor: pointer; padding: 5px; }
+.open:focus-visible, .description:focus-visible { outline: 2px solid var(--finapp-primary); outline-offset: 3px; }

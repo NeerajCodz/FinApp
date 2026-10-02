@@ -8,19 +8,20 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { api } from '@convex/_generated/api';
-import { useQuery } from 'convex/react';
+import { useConvexAuth, useQuery } from 'convex/react';
 import { currencies } from '@convex/shared/validators';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
 import {
-  Avatar,
   Button,
   Input,
   Label,
+  OnboardingAvatarPicker,
+  ProfilePreview,
   Progress,
   Tabs,
   Typography,
@@ -28,6 +29,7 @@ import {
 } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit } from '@/components/auth/AuthFields';
+import { isGroupInvitationToken } from '@/lib/authRoutes';
 type CurrencyCode = (typeof currencies)[number];
 const localeCurrency: CurrencyCode = Intl.NumberFormat()
   .resolvedOptions()
@@ -79,6 +81,10 @@ function currencyLabel(currency: string) {
 }
 
 export default function OnboardingScreen() {
+  const { nextGroupInviteToken: rawInviteToken } = useLocalSearchParams<{
+    nextGroupInviteToken?: string;
+  }>();
+  const inviteToken = isGroupInvitationToken(rawInviteToken) ? rawInviteToken : undefined;
   const [step, setStep] = useState(0);
   const [currency, setCurrency] = useState<CurrencyCode>(localeCurrency);
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -94,6 +100,27 @@ export default function OnboardingScreen() {
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
   const avatarCatalog = useQuery(api.avatars.queries.list, {});
+  const auth = useConvexAuth();
+  const verification = useQuery(api.users.queries.current, {});
+  React.useEffect(() => {
+    if (auth.isLoading || verification === undefined) return;
+    if (!auth.isAuthenticated) {
+      router.replace(
+        inviteToken
+          ? { pathname: '/(auth)/sign-in', params: { nextGroupInviteToken: inviteToken } }
+          : '/(auth)/sign-in',
+      );
+    } else if (verification?.emailVerificationTime === undefined) {
+      router.replace({
+        pathname: '/(auth)/verify',
+        params: {
+          email: verification?.email ?? '',
+          next: 'onboarding',
+          ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}),
+        },
+      });
+    }
+  }, [auth.isAuthenticated, auth.isLoading, verification]);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const { tokens } = useTheme();
@@ -131,7 +158,12 @@ export default function OnboardingScreen() {
     if (pending) return;
     if (step === 0) {
       if (router.canGoBack()) router.back();
-      else router.replace('/(auth)/sign-in');
+      else
+        router.replace(
+          inviteToken
+            ? { pathname: '/(auth)/sign-in', params: { nextGroupInviteToken: inviteToken } }
+            : '/(auth)/sign-in',
+        );
     } else {
       setStep((current) => current - 1);
     }
@@ -194,7 +226,13 @@ export default function OnboardingScreen() {
           },
         );
       }
-      router.replace(mode === 'shared' ? '/(tabs)/groups' : '/(tabs)');
+      router.replace(
+        inviteToken
+          ? { pathname: '/group-invite', params: { token: inviteToken } }
+          : mode === 'shared'
+            ? '/(tabs)/groups'
+            : '/(tabs)',
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile');
     } finally {
@@ -217,6 +255,12 @@ export default function OnboardingScreen() {
     'Start with personal finances or keep shared expenses ready from day one.',
   ];
 
+  if (
+    auth.isLoading ||
+    verification === undefined ||
+    verification?.emailVerificationTime === undefined
+  )
+    return null;
   return (
     <>
       <AuthScaffold
@@ -266,6 +310,11 @@ export default function OnboardingScreen() {
               editable={!pending}
               returnKeyType="next"
             />
+            <ProfilePreview
+              displayName={displayName}
+              username={handle}
+              avatarUrl={selectedAvatar?.url}
+            />
             <Label style={{ marginBottom: 0 }}>Username</Label>
             <Input
               accessibilityLabel="Username"
@@ -309,23 +358,11 @@ export default function OnboardingScreen() {
               ))}
             </View>
             <Label style={{ marginBottom: 0 }}>Choose an avatar</Label>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-                {visibleAvatars.map((avatar) => (
-                  <Button
-                    key={avatar.avatarId}
-                    variant={avatarId === avatar.avatarId ? 'primary' : 'outline'}
-                    disabled={pending}
-                    accessibilityLabel={`Select avatar ${avatar.avatarId}`}
-                    accessibilityState={{ selected: avatarId === avatar.avatarId }}
-                    onPress={() => setAvatarId(avatar.avatarId)}
-                    style={{ width: 58, height: 58, padding: 3, borderRadius: 999 }}
-                  >
-                    <Avatar initials="" label={avatar.avatarId} imageUrl={avatar.url} size={48} />
-                  </Button>
-                ))}
-              </View>
-            </ScrollView>
+            <OnboardingAvatarPicker
+              choices={visibleAvatars}
+              selectedId={avatarId}
+              onSelect={setAvatarId}
+            />
           </View>
         )}
         {step === 2 && (

@@ -161,7 +161,7 @@ export default function CategoriesPage() {
             : undefined
       }
       onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}`)}
-      onAddCategory={() => router.push('/category/new')}
+      onAddCategory={() => router.push('/categories/new')}
       onOpenAnalytics={() => router.push('/categories/analytics')}
     />
   );

@@ -2,25 +2,27 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import {
-  ArrowLeft,
-  ArrowLeftRight,
-  ArrowRight,
-  ChartNoAxesCombined,
-  Plus,
-  Settings2,
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
-import { Avatar, Button, Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { EntityIcon, formatTransactionDate, TransactionRow } from '@finapp/ui/finance';
+import { Empty } from '@finapp/ui/web';
+import { formatTransactionDate } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { isGroupRangeCovered } from '@/lib/offline/repository';
+import { isGroupRangeCovered, readLocal } from '@/lib/offline/repository';
+import {
+  GroupDetailScreen,
+  GroupChatScreen,
+  type GroupDetailActivity,
+  type GroupDetailMember,
+  type GroupChatScreenProps,
+  type GroupDetailSettlement,
+} from '@finapp/ui/finance';
+import type { GroupChatItem } from '@finapp/ui/finance';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type Group = LocalRecord & {
@@ -29,6 +31,7 @@ type Group = LocalRecord & {
   ownerId?: string;
   archivedAt?: number;
   icon?: string;
+  color?: string;
 };
 type Member = LocalRecord & {
   groupId?: string;
@@ -55,6 +58,8 @@ type LedgerRecord = LocalRecord & {
   hasTime?: boolean;
   title?: string;
   deletedAt?: number;
+  categoryId?: string;
+  accountId?: string;
   participants?: Array<{ userId: string; amountMinor: bigint | number | string }>;
   payerUserId?: string;
   payerAmountMinor?: bigint | number | string;
@@ -77,6 +82,7 @@ export default function GroupHomePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const groupId = params.id;
+  const standaloneChat = usePathname().endsWith('/chat');
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
   const {
     records: groups,
@@ -84,20 +90,61 @@ export default function GroupHomePage() {
     error: groupsError,
   } = useLocalRecords<Group>('group');
   const { records: members } = useLocalRecords<Member>('groupMember');
-  const { records: transactions } = useLocalRecords<LedgerRecord>('transaction');
-  const { records: payers } = useLocalRecords<LedgerRecord>('expensePayer');
-  const { records: participants } = useLocalRecords<LedgerRecord>('expenseParticipant');
-  const { records: settlements } = useLocalRecords<LedgerRecord>('settlement');
+  const {
+    records: transactions,
+    loading: transactionsLoading,
+    error: transactionsError,
+  } = useLocalRecords<LedgerRecord>('transaction');
+  const {
+    records: payers,
+    loading: payersLoading,
+    error: payersError,
+  } = useLocalRecords<LedgerRecord>('expensePayer');
+  const {
+    records: participants,
+    loading: participantsLoading,
+    error: participantsError,
+  } = useLocalRecords<LedgerRecord>('expenseParticipant');
+  const {
+    records: settlements,
+    loading: settlementsLoading,
+    error: settlementsError,
+  } = useLocalRecords<LedgerRecord>('settlement');
+  const { records: categories } = useLocalRecords<LocalRecord>('category');
+  const { records: accounts } = useLocalRecords<LocalRecord>('account');
   const [rangeStatus, setRangeStatus] = React.useState<
     'idle' | 'loading' | 'loaded' | 'uncached' | 'error'
   >('idle');
   const [rangeError, setRangeError] = React.useState('');
+  const [coveredScope, setCoveredScope] = React.useState('');
+  const [completeLedger, setCompleteLedger] = React.useState<{
+    scope: string;
+    transactions: LedgerRecord[];
+    payers: LedgerRecord[];
+    participants: LedgerRecord[];
+    settlements: LedgerRecord[];
+    error?: string;
+  }>();
   const group = groups.find((item) => recordIds(item).includes(groupId));
   const groupIds = group ? recordIds(group) : [groupId];
   const localGroupId = group ? recordId(group) : groupId;
   const groupReady = Boolean(group);
+  const groupOptions = groups
+    .filter((candidate) => {
+      if (candidate.deletedAt !== undefined || candidate.archivedAt !== undefined) return false;
+      return members.some(
+        (member) =>
+          member.deletedAt === undefined &&
+          (member.userId === userId || member.memberId === userId) &&
+          typeof member.groupId === 'string' &&
+          recordIds(candidate).includes(member.groupId),
+      );
+    })
+    .map((candidate) => ({ id: recordId(candidate), name: candidate.name ?? 'Group' }))
+    .filter((option) => option.id);
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
+  const ledgerScope = `${userId ?? ''}:${localGroupId}:${rangeEndAt}`;
   const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
   const canUseGroupChat = isConnected && Boolean(cloudGroupId);
   const remoteGroup = useQuery(
@@ -114,13 +161,6 @@ export default function GroupHomePage() {
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
   const [chatError, setChatError] = React.useState('');
-  const chatTimelineRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const timeline = chatTimelineRef.current;
-    if (canUseGroupChat && chatMessages?.length && timeline)
-      timeline.scrollTop = timeline.scrollHeight;
-  }, [canUseGroupChat, chatMessages?.length]);
 
   React.useEffect(() => {
     if (!userId || !group) return;
@@ -129,6 +169,7 @@ export default function GroupHomePage() {
       void isGroupRangeCovered(userId, localGroupId, 0, rangeEndAt).then(
         (covered) => {
           if (!active) return;
+          if (covered) setCoveredScope(ledgerScope);
           setRangeStatus(covered ? 'loaded' : 'uncached');
           setRangeError(
             covered ? '' : 'Offline. Showing saved records; the all-time range may be incomplete.',
@@ -150,7 +191,10 @@ export default function GroupHomePage() {
     setRangeError('');
     void fetchGroupRange(localGroupId, 0, rangeEndAt).then(
       () => {
-        if (active) setRangeStatus('loaded');
+        if (active) {
+          setCoveredScope(ledgerScope);
+          setRangeStatus('loaded');
+        }
       },
       (cause: unknown) => {
         if (active) {
@@ -164,7 +208,53 @@ export default function GroupHomePage() {
     return () => {
       active = false;
     };
-  }, [fetchGroupRange, groupReady, isConnected, localGroupId, rangeEndAt, userId]);
+  }, [fetchGroupRange, groupReady, isConnected, localGroupId, rangeEndAt, userId, ledgerScope]);
+
+  React.useEffect(() => {
+    if (!userId || rangeStatus !== 'loaded' || coveredScope !== ledgerScope) return;
+    let active = true;
+    void Promise.all([
+      readLocal<LedgerRecord>(userId, 'transaction'),
+      readLocal<LedgerRecord>(userId, 'expensePayer'),
+      readLocal<LedgerRecord>(userId, 'expenseParticipant'),
+      readLocal<LedgerRecord>(userId, 'settlement'),
+    ]).then(
+      ([completeTransactions, completePayers, completeParticipants, completeSettlements]) => {
+        if (active)
+          setCompleteLedger({
+            scope: ledgerScope,
+            transactions: completeTransactions,
+            payers: completePayers,
+            participants: completeParticipants,
+            settlements: completeSettlements,
+          });
+      },
+      (cause: unknown) => {
+        if (active)
+          setCompleteLedger({
+            scope: ledgerScope,
+            transactions: [],
+            payers: [],
+            participants: [],
+            settlements: [],
+            error:
+              cause instanceof Error ? cause.message : 'Complete group records could not be read.',
+          });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [
+    userId,
+    rangeStatus,
+    coveredScope,
+    ledgerScope,
+    transactions,
+    payers,
+    participants,
+    settlements,
+  ]);
 
   if (!userId)
     return (
@@ -208,7 +298,10 @@ export default function GroupHomePage() {
     );
 
   const groupMembers = members.filter(
-    (member) => typeof member.groupId === 'string' && groupIds.includes(member.groupId),
+    (member) =>
+      member.deletedAt === undefined &&
+      typeof member.groupId === 'string' &&
+      groupIds.includes(member.groupId),
   );
   const expenses = transactions.filter(
     (record) =>
@@ -223,18 +316,36 @@ export default function GroupHomePage() {
     const transactionIds = recordIds(expense);
     return transactionIds.length > 0;
   });
-  const rangeComplete = rangeStatus === 'loaded';
+  const recordsLoading =
+    transactionsLoading || payersLoading || participantsLoading || settlementsLoading;
+  const rangeComplete =
+    rangeStatus === 'loaded' &&
+    coveredScope === ledgerScope &&
+    completeLedger?.scope === ledgerScope &&
+    !recordsLoading;
   let balanceByUser: Record<string, bigint> = {};
-  let ledgerError = '';
-  if (rangeComplete) {
+  let ledgerError =
+    transactionsError ||
+    payersError ||
+    participantsError ||
+    settlementsError ||
+    (completeLedger?.scope === ledgerScope ? completeLedger.error : '') ||
+    '';
+  let totalSpendMinor = 0n;
+  if (rangeComplete && completeLedger && !ledgerError) {
     try {
-      balanceByUser = projectGroupBalances(
+      const projected = projectGroupBalances(
         group,
-        transactions,
-        payers,
-        participants,
-        settlements,
-      ).balances;
+        completeLedger.transactions,
+        completeLedger.payers,
+        completeLedger.participants,
+        completeLedger.settlements,
+      );
+      balanceByUser = projected.balances;
+      totalSpendMinor = projected.expenses.reduce(
+        (sum, expense) => sum + asMinor(expense.amountMinor),
+        0n,
+      );
     } catch (cause) {
       ledgerError = cause instanceof Error ? cause.message : 'The group balance is incomplete.';
     }
@@ -244,20 +355,30 @@ export default function GroupHomePage() {
   const recent = [...activeExpenses]
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
     .slice(0, 5);
-  const memberNames = groupMembers.map((member) => ({
-    id: String(member.userId ?? member.memberId ?? recordId(member)),
-    username: member.username,
-    avatarUrl: member.avatarUrl,
-    name: String(
-      member.userId === userId
-        ? 'You'
-        : (member.displayName ??
-            member.name ??
-            (member.username
-              ? `@${member.username}`
-              : `Member ${String(member.userId ?? '').slice(-6)}`)),
-    ),
-  }));
+  const memberNames: GroupDetailMember[] = remoteGroup?.members
+    ? remoteGroup.members.map((member) => ({
+        id: member.id,
+        username: member.username,
+        avatarUrl: member.avatarUrl,
+        role: member.role,
+        name: member.id === userId ? 'You' : member.displayName,
+      }))
+    : groupMembers.map((member) => ({
+        id: String(member.userId ?? member.memberId ?? recordId(member)),
+        username: member.username,
+        avatarUrl: member.avatarUrl,
+        role: member.role,
+        name:
+          member.userId === userId
+            ? 'You'
+            : String(
+                member.displayName ??
+                  member.name ??
+                  (member.username
+                    ? `@${member.username}`
+                    : `Member ${String(member.userId ?? '').slice(-6)}`),
+              ),
+      }));
   if (group.ownerId === userId && !memberNames.some((member) => member.id === userId))
     memberNames.unshift({ id: userId, username: undefined, avatarUrl: null, name: 'You' });
   const recentSettlements = settlements
@@ -277,6 +398,20 @@ export default function GroupHomePage() {
         (id ? `Member ${id.slice(-6)}` : 'Group member'));
   const formatDate = (value: unknown, hasTime?: boolean) =>
     formatTransactionDate(Number(value ?? Date.now()), hasTime);
+  const expenseMetadata = (expense: LedgerRecord) => {
+    const category = categories.find(
+      (record) => expense.categoryId && recordIds(record).includes(expense.categoryId),
+    );
+    const account = accounts.find(
+      (record) => expense.accountId && recordIds(record).includes(expense.accountId),
+    );
+    return {
+      category: typeof category?.name === 'string' ? category.name : undefined,
+      account: typeof account?.name === 'string' ? account.name : undefined,
+      icon: typeof category?.icon === 'string' ? category.icon : undefined,
+      color: typeof category?.color === 'string' ? category.color : undefined,
+    };
+  };
   const chatTimelineItems = [
     ...recent.map((expense) => ({
       id: `expense:${recordId(expense)}`,
@@ -297,6 +432,48 @@ export default function GroupHomePage() {
       message,
     })),
   ].sort((left, right) => left.createdAt - right.createdAt);
+  const groupChatItems: GroupChatItem[] = chatTimelineItems.map((item) => {
+    const date = new Date(item.createdAt);
+    if (item.kind === 'message') {
+      const message = item.message;
+      const ownMessage = message.senderId === userId;
+      return {
+        id: item.id,
+        kind: 'message',
+        date: date.toLocaleString(),
+        accessibleLabel: `${ownMessage ? 'You' : message.senderName}, ${date.toLocaleString()}`,
+        sender: message.senderName,
+        senderAvatarUrl: message.senderAvatarUrl,
+        ownMessage,
+        text: message.kind === 'text' ? message.text : undefined,
+        attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+      };
+    }
+    if (item.kind === 'expense') {
+      const expense = item.expense;
+      return {
+        id: item.id,
+        kind: 'expense',
+        date: formatDate(expense.occurredAt, expense.hasTime),
+        accessibleLabel: `Shared expense: ${expense.title ?? 'Group expense'}`,
+        title: expense.title ?? 'Group expense',
+        amount: formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR'),
+        ...expenseMetadata(expense),
+        onPress: () => router.push(`/transaction/${encodeURIComponent(recordId(expense))}`),
+      };
+    }
+    const settlement = item.settlement;
+    const from = memberName(String(settlement.fromUserId ?? ''));
+    const to = memberName(String(settlement.toUserId ?? ''));
+    return {
+      id: item.id,
+      kind: 'settlement',
+      date: formatDate(settlement.occurredAt, true),
+      accessibleLabel: `Settlement: ${from} paid ${to}`,
+      title: `${from} paid ${to}`,
+      amount: formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR'),
+    };
+  });
   async function submitChatMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
@@ -352,507 +529,113 @@ export default function GroupHomePage() {
     }
   }
 
+  const detailMembers = memberNames;
+  const detailActivities: GroupDetailActivity[] = recent.map((expense) => ({
+    id: recordId(expense),
+    title: expense.title ?? 'Group expense',
+    amountMinor: asMinor(expense.amountMinor),
+    currency: group.currency ?? 'INR',
+    date: formatDate(expense.occurredAt, expense.hasTime),
+    ...expenseMetadata(expense),
+  }));
+  const detailSettlements: GroupDetailSettlement[] = recentSettlements.map((settlement) => ({
+    id: recordId(settlement),
+    description: `${memberName(String(settlement.fromUserId ?? ''))} paid ${memberName(String(settlement.toUserId ?? ''))}`,
+    amount: formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR'),
+    date: settlement.occurredAt === undefined ? undefined : formatDate(settlement.occurredAt, true),
+  }));
+  const balanceMeaning =
+    myBalance === 0n ? 'You are settled' : myBalance > 0n ? 'Owed to you' : 'You owe';
+  const chat: GroupChatScreenProps = {
+    group: {
+      name: group.name ?? 'Group',
+      currency: group.currency ?? 'INR',
+      icon: remoteGroup?.icon ?? group.icon,
+      color: remoteGroup?.color ?? group.color,
+    },
+    members: detailMembers.map((member) => ({
+      ...member,
+      avatarUrl: member.avatarUrl ?? undefined,
+    })),
+    embedded: !standaloneChat,
+    onOpenGroup: () => router.push(`/group/${encodeURIComponent(localGroupId)}`),
+    onAddExpense: () => router.push(`/group/${encodeURIComponent(localGroupId)}/new`),
+    onOpenSettings: () => router.push(`/group/${encodeURIComponent(localGroupId)}/edit`),
+    items: groupChatItems,
+    loading: canUseGroupChat && chatMessages === undefined,
+    canSend: canUseGroupChat,
+    connected: isConnected,
+    draft: chatDraft,
+    pending: chatPending,
+    error: chatError || undefined,
+    onDraftChange: setChatDraft,
+    onSubmit: submitChatMessage,
+    onUpload: uploadBillImage,
+  };
+  if (standaloneChat) return <GroupChatScreen {...chat} />;
   return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        <Link className="finance-secondary-action" href="/groups" aria-label="Go back to groups">
-          <ArrowLeft size={18} />
-        </Link>
-        <EntityIcon
-          value={
-            remoteGroup
-              ? (remoteGroup.icon ?? 'lucide:UsersRound')
-              : (group.icon ?? 'lucide:UsersRound')
-          }
-          size={24}
-        />
-        <h1 style={{ flex: 1, margin: 0 }}>{group.name ?? 'Group'}</h1>
-        <Link
-          className="finance-secondary-action"
-          href={`/group/${encodeURIComponent(localGroupId)}/analytics`}
-          aria-label="Group analytics"
-          title="Group analytics"
-        >
-          <ChartNoAxesCombined size={18} />
-        </Link>
-        <Link
-          className="finance-secondary-action"
-          href={`/group/${encodeURIComponent(localGroupId)}/settings`}
-          aria-label="Group settings"
-          title="Group settings"
-        >
-          <Settings2 size={18} />
-        </Link>
-      </header>
-      {(rangeStatus === 'loading' || rangeStatus === 'uncached' || rangeStatus === 'error') && (
-        <p
-          className={rangeStatus === 'error' ? 'finance-form-error' : 'finance-form-note'}
-          role={rangeStatus === 'error' ? 'alert' : 'status'}
-        >
-          {rangeStatus === 'loading' ? 'Loading the all-time group range…' : rangeError}
-        </p>
-      )}
-      {rangeStatus === 'error' && isConnected && (
-        <Button
-          variant="outline"
-          onPress={() => {
-            setRangeStatus('loading');
-            setRangeError('');
-            void fetchGroupRange(localGroupId, 0, Date.now() + 1).then(
-              () => setRangeStatus('loaded'),
-              (cause: unknown) => {
-                setRangeStatus('error');
-                setRangeError(
-                  cause instanceof Error ? cause.message : 'The group range could not be loaded.',
-                );
-              },
-            );
-          }}
-        >
-          Retry range
-        </Button>
-      )}
-      {ledgerError && (
-        <p className="finance-form-error" role="alert">
-          Complete group balances are unavailable. No partial value is shown. {ledgerError}
-        </p>
-      )}
-      <Card className="finance-record-panel">
-        <SectionHeader title="Your balance" />
-        <strong className="finance-record-amount">
-          {ledgerUnavailable
-            ? rangeStatus === 'loading' && !ledgerError
-              ? 'Loading…'
-              : 'Balance unavailable'
-            : formatMinor(myBalance, group.currency ?? 'INR')}
-        </strong>
-        <p className="finance-muted">
-          {ledgerUnavailable
-            ? rangeStatus === 'loading' && !ledgerError
-              ? 'Loading all-time balance…'
-              : 'Complete group balances are unavailable. No partial value is shown.'
-            : myBalance === 0n
-              ? 'You are settled'
-              : myBalance > 0n
-                ? 'Owed to you'
-                : 'You owe'}
-        </p>
-        <div className="finance-page-actions">
-          <Link
-            className="finance-secondary-action"
-            href={`/group/${encodeURIComponent(localGroupId)}/balances`}
-          >
-            View member balances <ArrowRight size={15} />
-          </Link>
-          {myBalance !== 0n && (
-            <Link
-              className="finance-secondary-action"
-              href={`/settle/new?groupId=${encodeURIComponent(localGroupId)}`}
-            >
-              Record a settlement <ArrowLeftRight size={15} />
-            </Link>
-          )}
-        </div>
-      </Card>
-      <Link
-        className="finance-primary-link"
-        href={`/group/${encodeURIComponent(localGroupId)}/expenses/new`}
-      >
-        <Plus size={17} /> Add expense
-      </Link>
-      <Card className="finance-record-panel">
-        <SectionHeader title="Group chat" />
-        <p id="group-chat-help" className="finance-muted">
-          Messages and bill images are saved to this group when you are online. They are not queued
-          for offline sending.
-        </p>
-        {canUseGroupChat ? (
-          <>
-            <div
-              ref={chatTimelineRef}
-              role="log"
-              aria-live="polite"
-              aria-relevant="additions text"
-              aria-label="Group messages"
-              tabIndex={0}
-              style={{
-                display: 'grid',
-                alignContent: 'start',
-                gap: 10,
-                minHeight: 180,
-                maxHeight: 440,
-                overflowY: 'auto',
-                overscrollBehavior: 'contain',
-                padding: 14,
-                border: '1px solid var(--finance-border, rgba(127,127,127,.2))',
-                borderRadius: 16,
-                background: 'var(--finance-surface-subtle, rgba(127,127,127,.05))',
-              }}
-            >
-              {chatMessages === undefined && (
-                <p className="finance-muted" role="status">
-                  Loading saved messages…
-                </p>
-              )}
-              {chatTimelineItems.length ? (
-                chatTimelineItems.map((item) => {
-                  const createdAt = new Date(item.createdAt);
-                  if (item.kind === 'message') {
-                    const { message } = item;
-                    const ownMessage = message.senderId === userId;
-                    return (
-                      <article
-                        key={item.id}
-                        aria-label={`${ownMessage ? 'You' : message.senderName}, ${createdAt.toLocaleString()}`}
-                        style={{
-                          display: 'grid',
-                          justifySelf: ownMessage ? 'end' : 'start',
-                          width: 'fit-content',
-                          maxWidth: 'min(88%, 560px)',
-                          gap: 6,
-                          padding: '10px 13px',
-                          border: '1px solid var(--finance-border, rgba(127,127,127,.16))',
-                          borderRadius: ownMessage ? '16px 16px 5px 16px' : '16px 16px 16px 5px',
-                          background: ownMessage
-                            ? 'var(--finance-accent-subtle, rgba(190,255,0,.12))'
-                            : 'var(--finance-surface, rgba(127,127,127,.1))',
-                          overflowWrap: 'anywhere',
-                        }}
-                      >
-                        <strong style={{ fontSize: 13 }}>
-                          {ownMessage ? 'You' : message.senderName}
-                        </strong>
-                        {message.kind === 'bill' ? (
-                          message.attachmentUrl ? (
-                            <a
-                              href={message.attachmentUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              aria-label={`Open bill image shared by ${ownMessage ? 'you' : message.senderName}`}
-                            >
-                              <img
-                                src={message.attachmentUrl}
-                                alt={`Bill shared by ${ownMessage ? 'you' : message.senderName}`}
-                                style={{
-                                  display: 'block',
-                                  maxWidth: '100%',
-                                  maxHeight: 320,
-                                  borderRadius: 10,
-                                  objectFit: 'contain',
-                                }}
-                              />
-                            </a>
-                          ) : (
-                            <p className="finance-muted" style={{ margin: 0 }}>
-                              Bill image is no longer available.
-                            </p>
-                          )
-                        ) : (
-                          <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                            {message.text}
-                          </p>
-                        )}
-                        <time
-                          className="finance-muted"
-                          dateTime={createdAt.toISOString()}
-                          style={{ fontSize: 12 }}
-                        >
-                          {createdAt.toLocaleString()}
-                        </time>
-                      </article>
-                    );
-                  }
-                  if (item.kind === 'expense') {
-                    const { expense } = item;
-                    return (
-                      <article
-                        key={item.id}
-                        aria-label={`Shared expense: ${expense.title ?? 'Group expense'}, ${formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}`}
-                        style={{
-                          display: 'grid',
-                          justifySelf: 'center',
-                          width: 'min(100%, 540px)',
-                          gap: 5,
-                          padding: '11px 14px',
-                          border: '1px solid var(--finance-border, rgba(127,127,127,.16))',
-                          borderLeft: '3px solid var(--finapp-split)',
-                          borderRadius: 12,
-                          background: 'var(--finance-surface-raised, rgba(127,127,127,.08))',
-                        }}
-                      >
-                        <strong style={{ fontSize: 12 }}>Shared expense · Split</strong>
-                        <span>{expense.title ?? 'Group expense'}</span>
-                        <strong>
-                          {formatMinor(asMinor(expense.amountMinor), group.currency ?? 'INR')}
-                        </strong>
-                        <time
-                          className="finance-muted"
-                          dateTime={createdAt.toISOString()}
-                          style={{ fontSize: 12 }}
-                        >
-                          {formatDate(expense.occurredAt, expense.hasTime)}
-                        </time>
-                      </article>
-                    );
-                  }
-                  const { settlement } = item;
-                  const from = String(settlement.fromUserId ?? '');
-                  const to = String(settlement.toUserId ?? '');
-                  return (
-                    <article
-                      key={item.id}
-                      aria-label={`Settlement: ${memberName(from)} paid ${memberName(to)}, ${formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR')}`}
-                      style={{
-                        display: 'grid',
-                        justifySelf: 'center',
-                        width: 'min(100%, 540px)',
-                        gap: 5,
-                        padding: '11px 14px',
-                        border: '1px solid var(--finance-border, rgba(127,127,127,.16))',
-                        borderLeft: '3px solid var(--finapp-settlement)',
-                        borderRadius: 12,
-                        background: 'var(--finance-surface-raised, rgba(127,127,127,.08))',
-                      }}
-                    >
-                      <strong style={{ fontSize: 12 }}>Settlement</strong>
-                      <span>
-                        {memberName(from)} paid {memberName(to)}
-                      </span>
-                      <strong>
-                        {formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR')}
-                      </strong>
-                      <time
-                        className="finance-muted"
-                        dateTime={createdAt.toISOString()}
-                        style={{ fontSize: 12 }}
-                      >
-                        {formatDate(settlement.occurredAt, true)}
-                      </time>
-                    </article>
-                  );
-                })
-              ) : chatMessages !== undefined ? (
-                <div
-                  style={{
-                    alignSelf: 'center',
-                    justifySelf: 'center',
-                    padding: '18px 8px',
-                    textAlign: 'center',
-                  }}
-                >
-                  <strong style={{ display: 'block', marginBottom: 5 }}>
-                    Start the conversation
-                  </strong>
-                  <span className="finance-muted">
-                    Share a note or attach a bill for the group.
-                  </span>
-                </div>
-              ) : null}
-            </div>
-            <form
-              className="finance-form"
-              onSubmit={submitChatMessage}
-              aria-describedby="group-chat-help"
-            >
-              <textarea
-                aria-label="Group message"
-                value={chatDraft}
-                onChange={(event) => setChatDraft(event.currentTarget.value)}
-                maxLength={4_000}
-                rows={3}
-                placeholder="Write a message…"
-                disabled={chatPending}
-                style={{ resize: 'vertical', minHeight: 84 }}
-              />
-              <div className="finance-page-actions">
-                <label className="finance-secondary-action">
-                  Attach bill image
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    aria-label="Attach bill image"
-                    disabled={chatPending}
-                    onChange={(event) => void uploadBillImage(event)}
-                  />
-                </label>
-                <Button type="submit" disabled={chatPending || !chatDraft.trim()}>
-                  {chatPending ? 'Sending…' : 'Send message'}
-                </Button>
-              </div>
-              <p className="finance-muted" aria-live="polite">
-                {chatPending ? 'Sending to the group…' : `${chatDraft.length}/4,000 characters`}
-              </p>
-            </form>
-          </>
-        ) : (
-          <div
-            style={{
-              padding: 16,
-              border: '1px solid var(--finance-border, rgba(127,127,127,.2))',
-              borderRadius: 14,
-            }}
-          >
-            <strong>{isConnected ? 'Chat is not synced yet' : 'Group chat is offline'}</strong>
-            <p className="finance-muted" style={{ marginBottom: 0 }}>
-              {isConnected
-                ? 'This saved group has no connected cloud ID. Sync the group before using server chat or sharing bill images.'
-                : 'Connect to the internet to load saved messages or send a message and bill image. Group ledger data remains available offline.'}
-            </p>
-          </div>
-        )}
-        {!!chatError && (
-          <p className="finance-form-error" role="alert">
-            {chatError}
-          </p>
-        )}
-      </Card>
-      <section style={{ display: 'grid', gap: 24 }}>
-        <section>
-          <SectionHeader title="People" />
-          {memberNames.length ? (
-            <div
-              style={{
-                display: 'flex',
-                gap: 16,
-                overflowX: 'auto',
-                paddingBlock: 12,
-              }}
-            >
-              {memberNames.map((member) => {
-                const profileHref =
-                  member.id !== userId && member.username
-                    ? `/person/${encodeURIComponent(member.username.replace(/^@+/, ''))}`
-                    : undefined;
-                const item = (
-                  <>
-                    <Avatar
-                      initials={member.name
-                        .split(/\s+/)
-                        .map((part) => part[0] ?? '')
-                        .join('')
-                        .slice(0, 2)}
-                      label={member.name}
-                      size={48}
-                      imageUrl={member.avatarUrl}
-                    />
-                    <small>
-                      {member.username ? `@${member.username.replace(/^@+/, '')}` : member.name}
-                    </small>
-                  </>
-                );
-                return profileHref ? (
-                  <Link
-                    key={member.id}
-                    href={profileHref}
-                    aria-label={`Open @${member.username}`}
-                    style={{
-                      display: 'grid',
-                      width: 96,
-                      flex: '0 0 96px',
-                      justifyItems: 'center',
-                      gap: 7,
-                      color: 'inherit',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    {item}
-                  </Link>
-                ) : (
-                  <span
-                    key={member.id}
-                    style={{
-                      display: 'grid',
-                      width: 96,
-                      flex: '0 0 96px',
-                      justifyItems: 'center',
-                      gap: 7,
-                    }}
-                  >
-                    {item}
-                  </span>
-                );
-              })}
-            </div>
-          ) : (
-            <Empty
-              title="No members saved"
-              description="Members invited to this group will appear here."
-            />
-          )}
-        </section>
-        <section>
-          <SectionHeader title="Recent" />
-          {recent.length ? (
-            <div className="finance-record-list">
-              {recent.map((expense) => {
-                const transactionId = recordId(expense);
-                return (
-                  <TransactionRow
-                    key={transactionId}
-                    title={expense.title ?? 'Group expense'}
-                    category="Group expense"
-                    account={group.name ?? 'Group'}
-                    amountMinor={asMinor(expense.amountMinor)}
-                    currency={group.currency ?? 'INR'}
-                    type="expense"
-                    semanticType="split"
-                    date={formatDate(expense.occurredAt, expense.hasTime)}
-                    onPress={() => router.push(`/transaction/${encodeURIComponent(transactionId)}`)}
-                  />
-                );
-              })}
-            </div>
-          ) : (
-            <Empty
-              title="No shared expenses"
-              description="Add an expense to start your group history."
-              action={
-                <Link
-                  className="finance-secondary-action"
-                  href={`/group/${encodeURIComponent(localGroupId)}/expenses/new`}
-                >
-                  Add expense <ArrowRight size={15} />
-                </Link>
-              }
-            />
-          )}
-        </section>
-        <section>
-          <SectionHeader title="Recent settlements" />
-          {recentSettlements.length ? (
-            <div style={{ display: 'grid', gap: 10 }}>
-              {recentSettlements.map((settlement) => {
-                const from = String(settlement.fromUserId ?? '');
-                const to = String(settlement.toUserId ?? '');
-                return (
-                  <Card
-                    key={recordId(settlement)}
-                    className="finance-record-panel"
-                    style={{ display: 'grid', gap: 8 }}
-                  >
-                    <strong>
-                      {memberName(from)} paid {memberName(to)}
-                    </strong>
-                    <span className="finance-record-amount">
-                      {formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR')}
-                    </span>
-                    {settlement.occurredAt !== undefined && (
-                      <time
-                        className="finance-muted"
-                        dateTime={new Date(settlement.occurredAt).toISOString()}
-                      >
-                        {formatDate(settlement.occurredAt, true)}
-                      </time>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="finance-muted">Settlements recorded for this group will appear here.</p>
-          )}
-        </section>
-      </section>
-    </div>
+    <GroupDetailScreen
+      group={{
+        name: group.name ?? 'Group',
+        currency: group.currency ?? 'INR',
+        icon: remoteGroup?.icon ?? group.icon,
+        color: remoteGroup?.color ?? group.color,
+      }}
+      groupOptions={groupOptions}
+      currentGroupId={localGroupId}
+      onSelectGroup={(selectedId) => router.push(`/group/${encodeURIComponent(selectedId)}`)}
+      canSettle={!ledgerUnavailable && myBalance !== 0n}
+      balanceStatus={
+        (rangeStatus === 'loading' ||
+          recordsLoading ||
+          (rangeStatus === 'loaded' && !rangeComplete)) &&
+        !ledgerError
+          ? 'loading'
+          : ledgerUnavailable
+            ? 'unavailable'
+            : 'ready'
+      }
+      balance={formatMinor(myBalance, group.currency ?? 'INR')}
+      balanceMeaning={balanceMeaning}
+      balanceError={ledgerError || (rangeStatus === 'error' ? rangeError : undefined)}
+      totalSpend={
+        ledgerUnavailable ? undefined : formatMinor(totalSpendMinor, group.currency ?? 'INR')
+      }
+      owed={
+        ledgerUnavailable
+          ? undefined
+          : formatMinor(myBalance > 0n ? myBalance : 0n, group.currency ?? 'INR')
+      }
+      owing={
+        ledgerUnavailable
+          ? undefined
+          : formatMinor(myBalance < 0n ? -myBalance : 0n, group.currency ?? 'INR')
+      }
+      memberBalances={
+        ledgerUnavailable
+          ? undefined
+          : Object.entries(balanceByUser).map(([id, amount]) => ({
+              id,
+              name: memberName(id),
+              amount: formatMinor(amount < 0n ? -amount : amount, group.currency ?? 'INR'),
+              meaning: amount > 0n ? 'Owed by group' : amount < 0n ? 'Owes group' : 'Settled',
+            }))
+      }
+      members={detailMembers}
+      activities={detailActivities}
+      settlements={detailSettlements}
+      chat={chat}
+      onBack={() => router.push('/groups')}
+      onOpenChat={() => router.push(`/group/${encodeURIComponent(localGroupId)}/chat`)}
+      onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(localGroupId)}/analytics`)}
+      onOpenSettings={() => router.push(`/group/${encodeURIComponent(localGroupId)}/edit`)}
+      onOpenBalances={() => router.push(`/group/${encodeURIComponent(localGroupId)}/balances`)}
+      onSettle={() => router.push(`/settle/new?groupId=${encodeURIComponent(localGroupId)}`)}
+      onAddExpense={() => router.push(`/group/${encodeURIComponent(localGroupId)}/new`)}
+      onOpenPerson={(username) =>
+        router.push(`/person/${encodeURIComponent(username.replace(/^@+/, ''))}`)
+      }
+      onOpenActivity={(activityId) => router.push(`/transaction/${encodeURIComponent(activityId)}`)}
+    />
   );
 }

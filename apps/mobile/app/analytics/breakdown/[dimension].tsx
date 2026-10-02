@@ -81,7 +81,7 @@ export default function AnalyticsBreakdownScreen() {
     if (!valid || !rangeState.data || !accountState.data || !categoryState.data) return null;
     const source = rangeState.data.flatMap((record) => {
       const transaction = ledgerTransaction(record);
-      return transaction ? [transaction] : [];
+      return transaction && accounts.get(transaction.accountId ?? '')?.includeInAnalytics !== false ? [transaction] : [];
     });
     const summary = aggregateAnalytics(
       source,
@@ -108,6 +108,7 @@ export default function AnalyticsBreakdownScreen() {
           transaction.type !== 'expense' ||
           transaction.status !== 'posted' ||
           transaction.deletedAt !== undefined ||
+          accounts.get(transaction.accountId ?? '')?.includeInAnalytics === false ||
           transaction.currency !== currency ||
           transaction.occurredAt < startAt ||
           transaction.occurredAt >= endAt

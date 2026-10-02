@@ -8,6 +8,7 @@ import {
   Eye,
   LockKey,
   Palette,
+  Info,
   UserCircle,
 } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -100,6 +101,13 @@ export default function SettingsScreen() {
           label="Privacy and export"
           leadingIcon={<Eye size={19} color={tokens.primary} />}
           onPress={() => router.push('/settings/privacy' as never)}
+        />
+      </View>
+      <View>
+        <SettingsRow
+          label="About"
+          leadingIcon={<Info size={19} color={tokens.primary} />}
+          onPress={() => router.push('/about' as never)}
         />
       </View>
     </ScrollView>

@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { formatAuthError } from '@convex/shared/auth-errors';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { Button, InputOTP } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
 
@@ -54,7 +54,7 @@ export function EmailVerificationForm({
         </span>
       }
     >
-      <form onSubmit={submit}>
+      <form method="post" onSubmit={submit}>
         <div className="auth-field">
           <span className="auth-label">Six-digit code</span>
           <InputOTP value={code} onChangeText={setCode} />
@@ -115,7 +115,7 @@ export function TwoFactorVerificationForm({ challengeId }: { challengeId: string
         </span>
       }
     >
-      <form onSubmit={submit}>
+      <form method="post" onSubmit={submit}>
         <div className="auth-field">
           <span className="auth-label">Six-digit code</span>
           <InputOTP value={code} onChangeText={setCode} />

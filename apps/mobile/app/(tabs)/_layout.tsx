@@ -142,7 +142,7 @@ function SignatureBottomBar({ onAdd }: { onAdd: () => void }) {
       style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height }}
     >
       <Svg width={width} height={height} style={{ position: 'absolute' }} pointerEvents="none">
-        <Path d={path} fill="#080808" stroke={tokens.borderSubtle} strokeWidth={1} />
+        <Path d={path} fill={tokens.background} stroke={tokens.borderSubtle} strokeWidth={1} />
       </Svg>
       <View
         style={{

@@ -1,121 +1,368 @@
 'use client';
 
-import Link from 'next/link';
+import React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, UsersRound } from 'lucide-react';
-import { Card, Empty, SectionHeader } from '@finapp/ui/web';
-import { GroupCard, PeopleRail } from '@finapp/ui/finance';
+import { useSearchParams } from 'next/navigation';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { projectGroupBalances } from '@convex/splits/domain';
+import { formatMinor } from '@convex/shared/money';
+import {
+  formatTransactionDate,
+  GroupsOverviewScreen,
+  type GroupOverviewItem,
+} from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import type { LocalRecord } from '@/lib/offline/repository';
+import { isGroupRangeCovered, readLocal, type LocalRecord } from '@/lib/offline/repository';
+
+type GroupOverviewSummary = { currency: string; owed: string; owing: string };
+type GroupOverviewActivity = {
+  id: string;
+  title: string;
+  groupName: string;
+  kind: 'expense' | 'settlement';
+  amount: string;
+  date: string;
+};
 
 type Group = LocalRecord & {
   name?: string;
   currency?: string;
   ownerId?: string;
   archivedAt?: number;
+  icon?: string;
+  color?: string;
+  description?: string;
 };
-const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
+type Member = LocalRecord & {
+  groupId?: string;
+  userId?: string;
+  deletedAt?: number;
+  displayName?: string;
+  username?: string;
+  name?: string;
+  memberId?: string;
+  avatarUrl?: string | null;
+  role?: string;
+};
+type LedgerRecord = LocalRecord & {
+  groupId?: string;
+  transactionId?: string;
+  userId?: string;
+  memberId?: string;
+  fromUserId?: string;
+  toUserId?: string;
+  type?: string;
+  status?: string;
+  amountMinor?: bigint | number | string;
+  currency?: string;
+  occurredAt?: number;
+  hasTime?: boolean;
+  title?: string;
+  deletedAt?: number;
+};
+type RangeState = {
+  status: 'loading' | 'loaded' | 'unavailable';
+  error?: string;
+  userId?: string;
+  records?: {
+    transactions: LedgerRecord[];
+    payers: LedgerRecord[];
+    participants: LedgerRecord[];
+    settlements: LedgerRecord[];
+  };
+};
+const aliases = (record: LocalRecord) =>
+  [record.id, record._id, record.cloudId].filter(
+    (value): value is string => typeof value === 'string',
+  );
+const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? record.cloudId ?? '');
+const asMinor = (value: unknown) =>
+  typeof value === 'bigint'
+    ? value
+    : typeof value === 'number' && Number.isFinite(value)
+      ? BigInt(Math.trunc(value))
+      : typeof value === 'string' && /^-?[0-9]+$/.test(value)
+        ? BigInt(value)
+        : 0n;
 
 export default function GroupsPage() {
   const router = useRouter();
-  const { userId } = useBrowserSync();
-  const { records, loading, error } = useLocalRecords<Group>('group');
-  const { records: profiles } = useLocalRecords<LocalRecord>('profile');
-  const phoneVerified = Boolean(
-    profiles[0]?.phone && profiles[0]?.phoneVerificationTime !== undefined,
+  const searchParams = useSearchParams();
+  const { userId, isConnected, fetchGroupRange } = useBrowserSync();
+  const incomingInvitations = useQuery(
+    api.groups.queries.incomingInvitations,
+    userId && isConnected ? {} : 'skip',
   );
+  const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
+  const groupsState = useLocalRecords<Group>('group');
+  const membersState = useLocalRecords<Member>('groupMember');
+  const transactionsState = useLocalRecords<LedgerRecord>('transaction');
+  const payersState = useLocalRecords<LedgerRecord>('expensePayer');
+  const participantsState = useLocalRecords<LedgerRecord>('expenseParticipant');
+  const settlementsState = useLocalRecords<LedgerRecord>('settlement');
+  const [rangeStates, setRangeStates] = React.useState<Record<string, RangeState>>({});
+  const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
+  const activeGroups = React.useMemo(
+    () => groupsState.records.filter((group) => group.archivedAt === undefined),
+    [groupsState.records],
+  );
+  React.useEffect(() => {
+    if (!userId || groupsState.loading) {
+      setRangeStates({});
+      return;
+    }
+    let active = true;
+    const targets = activeGroups
+      .map((group) => ({ group, id: idOf(group) }))
+      .filter((target) => target.id);
+    setRangeStates((current) =>
+      Object.fromEntries(targets.map(({ id }) => [id, current[id] ?? { status: 'loading' }])),
+    );
+    for (const { id } of targets) {
+      void (async () => {
+        try {
+          const covered = await isGroupRangeCovered(userId, id, 0, rangeEndAt);
+          if (!covered) {
+            if (!isConnected) throw new Error('OFFLINE_GROUP_RANGE_INCOMPLETE');
+            await fetchGroupRange(id, 0, rangeEndAt);
+          }
+          const [transactions, payers, participants, settlements] = await Promise.all([
+            readLocal<LedgerRecord>(userId, 'transaction'),
+            readLocal<LedgerRecord>(userId, 'expensePayer'),
+            readLocal<LedgerRecord>(userId, 'expenseParticipant'),
+            readLocal<LedgerRecord>(userId, 'settlement'),
+          ]);
+          if (active)
+            setRangeStates((current) => ({
+              ...current,
+              [id]: {
+                status: 'loaded',
+                userId,
+                records: { transactions, payers, participants, settlements },
+              },
+            }));
+        } catch (cause) {
+          if (active)
+            setRangeStates((current) => ({
+              ...current,
+              [id]: {
+                status: 'unavailable',
+                error: cause instanceof Error ? cause.message : 'GROUP_RANGE_UNAVAILABLE',
+              },
+            }));
+        }
+      })();
+    }
+    return () => {
+      active = false;
+    };
+  }, [activeGroups, fetchGroupRange, groupsState.loading, isConnected, rangeEndAt, userId]);
 
-  if (!userId)
-    return (
-      <section className="finance-welcome">
-        <p className="finance-kicker">SHARED FINANCES</p>
-        <h1>Make room for the group.</h1>
-        <p>Sign in to view groups saved in this browser or create a new shared space.</p>
-        <Link className="finance-primary-link" href="/sign-in">
-          Sign in <ArrowRight size={16} />
-        </Link>
-      </section>
+  const recordsLoading =
+    groupsState.loading ||
+    membersState.loading ||
+    transactionsState.loading ||
+    payersState.loading ||
+    participantsState.loading ||
+    settlementsState.loading;
+  const recordsError =
+    groupsState.error ??
+    membersState.error ??
+    transactionsState.error ??
+    payersState.error ??
+    participantsState.error ??
+    settlementsState.error;
+  const balancesLoading =
+    recordsLoading ||
+    activeGroups.some(
+      (group) => rangeStates[idOf(group)]?.status === 'loading' || !rangeStates[idOf(group)],
     );
 
-  const groups = records;
-  return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        <div>
-          <p className="finance-kicker">SHARED FINANCES</p>
-          <h1>Groups</h1>
-          <p className="finance-muted">Keep shared plans, people, and balances together.</p>
-        </div>
-        <Link className="finance-secondary-action" href="/group/new" aria-label="Create group">
-          <Plus size={20} />
-          <span>Create group</span>
-        </Link>
-      </header>
-      <section style={{ display: 'grid', gap: 6 }} aria-label="Group overview">
-        <strong>Shared ledgers</strong>
-        <p className="finance-muted" aria-live="polite">
-          {loading
-            ? 'Loading your groups…'
-            : error
-              ? 'Your groups are temporarily unavailable.'
-              : `${groups.length} ${groups.length === 1 ? 'group' : 'groups'} saved on this device`}
-        </p>
-      </section>
-      <PeopleRail
-        title="People to split with"
-        phoneVerified={phoneVerified}
-        onChoose={() => router.push('/group/new')}
-      />
+  const { groups, summaries, activities } = React.useMemo(() => {
+    const summaryByCurrency = new Map<string, { owed: bigint; owing: bigint }>();
+    const overviewGroups: GroupOverviewItem[] = activeGroups.map((group) => {
+      const id = idOf(group);
+      const currency = typeof group.currency === 'string' ? group.currency : '';
+      const groupIds = aliases(group);
+      const groupMembers = membersState.records.filter(
+        (member) =>
+          member.deletedAt === undefined &&
+          typeof member.groupId === 'string' &&
+          groupIds.includes(member.groupId),
+      );
+      const currentMember = groupMembers.find(
+        (member) => (member.userId ?? member.memberId) === userId,
+      );
+      const status = rangeStates[id]?.status;
+      const completeRecords =
+        rangeStates[id]?.userId === userId ? rangeStates[id]?.records : undefined;
+      let balance = status === 'loading' || !status ? 'Loading…' : 'Unavailable';
+      let balanceMeaning =
+        status === 'loading' || !status
+          ? 'Loading complete balance'
+          : 'Complete balance unavailable';
+      if (
+        status === 'loaded' &&
+        completeRecords &&
+        currency &&
+        !transactionsState.error &&
+        !payersState.error &&
+        !participantsState.error &&
+        !settlementsState.error &&
+        !recordsLoading
+      ) {
+        try {
+          const projected = projectGroupBalances(
+            group,
+            completeRecords.transactions,
+            completeRecords.payers,
+            completeRecords.participants,
+            completeRecords.settlements,
+          );
+          const net = userId ? (projected.balances[userId] ?? 0n) : 0n;
+          balance = formatMinor(net < 0n ? -net : net, currency);
+          balanceMeaning = net > 0n ? 'Owed to you' : net < 0n ? 'You owe' : 'Settled up';
+          const totals = summaryByCurrency.get(currency) ?? { owed: 0n, owing: 0n };
+          if (net > 0n) totals.owed += net;
+          else if (net < 0n) totals.owing -= net;
+          summaryByCurrency.set(currency, totals);
+        } catch {
+          balanceMeaning = 'Complete balance unavailable';
+        }
+      }
+      return {
+        id,
+        name: typeof group.name === 'string' ? group.name : 'Unnamed group',
+        currency,
+        icon: typeof group.icon === 'string' ? group.icon : undefined,
+        color: typeof group.color === 'string' ? group.color : undefined,
+        description: group.description,
+        members: groupMembers.map((member) => ({
+          name:
+            member.displayName ??
+            member.name ??
+            (member.username ? `@${member.username}` : 'Group member'),
+          avatarUrl: member.avatarUrl ?? undefined,
+        })),
+        role: currentMember?.role,
+        memberCount: groupMembers.length,
+        balance,
+        balanceMeaning,
+      };
+    });
+    const overviewComplete =
+      overviewGroups.length > 0 &&
+      overviewGroups.every((item) =>
+        ['Owed to you', 'You owe', 'Settled up'].includes(item.balanceMeaning),
+      );
+    const completeGroups = overviewComplete ? activeGroups : [];
+    const activityRows: GroupOverviewActivity[] = completeGroups
+      .flatMap((group) => {
+        const groupIds = aliases(group);
+        const currency = typeof group.currency === 'string' ? group.currency : '';
+        if (!currency) return [];
+        const expenses = transactionsState.records.filter(
+          (record) =>
+            typeof record.groupId === 'string' &&
+            groupIds.includes(record.groupId) &&
+            record.type === 'expense' &&
+            record.status === 'posted' &&
+            record.deletedAt === undefined &&
+            record.currency === currency,
+        );
+        const groupSettlements = settlementsState.records.filter(
+          (record) =>
+            typeof record.groupId === 'string' &&
+            groupIds.includes(record.groupId) &&
+            record.currency === currency &&
+            record.deletedAt === undefined,
+        );
+        const memberName = (memberId?: string) => {
+          if (memberId === userId) return 'You';
+          const member = membersState.records.find(
+            (candidate) =>
+              candidate.userId === memberId &&
+              typeof candidate.groupId === 'string' &&
+              groupIds.includes(candidate.groupId),
+          );
+          return member?.displayName ?? (member?.username ? `@${member.username}` : 'Group member');
+        };
+        return [
+          ...expenses.map((record) => ({
+            id: `expense:${idOf(record)}`,
+            title: String(record.title ?? 'Group expense'),
+            groupName: String(group.name ?? 'Group'),
+            kind: 'expense' as const,
+            amount: formatMinor(asMinor(record.amountMinor), currency),
+            occurredAt: Number(record.occurredAt ?? 0),
+            date: formatTransactionDate(Number(record.occurredAt ?? 0), Boolean(record.hasTime)),
+          })),
+          ...groupSettlements.map((record) => ({
+            id: `settlement:${idOf(record)}`,
+            title: `${memberName(record.fromUserId)} paid ${memberName(record.toUserId)}`,
+            groupName: String(group.name ?? 'Group'),
+            kind: 'settlement' as const,
+            amount: formatMinor(asMinor(record.amountMinor), currency),
+            occurredAt: Number(record.occurredAt ?? 0),
+            date: formatTransactionDate(Number(record.occurredAt ?? 0), Boolean(record.hasTime)),
+          })),
+        ];
+      })
+      .sort((left, right) => right.occurredAt - left.occurredAt)
+      .slice(0, 8)
+      .map(({ occurredAt: _occurredAt, ...activity }) => activity);
+    return {
+      groups: overviewGroups,
+      summaries: overviewComplete
+        ? [...summaryByCurrency].map(([currency, value]): GroupOverviewSummary => ({
+            currency,
+            owed: formatMinor(value.owed, currency),
+            owing: formatMinor(value.owing, currency),
+          }))
+        : [],
+      activities: activityRows,
+    };
+  }, [
+    activeGroups,
+    recordsLoading,
+    membersState.records,
+    transactionsState.records,
+    transactionsState.error,
+    payersState.records,
+    payersState.error,
+    participantsState.records,
+    participantsState.error,
+    settlementsState.records,
+    settlementsState.error,
+    rangeStates,
+    userId,
+  ]);
 
-      {error && (
-        <p className="finance-form-error" role="alert">
-          Saved groups could not be read: {error}
-        </p>
-      )}
-      <Card className="finance-record-panel">
-        <SectionHeader title="Your groups" />
-        {loading ? (
-          <p className="finance-muted" role="status">
-            Loading groups…
-          </p>
-        ) : error ? (
-          <Empty
-            title="Groups unavailable"
-            description="Your saved groups could not be loaded."
-            icon={<UsersRound size={20} />}
-          />
-        ) : groups.length === 0 ? (
-          <Empty
-            title="No groups yet"
-            description="Create one for a trip, home, or any expense shared with people."
-            icon={<UsersRound size={20} />}
-            action={
-              <Link className="finance-secondary-action" href="/group/new">
-                Create group <ArrowRight size={15} />
-              </Link>
-            }
-          />
-        ) : (
-          <ul className="finance-record-list">
-            {groups.map((group) => {
-              const id = idOf(group);
-              return (
-                <li key={id}>
-                  <GroupCard
-                    name={group.name ?? 'Group'}
-                    icon={typeof group.icon === 'string' ? group.icon : undefined}
-                    meta={`${group.currency ?? 'INR'} · shared ledger`}
-                    balance="View balance"
-                    meaning="Calculated from the complete group ledger"
-                    onPress={() => router.push(`/group/${encodeURIComponent(id)}`)}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
-    </div>
+  return (
+    <GroupsOverviewScreen
+      groups={groups}
+      summaries={summaries}
+      activities={activities}
+      balancesLoading={balancesLoading}
+      loading={recordsLoading}
+      error={recordsError ?? undefined}
+      signedIn={Boolean(userId)}
+      onSignIn={() => router.push('/sign-in')}
+      onCreate={() => router.push('/groups/new')}
+      onOpenGroup={(id) => router.push(`/group/${encodeURIComponent(id)}`)}
+      onOpenChat={(id) => router.push(`/group/${encodeURIComponent(id)}/chat`)}
+      invitations={incomingInvitations}
+      invitationsLoading={Boolean(userId && isConnected && incomingInvitations === undefined)}
+      invitationsError={
+        userId && !isConnected ? 'Connect to the internet to view invitations.' : undefined
+      }
+      onRespondToInvitation={async (inviteId, response) => {
+        await respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response });
+      }}
+      showInvitations={searchParams.get('invitations') === '1'}
+    />
   );
 }

@@ -88,14 +88,14 @@
   display: block;
   width: 36px;
   height: 36px;
-  overflow: hidden;
-  border-radius: 50%;
+  flex: 0 0 auto;
 }
 .landing-logo img {
   display: block;
   width: 100%;
   height: 100%;
-  transform: scale(2.12);
+  object-fit: contain;
+  object-position: center;
 }
 .landing-nav,
 .landing-header-actions {
@@ -221,6 +221,7 @@
   height: 440px;
   border: 1px solid #b7ff4a45;
   border-radius: 50%;
+  pointer-events: none;
   content: '';
 }
 .landing-hero-monogram {
@@ -228,10 +229,12 @@
   z-index: -1;
   top: -65px;
   right: -38px;
-  color: var(--landing-volt);
+  color: #171a13;
   font-size: 640px;
   font-weight: 700;
   line-height: 1;
+  pointer-events: none;
+  user-select: none;
   transform: rotate(-14deg);
 }
 .landing-product {
@@ -358,8 +361,8 @@
 .landing-chart > div > div:first-child {
   height: 112px !important;
 }
-.landing-chart > div > div:first-child > div > div {
-  background-color: var(--landing-volt) !important;
+.landing-chart .recharts-wrapper {
+  background-color: #050505 !important;
 }
 .landing-recent {
   margin-top: 18px;
@@ -675,15 +678,19 @@
 }
 .landing-closing {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.7fr);
+  align-items: center;
+  gap: clamp(24px, 5vw, 72px);
   padding-block: 64px 96px;
   border-top: 1px solid #252525;
-  text-align: center;
+  text-align: left;
 }
-.landing-closing-coin {
-  width: min(100%, 280px);
-  margin: 0 auto 24px;
+.landing-closing-copy {
+  position: relative;
+  z-index: 1;
 }
-.landing-closing > p {
+.landing-closing-copy > p {
   margin: 0 0 28px;
   color: #a4a4a4;
   font-size: 10px;
@@ -691,13 +698,19 @@
 }
 .landing-closing h2 {
   margin: 0 0 32px;
-  font-size: clamp(44px, 6.5vw, 94px);
+  font-size: clamp(42px, 5.5vw, 82px);
   font-weight: 500;
   letter-spacing: -0.075em;
   line-height: 1.05;
 }
 .landing-closing h2 span {
   color: var(--landing-volt);
+}
+.landing-closing-coin {
+  width: min(100%, 300px);
+  justify-self: center;
+  aspect-ratio: 1;
+  background: radial-gradient(ellipse at center, #b7ff4a10, transparent 68%);
 }
 .landing-footer {
   display: flex;
@@ -942,12 +955,21 @@
   .landing-closing {
     padding-block: 56px 64px;
   }
-  .landing-closing > p {
+  .landing-closing-copy > p {
     font-size: 8px;
     letter-spacing: 1px;
   }
   .landing-closing h2 {
     font-size: clamp(38px, 8.5vw, 65px);
+  }
+  .landing-closing {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    text-align: left;
+  }
+  .landing-closing-coin {
+    width: min(72vw, 230px);
+    justify-self: center;
   }
   .landing-footer {
     flex-wrap: wrap;

@@ -3,12 +3,20 @@ import type { EmojiMartData } from '@emoji-mart/data';
 
 const data = emojiData as unknown as EmojiMartData;
 
+export type EmojiToneOption = {
+  id: string;
+  name: string;
+  native: string;
+  toneLabel: string;
+};
+
 export type EmojiPickerOption = {
   id: string;
   name: string;
   native: string;
   keywords: string[];
   searchText: string;
+  toneOptions: EmojiToneOption[];
 };
 
 const labels: Record<string, string> = {
@@ -39,38 +47,46 @@ for (const category of data.categories) {
 }
 
 const skinToneLabels = [
-  'default',
-  'light skin tone',
-  'medium-light skin tone',
-  'medium skin tone',
-  'medium-dark skin tone',
-  'dark skin tone',
+  'Default skin tone',
+  'Light skin tone',
+  'Medium-light skin tone',
+  'Medium skin tone',
+  'Medium-dark skin tone',
+  'Dark skin tone',
 ];
 export const emojiPickerOptions: EmojiPickerOption[] = [];
 const emojiByBaseId: Record<string, EmojiPickerOption[]> = Object.create(null);
 const categoryByNative: Record<string, string> = Object.create(null);
+const emojiByNative = new Map<string, EmojiPickerOption>();
 for (const [id, emoji] of Object.entries(data.emojis)) {
   const categoryId = categoryByEmoji[id];
-  const options = emoji.skins.map((skin, index) => {
-    const tone = skinToneLabels[index] ?? `skin tone ${index}`;
-    const name = index === 0 ? emoji.name : `${emoji.name} (${tone})`;
+  const toneOptions = emoji.skins.map((skin, index) => {
+    const toneLabel = skinToneLabels[index] ?? `Skin tone ${index}`;
     return {
       id: index === 0 ? id : `${id}-${index}`,
-      name,
+      name: index === 0 ? emoji.name : `${emoji.name} (${toneLabel})`,
       native: skin.native,
-      keywords: emoji.keywords,
-      searchText: `${name} ${emoji.keywords.join(' ')} ${id} ${tone}`.toLowerCase(),
+      toneLabel,
     };
   });
-  emojiByBaseId[id] = options;
-  emojiPickerOptions.push(...options);
-  if (categoryId) {
-    for (const option of options) categoryByNative[option.native] = categoryId;
+  const option: EmojiPickerOption = {
+    id,
+    name: emoji.name,
+    native: toneOptions[0]?.native ?? '',
+    keywords: emoji.keywords,
+    searchText:
+      `${emoji.name} ${emoji.keywords.join(' ')} ${id} ${toneOptions.map(({ toneLabel }) => toneLabel).join(' ')}`.toLowerCase(),
+    toneOptions,
+  };
+  emojiByBaseId[id] = [option];
+  emojiPickerOptions.push(option);
+  for (const tone of toneOptions) {
+    emojiByNative.set(tone.native, option);
+    if (categoryId) categoryByNative[tone.native] = categoryId;
   }
 }
 export const allEmojiPickerOptions = emojiPickerOptions;
 
-const emojiByNative = new Map(emojiPickerOptions.map((option) => [option.native, option]));
 const popularEmojiIds = [
   'money_with_wings',
   'moneybag',
@@ -98,9 +114,12 @@ const popularEmojiIds = [
 const recentEmojiValues: string[] = [];
 
 export function getRecentEmojiOptions(): EmojiPickerOption[] {
+  const seen = new Set<string>();
   return recentEmojiValues.flatMap((value) => {
     const option = emojiByNative.get(value);
-    return option ? [option] : [];
+    if (!option || seen.has(option.id)) return [];
+    seen.add(option.id);
+    return [option];
   });
 }
 

@@ -426,12 +426,14 @@ export default function ActivityPage() {
         onQueryChange={setQuery}
         onClearQuery={() => setQuery('')}
         onOpenAnalytics={() => router.push('/analytics')}
+        onAddTransaction={() => router.push('/transaction/new')}
       />
       <ActivityFilters
         rangeLabel={rangeLabel}
         rangeStartDate={getAnalyticsCalendarDate(pickerReferenceAt, timeZone)}
         rangeEndDate={getAnalyticsCalendarDate(pickerEndAt, timeZone)}
         presets={periodPresets}
+        period={customRange ? undefined : `period:${period}`}
         onPresetSelect={(value) => {
           const [kind, selected] = value.split(':');
           if (kind === 'period') selectRange(selected as ActivityPeriod);
@@ -474,24 +476,28 @@ export default function ActivityPage() {
           metrics={[
             {
               label: 'Total Spent',
+              icon: 'spent',
               value: formatMinor(totals.expenses, currency),
               color: 'var(--finapp-expense)',
               spark: metricSparks.spent,
             },
             {
               label: 'Total Income',
+              icon: 'income',
               value: formatMinor(totals.income, currency),
               color: 'var(--finapp-income)',
               spark: metricSparks.income,
             },
             {
               label: 'Net',
+              icon: 'net',
               value: formatMinor(net, currency),
               color: net >= 0n ? 'var(--finapp-income)' : 'var(--finapp-expense)',
               spark: metricSparks.net,
             },
             {
               label: 'Transactions',
+              icon: 'transactions',
               value: String(totals.count),
               color: 'var(--finapp-foreground)',
               spark: metricSparks.count,
@@ -516,6 +522,7 @@ export default function ActivityPage() {
         <aside className="activity-sidebar">
           <ActivityActions
             onAddTransaction={() => router.push('/transaction/new')}
+            onOpenTransactions={() => router.push('/transactions')}
             onOpenAnalytics={() => router.push('/analytics')}
           />
           <ActivityTopCategories

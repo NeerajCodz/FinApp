@@ -1,6 +1,7 @@
 import React from 'react';
 import { Bell, CalendarDays, Search, ShieldCheck } from 'lucide-react';
 import type { HomeAccountOption } from '../types';
+import { CustomSelect } from '@finapp/ui/web';
 
 export function HomeHeader({
   accounts,
@@ -59,20 +60,19 @@ export function HomeHeader({
           <CalendarDays size={16} aria-hidden="true" />
           <span>{dateLabel}</span>
         </button>
-        <label className="finance-home-account-filter">
-          <span className="finance-sr-only">Filter by account</span>
-          <select
-            value={selectedAccountId}
-            onChange={(event) => onAccountChange(event.target.value)}
-          >
-            <option value="">All accounts</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <CustomSelect
+          className="finance-home-account-filter"
+          aria-label="Filter by account"
+          value={selectedAccountId}
+          onChange={(event) => onAccountChange(event.currentTarget.value)}
+        >
+          <option value="">All accounts</option>
+          {accounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.name}
+            </option>
+          ))}
+        </CustomSelect>
         <label className="finance-home-search">
           <Search size={16} aria-hidden="true" />
           <span className="finance-sr-only">Search transactions</span>

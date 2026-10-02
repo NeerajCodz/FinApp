@@ -27,7 +27,8 @@ export {
   Progress,
   type InputProps,
 } from './fields';
-export { Checkbox, RadioGroup, Switch, Tabs, Select } from './choices';
+export { PasswordField } from './PasswordField';
+export { Checkbox, RadioGroup, Switch, Tabs, Select, CustomSelect, type SelectOption, type SelectProps, type CustomSelectProps } from './choices';
 export { Popover, Sheet, Dialog, AlertDialog, Drawer, type AlertDialogProps } from './overlay';
 export { FilterOptionPopover, type FilterOptionPopoverOption } from './FilterOptionPopover';
 export { Textarea, InputOTP, type TextareaProps } from './text-entry';
@@ -86,6 +87,7 @@ export {
   type ToggleGroupOption,
   type ToggleGroupProps,
 } from './ToggleGroup';
+export { OnboardingAvatarPicker, ProfilePreview } from './OnboardingIdentity';
 export type { ThemeTokens } from '../tokens';
 export function Tooltip({
   children,

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { ArrowRight } from '@finapp/ui/icons/native';
-import { Button, Input, Label, Text, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Text, Typography, useTheme } from '@finapp/ui/native';
 
 export const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 export const isIdentifier = (value: string) =>
@@ -19,63 +19,6 @@ export function AuthError({ message }: { message?: string }) {
     >
       {message}
     </Typography>
-  );
-}
-
-export function PasswordField({
-  label = 'Password',
-  error,
-  newPassword = false,
-  ...props
-}: Omit<React.ComponentProps<typeof Input>, 'secureTextEntry' | 'error'> & {
-  label?: string;
-  error?: string;
-  newPassword?: boolean;
-}) {
-  const [visible, setVisible] = useState(false);
-  const { tokens } = useTheme();
-  return (
-    <View style={{ gap: 8 }}>
-      <Label style={{ marginBottom: 0 }}>{label}</Label>
-      <View>
-        <Input
-          accessibilityLabel={label}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete={newPassword ? 'new-password' : 'current-password'}
-          textContentType={newPassword ? 'newPassword' : 'password'}
-          {...props}
-          error={!!error}
-          secureTextEntry={!visible}
-          style={[props.style, { paddingRight: 82 }]}
-        />
-        <Button
-          size="sm"
-          variant="ghost"
-          accessibilityLabel={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
-          accessibilityState={{ selected: visible }}
-          onPress={() => setVisible((current) => !current)}
-          style={{
-            position: 'absolute',
-            right: 4,
-            top: 6,
-            minWidth: 66,
-            height: 44,
-            minHeight: 44,
-          }}
-        >
-          <Text
-            style={{ color: tokens.primary, fontFamily: 'SpaceGrotesk_500Medium', fontSize: 13 }}
-          >
-            {visible ? 'Hide' : 'Show'}
-          </Text>
-        </Button>
-      </View>
-      <AuthError message={error} />
-      {newPassword && !error && (
-        <Typography variant="caption">At least 8 characters. Make it unique to Finapp.</Typography>
-      )}
-    </View>
   );
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidAuthEmail, formatAuthError } from '../../convex/shared/auth-errors';
+import { isValidAuthEmail, formatAuthError } from '../../convex/shared/authErrors';
 
 describe('formatAuthError', () => {
   it('accepts only email syntax supported by authentication', () => {
@@ -23,6 +23,15 @@ describe('formatAuthError', () => {
     ).toBe('An account with this email already exists. Sign in instead.');
     expect(formatAuthError(new Error('PASSWORD_TOO_SHORT'), 'sign-up')).toBe(
       'Your password must be at least eight characters.',
+    );
+  });
+
+  it('maps backend auth error codes to actionable account messages', () => {
+    expect(formatAuthError({ data: { code: 'ACCOUNT_EXISTS' } }, 'sign-up')).toBe(
+      'An account with this email already exists. Sign in instead.',
+    );
+    expect(formatAuthError({ data: { code: 'INVALID_CREDENTIALS' } }, 'sign-in')).toBe(
+      'Email or username and password do not match.',
     );
   });
 

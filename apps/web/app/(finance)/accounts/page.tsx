@@ -111,7 +111,7 @@ export default function AccountsPage() {
       loading={accountLoading || (accounts.length > 0 && transactionLoading)}
       error={error}
       onRetry={() => window.location.reload()}
-      onAddAccount={() => router.push('/account/new')}
+      onAddAccount={() => router.push('/accounts/new')}
       onOpenAccount={(id) => router.push(`/account/${encodeURIComponent(id)}`)}
     />
   );

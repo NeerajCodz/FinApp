@@ -1,12 +1,35 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, AppState, Image, StyleSheet, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  AppState,
+  Image,
+  StyleSheet,
+  View,
+  type GestureResponderEvent,
+} from 'react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { useFocusEffect } from 'expo-router';
-import { createCoinRenderer, type CoinRenderer } from '@finapp/ui/coin';
-import { createCoinFloat } from '@finapp/ui/coin/motion';
+import { createCoinRenderer, type CoinInteraction, type CoinRenderer } from '@finapp/ui/coin';
+import {
+  advanceCoinSpin,
+  applyCoinDrag,
+  createCoinFloat,
+  hasCoinMomentum,
+  stopCoinMomentum,
+  releaseCoinMomentum,
+  type CoinAngularVelocity,
+} from '@finapp/ui/coin/motion';
 import appIcon from '../../assets/icon.png';
 
-export function CoinLogo({ size = 240, animated = true }: { size?: number; animated?: boolean }) {
+export function CoinLogo({
+  size = 240,
+  animated = true,
+  interactive = false,
+}: {
+  size?: number;
+  animated?: boolean;
+  interactive?: boolean;
+}) {
   const [available, setAvailable] = useState(false);
   const renderer = useRef<CoinRenderer | null>(null);
   const context = useRef<ExpoWebGLRenderingContext | null>(null);
@@ -18,6 +41,50 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
   const moving = useRef(animated);
   const mounted = useRef(true);
   const synchronise = useRef<() => void>(() => {});
+  const interaction = useRef<CoinInteraction>({
+    rotationX: 0,
+    rotationY: 0,
+    lightX: 0,
+    lightY: 0,
+  });
+  const angularVelocity = useRef<CoinAngularVelocity>({ x: 0, y: 0 });
+  const previousTouch = useRef<{ x: number; y: number; time: number } | null>(null);
+  const onTouchStart = (event: GestureResponderEvent) => {
+    if (!interactive) return;
+    stopCoinMomentum(angularVelocity.current);
+    previousTouch.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+      time: Date.now(),
+    };
+  };
+  const onTouchMove = (event: GestureResponderEvent) => {
+    if (!interactive || !previousTouch.current) return;
+    const { pageX, pageY, locationX, locationY } = event.nativeEvent;
+    const time = Date.now();
+    applyCoinDrag(
+      interaction.current,
+      angularVelocity.current,
+      pageX - previousTouch.current.x,
+      pageY - previousTouch.current.y,
+      (time - previousTouch.current.time) / 1000,
+    );
+    interaction.current.lightX = Math.max(-1, Math.min(1, (locationX / size) * 2 - 1));
+    interaction.current.lightY = Math.max(-1, Math.min(1, 1 - (locationY / size) * 2));
+    previousTouch.current = { x: pageX, y: pageY, time };
+    synchronise.current();
+  };
+  const onTouchEnd = () => {
+    if (previousTouch.current)
+      releaseCoinMomentum(
+        angularVelocity.current,
+        (Date.now() - previousTouch.current.time) / 1000,
+      );
+    previousTouch.current = null;
+    interaction.current.lightX = 0;
+    interaction.current.lightY = 0;
+    synchronise.current();
+  };
 
   useEffect(() => {
     mounted.current = true;
@@ -29,25 +96,42 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
         moving.current && !reduced.current ? float.sample(elapsed.current) : 0,
         gl.drawingBufferWidth,
         gl.drawingBufferHeight,
+        interaction.current,
       );
       gl.endFrameEXP();
     };
     const tick = (timestamp: number) => {
       frame.current = 0;
       if (!mounted.current || !focused.current || AppState.currentState !== 'active') return;
-      if (previous.current) elapsed.current += Math.min((timestamp - previous.current) / 1000, 0.1);
+      const deltaSeconds = previous.current
+        ? Math.min((timestamp - previous.current) / 1000, 0.1)
+        : 0;
+      elapsed.current += deltaSeconds;
       previous.current = timestamp;
+      if (interactive && !reduced.current && !previousTouch.current)
+        advanceCoinSpin(interaction.current, angularVelocity.current, deltaSeconds);
       draw();
-      if (moving.current && !reduced.current) frame.current = requestAnimationFrame(tick);
+      if (
+        (moving.current && !reduced.current) ||
+        (interactive &&
+          !reduced.current &&
+          !previousTouch.current &&
+          hasCoinMomentum(angularVelocity.current))
+      )
+        frame.current = requestAnimationFrame(tick);
     };
     const sync = () => {
       cancelAnimationFrame(frame.current);
       frame.current = 0;
       previous.current = 0;
+      if (reduced.current) stopCoinMomentum(angularVelocity.current);
       if (!mounted.current || !focused.current || AppState.currentState !== 'active') return;
       draw();
-      if (renderer.current && moving.current && !reduced.current)
-        frame.current = requestAnimationFrame(tick);
+      const shouldAnimate =
+        !reduced.current &&
+        (moving.current ||
+          (!previousTouch.current && interactive && hasCoinMomentum(angularVelocity.current)));
+      if (renderer.current && shouldAnimate) frame.current = requestAnimationFrame(tick);
     };
     synchronise.current = sync;
     const motionSubscription = AccessibilityInfo.addEventListener(
@@ -113,8 +197,16 @@ export function CoinLogo({ size = 240, animated = true }: { size?: number; anima
       style={{ width: size, height: size }}
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Finapp volt coin with a black F"
-      pointerEvents="none"
+      accessibilityLabel={
+        interactive
+          ? 'Interactive Finapp volt coin. Drag to spin.'
+          : 'Finapp volt coin with a black F'
+      }
+      pointerEvents={interactive ? 'auto' : 'none'}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
     >
       {!available && <Image source={appIcon} style={styles.fallback} accessibilityElementsHidden />}
       <GLView

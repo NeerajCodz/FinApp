@@ -50,8 +50,6 @@ export type CategoryDetailScreenProps = {
   error?: string;
   pending?: boolean;
   formError?: string | null;
-  editingName: boolean;
-  nameValue: string;
   limitValue: string;
   isDefaultExpense: boolean;
   isDefaultIncome: boolean;
@@ -60,9 +58,6 @@ export type CategoryDetailScreenProps = {
   onAddTransaction: () => void;
   onOpenTransaction: (id: string) => void;
   onEditName: () => void;
-  onNameChange: (value: string) => void;
-  onSaveName: () => void;
-  onCancelName: () => void;
   onIconChange: (value?: string) => void;
   onLimitChange: (value: string) => void;
   onSaveLimit: () => void;
@@ -111,8 +106,6 @@ export function CategoryDetailScreen({
   error,
   pending = false,
   formError,
-  editingName,
-  nameValue,
   limitValue,
   isDefaultExpense,
   isDefaultIncome,
@@ -121,9 +114,6 @@ export function CategoryDetailScreen({
   onAddTransaction,
   onOpenTransaction,
   onEditName,
-  onNameChange,
-  onSaveName,
-  onCancelName,
   onIconChange,
   onLimitChange,
   onSaveLimit,
@@ -262,7 +252,7 @@ export function CategoryDetailScreen({
           <div className={styles.headerActions}>
             {!category.isSystem && category.archivedAt === undefined && (
               <Button variant="outline" onPress={onEditName}>
-                Edit name
+                Edit category
               </Button>
             )}
             {category.archivedAt === undefined && (
@@ -299,32 +289,6 @@ export function CategoryDetailScreen({
             <p className={styles.archived}>
               This category is archived and remains available for older transactions.
             </p>
-          )}
-          {editingName && !category.isSystem && (
-            <form
-              className={styles.editName}
-              onSubmit={(event) => {
-                event.preventDefault();
-                onSaveName();
-              }}
-            >
-              <Label htmlFor="category-name">Category name</Label>
-              <Input
-                id="category-name"
-                value={nameValue}
-                onChangeText={onNameChange}
-                maxLength={80}
-                required
-              />
-              <div>
-                <Button type="submit" disabled={pending || !nameValue.trim()}>
-                  {pending ? 'Saving…' : 'Save name'}
-                </Button>
-                <Button type="button" variant="ghost" onPress={onCancelName}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
           )}
           <section className={styles.metrics} aria-label="Category totals">
             <Metric

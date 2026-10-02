@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { ArrowLeft, Bell, Check, ChevronRight, Settings2 } from 'lucide-react';
 import { Button, Card, Empty, IconButton, Text, Typography, useTheme } from '@finapp/ui/web';
 import {
@@ -10,6 +13,7 @@ import {
   normalizeNotificationPreferences,
   type NotificationType,
 } from '@convex/notifications/domain';
+import { InvitationNotificationActions } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -57,6 +61,11 @@ function notificationDayLabel(timestamp: number) {
 
 export default function NotificationsPage() {
   const { userId, isConnected } = useBrowserSync();
+  const incomingInvitations = useQuery(
+    api.groups.queries.incomingInvitations,
+    userId && isConnected ? {} : 'skip',
+  );
+  const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
   const notificationState = useLocalRecords<NotificationRecord>('notification');
   const router = useRouter();
   const settingsState = useLocalRecords<SettingsRecord>('settings');
@@ -415,6 +424,19 @@ export default function NotificationsPage() {
                           />
                         )}
                       </button>
+                      {event.entityType === 'groupInvitation' && (
+                        <InvitationNotificationActions
+                          invitation={incomingInvitations?.find(
+                            (invite) => invite.id === event.entityId,
+                          )}
+                          onRespond={async (inviteId, response) => {
+                            await respondToInvitation({
+                              inviteId: inviteId as Id<'groupInvites'>,
+                              response,
+                            });
+                          }}
+                        />
+                      )}
                     </React.Fragment>
                   );
                 })}

@@ -1,11 +1,12 @@
 import earcut from 'earcut';
 
-export type CoinMesh = { vertices: Float32Array; vertexCount: number };
+export type CoinMesh = { vertices: Float32Array<ArrayBuffer>; vertexCount: number };
 type Point = readonly [number, number, number];
 type Color = readonly [number, number, number];
 
 const volt: Color = [183 / 255, 1, 74 / 255];
 const groove: Color = [0.4, 0.57, 0.17];
+const bevelColor: Color = [0.52, 0.72, 0.2];
 const black: Color = [0.008, 0.01, 0.006];
 const engravingWall: Color = [0.14, 0.19, 0.055];
 
@@ -85,12 +86,13 @@ export function createCoinMesh(): CoinMesh {
   }
   face.push(...letter);
   const faceIndices = earcut(face, [faceSegments]);
-  const floor = letter.map((coordinate) => coordinate * 0.975);
+  const bevel = letter.map((coordinate) => coordinate * 0.94);
+  const floor = letter.map((coordinate) => coordinate * 0.88);
   const floorIndices = earcut(floor);
   for (const side of [1, -1]) {
     for (const [points, indices, depth, color] of [
       [face, faceIndices, 0.047, volt],
-      [floor, floorIndices, 0.022, black],
+      [floor, floorIndices, 0.012, black],
     ] as const) {
       for (let index = 0; index < indices.length; index += 3) {
         for (let corner = 0; corner < 3; corner++) {
@@ -111,10 +113,14 @@ export function createCoinMesh(): CoinMesh {
       const next = (index + 2) % letter.length;
       const a: Point = [letter[index]! * side, letter[index + 1]!, 0.047 * side];
       const b: Point = [letter[next]! * side, letter[next + 1]!, 0.047 * side];
-      const c: Point = [floor[next]! * side, floor[next + 1]!, 0.022 * side];
-      const d: Point = [floor[index]! * side, floor[index + 1]!, 0.022 * side];
-      triangle(a, b, c, engravingWall);
-      triangle(a, c, d, engravingWall);
+      const c: Point = [bevel[next]! * side, bevel[next + 1]!, 0.034 * side];
+      const d: Point = [bevel[index]! * side, bevel[index + 1]!, 0.034 * side];
+      const e: Point = [floor[next]! * side, floor[next + 1]!, 0.012 * side];
+      const f: Point = [floor[index]! * side, floor[index + 1]!, 0.012 * side];
+      triangle(a, b, c, bevelColor);
+      triangle(a, c, d, bevelColor);
+      triangle(d, c, e, engravingWall);
+      triangle(d, e, f, engravingWall);
     }
   }
   return { vertices: new Float32Array(vertices), vertexCount: vertices.length / 9 };

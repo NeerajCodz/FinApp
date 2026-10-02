@@ -85,8 +85,6 @@ export default function CategoryDetailScreen() {
   const [limitInput, setLimitInput] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState('');
   const [confirmingArchive, setConfirmingArchive] = useState(false);
 
   if (categoryState.error) throw categoryState.error;
@@ -250,33 +248,6 @@ export default function CategoryDetailScreen() {
     }
   }
 
-  async function saveName() {
-    const name = nameInput.trim();
-    if (!userId || !category || !categoryLocalId || !categoryPayloadId || !name) return;
-    setPending(true);
-    setError('');
-    try {
-      await commitLocalWrite(
-        userId,
-        'category',
-        'category.rename',
-        { ...category, name },
-        { categoryId: categoryPayloadId, name },
-        {
-          recordId: categoryLocalId,
-          dependencies: categoryPayloadId.startsWith('local-')
-            ? [`category:${categoryPayloadId}`]
-            : [],
-        },
-      );
-      setEditingName(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not rename category.');
-    } finally {
-      setPending(false);
-    }
-  }
-
   async function archive() {
     if (!userId || !category || !categoryLocalId || !categoryPayloadId) return;
     setPending(true);
@@ -395,8 +366,6 @@ export default function CategoryDetailScreen() {
       loading={loading}
       pending={pending}
       formError={error}
-      editingName={editingName}
-      nameValue={nameInput}
       limitValue={limitInput}
       isDefaultExpense={isDefaultExpense}
       isDefaultIncome={isDefaultIncome}
@@ -408,13 +377,7 @@ export default function CategoryDetailScreen() {
       onOpenTransaction={(transactionId) =>
         router.push(`/transaction/${encodeURIComponent(transactionId)}` as never)
       }
-      onEditName={() => {
-        setNameInput(category?.name ?? '');
-        setEditingName(true);
-      }}
-      onNameChange={setNameInput}
-      onSaveName={() => void saveName()}
-      onCancelName={() => setEditingName(false)}
+      onEditName={() => router.push(`/category/${encodeURIComponent(id ?? '')}/edit` as never)}
       onIconChange={(emoji) => void saveIcon(emoji)}
       onLimitChange={setLimitInput}
       onSaveLimit={() => void saveLimit()}

@@ -13,7 +13,7 @@ import {
 import { getOptionalUser } from './shared/auth';
 import { normalizeUsername } from './users/domain';
 import { action, internalMutation, internalQuery } from './_generated/server';
-import { v } from 'convex/values';
+import { ConvexError, v } from 'convex/values';
 import { createNotification } from './notifications/mutations';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,13 +53,25 @@ export const requestEmailTwoFactor = action({
       { email: identifier, password, flow: 'signIn' },
       ctx as unknown as Parameters<PasswordOptions['authorize']>[1],
     );
-    const { account, user } = await retrieveAccount(ctx, {
+    const credentials = await retrieveAccount(ctx, {
       provider: 'password',
       account: {
         id: normalizedParams.email as string,
         secret: password,
       },
+    }).catch((cause) => {
+      const message =
+        cause instanceof Error
+          ? cause.message.toLowerCase()
+          : typeof cause === 'string'
+            ? cause.toLowerCase()
+            : '';
+      if (/invalidaccountid|invalidsecret|invalid credentials/.test(message)) {
+        throw new ConvexError({ code: 'INVALID_CREDENTIALS' });
+      }
+      throw cause;
     });
+    const { account, user } = credentials;
     if (!account.emailVerified) {
       return { status: 'verification-required' as const, email: normalizedParams.email as string };
     }
@@ -107,14 +119,59 @@ async function normalizedPasswordParams(
   return { ...params, email: email.toLowerCase() };
 }
 
+async function authorizeWithPublicErrors(
+  params: Parameters<PasswordOptions['authorize']>[0],
+  ctx: Parameters<PasswordOptions['authorize']>[1],
+) {
+  try {
+    return await passwordOptions.authorize(params, ctx);
+  } catch (cause) {
+    const message =
+      typeof cause === 'string'
+        ? cause
+        : cause instanceof Error
+          ? cause.message
+          : cause && typeof cause === 'object' && 'message' in cause
+            ? String(cause.message)
+            : '';
+    const normalizedMessage = message.toLowerCase();
+    if (
+      params.flow === 'signUp' &&
+      /(account|email|user).{0,50}(already exists|already registered)|(already exists|already registered).{0,50}(account|email|user)/.test(
+        normalizedMessage,
+      )
+    ) {
+      throw new ConvexError({ code: 'ACCOUNT_EXISTS' });
+    }
+    if (
+      params.flow === 'signIn' &&
+      /invalidaccountid|invalidsecret|invalid credentials|incorrect (email|username|password)|wrong password/.test(
+        normalizedMessage,
+      )
+    ) {
+      throw new ConvexError({ code: 'INVALID_CREDENTIALS' });
+    }
+    throw cause;
+  }
+}
+
 const usernameAuthorize: PasswordOptions['authorize'] = async (params, ctx) => {
+  if (params.flow === 'signUp') {
+    const normalizedParams = await normalizedPasswordParams(params, ctx);
+    const existing = await ctx.runQuery(internal.authEmailChallenges.emailStatus, {
+      email: normalizedParams.email as string,
+    });
+    if (existing) throw new ConvexError({ code: 'ACCOUNT_EXISTS' });
+    return authorizeWithPublicErrors(normalizedParams, ctx);
+  }
+
   if (params.flow === 'signIn') {
     const normalizedParams = await normalizedPasswordParams(params, ctx);
     const twoFactorEnabled = await ctx.runQuery(internal.users.queries.twoFactorEnabledForEmail, {
       email: normalizedParams.email as string,
     });
     if (twoFactorEnabled) throw new Error('Use the email second-factor sign-in flow.');
-    return passwordOptions.authorize(normalizedParams, ctx);
+    return authorizeWithPublicErrors(normalizedParams, ctx);
   }
 
   if (params.flow === 'verification-required') {
@@ -123,7 +180,7 @@ const usernameAuthorize: PasswordOptions['authorize'] = async (params, ctx) => {
       email: normalizedParams.email as string,
     });
     if (account?.verified) throw new Error('Use the email second-factor sign-in flow.');
-    return passwordOptions.authorize(normalizedParams, ctx);
+    return authorizeWithPublicErrors(normalizedParams, ctx);
   }
 
   if (params.flow === 'twoFactorVerification') {
@@ -143,7 +200,7 @@ const usernameAuthorize: PasswordOptions['authorize'] = async (params, ctx) => {
     const account = await ctx.runQuery(internal.authEmailChallenges.emailStatus, { email });
     if (account?.verified) throw new Error('Email is already verified.');
   }
-  return passwordOptions.authorize(normalizedParams, ctx);
+  return authorizeWithPublicErrors(normalizedParams, ctx);
 };
 
 const usernamePasswordProvider = {

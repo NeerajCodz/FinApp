@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowRight, BarChart3, Plus, Search, Tag } from 'lucide-react';
 import { Button, Empty, Input, Typography } from '@finapp/ui/web';
 import { formatMinor } from '../money';
+import { formatTransactionDate } from '../datetime';
 import { CategoryIcon } from './CategoryIcon';
 import styles from './CategoriesOverview.module.css';
 
@@ -41,11 +42,7 @@ const filters: { value: Filter; label: string }[] = [
 
 function dateLabel(timestamp?: number) {
   if (timestamp === undefined) return 'No activity in last 30 days';
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(timestamp);
+  return formatTransactionDate(timestamp, false, 'UTC');
 }
 
 function percent(spent: bigint, limit?: bigint) {

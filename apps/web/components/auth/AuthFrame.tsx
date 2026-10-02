@@ -40,8 +40,8 @@ export function AuthFrame({
                 Spending, saving, and shared expenses. One clear place to make sense of it all.
               </span>
             </div>
-            <div className="auth-coin-stage" aria-hidden="true">
-              <CoinLogo className="auth-coin" />
+            <div className="auth-coin-stage">
+              <CoinLogo className="auth-coin" interactive />
             </div>
             <span className="auth-story-foot">
               PRIVATE BY DEFAULT <i aria-hidden="true" /> ALWAYS YOURS

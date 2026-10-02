@@ -37,7 +37,8 @@ export default defineSchema({
   })
     .index('email', ['email'])
     .index('by_identityId', ['identityId'])
-    .index('by_username', ['username']),
+    .index('by_username', ['username'])
+    .index('by_phone', ['phone']),
   userSettings: defineTable({
     userId: v.id('users'),
     currency,
@@ -96,6 +97,11 @@ export default defineSchema({
     icon: optionalText,
     color: optionalText,
     isIncludedInTotal: v.boolean(),
+    notes: optionalText,
+    provider: optionalText,
+    accountNumber: optionalText,
+    openedAt: optionalTime,
+    includeInAnalytics: v.optional(v.boolean()),
     archivedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -110,6 +116,8 @@ export default defineSchema({
     parentId: optionalText,
     icon: optionalText,
     color: optionalText,
+    notes: optionalText,
+    includeInBudgets: v.optional(v.boolean()),
     isSystem: v.boolean(),
     archivedAt: optionalTime,
     monthlyLimitMinor: v.optional(v.int64()),
@@ -147,6 +155,7 @@ export default defineSchema({
     .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
     .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
     .index('by_account', ['accountId'])
+    .index('by_transferAccountId', ['transferAccountId'])
     .index('by_group_occurredAt', ['groupId', 'occurredAt']),
   transactionTags: defineTable({ transactionId: v.id('transactions'), tag: v.string() }).index(
     'by_transaction',
@@ -201,6 +210,13 @@ export default defineSchema({
     name: v.string(),
     currency,
     icon: optionalText,
+    color: optionalText,
+    description: optionalText,
+    groupType: optionalText,
+    purpose: optionalText,
+    location: optionalText,
+    startAt: optionalTime,
+    endAt: optionalTime,
     messageRetentionMs: optionalTime,
     archivedAt: optionalTime,
     createdAt: timestamp,
@@ -221,9 +237,25 @@ export default defineSchema({
     inviteeEmail: v.string(),
     inviteeUsername: optionalText,
     inviteePhone: optionalText,
+    inviteeUserId: v.optional(v.id('users')),
     status: v.union(v.literal('pending'), v.literal('accepted'), v.literal('declined')),
     createdAt: timestamp,
-  }).index('by_group', ['groupId']),
+  })
+    .index('by_group', ['groupId'])
+    .index('by_invitee_user_status', ['inviteeUserId', 'status'])
+    .index('by_invitee_username', ['inviteeUsername'])
+    .index('by_invitee_email', ['inviteeEmail'])
+    .index('by_invitee_phone', ['inviteePhone']),
+  groupInvitationLinks: defineTable({
+    groupId: v.id('groups'),
+    creatorId: v.id('users'),
+    tokenHash: v.string(),
+    expiresAt: timestamp,
+    revokedAt: optionalTime,
+    createdAt: timestamp,
+  })
+    .index('by_group', ['groupId'])
+    .index('by_token_hash', ['tokenHash']),
   groupMessages: defineTable({
     groupId: v.id('groups'),
     senderId: v.id('users'),
@@ -282,6 +314,11 @@ export default defineSchema({
     ),
     categoryId: optionalText,
     accountId: optionalText,
+    accountIds: v.optional(v.array(v.string())),
+    icon: optionalText,
+    alertThreshold: v.optional(v.number()),
+    notes: optionalText,
+    includeInAnalytics: v.optional(v.boolean()),
     startAt: timestamp,
     endAt: timestamp,
     archivedAt: optionalTime,
@@ -292,10 +329,18 @@ export default defineSchema({
     ownerId: v.id('users'),
     name: v.string(),
     icon: optionalText,
+    color: optionalText,
     targetAmountMinor: v.int64(),
     currency,
     targetDate: optionalTime,
     accountId: optionalText,
+    goalType: optionalText,
+    monthlyContributionMinor: v.optional(v.int64()),
+    priority: v.optional(v.union(v.literal('low'), v.literal('medium'), v.literal('high'))),
+    notes: optionalText,
+    reminderFrequency: v.optional(
+      v.union(v.literal('none'), v.literal('weekly'), v.literal('monthly')),
+    ),
     completedAt: optionalTime,
     archivedAt: optionalTime,
     createdAt: timestamp,

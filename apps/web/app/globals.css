@@ -14,6 +14,22 @@ body {
   color: var(--finapp-foreground, #fff);
   font-family: var(--font-space-grotesk, 'Space Grotesk', 'Avenir Next', sans-serif);
   -webkit-font-smoothing: antialiased;
+  cursor: default;
+}
+
+a,
+button,
+[role='button'],
+summary,
+label {
+  cursor: pointer;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+[role='textbox'] {
+  cursor: text;
 }
 
 button,

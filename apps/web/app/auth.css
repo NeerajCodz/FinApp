@@ -223,33 +223,6 @@ form.auth-form {
 .auth-form .finapp-input.is-error {
   border-color: #ff9898;
 }
-.auth-password-control {
-  position: relative;
-  min-width: 0;
-}
-.auth-password-control .finapp-input {
-  padding-right: 76px;
-}
-.auth-password-toggle {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: grid;
-  min-width: 58px;
-  min-height: 44px;
-  place-items: center;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #b5b5b0;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.auth-password-toggle:hover:not(:disabled) {
-  background: #ffffff08;
-  color: #b7ff4a;
-}
 .auth-form .finapp-button,
 .auth-welcome-actions .finapp-button {
   width: 100%;
@@ -295,8 +268,7 @@ form.auth-form {
 .auth-form :disabled {
   cursor: not-allowed;
 }
-.auth-form .finapp-input:disabled,
-.auth-form .auth-password-toggle:disabled {
+.auth-form .finapp-input:disabled {
   opacity: 0.65;
 }
 .auth-form .finapp-button:disabled {
@@ -362,6 +334,7 @@ form.auth-form {
 .auth-form .finapp-otp,
 .auth-otp {
   width: 100%;
+  grid-template-columns: minmax(0, 1fr);
   justify-content: flex-start;
 }
 .auth-form .finapp-otp__cells {

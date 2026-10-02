@@ -57,6 +57,7 @@ type Budget = LocalRecord & {
   period?: string;
   categoryId?: string;
   accountId?: string;
+  accountIds?: string[];
   startAt?: number;
   endAt?: number;
   archivedAt?: number;
@@ -315,6 +316,7 @@ export default function AnalyticsPage() {
   const accountEntities = React.useMemo(
     () =>
       accountState.records.flatMap((account) => {
+        if (account.includeInAnalytics === false) return [];
         const aliases = idAliases(account);
         const id = aliases[0];
         return id ? [{ id, name: String(account.name ?? 'Account'), aliases }] : [];
@@ -360,6 +362,7 @@ export default function AnalyticsPage() {
   const filteredTransactions = React.useMemo(
     () =>
       analyticsTransactions.filter((transaction) => {
+        if (accountById.get(transaction.accountId ?? '')?.includeInAnalytics === false) return false;
         const account = accountById.get(accountFilter);
         const category = categoryById.get(categoryFilter);
         if (
@@ -409,6 +412,7 @@ export default function AnalyticsPage() {
   const rangeRecords = React.useMemo(() => {
     if (!range) return [];
     return transactionState.records.filter((record) => {
+      if (accountById.get(String(record.accountId ?? ''))?.includeInAnalytics === false) return false;
       const occurredAt = Number(record.occurredAt ?? 0);
       const account = accountById.get(accountFilter);
       const category = categoryById.get(categoryFilter);
@@ -525,6 +529,7 @@ export default function AnalyticsPage() {
     .filter(
       (budget) =>
         !budget.archivedAt &&
+        budget.includeInAnalytics !== false &&
         (budget.currency ??
           accountById.get(String(budget.accountId ?? ''))?.currency ??
           profile?.defaultCurrency ??
@@ -556,6 +561,7 @@ export default function AnalyticsPage() {
         at >= Number(budget.endAt ?? range?.endAt ?? 0)
       )
         return sum;
+      if (categoryById.get(String(record.categoryId ?? ''))?.includeInBudgets === false) return sum;
       const budgetCategory = budget.categoryId ? categoryById.get(budget.categoryId) : undefined;
       if (
         budget.categoryId &&
@@ -568,6 +574,10 @@ export default function AnalyticsPage() {
         (!budgetAccount || !idAliases(budgetAccount).includes(String(record.accountId ?? '')))
       )
         return sum;
+      if (budget.accountIds?.length && !budget.accountIds.some(id => {
+        const scopedAccount = accountById.get(id);
+        return (scopedAccount ? idAliases(scopedAccount) : [id]).includes(String(record.accountId ?? ''));
+      })) return sum;
       return sum + amountAsBigInt(record.amountMinor);
     }, 0n);
 
@@ -665,6 +675,7 @@ export default function AnalyticsPage() {
 
       <AnalyticsFilters
         periods={periods}
+        period={customRange ? undefined : period}
         onPeriodChange={(value) => {
           setPeriod(value as AnalyticsPeriod);
           setCustomRange(null);
@@ -784,26 +795,30 @@ export default function AnalyticsPage() {
             metrics={[
               {
                 label: 'Total Spent',
+                icon: 'spent',
                 value: formatMinor(result.spentMinor, currency),
                 color: tokens.expense,
                 detail: comparison,
               },
               {
                 label: 'Total Income',
+                icon: 'income',
                 value: formatMinor(result.incomeMinor, currency),
                 color: tokens.income,
               },
               {
                 label: 'Net Cash Flow',
+                icon: 'net',
                 value: formatMinor(result.incomeMinor - result.spentMinor, currency),
                 color: result.incomeMinor >= result.spentMinor ? tokens.income : tokens.expense,
               },
               {
                 label: 'Savings Rate',
+                icon: 'savings',
                 value: savingsRate === null ? '—' : `${savingsRate}%`,
                 color: tokens.primary,
               },
-              { label: 'Transactions', value: String(transactionCount), color: tokens.foreground },
+              { label: 'Transactions', icon: 'transactions', value: String(transactionCount), color: tokens.foreground },
             ]}
           />
 
@@ -916,12 +931,14 @@ export default function AnalyticsPage() {
               {accountState.records.filter(
                 (account) =>
                   !account.archivedAt &&
+                  account.includeInAnalytics !== false &&
                   (account.currency ?? profile?.defaultCurrency ?? 'INR') === currency,
               ).length ? (
                 accountState.records
                   .filter(
                     (account) =>
                       !account.archivedAt &&
+                      account.includeInAnalytics !== false &&
                       (account.currency ?? profile?.defaultCurrency ?? 'INR') === currency,
                   )
                   .map((account) => {
@@ -984,7 +1001,7 @@ export default function AnalyticsPage() {
                   <Typography variant="bodyLarge">Budget progress</Typography>
                   <Typography variant="caption">Spend within the selected range</Typography>
                 </div>
-                <Link className="finance-inline-link" href="/budget">
+                <Link className="finance-inline-link" href="/budgets">
                   View all
                 </Link>
               </div>
@@ -1014,7 +1031,7 @@ export default function AnalyticsPage() {
                   title="No budgets yet"
                   description="Create a budget to keep an eye on your plan."
                   action={
-                    <Link className="finance-inline-link" href="/budget/new">
+                    <Link className="finance-inline-link" href="/budgets/new">
                       Create a budget
                     </Link>
                   }

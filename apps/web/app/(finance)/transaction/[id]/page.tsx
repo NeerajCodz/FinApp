@@ -1,18 +1,12 @@
 'use client';
 
-import React from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, ReceiptText } from 'lucide-react';
-import { Empty } from '@finapp/ui/web';
+import { useParams, useRouter } from 'next/navigation';
 import {
-  CategoryIcon,
-  Money,
-  SemanticMarker,
-  SettingsRow,
+  TransactionDetailScreen,
+  transactionViews,
+  formatTransactionDate,
   type SemanticType,
   type TransactionType,
-  formatTransactionDate,
 } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -48,55 +42,72 @@ type Profile = LocalRecord & { timezone?: string };
 
 export default function PersonalTransactionDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { userId } = useBrowserSync();
-  const {
-    records: transactionRecords,
-    loading: transactionLoading,
-    error: transactionError,
-  } = useLocalRecords<Transaction>('transaction');
-  const {
-    records: accountRecords,
-    loading: accountLoading,
-    error: accountError,
-  } = useLocalRecords<Account>('account');
-  const {
-    records: categoryRecords,
-    loading: categoryLoading,
-    error: categoryError,
-  } = useLocalRecords<Category>('category');
-  const {
-    records: profiles,
-    loading: profileLoading,
-    error: profileError,
-  } = useLocalRecords<Profile>('profile');
+  const transactionState = useLocalRecords<Transaction>('transaction');
+  const accountState = useLocalRecords<Account>('account');
+  const categoryState = useLocalRecords<Category>('category');
+  const profileState = useLocalRecords<Profile>('profile');
+  const tagState = useLocalRecords('transactionTag');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const transaction = transactionRecords.find(
-    (item) => userId && belongsToUser(item, userId) && matchesId(item, routeId),
+  const transaction = transactionState.records.find(
+    (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
   );
-  const accounts = accountRecords.filter((item) => userId && belongsToUser(item, userId));
-  const categories = categoryRecords.filter((item) => userId && belongsToUser(item, userId));
-  const profile = profiles[0];
-  const timeZone = typeof profile?.timezone === 'string' ? profile.timezone : 'UTC';
-  function findAlias<T extends LocalRecord>(records: T[], id: string | undefined): T | undefined {
-    return records.find((record) => typeof id === 'string' && aliasesOf(record).includes(id));
-  }
-  const account = findAlias(accounts, transaction?.accountId);
-  const category = findAlias(categories, transaction?.categoryId);
-  const destination = findAlias(accounts, transaction?.transferAccountId);
-  const currency = transaction?.currency ?? account?.currency ?? 'INR';
-  const type = transaction?.type;
-  const duplicable =
-    !!transaction &&
-    (type === 'expense' || type === 'income' || type === 'transfer') &&
+  const accounts = accountState.records.filter((record) => userId && belongsToUser(record, userId));
+  const categories = categoryState.records.filter(
+    (record) => userId && belongsToUser(record, userId),
+  );
+  const profile = profileState.records[0];
+  const account = accounts.find(
+    (record) => transaction?.accountId && aliasesOf(record).includes(transaction.accountId),
+  );
+  const category = categories.find(
+    (record) => transaction?.categoryId && aliasesOf(record).includes(transaction.categoryId),
+  );
+  const destination = accounts.find(
+    (record) =>
+      transaction?.transferAccountId && aliasesOf(record).includes(transaction.transferAccountId),
+  );
+  const transactionType: TransactionType =
+    transaction?.type === 'income' ||
+    transaction?.type === 'transfer' ||
+    transaction?.type === 'refund' ||
+    transaction?.type === 'adjustment'
+      ? transaction.type
+      : 'expense';
+  const semanticType: SemanticType = transaction?.groupId ? 'split' : transactionType;
+  const loading =
+    transactionState.loading ||
+    accountState.loading ||
+    categoryState.loading ||
+    profileState.loading ||
+    tagState.loading;
+  const error =
+    transactionState.error ??
+    accountState.error ??
+    categoryState.error ??
+    profileState.error ??
+    tagState.error;
+  const canEdit = Boolean(
+    transaction &&
+    !transaction.groupId &&
+    ['expense', 'income', 'transfer'].includes(String(transaction.type)),
+  );
+  const canDuplicate = Boolean(
+    transaction &&
+    (transaction.type === 'expense' ||
+      transaction.type === 'income' ||
+      transaction.type === 'transfer') &&
     asMinor(transaction.amountMinor) > 0n &&
-    !!account &&
+    account &&
     account.archivedAt === undefined &&
     account.currency === transaction.currency &&
-    (type === 'transfer'
-      ? !!destination && destination.archivedAt === undefined
-      : !!category && category.archivedAt === undefined);
-  let duplicateHref = '';
-  if (transaction && duplicable) {
+    (transaction.type === 'transfer'
+      ? destination && destination.archivedAt === undefined
+      : category && category.archivedAt === undefined),
+  );
+  function duplicate() {
+    if (!transaction || !canDuplicate) return;
     const query = new URLSearchParams({
       type: transaction.type!,
       amount: minorToInput(transaction.amountMinor, transaction.currency ?? 'INR'),
@@ -107,176 +118,67 @@ export default function PersonalTransactionDetailPage() {
     });
     if (transaction.categoryId) query.set('categoryId', transaction.categoryId);
     if (transaction.transferAccountId) query.set('destinationId', transaction.transferAccountId);
-    duplicateHref = `/transaction/new?${query.toString()}`;
+    if (transaction.title) query.set('title', transaction.title);
+    if (transaction.merchant) query.set('merchant', transaction.merchant);
+    router.push(`/transaction/new?${query.toString()}`);
   }
   if (!userId)
     return (
       <SignInGate eyebrow="TRANSACTION DETAIL" title="Your ledger stays private.">
-        Sign in to review a transaction from this browser’s local finance data.
+        Sign in to review a transaction from your personal finance data.
       </SignInGate>
     );
-  if (!routeId)
-    return (
-      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
-            <ArrowLeft size={21} />
-          </Link>
-          <h1 style={{ margin: 0 }}>Transaction</h1>
-        </div>
-        <Empty
-          title="Missing transaction ID"
-          description="Open a transaction from Activity to view its details."
-        />
-      </div>
-    );
-  if (transactionLoading || accountLoading || categoryLoading || profileLoading)
-    return (
-      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
-            <ArrowLeft size={21} />
-          </Link>
-          <h1 style={{ margin: 0 }}>Transaction</h1>
-        </div>
-        <p className="finance-muted" role="status">
-          Loading transaction…
-        </p>
-      </div>
-    );
-  if (transactionError || accountError || categoryError || profileError)
-    return (
-      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
-            <ArrowLeft size={21} />
-          </Link>
-          <h1 style={{ margin: 0 }}>Transaction</h1>
-        </div>
-        <p className="finance-form-error" role="alert">
-          Transaction data could not be opened:{' '}
-          {transactionError ?? accountError ?? categoryError ?? profileError}
-        </p>
-      </div>
-    );
-  if (!transaction || transaction.deletedAt !== undefined)
-    return (
-      <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
-            <ArrowLeft size={21} />
-          </Link>
-          <h1 style={{ margin: 0 }}>Transaction</h1>
-        </div>
-        <Empty
-          title="Transaction unavailable"
-          description="This transaction was removed or is no longer saved on this device."
-          action={
-            <Link className="finance-inline-link" href="/activity">
-              Back to activity
-            </Link>
-          }
-        />
-      </div>
-    );
-  const semanticType: SemanticType = transaction.groupId
-    ? 'split'
-    : transaction.type === 'income' ||
-        transaction.type === 'expense' ||
-        transaction.type === 'transfer' ||
-        transaction.type === 'refund' ||
-        transaction.type === 'settlement'
-      ? transaction.type
-      : 'expense';
-  const amountType: TransactionType =
-    transaction.type === 'income' ||
-    transaction.type === 'expense' ||
-    transaction.type === 'transfer' ||
-    transaction.type === 'refund' ||
-    transaction.type === 'adjustment'
-      ? transaction.type
-      : 'expense';
   return (
-    <div className="finance-page" style={{ display: 'grid', gap: 28 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Link className="finance-secondary-action" href="/activity" aria-label="Go back">
-          <ArrowLeft size={21} />
-        </Link>
-        <h1 style={{ margin: 0 }}>Transaction</h1>
-      </div>
-      <div style={{ display: 'grid', justifyItems: 'center', gap: 12, paddingBlock: 24 }}>
-        <CategoryIcon
-          label={category?.name ?? transaction.type ?? 'Transaction'}
-          icon={category?.icon}
-        />
-        <Money
-          amountMinor={asMinor(transaction.amountMinor)}
-          currency={currency}
-          type={amountType}
-          size="display"
-        />
-        <h2 style={{ margin: 0, textAlign: 'center' }}>{transaction.title || 'Transaction'}</h2>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            gap: 10,
-          }}
-        >
-          <SemanticMarker type={semanticType} />
-          {transaction.status && (
-            <span className="finance-muted">{transaction.status.toUpperCase()}</span>
-          )}
-        </div>
-      </div>
-      <div>
-        {transaction.merchant && (
-          <>
-            <SettingsRow label="Merchant" value={transaction.merchant} />
-            <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-          </>
-        )}
-        <SettingsRow
-          label="Category"
-          leadingIcon={
-            <CategoryIcon label={category?.name ?? 'Uncategorized'} icon={category?.icon} />
-          }
-          value={category?.name ?? 'Uncategorized'}
-        />
-        <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-        <SettingsRow label="Account" value={account?.name ?? 'Unassigned account'} />
-        {transaction.type === 'transfer' && (
-          <>
-            <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-            <SettingsRow label="Destination" value={destination?.name ?? 'Unassigned account'} />
-          </>
-        )}
-        <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-        <SettingsRow
-          label="Date"
-          value={
-            transaction.occurredAt
-              ? formatTransactionDate(transaction.occurredAt, transaction.hasTime, timeZone)
-              : 'Date unavailable'
-          }
-        />
-        <div style={{ borderTop: '1px solid var(--finance-line)' }} />
-        <SettingsRow label="Note" value={transaction.note?.trim() || 'None'} />
-      </div>
-      {duplicable && (
-        <Link
-          className="finance-secondary-action"
-          href={duplicateHref}
-          style={{ justifyContent: 'space-between', minHeight: 56 }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ReceiptText size={19} /> Duplicate transaction
-          </span>
-          <ArrowRight size={18} />
-        </Link>
+    <TransactionDetailScreen
+      referenceId={routeId}
+      relatedTransactions={transactionViews(transactionState.records.filter(record => userId && belongsToUser(record, userId) && !matchesId(record, routeId) && ((transaction?.categoryId && record.categoryId === transaction.categoryId) || (transaction?.merchant && record.merchant === transaction.merchant))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,5),accounts,categories,profile?.timezone)}
+      onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      tags={tagState.records.flatMap((tag) => {
+        if (
+          !transaction ||
+          !userId ||
+          !belongsToUser(tag, userId) ||
+          typeof tag.tag !== 'string' ||
+          typeof tag.transactionId !== 'string' ||
+          !aliasesOf(transaction).includes(tag.transactionId)
+        )
+          return [];
+        return [tag.tag];
+      })}
+      title={transaction?.title || transaction?.merchant || 'Transaction'}
+      amountMinor={asMinor(transaction?.amountMinor)}
+      currency={String(
+        transaction?.currency ?? account?.currency ?? profile?.defaultCurrency ?? 'INR',
       )}
-    </div>
+      type={transactionType}
+      semanticType={semanticType}
+      status={transaction?.status}
+      category={category?.name ?? (transaction?.groupId ? 'Split expense' : 'Uncategorized')}
+      categoryIcon={category?.icon}
+      account={account?.name ?? 'Unassigned account'}
+      destination={
+        transaction?.type === 'transfer' ? (destination?.name ?? 'Unassigned account') : undefined
+      }
+      date={
+        transaction?.occurredAt
+          ? formatTransactionDate(
+              transaction.occurredAt,
+              transaction.hasTime,
+              profile?.timezone ?? 'UTC',
+            )
+          : 'Date unavailable'
+      }
+      merchant={transaction?.merchant}
+      note={transaction?.note?.trim()}
+      loading={loading}
+      error={error}
+      unavailable={!loading && !error && (!transaction || transaction.deletedAt !== undefined)}
+      missingId={!routeId}
+      canEdit={canEdit}
+      canDuplicate={canDuplicate}
+      onBack={() => router.push('/transactions')}
+      onEdit={() => router.push(`/transaction/${encodeURIComponent(routeId)}/edit`)}
+      onDuplicate={duplicate}
+    />
   );
 }

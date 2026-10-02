@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as LucideIcons from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
+import * as PhosphorIcons from '@phosphor-icons/react';
+import type { IconProps as PhosphorProps } from '@phosphor-icons/react';
 import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/web';
 import {
   allEmojiPickerOptions,
@@ -15,9 +18,10 @@ import {
 } from '../emoji-picker-data';
 import { getIconPurpose, iconPurposeCategories, type IconPurpose } from '../icon-picker-data';
 
-export type EntityIconPickerMode = 'emoji' | 'lucide' | 'either';
+export type EntityIconPickerMode = 'emoji' | 'lucide' | 'phosphor' | 'either' | 'all';
 type LucideIconComponent = React.ComponentType<LucideProps>;
-type PickerKind = 'emoji' | 'lucide';
+type PhosphorIconComponent = React.ComponentType<PhosphorProps>;
+type PickerKind = 'emoji' | 'lucide' | 'phosphor';
 
 const emojiTabs = [
   { id: 'recent', label: 'Recent' },
@@ -51,6 +55,31 @@ const lucideIcons = Object.entries(LucideIcons)
   }))
   .sort((left, right) => left.name.localeCompare(right.name));
 
+const phosphorIcons = Object.entries(PhosphorIcons)
+  .filter(
+    ([name, icon]) =>
+      /^[A-Z]/.test(name) &&
+      name !== 'IconContext' &&
+      name !== 'IconBase' &&
+      typeof icon === 'object' &&
+      icon !== null &&
+      '$$typeof' in icon,
+  )
+  .map(([name, icon]) => ({
+    name,
+    searchText: name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase(),
+    purpose: getIconPurpose(name),
+    Icon: icon as unknown as PhosphorIconComponent,
+  }))
+  .sort((left, right) => left.name.localeCompare(right.name));
+
+const phosphorIconsByName: Record<string, PhosphorIconComponent> = {};
+for (const { name, Icon } of phosphorIcons) phosphorIconsByName[name] = Icon;
+
+function phosphorComponentFor(value: string): PhosphorIconComponent | undefined {
+  return phosphorIconsByName[value.slice('phosphor:'.length)];
+}
+
 const iconsByName: Record<string, LucideIconComponent> = {};
 for (const { name, Icon } of lucideIcons) {
   iconsByName[name] = Icon;
@@ -73,6 +102,11 @@ export function EntityIcon({
 }) {
   const { tokens } = useTheme();
   if (!value) return null;
+  const Phosphor = value.startsWith('phosphor:') ? phosphorComponentFor(value) : undefined;
+  if (Phosphor)
+    return (
+      <Phosphor size={size} color={color ?? tokens.primary} weight="fill" aria-hidden="true" />
+    );
   const Icon = componentFor(value);
   if (Icon) return <Icon size={size} color={color ?? tokens.primary} aria-hidden="true" />;
   if (value.startsWith('lucide:')) {
@@ -117,7 +151,7 @@ function IconTile({
       onClick={onSelect}
       style={{
         minWidth: 0,
-        minHeight: 46,
+        minHeight: 42,
         aspectRatio: '1',
         display: 'grid',
         placeItems: 'center',
@@ -135,34 +169,157 @@ function IconTile({
 
 function EmojiTile({
   emoji,
-  selected,
+  selectedValue,
   onSelect,
 }: {
   emoji: EmojiPickerOption;
-  selected: boolean;
-  onSelect: () => void;
+  selectedValue?: string;
+  onSelect: (value: string) => void;
 }) {
   const { tokens } = useTheme();
+  const [tonesOpen, setTonesOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const tonePanelRef = useRef<HTMLDivElement>(null);
+  const [tonePosition, setTonePosition] = useState<{ top: number; left: number } | null>(null);
+  const chosenTone = emoji.toneOptions.find((tone) => tone.native === selectedValue);
+  const hasTones = emoji.toneOptions.length > 1;
+  const chooseTone = (native: string) => {
+    onSelect(native);
+    setTonesOpen(false);
+  };
+  const toggleTones = () => {
+    if (!hasTones) {
+      chooseTone(emoji.native);
+      return;
+    }
+    if (tonesOpen) {
+      setTonesOpen(false);
+      return;
+    }
+    const bounds = triggerRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const width = 208;
+    const height = 44;
+    setTonePosition({
+      left: Math.max(
+        8,
+        Math.min(bounds.left + bounds.width / 2 - width / 2, window.innerWidth - width - 8),
+      ),
+      top: Math.max(8, Math.min(bounds.top - height - 5, window.innerHeight - height - 8)),
+    });
+    setTonesOpen(true);
+  };
+  useEffect(() => {
+    if (!tonesOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        (triggerRef.current?.contains(target) || tonePanelRef.current?.contains(target))
+      ) {
+        return;
+      }
+      setTonesOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTonesOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [tonesOpen]);
+
   return (
-    <button
-      type="button"
-      aria-label={`${emoji.native} ${emoji.name}`}
-      aria-pressed={selected}
-      onClick={onSelect}
-      style={{
-        minWidth: 0,
-        aspectRatio: '1',
-        display: 'grid',
-        placeItems: 'center',
-        border: `1px solid ${selected ? tokens.primary : 'transparent'}`,
-        borderRadius: 11,
-        background: selected ? tokens.surfaceSubtle : tokens.surfaceRaised,
-        cursor: 'pointer',
-        fontSize: 24,
-      }}
-    >
-      {emoji.native}
-    </button>
+    <div style={{ position: 'relative', zIndex: tonesOpen ? 5 : 0 }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`${emoji.native} ${emoji.name}${hasTones ? ', choose skin tone' : ''}`}
+        aria-pressed={!!chosenTone}
+        aria-haspopup={hasTones ? 'dialog' : undefined}
+        aria-expanded={hasTones ? tonesOpen : undefined}
+        onClick={toggleTones}
+        style={{
+          width: '100%',
+          minWidth: 0,
+          aspectRatio: '1',
+          display: 'grid',
+          placeItems: 'center',
+          position: 'relative',
+          border: `1px solid ${chosenTone ? tokens.primary : 'transparent'}`,
+          borderRadius: 11,
+          background: chosenTone ? tokens.surfaceSubtle : tokens.surfaceRaised,
+          cursor: 'pointer',
+          fontSize: 24,
+        }}
+      >
+        {chosenTone?.native ?? emoji.native}
+        {hasTones && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              right: 3,
+              bottom: 1,
+              fontSize: 9,
+              color: tokens.foregroundMuted,
+            }}
+          >
+            ●
+          </span>
+        )}
+      </button>
+      {tonesOpen &&
+        tonePosition &&
+        createPortal(
+          <div
+            ref={tonePanelRef}
+            role="dialog"
+            aria-label={`${emoji.name} skin tone`}
+            style={{
+              position: 'fixed',
+              zIndex: 10000,
+              top: tonePosition.top,
+              left: tonePosition.left,
+              display: 'flex',
+              gap: 3,
+              padding: 5,
+              border: `1px solid ${tokens.borderSubtle}`,
+              borderRadius: 12,
+              background: tokens.popover,
+              boxShadow: '0 10px 28px #0006',
+            }}
+          >
+            {emoji.toneOptions.map((tone) => (
+              <button
+                key={tone.id}
+                type="button"
+                aria-label={tone.toneLabel}
+                aria-pressed={selectedValue === tone.native}
+                title={tone.toneLabel}
+                onClick={() => chooseTone(tone.native)}
+                style={{
+                  width: 30,
+                  height: 30,
+                  flex: '0 0 30px',
+                  border: `1px solid ${selectedValue === tone.native ? tokens.primary : tokens.borderSubtle}`,
+                  borderRadius: 8,
+                  background: selectedValue === tone.native ? tokens.surfaceSubtle : 'transparent',
+                  cursor: 'pointer',
+                  fontSize: 18,
+                  padding: 0,
+                }}
+              >
+                {tone.native}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </div>
   );
 }
 
@@ -177,7 +334,9 @@ export function EntityIconPicker({
   const { tokens } = useTheme();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [kind, setKind] = useState<PickerKind>(mode === 'emoji' ? 'emoji' : 'lucide');
+  const [kind, setKind] = useState<PickerKind>(
+    mode === 'emoji' ? 'emoji' : mode === 'phosphor' ? 'phosphor' : 'lucide',
+  );
   const [activeCategory, setActiveCategory] = useState('recent');
   const [activeIconPurpose, setActiveIconPurpose] = useState<IconPurpose>('finance');
   const [visibleIconCount, setVisibleIconCount] = useState(120);
@@ -210,11 +369,27 @@ export function EntityIconPicker({
         : activeIconPurpose === 'all' || icon.purpose === activeIconPurpose,
     );
   }, [activeIconPurpose, search]);
+  const matchingPhosphorIcons = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return phosphorIcons.filter((icon) =>
+      needle
+        ? icon.searchText.includes(needle)
+        : activeIconPurpose === 'all' || icon.purpose === activeIconPurpose,
+    );
+  }, [activeIconPurpose, search]);
   const displayedIcons = matchingIcons.slice(0, visibleIconCount);
+  const displayedPhosphorIcons = matchingPhosphorIcons.slice(0, visibleIconCount);
 
   function openPicker() {
-    if (mode === 'either') setKind(value?.startsWith('lucide:') ? 'lucide' : 'emoji');
-    else setKind(mode);
+    if (mode === 'either' || mode === 'all') {
+      setKind(
+        value?.startsWith('phosphor:')
+          ? 'phosphor'
+          : value?.startsWith('lucide:')
+            ? 'lucide'
+            : 'emoji',
+      );
+    } else setKind(mode);
     setActiveCategory(getRecentEmojiOptions().length ? 'recent' : 'popular');
     setActiveIconPurpose('finance');
     setVisibleIconCount(120);
@@ -222,7 +397,9 @@ export function EntityIconPicker({
   }
 
   function select(nextValue?: string) {
-    if (nextValue && !nextValue.startsWith('lucide:')) recordRecentEmoji(nextValue);
+    if (nextValue && !nextValue.startsWith('lucide:') && !nextValue.startsWith('phosphor:')) {
+      recordRecentEmoji(nextValue);
+    }
     onChange(nextValue);
     setOpen(false);
     setSearch('');
@@ -247,6 +424,8 @@ export function EntityIconPicker({
       >
         {value ? (
           <EntityIcon value={value} size={22} color={tokens.primary} />
+        ) : mode === 'phosphor' ? (
+          <PhosphorIcons.Plus size={19} color={tokens.primary} weight="fill" aria-hidden="true" />
         ) : (
           <LucideIcons.Plus size={19} color={tokens.primary} aria-hidden="true" />
         )}
@@ -272,14 +451,19 @@ export function EntityIconPicker({
         title={
           mode === 'emoji'
             ? 'Choose an emoji'
-            : mode === 'lucide'
-              ? 'Choose an icon'
-              : 'Choose an emoji or icon'
+            : mode === 'phosphor'
+              ? 'Choose a Phosphor icon'
+              : mode === 'lucide'
+                ? 'Choose a Lucide icon'
+                : 'Choose an emoji or icon'
         }
       >
-        {mode === 'either' && (
+        {(mode === 'either' || mode === 'all') && (
           <div role="tablist" aria-label="Icon type" style={{ display: 'flex', gap: 6 }}>
-            {(['emoji', 'lucide'] as const).map((choice) => (
+            {(mode === 'all'
+              ? (['emoji', 'lucide', 'phosphor'] as const)
+              : (['emoji', 'lucide'] as const)
+            ).map((choice) => (
               <button
                 key={choice}
                 type="button"
@@ -296,14 +480,16 @@ export function EntityIconPicker({
                   cursor: 'pointer',
                 }}
               >
-                {choice === 'emoji' ? 'Emoji' : 'Lucide icons'}
+                {choice === 'emoji'
+                  ? 'Emoji'
+                  : `${choice[0]!.toUpperCase()}${choice.slice(1)} icons`}
               </button>
             ))}
           </div>
         )}
         <Input
-          accessibilityLabel={kind === 'emoji' ? 'Search emoji' : 'Search Lucide icons'}
-          placeholder={kind === 'emoji' ? 'Search all emoji' : 'Search all Lucide icons'}
+          accessibilityLabel={kind === 'emoji' ? 'Search emoji' : `Search ${kind} icons`}
+          placeholder={kind === 'emoji' ? 'Search all emoji' : `Search all ${kind} icons`}
           value={search}
           onChangeText={(nextSearch) => {
             setSearch(nextSearch);
@@ -312,10 +498,10 @@ export function EntityIconPicker({
           autoCapitalize="none"
           autoCorrect="off"
         />
-        {kind === 'lucide' && (
+        {kind !== 'emoji' && (
           <div
             role="tablist"
-            aria-label="Icon purpose"
+            aria-label={`${kind} icon purpose`}
             style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2 }}
           >
             {iconPurposeCategories.map((category) => (
@@ -399,19 +585,14 @@ export function EntityIconPicker({
               }}
             >
               {matchingEmojis.map((emoji) => (
-                <EmojiTile
-                  key={emoji.id}
-                  emoji={emoji}
-                  selected={value === emoji.native}
-                  onSelect={() => select(emoji.native)}
-                />
+                <EmojiTile key={emoji.id} emoji={emoji} selectedValue={value} onSelect={select} />
               ))}
             </div>
             {matchingEmojis.length === 0 && (
               <Typography variant="small">No emoji match that search.</Typography>
             )}
           </>
-        ) : (
+        ) : kind === 'lucide' ? (
           <>
             <div
               role="grid"
@@ -424,7 +605,7 @@ export function EntityIconPicker({
                 maxHeight: 356,
                 overflowY: 'auto',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(124px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))',
                 gap: 6,
                 padding: '2px 1px',
               }}
@@ -443,6 +624,64 @@ export function EntityIconPicker({
             ) : matchingIcons.length > displayedIcons.length ? (
               <Button variant="ghost" onPress={() => setVisibleIconCount((count) => count + 120)}>
                 Show more icons ({matchingIcons.length - displayedIcons.length} remaining)
+              </Button>
+            ) : null}
+          </>
+        ) : null}
+        {kind === 'phosphor' && (
+          <>
+            <div
+              role="grid"
+              aria-label={
+                search
+                  ? 'Phosphor icon search results'
+                  : `${iconPurposeCategories.find((category) => category.id === activeIconPurpose)?.label ?? 'All icons'} Phosphor catalog`
+              }
+              style={{
+                maxHeight: 356,
+                overflowY: 'auto',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))',
+                gap: 6,
+                padding: '2px 1px',
+              }}
+            >
+              {displayedPhosphorIcons.map((icon) => {
+                const Icon = icon.Icon;
+                return (
+                  <button
+                    key={icon.name}
+                    type="button"
+                    aria-label={icon.searchText}
+                    aria-pressed={value === `phosphor:${icon.name}`}
+                    onClick={() => select(`phosphor:${icon.name}`)}
+                    style={{
+                      minWidth: 0,
+                      minHeight: 46,
+                      aspectRatio: '1',
+                      display: 'grid',
+                      placeItems: 'center',
+                      border: `1px solid ${value === `phosphor:${icon.name}` ? tokens.primary : tokens.borderSubtle}`,
+                      borderRadius: 11,
+                      background:
+                        value === `phosphor:${icon.name}`
+                          ? tokens.surfaceSubtle
+                          : tokens.surfaceRaised,
+                      color: tokens.primary,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Icon size={20} color={tokens.primary} weight="fill" aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
+            {matchingPhosphorIcons.length === 0 ? (
+              <Typography variant="small">No Phosphor icon matches that search.</Typography>
+            ) : matchingPhosphorIcons.length > displayedPhosphorIcons.length ? (
+              <Button variant="ghost" onPress={() => setVisibleIconCount((count) => count + 120)}>
+                Show more icons ({matchingPhosphorIcons.length - displayedPhosphorIcons.length}{' '}
+                remaining)
               </Button>
             ) : null}
           </>

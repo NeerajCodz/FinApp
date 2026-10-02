@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { CustomSelect } from './choices';
 
 export type QuestionnaireField =
   | { name: string; label: string; type: 'text'; required?: boolean; placeholder?: string }
@@ -117,21 +118,19 @@ export function QuestionnaireNew({
               />
             )}
             {field.type === 'choice' && (
-              <select
-                {...common}
-                value={
-                  typeof answers[field.name] === 'string' ? (answers[field.name] as string) : ''
-                }
-                onChange={(event) => update(field.name, event.currentTarget.value)}
-                style={inputStyle}
-              >
+              <CustomSelect {...common}
+              value={
+                typeof answers[field.name] === 'string' ? (answers[field.name] as string) : ''
+              }
+              onChange={(event) => update(field.name, event.currentTarget.value)}
+              style={inputStyle}>
                 <option value="">Choose an option</option>
                 {field.options.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </CustomSelect>
             )}
             {error && (
               <span

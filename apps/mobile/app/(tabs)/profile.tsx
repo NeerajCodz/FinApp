@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar, Button, IconButton, Sheet, Text, Typography } from '@finapp/ui/native';
 import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import {
+  Info,
   ArrowLeft,
   Bell,
   CaretRight,
@@ -300,7 +301,7 @@ export default function ProfileScreen() {
               icon={Coins}
               label="Budget"
               description="Limits and progress"
-              onPress={() => router.push('/budget' as never)}
+              onPress={() => router.push('/budgets' as never)}
             />
             <ProfileTile
               icon={ChartLineUp}
@@ -363,6 +364,13 @@ export default function ProfileScreen() {
             last
           />
         </View>
+
+        <ProfileActionRow
+          icon={Info}
+          label="About"
+          onPress={() => router.push('/about' as never)}
+          last
+        />
 
         <Button variant="destructive" size="lg" onPress={leave}>
           <Text

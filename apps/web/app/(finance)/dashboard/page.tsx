@@ -171,7 +171,7 @@ export default function DashboardPage() {
         onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
         onSeeAllTransactions={() => router.push('/activity')}
         onOpenBudget={(id) => router.push(`/budget/${encodeURIComponent(id)}`)}
-        onSeeAllBudgets={() => router.push('/budget')}
+        onSeeAllBudgets={() => router.push('/budgets')}
         onOpenGoal={(id) => router.push(`/goals/${encodeURIComponent(id)}`)}
         onSeeAllGoals={() => router.push('/goals')}
         onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}`)}

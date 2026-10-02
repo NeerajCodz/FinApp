@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatAuthError } from '@convex/shared/auth-errors';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
 import { Button, InputOTP, Label, Typography } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit } from '@/components/auth/AuthFields';
+import { isGroupInvitationToken } from '@/lib/authRoutes';
 
 export default function VerifyScreen() {
-  const { email: rawEmail, next: rawNext } = useLocalSearchParams<{
+  const {
+    email: rawEmail,
+    next: rawNext,
+    nextGroupInviteToken: rawInviteToken,
+  } = useLocalSearchParams<{
     email?: string;
     next?: string;
+    nextGroupInviteToken?: string;
   }>();
+  const inviteToken = isGroupInvitationToken(rawInviteToken) ? rawInviteToken : undefined;
   const email = typeof rawEmail === 'string' ? rawEmail : '';
   const next = rawNext === 'onboarding' ? 'onboarding' : 'tabs';
   const [code, setCode] = useState('');
@@ -31,7 +38,15 @@ export default function VerifyScreen() {
       const result = await signIn('password', form);
       if (!result.signingIn) throw new Error('That code could not be verified.');
       toast.success('Email verified');
-      router.replace(next === 'onboarding' ? '/(auth)/onboarding' : '/(tabs)');
+      if (next === 'onboarding') {
+        router.replace(
+          inviteToken
+            ? { pathname: '/(auth)/onboarding', params: { nextGroupInviteToken: inviteToken } }
+            : '/(auth)/onboarding',
+        );
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (cause) {
       const message = formatAuthError(cause, 'verification');
       setError(message);
@@ -50,11 +65,15 @@ export default function VerifyScreen() {
           ? `Enter the six-digit code sent to ${email || 'your email address'}. It expires in 10 minutes.`
           : 'Enter the six-digit code sent to the email on your account. It expires in 10 minutes.'
       }
-      onBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in'))}
       footer={
         <Button
           variant="ghost"
-          onPress={() => router.replace({ pathname: '/(auth)/sign-in', params: { email } })}
+          onPress={() =>
+            router.replace({
+              pathname: '/(auth)/sign-in',
+              params: { email, ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}) },
+            })
+          }
         >
           Return to sign in
         </Button>

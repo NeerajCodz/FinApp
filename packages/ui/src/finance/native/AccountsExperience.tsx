@@ -17,6 +17,7 @@ import {
 } from '@finapp/ui/icons/native';
 import { Button, Input, Label, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
+import { EntityColorPicker } from './EntityColorPicker';
 import { Money } from './Money';
 import { TransactionRow } from './TransactionRow';
 import type { SemanticType, TransactionType } from '../types';
@@ -71,16 +72,6 @@ const filterOptions = [
   { id: 'custom', title: 'Custom' },
 ] as const;
 type AccountFilter = (typeof filterOptions)[number]['id'];
-const accountColors = [
-  { name: 'Lime', value: '#B7FF4A' },
-  { name: 'Sky', value: '#71B8FF' },
-  { name: 'Coral', value: '#FF7777' },
-  { name: 'Violet', value: '#BA8AFF' },
-  { name: 'Amber', value: '#FFD44F' },
-  { name: 'Orange', value: '#FF9C5B' },
-  { name: 'Mint', value: '#54D6A1' },
-  { name: 'Rose', value: '#FF80B6' },
-] as const;
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
@@ -196,7 +187,6 @@ const styles = StyleSheet.create({
   propertyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   personalize: { gap: 11, borderWidth: 1, borderRadius: 13, padding: 12 },
   personalizeHeading: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  colorSwatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   activityPanel: {
     gap: 8,
     borderWidth: 1,
@@ -965,29 +955,13 @@ export function AccountDetailView({
                   </Typography>
                 </View>
               </View>
-              <View
-                accessibilityRole="radiogroup"
-                accessibilityLabel="Account color"
-                style={styles.colorSwatches}
-              >
-                <ColorSwatch
-                  name="Default"
-                  value={null}
-                  selected={!account.color}
-                  disabled={isBusy}
-                  onPress={() => onSetColor(null)}
-                />
-                {accountColors.map((colorOption) => (
-                  <ColorSwatch
-                    key={colorOption.value}
-                    name={colorOption.name}
-                    value={colorOption.value}
-                    selected={account.color?.toLowerCase() === colorOption.value.toLowerCase()}
-                    disabled={isBusy}
-                    onPress={() => onSetColor(colorOption.value)}
-                  />
-                ))}
-              </View>
+              <EntityColorPicker
+                compact
+                value={account.color ?? undefined}
+                onChange={(color) => onSetColor(color ?? null)}
+                disabled={isBusy}
+                label="Account color"
+              />
               <View pointerEvents={isBusy ? 'none' : 'auto'} style={{ opacity: isBusy ? 0.55 : 1 }}>
                 <EntityIconPicker
                   mode="lucide"
@@ -1201,51 +1175,5 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
       <Text style={{ color: tokens.foregroundMuted, fontSize: 11 }}>{label}</Text>
     </View>
-  );
-}
-
-function ColorSwatch({
-  name,
-  value,
-  selected,
-  disabled,
-  onPress,
-}: {
-  name: string;
-  value: string | null;
-  selected: boolean;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const { tokens } = useTheme();
-  return (
-    <TouchableOpacity
-      accessibilityRole="radio"
-      accessibilityLabel={`${name} account color`}
-      accessibilityState={{ checked: selected, disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      activeOpacity={0.74}
-      style={{
-        width: 31,
-        height: 31,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? tokens.foreground : tokens.borderSubtle,
-        borderRadius: 50,
-        padding: 3,
-        opacity: disabled ? 0.55 : 1,
-      }}
-    >
-      <View
-        style={{
-          width: '100%',
-          height: '100%',
-          borderRadius: 50,
-          backgroundColor: value ?? tokens.surfaceRaised,
-        }}
-      />
-    </TouchableOpacity>
   );
 }

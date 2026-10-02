@@ -4,10 +4,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { formatAuthError } from '@convex/shared/auth-errors';
-import { Button, Input, Label } from '@finapp/ui/web';
+import { formatAuthError } from '@convex/shared/authErrors';
+import { Button, Input, Label, PasswordField } from '@finapp/ui/web';
 import { AuthFrame } from './AuthFrame';
-import { PasswordField } from './PasswordField';
 
 export function SignUpForm() {
   const [email, setEmail] = useState('');
@@ -48,12 +47,8 @@ export function SignUpForm() {
     form.set('password', password);
     form.set('flow', 'signUp');
     try {
-      const result = await signIn('password', form);
-      router.replace(
-        result.signingIn
-          ? '/onboarding'
-          : `/verify?email=${encodeURIComponent(normalizedEmail)}&next=onboarding`,
-      );
+      await signIn('password', form);
+      router.replace(`/verify?email=${encodeURIComponent(normalizedEmail)}&next=onboarding`);
     } catch (cause) {
       setError(formatAuthError(cause, 'sign-up'));
     } finally {
@@ -73,6 +68,7 @@ export function SignUpForm() {
       }
     >
       <form
+        method="post"
         onSubmit={submit}
         noValidate
         aria-busy={pending}

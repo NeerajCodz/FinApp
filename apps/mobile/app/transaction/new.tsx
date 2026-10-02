@@ -1,58 +1,27 @@
-import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
-import { ArrowLeft, ArrowRight, ReceiptText, UsersThree } from '@finapp/ui/icons/native';
-import {
-  CategoryIcon,
-  CurrencyInput,
-  DateTimePicker,
-  SettingsRow,
-  formatTransactionDate,
-} from '@finapp/ui/finance';
-import { Button, IconButton, Input, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TransactionFormScreen, type TransactionFormType } from '@finapp/ui/finance';
+import { parseMinor } from '@convex/shared/money';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
 import { displayAccountName } from '@/lib/ledger';
 
-type TransactionType = 'expense' | 'income' | 'transfer';
 type ProfileRecord = LocalRecord & {
   defaultCurrency?: string;
   defaultAccountId?: string | null;
   defaultExpenseCategoryId?: string | null;
   defaultIncomeCategoryId?: string | null;
+  updatedAt?: number;
 };
-type AccountRecord = LocalRecord & {
-  id?: string;
-  _id?: string;
-  cloudId?: string;
-  name: string;
-  currency: string;
-  archivedAt?: number;
-};
-type CategoryRecord = LocalRecord & {
-  id?: string;
-  _id?: string;
-  cloudId?: string;
-  name: string;
-  icon?: string;
-  archivedAt?: number;
-};
-type Picker = 'category' | 'account' | 'destination' | 'date' | null;
-const transactionTypes = ['expense', 'income', 'transfer'] as const;
+type AccountRecord = LocalRecord & { name: string; currency: string; archivedAt?: number };
+type CategoryRecord = LocalRecord & { name: string; icon?: string; archivedAt?: number };
 const scalar = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
-
-function amountInMinor(value: string): bigint | null {
-  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
-  const [whole = '', fraction = ''] = value.split('.');
-  const minor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
-  return minor > 0n && minor <= 9223372036854775807n ? minor : null;
-}
+const typeOptions: TransactionFormType[] = ['expense', 'income', 'transfer'];
+const recordId = (record: LocalRecord) => String(record.id ?? record._id ?? record.cloudId ?? '');
 
 export default function NewTransactionScreen() {
   const params = useLocalSearchParams<{
@@ -64,140 +33,128 @@ export default function NewTransactionScreen() {
     occurredAt?: string | string[];
     hasTime?: string | string[];
     note?: string | string[];
+    title?: string | string[];
+    merchant?: string | string[];
   }>();
   const queryType = scalar(params.type);
-  const initialType: TransactionType = transactionTypes.includes(queryType as TransactionType)
-    ? (queryType as TransactionType)
+  const initialType: TransactionFormType = typeOptions.includes(queryType as TransactionFormType)
+    ? (queryType as TransactionFormType)
     : 'expense';
-  const initialAmount = scalar(params.amount);
   const initialDate = Number(scalar(params.occurredAt));
-  const [amount, setAmount] = useState(
-    initialAmount && amountInMinor(initialAmount) ? initialAmount : '',
-  );
-  const [type, setType] = useState<TransactionType>(initialType);
-  const [categoryId, setCategoryId] = useState<string | null>(scalar(params.categoryId) || null);
-  const [accountId, setAccountId] = useState<string | null>(scalar(params.accountId) || null);
-  const [destinationId, setDestinationId] = useState<string | null>(
-    scalar(params.destinationId) || null,
-  );
-  const [date, setDate] = useState(() => {
-    const value =
-      Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date();
-    if (!Number.isFinite(initialDate) || initialDate <= 0) value.setHours(12, 0, 0, 0);
-    return value;
-  });
-  const initialHasTime = scalar(params.hasTime);
-  const [showTime, setShowTime] = useState(() => initialHasTime === 'true');
+  const [type, setType] = useState<TransactionFormType>(initialType);
+  const [amount, setAmount] = useState(scalar(params.amount) ?? '');
+  const [title, setTitle] = useState(scalar(params.title) ?? '');
+  const [merchant, setMerchant] = useState(scalar(params.merchant) ?? '');
   const [note, setNote] = useState(scalar(params.note) ?? '');
-  const [picker, setPicker] = useState<Picker>(null);
-  const [error, setError] = useState('');
+  const [accountId, setAccountId] = useState(scalar(params.accountId) ?? '');
+  const [categoryId, setCategoryId] = useState(scalar(params.categoryId) ?? '');
+  const [destinationId, setDestinationId] = useState(scalar(params.destinationId) ?? '');
+  const [occurredAt, setOccurredAt] = useState(() => {
+    const date =
+      Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date();
+    if (!Number.isFinite(initialDate) || initialDate <= 0) date.setHours(12, 0, 0, 0);
+    return date.getTime();
+  });
+  const [hasTime, setHasTime] = useState(scalar(params.hasTime) === 'true');
   const [saving, setSaving] = useState(false);
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [error, setError] = useState('');
   const { userId } = useLocalSync();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
   const accountState = useLocalRecords<AccountRecord>(userId, 'account');
   const categoryState = useLocalRecords<CategoryRecord>(userId, 'category');
   const profile = profileState.data?.[0];
-  const accounts = accountState.data?.filter((item) => item.archivedAt === undefined);
-  const categories = categoryState.data?.filter((item) => item.archivedAt === undefined);
-  const categoryOptions = categories;
+  const accounts = accountState.data?.filter((item) => item.archivedAt === undefined) ?? [];
+  const categories = categoryState.data?.filter((item) => item.archivedAt === undefined) ?? [];
   const account =
-    accounts?.find(
-      (item) => String(item.id ?? item._id) === accountId || item.cloudId === accountId,
+    accounts.find((item) => [item.id, item._id, item.cloudId].includes(accountId)) ??
+    accounts.find((item) =>
+      [item.id, item._id, item.cloudId].includes(String(profile?.defaultAccountId)),
     ) ??
-    accounts?.find(
-      (item) =>
-        String(item.id ?? item._id) === String(profile?.defaultAccountId) ||
-        item.cloudId === profile?.defaultAccountId,
-    ) ??
-    accounts?.[0];
-  const preferredCategoryId =
+    accounts[0];
+  const defaultCategoryId =
     type === 'expense' ? profile?.defaultExpenseCategoryId : profile?.defaultIncomeCategoryId;
   const category =
-    categoryOptions?.find(
-      (item) => String(item.id ?? item._id) === categoryId || item.cloudId === categoryId,
+    categories.find((item) => [item.id, item._id, item.cloudId].includes(categoryId)) ??
+    categories.find((item) =>
+      [item.id, item._id, item.cloudId].includes(String(defaultCategoryId)),
     ) ??
-    categoryOptions?.find(
-      (item) =>
-        String(item.id ?? item._id) === String(preferredCategoryId) ||
-        item.cloudId === preferredCategoryId,
-    ) ??
-    categoryOptions?.[0];
-  const destination = accounts?.find(
-    (item) => String(item.id ?? item._id) === destinationId || item.cloudId === destinationId,
+    categories[0];
+  const destination = accounts.find((item) =>
+    [item.id, item._id, item.cloudId].includes(destinationId),
   );
-  const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
-  const typeColor =
-    type === 'expense' ? tokens.expense : type === 'income' ? tokens.income : tokens.warning;
-  const validAmount = amountInMinor(amount);
-  const saveDisabled =
-    saving ||
-    !validAmount ||
-    !account ||
-    (type === 'transfer'
-      ? !destination || destination.id === account.id || destination.currency !== account.currency
-      : !category);
-  const defaultId =
-    picker === 'account'
-      ? profile?.defaultAccountId
-      : type === 'expense'
-        ? profile?.defaultExpenseCategoryId
-        : profile?.defaultIncomeCategoryId;
+  const accountDefault = Boolean(
+    account &&
+    profile?.defaultAccountId &&
+    [account.id, account._id, account.cloudId].includes(profile.defaultAccountId),
+  );
+  const categoryDefault = Boolean(
+    category &&
+    defaultCategoryId &&
+    [category.id, category._id, category.cloudId].includes(defaultCategoryId),
+  );
+  useEffect(() => {
+    if (!accountId && account) setAccountId(recordId(account));
+  }, [accountId, account]);
+  useEffect(() => {
+    if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));
+  }, [category, categoryId, type]);
+  let amountMinor: bigint | null = null;
+  try { amountMinor = parseMinor(amount, account?.currency ?? profile?.defaultCurrency ?? 'INR'); } catch { /* Invalid amounts keep save disabled. */ }
+  const invalidTransfer =
+    type === 'transfer' &&
+    (!destination ||
+      destination.currency !== account?.currency ||
+      recordId(destination) === recordId(account!));
 
   async function save() {
-    if (saveDisabled || !account || !validAmount || !userId) return;
+    if (
+      !userId ||
+      !account ||
+      !amountMinor ||
+      amountMinor <= 0n ||
+      amountMinor > 9_223_372_036_854_775_807n ||
+      (type === 'transfer' ? invalidTransfer : !category)
+    )
+      return;
     setSaving(true);
     setError('');
     try {
-      const accountRecordId = String(account.id ?? account._id);
-      const categoryRecordId = category ? String(category.id ?? category._id) : undefined;
-      const destinationRecordId = destination
-        ? String(destination.id ?? destination._id)
-        : undefined;
-      const title =
+      const accountRecordId = recordId(account);
+      const categoryRecordId = type === 'transfer' ? undefined : recordId(category!);
+      const destinationRecordId = type === 'transfer' ? recordId(destination!) : undefined;
+      const transactionTitle =
         type === 'transfer'
           ? `Transfer to ${displayAccountName(destination!.name)}`
-          : note.trim() || category!.name;
+          : title.trim() || note.trim() || category!.name;
       const payload = {
         accountId: accountRecordId,
         type,
-        amountMinor: validAmount,
-        currency: String(account.currency),
-        categoryId: type === 'transfer' ? undefined : categoryRecordId,
-        title,
-        note: note.trim() || undefined,
-        transferAccountId: type === 'transfer' ? destinationRecordId : undefined,
-        occurredAt: date.getTime(),
-        hasTime: showTime,
+        amountMinor,
+        currency: account.currency,
+        ...(categoryRecordId ? { categoryId: categoryRecordId } : {}),
+        ...(destinationRecordId ? { transferAccountId: destinationRecordId } : {}),
+        title: transactionTitle,
+        ...(merchant.trim() ? { merchant: merchant.trim() } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
+        occurredAt,
+        hasTime,
       };
-      const record: LocalRecord = {
-        accountId: accountRecordId,
-        categoryId: type === 'transfer' ? undefined : categoryRecordId,
-        transferAccountId: type === 'transfer' ? destinationRecordId : undefined,
-        amountMinor: validAmount,
-        currency: String(account.currency),
-        occurredAt: date.getTime(),
-        hasTime: showTime,
-        type,
-        status: 'posted',
-        title,
-        note: note.trim() || undefined,
-      };
+      const record: LocalRecord = { ...payload, type, status: 'posted' };
       const dependencies = [
         !account.cloudId && !account._id ? `account:${accountRecordId}` : null,
-        type !== 'transfer' && category && !category.cloudId && !category._id
+        categoryRecordId && category && !category.cloudId && !category._id
           ? `category:${categoryRecordId}`
           : null,
-        type === 'transfer' && destination && !destination.cloudId && !destination._id
+        destinationRecordId && destination && !destination.cloudId && !destination._id
           ? `account:${destinationRecordId}`
           : null,
-      ].filter((dependency): dependency is string => dependency !== null);
+      ].filter((item): item is string => item !== null);
       await commitLocalWrite(userId, 'transaction', 'transaction.create', record, payload, {
         dependencies,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      toast.success(`${typeLabel} added`);
+      toast.success(`${type[0]!.toUpperCase()}${type.slice(1)} added`);
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not save ${type}`);
@@ -205,517 +162,127 @@ export default function NewTransactionScreen() {
       setSaving(false);
     }
   }
-
-  function selectValue(id: string) {
-    void Haptics.selectionAsync();
-    if (picker === 'category') setCategoryId(id);
-    if (picker === 'account') {
-      setAccountId(id);
-      setDestinationId(null);
-    }
-    if (picker === 'destination') setDestinationId(id);
-    setPicker(null);
-  }
-
-  async function saveDefault() {
+  async function toggleDefault(selection: 'account' | 'category') {
     if (!userId) return;
     const currentProfile = profile ?? { id: userId };
+    setSavingDefault(true);
     try {
-      if (picker === 'account' && account) {
-        const id = String(account.id ?? account._id);
+      if (selection === 'account' && account) {
+        const id = accountDefault ? null : recordId(account);
         await commitLocalWrite(
           userId,
           'profile',
           'user.defaultAccount',
           { ...currentProfile, defaultAccountId: id },
           { accountId: id },
-          { dependencies: !account.cloudId && !account._id ? [`account:${id}`] : [] },
+          { dependencies: id && !account.cloudId && !account._id ? [`account:${id}`] : [] },
         );
-      }
-      if (picker === 'category' && category) {
-        const id = String(category.id ?? category._id);
+      } else if (selection === 'category' && category && type !== 'transfer') {
+        const id = categoryDefault ? null : recordId(category);
         const field = type === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId';
         await commitLocalWrite(
           userId,
           'profile',
           'user.defaultCategory',
           { ...currentProfile, [field]: id },
-          { transactionType: type as 'expense' | 'income', categoryId: id },
-          { dependencies: !category.cloudId && !category._id ? [`category:${id}`] : [] },
+          { transactionType: type, categoryId: id },
+          { dependencies: id && !category.cloudId && !category._id ? [`category:${id}`] : [] },
         );
       }
-      toast.success('Default saved');
-      setPicker(null);
+      setSavingDefault(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save default');
+      setError(cause instanceof Error ? cause.message : 'Could not update this default.');
+    } finally {
+      setSavingDefault(false);
     }
   }
 
-  async function clearDefault() {
-    if (!userId) return;
-    const currentProfile = profile ?? { id: userId };
-    try {
-      if (picker === 'account')
-        await commitLocalWrite(
-          userId,
-          'profile',
-          'user.defaultAccount',
-          { ...currentProfile, defaultAccountId: null },
-          { accountId: null },
-        );
-      if (picker === 'category') {
-        const field = type === 'expense' ? 'defaultExpenseCategoryId' : 'defaultIncomeCategoryId';
-        await commitLocalWrite(
-          userId,
-          'profile',
-          'user.defaultCategory',
-          { ...currentProfile, [field]: null },
-          { transactionType: type as 'expense' | 'income', categoryId: null },
-        );
-      }
-      setPicker(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not clear default');
-    }
-  }
-
-  const pickerOptions =
-    picker === 'category'
-      ? categoryOptions?.map((item) => ({
-          id: String(item.id ?? item._id),
-          name: String(item.name),
-          icon: item.icon,
-        }))
-      : accounts
-          ?.filter(
-            (item) =>
-              picker !== 'destination' ||
-              (String(item.id ?? item._id) !== String(account?.id ?? account?._id) &&
-                item.currency === account?.currency),
-          )
-          .map((item) => ({
-            id: String(item.id ?? item._id),
-            name: `${displayAccountName(String(item.name))} · ${String(item.currency)}`,
-          }));
-  const selectedId =
-    picker === 'category'
-      ? category && String(category.id ?? category._id)
-      : picker === 'destination'
-        ? destination && String(destination.id ?? destination._id)
-        : account && String(account.id ?? account._id);
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: tokens.background }}
-    >
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 24,
-          gap: 20,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48 }}>
-          <IconButton label="Cancel" variant="ghost" onPress={() => router.back()}>
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Typography variant="bodyLarge" style={{ fontFamily: 'SpaceGrotesk_600SemiBold' }}>
-              New transaction
-            </Typography>
-            <Typography variant="caption">Record locally, sync when ready</Typography>
-          </View>
-          <View style={{ width: 44 }} />
-        </View>
-        <View
-          style={{
-            minHeight: 180,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-            backgroundColor: tokens.surfaceRaised,
-            padding: 20,
-          }}
-        >
-          <Typography
-            variant="caption"
-            style={{ color: tokens.foregroundMuted, letterSpacing: 1.5 }}
-          >
-            {type} amount
-          </Typography>
-          <CurrencyInput
-            currency={account?.currency ?? profile?.defaultCurrency ?? 'INR'}
-            value={amount}
-            onChangeText={setAmount}
-          />
-        </View>
-        <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-          Transaction type
-        </Typography>
-        <View
-          style={{
-            flexDirection: 'row',
-            padding: 4,
-            gap: 4,
-            borderRadius: 12,
-            backgroundColor: tokens.surfaceRaised,
-          }}
-        >
-          {transactionTypes.map((item) => {
-            const selected = item === type;
-            const color =
-              item === 'expense'
-                ? tokens.expense
-                : item === 'income'
-                  ? tokens.income
-                  : tokens.warning;
-            return (
-              <Button
-                key={item}
-                size="sm"
-                variant={selected ? 'primary' : 'ghost'}
-                accessibilityLabel={`${item} transaction`}
-                accessibilityState={{ selected }}
-                onPress={() => {
-                  setType(item);
-                  setCategoryId(null);
-                }}
-                style={{
-                  flex: 1,
-                  minHeight: 42,
-                  borderRadius: 10,
-                  backgroundColor: selected ? color : 'transparent',
-                }}
-              >
-                <Text
-                  style={{
-                    color: selected ? '#000000' : tokens.foregroundMuted,
-                    fontFamily: 'SpaceGrotesk_600SemiBold',
-                    fontSize: 13,
-                  }}
-                >
-                  {item.charAt(0).toUpperCase() + item.slice(1)}
-                </Text>
-              </Button>
-            );
-          })}
-        </View>
-        <View
-          style={{
-            paddingHorizontal: 12,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-            borderRadius: 16,
-            backgroundColor: tokens.surfaceRaised,
-          }}
-        >
-          <Typography variant="caption" style={{ marginTop: 12, color: tokens.foregroundMuted }}>
-            Transaction details
-          </Typography>
-          {type !== 'transfer' && (
-            <>
-              <SettingsRow
-                label="Category"
-                leadingIcon={
-                  <CategoryIcon label={category?.name ?? 'Category'} icon={category?.icon} />
-                }
-                value={
-                  category?.name ?? (categoryOptions ? 'Choose a category' : 'Loading categories…')
-                }
-                onPress={() => setPicker('category')}
-              />
-              <Separator />
-            </>
-          )}
-          <SettingsRow
-            label={type === 'transfer' ? 'From account' : 'Account'}
-            value={
-              account
-                ? displayAccountName(account.name)
-                : accounts
-                  ? 'Choose an account'
-                  : 'Loading accounts…'
-            }
-            onPress={() => setPicker('account')}
-          />
-          {type === 'transfer' && (
-            <>
-              <Separator />
-              <SettingsRow
-                label="To account"
-                value={destination ? displayAccountName(destination.name) : 'Choose destination'}
-                onPress={() => setPicker('destination')}
-              />
-            </>
-          )}
-          <Separator />
-          <Typography variant="caption" style={{ marginTop: 8, color: tokens.foregroundMuted }}>
-            Timing
-          </Typography>
-          <SettingsRow
-            label="Date"
-            value={formatTransactionDate(date.getTime(), showTime)}
-            onPress={() => setPicker('date')}
-          />
-          <Separator />
-          <TouchableOpacity
-            accessibilityRole="switch"
-            accessibilityState={{ checked: showTime }}
-            onPress={() => {
-              const enabled = !showTime;
-              setShowTime(enabled);
-              const updated = new Date(date);
-              if (enabled) {
-                const now = new Date();
-                updated.setHours(now.getHours(), now.getMinutes(), 0, 0);
-              } else updated.setHours(12, 0, 0, 0);
-              setDate(updated);
-            }}
-            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-          >
-            <View
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 6,
-                borderWidth: 1,
-                borderColor: showTime ? tokens.primary : tokens.borderSubtle,
-                backgroundColor: showTime ? tokens.primary : 'transparent',
-              }}
-            />
-            <Typography variant="bodyLarge" style={{ fontSize: 14 }}>
-              Include time
-            </Typography>
-          </TouchableOpacity>
-        </View>
-        <View
-          style={{
-            gap: 12,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-            borderRadius: 16,
-          }}
-        >
-          <Typography variant="label">Note and sharing</Typography>
-          <Input
-            accessibilityLabel="Transaction note"
-            placeholder="What was this for?"
-            value={note}
-            onChangeText={setNote}
-            returnKeyType="done"
-          />
-          {type === 'expense' && (
-            <Button
-              variant="outline"
-              onPress={() => router.push('/split/new' as never)}
-              style={{ minHeight: 68, paddingHorizontal: 16, justifyContent: 'space-between' }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: tokens.controlDisabledBackground,
-                  }}
-                >
-                  <UsersThree size={19} color={tokens.primary} />
-                </View>
-                <View style={{ gap: 2 }}>
-                  <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
-                    Split this expense
-                  </Typography>
-                  <Typography variant="caption">Choose people and shares</Typography>
-                </View>
-              </View>
-              <ArrowRight size={18} color={tokens.foregroundSubtle} />
-            </Button>
-          )}
-        </View>
-        {accounts?.length === 0 && (
-          <Typography
-            style={{ color: tokens.foregroundMuted }}
-            onPress={() => router.push('/account/new' as never)}
-          >
-            Add an account before recording a transaction.
-          </Typography>
-        )}
-        {type !== 'transfer' && categoryOptions?.length === 0 && (
-          <Typography
-            style={{ color: tokens.foregroundMuted }}
-            onPress={() => router.push('/category/new' as never)}
-          >
-            Add a category before recording a transaction.
-          </Typography>
-        )}
-        {!!error && <Typography style={{ color: tokens.expense }}>{error}</Typography>}
-        <Button
-          size="lg"
-          disabled={!!saveDisabled}
-          onPress={save}
-          style={!saveDisabled ? { backgroundColor: typeColor } : undefined}
-        >
-          <ReceiptText
-            size={18}
-            color={saveDisabled ? tokens.controlDisabledForeground : '#000000'}
-          />
-          <Text
-            style={{
-              marginLeft: 8,
-              color: saveDisabled ? tokens.controlDisabledForeground : '#000000',
-              fontFamily: 'SpaceGrotesk_600SemiBold',
-              fontSize: 15,
-            }}
-          >
-            {saving ? 'Saving…' : `Save ${type}`}
-          </Text>
-        </Button>
-      </ScrollView>
-      <Sheet
-        visible={picker !== null}
-        onClose={() => setPicker(null)}
-        title={
-          picker === 'date'
-            ? 'Choose date'
-            : picker === 'category'
-              ? 'Choose category'
-              : picker === 'destination'
-                ? 'Choose destination'
-                : 'Choose account'
-        }
-      >
-        {picker === 'date' ? (
-          <DateTimePicker
-            value={date.getTime()}
-            showTime={showTime}
-            onChange={(value) => setDate(new Date(value))}
-          />
-        ) : (
-          <>
-            <ScrollView
-              style={{ maxHeight: 380 }}
-              keyboardShouldPersistTaps="always"
-              contentContainerStyle={{ paddingBottom: 4 }}
-            >
-              {pickerOptions?.map((item, index) => (
-                <React.Fragment key={item.id}>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel={item.name}
-                    accessibilityState={{ selected: item.id === selectedId }}
-                    onPress={() => selectValue(item.id)}
-                    activeOpacity={0.72}
-                    style={{
-                      minHeight: 60,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 12,
-                    }}
-                  >
-                    {picker === 'category' && (
-                      <CategoryIcon
-                        label={item.name}
-                        icon={
-                          'icon' in item && typeof item.icon === 'string' ? item.icon : undefined
-                        }
-                        selected={item.id === selectedId}
-                      />
-                    )}
-                    <Text
-                      style={{
-                        flex: 1,
-                        color: tokens.foreground,
-                        fontFamily: 'SpaceGrotesk_500Medium',
-                        fontSize: 16,
-                      }}
-                    >
-                      {item.name}
-                    </Text>
-                    {item.id === selectedId && (
-                      <Typography variant="caption" style={{ color: tokens.primary }}>
-                        Selected
-                      </Typography>
-                    )}
-                  </TouchableOpacity>
-                  {index < (pickerOptions?.length ?? 0) - 1 && <Separator />}
-                </React.Fragment>
-              ))}
-              {pickerOptions === undefined ? (
-                <Typography variant="small">
-                  Loading {picker === 'category' ? 'categories' : 'accounts'}…
-                </Typography>
-              ) : pickerOptions.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}>
-                  {picker === 'category' ? (
-                    <CategoryIcon label="Category" />
-                  ) : (
-                    <ReceiptText size={24} color={tokens.foregroundMuted} />
-                  )}
-                  <Typography variant="bodyLarge">
-                    {picker === 'category' ? 'No categories yet' : 'No accounts yet'}
-                  </Typography>
-                  <Typography variant="small" style={{ textAlign: 'center' }}>
-                    {picker === 'category'
-                      ? 'Create a category to organize this transaction.'
-                      : 'Add an account before recording this transaction.'}
-                  </Typography>
-                </View>
-              ) : null}
-            </ScrollView>
-            {picker === 'category' && (
-              <Button
-                variant="outline"
-                onPress={() => {
-                  setPicker(null);
-                  router.push(
-                    pickerOptions?.length === 0
-                      ? ('/category/new' as never)
-                      : ('/categories' as never),
-                  );
-                }}
-              >
-                {pickerOptions?.length === 0 ? 'Create category' : 'Manage categories'}
-              </Button>
-            )}
-            {picker === 'account' && (
-              <Button
-                variant="outline"
-                onPress={() => {
-                  setPicker(null);
-                  router.push('/account/new' as never);
-                }}
-              >
-                Add account
-              </Button>
-            )}
-            {(picker === 'category' || picker === 'account') && (selectedId || defaultId) && (
-              <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
-              >
-                {selectedId && selectedId !== defaultId && (
-                  <Button size="sm" variant="outline" onPress={saveDefault}>
-                    Set as default
-                  </Button>
-                )}
-                {defaultId && (
-                  <Button size="sm" variant="ghost" onPress={clearDefault}>
-                    Clear default
-                  </Button>
-                )}
-              </View>
-            )}
-          </>
-        )}
-      </Sheet>
-    </KeyboardAvoidingView>
+    <TransactionFormScreen
+      mode="create"
+      signedIn={Boolean(userId)}
+      type={type}
+      title={title}
+      amount={amount}
+      merchant={merchant}
+      note={note}
+      occurredAt={occurredAt}
+      hasTime={hasTime}
+      currency={account?.currency ?? profile?.defaultCurrency ?? 'INR'}
+      saving={saving}
+      error={error}
+      savingDefault={savingDefault}
+      isDefaultAccount={accountDefault}
+      isDefaultCategory={categoryDefault}
+      accounts={accounts.map((item) => ({
+        id: recordId(item),
+        name: displayAccountName(item.name),
+        currency: item.currency,
+      }))}
+      categories={categories.map((item) => ({
+        id: recordId(item),
+        name: item.name,
+        icon: item.icon,
+      }))}
+      accountId={account ? recordId(account) : ''}
+      categoryId={category ? recordId(category) : ''}
+      destinationId={destination ? recordId(destination) : ''}
+      loading={!accountState.data || !categoryState.data || !profileState.data}
+      dataError={
+        accountState.error?.message ?? categoryState.error?.message ?? profileState.error?.message
+      }
+      submitDisabled={
+        !userId ||
+        !accountState.data ||
+        !categoryState.data ||
+        !profileState.data ||
+        Boolean(accountState.error || categoryState.error || profileState.error) ||
+        !account ||
+        !amountMinor ||
+        amountMinor <= 0n ||
+        amountMinor > 9_223_372_036_854_775_807n ||
+        (type === 'transfer' ? invalidTransfer : !category)
+      }
+      onTypeChange={(value) => {
+        void Haptics.selectionAsync();
+        setType(value);
+        setCategoryId('');
+      }}
+      onTitleChange={setTitle}
+      onAmountChange={setAmount}
+      onMerchantChange={setMerchant}
+      onNoteChange={setNote}
+      onAccountChange={(id) => {
+        void Haptics.selectionAsync();
+        setAccountId(id);
+        setDestinationId('');
+      }}
+      onCategoryChange={(id) => {
+        void Haptics.selectionAsync();
+        setCategoryId(id);
+      }}
+      onDestinationChange={(id) => {
+        void Haptics.selectionAsync();
+        setDestinationId(id);
+      }}
+      onDateChange={setOccurredAt}
+      onHasTimeChange={(enabled) => {
+        setHasTime(enabled);
+        const date = new Date(occurredAt);
+        if (enabled) {
+          const now = new Date();
+          date.setHours(now.getHours(), now.getMinutes(), 0, 0);
+        } else date.setHours(12, 0, 0, 0);
+        setOccurredAt(date.getTime());
+      }}
+      onSubmit={() => void save()}
+      onBack={() => router.back()}
+      onToggleDefault={toggleDefault}
+      onAddAccount={() => router.push('/accounts/new' as never)}
+      onManageCategories={() =>
+        router.push((categories.length ? '/categories' : '/categories/new') as never)
+      }
+      onSplitExpense={() => router.push('/split/new' as never)}
+    />
   );
 }

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Button, Input, Label, Sheet, Typography } from '@finapp/ui/web';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
+import { EntityColorPicker } from './EntityColorPicker';
 import { Money } from './Money';
 import { TransactionRow } from './TransactionRow';
 import type { SemanticType, TransactionType } from '../types';
@@ -358,17 +359,6 @@ export type AccountDetailViewProps = {
   onOpenTransaction: (id: string) => void;
 };
 
-const accountColors = [
-  { name: 'Lime', value: '#B7FF4A' },
-  { name: 'Sky', value: '#71B8FF' },
-  { name: 'Coral', value: '#FF7777' },
-  { name: 'Violet', value: '#BA8AFF' },
-  { name: 'Amber', value: '#FFD44F' },
-  { name: 'Orange', value: '#FF9C5B' },
-  { name: 'Mint', value: '#54D6A1' },
-  { name: 'Rose', value: '#FF80B6' },
-] as const;
-
 export function AccountDetailView({
   account,
   activity,
@@ -701,32 +691,13 @@ export function AccountDetailView({
                 <Typography variant="caption">Choose a color and icon</Typography>
               </div>
             </div>
-            <div className={styles.colorPicker} role="group" aria-label="Account color">
-              <button
-                type="button"
-                className={`${styles.colorSwatch} ${account.color ? '' : styles.colorSelected}`}
-                aria-label="Use default account color"
-                aria-pressed={!account.color}
-                onClick={() => onSetColor(null)}
-                disabled={isBusy}
-              >
-                <span className={styles.defaultSwatch} />
-              </button>
-              {accountColors.map((color) => (
-                <button
-                  type="button"
-                  key={color.value}
-                  className={`${styles.colorSwatch} ${account.color?.toLowerCase() === color.value.toLowerCase() ? styles.colorSelected : ''}`}
-                  style={{ '--swatch-color': color.value } as React.CSSProperties}
-                  aria-label={`${color.name} account color`}
-                  aria-pressed={account.color?.toLowerCase() === color.value.toLowerCase()}
-                  onClick={() => onSetColor(color.value)}
-                  disabled={isBusy}
-                >
-                  <span />
-                </button>
-              ))}
-            </div>
+            <EntityColorPicker
+              compact
+              value={account.color ?? undefined}
+              onChange={(color) => onSetColor(color ?? null)}
+              disabled={isBusy}
+              label="Account color"
+            />
             <div className={isBusy ? styles.disabledPicker : undefined} aria-busy={isBusy}>
               <EntityIconPicker
                 mode="lucide"

@@ -148,7 +148,7 @@ export default function CategoriesIndexScreen() {
       loading={loading}
       error={error ? `Category data could not be opened: ${error}` : undefined}
       onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}` as never)}
-      onAddCategory={() => router.push('/category/new' as never)}
+      onAddCategory={() => router.push('/categories/new' as never)}
       onOpenAnalytics={() => router.push('/categories/analytics' as never)}
     />
   );

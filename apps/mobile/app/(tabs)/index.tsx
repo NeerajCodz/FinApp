@@ -277,7 +277,7 @@ export default function HomeScreen() {
           onOpenTransaction={(id) => router.push(`/transaction/${id}` as never)}
           onSeeAllTransactions={() => router.push('/(tabs)/activity' as never)}
           onOpenBudget={(id) => router.push(`/budget/${id}` as never)}
-          onSeeAllBudgets={() => router.push('/budget' as never)}
+          onSeeAllBudgets={() => router.push('/budgets' as never)}
           onOpenGoal={(id) => router.push(`/goals/${id}` as never)}
           onSeeAllGoals={() => router.push('/goals' as never)}
           onOpenCategory={(id) => router.push(`/category/${id}` as never)}

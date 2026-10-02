@@ -9,6 +9,7 @@ import {
   Bell,
   ChartNoAxesCombined,
   Coins,
+  Info,
   LogOut,
   Palette,
   ReceiptText,
@@ -50,7 +51,7 @@ const links = [
     href: '/categories',
     icon: ReceiptText,
   },
-  { label: 'Budget', description: 'Limits and progress', href: '/budget', icon: Coins },
+  { label: 'Budget', description: 'Limits and progress', href: '/budgets', icon: Coins },
   {
     label: 'Analytics',
     description: 'Patterns over time',
@@ -251,6 +252,11 @@ export default function ProfilePage() {
             />
           ))}
         </section>
+        <SettingsRow
+          leadingIcon={<Info size={19} color={tokens.foreground} />}
+          label="About"
+          onPress={() => router.push('/about')}
+        />
         {!!message && <Text role="status">{message}</Text>}
         <Button variant="destructive" size="lg" onPress={() => void leave()}>
           <LogOut size={16} aria-hidden="true" /> Sign out{' '}

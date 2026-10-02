@@ -309,16 +309,18 @@ export default function HomePage() {
         </section>
 
         <section className="landing-closing landing-container" aria-labelledby="closing-title">
-          <CoinLogo className="landing-closing-coin" />
-          <p>YOUR MONEY. YOUR PEOPLE. ONE CLEAR PLACE.</p>
-          <h2 id="closing-title">
-            Life’s full.
-            <br />
-            <span>Money can be simple.</span>
-          </h2>
-          <Link className="landing-button" href="/sign-up">
-            Get started <ArrowUpRight size={20} aria-hidden="true" />
-          </Link>
+          <div className="landing-closing-copy">
+            <p>YOUR MONEY. YOUR PEOPLE. ONE CLEAR PLACE.</p>
+            <h2 id="closing-title">
+              Life’s full.
+              <br />
+              <span>Money can be simple.</span>
+            </h2>
+            <Link className="landing-button" href="/sign-up">
+              Get started <ArrowUpRight size={20} aria-hidden="true" />
+            </Link>
+          </div>
+          <CoinLogo className="landing-closing-coin" interactive />
         </section>
       </main>
 

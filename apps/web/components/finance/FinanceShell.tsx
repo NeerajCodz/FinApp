@@ -4,18 +4,17 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
+  Bell,
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
   CalendarClock,
-  ChartNoAxesCombined,
   CircleUserRound,
   HandCoins,
   History,
   House,
   Landmark,
-  Plus,
   Tags,
   Target,
   UsersRound,
@@ -23,22 +22,29 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Button, Sheet } from '@finapp/ui/web';
-import { FinanceBrand, MobileFinanceNav } from '@finapp/ui/finance';
+import { Avatar, Sheet } from '@finapp/ui/web';
+import { FinanceBrand, FinanceWorkspace, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
+import { useLocalRecords } from '@/lib/offline/hooks';
+import type { LocalRecord } from '@/lib/offline/repository';
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
+type SidebarProfile = LocalRecord & {
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string | null;
+};
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
   { href: '/accounts', label: 'Accounts', icon: Landmark },
-  { href: '/budget', label: 'Budgets', icon: Activity },
+  { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/groups', label: 'Groups', icon: UsersRound },
   { href: '/categories', label: 'Categories', icon: Tags },
-  { href: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 const mobileNavigation = [
   { href: '/dashboard', label: 'Home', icon: House },
@@ -93,6 +99,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { userId, identityReady } = useBrowserSync();
+  const { records: profiles } = useLocalRecords<SidebarProfile>('profile');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
@@ -100,8 +107,17 @@ export function FinanceShell({ children }: { children: ReactNode }) {
     if (identityReady && !userId) router.replace('/sign-in');
   }, [identityReady, router, userId]);
   if (!identityReady || !userId) return null;
+  const profile = profiles[0];
+  const profileName = profile?.displayName?.trim() || profile?.username?.trim() || 'Your profile';
+  const profileInitials =
+    (profile?.displayName?.trim() || profile?.username?.trim() || 'U')
+      .split(/\s+/)
+      .map((part) => part[0] ?? '')
+      .slice(0, 2)
+      .join('')
+      .toLocaleUpperCase() || 'U';
 
-  const profileHref = userId ? '/profile' : '/sign-in';
+  const profileHref = '/profile';
   const isActive = (href: string) =>
     pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
   const isProfileActive =
@@ -109,53 +125,47 @@ export function FinanceShell({ children }: { children: ReactNode }) {
     pathname.startsWith('/profile/') ||
     pathname === '/settings' ||
     pathname.startsWith('/settings/');
-  const guestHome = !userId && pathname === '/dashboard';
 
   return (
     <QuickAddContext.Provider value={openQuickAdd}>
-      <div className={`finance-app${guestHome ? ' finance-guest-home' : ''}`}>
-        <aside className="finance-sidebar" aria-label="Finapp">
-          <div className="finance-brand-lockup">
-            <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-              <FinanceBrand />
-            </Link>
-          </div>
-          <p className="finance-sidebar-label">YOUR MONEY</p>
-          <nav className="finance-nav" aria-label="Main navigation">
-            {navigation.map(({ href, label, icon: Icon }) => {
-              const active = isActive(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`finance-nav-link${active ? ' active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  <Icon size={18} aria-hidden="true" />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="finance-sidebar-bottom">
+      <FinanceWorkspace
+        onAdd={openQuickAdd}
+        brandLink={
+          <Link href="/dashboard" aria-label="Finapp overview">
+            <FinanceBrand />
+          </Link>
+        }
+        navigation={
+          <>
+            {navigation.map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined}>
+                <Icon size={22} aria-hidden="true" />
+                <span>{label}</span>
+              </Link>
+            ))}
             <Link
               href={profileHref}
-              className={`finance-nav-link${isProfileActive ? ' active' : ''}`}
+              className="finance-sidebar-profile"
+              aria-current={isProfileActive ? 'page' : undefined}
             >
-              <CircleUserRound size={18} aria-hidden="true" />
-              <span>{userId ? 'Profile' : 'Sign in'}</span>
+              <Avatar
+                initials={profileInitials}
+                label={profileName}
+                size={40}
+                imageUrl={profile?.avatarUrl}
+              />
+              <span className="finance-sidebar-profile-copy">
+                <span className="finance-sidebar-profile-name">{profileName}</span>
+                {profile?.username?.trim() && (
+                  <span className="finance-sidebar-profile-label">
+                    @{profile.username.trim().replace(/^@+/, '')}
+                  </span>
+                )}
+              </span>
             </Link>
-          </div>
-        </aside>
-        <div className="finance-main">
-          <header className="finance-topbar">
-            <div className="finance-topbar-brand finance-brand-lockup">
-              <Link className="finance-brand" href="/dashboard" aria-label="Finapp overview">
-                <FinanceBrand />
-              </Link>
-            </div>
-          </header>
-          <main className="finance-content">{children}</main>
+          </>
+        }
+        mobileNavigation={
           <MobileFinanceNav
             onAdd={openQuickAdd}
             beforeAdd={
@@ -200,11 +210,10 @@ export function FinanceShell({ children }: { children: ReactNode }) {
               </>
             }
           />
-        </div>
-      </div>
-      <Button className="finance-desktop-add" size="icon" aria-label="Add" onPress={openQuickAdd}>
-        <Plus size={24} strokeWidth={2.2} aria-hidden="true" />
-      </Button>
+        }
+      >
+        <main>{children}</main>
+      </FinanceWorkspace>
       <Sheet visible={quickAddOpen} onClose={closeQuickAdd} title="Add">
         <QuickAddActions onClose={closeQuickAdd} />
       </Sheet>

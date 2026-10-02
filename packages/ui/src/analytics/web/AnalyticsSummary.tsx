@@ -1,11 +1,14 @@
 'use client';
-import { Card, Typography } from '@finapp/ui/web';
+import type { CSSProperties } from 'react';
+import { ArrowLeftRight, CreditCard, FileText, PiggyBank, Wallet } from 'lucide-react';
+import styles from './Dashboard.module.css';
 
 export type AnalyticsMetric = {
   label: string;
   value: string;
   color: string;
   detail?: string;
+  icon?: 'spent' | 'income' | 'net' | 'savings' | 'transactions';
 };
 
 type AnalyticsSummaryProps = {
@@ -13,21 +16,21 @@ type AnalyticsSummaryProps = {
 };
 
 export function AnalyticsSummary({ metrics }: AnalyticsSummaryProps) {
+  const icons = { spent: CreditCard, income: Wallet, net: ArrowLeftRight, savings: PiggyBank, transactions: FileText };
   return (
-    <section className="analytics-summary" aria-label="Analytics summary">
-      {metrics.map((item) => (
-        <Card key={item.label} variant="subtle" className="analytics-summary-card">
-          <Typography variant="caption">{item.label}</Typography>
-          <Typography
-            variant="heading"
-            className="analytics-summary-value"
-            style={{ color: item.color }}
-          >
-            {item.value}
-          </Typography>
-          {item.detail && <Typography variant="caption">{item.detail}</Typography>}
-        </Card>
-      ))}
+    <section className={styles.summary} aria-label="Analytics summary">
+      {metrics.map((item) => {
+        const Icon = icons[item.icon ?? 'transactions'];
+        const color = { '--metric-color': item.color } as CSSProperties;
+        return (
+          <article key={item.label} className={styles.metric} style={color}>
+            <span className={styles.icon} aria-hidden="true"><Icon size={23} /></span>
+            <p className={styles.label}>{item.label}</p>
+            <p className={styles.value}>{item.value}</p>
+            {item.detail && <p className={styles.detail}>{item.detail}</p>}
+          </article>
+        );
+      })}
     </section>
   );
 }

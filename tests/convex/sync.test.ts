@@ -10,6 +10,7 @@ async function makeAuthenticatedUser() {
   const identity = { subject: 'sync-contract-user', email: 'sync@example.com', name: 'Sync User' };
   const userId = await t.run((ctx) =>
     ctx.db.insert('users', {
+      emailVerificationTime: 1,
       identityId: identity.subject,
       email: identity.email,
       displayName: identity.name,
@@ -142,6 +143,152 @@ describe('authenticated local-first sync contract', () => {
     });
     const cleared = await authenticated.query(api.accounts.queries.detail, { accountId });
     expect(cleared?.account.color).toBeUndefined();
+  });
+
+  it('updates account details atomically with ownership, replay, and field invariants', async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        identityId: 'sync-contract-user',
+        email: 'sync@example.com',
+        displayName: 'Sync User',
+      }),
+    );
+    const authenticated = t.withIdentity({
+      subject: 'sync-contract-user',
+      email: 'sync@example.com',
+    });
+    const other = t.withIdentity({ subject: 'other-owner', email: 'other@example.com' });
+    const accountId = await authenticated.mutation(api.accounts.mutations.create, {
+      name: 'Before',
+      type: 'bank',
+      currency: 'INR',
+      openingBalanceMinor: 1250n,
+      isIncludedInTotal: true,
+      clientMutationId: 'account-details-create',
+    });
+    await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        identityId: 'other-owner',
+        email: 'other@example.com',
+        displayName: 'Other',
+      }),
+    );
+    const input = {
+      accountId,
+      name: '  Emergency reserve  ',
+      type: 'other' as const,
+      customType: ' Savings ',
+      currency: 'USD',
+      openingBalanceMinor: 98_765n,
+      icon: 'Landmark',
+      color: '#B7FF4A',
+      isIncludedInTotal: false,
+      clientMutationId: 'account-details-update',
+    };
+    await expect(other.mutation(api.accounts.mutations.updateDetails, input)).rejects.toThrow(
+      'ACCOUNT_UNAVAILABLE',
+    );
+    const updatedId = await authenticated.mutation(api.accounts.mutations.updateDetails, input);
+    expect(await authenticated.mutation(api.accounts.mutations.updateDetails, input)).toBe(
+      updatedId,
+    );
+    const detail = await authenticated.query(api.accounts.queries.detail, { accountId });
+    expect(detail?.account).toMatchObject({
+      name: 'Emergency reserve',
+      type: 'other',
+      customType: 'Savings',
+      currency: 'USD',
+      openingBalanceMinor: 98_765n,
+      icon: 'Landmark',
+      color: '#B7FF4A',
+      isIncludedInTotal: false,
+    });
+    const changes = await authenticated.query(api.sync.queries.changes, {
+      paginationOpts: { numItems: 20, cursor: null },
+    });
+    expect(changes.page.filter((change) => change.entityType === 'accounts')).toHaveLength(2);
+    for (const [patch, clientMutationId] of [
+      [{ name: '   ' }, 'account-details-blank'],
+      [{ name: 'a'.repeat(81) }, 'account-details-long-name'],
+      [{ openingBalanceMinor: -1n }, 'account-details-negative-balance'],
+      [{ customType: ' '.repeat(41) }, 'account-details-long-type'],
+      [{ icon: 'x'.repeat(81) }, 'account-details-long-icon'],
+      [{ color: 'lime' }, 'account-details-invalid-color'],
+      [{ currency: 'ZZZ' }, 'account-details-invalid-currency'],
+    ] as const) {
+      await expect(
+        authenticated.mutation(api.accounts.mutations.updateDetails, {
+          ...input,
+          ...patch,
+          clientMutationId,
+        }),
+      ).rejects.toThrow();
+    }
+    expect(
+      (await authenticated.query(api.accounts.queries.detail, { accountId }))?.account,
+    ).toMatchObject({
+      name: 'Emergency reserve',
+      openingBalanceMinor: 98_765n,
+      currency: 'USD',
+    });
+  });
+
+  it('prevents currency changes on accounts referenced by transactions but permits other edits', async () => {
+    const { authenticated } = await makeAuthenticatedUser();
+    const createAccount = async (name: string) =>
+      authenticated.mutation(api.accounts.mutations.create, {
+        name,
+        type: 'bank' as const,
+        currency: 'INR',
+        openingBalanceMinor: 0n,
+        isIncludedInTotal: true,
+      });
+    const sourceAccountId = await createAccount('Source');
+    const destinationAccountId = await createAccount('Destination');
+    const unusedAccountId = await createAccount('Unused');
+    await authenticated.mutation(api.transactions.mutations.create, {
+      accountId: sourceAccountId,
+      transferAccountId: destinationAccountId,
+      type: 'transfer',
+      amountMinor: 1500n,
+      currency: 'INR',
+      title: 'Move funds',
+      occurredAt: 1_000,
+      clientMutationId: 'account-currency-transfer',
+    });
+    const update = (
+      accountId: typeof sourceAccountId,
+      currency: string,
+      name: string,
+      clientMutationId: string,
+    ) =>
+      authenticated.mutation(api.accounts.mutations.updateDetails, {
+        accountId,
+        name,
+        type: 'bank',
+        currency,
+        openingBalanceMinor: 0n,
+        icon: null,
+        color: '#B7FF4A',
+        isIncludedInTotal: true,
+        clientMutationId,
+      });
+
+    await expect(
+      update(sourceAccountId, 'USD', 'Source', 'source-currency-change'),
+    ).rejects.toThrow('ACCOUNT_CURRENCY_IN_USE');
+    await expect(
+      update(destinationAccountId, 'USD', 'Destination', 'destination-currency-change'),
+    ).rejects.toThrow('ACCOUNT_CURRENCY_IN_USE');
+    await expect(update(sourceAccountId, 'INR', 'Renamed source', 'source-rename')).resolves.toBe(
+      sourceAccountId,
+    );
+    await expect(update(unusedAccountId, 'USD', 'Unused', 'unused-currency-change')).resolves.toBe(
+      unusedAccountId,
+    );
   });
   it('paginates group transactions and settlements through separate queries', async () => {
     const { t, userId, authenticated } = await makeAuthenticatedUser();

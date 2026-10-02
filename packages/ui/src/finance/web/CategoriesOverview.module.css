@@ -1,18 +1,19 @@
 .page {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
   color: var(--finance-text, #f4f5f2);
 }
 .header {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 620px);
+  align-items: center;
   justify-content: space-between;
   gap: 22px;
 }
 .header h1 {
   margin: 0;
-  font-size: clamp(1.8rem, 3vw, 2.45rem);
+  font-size: clamp(2rem, 3vw, 2.6rem);
   letter-spacing: -0.045em;
   line-height: 1.05;
 }
@@ -22,18 +23,20 @@
   font-size: 0.94rem;
 }
 .actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: stretch;
   gap: 9px;
-  flex-wrap: wrap;
 }
 .search {
   display: flex;
   align-items: center;
   gap: 9px;
-  width: min(260px, 100%);
+  width: 100%;
+  min-width: 0;
   height: 44px;
+  box-sizing: border-box;
   padding: 0 12px;
   border: 1px solid var(--finance-line, #262926);
   border-radius: 12px;
@@ -69,22 +72,19 @@
   align-items: center;
   gap: 14px;
   min-width: 0;
-  padding: 17px 16px;
-  border: 1px solid var(--finance-line, #242724);
-  border-radius: 15px;
-  background: linear-gradient(
-    125deg,
-    color-mix(in srgb, var(--finance-panel, #111311) 96%, white 4%),
-    var(--finance-background, #070807)
-  );
+  min-height: 116px;
+  padding: 18px 20px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 11px;
+  background: var(--finapp-card);
 }
 .metricMark {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  border-radius: 12px;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  border-radius: 11px;
   color: var(--finance-lime, #b7ff4a);
   background: color-mix(in srgb, var(--finance-lime, #b7ff4a) 13%, transparent);
 }
@@ -108,29 +108,25 @@
 .metric > div > span {
   overflow: hidden;
   color: var(--finance-muted, #9da19c);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .metric strong {
-  font-size: 1.55rem;
+  font-size: 2rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 .metric small {
   color: var(--finance-muted, #9da19c);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 .panel {
   min-width: 0;
   padding: 20px;
-  border: 1px solid var(--finance-line, #242724);
-  border-radius: 17px;
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--finance-panel, #111311) 94%, white 6%),
-    var(--finance-background, #070807)
-  );
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 11px;
+  background: var(--finapp-card);
 }
 .panelHeading {
   display: flex;
@@ -151,19 +147,19 @@
 }
 .filters {
   display: flex;
-  gap: 5px;
-  padding: 4px;
-  border: 1px solid var(--finance-line, #242724);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--finance-background, #070807) 76%, transparent);
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
 }
 .filters button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 9px;
+  min-height: 42px;
+  padding: 0 20px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 10px;
   background: transparent;
-  color: var(--finance-muted, #a4aaa3);
+  color: var(--finapp-foreground);
   font: inherit;
   font-size: 0.78rem;
   cursor: pointer;
@@ -185,8 +181,8 @@
   outline-offset: 2px;
 }
 .filters .activeFilter {
-  background: var(--finance-lime, #b7ff4a);
-  color: #090b07;
+  background: var(--finapp-foreground);
+  color: var(--finapp-background);
   font-weight: 650;
 }
 .tableWrap {
@@ -214,8 +210,8 @@
 }
 .row {
   width: 100%;
-  min-height: 65px;
-  padding: 9px 13px;
+  min-height: 51px;
+  padding: 6px 13px;
   border: 0;
   border-bottom: 1px solid var(--finance-line, #242724);
   background: transparent;
@@ -370,8 +366,8 @@
 }
 @media (max-width: 1040px) {
   .header {
+    grid-template-columns: minmax(0, 1fr);
     align-items: flex-start;
-    flex-direction: column;
   }
   .actions {
     width: 100%;

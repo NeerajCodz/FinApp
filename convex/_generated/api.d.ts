@@ -48,6 +48,7 @@ import type * as settlements_domain from "../settlements/domain.js";
 import type * as settlements_mutations from "../settlements/mutations.js";
 import type * as shared_audit from "../shared/audit.js";
 import type * as shared_auth from "../shared/auth.js";
+import type * as shared_authErrors from "../shared/authErrors.js";
 import type * as shared_email from "../shared/email.js";
 import type * as shared_errors from "../shared/errors.js";
 import type * as shared_money from "../shared/money.js";
@@ -113,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   "settlements/mutations": typeof settlements_mutations;
   "shared/audit": typeof shared_audit;
   "shared/auth": typeof shared_auth;
+  "shared/authErrors": typeof shared_authErrors;
   "shared/email": typeof shared_email;
   "shared/errors": typeof shared_errors;
   "shared/money": typeof shared_money;

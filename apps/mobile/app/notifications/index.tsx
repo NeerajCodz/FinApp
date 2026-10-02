@@ -1,6 +1,9 @@
 import React from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { ArrowLeft, Bell, CaretRight, Gear } from '@finapp/ui/icons/native';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -9,6 +12,7 @@ import {
   notificationTypes,
   type NotificationType,
 } from '@convex/notifications/domain';
+import { InvitationNotificationActions } from '@finapp/ui/finance';
 import { Button, IconButton, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -47,6 +51,11 @@ export default function NotificationsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId, isConnected } = useLocalSync();
+  const incomingInvitations = useQuery(
+    api.groups.queries.incomingInvitations,
+    userId && isConnected ? {} : 'skip',
+  );
+  const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
   const notifications = useLocalRecords<NotificationRecord>(userId, 'notification');
   const settings = useLocalRecords<LocalRecord>(userId, 'settings');
   const [unreadOnly, setUnreadOnly] = React.useState(false);
@@ -86,7 +95,9 @@ export default function NotificationsScreen() {
     try {
       await markNotificationAsRead(userId, event);
       const destination = notificationRoute(event);
-      if (destination !== '/notifications') router.push(destination as never);
+      if (destination === '/groups?invitations=1')
+        router.push('/(tabs)/groups?invitations=1' as never);
+      else if (destination !== '/notifications') router.push(destination as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not open this notification.');
     }
@@ -338,6 +349,19 @@ export default function NotificationsScreen() {
                           />
                         )}
                       </TouchableOpacity>
+                      {event.entityType === 'groupInvitation' && (
+                        <InvitationNotificationActions
+                          invitation={incomingInvitations?.find(
+                            (invite) => invite.id === event.entityId,
+                          )}
+                          onRespond={async (inviteId, response) => {
+                            await respondToInvitation({
+                              inviteId: inviteId as Id<'groupInvites'>,
+                              response,
+                            });
+                          }}
+                        />
+                      )}
                     </React.Fragment>
                   );
                 })}

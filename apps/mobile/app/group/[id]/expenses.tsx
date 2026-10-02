@@ -47,7 +47,7 @@ export default function GroupExpensesScreen() {
         <IconButton
           label="Add group expense"
           variant="ghost"
-          onPress={() => router.push(`/group/${id}/expenses/new` as never)}
+          onPress={() => router.push(`/group/${id}/new` as never)}
         >
           <Plus size={22} color={tokens.foreground} />
         </IconButton>
@@ -81,7 +81,7 @@ export default function GroupExpensesScreen() {
           <Button
             size="sm"
             variant="outline"
-            onPress={() => router.push(`/group/${id}/expenses/new` as never)}
+            onPress={() => router.push(`/group/${id}/new` as never)}
           >
             Add expense
           </Button>

@@ -38,6 +38,7 @@ export function normalizeNotificationPreferences(value: unknown): NotificationPr
 export type NotificationRoute = { type: string; entityType?: string; entityId?: string };
 
 export function notificationRoute(notification: NotificationRoute): string {
+  if (notification.entityType === 'groupInvitation') return '/groups?invitations=1';
   if (notification.entityType === 'recurring') return '/recurring';
   if (notification.entityType === 'sync') return '/settings/sync';
   if (notification.entityType === 'security') return '/settings/security';
