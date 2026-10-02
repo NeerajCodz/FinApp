@@ -9,7 +9,7 @@ import { Button, Card, RadioGroup } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceEmptyState, SettlementEditor } from '@finapp/ui/finance';
+import { SettlementEditor } from '@finapp/ui/finance';
 
 type Group = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
 type Member = LocalRecord & {
@@ -441,17 +441,9 @@ function NewSettlementForm() {
               }}
             />
             {!activeGroups.length && (
-              <FinanceEmptyState
-                kind="group"
-                title="No saved group is available."
-                description="Create or join a group before recording a settlement."
-                compact
-                action={
-                  <Button variant="outline" onPress={() => router.push('/groups')}>
-                    Browse groups
-                  </Button>
-                }
-              />
+              <p className="finance-form-note">
+                No saved group is available. Create or join a group first.
+              </p>
             )}
             {availableMembers.length > 0 && (
               <RadioGroup

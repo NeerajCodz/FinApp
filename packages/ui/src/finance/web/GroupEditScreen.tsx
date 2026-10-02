@@ -8,7 +8,6 @@ import {
 import { Button, Input, Empty } from '@finapp/ui/web';
 import { Plus, Crown, ArrowUp, ArrowDown, ChartBar } from '@phosphor-icons/react';
 import { EntityColorPicker } from './EntityColorPicker';
-import { FinanceEmptyState } from './FinanceEmptyState';
 import { EntityIconPicker } from './EntityIconPicker';
 import { GroupPage, Crumb, Tile, PersonAvatar, Permissions, s } from './GroupUI';
 export type GroupEditMember = {
@@ -357,14 +356,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                     })}
                   </tbody>
                 </table>
-                {!members.length && (
-                  <FinanceEmptyState
-                    kind="search"
-                    compact
-                    title="No members match this search"
-                    description="Try another name or username."
-                  />
-                )}
+                {!members.length && <p className={s.empty}>No members match this search.</p>}
               </div>
             ) : (
               <Empty

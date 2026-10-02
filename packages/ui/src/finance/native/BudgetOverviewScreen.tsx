@@ -1,6 +1,5 @@
 import { Pressable, ScrollView, View } from 'react-native';
 import { Button, Text, Typography, useTheme } from '@finapp/ui/native';
-import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 
@@ -94,12 +93,13 @@ export function BudgetOverviewScreen({
           {error}
         </Text>
       ) : !items.length ? (
-        <FinanceEmptyState
-          kind="budget"
-          title="Give your spending a plan."
-          description="Set a limit for a category you already use. Only posted expenses count."
-          action={<Button onPress={onCreate}>Create a budget</Button>}
-        />
+        <View style={panel}>
+          <Typography variant="bodyLarge">No category budgets yet</Typography>
+          <Text style={{ color: tokens.foregroundMuted }}>
+            Set a limit for a category you already use. Only posted expenses count.
+          </Text>
+          <Button onPress={onCreate}>Create a budget</Button>
+        </View>
       ) : (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -127,9 +127,7 @@ export function BudgetOverviewScreen({
             <Typography variant="heading">Budget by category</Typography>
             {items.map((item) => {
               const ratio =
-                item.limitMinor > 0n
-                  ? Number((item.spentMinor * 10000n) / item.limitMinor) / 100
-                  : 0;
+                item.limitMinor > 0n ? Number((item.spentMinor * 10000n) / item.limitMinor) / 100 : 0;
               const threshold = item.alertThreshold ?? 80;
               const over = ratio >= 100;
               const atRisk = !over && ratio >= threshold;
@@ -206,18 +204,11 @@ export function BudgetOverviewScreen({
                     key={item.id}
                     accessibilityRole="button"
                     onPress={() => onOpen(item.id)}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                      paddingVertical: 7,
-                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 }}
                   >
                     <CategoryIcon label={item.category} icon={item.icon} />
                     <View style={{ flex: 1 }}>
-                      <Text>
-                        {item.name} {over ? 'is over budget' : 'is nearing its limit'}
-                      </Text>
+                      <Text>{item.name} {over ? 'is over budget' : 'is nearing its limit'}</Text>
                       <Text style={{ color: tokens.foregroundMuted }}>
                         {over
                           ? `${formatMinor(item.spentMinor - item.limitMinor, item.currency)} over the limit`
@@ -241,9 +232,7 @@ export function BudgetOverviewScreen({
               <>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
                   <Text>Spent {money(spent)}</Text>
-                  <Text style={{ color: tokens.foregroundMuted }}>
-                    Remaining {money(limit - spent)}
-                  </Text>
+                  <Text style={{ color: tokens.foregroundMuted }}>Remaining {money(limit - spent)}</Text>
                 </View>
                 <View
                   style={{

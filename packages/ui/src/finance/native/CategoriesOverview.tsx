@@ -7,8 +7,7 @@ import {
   MagnifyingGlass as Search,
   ReceiptText as Tag,
 } from '@finapp/ui/icons/native';
-import { Button, Input, Typography, useTheme } from '@finapp/ui/native';
-import { FinanceEmptyState } from './FinanceEmptyState';
+import { Button, Empty, Input, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 
@@ -184,10 +183,9 @@ export function CategoriesOverview({
             Loading your categories…
           </Typography>
         ) : items.length === 0 ? (
-          <FinanceEmptyState
-            kind="category"
-            title="Your categories are ready to begin."
-            description="Create a category to organize income and spending as your activity grows."
+          <Empty
+            title="No categories yet."
+            description="Create a category to organize your income and spending."
             action={
               <Button size="sm" onPress={onAddCategory}>
                 Add category
@@ -195,12 +193,7 @@ export function CategoriesOverview({
             }
           />
         ) : visible.length === 0 ? (
-          <FinanceEmptyState
-            kind="search"
-            title="No matching categories."
-            description="Try another search or filter to find a category."
-            compact
-          />
+          <Empty title="No matching categories." description="Try another search or filter." />
         ) : (
           <View>
             {visible.map((item, index) => {

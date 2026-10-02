@@ -17,7 +17,6 @@ import {
   Search,
   Wallet,
 } from 'lucide-react';
-import { FinanceEmptyState } from './FinanceEmptyState';
 import { Button, Input, Label, Sheet, Typography } from '@finapp/ui/web';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
 import { EntityColorPicker } from './EntityColorPicker';
@@ -199,16 +198,18 @@ export function AccountsIndexView({
           </section>
 
           {accounts.length === 0 ? (
-            <FinanceEmptyState
-              kind="account"
-              title="Start with an account"
-              description="Add cash, a bank account, or a card to keep balances and activity together."
-              action={
-                <Button onPress={onAddAccount}>
-                  <Plus size={17} aria-hidden="true" /> Add your first account
-                </Button>
-              }
-            />
+            <section className={styles.statePanel}>
+              <span className={styles.emptyIcon} aria-hidden="true">
+                <Wallet size={25} />
+              </span>
+              <Typography variant="title">Start with an account</Typography>
+              <Typography variant="small">
+                Add cash, a bank account, or a card to keep balances and activity in one place.
+              </Typography>
+              <Button onPress={onAddAccount}>
+                <Plus size={17} aria-hidden="true" /> Add your first account
+              </Button>
+            </section>
           ) : (
             <section className={styles.accountsPanel} aria-labelledby="accounts-heading">
               <div className={styles.listHeader}>
@@ -235,12 +236,11 @@ export function AccountsIndexView({
                 </div>
               </div>
               {filtered.length === 0 ? (
-                <FinanceEmptyState
-                  kind="search"
-                  compact
-                  title="No accounts match this search"
-                  description="Try another name or account type."
-                />
+                <div className={styles.noResults}>
+                  <Search size={20} aria-hidden="true" />
+                  <Typography variant="bodyLarge">No accounts match this search</Typography>
+                  <Typography variant="small">Try another name or account type.</Typography>
+                </div>
               ) : (
                 <div className={styles.accountRows}>
                   {filtered.map((account) => {
@@ -331,12 +331,9 @@ export function AccountsIndexView({
                   </span>
                 ))
               ) : (
-                <FinanceEmptyState
-                  kind="account"
-                  compact
-                  title="No included balances"
-                  description="Mark an account as included to show it in your overall balance."
-                />
+                <Typography variant="caption">
+                  No accounts are currently included in your overall balance.
+                </Typography>
               )}
             </div>
             <p>Only accounts marked “In total” count toward your overall balance.</p>
@@ -745,19 +742,15 @@ export function AccountDetailView({
           </Button>
         </div>
         {activity.length === 0 ? (
-          <FinanceEmptyState
-            kind="activity"
-            compact
-            title="No posted activity yet"
-            description="Record a transaction to see it here."
-            action={
-              !isArchived ? (
-                <Button onPress={onAddTransaction}>
-                  <Plus size={16} aria-hidden="true" /> Add transaction
-                </Button>
-              ) : undefined
-            }
-          />
+          <div className={styles.activityEmpty}>
+            <Typography variant="bodyLarge">No posted activity yet</Typography>
+            <Typography variant="small">Record a transaction to see it here.</Typography>
+            {!isArchived && (
+              <Button onPress={onAddTransaction}>
+                <Plus size={16} aria-hidden="true" /> Add transaction
+              </Button>
+            )}
+          </div>
         ) : (
           <div className={styles.activityRows}>
             {activity.map((transaction) => (

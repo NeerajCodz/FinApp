@@ -18,7 +18,6 @@ import {
 import { Button, Input, Label, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
 import { EntityColorPicker } from './EntityColorPicker';
-import { FinanceEmptyState } from './FinanceEmptyState';
 import { Money } from './Money';
 import { TransactionRow } from './TransactionRow';
 import type { SemanticType, TransactionType } from '../types';
@@ -370,16 +369,37 @@ export function AccountsIndexView({
           </View>
 
           {accounts.length === 0 ? (
-            <FinanceEmptyState
-              kind="account"
-              title="Start with an account."
-              description="Add cash, a bank account, or a card to keep balances and activity in one place."
-              action={
-                <Button onPress={onAddAccount}>
-                  <Plus size={16} color={tokens.background} /> Add your first account
-                </Button>
-              }
-            />
+            <View
+              style={{
+                alignItems: 'center',
+                gap: 11,
+                padding: 24,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                borderRadius: 16,
+                backgroundColor: tokens.card,
+              }}
+            >
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 16,
+                  backgroundColor: tokens.surfaceRaised,
+                }}
+              >
+                <Wallet size={24} color={tokens.primary} />
+              </View>
+              <Typography variant="title">Start with an account</Typography>
+              <Text style={{ maxWidth: 300, color: tokens.foregroundMuted, textAlign: 'center' }}>
+                Add cash, a bank account, or a card to keep balances and activity in one place.
+              </Text>
+              <Button onPress={onAddAccount}>
+                <Plus size={16} color={tokens.background} /> Add your first account
+              </Button>
+            </View>
           ) : (
             <View
               style={[
@@ -432,12 +452,13 @@ export function AccountsIndexView({
                 </ScrollView>
               </View>
               {filtered.length === 0 ? (
-                <FinanceEmptyState
-                  kind="search"
-                  title="No accounts match this search."
-                  description="Try another name or account type to find an account."
-                  compact
-                />
+                <View style={{ alignItems: 'center', gap: 7, paddingVertical: 23 }}>
+                  <MagnifyingGlass size={20} color={tokens.foregroundSubtle} />
+                  <Typography variant="bodyLarge">No accounts match this search</Typography>
+                  <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+                    Try another name or account type.
+                  </Typography>
+                </View>
               ) : (
                 <View style={styles.accountRows}>
                   {filtered.map((account) => {
@@ -528,12 +549,9 @@ export function AccountsIndexView({
                   <Money key={currency} amountMinor={amountMinor} currency={currency} size="body" />
                 ))
               ) : (
-                <FinanceEmptyState
-                  kind="account"
-                  title="No included balances."
-                  description="Mark an account as included to show it in your overall balance."
-                  compact
-                />
+                <Typography variant="small">
+                  No accounts are included in your overall balance.
+                </Typography>
               )}
             </View>
           </View>
@@ -993,19 +1011,20 @@ export function AccountDetailView({
             )}
           </View>
           {activity.length === 0 ? (
-            <FinanceEmptyState
-              kind="activity"
-              title="No posted activity yet."
-              description="Record a transaction to see it here."
-              compact
-              action={
-                !isArchived ? (
-                  <Button size="sm" variant="outline" onPress={onAddTransaction}>
-                    Add transaction
-                  </Button>
-                ) : undefined
-              }
-            />
+            <View style={{ alignItems: 'center', gap: 9, paddingVertical: 23 }}>
+              <Typography variant="bodyLarge">No posted activity yet</Typography>
+              <Typography
+                variant="small"
+                style={{ color: tokens.foregroundMuted, textAlign: 'center' }}
+              >
+                Record a transaction to see it here.
+              </Typography>
+              {!isArchived && (
+                <Button size="sm" variant="outline" onPress={onAddTransaction}>
+                  Add transaction
+                </Button>
+              )}
+            </View>
           ) : (
             <View style={styles.activityRows}>
               {activity.map((transaction, index) => (

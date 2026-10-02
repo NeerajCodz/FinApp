@@ -3,11 +3,6 @@ export {
   INVITATION_LINK_EXPIRY_OPTIONS,
   type InvitationLinkExpiryMs,
 } from '../groupInvitationExpiry';
-export {
-  FinanceEmptyState,
-  type FinanceEmptyKind,
-  type FinanceEmptyStateProps,
-} from './FinanceEmptyState';
 export { FinanceBrand } from './FinanceBrand';
 export { FinanceWorkspace } from './FinanceWorkspace';
 export { resolveDefaultCurrency, type CurrencyPreferenceRecord } from '../defaultCurrency';

@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowUpRight, Target } from 'lucide-react';
 import { formatMinor } from '@convex/shared/money';
 import { CashFlowChart } from '../../analytics/web/CashFlowChart';
-import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 import type { HomeDashboardData } from '../model';
 
 export function HomeFlowBudgets({
@@ -70,13 +69,11 @@ export function HomeFlowBudgets({
             })}
           </div>
         ) : (
-          <FinanceEmptyState
-            kind="budget"
-            compact
-            title="No active budgets for this period"
-            description="Create a spending limit to track category expenses."
-            action={<a href="/budgets/new">Create a budget</a>}
-          />
+          <div className="finance-home-empty-block">
+            <Target size={21} aria-hidden="true" />
+            <p>No active budgets for this period.</p>
+            <a href="/budgets/new">Create a budget</a>
+          </div>
         )}
       </section>
     </div>

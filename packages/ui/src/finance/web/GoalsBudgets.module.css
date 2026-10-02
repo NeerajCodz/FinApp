@@ -6,3 +6,7 @@
 @media(max-width:850px){.goalsHeader{grid-template-columns:minmax(0,1fr);align-items:start}.goalsActions{grid-template-columns:auto minmax(0,1fr) auto}}
 @media(max-width:520px){.goalsActions{grid-template-columns:minmax(0,1fr)}}
 
+.emptyGoals{display:grid;justify-items:center;align-content:center;gap:12px;min-height:320px;padding:36px 20px;border:1px solid var(--finapp-border-subtle);border-radius:14px;background:var(--finapp-card);text-align:center}
+.goalEmptyIllustration{display:block;width:160px;height:120px;margin-bottom:2px}
+.emptyGoals h2{margin:0;font-size:24px;line-height:1.2;font-weight:600;letter-spacing:-.4px}
+.emptyGoals p{max-width:42ch;margin:0;color:var(--finapp-foreground-muted);font-size:14px;line-height:1.5}

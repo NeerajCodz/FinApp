@@ -13,7 +13,6 @@ import {
   type AnalyticsPeriod,
 } from '@convex/analytics/domain';
 import { CategoryIcon, TransactionRow } from '@finapp/ui/finance';
-import { FinanceEmptyState } from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
@@ -82,9 +81,7 @@ export default function AnalyticsBreakdownScreen() {
     if (!valid || !rangeState.data || !accountState.data || !categoryState.data) return null;
     const source = rangeState.data.flatMap((record) => {
       const transaction = ledgerTransaction(record);
-      return transaction && accounts.get(transaction.accountId ?? '')?.includeInAnalytics !== false
-        ? [transaction]
-        : [];
+      return transaction && accounts.get(transaction.accountId ?? '')?.includeInAnalytics !== false ? [transaction] : [];
     });
     const summary = aggregateAnalytics(
       source,
@@ -235,15 +232,13 @@ export default function AnalyticsBreakdownScreen() {
                   % of spending · {period}
                 </Typography>
                 {result.rows.length === 0 ? (
-                  <FinanceEmptyState
-                    kind="search"
-                    title="No matching transactions."
+                  <Empty
+                    title="No matching transactions"
                     description={
                       rangeState.covered
                         ? 'No posted expenses match this breakdown.'
                         : 'No matching saved rows. Refresh to confirm the full period.'
                     }
-                    compact
                   />
                 ) : (
                   result.rows.map((record) => {

@@ -4,12 +4,7 @@ import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button, Empty, IconButton, Text, Typography } from '@finapp/ui/web';
-import {
-  CategoryIcon,
-  FinanceEmptyState,
-  TransactionRow,
-  formatTransactionDate,
-} from '@finapp/ui/finance';
+import { CategoryIcon, TransactionRow, formatTransactionDate } from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
   getAnalyticsRange,
@@ -130,13 +125,8 @@ export default function AnalyticsBreakdownPage() {
   }, [endAt, fetchTransactionRange, isConnected, startAt, userId, valid]);
   const categories = categoryRecords.filter((item) => userId && belongsToUser(item, userId));
   const accounts = accountRecords.filter((item) => userId && belongsToUser(item, userId));
-  const excludedAccounts = new Set(
-    accounts.filter((account) => account.includeInAnalytics === false).flatMap(aliasesOf),
-  );
-  const transactions = transactionRecords.filter(
-    (item) =>
-      userId && belongsToUser(item, userId) && !excludedAccounts.has(String(item.accountId ?? '')),
-  );
+  const excludedAccounts = new Set(accounts.filter(account => account.includeInAnalytics === false).flatMap(aliasesOf));
+  const transactions = transactionRecords.filter((item) => userId && belongsToUser(item, userId) && !excludedAccounts.has(String(item.accountId ?? '')));
   const categoryIcon =
     dimension === 'category'
       ? categories.find((item) => query?.key && aliasesOf(item).includes(query.key))?.icon
@@ -328,9 +318,7 @@ export default function AnalyticsBreakdownPage() {
                 {sharePercent}% of spending · {query?.period}
               </Typography>
               {result.rows.length === 0 ? (
-                <FinanceEmptyState
-                  kind="transaction"
-                  compact
+                <Empty
                   title="No matching transactions"
                   description={
                     serverRangeLoaded

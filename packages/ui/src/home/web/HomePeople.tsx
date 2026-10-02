@@ -1,7 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, UsersRound } from 'lucide-react';
 import { formatMinor } from '@convex/shared/money';
-import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 import type { HomePerson } from '../types';
 
 export function HomePeople({
@@ -57,12 +56,9 @@ export function HomePeople({
           ))}
         </div>
       ) : (
-        <FinanceEmptyState
-          kind="group"
-          compact
-          title="No shared activity yet"
-          description="Shared expenses with group members will appear here once you transact together."
-        />
+        <p className="finance-home-empty">
+          Shared expenses with group members will appear here once you transact together.
+        </p>
       )}
     </section>
   );
