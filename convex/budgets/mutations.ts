@@ -5,6 +5,7 @@ import { requireUser } from '../shared/auth';
 import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 import { publishMutationResult, replayMutationResult } from '../sync/common';
 
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 const period = v.union(
   v.literal('monthly'),
   v.literal('category'),
@@ -15,9 +16,13 @@ const period = v.union(
 function assertBudgetMetadata(args: { icon?: string | null; alertThreshold?: number | null }) {
   if (
     (args.icon !== undefined && args.icon !== null && (!args.icon || args.icon.length > 80)) ||
-    (args.alertThreshold !== undefined && args.alertThreshold !== null &&
-      (!Number.isFinite(args.alertThreshold) || args.alertThreshold < 0 || args.alertThreshold > 100))
-  ) throw new Error('INVALID_BUDGET');
+    (args.alertThreshold !== undefined &&
+      args.alertThreshold !== null &&
+      (!Number.isFinite(args.alertThreshold) ||
+        args.alertThreshold < 0 ||
+        args.alertThreshold > 100))
+  )
+    throw new Error('INVALID_BUDGET');
 }
 
 async function assertBudgetAccounts(
@@ -51,9 +56,11 @@ export const create = mutation({
     includeInAnalytics: v.optional(v.boolean()),
     accountIds: v.optional(v.array(v.string())),
     clientMutationId: v.optional(v.string()),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    assertClientId(args.clientId);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
       ctx,
@@ -66,6 +73,12 @@ export const create = mutation({
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
       return previousId;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('budgets')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     const name = args.name.trim();
     assertPositiveAmount(args.amountMinor);
     if (!name || args.endAt <= args.startAt) throw new Error('INVALID_BUDGET');
@@ -93,6 +106,7 @@ export const create = mutation({
     const now = Date.now();
     const record = {
       ownerId: user._id,
+      clientId: args.clientId,
       name,
       amountMinor: args.amountMinor,
       currency: args.currency,
@@ -167,8 +181,12 @@ export const update = mutation({
     assertCurrency(args.currency);
     if (!name || args.endAt <= args.startAt) throw new Error('INVALID_BUDGET');
     assertBudgetMetadata(args);
-    await assertBudgetAccounts(ctx, user._id, args.currency,
-      args.accountIds === null ? undefined : (args.accountIds ?? budget.accountIds));
+    await assertBudgetAccounts(
+      ctx,
+      user._id,
+      args.currency,
+      args.accountIds === null ? undefined : (args.accountIds ?? budget.accountIds),
+    );
     const now = Date.now();
     await ctx.db.patch(args.budgetId, {
       name,
@@ -180,9 +198,13 @@ export const update = mutation({
       startAt: args.startAt,
       endAt: args.endAt,
       ...(args.icon !== undefined ? { icon: args.icon ?? undefined } : {}),
-      ...(args.alertThreshold !== undefined ? { alertThreshold: args.alertThreshold ?? undefined } : {}),
+      ...(args.alertThreshold !== undefined
+        ? { alertThreshold: args.alertThreshold ?? undefined }
+        : {}),
       ...(args.notes !== undefined ? { notes: args.notes ?? undefined } : {}),
-      ...(args.includeInAnalytics !== undefined ? { includeInAnalytics: args.includeInAnalytics } : {}),
+      ...(args.includeInAnalytics !== undefined
+        ? { includeInAnalytics: args.includeInAnalytics }
+        : {}),
       ...(args.accountIds !== undefined ? { accountIds: args.accountIds ?? undefined } : {}),
       updatedAt: now,
     });

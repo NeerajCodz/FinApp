@@ -6,6 +6,7 @@ import { publishMutationResult, recordSyncChange, replayMutationResult } from '.
 import { createNotification } from '../notifications/mutations';
 import { applyContribution } from './domain';
 
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 const priority = v.union(v.literal('low'), v.literal('medium'), v.literal('high'));
 const reminderFrequency = v.union(v.literal('none'), v.literal('weekly'), v.literal('monthly'));
 
@@ -24,9 +25,11 @@ export const create = mutation({
     notes: v.optional(v.string()),
     reminderFrequency: v.optional(reminderFrequency),
     clientMutationId: v.string(),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    assertClientId(args.clientId);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(ctx, user._id, args.clientMutationId, 'goal.create');
     if (replay.found) {
@@ -34,6 +37,12 @@ export const create = mutation({
       if (!id) throw new Error('INVALID_MUTATION_RECEIPT');
       return id;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('goals')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     const name = args.name.trim();
     assertPositiveAmount(args.targetAmountMinor);
     assertCurrency(args.currency);
@@ -50,11 +59,16 @@ export const create = mutation({
       (args.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(args.color))
     )
       throw new Error('INVALID_GOAL');
-    if (!name || (args.targetDate !== undefined && (!Number.isFinite(args.targetDate) || args.targetDate <= Date.now())))
+    if (
+      !name ||
+      (args.targetDate !== undefined &&
+        (!Number.isFinite(args.targetDate) || args.targetDate <= Date.now()))
+    )
       throw new Error('INVALID_GOAL');
     const now = Date.now();
     const record = {
       ownerId: user._id,
+      clientId: args.clientId,
       name,
       targetAmountMinor: args.targetAmountMinor,
       currency: args.currency,
@@ -154,7 +168,11 @@ export const update = mutation({
       throw new Error('INVALID_GOAL');
     const name = args.name.trim();
     assertPositiveAmount(args.targetAmountMinor);
-    if (args.monthlyContributionMinor !== undefined && args.monthlyContributionMinor !== null && args.monthlyContributionMinor < 0n)
+    if (
+      args.monthlyContributionMinor !== undefined &&
+      args.monthlyContributionMinor !== null &&
+      args.monthlyContributionMinor < 0n
+    )
       throw new Error('INVALID_GOAL');
     if (args.accountId !== undefined && args.accountId !== null) {
       const account = await ctx.db.get(args.accountId);
@@ -164,8 +182,12 @@ export const update = mutation({
     }
     if (
       !name ||
-      (args.targetDate !== undefined && args.targetDate !== null && (!Number.isFinite(args.targetDate) || args.targetDate <= Date.now())) ||
-      (args.icon !== undefined && args.icon !== null && (args.icon.length === 0 || args.icon.length > 80)) ||
+      (args.targetDate !== undefined &&
+        args.targetDate !== null &&
+        (!Number.isFinite(args.targetDate) || args.targetDate <= Date.now())) ||
+      (args.icon !== undefined &&
+        args.icon !== null &&
+        (args.icon.length === 0 || args.icon.length > 80)) ||
       (args.color !== undefined && args.color !== null && !/^#[0-9a-fA-F]{6}$/.test(args.color))
     )
       throw new Error('INVALID_GOAL');
@@ -177,11 +199,15 @@ export const update = mutation({
       ...(args.icon !== undefined ? { icon: args.icon ?? undefined } : {}),
       ...(args.color !== undefined ? { color: args.color ?? undefined } : {}),
       ...(args.goalType !== undefined ? { goalType: args.goalType ?? undefined } : {}),
-      ...(args.monthlyContributionMinor !== undefined ? { monthlyContributionMinor: args.monthlyContributionMinor ?? undefined } : {}),
+      ...(args.monthlyContributionMinor !== undefined
+        ? { monthlyContributionMinor: args.monthlyContributionMinor ?? undefined }
+        : {}),
       ...(args.accountId !== undefined ? { accountId: args.accountId ?? undefined } : {}),
       ...(args.priority !== undefined ? { priority: args.priority } : {}),
       ...(args.notes !== undefined ? { notes: args.notes ?? undefined } : {}),
-      ...(args.reminderFrequency !== undefined ? { reminderFrequency: args.reminderFrequency } : {}),
+      ...(args.reminderFrequency !== undefined
+        ? { reminderFrequency: args.reminderFrequency }
+        : {}),
       updatedAt,
     });
     const updated = await ctx.db.get(args.goalId);
@@ -238,8 +264,14 @@ export const archive = mutation({
 });
 
 export const contribute = mutation({
-  args: { goalId: v.id('goals'), amountMinor: v.int64(), clientMutationId: v.string() },
+  args: {
+    goalId: v.id('goals'),
+    amountMinor: v.int64(),
+    clientMutationId: v.string(),
+    clientId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    assertClientId(args.clientId);
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
@@ -253,6 +285,12 @@ export const contribute = mutation({
       if (!id) throw new Error('INVALID_MUTATION_RECEIPT');
       return id;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('goalContributions')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     const goal = await ctx.db.get(args.goalId);
     if (!goal || goal.ownerId !== user._id || goal.archivedAt !== undefined)
       throw new Error('INSUFFICIENT_PERMISSION');
@@ -266,6 +304,7 @@ export const contribute = mutation({
     const now = Date.now();
     const record = {
       goalId: goal._id,
+      clientId: args.clientId,
       ownerId: user._id,
       amountMinor: args.amountMinor,
       currency: goal.currency,

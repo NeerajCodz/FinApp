@@ -148,7 +148,7 @@ export default function GroupSettingsPage() {
   const groupIds = group ? aliases(group) : [routeId];
   const currentGroupId = group ? localId(group) : routeId;
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
-  const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
+  const cloudGroupId = groupIdentity;
   const remoteGroup = useQuery(
     api.groups.queries.detail,
     cloudGroupId ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',

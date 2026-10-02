@@ -142,9 +142,8 @@ export default function CategoryDetailScreen() {
         { categoryId: categoryPayloadId, icon: icon ?? null },
         {
           recordId: categoryLocalId,
-          dependencies: categoryPayloadId.startsWith('local-')
-            ? [`category:${categoryPayloadId}`]
-            : [],
+          dependencies:
+            category && !category._id && !category.cloudId ? [`category:${categoryPayloadId}`] : [],
         },
       );
     } catch (cause) {
@@ -175,9 +174,8 @@ export default function CategoryDetailScreen() {
         { categoryId: categoryPayloadId, amountMinor, currency },
         {
           recordId: categoryLocalId,
-          dependencies: categoryPayloadId.startsWith('local-')
-            ? [`category:${categoryPayloadId}`]
-            : [],
+          dependencies:
+            category && !category._id && !category.cloudId ? [`category:${categoryPayloadId}`] : [],
         },
       );
       setLimitInput('');
@@ -201,9 +199,8 @@ export default function CategoryDetailScreen() {
         { categoryId: categoryPayloadId, amountMinor: null },
         {
           recordId: categoryLocalId,
-          dependencies: categoryPayloadId.startsWith('local-')
-            ? [`category:${categoryPayloadId}`]
-            : [],
+          dependencies:
+            category && !category._id && !category.cloudId ? [`category:${categoryPayloadId}`] : [],
         },
       );
       setLimitInput('');
@@ -238,7 +235,10 @@ export default function CategoryDetailScreen() {
         { transactionType, categoryId: nextCategoryId },
         {
           recordId: profile.id ?? profile._id,
-          dependencies: nextCategoryId?.startsWith('local-') ? [`category:${nextCategoryId}`] : [],
+          dependencies:
+            nextCategoryId && category && !category._id && !category.cloudId
+              ? [`category:${nextCategoryId}`]
+              : [],
         },
       );
     } catch (cause) {
@@ -267,9 +267,8 @@ export default function CategoryDetailScreen() {
         { categoryId: categoryPayloadId },
         {
           recordId: categoryLocalId,
-          dependencies: categoryPayloadId.startsWith('local-')
-            ? [`category:${categoryPayloadId}`]
-            : [],
+          dependencies:
+            category && !category._id && !category.cloudId ? [`category:${categoryPayloadId}`] : [],
           relatedRecords:
             profile && (defaultExpenseCategoryId || defaultIncomeCategoryId)
               ? [

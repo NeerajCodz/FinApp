@@ -265,38 +265,50 @@ export default function AccountDetailScreen() {
   }
 
   return (
-    <AccountDetailView
-      account={{
-        id: String(accountLocalId),
-        name: account.name,
-        type: account.type,
-        customType: account.customType,
-        currency: account.currency,
-        balanceMinor,
-        icon: account.icon,
-        color: account.color,
-        isIncludedInTotal: account.isIncludedInTotal === true,
-        createdAt: account.createdAt,
-      }}
-      activity={activity}
-      flowActivity={flowActivity}
-      isBusy={pending}
-      error={error}
-      rangeNotice={transactionRange.error?.message}
-      topInset={insets.top}
-      bottomInset={insets.bottom}
-      onRename={renameAccount}
-      onArchive={archiveAccount}
-      onSetIcon={(icon) => void setAccountIcon(icon)}
-      onSetColor={(color) => void setAccountColor(color)}
-      onBack={() => router.back()}
-      onAddTransaction={() =>
-        router.push({ pathname: '/transaction/new', params: { accountId: id } } as never)
-      }
-      onOpenTransaction={(transactionId) =>
-        router.push(`/transaction/${encodeURIComponent(transactionId)}` as never)
-      }
-    />
+    <View style={{ flex: 1, backgroundColor: tokens.background }}>
+      {account.archivedAt === undefined ? (
+        <Button
+          variant="outline"
+          onPress={() =>
+            router.push(`/account/${encodeURIComponent(String(accountLocalId))}/edit` as never)
+          }
+        >
+          Edit details
+        </Button>
+      ) : null}
+      <AccountDetailView
+        account={{
+          id: String(accountLocalId),
+          name: account.name,
+          type: account.type,
+          customType: account.customType,
+          currency: account.currency,
+          balanceMinor,
+          icon: account.icon,
+          color: account.color,
+          isIncludedInTotal: account.isIncludedInTotal === true,
+          archivedAt: account.archivedAt,
+        }}
+        activity={activity}
+        flowActivity={flowActivity}
+        isBusy={pending}
+        error={error}
+        rangeNotice={transactionRange.error?.message}
+        topInset={insets.top}
+        bottomInset={insets.bottom}
+        onRename={renameAccount}
+        onArchive={archiveAccount}
+        onSetIcon={(icon) => void setAccountIcon(icon)}
+        onSetColor={(color) => void setAccountColor(color)}
+        onBack={() => router.back()}
+        onAddTransaction={() =>
+          router.push({ pathname: '/transaction/new', params: { accountId: id } } as never)
+        }
+        onOpenTransaction={(transactionId) =>
+          router.push(`/transaction/${encodeURIComponent(transactionId)}` as never)
+        }
+      />
+    </View>
   );
 }
 

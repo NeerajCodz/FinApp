@@ -358,6 +358,7 @@ export type AccountDetailViewProps = {
   isBusy: boolean;
   error?: string | null;
   rangeNotice?: string | null;
+  onEdit: () => void;
   onRename: (name: string) => Promise<boolean>;
   onArchive: () => Promise<boolean>;
   onSetIcon: (icon: string | null) => void;
@@ -373,6 +374,7 @@ export function AccountDetailView({
   isBusy,
   error,
   rangeNotice,
+  onEdit,
   onRename,
   onArchive,
   onSetIcon,
@@ -474,6 +476,11 @@ export function AccountDetailView({
           </div>
         </div>
         <div className={styles.detailActions}>
+          {!isArchived && (
+            <Button variant="outline" onPress={onEdit}>
+              Edit details
+            </Button>
+          )}
           {!isArchived && (
             <Button
               variant="outline"

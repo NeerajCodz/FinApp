@@ -82,6 +82,7 @@ export default defineSchema({
     .index('by_challenge', ['challengeIdHash']),
   accounts: defineTable({
     ownerId: v.id('users'),
+    clientId: optionalText,
     name: v.string(),
     type: v.union(
       v.literal('cash'),
@@ -105,12 +106,15 @@ export default defineSchema({
     archivedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
-  }).index('by_owner', ['ownerId']),
+  })
+    .index('by_owner', ['ownerId'])
+    .index('by_clientId', ['clientId']),
   accountMembers: defineTable({ accountId: v.id('accounts'), userId: v.id('users'), role })
     .index('by_account', ['accountId'])
     .index('by_user', ['userId']),
   categories: defineTable({
     ownerId: v.id('users'),
+    clientId: optionalText,
     name: v.string(),
     kind: v.optional(v.union(v.literal('expense'), v.literal('income'))),
     parentId: optionalText,
@@ -125,9 +129,12 @@ export default defineSchema({
     sortOrder: v.number(),
     createdAt: timestamp,
     updatedAt: timestamp,
-  }).index('by_owner', ['ownerId']),
+  })
+    .index('by_owner', ['ownerId'])
+    .index('by_clientId', ['clientId']),
   transactions: defineTable({
     ownerId: v.id('users'),
+    clientId: optionalText,
     accountId: v.id('accounts'),
     type: v.union(
       v.literal('expense'),
@@ -156,7 +163,8 @@ export default defineSchema({
     .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
     .index('by_account', ['accountId'])
     .index('by_transferAccountId', ['transferAccountId'])
-    .index('by_group_occurredAt', ['groupId', 'occurredAt']),
+    .index('by_group_occurredAt', ['groupId', 'occurredAt'])
+    .index('by_clientId', ['clientId']),
   transactionTags: defineTable({ transactionId: v.id('transactions'), tag: v.string() }).index(
     'by_transaction',
     ['transactionId'],
@@ -207,6 +215,7 @@ export default defineSchema({
     .index('by_user_entity_updatedAt', ['scopeUserId', 'entityType', 'updatedAt']),
   groups: defineTable({
     ownerId: v.id('users'),
+    clientId: optionalText,
     name: v.string(),
     currency,
     icon: optionalText,
@@ -221,7 +230,9 @@ export default defineSchema({
     archivedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
-  }).index('by_owner', ['ownerId']),
+  })
+    .index('by_owner', ['ownerId'])
+    .index('by_clientId', ['clientId']),
   groupMembers: defineTable({
     groupId: v.id('groups'),
     userId: v.id('users'),
@@ -286,6 +297,7 @@ export default defineSchema({
     .index('by_transaction', ['transactionId'])
     .index('by_user', ['userId']),
   settlements: defineTable({
+    clientId: optionalText,
     groupId: v.id('groups'),
     fromUserId: v.id('users'),
     toUserId: v.id('users'),
@@ -300,9 +312,11 @@ export default defineSchema({
     .index('by_to_user', ['toUserId'])
     .index('by_group_occurredAt', ['groupId', 'occurredAt'])
     .index('by_from_user_occurredAt', ['fromUserId', 'occurredAt'])
-    .index('by_to_user_occurredAt', ['toUserId', 'occurredAt']),
+    .index('by_to_user_occurredAt', ['toUserId', 'occurredAt'])
+    .index('by_clientId', ['clientId']),
   budgets: defineTable({
     ownerId: v.id('users'),
+    clientId: optionalText,
     name: v.string(),
     amountMinor: v.int64(),
     currency,
@@ -324,9 +338,12 @@ export default defineSchema({
     archivedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
-  }).index('by_owner_period', ['ownerId', 'startAt']),
+  })
+    .index('by_owner_period', ['ownerId', 'startAt'])
+    .index('by_clientId', ['clientId']),
   goals: defineTable({
     ownerId: v.id('users'),
+    clientId: optionalText,
     name: v.string(),
     icon: optionalText,
     color: optionalText,
@@ -345,10 +362,13 @@ export default defineSchema({
     archivedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
-  }).index('by_owner', ['ownerId']),
+  })
+    .index('by_owner', ['ownerId'])
+    .index('by_clientId', ['clientId']),
   goalContributions: defineTable({
     goalId: v.id('goals'),
     ownerId: v.id('users'),
+    clientId: optionalText,
     amountMinor: v.int64(),
     currency,
     accountId: optionalText,
@@ -357,9 +377,11 @@ export default defineSchema({
   })
     .index('by_goal', ['goalId'])
     .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
-    .index('by_goal_occurredAt', ['goalId', 'occurredAt']),
+    .index('by_goal_occurredAt', ['goalId', 'occurredAt'])
+    .index('by_clientId', ['clientId']),
   recurringRules: defineTable({
     ownerId: v.id('users'),
+    clientId: optionalText,
     name: v.string(),
     template: v.any(),
     frequency: v.union(
@@ -379,7 +401,8 @@ export default defineSchema({
     updatedAt: timestamp,
   })
     .index('by_owner_nextOccurrence', ['ownerId', 'nextOccurrence'])
-    .index('by_enabled_nextOccurrence', ['enabled', 'nextOccurrence']),
+    .index('by_enabled_nextOccurrence', ['enabled', 'nextOccurrence'])
+    .index('by_clientId', ['clientId']),
   notifications: defineTable({
     recipientId: v.id('users'),
     type: v.string(),

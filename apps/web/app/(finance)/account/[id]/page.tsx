@@ -17,6 +17,7 @@ import {
   idOf,
   matchesRouteId,
   localDependency,
+  routeIdFor,
   SignInGate,
 } from '../../_personal';
 
@@ -362,6 +363,7 @@ export default function PersonalAccountDetailPage() {
           ? 'Recent activity refresh unavailable. Showing records already saved in this browser.'
           : null
       }
+      onEdit={() => router.push(`/account/${encodeURIComponent(routeIdFor(localId))}/edit`)}
       onRename={updateName}
       onArchive={archive}
       onSetIcon={(icon) => void updateIcon(icon)}

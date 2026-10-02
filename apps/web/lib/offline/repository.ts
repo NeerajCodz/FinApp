@@ -246,66 +246,117 @@ export async function commitLocalWrite(
 ): Promise<string> {
   requireUser(userId);
   const clientMutationId = options.clientMutationId ?? crypto.randomUUID();
-  const id = options.recordId ?? String(record.id ?? record._id ?? `local-${clientMutationId}`);
-  const now = Date.now();
-  const localRecord = { ...record, id, updatedAt: now, clientUpdatedAt: now };
-  const entry: OutboxEntry = {
-    userId,
-    localId: `local-${clientMutationId}`,
-    operation,
-    payload: { ...payload, clientMutationId },
-    clientMutationId,
-    entityType,
-    recordId: id,
-    createdAt: now,
-    clientUpdatedAt: now,
-    baseUpdatedAt: options.baseUpdatedAt,
-    deviceId: options.deviceId,
-    dependencies: options.dependencies ?? [],
-    retryCount: 0,
-    status: 'pending',
-  };
+  const isCreate =
+    operation.endsWith('.create') ||
+    operation === 'group.addExpense' ||
+    operation === 'goal.contribute';
+  const sourceId = options.recordId ?? (typeof record.id === 'string' ? record.id : undefined);
+  const requestedId = isCreate
+    ? sourceId
+    : (options.recordId ?? String(record.id ?? record._id ?? crypto.randomUUID()));
   const db = await openWebDatabase();
   const transaction = db.transaction(['records', 'outbox'], 'readwrite');
   const done = transactionComplete(transaction);
   const records = transaction.objectStore('records');
-  for (const related of options.relatedRecords ?? []) {
-    const relatedId = relatedRecordId(related.entityType, related.record);
-    const relatedRecord = {
-      ...related.record,
-      id: relatedId,
-      updatedAt: now,
-      clientUpdatedAt: now,
-    };
-    records.put({
-      key: recordKey(userId, related.entityType, relatedId),
-      userId,
-      entityType: related.entityType,
-      id: relatedId,
-      cloudId: typeof related.record.cloudId === 'string' ? related.record.cloudId : undefined,
-      updatedAt: now,
-      clientUpdatedAt: now,
-      record: relatedRecord,
-    } satisfies RecordRow);
-  }
-  records.put({
-    key: recordKey(userId, entityType, id),
-    userId,
-    entityType,
-    id,
-    cloudId: typeof record.cloudId === 'string' ? record.cloudId : undefined,
-    updatedAt: now,
-    clientUpdatedAt: now,
-    record: localRecord,
-  } satisfies RecordRow);
   const outbox = transaction.objectStore('outbox');
-  const existing = outbox.get(entry.localId);
-  existing.onsuccess = () => {
-    if (!existing.result) outbox.add(entry);
+  let finalId =
+    typeof requestedId === 'string' &&
+    (!isCreate ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedId))
+      ? requestedId
+      : crypto.randomUUID();
+  let outboxId = crypto.randomUUID();
+  const checkId = () => {
+    const existing = records.get(recordKey(userId, entityType, finalId));
+    existing.onsuccess = () => {
+      if (isCreate && existing.result) {
+        finalId = crypto.randomUUID();
+        checkId();
+        return;
+      }
+      const checkOutboxId = () => {
+        const existingOutbox = outbox.get(outboxId);
+        existingOutbox.onsuccess = () => {
+          if (existingOutbox.result) {
+            outboxId = crypto.randomUUID();
+            checkOutboxId();
+            return;
+          }
+          const now = Date.now();
+          const localRecord = {
+            ...(rewriteForeignIds(record, sourceId ?? finalId, finalId) as LocalRecord),
+            id: finalId,
+            ...(isCreate ? { clientId: finalId } : {}),
+            updatedAt: now,
+            clientUpdatedAt: now,
+          };
+          for (const related of options.relatedRecords ?? []) {
+            const rewrittenRelatedRecord = rewriteForeignIds(
+              related.record,
+              sourceId ?? finalId,
+              finalId,
+            ) as LocalRecord;
+            const relatedId = relatedRecordId(related.entityType, rewrittenRelatedRecord);
+            const relatedRecord = {
+              ...rewrittenRelatedRecord,
+              id: relatedId,
+              updatedAt: now,
+              clientUpdatedAt: now,
+            };
+            records.put({
+              key: recordKey(userId, related.entityType, relatedId),
+              userId,
+              entityType: related.entityType,
+              id: relatedId,
+              cloudId:
+                typeof related.record.cloudId === 'string' ? related.record.cloudId : undefined,
+              updatedAt: now,
+              clientUpdatedAt: now,
+              record: relatedRecord,
+            } satisfies RecordRow);
+          }
+          records.put({
+            key: recordKey(userId, entityType, finalId),
+            userId,
+            entityType,
+            id: finalId,
+            cloudId: typeof record.cloudId === 'string' ? record.cloudId : undefined,
+            updatedAt: now,
+            clientUpdatedAt: now,
+            record: localRecord,
+          } satisfies RecordRow);
+          outbox.add({
+            userId,
+            localId: outboxId,
+            operation,
+            payload: {
+              ...(rewriteForeignIds(payload, sourceId ?? finalId, finalId) as Record<
+                string,
+                unknown
+              >),
+              ...(isCreate ? { clientId: finalId } : {}),
+              clientMutationId,
+            },
+            clientMutationId,
+            entityType,
+            recordId: finalId,
+            createdAt: now,
+            clientUpdatedAt: now,
+            baseUpdatedAt: options.baseUpdatedAt,
+            deviceId: options.deviceId,
+            dependencies: options.dependencies ?? [],
+            retryCount: 0,
+            status: 'pending',
+          } satisfies OutboxEntry);
+        };
+      };
+      checkOutboxId();
+    };
   };
+  checkId();
   await done;
   notify(userId);
-  return id;
+  return finalId;
 }
 
 export async function upsertCloudPage(
@@ -330,7 +381,9 @@ export async function upsertCloudPage(
       .index('by-user-entity-cloud')
       .get([userId, entityType, cloudId]);
     mappingRequest.onsuccess = () => {
-      const localId = (mappingRequest.result as MappingRow | undefined)?.localId ?? cloudId;
+      const localId =
+        (mappingRequest.result as MappingRow | undefined)?.localId ??
+        (typeof raw.clientId === 'string' && raw.clientId ? raw.clientId : cloudId);
       const key = recordKey(userId, entityType, localId);
       const record = { ...raw, id: localId, _id: cloudId, cloudId };
       const existingRequest = rows.get(key);
@@ -612,7 +665,10 @@ export async function applyCloudChanges(
       .get([userId, change.entityType, change.documentId]);
     mappingRequest.onsuccess = () => {
       const localId =
-        (mappingRequest.result as MappingRow | undefined)?.localId ?? change.documentId;
+        (mappingRequest.result as MappingRow | undefined)?.localId ??
+        (typeof change.document?.clientId === 'string' && change.document.clientId
+          ? change.document.clientId
+          : change.documentId);
       const key = recordKey(userId, change.entityType, localId);
       const recordRequest = records.get(key);
       recordRequest.onsuccess = () => {

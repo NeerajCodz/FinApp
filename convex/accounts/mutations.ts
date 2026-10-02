@@ -4,6 +4,7 @@ import { requireUser } from '../shared/auth';
 import { requireOwner } from '../shared/permissions';
 import { assertCurrency } from '../shared/validators';
 import { publishMutationResult, replayMutationResult, recordSyncChange } from '../sync/common';
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 
 export type AccountDraft<OwnerId extends string = string> = {
   ownerId: OwnerId;
@@ -20,6 +21,7 @@ export type AccountDraft<OwnerId extends string = string> = {
   accountNumber?: string;
   openedAt?: number;
   includeInAnalytics?: boolean;
+  clientId?: string;
 };
 
 export function createAccountRecord<OwnerId extends string>(
@@ -78,8 +80,10 @@ export const create = mutation({
     openedAt: v.optional(v.number()),
     includeInAnalytics: v.optional(v.boolean()),
     clientMutationId: v.optional(v.string()),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    assertClientId(args.clientId);
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     if (user.emailVerificationTime === undefined) throw new Error('EMAIL_NOT_VERIFIED');
@@ -94,15 +98,22 @@ export const create = mutation({
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
       return previousId;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('accounts')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     assertCurrency(args.currency);
     if (args.icon !== undefined && (args.icon.length === 0 || args.icon.length > 80))
       throw new Error('INVALID_ACCOUNT');
     if (args.color !== undefined && !/^#[\da-f]{6}$/i.test(args.color))
       throw new Error('INVALID_ACCOUNT');
-    const { clientMutationId, ...accountArgs } = args;
+    const { clientMutationId, clientId, ...accountArgs } = args;
     const record = createAccountRecord(user._id, {
       ...accountArgs,
       ownerId: user._id,
+      clientId,
       type: args.type as AccountDraft['type'],
     });
     const accountId = await ctx.db.insert('accounts', record);
@@ -203,8 +214,12 @@ export const updateDetails = mutation({
     if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
       throw new Error('ACCOUNT_UNAVAILABLE');
     const name = args.name.trim();
-    const customType = args.type === 'other'
-      ? (args.customType === undefined ? account.customType : args.customType?.trim()) : undefined;
+    const customType =
+      args.type === 'other'
+        ? args.customType === undefined
+          ? account.customType
+          : args.customType?.trim()
+        : undefined;
     if (
       !name ||
       name.length > 80 ||
@@ -228,14 +243,23 @@ export const updateDetails = mutation({
         .first();
       if (sourceTransaction || destinationTransaction) throw new Error('ACCOUNT_CURRENCY_IN_USE');
       const [goals, budgets] = await Promise.all([
-        ctx.db.query('goals').withIndex('by_owner', (q) => q.eq('ownerId', user._id)).collect(),
-        ctx.db.query('budgets').withIndex('by_owner_period', (q) => q.eq('ownerId', user._id)).collect(),
+        ctx.db
+          .query('goals')
+          .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
+          .collect(),
+        ctx.db
+          .query('budgets')
+          .withIndex('by_owner_period', (q) => q.eq('ownerId', user._id))
+          .collect(),
       ]);
       const accountId = String(args.accountId);
       if (
         goals.some((goal) => goal.accountId === accountId) ||
-        budgets.some((budget) => budget.accountId === accountId || budget.accountIds?.includes(accountId))
-      ) throw new Error('ACCOUNT_CURRENCY_IN_USE');
+        budgets.some(
+          (budget) => budget.accountId === accountId || budget.accountIds?.includes(accountId),
+        )
+      )
+        throw new Error('ACCOUNT_CURRENCY_IN_USE');
     }
     const updatedAt = Date.now();
     await ctx.db.patch(args.accountId, {
@@ -249,9 +273,13 @@ export const updateDetails = mutation({
       isIncludedInTotal: args.isIncludedInTotal,
       ...(args.notes !== undefined ? { notes: args.notes ?? undefined } : {}),
       ...(args.provider !== undefined ? { provider: args.provider ?? undefined } : {}),
-      ...(args.accountNumber !== undefined ? { accountNumber: args.accountNumber ?? undefined } : {}),
+      ...(args.accountNumber !== undefined
+        ? { accountNumber: args.accountNumber ?? undefined }
+        : {}),
       ...(args.openedAt !== undefined ? { openedAt: args.openedAt ?? undefined } : {}),
-      ...(args.includeInAnalytics !== undefined ? { includeInAnalytics: args.includeInAnalytics } : {}),
+      ...(args.includeInAnalytics !== undefined
+        ? { includeInAnalytics: args.includeInAnalytics }
+        : {}),
       updatedAt,
     });
     const updated = await ctx.db.get(args.accountId);

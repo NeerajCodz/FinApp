@@ -135,11 +135,8 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
     setSaving(true);
     setError('');
     try {
-      const bytes = await Crypto.getRandomBytesAsync(16);
-      const clientMutationId = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
-        '',
-      );
-      const transactionId = `local-${clientMutationId}`;
+      const clientMutationId = Crypto.randomUUID();
+      const transactionId = Crypto.randomUUID();
       const now = Date.now();
       const participants = shares.map((share) => ({
         ...share,
@@ -180,7 +177,6 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
           participants,
         },
         {
-          recordId: transactionId,
           clientMutationId,
           dependencies: [`group:${selectedGroupId}`, `account:${recordId(account)}`],
           relatedRecords: [

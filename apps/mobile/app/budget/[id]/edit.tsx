@@ -112,9 +112,7 @@ export default function EditBudgetScreen() {
       alertThreshold: budget.alertThreshold ?? 80,
       includeInAnalytics: budget.includeInAnalytics !== false,
       accountIds: (budget.accountIds ?? []).flatMap((id) => {
-        const account = accounts.find((row) =>
-          [row.id, row._id, row.cloudId].includes(id),
-        );
+        const account = accounts.find((row) => [row.id, row._id, row.cloudId].includes(id));
         const accountId = account?._id ?? account?.id;
         return accountId ? [accountId] : [];
       }),
@@ -181,11 +179,9 @@ export default function EditBudgetScreen() {
         updatedAt: Date.now(),
       };
       const dependencies = [
-        ...(categoryKey.startsWith('local-') ? [`category:${categoryKey}`] : []),
+        ...(category && !category._id && !category.cloudId ? [`category:${categoryKey}`] : []),
         ...selectedAccounts.flatMap((account) =>
-          account && !account._id && !account.cloudId && account.id?.startsWith('local-')
-            ? [`account:${account.id}`]
-            : [],
+          account && !account._id && !account.cloudId ? [`account:${account.id}`] : [],
         ),
       ];
       await commitLocalWrite(userId, 'budget', 'budget.update', record, payload, {
@@ -222,11 +218,7 @@ export default function EditBudgetScreen() {
       onSettingsChange={setBudgetSettings}
       startDate={startDate}
       endDate={endDate}
-      loading={
-        !initialized ||
-        categoryState.data === undefined ||
-        accountState.data === undefined
-      }
+      loading={!initialized || categoryState.data === undefined || accountState.data === undefined}
       pending={pending}
       error={error}
       onNameChange={setName}

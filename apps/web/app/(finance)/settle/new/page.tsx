@@ -357,8 +357,8 @@ function NewSettlementForm() {
         },
         {
           dependencies: [
-            ...(currentGroupId.startsWith('local-') ? [`group:${currentGroupId}`] : []),
-            ...(accountRecordId.startsWith('local-') ? [`account:${accountRecordId}`] : []),
+            ...(!group.cloudId && !group._id ? [`group:${currentGroupId}`] : []),
+            ...(!chosenAccount.cloudId && !chosenAccount._id ? [`account:${accountRecordId}`] : []),
           ],
         },
       );

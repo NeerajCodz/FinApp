@@ -22,7 +22,7 @@ export default function GroupChatRoute() {
   const categories = useLocalRecords(userId, 'category');
   const group = groups.data?.find((record) => id && recordIds(record).includes(id));
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
-  const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
+  const cloudGroupId = groupIdentity;
   const canUseChat = Boolean(userId && isConnected && cloudGroupId);
   const remoteGroup = useQuery(
     api.groups.queries.detail,
@@ -46,27 +46,39 @@ export default function GroupChatRoute() {
         avatarUrl: member.avatarUrl ?? undefined,
       }))
     : (memberships.data ?? [])
-        .filter((member) => member.deletedAt === undefined && typeof member.groupId === 'string' && recordIds(group ?? {}).includes(member.groupId))
+        .filter(
+          (member) =>
+            member.deletedAt === undefined &&
+            typeof member.groupId === 'string' &&
+            recordIds(group ?? {}).includes(member.groupId),
+        )
         .map((member) => ({
           id: String(member.userId ?? member.memberId ?? recordId(member)),
-          name: member.userId === userId ? 'You' : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
+          name:
+            member.userId === userId
+              ? 'You'
+              : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
           username: typeof member.username === 'string' ? member.username : undefined,
           avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
         }));
   const expenseEvents = (transactions.data ?? [])
-    .filter((expense) =>
-      typeof expense.groupId === 'string' &&
-      recordIds(group ?? {}).includes(expense.groupId) &&
-      expense.type === 'expense' &&
-      expense.status === 'posted' &&
-      expense.deletedAt === undefined &&
-      expense.currency === group?.currency &&
-      typeof expense.amountMinor === 'bigint',
+    .filter(
+      (expense) =>
+        typeof expense.groupId === 'string' &&
+        recordIds(group ?? {}).includes(expense.groupId) &&
+        expense.type === 'expense' &&
+        expense.status === 'posted' &&
+        expense.deletedAt === undefined &&
+        expense.currency === group?.currency &&
+        typeof expense.amountMinor === 'bigint',
     )
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
     .slice(0, 20)
     .map((expense) => {
-      const category = categories.data?.find((record) => typeof expense.categoryId === 'string' && recordIds(record).includes(expense.categoryId));
+      const category = categories.data?.find(
+        (record) =>
+          typeof expense.categoryId === 'string' && recordIds(record).includes(expense.categoryId),
+      );
       return {
         id: `expense:${recordId(expense)}`,
         kind: 'expense' as const,
@@ -78,7 +90,8 @@ export default function GroupChatRoute() {
         currency: group?.currency ?? '',
         icon: typeof category?.icon === 'string' ? category.icon : undefined,
         color: typeof category?.color === 'string' ? category.color : undefined,
-        onPress: () => router.push({ pathname: '/transaction/[id]', params: { id: recordId(expense) } }),
+        onPress: () =>
+          router.push({ pathname: '/transaction/[id]', params: { id: recordId(expense) } }),
       };
     });
   const items: GroupChatItem[] = [
@@ -95,7 +108,8 @@ export default function GroupChatRoute() {
       text: message.kind === 'text' ? message.text : undefined,
       attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
     })),
-  ].sort((left, right) => left.timestamp - right.timestamp)
+  ]
+    .sort((left, right) => left.timestamp - right.timestamp)
     .map(({ timestamp: _timestamp, ...item }) => item);
 
   async function sendMessage() {
@@ -162,28 +176,34 @@ export default function GroupChatRoute() {
   }
 
   return (
-      <GroupChatScreen
-        group={group ? {
-          name: group.name ?? 'Group',
-          currency: group.currency ?? '',
-          icon: remoteGroup?.icon ?? group.icon,
-          color: remoteGroup?.color ?? group.color,
-        } : undefined}
-        members={members}
-        onOpenGroup={() => router.push({ pathname: '/group/[id]', params: { id: id ?? '' } })}
-        onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
-        onOpenSettings={() => router.push({ pathname: '/group/[id]/edit', params: { id: id ?? '' } })}
-        items={items}
-        loading={groups.loading || transactions.loading || (canUseChat && chatMessages === undefined)}
-        canSend={canUseChat}
-        connected={isConnected}
-        draft={draft}
-        pending={pending}
-        error={error || groups.error?.message || memberships.error?.message || transactions.error?.message}
-        onDraftChange={setDraft}
-        onSend={() => void sendMessage()}
-        onChooseBillImage={() => void chooseBillImage()}
-        onBack={() => router.back()}
-      />
+    <GroupChatScreen
+      group={
+        group
+          ? {
+              name: group.name ?? 'Group',
+              currency: group.currency ?? '',
+              icon: remoteGroup?.icon ?? group.icon,
+              color: remoteGroup?.color ?? group.color,
+            }
+          : undefined
+      }
+      members={members}
+      onOpenGroup={() => router.push({ pathname: '/group/[id]', params: { id: id ?? '' } })}
+      onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
+      onOpenSettings={() => router.push({ pathname: '/group/[id]/edit', params: { id: id ?? '' } })}
+      items={items}
+      loading={groups.loading || transactions.loading || (canUseChat && chatMessages === undefined)}
+      canSend={canUseChat}
+      connected={isConnected}
+      draft={draft}
+      pending={pending}
+      error={
+        error || groups.error?.message || memberships.error?.message || transactions.error?.message
+      }
+      onDraftChange={setDraft}
+      onSend={() => void sendMessage()}
+      onChooseBillImage={() => void chooseBillImage()}
+      onBack={() => router.back()}
+    />
   );
 }
