@@ -12,6 +12,10 @@ Web and mobile authentication use a scoped dark theme without changing the user'
 saved appearance preference. Mobile forms use a keyboard-aware scrollable scaffold,
 password visibility controls, and responsive verification-code fields.
 
+Verification, password-reset, email sign-in, and app-lock reset messages use the same
+responsive black-and-volt email layout with Finapp’s inline PNG mark. Each message includes
+purpose-specific safety guidance and a six-digit code that expires in ten minutes.
+
 Account creation asks for email and password, followed by email verification. It
 does not offer or submit a two-factor enrollment option. Onboarding retains display
 name, username, and gender selection, with a live profile preview that reflects the
