@@ -9,6 +9,7 @@ import { publishMutationResult, recordSyncChange, replayMutationResult } from '.
 import { createNotification } from '../notifications/mutations';
 import { allocateParticipants } from '../splits/domain';
 import { assertCurrency } from '../shared/validators';
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 
 type InviteTarget = {
   userId?: Id<'users'>;
@@ -134,6 +135,7 @@ export const create = mutation({
     currency: v.string(),
     memberUsernames: v.array(v.string()),
     clientMutationId: v.optional(v.string()),
+    clientId: v.optional(v.string()),
     memberPhones: v.optional(v.array(v.string())),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
@@ -146,6 +148,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
+    assertClientId(args.clientId);
     const owner = await requireUser(ctx);
     if (!owner) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
@@ -159,6 +162,12 @@ export const create = mutation({
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
       return previousId;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('groups')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     if ((args.memberPhones?.length ?? 0) > 0 && owner.phoneVerificationTime === undefined)
       throw new Error('PHONE_UNVERIFIED');
     const currency = args.currency.toUpperCase();
@@ -172,6 +181,7 @@ export const create = mutation({
     const now = Date.now();
     const groupId = await ctx.db.insert('groups', {
       ownerId: owner._id,
+      clientId: args.clientId,
       name,
       currency,
       ...(args.icon === undefined ? {} : { icon: args.icon }),
@@ -992,9 +1002,11 @@ export const addExpense = mutation({
       }),
     ),
     clientMutationId: v.optional(v.string()),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    assertClientId(args.clientId);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
       ctx,
@@ -1007,6 +1019,12 @@ export const addExpense = mutation({
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
       return previousId;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('transactions')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     if (args.amountMinor <= 0n || !args.title.trim()) throw new Error('INVALID_AMOUNT');
     const group = await ctx.db.get(args.groupId);
     const account = await ctx.db.get(args.accountId);
@@ -1070,6 +1088,7 @@ export const addExpense = mutation({
     const now = Date.now();
     const transactionId = await ctx.db.insert('transactions', {
       ownerId: user._id,
+      clientId: args.clientId,
       accountId: args.accountId,
       type: 'expense',
       amountMinor: args.amountMinor,

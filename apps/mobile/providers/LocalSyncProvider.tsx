@@ -176,7 +176,8 @@ async function sendMutation(
       return convex.mutation(api.accounts.mutations.create, payload as never);
     case 'account.rename':
       return convex.mutation(api.accounts.mutations.rename, {
-        ...payload, accountId: await mapId('account', payload.accountId),
+        ...payload,
+        accountId: await mapId('account', payload.accountId),
       } as never);
     case 'account.updateDetails': {
       const accountId = String(payload.accountId);
@@ -204,21 +205,25 @@ async function sendMutation(
     }
     case 'account.archive':
       return convex.mutation(api.accounts.mutations.archive, {
-        ...payload, accountId: await mapId('account', payload.accountId),
+        ...payload,
+        accountId: await mapId('account', payload.accountId),
       } as never);
     case 'category.create':
       return convex.mutation(api.categories.mutations.create, {
         ...payload,
         ...(typeof payload.parentId === 'string'
-          ? { parentId: await mapId('category', payload.parentId) } : {}),
+          ? { parentId: await mapId('category', payload.parentId) }
+          : {}),
       } as never);
     case 'category.rename':
       return convex.mutation(api.categories.mutations.rename, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
     case 'category.setIcon':
       return convex.mutation(api.categories.mutations.setIcon, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
     case 'category.setPreferences':
       return convex.mutation(api.categories.mutations.setPreferences, {
@@ -227,21 +232,26 @@ async function sendMutation(
       } as never);
     case 'category.setLimit':
       return convex.mutation(api.categories.mutations.setLimit, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
     case 'category.archive':
       return convex.mutation(api.categories.mutations.archive, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
     case 'budget.create': {
       return convex.mutation(api.budgets.mutations.create, {
         ...payload,
         ...(typeof payload.categoryId === 'string'
-          ? { categoryId: await mapId('category', payload.categoryId) } : {}),
+          ? { categoryId: await mapId('category', payload.categoryId) }
+          : {}),
         ...(typeof payload.accountId === 'string'
-          ? { accountId: await mapId('account', payload.accountId) } : {}),
+          ? { accountId: await mapId('account', payload.accountId) }
+          : {}),
         ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) } : {}),
+          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
+          : {}),
       } as never);
     }
     case 'budget.update': {
@@ -256,7 +266,8 @@ async function sendMutation(
         budgetId: mappedBudgetId ?? budgetId,
         categoryId: mappedCategoryId ?? categoryId,
         ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) } : {}),
+          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
+          : {}),
       } as never);
     }
     case 'budget.archive': {
@@ -339,7 +350,8 @@ async function sendMutation(
         groupId: mappedGroupId ?? groupId,
         accountId: mappedAccountId ?? accountId,
         ...(typeof payload.categoryId === 'string'
-          ? { categoryId: await mapId('category', payload.categoryId) } : {}),
+          ? { categoryId: await mapId('category', payload.categoryId) }
+          : {}),
       } as never);
     }
     case 'settlement.create': {
@@ -359,7 +371,8 @@ async function sendMutation(
       return convex.mutation(api.goals.mutations.create, {
         ...payload,
         ...(typeof payload.accountId === 'string'
-          ? { accountId: await mapId('account', payload.accountId) } : {}),
+          ? { accountId: await mapId('account', payload.accountId) }
+          : {}),
       } as never);
     case 'goal.setIcon': {
       const goalId = String(payload.goalId);
@@ -376,7 +389,8 @@ async function sendMutation(
         ...payload,
         goalId: mappedGoalId ?? goalId,
         ...(typeof payload.accountId === 'string'
-          ? { accountId: await mapId('account', payload.accountId) } : {}),
+          ? { accountId: await mapId('account', payload.accountId) }
+          : {}),
       } as never);
     }
     case 'goal.archive': {
@@ -808,7 +822,14 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
     async ({ groupId, startAt, endAt, transactionCursor, settlementCursor }) => {
       const mappedGroupId = userId ? await getMappedCloudId(userId, 'group', groupId) : null;
       if (!validatedOnline) throw new Error('SYNC_OFFLINE');
-      if (groupId.startsWith('local-') && !mappedGroupId) throw new Error('SYNC_PARENT_PENDING');
+      const localGroup = userId
+        ? (await readLocal<LocalRecord>(userId, 'group')).find((record) =>
+            [record.id, record._id, record.cloudId].includes(groupId),
+          )
+        : undefined;
+      if (localGroup && !localGroup._id && !localGroup.cloudId && !mappedGroupId) {
+        throw new Error('SYNC_PARENT_PENDING');
+      }
       const cloudGroupId = (mappedGroupId ?? groupId) as never;
       const [transactionPage, settlementPage]: [
         GroupTransactionRangeResult,
@@ -993,7 +1014,7 @@ async function upsertAndReadGroupIds(userId: string): Promise<string[]> {
   const groups = await readLocal<LocalRecord>(userId, 'group');
   return groups
     .map((group) => String(group.cloudId ?? group._id ?? ''))
-    .filter((groupId) => groupId.length > 0 && !groupId.startsWith('local-'));
+    .filter((groupId) => groupId.length > 0);
 }
 
 export function useLocalSync() {

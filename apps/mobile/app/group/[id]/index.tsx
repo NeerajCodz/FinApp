@@ -61,7 +61,7 @@ export default function GroupHomeScreen() {
       (group as { _id?: string } | undefined)?._id ??
       '',
   );
-  const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
+  const cloudGroupId = groupIdentity;
   const canUseGroupChat = isConnected && Boolean(cloudGroupId);
   const remoteGroup = useQuery(
     api.groups.queries.detail,

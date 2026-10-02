@@ -4,6 +4,7 @@ import { requireUser } from '../shared/auth';
 import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 import { publishMutationResult, replayMutationResult } from '../sync/common';
 
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 const recurrence = v.union(
   v.literal('daily'),
   v.literal('weekly'),
@@ -20,9 +21,11 @@ export const create = mutation({
     frequency: recurrence,
     nextOccurrence: v.number(),
     clientMutationId: v.string(),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    assertClientId(args.clientId);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
       ctx,
@@ -35,6 +38,12 @@ export const create = mutation({
       if (!id) throw new Error('INVALID_MUTATION_RECEIPT');
       return id;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('recurringRules')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     const account = await ctx.db.get(args.accountId);
     if (!account || account.ownerId !== user._id || account.archivedAt !== undefined)
       throw new Error('INVALID_ACCOUNT');
@@ -48,6 +57,7 @@ export const create = mutation({
       throw new Error('INVALID_RECURRING_RULE');
     const now = Date.now();
     const record = {
+      clientId: args.clientId,
       ownerId: user._id,
       name: args.name.trim(),
       template: {

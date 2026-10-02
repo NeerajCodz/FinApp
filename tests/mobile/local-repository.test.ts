@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('expo-crypto', () => ({
-  getRandomBytesAsync: async (byteCount: number) => new Uint8Array(byteCount).fill(1),
-}));
+vi.mock('expo-crypto', () => {
+  let sequence = 0;
+  return {
+    randomUUID: vi.fn(() => {
+      sequence += 1;
+      return `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
+    }),
+    getRandomBytesAsync: async (byteCount: number) => new Uint8Array(byteCount).fill(1),
+  };
+});
 vi.mock('expo-file-system', () => ({
   File: class {
     constructor(_uri: string) {}
@@ -12,7 +19,9 @@ vi.mock('expo-file-system', () => ({
     async move(_destination: unknown) {}
   },
 }));
+import * as Crypto from 'expo-crypto';
 import * as repo from '../../apps/mobile/local/repository';
+import { commitLocalWrite } from '../../apps/mobile/local/commands';
 import { createOutboxEntry } from '../../apps/mobile/local/outbox/queue';
 import { syncOutbox } from '../../apps/mobile/local/sync/engine';
 import { deserializeLocalValue } from '../../apps/mobile/local/serialization';
@@ -65,6 +74,92 @@ vi.mock('expo-sqlite', async () => {
 });
 
 describe('local financial repository', () => {
+  it('retries a colliding generated record UUID without replacing the existing record', async () => {
+    const userId = 'user-id-collision';
+    const collisionId = '00000000-0000-4000-8000-000000000010';
+    await repo.applyLocalMutationAndEnqueue(
+      userId,
+      'account',
+      { id: collisionId, name: 'Original', type: 'cash', currency: 'INR' },
+      createOutboxEntry('account.create', { name: 'Original' }, 'existing-account-mutation'),
+    );
+
+    const selectedId = '00000000-0000-4000-8000-000000000020';
+    vi.mocked(Crypto.randomUUID)
+      .mockImplementationOnce(() => '00000000-0000-4000-8000-000000000011')
+      .mockImplementationOnce(() => collisionId)
+      .mockImplementationOnce(() => '90000000-0000-4000-8000-000000000012')
+      .mockImplementationOnce(() => selectedId)
+      .mockImplementationOnce(() => '90000000-0000-4000-8000-000000000013');
+
+    const actualId = await commitLocalWrite(
+      userId,
+      'account',
+      'account.create',
+      { name: 'New account', type: 'cash', currency: 'INR' },
+      { name: 'New account', type: 'cash', currency: 'INR' },
+    );
+
+    expect(actualId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(actualId).toBe(selectedId);
+    expect(await repo.readLocal(userId, 'account')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: collisionId, name: 'Original' }),
+        expect.objectContaining({ id: selectedId, clientId: selectedId, name: 'New account' }),
+      ]),
+    );
+    const newEntry = (await repo.listOutbox(userId)).find(
+      (entry) =>
+        entry.operation === 'account.create' &&
+        entry.clientMutationId !== 'existing-account-mutation',
+    );
+    expect(newEntry?.localId).not.toMatch(/^local-/);
+    expect(newEntry?.clientMutationId).not.toBe(selectedId);
+    expect(JSON.parse(newEntry?.payload ?? '{}')).toMatchObject({ clientId: selectedId });
+  });
+
+  it('uses a cloud record clientId as its local ID when no device mapping exists', async () => {
+    const userId = 'user-client-id-read';
+    const clientId = '00000000-0000-4000-8000-000000000030';
+    await repo.applyCloudChanges(
+      userId,
+      [
+        {
+          entityType: 'account',
+          documentId: 'cloud-account-client-id',
+          revision: '1',
+          updatedAt: 100,
+          document: {
+            _id: 'cloud-account-client-id',
+            clientId,
+            name: 'Synced account',
+            type: 'cash',
+            currency: 'INR',
+          },
+        },
+      ],
+      'cursor-1',
+    );
+
+    expect(await repo.readLocal(userId, 'account')).toMatchObject([
+      { id: clientId, _id: 'cloud-account-client-id', cloudId: 'cloud-account-client-id' },
+    ]);
+    const pageUserId = 'user-client-id-page';
+    await repo.upsertCloudPage(pageUserId, 'account', [
+      {
+        _id: 'cloud-account-page',
+        clientId,
+        name: 'Synced page account',
+        type: 'cash',
+        currency: 'INR',
+      },
+    ]);
+    expect(await repo.readLocal(pageUserId, 'account')).toMatchObject([
+      { id: clientId, _id: 'cloud-account-page', cloudId: 'cloud-account-page' },
+    ]);
+  });
   it('commits the optimistic transaction and durable outbox before cloud acknowledgement', async () => {
     const userId = 'user-1';
     const entry = createOutboxEntry(

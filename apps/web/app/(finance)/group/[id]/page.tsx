@@ -145,7 +145,7 @@ export default function GroupHomePage() {
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
   const ledgerScope = `${userId ?? ''}:${localGroupId}:${rangeEndAt}`;
-  const cloudGroupId = groupIdentity.startsWith('local-') ? '' : groupIdentity;
+  const cloudGroupId = groupIdentity;
   const canUseGroupChat = isConnected && Boolean(cloudGroupId);
   const remoteGroup = useQuery(
     api.groups.queries.detail,

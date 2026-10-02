@@ -47,6 +47,7 @@ describe('account icons', () => {
         activity: [],
         flowActivity: [],
         isBusy: false,
+        onEdit: () => {},
         onRename: async () => true,
         onArchive: async () => true,
         onSetIcon: () => {},
@@ -60,5 +61,30 @@ describe('account icons', () => {
       expect(markup).toContain('<svg');
       expect(markup).toMatch(/(?:color|fill)="var\(--finapp-background\)"/);
     }
+  });
+  it('exposes account editing only for active accounts', () => {
+    const baseProps = {
+      account,
+      activity: [],
+      flowActivity: [],
+      isBusy: false,
+      onEdit: () => {},
+      onRename: async () => true,
+      onArchive: async () => true,
+      onSetIcon: () => {},
+      onSetColor: () => {},
+      onAddTransaction: () => {},
+      onOpenTransaction: () => {},
+    };
+    const active = renderWithTheme(React.createElement(AccountDetailView, baseProps));
+    const archived = renderWithTheme(
+      React.createElement(AccountDetailView, {
+        ...baseProps,
+        account: { ...account, archivedAt: Date.now() },
+      }),
+    );
+
+    expect(active).toContain('Edit details');
+    expect(archived).not.toContain('Edit details');
   });
 });

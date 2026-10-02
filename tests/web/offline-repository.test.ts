@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { openWebDatabase, WEB_DATABASE_NAME } from '../../apps/web/lib/offline/database';
 import * as repository from '../../apps/web/lib/offline/repository';
 import type { OutboxEntry } from '../../apps/web/lib/offline/repository';
@@ -6,6 +6,10 @@ import { syncOutbox } from '../../apps/web/lib/offline/sync';
 
 const userA = 'user-a';
 const userB = 'user-b';
+const outboxIdFor = async (userId: string, clientMutationId: string) =>
+  (await repository.listOutbox(userId)).find(
+    (entry) => entry.clientMutationId === clientMutationId,
+  )!.localId;
 
 describe('browser offline repository', () => {
   it('persists an optimistic transaction and exactly one matching outbox entry', async () => {
@@ -19,26 +23,136 @@ describe('browser offline repository', () => {
     );
 
     expect(await repository.getLocalRecord(userA, 'transaction', id)).toMatchObject({
-      id: 'txn-local-1',
+      id,
+      clientId: id,
       amount: '00125.50',
       type: 'expense',
     });
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     const entries = await repository.listOutbox(userA);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
-      localId: 'local-mutation-1',
       clientMutationId: 'mutation-1',
-      recordId: 'txn-local-1',
+      recordId: id,
       operation: 'transaction.create',
       status: 'pending',
-      payload: { clientMutationId: 'mutation-1', amount: '00125.50' },
+      payload: { clientMutationId: 'mutation-1', clientId: id, amount: '00125.50' },
     });
+    expect(entries[0]!.localId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
     expect((await repository.readLocal(userA, 'transaction'))[0]).toMatchObject({
       amount: '00125.50',
       id: id,
     });
     expect(await repository.readLocal(userB, 'transaction')).toEqual([]);
     expect(await repository.listOutbox(userB)).toEqual([]);
+  });
+  it('retries a colliding generated record ID without replacing the existing record', async () => {
+    const collidedId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const selectedId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const outboxId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'transaction.update',
+      { id: collidedId, amount: 'old' },
+      {},
+      { recordId: collidedId, clientMutationId: 'existing-record' },
+    );
+    vi.spyOn(crypto, 'randomUUID')
+      .mockReturnValueOnce(collidedId)
+      .mockReturnValueOnce(outboxId)
+      .mockReturnValueOnce(selectedId);
+
+    const insertedId = await repository.commitLocalWrite(
+      userA,
+      'transaction',
+      'transaction.create',
+      { amount: 'new' },
+      { amount: 'new' },
+      { clientMutationId: 'collision-retry' },
+    );
+    vi.restoreAllMocks();
+
+    expect(insertedId).toBe(selectedId);
+    expect(await repository.getLocalRecord(userA, 'transaction', collidedId)).toMatchObject({
+      amount: 'old',
+    });
+    expect(await repository.getLocalRecord(userA, 'transaction', selectedId)).toMatchObject({
+      id: selectedId,
+      clientId: selectedId,
+      amount: 'new',
+    });
+  });
+
+  it('uses cloud clientId identity unless an existing cloud mapping takes precedence', async () => {
+    const clientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    await repository.upsertCloudPage(userA, 'account', [
+      { _id: 'cloud-account-client-id', clientId, name: 'Stable identity' },
+    ]);
+    expect(await repository.getLocalRecord(userA, 'account', clientId)).toMatchObject({
+      id: clientId,
+      _id: 'cloud-account-client-id',
+      cloudId: 'cloud-account-client-id',
+    });
+
+    const mappedId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    await repository.commitLocalWrite(
+      userA,
+      'account',
+      'account.update',
+      { id: mappedId, name: 'Mapped account' },
+      {},
+      { recordId: mappedId, clientMutationId: 'mapped-account' },
+    );
+    await repository.markSynced(
+      userA,
+      await outboxIdFor(userA, 'mapped-account'),
+      'account',
+      mappedId,
+      {
+        serverId: 'cloud-account-mapped',
+        revision: '1',
+        updatedAt: 1,
+      },
+    );
+    await repository.upsertCloudPage(userA, 'account', [
+      {
+        _id: 'cloud-account-mapped',
+        clientId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        name: 'Mapped account',
+      },
+    ]);
+    expect(await repository.getLocalRecord(userA, 'account', mappedId)).toMatchObject({
+      id: mappedId,
+      _id: 'cloud-account-mapped',
+    });
+    expect(
+      await repository.getLocalRecord(userA, 'account', 'ffffffff-ffff-4fff-8fff-ffffffffffff'),
+    ).toBeNull();
+  });
+  it('uses cloud clientId identity for incremental cloud changes', async () => {
+    const clientId = '12121212-1212-4121-8121-121212121212';
+    await repository.applyCloudChanges(
+      userA,
+      [
+        {
+          entityType: 'transaction',
+          documentId: 'cloud-change-transaction',
+          revision: 1n,
+          updatedAt: 10,
+          document: { clientId, title: 'Incremental identity' },
+        },
+      ],
+      'cursor-1',
+    );
+    expect(await repository.getLocalRecord(userA, 'transaction', clientId)).toMatchObject({
+      id: clientId,
+      _id: 'cloud-change-transaction',
+      cloudId: 'cloud-change-transaction',
+      title: 'Incremental identity',
+    });
   });
 
   it('retries only the selected failed outbox entry and clears its error', async () => {
@@ -59,9 +173,11 @@ describe('browser offline repository', () => {
       { clientMutationId: 'retry-sibling' },
     );
 
+    const targetOutboxId = await outboxIdFor(userA, 'retry-target');
+    const siblingOutboxId = await outboxIdFor(userA, 'retry-sibling');
     await repository.updateOutboxStatus(
       userA,
-      'local-retry-target',
+      targetOutboxId,
       'failed',
       2,
       Date.now() + 60_000,
@@ -69,39 +185,39 @@ describe('browser offline repository', () => {
     );
     await repository.updateOutboxStatus(
       userA,
-      'local-retry-sibling',
+      siblingOutboxId,
       'failed',
       1,
       Date.now() + 60_000,
       'Keep this failure.',
     );
 
-    await repository.retryFailedEntry(userA, 'local-retry-target');
+    await repository.retryFailedEntry(userA, targetOutboxId);
 
     const entries = await repository.listOutbox(userA);
-    expect(entries.find((entry) => entry.localId === 'local-retry-target')).toMatchObject({
+    expect(entries.find((entry) => entry.localId === targetOutboxId)).toMatchObject({
       status: 'pending',
       retryCount: 2,
       nextRetryAt: undefined,
       lastError: undefined,
     });
-    expect(entries.find((entry) => entry.localId === 'local-retry-sibling')).toMatchObject({
+    expect(entries.find((entry) => entry.localId === siblingOutboxId)).toMatchObject({
       status: 'failed',
       lastError: 'Keep this failure.',
     });
   });
   it('persists split payer and participant records with the transaction', async () => {
-    const transactionId = 'split-local';
+    const requestedTransactionId = 'split-local';
     const participants = [
       { userId: userA, amountMinor: 1_000n, method: 'exact' },
       { userId: userB, amountMinor: 1_000n, method: 'exact' },
     ];
 
-    await repository.commitLocalWrite(
+    const transactionId = await repository.commitLocalWrite(
       userA,
       'transaction',
       'group.addExpense',
-      { id: transactionId, groupId: 'group-local', amountMinor: 2_000n, type: 'expense' },
+      { id: requestedTransactionId, groupId: 'group-local', amountMinor: 2_000n, type: 'expense' },
       { groupId: 'group-local', amountMinor: 2_000n, participants },
       {
         clientMutationId: 'split-mutation',
@@ -109,7 +225,7 @@ describe('browser offline repository', () => {
           {
             entityType: 'expensePayer',
             record: {
-              transactionId,
+              transactionId: requestedTransactionId,
               userId: userA,
               memberId: userA,
               amountMinor: 2_000n,
@@ -118,7 +234,7 @@ describe('browser offline repository', () => {
           ...participants.map((participant) => ({
             entityType: 'expenseParticipant' as const,
             record: {
-              transactionId,
+              transactionId: requestedTransactionId,
               userId: participant.userId,
               memberId: participant.userId,
               amountMinor: participant.amountMinor,
@@ -181,7 +297,7 @@ describe('browser offline repository', () => {
   });
 
   it('replays a child expense only after its parent group ID is mapped', async () => {
-    await repository.commitLocalWrite(
+    const groupId = await repository.commitLocalWrite(
       userA,
       'group',
       'group.create',
@@ -193,11 +309,11 @@ describe('browser offline repository', () => {
       userA,
       'transaction',
       'group.addExpense',
-      { id: 'expense-local', groupId: 'group-local', amountMinor: 2_500n },
-      { groupId: 'group-local', amountMinor: 2_500n },
+      { id: 'expense-local', groupId, amountMinor: 2_500n },
+      { groupId, amountMinor: 2_500n },
       {
         clientMutationId: 'add-group-expense',
-        dependencies: ['group:group-local'],
+        dependencies: [`group:${groupId}`],
       },
     );
     const sent: OutboxEntry[] = [];
@@ -230,11 +346,17 @@ describe('browser offline repository', () => {
       { clientMutationId: 'account-mutation' },
     );
 
-    await repository.markSynced(userA, 'local-account-mutation', 'account', localId, {
-      serverId: 'cloud-account',
-      revision: '17',
-      updatedAt: 1_700_000_000_000,
-    });
+    await repository.markSynced(
+      userA,
+      await outboxIdFor(userA, 'account-mutation'),
+      'account',
+      localId,
+      {
+        serverId: 'cloud-account',
+        revision: '17',
+        updatedAt: 1_700_000_000_000,
+      },
+    );
 
     expect(await repository.getLocalRecord(userB, 'account', localId)).toBeNull();
     expect(await repository.getMappedCloudId(userA, 'account', localId)).toBe('cloud-account');
@@ -252,11 +374,17 @@ describe('browser offline repository', () => {
       { amount: '12' },
       { clientMutationId: 'txn-original' },
     );
-    await repository.markSynced(userA, 'local-txn-original', 'transaction', localId, {
-      serverId: 'cloud-txn',
-      revision: '8',
-      updatedAt: 10,
-    });
+    await repository.markSynced(
+      userA,
+      await outboxIdFor(userA, 'txn-original'),
+      'transaction',
+      localId,
+      {
+        serverId: 'cloud-txn',
+        revision: '8',
+        updatedAt: 10,
+      },
+    );
     await repository.commitLocalWrite(
       userA,
       'transaction',
@@ -303,7 +431,7 @@ describe('browser offline repository', () => {
     const [conflict] = await repository.readConflicts(userA);
     expect(conflict).toMatchObject({
       entityType: 'transaction',
-      recordId: 'txn-local',
+      recordId: localId,
       localRecord: { amount: '12', memo: 'Local edit' },
       cloudRecord: { amount: '1200', memo: 'Cloud edit', _id: 'cloud-txn' },
     });
@@ -330,7 +458,7 @@ describe('browser offline repository', () => {
       {},
       { clientMutationId: 'mutation-a' },
     );
-    await repository.commitLocalWrite(
+    const transactionB = await repository.commitLocalWrite(
       userB,
       'transaction',
       'transaction.create',
@@ -346,11 +474,17 @@ describe('browser offline repository', () => {
       {},
       { clientMutationId: 'account-mutation-a' },
     );
-    await repository.markSynced(userA, 'local-account-mutation-a', 'account', accountA, {
-      serverId: 'cloud-account-a',
-      revision: '1',
-      updatedAt: 10,
-    });
+    await repository.markSynced(
+      userA,
+      await outboxIdFor(userA, 'account-mutation-a'),
+      'account',
+      accountA,
+      {
+        serverId: 'cloud-account-a',
+        revision: '1',
+        updatedAt: 10,
+      },
+    );
     const accountB = await repository.commitLocalWrite(
       userB,
       'account',
@@ -359,18 +493,24 @@ describe('browser offline repository', () => {
       {},
       { clientMutationId: 'account-mutation-b' },
     );
-    await repository.markSynced(userB, 'local-account-mutation-b', 'account', accountB, {
-      serverId: 'cloud-account-b',
-      revision: '2',
-      updatedAt: 20,
-    });
+    await repository.markSynced(
+      userB,
+      await outboxIdFor(userB, 'account-mutation-b'),
+      'account',
+      accountB,
+      {
+        serverId: 'cloud-account-b',
+        revision: '2',
+        updatedAt: 20,
+      },
+    );
 
     await repository.clearLocalData(userA);
 
     expect(await repository.readLocal(userA, 'transaction')).toEqual([]);
     expect(await repository.listOutbox(userA)).toEqual([]);
     expect(await repository.readLocal(userB, 'transaction')).toMatchObject([
-      { id: 'txn-b', amount: '9' },
+      { id: transactionB, amount: '9' },
     ]);
     expect((await repository.listOutbox(userB)).map((entry) => entry.status).sort()).toEqual([
       'pending',

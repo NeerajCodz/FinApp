@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getLocalDatabase, initializeLocalDatabase } from './sqlite/database';
 import type { OutboxEntry } from './outbox/queue';
@@ -386,6 +387,7 @@ export async function applyLocalMutationAndEnqueue(
   record: LocalRecord,
   entry: OutboxEntry,
   relatedRecords: readonly { entityType: LocalEntity; record: LocalRecord }[] = [],
+  rejectExistingRecordId = false,
 ): Promise<void> {
   requireUser(userId);
   if (!entry.clientMutationId) throw new Error('CLIENT_MUTATION_ID_REQUIRED');
@@ -398,6 +400,37 @@ export async function applyLocalMutationAndEnqueue(
       entry.clientMutationId,
     );
     if (prior) return;
+    if (
+      db.getFirstSync<{ localId: string }>(
+        'SELECT localId FROM outbox WHERE localId = ?',
+        entry.localId,
+      )
+    )
+      throw new Error('LOCAL_OUTBOX_ID_COLLISION');
+    if (rejectExistingRecordId) {
+      const table: Partial<Record<LocalEntity, string>> = {
+        account: 'accounts',
+        category: 'categories',
+        transaction: 'transactions',
+        group: 'groups',
+        budget: 'budgets',
+        goal: 'goals',
+        recurringRule: 'recurringRules',
+        settlement: 'settlements',
+        goalContribution: 'goalContributions',
+      };
+      const recordTable = table[type];
+      if (
+        recordTable &&
+        db.getFirstSync(
+          `SELECT 1 FROM ${recordTable} WHERE userId = ? AND id = ? LIMIT 1`,
+          userId,
+          entityId(record, type),
+        )
+      ) {
+        throw new Error('LOCAL_RECORD_ID_COLLISION');
+      }
+    }
     for (const related of relatedRecords) putRecord(db, userId, related.entityType, related.record);
     putRecord(db, userId, type, record);
     db.runSync(
@@ -501,7 +534,11 @@ export async function upsertCloudPage(
           cloudId,
         });
       } else {
-        putRecord(db, userId, type, record);
+        putRecord(db, userId, type, {
+          ...record,
+          id: String(record.clientId ?? record._id ?? cloudId),
+          ...(cloudId ? { _id: cloudId, cloudId } : {}),
+        });
       }
     }
   });
@@ -524,7 +561,8 @@ export async function applyCloudChanges(
         change.documentId,
       );
       const localId =
-        mapped?.localId ?? String(change.document?.id ?? change.document?._id ?? change.documentId);
+        mapped?.localId ??
+        String(change.document?.clientId ?? change.document?._id ?? change.documentId);
       const localTable: Partial<Record<LocalEntity, string>> = {
         profile: 'appProfile',
         settings: 'appSettings',
@@ -1033,18 +1071,7 @@ export async function setSyncWindow(userId: string, days: LocalSyncWindow): Prom
   const db = await getLocalDatabase();
   const now = Date.now();
   db.withTransactionSync(() => {
-    const priorVersion = db.getFirstSync<{ value: string }>(
-      "SELECT value FROM localMetadata WHERE userId = ? AND key = 'syncWindowMutationVersion'",
-      userId,
-    );
-    const version = Number(priorVersion?.value ?? 0) + 1;
-    const mutationId = `sync-window:${userId}:${version}`;
-    db.runSync(
-      `INSERT INTO localMetadata (userId, key, value) VALUES (?, 'syncWindowMutationVersion', ?)
-       ON CONFLICT(userId, key) DO UPDATE SET value = excluded.value`,
-      userId,
-      String(version),
-    );
+    const mutationId = Crypto.randomUUID();
     db.runSync(
       `INSERT INTO localMetadata (userId, key, value) VALUES (?, ?, ?)
        ON CONFLICT(userId, key) DO UPDATE SET value = excluded.value`,
@@ -1056,7 +1083,7 @@ export async function setSyncWindow(userId: string, days: LocalSyncWindow): Prom
       `INSERT OR IGNORE INTO outbox (localId, userId, operation, payload, clientMutationId, createdAt,
         clientUpdatedAt, retryCount, dependencies, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, '[]', 'pending')`,
-      `local-${mutationId}`,
+      Crypto.randomUUID(),
       userId,
       'sync.bootstrap',
       encode({ days }),

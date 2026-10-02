@@ -146,8 +146,8 @@ export default function NewSettlementScreen() {
         { groupId, fromUserId, toUserId, accountId, amountMinor, currency, occurredAt },
         {
           dependencies: [
-            ...(groupId.startsWith('local-') ? [`group:${groupId}`] : []),
-            ...(accountId.startsWith('local-') ? [`account:${accountId}`] : []),
+            ...(!group?._id && !group?.cloudId ? [`group:${groupId}`] : []),
+            ...(!account._id && !account.cloudId ? [`account:${accountId}`] : []),
           ],
         },
       );

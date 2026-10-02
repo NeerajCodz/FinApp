@@ -64,7 +64,10 @@ const phosphorIcons = Object.entries(PhosphorIcons)
   .sort((left, right) => left.name.localeCompare(right.name));
 
 const phosphorIconsByName: Record<string, PhosphorIconComponent> = {};
-for (const { name, Icon } of phosphorIcons) phosphorIconsByName[name] = Icon;
+for (const { name, Icon } of phosphorIcons) {
+  phosphorIconsByName[name] = Icon;
+  phosphorIconsByName[name.toLowerCase().replace(/[^a-z0-9]/g, '')] = Icon;
+}
 
 const iconsByName: Record<string, LucideIconComponent> = {};
 for (const { name, Icon } of lucideIcons) {
@@ -88,14 +91,19 @@ export function EntityIcon({
 }) {
   const { tokens } = useTheme();
   if (!value) return null;
-  if (value.startsWith('phosphor:')) {
-    const Icon = phosphorIconsByName[value.slice('phosphor:'.length)];
-    if (Icon) return <Icon size={size} color={color ?? tokens.primary} weight="fill" />;
-    return null;
-  }
+  const Phosphor = value.startsWith('phosphor:')
+    ? (phosphorIconsByName[value.slice('phosphor:'.length)] ??
+      phosphorIconsByName[
+        value
+          .slice('phosphor:'.length)
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '')
+      ])
+    : undefined;
+  if (Phosphor) return <Phosphor size={size} color={color ?? tokens.primary} weight="fill" />;
   const Icon = componentFor(value);
   if (Icon) return <Icon size={size} color={color ?? tokens.primary} />;
-  if (value.startsWith('lucide:')) {
+  if (value.startsWith('lucide:') || value.startsWith('phosphor:')) {
     const Fallback = iconsByName.CircleHelp;
     return Fallback ? <Fallback size={size} color={color ?? tokens.primary} /> : null;
   }

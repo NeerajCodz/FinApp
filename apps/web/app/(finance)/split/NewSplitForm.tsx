@@ -180,8 +180,8 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       const groupRecordId = idOf(group);
       const accountRecordId = idOf(selectedAccount);
       const now = Date.now();
-      const clientMutationId = crypto.randomUUID().replaceAll('-', '');
-      const transactionId = `local-${clientMutationId}`;
+      const clientMutationId = crypto.randomUUID();
+      const transactionId = crypto.randomUUID();
       const participants = shares.map((share) => ({
         ...share,
         method,
@@ -225,8 +225,10 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
           recordId: transactionId,
           clientMutationId,
           dependencies: [
-            ...(groupRecordId.startsWith('local-') ? [`group:${groupRecordId}`] : []),
-            ...(accountRecordId.startsWith('local-') ? [`account:${accountRecordId}`] : []),
+            ...(!group.cloudId && !group._id ? [`group:${groupRecordId}`] : []),
+            ...(!selectedAccount.cloudId && !selectedAccount._id
+              ? [`account:${accountRecordId}`]
+              : []),
           ],
           relatedRecords: [
             {

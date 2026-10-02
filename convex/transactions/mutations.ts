@@ -9,6 +9,7 @@ import { assertMutationAvailable, transactionSignedAmount } from './domain';
 import { getMutationReceipt, recordSyncChange, storeMutationReceipt } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
 import { aggregateBudgetSpending, budgetAlertThresholdCrossed } from '../budgets/domain';
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 
 export type TransactionDraft = {
   ownerId: string;
@@ -94,9 +95,11 @@ export const create = mutation({
     occurredAt: v.number(),
     hasTime: v.optional(v.boolean()),
     clientMutationId: v.string(),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    assertClientId(args.clientId);
     if (!user) throw new DomainError('AUTH_REQUIRED');
     const previousReceipt = await getMutationReceipt(
       ctx,
@@ -109,6 +112,12 @@ export const create = mutation({
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
       return previousId;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('transactions')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     const account = await ctx.db.get(args.accountId);
     const transferAccount = args.transferAccountId
       ? ((await ctx.db.get(args.transferAccountId)) ?? undefined)
@@ -138,6 +147,7 @@ export const create = mutation({
     const record = {
       ...resultRecord,
       ownerId: user._id,
+      clientId: args.clientId,
       accountId: args.accountId,
       transferAccountId: args.transferAccountId,
       ...(args.hasTime !== undefined ? { hasTime: args.hasTime } : {}),
@@ -169,10 +179,15 @@ export const create = mutation({
         .query('budgets')
         .withIndex('by_owner_period', (query) => query.eq('ownerId', user._id))
         .collect();
-      const categories = await ctx.db.query('categories')
-        .withIndex('by_owner', (query) => query.eq('ownerId', user._id)).collect();
-      const excludedCategoryIds = new Set(categories
-        .filter((entry) => entry.includeInBudgets === false).map((entry) => String(entry._id)));
+      const categories = await ctx.db
+        .query('categories')
+        .withIndex('by_owner', (query) => query.eq('ownerId', user._id))
+        .collect();
+      const excludedCategoryIds = new Set(
+        categories
+          .filter((entry) => entry.includeInBudgets === false)
+          .map((entry) => String(entry._id)),
+      );
       const active = budgets.filter(
         (budget) =>
           budget.archivedAt === undefined &&
@@ -200,7 +215,12 @@ export const create = mutation({
           const threshold =
             previous < budget.amountMinor && current >= budget.amountMinor
               ? 100
-              : budgetAlertThresholdCrossed(previous, current, budget.amountMinor, configuredThreshold)
+              : budgetAlertThresholdCrossed(
+                    previous,
+                    current,
+                    budget.amountMinor,
+                    configuredThreshold,
+                  )
                 ? configuredThreshold
                 : null;
           if (threshold !== null)

@@ -77,8 +77,9 @@ describe('authenticated local-first sync contract', () => {
     ).rejects.toThrow('INVALID_DATE_RANGE');
   });
 
-  it('replays a write once and exposes its durable change revision', async () => {
+  it('persists client UUIDs and rejects a collision while replaying idempotently', async () => {
     const { t, userId, authenticated } = await makeAuthenticatedUser();
+    const clientId = '82d3a038-b0d0-4fb7-84c9-8207143ca190';
     const input = {
       name: 'Replay-safe wallet',
       type: 'wallet' as const,
@@ -86,10 +87,21 @@ describe('authenticated local-first sync contract', () => {
       openingBalanceMinor: 500n,
       isIncludedInTotal: true,
       clientMutationId: 'account-create-once',
+      clientId,
     };
     const firstId = await authenticated.mutation(api.accounts.mutations.create, input);
     const replayedId = await authenticated.mutation(api.accounts.mutations.create, input);
     expect(replayedId).toBe(firstId);
+    expect(await t.run((ctx) => ctx.db.query('accounts').collect())).toMatchObject([
+      { clientId, _id: firstId },
+    ]);
+    await expect(
+      authenticated.mutation(api.accounts.mutations.create, {
+        ...input,
+        clientMutationId: 'account-create-collision',
+        name: 'Collision',
+      }),
+    ).rejects.toThrow('CLIENT_ID_COLLISION');
     expect(await t.run((ctx) => ctx.db.query('accounts').collect())).toHaveLength(1);
     const page = await authenticated.query(api.sync.queries.changes, {
       paginationOpts: { numItems: 20, cursor: null },

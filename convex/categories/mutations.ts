@@ -4,6 +4,7 @@ import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
 import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 export const create = mutation({
   args: {
     name: v.string(),
@@ -16,9 +17,11 @@ export const create = mutation({
     monthlyLimitMinor: v.optional(v.int64()),
     limitCurrency: v.optional(v.string()),
     clientMutationId: v.optional(v.string()),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    assertClientId(args.clientId);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
       ctx,
@@ -27,6 +30,12 @@ export const create = mutation({
       'category.create',
     );
     if (replay.found) return replay.result as Id<'categories'>;
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('categories')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     const name = args.name.trim();
     if (!name) throw new Error('INVALID_CATEGORY');
     if (args.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(args.color))
@@ -38,18 +47,21 @@ export const create = mutation({
         throw new Error('INVALID_CATEGORY');
     }
     if (args.monthlyLimitMinor !== undefined) assertPositiveAmount(args.monthlyLimitMinor);
-    const limitCurrency = args.monthlyLimitMinor === undefined
-      ? undefined : (args.limitCurrency ?? user.defaultCurrency);
+    const limitCurrency =
+      args.monthlyLimitMinor === undefined
+        ? undefined
+        : (args.limitCurrency ?? user.defaultCurrency);
     if (limitCurrency !== undefined) assertCurrency(limitCurrency);
     if (args.monthlyLimitMinor !== undefined && limitCurrency === undefined)
       throw new Error('INVALID_CURRENCY');
     const now = Date.now();
-    const { clientMutationId, ...categoryFields } = args;
+    const { clientMutationId, clientId, ...categoryFields } = args;
     const categoryId = await ctx.db.insert('categories', {
       ...categoryFields,
       name,
       limitCurrency,
       ownerId: user._id,
+      clientId,
       isSystem: false,
       sortOrder: now,
       createdAt: now,

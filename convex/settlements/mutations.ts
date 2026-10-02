@@ -9,6 +9,7 @@ import { formatMinor } from '../shared/money';
 import { requireSettlementParticipant } from '../shared/permissions';
 import { createSettlement, type Settlement } from './domain';
 
+import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 export function createSettlementRecord(
   actorId: string,
   fromUserId: string,
@@ -29,9 +30,11 @@ export const create = mutation({
     currency: v.string(),
     occurredAt: v.number(),
     clientMutationId: v.string(),
+    clientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const actor = await requireUser(ctx);
+    assertClientId(args.clientId);
     if (!actor) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(
       ctx,
@@ -44,6 +47,12 @@ export const create = mutation({
       if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
       return previousId;
     }
+    await assertClientIdAvailable(args.clientId, () =>
+      ctx.db
+        .query('settlements')
+        .withIndex('by_clientId', (query) => query.eq('clientId', args.clientId!))
+        .unique(),
+    );
     createSettlementRecord(actor._id, args.fromUserId, args.toUserId, args.amountMinor);
     if (!Number.isFinite(args.occurredAt) || args.occurredAt < 0) throw new Error('INVALID_DATE');
     const currency = args.currency.toUpperCase();
@@ -123,6 +132,7 @@ export const create = mutation({
 
     const now = Date.now();
     const settlementId = await ctx.db.insert('settlements', {
+      clientId: args.clientId,
       groupId: args.groupId,
       fromUserId: args.fromUserId,
       toUserId: args.toUserId,

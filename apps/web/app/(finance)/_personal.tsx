@@ -38,7 +38,7 @@ export function localDependency(entity: 'account' | 'category' | 'budget', recor
 
 export function syncedId(record: LocalRecord): string | null {
   const id = record.cloudId ?? record._id;
-  return typeof id === 'string' && id.length > 0 && !id.startsWith('local-') ? id : null;
+  return typeof id === 'string' && id.length > 0 ? id : null;
 }
 
 export function asMinor(value: unknown): bigint {

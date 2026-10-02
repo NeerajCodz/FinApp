@@ -19,6 +19,7 @@ import {
   applyCloudChanges,
   getLocalSyncStatus,
   getMappedCloudId,
+  getLocalRecord,
   getSyncCursor,
   getSyncState,
   getSyncWindow,
@@ -171,7 +172,8 @@ async function sendMutation(
       return;
     case 'account.rename':
       await convex.mutation(api.accounts.mutations.rename, {
-        ...payload, accountId: await mapId('account', payload.accountId),
+        ...payload,
+        accountId: await mapId('account', payload.accountId),
       } as never);
       return;
     case 'account.updateDetails':
@@ -194,24 +196,28 @@ async function sendMutation(
       return;
     case 'account.archive':
       await convex.mutation(api.accounts.mutations.archive, {
-        ...payload, accountId: await mapId('account', payload.accountId),
+        ...payload,
+        accountId: await mapId('account', payload.accountId),
       } as never);
       return;
     case 'category.create':
       await convex.mutation(api.categories.mutations.create, {
         ...payload,
         ...(typeof payload.parentId === 'string'
-          ? { parentId: await mapId('category', payload.parentId) } : {}),
+          ? { parentId: await mapId('category', payload.parentId) }
+          : {}),
       } as never);
       return;
     case 'category.rename':
       await convex.mutation(api.categories.mutations.rename, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
       return;
     case 'category.setIcon':
       await convex.mutation(api.categories.mutations.setIcon, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
       return;
     case 'category.setPreferences':
@@ -222,12 +228,14 @@ async function sendMutation(
       return;
     case 'category.setLimit':
       await convex.mutation(api.categories.mutations.setLimit, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
       return;
     case 'category.archive':
       await convex.mutation(api.categories.mutations.archive, {
-        ...payload, categoryId: await mapId('category', payload.categoryId),
+        ...payload,
+        categoryId: await mapId('category', payload.categoryId),
       } as never);
       return;
     case 'budget.create': {
@@ -238,7 +246,8 @@ async function sendMutation(
         ...(categoryId ? { categoryId: await mapId('category', categoryId) } : {}),
         ...(accountId ? { accountId: await mapId('account', accountId) } : {}),
         ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) } : {}),
+          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
+          : {}),
       } as never);
       return;
     }
@@ -249,7 +258,8 @@ async function sendMutation(
         budgetId: await mapId('budget', String(payload.budgetId)),
         categoryId: await mapId('category', categoryId),
         ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) } : {}),
+          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
+          : {}),
       } as never);
       return;
     }
@@ -310,7 +320,8 @@ async function sendMutation(
         groupId: await mapId('group', payload.groupId),
         accountId: await mapId('account', payload.accountId),
         ...(typeof payload.categoryId === 'string'
-          ? { categoryId: await mapId('category', payload.categoryId) } : {}),
+          ? { categoryId: await mapId('category', payload.categoryId) }
+          : {}),
       } as never);
       return;
     case 'settlement.create':
@@ -324,7 +335,8 @@ async function sendMutation(
       await convex.mutation(api.goals.mutations.create, {
         ...payload,
         ...(typeof payload.accountId === 'string'
-          ? { accountId: await mapId('account', payload.accountId) } : {}),
+          ? { accountId: await mapId('account', payload.accountId) }
+          : {}),
       } as never);
       return;
     case 'goal.contribute':
@@ -344,7 +356,8 @@ async function sendMutation(
         ...payload,
         goalId: await mapId('goal', payload.goalId),
         ...(typeof payload.accountId === 'string'
-          ? { accountId: await mapId('account', payload.accountId) } : {}),
+          ? { accountId: await mapId('account', payload.accountId) }
+          : {}),
       } as never);
       return;
     case 'goal.archive':
@@ -553,7 +566,9 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
 
       const request = (async () => {
         const mappedGroupId = await getMappedCloudId(userId, 'group', groupId);
-        if (groupId.startsWith('local-') && !mappedGroupId) throw new Error('SYNC_PARENT_PENDING');
+        const localGroup = await getLocalRecord(userId, 'group', groupId);
+        if (localGroup && !localGroup.cloudId && !localGroup._id && !mappedGroupId)
+          throw new Error('SYNC_PARENT_PENDING');
         const cloudGroupId = mappedGroupId ?? groupId;
         const persistGroup = async (page: GroupTransactionRangeResult) => {
           await Promise.all([
@@ -647,8 +662,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       for (const group of groups) {
         const groupId = String(group.id ?? group._id ?? group.cloudId ?? '');
         const cloudId = String(group.cloudId ?? group._id ?? '');
-        if (groupId && cloudId && !cloudId.startsWith('local-'))
-          await fetchGroupRange(groupId, startAt, endAt);
+        if (groupId && cloudId) await fetchGroupRange(groupId, startAt, endAt);
       }
     },
     [fetchGroupRange],

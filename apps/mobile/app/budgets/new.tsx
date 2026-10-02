@@ -15,6 +15,7 @@ type SettingsRecord = LocalRecord & { currency?: string; defaultCurrency?: strin
 type CategoryRecord = LocalRecord & {
   id?: string;
   _id?: string;
+  cloudId?: string;
   name?: string;
   icon?: string;
   archivedAt?: number;
@@ -90,9 +91,7 @@ export default function NewBudgetScreen() {
       if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100)
         throw new Error('Alert threshold must be between 0 and 100%.');
       const selectedAccounts = (budgetSettings.accountIds ?? []).map((selectedId) =>
-        accounts.find(
-          (account) => String(account._id ?? account.id ?? '') === selectedId,
-        ),
+        accounts.find((account) => String(account._id ?? account.id ?? '') === selectedId),
       );
       if (selectedAccounts.some((account) => !account))
         throw new Error('Choose active accounts in this currency.');
@@ -125,11 +124,9 @@ export default function NewBudgetScreen() {
         updatedAt: now,
       };
       const dependencies = [
-        ...(id.startsWith('local-') ? [`category:${id}`] : []),
+        ...(category && !category._id && !category.cloudId ? [`category:${id}`] : []),
         ...selectedAccounts.flatMap((account) =>
-          account && !account._id && !account.cloudId && account.id?.startsWith('local-')
-            ? [`account:${account.id}`]
-            : [],
+          account && !account._id && !account.cloudId ? [`account:${account.id}`] : [],
         ),
       ];
       await commitLocalWrite(userId, 'budget', 'budget.create', record, payload, {

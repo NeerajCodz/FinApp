@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { serializeLocalValue } from '../serialization';
 export type OutboxStatus = 'pending' | 'syncing' | 'failed' | 'synced' | 'conflict';
 export type OutboxEntry = {
@@ -34,7 +35,7 @@ export function createOutboxEntry(
 ): OutboxEntry {
   const createdAt = Date.now();
   return {
-    localId: `local-${clientMutationId}`,
+    localId: Crypto.randomUUID(),
     entityType: options.entityType,
     recordId: options.recordId,
     operation,
