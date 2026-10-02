@@ -34,10 +34,16 @@ export const summary = query({
       .query('accounts')
       .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
       .collect();
-    const excludedAccountIds = new Set(accounts
-      .filter((account) => account.includeInAnalytics === false).map((account) => String(account._id)));
-    const includedTransactions = transactions.filter((transaction) => !excludedAccountIds.has(String(transaction.accountId)));
-    const accountNames = accounts.filter((account) => account.includeInAnalytics !== false)
+    const excludedAccountIds = new Set(
+      accounts
+        .filter((account) => account.includeInAnalytics === false)
+        .map((account) => String(account._id)),
+    );
+    const includedTransactions = transactions.filter(
+      (transaction) => !excludedAccountIds.has(String(transaction.accountId)),
+    );
+    const accountNames = accounts
+      .filter((account) => account.includeInAnalytics !== false)
       .map((account) => ({ id: account._id, name: account.name }));
     const categoryNames = categories.map((category) => ({ id: category._id, name: category.name }));
     const analyticsPeriod = period as AnalyticsPeriod;

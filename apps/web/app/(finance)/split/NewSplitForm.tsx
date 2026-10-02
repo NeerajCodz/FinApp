@@ -72,7 +72,12 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const group = activeGroups.find((item) => aliases(item).includes(groupId));
   const groupIds = group ? aliases(group) : [];
   const currency = group?.currency ?? '';
-  const groupMembers: Array<{ userId: string; name: string; avatarId?: string; avatarUrl?: string | null }> = [];
+  const groupMembers: Array<{
+    userId: string;
+    name: string;
+    avatarId?: string;
+    avatarUrl?: string | null;
+  }> = [];
   if (userId)
     groupMembers.push({
       userId,

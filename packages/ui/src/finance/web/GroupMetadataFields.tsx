@@ -2,9 +2,203 @@
 import React from 'react';
 import { Button, CustomSelect } from '@finapp/ui/web';
 import { s } from './GroupUI';
-export type GroupMetadataProps={description?:string;onDescriptionChange?:(value:string)=>void;groupType?:string;onGroupTypeChange?:(value:string)=>void;purpose?:string;onPurposeChange?:(value:string)=>void;location?:string;onLocationChange?:(value:string)=>void;startDate?:string;onStartDateChange?:(value:string)=>void;endDate?:string;onEndDateChange?:(value:string)=>void;onSaveDetails?:()=>void};
-export type GroupMetadata={description?:string;groupType?:string;purpose?:string;location?:string;startAt?:number;endAt?:number};
-export function GroupMetadataFields({p,disabled=false,saving=false}:{p:GroupMetadataProps;disabled?:boolean;saving?:boolean}){return <div className={s.fields}><label className={`${s.field} ${s.full}`}><span>Description</span><textarea aria-label="Group description" value={p.description??''} onChange={e=>p.onDescriptionChange?.(e.currentTarget.value)} placeholder="What is this group for? (optional)" maxLength={200} rows={2} disabled={disabled||!p.onDescriptionChange}/><small className={s.muted}>{(p.description??'').length}/200</small></label><label className={s.field}><span>Group type</span><CustomSelect aria-label="Group type" value={p.groupType??''} onChange={e=>p.onGroupTypeChange?.(e.currentTarget.value)} disabled={disabled||!p.onGroupTypeChange}><option value="">Select group type</option><option value="trip">Trip</option><option value="household">Household</option><option value="office">Office</option><option value="event">Event</option><option value="other">Other</option></CustomSelect></label><label className={s.field}><span>Purpose (optional)</span><input className={s.input} aria-label="Group purpose" placeholder="Travel, rent, food, activities" value={p.purpose??''} onChange={e=>p.onPurposeChange?.(e.currentTarget.value)} disabled={disabled||!p.onPurposeChange}/></label><label className={`${s.field} ${s.full}`}><span>Location (optional)</span><input className={s.input} aria-label="Group location" placeholder="City or place" value={p.location??''} onChange={e=>p.onLocationChange?.(e.currentTarget.value)} disabled={disabled||!p.onLocationChange}/></label><label className={s.field}><span>Start date (optional)</span><input type="date" className={s.input} aria-label="Group start date" value={p.startDate??''} onChange={e=>p.onStartDateChange?.(e.currentTarget.value)} disabled={disabled||!p.onStartDateChange}/></label><label className={s.field}><span>End date (optional)</span><input type="date" className={s.input} aria-label="Group end date" value={p.endDate??''} onChange={e=>p.onEndDateChange?.(e.currentTarget.value)} disabled={disabled||!p.onEndDateChange}/></label>{p.onSaveDetails&&<Button type="button" size="sm" onPress={p.onSaveDetails} disabled={disabled||saving}>{saving?'Saving…':'Save group details'}</Button>}</div>}
-export function GroupMetadataSummary({group}:{group:GroupMetadata}){return <>{group.description&&<p className={s.subtitle}>{group.description}</p>}<div className={s.rowMeta}>{group.location&&<span>⌖ {group.location}</span>}{group.startAt!==undefined&&<span>{new Date(group.startAt).toLocaleDateString()} {group.endAt!==undefined?`– ${new Date(group.endAt).toLocaleDateString()}`:''}</span>}{group.groupType&&<span>{group.groupType} group</span>}{group.purpose&&<span>{group.purpose}</span>}</div></>}
-export type GroupExpenseDetailsProps={date?:string;onDateChange?:(value:string)=>void;categories?:readonly {id:string;name:string;icon?:string;color?:string}[];selectedCategoryId?:string;onCategoryChange?:(value:string)=>void;merchant?:string;onMerchantChange?:(value:string)=>void;note?:string;onNoteChange?:(value:string)=>void};
-export function GroupExpenseDetailsFields({p}:{p:GroupExpenseDetailsProps}){return <div className={s.fields}><label className={s.field}><span>Merchant / Description</span><input className={s.input} aria-label="Merchant" value={p.merchant??''} onChange={e=>p.onMerchantChange?.(e.currentTarget.value)} placeholder="Merchant or place" disabled={!p.onMerchantChange}/></label><label className={s.field}><span>Category</span><CustomSelect aria-label="Expense category" value={p.selectedCategoryId??''} onChange={e=>p.onCategoryChange?.(e.currentTarget.value)} disabled={!p.onCategoryChange}><option value="">Uncategorized</option>{p.categories?.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</CustomSelect></label><label className={s.field}><span>Date *</span><input type="date" className={s.input} aria-label="Expense date" value={p.date??''} onChange={e=>p.onDateChange?.(e.currentTarget.value)} disabled={!p.onDateChange} required/></label><label className={s.field}><span>Notes (optional)</span><input className={s.input} aria-label="Expense notes" value={p.note??''} onChange={e=>p.onNoteChange?.(e.currentTarget.value)} placeholder="Add a note for the group" disabled={!p.onNoteChange}/></label></div>}
+export type GroupMetadataProps = {
+  description?: string;
+  onDescriptionChange?: (value: string) => void;
+  groupType?: string;
+  onGroupTypeChange?: (value: string) => void;
+  purpose?: string;
+  onPurposeChange?: (value: string) => void;
+  location?: string;
+  onLocationChange?: (value: string) => void;
+  startDate?: string;
+  onStartDateChange?: (value: string) => void;
+  endDate?: string;
+  onEndDateChange?: (value: string) => void;
+  onSaveDetails?: () => void;
+};
+export type GroupMetadata = {
+  description?: string;
+  groupType?: string;
+  purpose?: string;
+  location?: string;
+  startAt?: number;
+  endAt?: number;
+};
+export function GroupMetadataFields({
+  p,
+  disabled = false,
+  saving = false,
+}: {
+  p: GroupMetadataProps;
+  disabled?: boolean;
+  saving?: boolean;
+}) {
+  return (
+    <div className={s.fields}>
+      <label className={`${s.field} ${s.full}`}>
+        <span>Description</span>
+        <textarea
+          aria-label="Group description"
+          value={p.description ?? ''}
+          onChange={(e) => p.onDescriptionChange?.(e.currentTarget.value)}
+          placeholder="What is this group for? (optional)"
+          maxLength={200}
+          rows={2}
+          disabled={disabled || !p.onDescriptionChange}
+        />
+        <small className={s.muted}>{(p.description ?? '').length}/200</small>
+      </label>
+      <label className={s.field}>
+        <span>Group type</span>
+        <CustomSelect
+          aria-label="Group type"
+          value={p.groupType ?? ''}
+          onChange={(e) => p.onGroupTypeChange?.(e.currentTarget.value)}
+          disabled={disabled || !p.onGroupTypeChange}
+        >
+          <option value="">Select group type</option>
+          <option value="trip">Trip</option>
+          <option value="household">Household</option>
+          <option value="office">Office</option>
+          <option value="event">Event</option>
+          <option value="other">Other</option>
+        </CustomSelect>
+      </label>
+      <label className={s.field}>
+        <span>Purpose (optional)</span>
+        <input
+          className={s.input}
+          aria-label="Group purpose"
+          placeholder="Travel, rent, food, activities"
+          value={p.purpose ?? ''}
+          onChange={(e) => p.onPurposeChange?.(e.currentTarget.value)}
+          disabled={disabled || !p.onPurposeChange}
+        />
+      </label>
+      <label className={`${s.field} ${s.full}`}>
+        <span>Location (optional)</span>
+        <input
+          className={s.input}
+          aria-label="Group location"
+          placeholder="City or place"
+          value={p.location ?? ''}
+          onChange={(e) => p.onLocationChange?.(e.currentTarget.value)}
+          disabled={disabled || !p.onLocationChange}
+        />
+      </label>
+      <label className={s.field}>
+        <span>Start date (optional)</span>
+        <input
+          type="date"
+          className={s.input}
+          aria-label="Group start date"
+          value={p.startDate ?? ''}
+          onChange={(e) => p.onStartDateChange?.(e.currentTarget.value)}
+          disabled={disabled || !p.onStartDateChange}
+        />
+      </label>
+      <label className={s.field}>
+        <span>End date (optional)</span>
+        <input
+          type="date"
+          className={s.input}
+          aria-label="Group end date"
+          value={p.endDate ?? ''}
+          onChange={(e) => p.onEndDateChange?.(e.currentTarget.value)}
+          disabled={disabled || !p.onEndDateChange}
+        />
+      </label>
+      {p.onSaveDetails && (
+        <Button type="button" size="sm" onPress={p.onSaveDetails} disabled={disabled || saving}>
+          {saving ? 'Saving…' : 'Save group details'}
+        </Button>
+      )}
+    </div>
+  );
+}
+export function GroupMetadataSummary({ group }: { group: GroupMetadata }) {
+  return (
+    <>
+      {group.description && <p className={s.subtitle}>{group.description}</p>}
+      <div className={s.rowMeta}>
+        {group.location && <span>⌖ {group.location}</span>}
+        {group.startAt !== undefined && (
+          <span>
+            {new Date(group.startAt).toLocaleDateString()}{' '}
+            {group.endAt !== undefined ? `– ${new Date(group.endAt).toLocaleDateString()}` : ''}
+          </span>
+        )}
+        {group.groupType && <span>{group.groupType} group</span>}
+        {group.purpose && <span>{group.purpose}</span>}
+      </div>
+    </>
+  );
+}
+export type GroupExpenseDetailsProps = {
+  date?: string;
+  onDateChange?: (value: string) => void;
+  categories?: readonly { id: string; name: string; icon?: string; color?: string }[];
+  selectedCategoryId?: string;
+  onCategoryChange?: (value: string) => void;
+  merchant?: string;
+  onMerchantChange?: (value: string) => void;
+  note?: string;
+  onNoteChange?: (value: string) => void;
+};
+export function GroupExpenseDetailsFields({ p }: { p: GroupExpenseDetailsProps }) {
+  return (
+    <div className={s.fields}>
+      <label className={s.field}>
+        <span>Merchant / Description</span>
+        <input
+          className={s.input}
+          aria-label="Merchant"
+          value={p.merchant ?? ''}
+          onChange={(e) => p.onMerchantChange?.(e.currentTarget.value)}
+          placeholder="Merchant or place"
+          disabled={!p.onMerchantChange}
+        />
+      </label>
+      <label className={s.field}>
+        <span>Category</span>
+        <CustomSelect
+          aria-label="Expense category"
+          value={p.selectedCategoryId ?? ''}
+          onChange={(e) => p.onCategoryChange?.(e.currentTarget.value)}
+          disabled={!p.onCategoryChange}
+        >
+          <option value="">Uncategorized</option>
+          {p.categories?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </CustomSelect>
+      </label>
+      <label className={s.field}>
+        <span>Date *</span>
+        <input
+          type="date"
+          className={s.input}
+          aria-label="Expense date"
+          value={p.date ?? ''}
+          onChange={(e) => p.onDateChange?.(e.currentTarget.value)}
+          disabled={!p.onDateChange}
+          required
+        />
+      </label>
+      <label className={s.field}>
+        <span>Notes (optional)</span>
+        <input
+          className={s.input}
+          aria-label="Expense notes"
+          value={p.note ?? ''}
+          onChange={(e) => p.onNoteChange?.(e.currentTarget.value)}
+          placeholder="Add a note for the group"
+          disabled={!p.onNoteChange}
+        />
+      </label>
+    </div>
+  );
+}

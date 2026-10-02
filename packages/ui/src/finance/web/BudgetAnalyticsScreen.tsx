@@ -1,11 +1,230 @@
 'use client';
 import { Button } from '@finapp/ui/web';
 import { CategoryIcon } from './CategoryIcon';
-import { budgetDashboard,type BudgetDashboardTransaction } from '../budgetDashboard';
+import { budgetDashboard, type BudgetDashboardTransaction } from '../budgetDashboard';
 import { formatMinor } from '../money';
-import { Panel,Metrics,Bars,Trend,Ring,Legend,Rankings,Bar,chartColors } from './GoalsBudgetsParts';
+import {
+  Panel,
+  Metrics,
+  Bars,
+  Trend,
+  Ring,
+  Legend,
+  Rankings,
+  Bar,
+  chartColors,
+} from './GoalsBudgetsParts';
 import { BudgetTable } from './BudgetDashboardParts';
 import s from './GoalsBudgets.module.css';
-export type BudgetAnalyticsTransaction=BudgetDashboardTransaction;
-export type BudgetAnalyticsScreenProps={name:string;category:string;icon?:string;currency:string;limit:bigint;transactions:readonly BudgetAnalyticsTransaction[];period:'week'|'month'|'year';startAt:number;endAt:number;loading?:boolean;error?:string|null;onPeriodChange:(value:'week'|'month'|'year')=>void;onBack:()=>void;onOpenTransaction?:(id:string)=>void};
-export function BudgetAnalyticsScreen(p:BudgetAnalyticsScreenProps){const m=budgetDashboard(p.transactions,p.startAt,p.endAt,p.limit);const max=m.daily.reduce((n,r)=>r.amount>n?r.amount:n,0n)||1n;const score=p.limit>0n?Math.max(0,Math.min(100,Number((p.limit-m.forecast)*100n/p.limit)+100)):0;return <div className={s.page}><button className={s.back} onClick={p.onBack}>‹ Budgets › {p.name} › Analytics</button><header className={s.header}><div className={s.actions}><span className={s.tile}><CategoryIcon label={p.category} icon={p.icon}/></span><div><h1 className={s.heading}>Budget analytics</h1><p className={s.subtitle}>Track spending, analyze trends and get insights for your {p.category} budget.</p></div></div><span className={s.choice}>{new Date(p.startAt).toLocaleDateString()} – {new Date(p.endAt-1).toLocaleDateString()}</span></header><div className={s.actions}>{(['week','month','year'] as const).map(period=><Button key={period} variant={p.period===period?'primary':'ghost'} onPress={()=>p.onPeriodChange(period)} aria-pressed={p.period===period}>{period[0]!.toUpperCase()+period.slice(1)}</Button>)}</div>{p.loading?<p role="status">Loading this budget period…</p>:p.error?<p className={s.error} role="alert">{p.error}</p>:<><Metrics items={[{label:'Budget limit',value:formatMinor(p.limit,p.currency),detail:'For selected budget period'},{label:'Total spent',value:formatMinor(m.spent,p.currency),detail:`${Math.round(m.ratio)}% of limit`,tone:'var(--finapp-destructive)'},{label:'Remaining',value:formatMinor(m.remaining,p.currency),detail:`${Math.max(0,100-Math.round(m.ratio))}% left`},{label:'Projected spend',value:formatMinor(m.forecast,p.currency),detail:'At current daily pace'},{label:'Budget compliance',value:`${score}%`,detail:m.forecast<=p.limit?'On track':'Projected over limit'}]}/><div className={s.three}><Panel title="Spending vs Budget" description={`Actual spend ${formatMinor(m.spent,p.currency)} · Budget limit ${formatMinor(p.limit,p.currency)}`}><Bars rows={m.buckets} currency={p.currency}/></Panel><Panel title="Budget breakdown"><div className={s.ringLayout}><Ring segments={m.merchants} value={formatMinor(m.spent,p.currency)} label="Total spent" detail={`${Math.round(m.ratio)}% of limit`}/><Legend rows={m.merchants.slice(0,5)} currency={p.currency}/></div></Panel><Panel title="Remaining budget"><div className={s.ringLayout}><Ring segments={[{amount:m.remaining>0n?m.remaining:0n},{amount:m.spent,color:'var(--finapp-surface-raised)'}]} value={formatMinor(m.remaining,p.currency)} label={`left of ${formatMinor(p.limit,p.currency)}`} detail={`${Math.max(0,100-Math.round(m.ratio))}% remaining`}/></div></Panel></div><div className={s.equalThree}><Panel title="Spending trend" description="Actual spending across the selected period."><Trend rows={m.buckets}/></Panel><Panel title="Day-by-day spending" description="Each cell is a day; darker cells have lower spending."><div className={s.heatmap}>{m.daily.map(r=><div key={r.date} className={s.heatCell} title={`${new Date(r.date).toLocaleDateString()}: ${formatMinor(r.amount,p.currency)}`} style={{background:r.amount>0n?`color-mix(in srgb, var(--finapp-primary) ${Math.max(15,Number(r.amount*100n/max))}%, var(--finapp-surface-raised))`:undefined}}/>)}</div><div className={`${s.between} ${s.divider}`}><span className={s.muted}>Low spending</span><span className={s.positive}>Higher spending</span></div></Panel><Panel title="Account-wise spend"><Rankings rows={m.accounts} currency={p.currency}/></Panel></div><div className={s.equalThree}><Panel title="Top merchants"><Rankings rows={m.merchants} currency={p.currency}/></Panel><Panel title="Spending by category"><Rankings rows={m.categories} currency={p.currency}/></Panel><Panel title="Insights & alerts"><div className={s.insight}><span><strong className={m.forecast<=p.limit?s.positive:s.negative}>{m.forecast<=p.limit?'On track to stay under budget':'Projected to exceed your budget'}</strong><br/><span className={s.muted}>Projected spending is {formatMinor(m.forecast,p.currency)} at your current pace.</span></span></div><div className={s.insight}><span><strong>Average daily spending</strong><br/>{formatMinor(m.average,p.currency)} over {m.elapsed} elapsed days.</span></div>{m.merchants[0]&&<div className={s.insight}><span><strong>{m.merchants[0].name} is your top merchant</strong><br/><span className={s.muted}>{formatMinor(m.merchants[0].amount,p.currency)} of recorded expenses.</span></span></div>}</Panel></div><Panel title="Recent transactions"><BudgetTable rows={[...m.rows].sort((a,b)=>b.occurredAt-a.occurredAt)} onOpen={p.onOpenTransaction}/></Panel></>}</div>}
+export type BudgetAnalyticsTransaction = BudgetDashboardTransaction;
+export type BudgetAnalyticsScreenProps = {
+  name: string;
+  category: string;
+  icon?: string;
+  currency: string;
+  limit: bigint;
+  transactions: readonly BudgetAnalyticsTransaction[];
+  period: 'week' | 'month' | 'year';
+  startAt: number;
+  endAt: number;
+  loading?: boolean;
+  error?: string | null;
+  onPeriodChange: (value: 'week' | 'month' | 'year') => void;
+  onBack: () => void;
+  onOpenTransaction?: (id: string) => void;
+};
+export function BudgetAnalyticsScreen(p: BudgetAnalyticsScreenProps) {
+  const m = budgetDashboard(p.transactions, p.startAt, p.endAt, p.limit);
+  const max = m.daily.reduce((n, r) => (r.amount > n ? r.amount : n), 0n) || 1n;
+  const score =
+    p.limit > 0n
+      ? Math.max(0, Math.min(100, Number(((p.limit - m.forecast) * 100n) / p.limit) + 100))
+      : 0;
+  return (
+    <div className={s.page}>
+      <button className={s.back} onClick={p.onBack}>
+        ‹ Budgets › {p.name} › Analytics
+      </button>
+      <header className={s.header}>
+        <div className={s.actions}>
+          <span className={s.tile}>
+            <CategoryIcon label={p.category} icon={p.icon} />
+          </span>
+          <div>
+            <h1 className={s.heading}>Budget analytics</h1>
+            <p className={s.subtitle}>
+              Track spending, analyze trends and get insights for your {p.category} budget.
+            </p>
+          </div>
+        </div>
+        <span className={s.choice}>
+          {new Date(p.startAt).toLocaleDateString()} – {new Date(p.endAt - 1).toLocaleDateString()}
+        </span>
+      </header>
+      <div className={s.actions}>
+        {(['week', 'month', 'year'] as const).map((period) => (
+          <Button
+            key={period}
+            variant={p.period === period ? 'primary' : 'ghost'}
+            onPress={() => p.onPeriodChange(period)}
+            aria-pressed={p.period === period}
+          >
+            {period[0]!.toUpperCase() + period.slice(1)}
+          </Button>
+        ))}
+      </div>
+      {p.loading ? (
+        <p role="status">Loading this budget period…</p>
+      ) : p.error ? (
+        <p className={s.error} role="alert">
+          {p.error}
+        </p>
+      ) : (
+        <>
+          <Metrics
+            items={[
+              {
+                label: 'Budget limit',
+                value: formatMinor(p.limit, p.currency),
+                detail: 'For selected budget period',
+              },
+              {
+                label: 'Total spent',
+                value: formatMinor(m.spent, p.currency),
+                detail: `${Math.round(m.ratio)}% of limit`,
+                tone: 'var(--finapp-destructive)',
+              },
+              {
+                label: 'Remaining',
+                value: formatMinor(m.remaining, p.currency),
+                detail: `${Math.max(0, 100 - Math.round(m.ratio))}% left`,
+              },
+              {
+                label: 'Projected spend',
+                value: formatMinor(m.forecast, p.currency),
+                detail: 'At current daily pace',
+              },
+              {
+                label: 'Budget compliance',
+                value: `${score}%`,
+                detail: m.forecast <= p.limit ? 'On track' : 'Projected over limit',
+              },
+            ]}
+          />
+          <div className={s.three}>
+            <Panel
+              title="Spending vs Budget"
+              description={`Actual spend ${formatMinor(m.spent, p.currency)} · Budget limit ${formatMinor(p.limit, p.currency)}`}
+            >
+              <Bars rows={m.buckets} currency={p.currency} />
+            </Panel>
+            <Panel title="Budget breakdown">
+              <div className={s.ringLayout}>
+                <Ring
+                  segments={m.merchants}
+                  value={formatMinor(m.spent, p.currency)}
+                  label="Total spent"
+                  detail={`${Math.round(m.ratio)}% of limit`}
+                />
+                <Legend rows={m.merchants.slice(0, 5)} currency={p.currency} />
+              </div>
+            </Panel>
+            <Panel title="Remaining budget">
+              <div className={s.ringLayout}>
+                <Ring
+                  segments={[
+                    { amount: m.remaining > 0n ? m.remaining : 0n },
+                    { amount: m.spent, color: 'var(--finapp-surface-raised)' },
+                  ]}
+                  value={formatMinor(m.remaining, p.currency)}
+                  label={`left of ${formatMinor(p.limit, p.currency)}`}
+                  detail={`${Math.max(0, 100 - Math.round(m.ratio))}% remaining`}
+                />
+              </div>
+            </Panel>
+          </div>
+          <div className={s.equalThree}>
+            <Panel title="Spending trend" description="Actual spending across the selected period.">
+              <Trend rows={m.buckets} />
+            </Panel>
+            <Panel
+              title="Day-by-day spending"
+              description="Each cell is a day; darker cells have lower spending."
+            >
+              <div className={s.heatmap}>
+                {m.daily.map((r) => (
+                  <div
+                    key={r.date}
+                    className={s.heatCell}
+                    title={`${new Date(r.date).toLocaleDateString()}: ${formatMinor(r.amount, p.currency)}`}
+                    style={{
+                      background:
+                        r.amount > 0n
+                          ? `color-mix(in srgb, var(--finapp-primary) ${Math.max(15, Number((r.amount * 100n) / max))}%, var(--finapp-surface-raised))`
+                          : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+              <div className={`${s.between} ${s.divider}`}>
+                <span className={s.muted}>Low spending</span>
+                <span className={s.positive}>Higher spending</span>
+              </div>
+            </Panel>
+            <Panel title="Account-wise spend">
+              <Rankings rows={m.accounts} currency={p.currency} />
+            </Panel>
+          </div>
+          <div className={s.equalThree}>
+            <Panel title="Top merchants">
+              <Rankings rows={m.merchants} currency={p.currency} />
+            </Panel>
+            <Panel title="Spending by category">
+              <Rankings rows={m.categories} currency={p.currency} />
+            </Panel>
+            <Panel title="Insights & alerts">
+              <div className={s.insight}>
+                <span>
+                  <strong className={m.forecast <= p.limit ? s.positive : s.negative}>
+                    {m.forecast <= p.limit
+                      ? 'On track to stay under budget'
+                      : 'Projected to exceed your budget'}
+                  </strong>
+                  <br />
+                  <span className={s.muted}>
+                    Projected spending is {formatMinor(m.forecast, p.currency)} at your current
+                    pace.
+                  </span>
+                </span>
+              </div>
+              <div className={s.insight}>
+                <span>
+                  <strong>Average daily spending</strong>
+                  <br />
+                  {formatMinor(m.average, p.currency)} over {m.elapsed} elapsed days.
+                </span>
+              </div>
+              {m.merchants[0] && (
+                <div className={s.insight}>
+                  <span>
+                    <strong>{m.merchants[0].name} is your top merchant</strong>
+                    <br />
+                    <span className={s.muted}>
+                      {formatMinor(m.merchants[0].amount, p.currency)} of recorded expenses.
+                    </span>
+                  </span>
+                </div>
+              )}
+            </Panel>
+          </div>
+          <Panel title="Recent transactions">
+            <BudgetTable
+              rows={[...m.rows].sort((a, b) => b.occurredAt - a.occurredAt)}
+              onOpen={p.onOpenTransaction}
+            />
+          </Panel>
+        </>
+      )}
+    </div>
+  );
+}

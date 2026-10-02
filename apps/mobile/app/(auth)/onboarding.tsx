@@ -310,11 +310,7 @@ export default function OnboardingScreen() {
               editable={!pending}
               returnKeyType="next"
             />
-            <ProfilePreview
-              displayName={displayName}
-              username={handle}
-              avatarId={avatarId}
-            />
+            <ProfilePreview displayName={displayName} username={handle} avatarId={avatarId} />
             <Label style={{ marginBottom: 0 }}>Username</Label>
             <Input
               accessibilityLabel="Username"

@@ -1,10 +1,7 @@
 'use client';
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  BudgetFormScreen,
-  type BudgetSettings,
-} from '@finapp/ui/finance';
+import { BudgetFormScreen, type BudgetSettings } from '@finapp/ui/finance';
 import { parseMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';

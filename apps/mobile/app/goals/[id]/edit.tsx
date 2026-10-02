@@ -212,7 +212,9 @@ export default function EditGoalScreen() {
         title={goal?.name ?? 'Goal details'}
         currency={goal?.currency ?? ''}
         accounts={(accounts.data ?? [])
-          .filter((account) => account.archivedAt === undefined && account.currency === goal?.currency)
+          .filter(
+            (account) => account.archivedAt === undefined && account.currency === goal?.currency,
+          )
           .map((account) => ({
             id: String(account.id ?? account._id ?? ''),
             name: account.name ?? 'Account',
@@ -236,10 +238,7 @@ export default function EditGoalScreen() {
                 goalType: goal.goalType,
                 monthlyContribution:
                   goal.monthlyContributionMinor !== undefined
-                    ? goalTargetInput(
-                        minor(goal.monthlyContributionMinor),
-                        goal.currency ?? 'INR',
-                      )
+                    ? goalTargetInput(minor(goal.monthlyContributionMinor), goal.currency ?? 'INR')
                     : '',
                 accountId: goal.accountId,
                 priority: goal.priority ?? 'low',

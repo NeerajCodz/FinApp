@@ -1,11 +1,234 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Button,Input,Text,Typography,useTheme } from '@finapp/ui/native';
-import { EntityIcon,EntityIconPicker } from './EntityIconPicker';
+import { Button, Input, Text, Typography, useTheme } from '@finapp/ui/native';
+import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
 import { formatMinor } from '../money';
 import { buildGoalAnalyticsModel } from '../goalAnalytics';
 import type { GoalDetailScreenProps as WebProps } from '../web/GoalDetailScreen';
-import { Page,Columns,Panel,Metrics,Bar,Trend,Milestones,ContributionTable } from './GoalsBudgetsParts';
+import {
+  Page,
+  Columns,
+  Panel,
+  Metrics,
+  Bar,
+  Trend,
+  Milestones,
+  ContributionTable,
+} from './GoalsBudgetsParts';
 export type { GoalHistoryItem } from '../web/GoalDetailScreen';
-export type GoalDetailScreenProps=WebProps&{onBack:()=>void};
-export function GoalDetailScreen(p:GoalDetailScreenProps){const {tokens}=useTheme();const [amount,setAmount]=React.useState('');const [contribute,setContribute]=React.useState(false);const g=p.goal;const m=buildGoalAnalyticsModel({contributions:p.history,accounts:p.accounts??[],target:g.target,targetDate:g.targetDate,now:Date.now()});return <Page><Button variant="ghost" onPress={p.onBack}>‹ Goals</Button><View style={{flexDirection:'row',gap:13,alignItems:'center'}}><View style={{width:58,height:58,borderRadius:11,backgroundColor:g.color??tokens.surfaceRaised,alignItems:'center',justifyContent:'center'}}><EntityIcon value={g.icon??'lucide:Target'} size={30} color={tokens.primary}/></View><View style={{flex:1,gap:5}}><Typography variant="title">{g.name}</Typography><Text style={{fontSize:12,color:tokens.foregroundMuted}}>{g.notes??'Track every contribution toward your savings goal.'}</Text></View></View>{p.loading?<Text>Loading goal…</Text>:p.error?<Panel title="Goal unavailable"><Text>{p.error}</Text><Button onPress={p.onRetry}>Retry</Button></Panel>:!p.available?<Panel title="Goal unavailable"><Text>It may have been archived or is not saved on this device.</Text></Panel>:<><View style={{flexDirection:'row',gap:8,flexWrap:'wrap'}}><Button variant="outline" onPress={p.onEdit}>Edit goal</Button><Button onPress={()=>setContribute(v=>!v)}>＋ Contribution</Button><Button variant="outline" onPress={p.onAnalytics}>Analytics</Button></View>{p.actionError&&<Text accessibilityRole="alert" style={{color:tokens.destructive}}>{p.actionError}</Text>}{contribute&&<Panel title="Record a contribution" description="This tracks progress; it does not move money between accounts."><Input accessibilityLabel={`Amount in ${g.currency}`} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder={`Amount · ${g.currency}`}/><Button disabled={p.saving||!amount.trim()} onPress={()=>p.onContribute(amount)}>{p.saving?'Saving…':'Add contribution'}</Button></Panel>}<Metrics items={[{label:'Target amount',value:formatMinor(g.target,g.currency)},{label:'Saved so far',value:formatMinor(g.saved,g.currency),detail:`${g.percent}% of target`},{label:'Remaining',value:formatMinor(g.target>g.saved?g.target-g.saved:0n,g.currency)},{label:'Monthly contribution',value:g.monthlyContributionMinor!==undefined?formatMinor(g.monthlyContributionMinor,g.currency):'Not set',detail:'Planned; transfers manual'},{label:'Projected completion',value:m.forecastDate?new Date(m.forecastDate).toLocaleDateString(undefined,{month:'short',year:'numeric'}):'Not enough history'},{label:'Avg. monthly progress',value:m.averageMonthly===null?'No history':formatMinor(m.averageMonthly,g.currency)}]}/><Columns><View style={{gap:13}}><Panel title="Goal progress"><Bar value={g.percent} large/><View style={{flexDirection:'row',justifyContent:'space-between'}}><Text>{formatMinor(g.saved,g.currency)}</Text><Text>{g.percent}%</Text></View><Text style={{fontSize:12,color:tokens.foregroundMuted}}>Target {formatMinor(g.target,g.currency)}</Text></Panel><Panel title="Milestones" description="Track your progress with key milestones."><Milestones saved={g.saved} target={g.target} currency={g.currency} rows={m.milestones}/></Panel><Panel title="Contribution history"><ContributionTable history={p.history} currency={g.currency} accounts={p.accounts}/></Panel></View><View style={{gap:13}}><Panel title="Savings trend" description="Actual contributions over the last six months."><Trend rows={m.months}/></Panel><Panel title="Goal details"><EntityIconPicker mode="all" value={g.icon} onChange={p.onIconChange} label="Change goal icon"/>{[['Goal type',g.goalType??'Savings goal'],['Linked account',p.accounts?.find(a=>a.id===g.accountId)?.name??'No linked account'],['Target date',g.targetDate?new Date(g.targetDate).toLocaleDateString():'Not set'],['Reminder preference',g.reminderFrequency??'None'],['Priority',g.priority??'Not set'],['Notes',g.notes??'No notes']].map(([label,value])=><View key={label} style={{flexDirection:'row',justifyContent:'space-between',gap:12,paddingVertical:7,borderBottomWidth:1,borderColor:tokens.borderSubtle}}><Text style={{fontSize:12,color:tokens.foregroundMuted}}>{label}</Text><Text style={{flex:1,fontSize:12,textAlign:'right'}}>{value}</Text></View>)}</Panel><Panel title="Insights & recommendations"><Text style={{color:tokens.primary,fontSize:13}}>{m.onTrackScore===null?'Build your savings history':m.onTrackScore>=100?'On track':'Review your savings pace'}</Text><Text style={{fontSize:12,color:tokens.foregroundMuted}}>{m.requiredMonthly===null?'Record contributions to see a completion forecast.':`${formatMinor(m.requiredMonthly,g.currency)} per month needed to meet the target date.`}</Text><Text style={{fontSize:12,color:tokens.foregroundMuted}}>Contributions are separate from account balances.</Text></Panel></View></Columns></>}</Page>}
+export type GoalDetailScreenProps = WebProps & { onBack: () => void };
+export function GoalDetailScreen(p: GoalDetailScreenProps) {
+  const { tokens } = useTheme();
+  const [amount, setAmount] = React.useState('');
+  const [contribute, setContribute] = React.useState(false);
+  const g = p.goal;
+  const m = buildGoalAnalyticsModel({
+    contributions: p.history,
+    accounts: p.accounts ?? [],
+    target: g.target,
+    targetDate: g.targetDate,
+    now: Date.now(),
+  });
+  return (
+    <Page>
+      <Button variant="ghost" onPress={p.onBack}>
+        ‹ Goals
+      </Button>
+      <View style={{ flexDirection: 'row', gap: 13, alignItems: 'center' }}>
+        <View
+          style={{
+            width: 58,
+            height: 58,
+            borderRadius: 11,
+            backgroundColor: g.color ?? tokens.surfaceRaised,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <EntityIcon value={g.icon ?? 'lucide:Target'} size={30} color={tokens.primary} />
+        </View>
+        <View style={{ flex: 1, gap: 5 }}>
+          <Typography variant="title">{g.name}</Typography>
+          <Text style={{ fontSize: 12, color: tokens.foregroundMuted }}>
+            {g.notes ?? 'Track every contribution toward your savings goal.'}
+          </Text>
+        </View>
+      </View>
+      {p.loading ? (
+        <Text>Loading goal…</Text>
+      ) : p.error ? (
+        <Panel title="Goal unavailable">
+          <Text>{p.error}</Text>
+          <Button onPress={p.onRetry}>Retry</Button>
+        </Panel>
+      ) : !p.available ? (
+        <Panel title="Goal unavailable">
+          <Text>It may have been archived or is not saved on this device.</Text>
+        </Panel>
+      ) : (
+        <>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <Button variant="outline" onPress={p.onEdit}>
+              Edit goal
+            </Button>
+            <Button onPress={() => setContribute((v) => !v)}>＋ Contribution</Button>
+            <Button variant="outline" onPress={p.onAnalytics}>
+              Analytics
+            </Button>
+          </View>
+          {p.actionError && (
+            <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
+              {p.actionError}
+            </Text>
+          )}
+          {contribute && (
+            <Panel
+              title="Record a contribution"
+              description="This tracks progress; it does not move money between accounts."
+            >
+              <Input
+                accessibilityLabel={`Amount in ${g.currency}`}
+                keyboardType="decimal-pad"
+                value={amount}
+                onChangeText={setAmount}
+                placeholder={`Amount · ${g.currency}`}
+              />
+              <Button disabled={p.saving || !amount.trim()} onPress={() => p.onContribute(amount)}>
+                {p.saving ? 'Saving…' : 'Add contribution'}
+              </Button>
+            </Panel>
+          )}
+          <Metrics
+            items={[
+              { label: 'Target amount', value: formatMinor(g.target, g.currency) },
+              {
+                label: 'Saved so far',
+                value: formatMinor(g.saved, g.currency),
+                detail: `${g.percent}% of target`,
+              },
+              {
+                label: 'Remaining',
+                value: formatMinor(g.target > g.saved ? g.target - g.saved : 0n, g.currency),
+              },
+              {
+                label: 'Monthly contribution',
+                value:
+                  g.monthlyContributionMinor !== undefined
+                    ? formatMinor(g.monthlyContributionMinor, g.currency)
+                    : 'Not set',
+                detail: 'Planned; transfers manual',
+              },
+              {
+                label: 'Projected completion',
+                value: m.forecastDate
+                  ? new Date(m.forecastDate).toLocaleDateString(undefined, {
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : 'Not enough history',
+              },
+              {
+                label: 'Avg. monthly progress',
+                value:
+                  m.averageMonthly === null
+                    ? 'No history'
+                    : formatMinor(m.averageMonthly, g.currency),
+              },
+            ]}
+          />
+          <Columns>
+            <View style={{ gap: 13 }}>
+              <Panel title="Goal progress">
+                <Bar value={g.percent} large />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text>{formatMinor(g.saved, g.currency)}</Text>
+                  <Text>{g.percent}%</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: tokens.foregroundMuted }}>
+                  Target {formatMinor(g.target, g.currency)}
+                </Text>
+              </Panel>
+              <Panel title="Milestones" description="Track your progress with key milestones.">
+                <Milestones
+                  saved={g.saved}
+                  target={g.target}
+                  currency={g.currency}
+                  rows={m.milestones}
+                />
+              </Panel>
+              <Panel title="Contribution history">
+                <ContributionTable
+                  history={p.history}
+                  currency={g.currency}
+                  accounts={p.accounts}
+                />
+              </Panel>
+            </View>
+            <View style={{ gap: 13 }}>
+              <Panel
+                title="Savings trend"
+                description="Actual contributions over the last six months."
+              >
+                <Trend rows={m.months} />
+              </Panel>
+              <Panel title="Goal details">
+                <EntityIconPicker
+                  mode="all"
+                  value={g.icon}
+                  onChange={p.onIconChange}
+                  label="Change goal icon"
+                />
+                {[
+                  ['Goal type', g.goalType ?? 'Savings goal'],
+                  [
+                    'Linked account',
+                    p.accounts?.find((a) => a.id === g.accountId)?.name ?? 'No linked account',
+                  ],
+                  [
+                    'Target date',
+                    g.targetDate ? new Date(g.targetDate).toLocaleDateString() : 'Not set',
+                  ],
+                  ['Reminder preference', g.reminderFrequency ?? 'None'],
+                  ['Priority', g.priority ?? 'Not set'],
+                  ['Notes', g.notes ?? 'No notes'],
+                ].map(([label, value]) => (
+                  <View
+                    key={label}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      paddingVertical: 7,
+                      borderBottomWidth: 1,
+                      borderColor: tokens.borderSubtle,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, color: tokens.foregroundMuted }}>{label}</Text>
+                    <Text style={{ flex: 1, fontSize: 12, textAlign: 'right' }}>{value}</Text>
+                  </View>
+                ))}
+              </Panel>
+              <Panel title="Insights & recommendations">
+                <Text style={{ color: tokens.primary, fontSize: 13 }}>
+                  {m.onTrackScore === null
+                    ? 'Build your savings history'
+                    : m.onTrackScore >= 100
+                      ? 'On track'
+                      : 'Review your savings pace'}
+                </Text>
+                <Text style={{ fontSize: 12, color: tokens.foregroundMuted }}>
+                  {m.requiredMonthly === null
+                    ? 'Record contributions to see a completion forecast.'
+                    : `${formatMinor(m.requiredMonthly, g.currency)} per month needed to meet the target date.`}
+                </Text>
+                <Text style={{ fontSize: 12, color: tokens.foregroundMuted }}>
+                  Contributions are separate from account balances.
+                </Text>
+              </Panel>
+            </View>
+          </Columns>
+        </>
+      )}
+    </Page>
+  );
+}

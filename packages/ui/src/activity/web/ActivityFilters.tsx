@@ -69,11 +69,33 @@ export function ActivityFilters({
     <Card className="activity-toolbar" aria-label="Activity filters">
       <div className="activity-period-switch" aria-label="Period">
         <span>Period</span>
-        {presets.filter(preset => preset.value.startsWith('period:')).map(preset => <button key={preset.value} type="button" className={period === preset.value ? 'active' : undefined} aria-pressed={period === preset.value} onClick={() => onPresetSelect(preset.value)}>{preset.label}</button>)}
+        {presets
+          .filter((preset) => preset.value.startsWith('period:'))
+          .map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              className={period === preset.value ? 'active' : undefined}
+              aria-pressed={period === preset.value}
+              onClick={() => onPresetSelect(preset.value)}
+            >
+              {preset.label}
+            </button>
+          ))}
       </div>
       <div className="activity-type-switch" aria-label="Transaction type">
         <span>Type</span>
-        {filters.map(option => <button key={option.value} type="button" className={filter === option.value ? 'active' : undefined} aria-pressed={filter === option.value} onClick={() => onFilterChange(option.value)}>{option.label}</button>)}
+        {filters.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={filter === option.value ? 'active' : undefined}
+            aria-pressed={filter === option.value}
+            onClick={() => onFilterChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
       <QuickFiltersPopover groups={groups} />
       <DateRangePopover

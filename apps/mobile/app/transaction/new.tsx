@@ -100,7 +100,11 @@ export default function NewTransactionScreen() {
     if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));
   }, [category, categoryId, type]);
   let amountMinor: bigint | null = null;
-  try { amountMinor = parseMinor(amount, account?.currency ?? profile?.defaultCurrency ?? 'INR'); } catch { /* Invalid amounts keep save disabled. */ }
+  try {
+    amountMinor = parseMinor(amount, account?.currency ?? profile?.defaultCurrency ?? 'INR');
+  } catch {
+    /* Invalid amounts keep save disabled. */
+  }
   const invalidTransfer =
     type === 'transfer' &&
     (!destination ||

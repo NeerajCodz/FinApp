@@ -31,7 +31,8 @@ export default function NewCategoryPage() {
     try {
       const now = Date.now();
       const monthlyLimitMinor = limitValue.trim() ? parseMinor(limitValue, currency) : undefined;
-      if (monthlyLimitMinor !== undefined && monthlyLimitMinor <= 0n) throw new Error('Enter a positive monthly limit.');
+      if (monthlyLimitMinor !== undefined && monthlyLimitMinor <= 0n)
+        throw new Error('Enter a positive monthly limit.');
       const record: LocalRecord = {
         ownerId: userId,
         name: trimmedName,

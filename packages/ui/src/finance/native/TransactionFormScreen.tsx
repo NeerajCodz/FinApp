@@ -191,7 +191,16 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
             ))}
           </View>
           {type !== 'transfer' && (
-            <View style={{gap:7}}><Typography variant="label">Title *</Typography><Input accessibilityLabel="Transaction title" placeholder="e.g. Grocery shopping, Salary, Rent…" value={title} onChangeText={onTitleChange} maxLength={120}/></View>
+            <View style={{ gap: 7 }}>
+              <Typography variant="label">Title *</Typography>
+              <Input
+                accessibilityLabel="Transaction title"
+                placeholder="e.g. Grocery shopping, Salary, Rent…"
+                value={title}
+                onChangeText={onTitleChange}
+                maxLength={120}
+              />
+            </View>
           )}
           <Typography variant="label">Amount *</Typography>
           <CurrencyInput
@@ -311,7 +320,57 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
             </Button>
           </View>
         </View>
-        {mode==='edit'&&<View style={{gap:16}}><View style={{padding:16,borderWidth:1,borderColor:tokens.borderSubtle,borderRadius:12,backgroundColor:tokens.surfaceRaised,gap:6}}><Typography variant="heading">Transaction impact</Typography><Typography variant="caption">How this change affects your finances.</Typography>{[['Amount',`${amount||'0'} ${account?.currency??currency}`],['Category',type==='transfer'?'Transfer':category?.name??'Uncategorized'],['Account',account?.name??'Unassigned'],['Date',new Date(occurredAt).toLocaleDateString()],['Status',props.status??'Saved'],...(props.referenceId?[['Reference ID',props.referenceId]]:[])].map(([label,value])=><SettingsRow key={label} label={label!} value={value}/>)}<Typography variant="caption">Saving updates your account and category totals.</Typography></View><View style={{padding:16,borderWidth:1,borderColor:tokens.borderSubtle,borderRadius:12,backgroundColor:tokens.surfaceRaised}}><Typography variant="heading">Recent similar transactions</Typography><Typography variant="caption">Other transactions in this category or at this merchant.</Typography><TransactionCards items={props.similarTransactions??[]} onSelect={props.onOpenTransaction}/></View></View>}
+        {mode === 'edit' && (
+          <View style={{ gap: 16 }}>
+            <View
+              style={{
+                padding: 16,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                borderRadius: 12,
+                backgroundColor: tokens.surfaceRaised,
+                gap: 6,
+              }}
+            >
+              <Typography variant="heading">Transaction impact</Typography>
+              <Typography variant="caption">How this change affects your finances.</Typography>
+              {[
+                ['Amount', `${amount || '0'} ${account?.currency ?? currency}`],
+                [
+                  'Category',
+                  type === 'transfer' ? 'Transfer' : (category?.name ?? 'Uncategorized'),
+                ],
+                ['Account', account?.name ?? 'Unassigned'],
+                ['Date', new Date(occurredAt).toLocaleDateString()],
+                ['Status', props.status ?? 'Saved'],
+                ...(props.referenceId ? [['Reference ID', props.referenceId]] : []),
+              ].map(([label, value]) => (
+                <SettingsRow key={label} label={label!} value={value} />
+              ))}
+              <Typography variant="caption">
+                Saving updates your account and category totals.
+              </Typography>
+            </View>
+            <View
+              style={{
+                padding: 16,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                borderRadius: 12,
+                backgroundColor: tokens.surfaceRaised,
+              }}
+            >
+              <Typography variant="heading">Recent similar transactions</Typography>
+              <Typography variant="caption">
+                Other transactions in this category or at this merchant.
+              </Typography>
+              <TransactionCards
+                items={props.similarTransactions ?? []}
+                onSelect={props.onOpenTransaction}
+              />
+            </View>
+          </View>
+        )}
       </ScrollView>
       <Sheet
         visible={picker !== null}
@@ -320,63 +379,61 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
       >
         {picker === 'date' ? (
           <DateTimePicker value={occurredAt} showTime={hasTime} onChange={onDateChange} />
+        ) : options.length ? (
+          <ScrollView style={{ maxHeight: 360 }}>
+            {options.map((item) => (
+              <React.Fragment key={item.id}>
+                <SettingsRow
+                  label={item.name}
+                  leadingIcon={
+                    picker === 'category' ? (
+                      <CategoryIcon label={item.name} icon={item.icon} />
+                    ) : undefined
+                  }
+                  value={item.id === selectedId ? 'Selected' : item.currency}
+                  onPress={() => {
+                    if (picker === 'category') onCategoryChange(item.id);
+                    else if (picker === 'destination') onDestinationChange(item.id);
+                    else onAccountChange(item.id);
+                    setPicker(null);
+                  }}
+                />
+                <Separator />
+              </React.Fragment>
+            ))}
+          </ScrollView>
         ) : (
-          options.length ? (
-            <ScrollView style={{ maxHeight: 360 }}>
-              {options.map((item) => (
-                <React.Fragment key={item.id}>
-                  <SettingsRow
-                    label={item.name}
-                    leadingIcon={
-                      picker === 'category' ? (
-                        <CategoryIcon label={item.name} icon={item.icon} />
-                      ) : undefined
-                    }
-                    value={item.id === selectedId ? 'Selected' : item.currency}
-                    onPress={() => {
-                      if (picker === 'category') onCategoryChange(item.id);
-                      else if (picker === 'destination') onDestinationChange(item.id);
-                      else onAccountChange(item.id);
-                      setPicker(null);
-                    }}
-                  />
-                  <Separator />
-                </React.Fragment>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={{ gap: 12, padding: 16 }}>
-              <Typography variant="body">
-                {picker === 'category'
-                  ? 'No categories yet.'
-                  : picker === 'destination'
-                    ? 'No other accounts use this currency yet.'
-                    : 'No accounts yet.'}
-              </Typography>
-              {picker === 'category' && onManageCategories ? (
-                <Button
-                  variant="outline"
-                  onPress={() => {
-                    setPicker(null);
-                    onManageCategories();
-                  }}
-                >
-                  Create a category
-                </Button>
-              ) : null}
-              {picker !== 'category' && onAddAccount ? (
-                <Button
-                  variant="outline"
-                  onPress={() => {
-                    setPicker(null);
-                    onAddAccount();
-                  }}
-                >
-                  Add an account
-                </Button>
-              ) : null}
-            </View>
-          )
+          <View style={{ gap: 12, padding: 16 }}>
+            <Typography variant="body">
+              {picker === 'category'
+                ? 'No categories yet.'
+                : picker === 'destination'
+                  ? 'No other accounts use this currency yet.'
+                  : 'No accounts yet.'}
+            </Typography>
+            {picker === 'category' && onManageCategories ? (
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setPicker(null);
+                  onManageCategories();
+                }}
+              >
+                Create a category
+              </Button>
+            ) : null}
+            {picker !== 'category' && onAddAccount ? (
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setPicker(null);
+                  onAddAccount();
+                }}
+              >
+                Add an account
+              </Button>
+            ) : null}
+          </View>
         )}
       </Sheet>
     </KeyboardAvoidingView>

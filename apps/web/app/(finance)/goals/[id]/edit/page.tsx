@@ -42,7 +42,6 @@ function minor(value: unknown): bigint {
   }
 }
 
-
 export default function EditGoalPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -51,8 +50,11 @@ export default function EditGoalPage() {
   const goal = goals.find((item) => [item.id, item._id, item.cloudId].includes(id));
   const accountState = useLocalRecords<GoalAccount>('account');
   const accountRecords = accountState.records;
-  const { records: contributionRecords, loading: contributionsLoading, error: contributionsError } =
-    useLocalRecords<Contribution>('goalContribution');
+  const {
+    records: contributionRecords,
+    loading: contributionsLoading,
+    error: contributionsError,
+  } = useLocalRecords<Contribution>('goalContribution');
   const goalAliases = [goal?.id, goal?._id, goal?.cloudId].filter(
     (value): value is string => typeof value === 'string',
   );

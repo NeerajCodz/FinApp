@@ -37,11 +37,7 @@ export function Avatar({
       }}
     >
       {imageSource ? (
-        <Image
-          source={imageSource}
-          resizeMode="cover"
-          style={{ width: size, height: size }}
-        />
+        <Image source={imageSource} resizeMode="cover" style={{ width: size, height: size }} />
       ) : (
         <Text
           style={{

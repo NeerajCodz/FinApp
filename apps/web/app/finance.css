@@ -1544,9 +1544,12 @@
   background: var(--finance-panel);
   color: var(--finance-text);
   font: inherit;
-  font-size: .74rem;
+  font-size: 0.74rem;
   cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
 }
 .activity-sidebar-link:hover {
   border-color: var(--finance-lime);

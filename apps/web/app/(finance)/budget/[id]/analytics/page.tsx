@@ -137,8 +137,7 @@ export default function BudgetAnalyticsPage() {
           (typeof row.accountId === 'string' &&
             budget.accountIds.some(
               (id) =>
-                accountAliases.has(id) &&
-                aliases(accountAliases.get(id)!).includes(row.accountId!),
+                accountAliases.has(id) && aliases(accountAliases.get(id)!).includes(row.accountId!),
             ))),
     )
     .map((row) => ({

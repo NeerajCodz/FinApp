@@ -3,4 +3,79 @@ import React from 'react';
 import { Button } from '@finapp/ui/web';
 import { ChatCircle, Crown } from '@phosphor-icons/react';
 import { s, Tile, PersonAvatar } from './GroupUI';
-export function GroupCard({name,meta,balance,meaning,icon,color,onPress,onOpenChat,description,members=[],role}:{name:string;meta:string;balance:string;meaning:string;icon?:string;color?:string;onPress?:()=>void;onOpenChat?:()=>void;description?:string;members?:readonly {name:string;avatarId?:string;avatarUrl?:string|null}[];role?:string}){const tone=meaning.toLowerCase().includes('you owe')?s.negative:meaning.toLowerCase().includes('owed')?s.positive:'';return <article className={s.groupRow}><Tile icon={icon} color={color}/><div className={s.groupIdentity}><h3>{name}</h3>{description&&<p className={s.muted}>{description}</p>}<div className={s.rowMeta}>{members.length>0&&<span className={s.avatars}>{members.slice(0,4).map((m,i)=><PersonAvatar key={i} name={m.name} url={m.avatarUrl} avatarId={m.avatarId} size={28}/>)}</span>}<span>{meta}</span>{role&&<span className={`${s.badge} ${role==='admin'||role==='owner'?s.admin:''}`}>{role==='admin'||role==='owner'?<Crown weight="fill" size={13}/>:null}{role==='owner'?'Group owner':role==='admin'?'You are an admin':'Member'}</span>}</div></div><div className={`${s.balance} ${tone}`}><small>{meaning}</small><strong>{balance}</strong></div><div className={s.actions}><Button size="sm" variant="outline" onPress={onPress}>View group</Button>{onOpenChat&&<Button size="sm" variant="outline" onPress={onOpenChat}><ChatCircle size={16}/> Open chat</Button>}</div></article>}
+export function GroupCard({
+  name,
+  meta,
+  balance,
+  meaning,
+  icon,
+  color,
+  onPress,
+  onOpenChat,
+  description,
+  members = [],
+  role,
+}: {
+  name: string;
+  meta: string;
+  balance: string;
+  meaning: string;
+  icon?: string;
+  color?: string;
+  onPress?: () => void;
+  onOpenChat?: () => void;
+  description?: string;
+  members?: readonly { name: string; avatarId?: string; avatarUrl?: string | null }[];
+  role?: string;
+}) {
+  const tone = meaning.toLowerCase().includes('you owe')
+    ? s.negative
+    : meaning.toLowerCase().includes('owed')
+      ? s.positive
+      : '';
+  return (
+    <article className={s.groupRow}>
+      <Tile icon={icon} color={color} />
+      <div className={s.groupIdentity}>
+        <h3>{name}</h3>
+        {description && <p className={s.muted}>{description}</p>}
+        <div className={s.rowMeta}>
+          {members.length > 0 && (
+            <span className={s.avatars}>
+              {members.slice(0, 4).map((m, i) => (
+                <PersonAvatar
+                  key={i}
+                  name={m.name}
+                  url={m.avatarUrl}
+                  avatarId={m.avatarId}
+                  size={28}
+                />
+              ))}
+            </span>
+          )}
+          <span>{meta}</span>
+          {role && (
+            <span className={`${s.badge} ${role === 'admin' || role === 'owner' ? s.admin : ''}`}>
+              {role === 'admin' || role === 'owner' ? <Crown weight="fill" size={13} /> : null}
+              {role === 'owner' ? 'Group owner' : role === 'admin' ? 'You are an admin' : 'Member'}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className={`${s.balance} ${tone}`}>
+        <small>{meaning}</small>
+        <strong>{balance}</strong>
+      </div>
+      <div className={s.actions}>
+        <Button size="sm" variant="outline" onPress={onPress}>
+          View group
+        </Button>
+        {onOpenChat && (
+          <Button size="sm" variant="outline" onPress={onOpenChat}>
+            <ChatCircle size={16} /> Open chat
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}

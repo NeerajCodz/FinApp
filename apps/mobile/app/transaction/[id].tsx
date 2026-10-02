@@ -88,8 +88,23 @@ export default function TransactionDetailRoute() {
   return (
     <TransactionDetailScreen
       referenceId={id}
-      relatedTransactions={transactionViews((transactionState.data??[]).filter(item => !recordIds(item).includes(String(id)) && ((record?.categoryId && item.categoryId === record.categoryId) || (record?.merchant && item.merchant === record.merchant))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,5),accountState.data??[],categoryState.data??[],timeZone)}
-      onOpenTransaction={value => router.push(`/transaction/${encodeURIComponent(value)}` as never)}
+      relatedTransactions={transactionViews(
+        (transactionState.data ?? [])
+          .filter(
+            (item) =>
+              !recordIds(item).includes(String(id)) &&
+              ((record?.categoryId && item.categoryId === record.categoryId) ||
+                (record?.merchant && item.merchant === record.merchant)),
+          )
+          .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt))
+          .slice(0, 5),
+        accountState.data ?? [],
+        categoryState.data ?? [],
+        timeZone,
+      )}
+      onOpenTransaction={(value) =>
+        router.push(`/transaction/${encodeURIComponent(value)}` as never)
+      }
       tags={(tagState.data ?? []).flatMap((tag) =>
         record &&
         typeof tag.transactionId === 'string' &&

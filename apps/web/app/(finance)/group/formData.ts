@@ -14,9 +14,7 @@ export function dateInput(value: unknown): string {
 }
 
 export function dateTimestamp(value: string): number {
-  const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? Date.parse(`${value}T00:00:00.000Z`)
-    : NaN;
+  const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(value) ? Date.parse(`${value}T00:00:00.000Z`) : NaN;
   if (!Number.isFinite(timestamp) || dateInput(timestamp) !== value)
     throw new Error('Choose a valid date.');
   return timestamp;

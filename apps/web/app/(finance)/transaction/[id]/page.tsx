@@ -131,8 +131,23 @@ export default function PersonalTransactionDetailPage() {
   return (
     <TransactionDetailScreen
       referenceId={routeId}
-      relatedTransactions={transactionViews(transactionState.records.filter(record => userId && belongsToUser(record, userId) && !matchesId(record, routeId) && ((transaction?.categoryId && record.categoryId === transaction.categoryId) || (transaction?.merchant && record.merchant === transaction.merchant))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,5),accounts,categories,profile?.timezone)}
-      onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      relatedTransactions={transactionViews(
+        transactionState.records
+          .filter(
+            (record) =>
+              userId &&
+              belongsToUser(record, userId) &&
+              !matchesId(record, routeId) &&
+              ((transaction?.categoryId && record.categoryId === transaction.categoryId) ||
+                (transaction?.merchant && record.merchant === transaction.merchant)),
+          )
+          .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt))
+          .slice(0, 5),
+        accounts,
+        categories,
+        profile?.timezone,
+      )}
+      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
       tags={tagState.records.flatMap((tag) => {
         if (
           !transaction ||

@@ -46,7 +46,13 @@ export type GroupChatScreenProps = {
   onChooseBillImage: () => void;
   onBack?: () => void;
   group?: GroupMetadata & { name: string; currency: string; icon?: string; color?: string };
-  members?: readonly { id: string; name: string; username?: string; avatarId?: string; avatarUrl?: string }[];
+  members?: readonly {
+    id: string;
+    name: string;
+    username?: string;
+    avatarId?: string;
+    avatarUrl?: string;
+  }[];
   onOpenGroup?: () => void;
   onAddExpense?: () => void;
   onOpenSettings?: () => void;
@@ -91,7 +97,12 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
               <View style={{ flexDirection: 'row' }}>
                 {p.members?.slice(0, 5).map((member, index) => (
                   <View key={member.id} style={{ marginLeft: index ? -6 : 0 }}>
-                    <GroupAvatar name={member.name} avatarId={member.avatarId} avatarUrl={member.avatarUrl} size={26} />
+                    <GroupAvatar
+                      name={member.name}
+                      avatarId={member.avatarId}
+                      avatarUrl={member.avatarUrl}
+                      size={26}
+                    />
                   </View>
                 ))}
               </View>
@@ -355,7 +366,11 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                     paddingVertical: 4,
                   }}
                 >
-                  <GroupAvatar name={member.name} avatarId={member.avatarId} avatarUrl={member.avatarUrl} />
+                  <GroupAvatar
+                    name={member.name}
+                    avatarId={member.avatarId}
+                    avatarUrl={member.avatarUrl}
+                  />
                   <View style={{ flex: 1 }}>
                     <Typography variant="label">{member.name}</Typography>
                     {member.username && (
