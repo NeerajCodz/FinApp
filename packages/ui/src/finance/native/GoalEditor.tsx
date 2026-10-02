@@ -215,8 +215,7 @@ export function GoalEditor(p: GoalEditorProps) {
             style={{ flex: 1 }}
             disabled={p.saving || !p.currency || !values.name.trim() || !values.target.trim()}
             onPress={() => {
-              if (values.name.trim() && values.target.trim() && p.currency)
-                p.onSave?.(values);
+              if (values.name.trim() && values.target.trim() && p.currency) p.onSave?.(values);
             }}
           >
             {p.saving ? 'Saving…' : editing ? 'Save changes' : 'Create goal'}

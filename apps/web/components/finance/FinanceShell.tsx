@@ -33,6 +33,7 @@ type NavItem = { href: string; label: string; icon: LucideIcon };
 type SidebarProfile = LocalRecord & {
   displayName?: string;
   username?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
 };
 const navigation: NavItem[] = [
@@ -153,6 +154,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
                 label={profileName}
                 size={40}
                 imageUrl={profile?.avatarUrl}
+                avatarId={profile?.avatarId}
               />
               <span className="finance-sidebar-profile-copy">
                 <span className="finance-sidebar-profile-name">{profileName}</span>

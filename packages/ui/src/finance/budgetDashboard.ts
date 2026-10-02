@@ -1,5 +1,21 @@
-export type BudgetSettings={icon?:string;alertThreshold?:number;notes?:string;includeInAnalytics?:boolean;accountIds?:string[]};
-export type BudgetDashboardTransaction={id:string;amountMinor:bigint;currency:string;occurredAt:number;title:string;merchant?:string;accountId?:string;accountName?:string;categoryName?:string};
+export type BudgetSettings = {
+  icon?: string;
+  alertThreshold?: number;
+  notes?: string;
+  includeInAnalytics?: boolean;
+  accountIds?: string[];
+};
+export type BudgetDashboardTransaction = {
+  id: string;
+  amountMinor: bigint;
+  currency: string;
+  occurredAt: number;
+  title: string;
+  merchant?: string;
+  accountId?: string;
+  accountName?: string;
+  categoryName?: string;
+};
 export function budgetDashboard(
   transactions: readonly BudgetDashboardTransaction[],
   startAt: number,
@@ -25,7 +41,8 @@ export function budgetDashboard(
   }));
   for (const row of rows) {
     const index = Math.floor((row.occurredAt - startAt) / 86_400_000);
-    const bucket = buckets[Math.min(buckets.length - 1, Math.floor((index * buckets.length) / days))];
+    const bucket =
+      buckets[Math.min(buckets.length - 1, Math.floor((index * buckets.length) / days))];
     if (bucket) bucket.amount += row.amountMinor;
     if (daily[index]) daily[index]!.amount += row.amountMinor;
   }

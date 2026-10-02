@@ -1,6 +1,6 @@
 {
   "name": "finapp",
-  "version": "0.1.1",
+  "version": "1.1.1",
   "private": true,
   "packageManager": "bun@1.3.14",
   "workspaces": [
@@ -26,7 +26,8 @@
     "format:check": "bunx prettier --check .",
     "expo:doctor": "bun run --cwd apps/mobile expo:doctor",
     "validate": "bun run typecheck && bun run test && bun run lint && bun run format:check && bun run expo:doctor",
-    "upload:avatars": "bun scripts/upload-avatars.ts"
+    "generate:avatars": "bun scripts/generate-avatar-variants.ts",
+    "cleanup:avatar-storage": "bun scripts/cleanup-avatar-storage.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -34,7 +35,8 @@
     "eslint": "^10.9.1",
     "prettier": "^3.6.2",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.68.0"
+    "typescript-eslint": "^8.68.0",
+    "sharp": "^0.35.4"
   },
   "overrides": {
     "expo-constants": "~57.0.20",

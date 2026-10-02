@@ -8,7 +8,12 @@ import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-type GoalAccount = LocalRecord & { name?: string; currency?: string; archivedAt?: number; cloudId?: string };
+type GoalAccount = LocalRecord & {
+  name?: string;
+  currency?: string;
+  archivedAt?: number;
+  cloudId?: string;
+};
 
 export default function NewGoalPage() {
   const router = useRouter();
@@ -65,12 +70,12 @@ export default function NewGoalPage() {
         ...(values.color ? { color: values.color } : {}),
         ...(values.goalType ? { goalType: values.goalType } : {}),
         ...(monthlyContributionMinor !== undefined ? { monthlyContributionMinor } : {}),
-        ...(selectedAccount ? { accountId: String(selectedAccount.id ?? selectedAccount._id) } : {}),
+        ...(selectedAccount
+          ? { accountId: String(selectedAccount.id ?? selectedAccount._id) }
+          : {}),
         ...(values.priority ? { priority: values.priority } : {}),
         ...(values.notes?.trim() ? { notes: values.notes.trim() } : {}),
-        ...(values.reminderFrequency
-          ? { reminderFrequency: values.reminderFrequency }
-          : {}),
+        ...(values.reminderFrequency ? { reminderFrequency: values.reminderFrequency } : {}),
       };
       const goalId = await commitLocalWrite(
         userId,

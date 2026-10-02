@@ -20,6 +20,6 @@ export function compareTransactionAmounts(
   const percent = (magnitude * 100n + previous / 2n) / previous;
   return {
     label: `${difference > 0n ? '↑' : '↓'} ${percent}% from last month`,
-    tone: (difference > 0n) === lowerIsBetter ? 'negative' : 'positive',
+    tone: difference > 0n === lowerIsBetter ? 'negative' : 'positive',
   };
 }

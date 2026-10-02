@@ -119,8 +119,7 @@ export default function BudgetAnalyticsRoute() {
           (typeof row.accountId === 'string' &&
             budget.accountIds.some(
               (id) =>
-                accountAliases.has(id) &&
-                ids(accountAliases.get(id)!).includes(row.accountId!),
+                accountAliases.has(id) && ids(accountAliases.get(id)!).includes(row.accountId!),
             ))),
     )
     .map((row) => ({

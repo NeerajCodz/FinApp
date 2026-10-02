@@ -20,7 +20,7 @@ export type GroupOverviewItem = {
   balance: string;
   balanceMeaning: string;
   description?: string;
-  members?: readonly { name: string; avatarUrl?: string | null }[];
+  members?: readonly { name: string; avatarId?: string; avatarUrl?: string | null }[];
   role?: string;
 };
 export type GroupOverviewSummary = { currency: string; owed: string; owing: string };

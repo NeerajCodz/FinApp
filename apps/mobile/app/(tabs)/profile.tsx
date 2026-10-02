@@ -229,6 +229,7 @@ export default function ProfileScreen() {
               label="Your profile"
               size={68}
               imageUrl={profile?.avatarUrl}
+              avatarId={profile?.avatarId}
             />
             <View style={{ flex: 1, gap: 3 }}>
               <Typography variant="heading">{profile?.displayName ?? 'Your profile'}</Typography>

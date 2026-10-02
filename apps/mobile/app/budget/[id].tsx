@@ -121,8 +121,7 @@ export default function BudgetDetailScreenRoute() {
           (typeof row.accountId === 'string' &&
             budget.accountIds.some(
               (id) =>
-                accountAliases.has(id) &&
-                aliases(accountAliases.get(id)!).includes(row.accountId!),
+                accountAliases.has(id) && aliases(accountAliases.get(id)!).includes(row.accountId!),
             ))),
     )
     .sort((a, b) => Number(b.occurredAt ?? 0) - Number(a.occurredAt ?? 0));
@@ -169,11 +168,7 @@ export default function BudgetDetailScreenRoute() {
         <Text>Sign in to view this category budget.</Text>
       </View>
     );
-  if (
-    budgetState.loading ||
-    categoryState.data === undefined ||
-    accountState.data === undefined
-  )
+  if (budgetState.loading || categoryState.data === undefined || accountState.data === undefined)
     return (
       <View style={{ flex: 1, backgroundColor: tokens.background, padding: 24 }}>
         <Text>Opening budget…</Text>
@@ -229,17 +224,19 @@ export default function BudgetDetailScreenRoute() {
       allTransactions={matching.flatMap((row) => {
         const id = aliases(row)[0];
         return id
-          ? [{
-              id,
-              amountMinor: minor(row.amountMinor),
-              currency: row.currency ?? currency,
-              occurredAt: Number(row.occurredAt ?? 0),
-              title: row.title ?? row.merchant ?? 'Expense',
-              merchant: row.merchant,
-              accountId: row.accountId,
-              accountName: row.accountId ? accountAliases.get(row.accountId)?.name : undefined,
-              categoryName: category?.name,
-            }]
+          ? [
+              {
+                id,
+                amountMinor: minor(row.amountMinor),
+                currency: row.currency ?? currency,
+                occurredAt: Number(row.occurredAt ?? 0),
+                title: row.title ?? row.merchant ?? 'Expense',
+                merchant: row.merchant,
+                accountId: row.accountId,
+                accountName: row.accountId ? accountAliases.get(row.accountId)?.name : undefined,
+                categoryName: category?.name,
+              },
+            ]
           : [];
       })}
       startAt={startAt}

@@ -16,7 +16,13 @@ type AnalyticsSummaryProps = {
 };
 
 export function AnalyticsSummary({ metrics }: AnalyticsSummaryProps) {
-  const icons = { spent: CreditCard, income: Wallet, net: ArrowLeftRight, savings: PiggyBank, transactions: FileText };
+  const icons = {
+    spent: CreditCard,
+    income: Wallet,
+    net: ArrowLeftRight,
+    savings: PiggyBank,
+    transactions: FileText,
+  };
   return (
     <section className={styles.summary} aria-label="Analytics summary">
       {metrics.map((item) => {
@@ -24,7 +30,9 @@ export function AnalyticsSummary({ metrics }: AnalyticsSummaryProps) {
         const color = { '--metric-color': item.color } as CSSProperties;
         return (
           <article key={item.label} className={styles.metric} style={color}>
-            <span className={styles.icon} aria-hidden="true"><Icon size={23} /></span>
+            <span className={styles.icon} aria-hidden="true">
+              <Icon size={23} />
+            </span>
             <p className={styles.label}>{item.label}</p>
             <p className={styles.value}>{item.value}</p>
             {item.detail && <p className={styles.detail}>{item.detail}</p>}

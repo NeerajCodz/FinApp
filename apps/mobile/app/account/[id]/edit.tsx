@@ -48,7 +48,9 @@ export default function EditAccountScreen() {
   const { data: transactions = [] } = useLocalRecords<LocalRecord>(userId, 'transaction');
   const { data: categories = [] } = useLocalRecords<LocalRecord>(userId, 'category');
   const { data: profiles = [] } = useLocalRecords<LocalRecord>(userId, 'profile');
-  const profile = profiles.find(record => record.ownerId === undefined || record.ownerId === userId);
+  const profile = profiles.find(
+    (record) => record.ownerId === undefined || record.ownerId === userId,
+  );
   const [primaryDraft, setPrimaryDraft] = useState<boolean>();
   const account = accounts?.find(
     (item) =>
@@ -150,7 +152,18 @@ export default function EditAccountScreen() {
       );
       if (profile && primaryDraft !== undefined) {
         const nextId = primaryDraft ? accountId : null;
-        await commitLocalWrite(userId, 'profile', 'user.defaultAccount', { ...profile, defaultAccountId: nextId ?? undefined }, { accountId: nextId }, { recordId: String(profile.id ?? profile._id), dependencies: nextId && !account._id && !account.cloudId ? [`account:${accountId}`] : [] });
+        await commitLocalWrite(
+          userId,
+          'profile',
+          'user.defaultAccount',
+          { ...profile, defaultAccountId: nextId ?? undefined },
+          { accountId: nextId },
+          {
+            recordId: String(profile.id ?? profile._id),
+            dependencies:
+              nextId && !account._id && !account.cloudId ? [`account:${accountId}`] : [],
+          },
+        );
       }
       router.replace(`/account/${encodeURIComponent(accountId)}` as never);
     } catch (cause) {
@@ -175,10 +188,23 @@ export default function EditAccountScreen() {
     <AccountFormScreen
       mode="edit"
       createdAt={account.createdAt}
-      activity={deriveFormActivity(transactions, categories, accounts ?? [], account, 'accountId', userId)}
-      onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}` as never)}
+      activity={deriveFormActivity(
+        transactions,
+        categories,
+        accounts ?? [],
+        account,
+        'accountId',
+        userId,
+      )}
+      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}` as never)}
       onViewTransactions={() => router.push(`/account/${encodeURIComponent(routeId)}` as never)}
-      isPrimary={primaryDraft ?? Boolean(profile && [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string))}
+      isPrimary={
+        primaryDraft ??
+        Boolean(
+          profile &&
+          [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string),
+        )
+      }
       onPrimaryChange={profile ? setPrimaryDraft : undefined}
       title={form.name.trim() || 'Edit account'}
       subtitle="Update your account details and settings."

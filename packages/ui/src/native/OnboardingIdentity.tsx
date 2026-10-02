@@ -4,15 +4,15 @@ import { Avatar } from './feedback';
 import { Button } from './button';
 import { Typography } from './typography';
 
-type AvatarChoice = { avatarId: string; url: string };
+type AvatarChoice = { avatarId: string };
 
 type ProfilePreviewProps = {
   displayName: string;
   username: string;
-  avatarUrl?: string;
+  avatarId?: string;
 };
 
-export function ProfilePreview({ displayName, username, avatarUrl }: ProfilePreviewProps) {
+export function ProfilePreview({ displayName, username, avatarId }: ProfilePreviewProps) {
   const name = displayName.trim() || 'Your name';
   const initials = name
     .split(/\s+/)
@@ -35,7 +35,7 @@ export function ProfilePreview({ displayName, username, avatarUrl }: ProfilePrev
         backgroundColor: '#ffffff08',
       }}
     >
-      <Avatar initials={initials} label={name} imageUrl={avatarUrl} size={68} />
+      <Avatar initials={initials} label={name} avatarId={avatarId} size={68} />
       <View style={{ flex: 1, gap: 4 }}>
         <Typography variant="caption" style={{ letterSpacing: 1.2 }}>
           PROFILE PREVIEW
@@ -72,7 +72,7 @@ export function OnboardingAvatarPicker({
           <Avatar
             initials=""
             label={`Select avatar ${avatar.avatarId}`}
-            imageUrl={avatar.url}
+            avatarId={avatar.avatarId}
             size={48}
           />
         </Button>

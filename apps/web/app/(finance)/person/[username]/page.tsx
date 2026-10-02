@@ -50,6 +50,7 @@ type UserSearchResult = {
   id: string;
   username?: string;
   displayName?: string;
+  avatarId?: string;
   image?: string;
   avatarUrl?: string | null;
 };
@@ -249,6 +250,7 @@ export default function PersonPage() {
             label={`@${handle}`}
             size={60}
             imageUrl={person?.avatarUrl ?? person?.image}
+            avatarId={person?.avatarId}
           />
           <div style={{ display: 'grid', gap: 3 }}>
             <strong style={{ fontSize: '1.25rem' }}>@{handle}</strong>

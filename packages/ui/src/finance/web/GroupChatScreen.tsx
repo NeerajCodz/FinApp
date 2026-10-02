@@ -12,6 +12,7 @@ export type GroupChatItem = {
   date: string;
   accessibleLabel: string;
   sender?: string;
+  senderAvatarId?: string;
   senderAvatarUrl?: string | null;
   ownMessage?: boolean;
   text?: string;
@@ -35,7 +36,13 @@ export type GroupChatScreenProps = {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   group?: { name: string; currency: string; icon?: string; color?: string };
-  members?: readonly { id: string; name: string; username?: string; avatarUrl?: string | null }[];
+  members?: readonly {
+    id: string;
+    name: string;
+    username?: string;
+    avatarId?: string;
+    avatarUrl?: string | null;
+  }[];
   onOpenGroup?: () => void;
   onAddExpense?: () => void;
   onOpenSettings?: () => void;
@@ -76,6 +83,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
               <PersonAvatar
                 name={item.sender ?? (item.kind === 'message' ? 'Member' : 'Group')}
                 url={item.senderAvatarUrl}
+                avatarId={item.senderAvatarId}
                 size={38}
               />
             )}
@@ -224,7 +232,13 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
         </div>
         <span className={s.avatars}>
           {members.slice(0, 6).map((member) => (
-            <PersonAvatar key={member.id} name={member.name} url={member.avatarUrl} size={38} />
+            <PersonAvatar
+              key={member.id}
+              name={member.name}
+              url={member.avatarUrl}
+              avatarId={member.avatarId}
+              size={38}
+            />
           ))}
         </span>
         <div className={s.actions}>
@@ -265,7 +279,11 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
             <h3>Members ({members.length})</h3>
             {members.map((member) => (
               <div className={s.member} key={member.id}>
-                <PersonAvatar name={member.name} url={member.avatarUrl} />
+                <PersonAvatar
+                  name={member.name}
+                  url={member.avatarUrl}
+                  avatarId={member.avatarId}
+                />
                 <span className={s.activityCopy}>{member.name}</span>
                 <span className={s.badge}>Member</span>
               </div>

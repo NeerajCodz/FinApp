@@ -21,7 +21,7 @@ type Profile = LocalRecord & {
   avatarUrl?: string | null;
   phoneVerificationTime?: number;
 };
-type AvatarChoice = { avatarId: string; gender: NonNullable<Profile['gender']>; url: string };
+type AvatarChoice = { avatarId: string; gender: NonNullable<Profile['gender']> };
 const usernamePattern = /^[a-z0-9_]{3,32}$/;
 
 export default function EditProfileScreen() {
@@ -45,7 +45,6 @@ export default function EditProfileScreen() {
       phone: profile.phone ?? '',
       gender: profile.gender ?? 'neutral',
       avatarId: profile.avatarId ?? '',
-      avatarUrl: profile.avatarUrl,
     });
     setInitialized(true);
   }, [profile, initialized]);
@@ -64,9 +63,6 @@ export default function EditProfileScreen() {
     setSaving(true);
     setError('');
     try {
-      const selectedAvatar = (avatars ?? []).find(
-        (avatar: AvatarChoice) => avatar.avatarId === draft.avatarId,
-      );
       const update = {
         displayName: (draft.displayName ?? '').trim(),
         username: normalizedUsername,
@@ -77,7 +73,6 @@ export default function EditProfileScreen() {
       const next: Profile = {
         ...profile,
         ...update,
-        avatarUrl: selectedAvatar?.url ?? profile.avatarUrl,
       };
       if (update.phone !== profile.phone) next.phoneVerificationTime = undefined;
       const recordId = String(profile.id ?? profile._id ?? userId);
@@ -178,12 +173,11 @@ export default function EditProfileScreen() {
                   setDraft((current) => ({
                     ...current,
                     avatarId: avatar.avatarId,
-                    avatarUrl: avatar.url,
                     gender: avatar.gender || current.gender,
                   }))
                 }
               >
-                <Avatar initials="" label={avatar.avatarId} imageUrl={avatar.url} size={48} />
+                <Avatar initials="" label={avatar.avatarId} avatarId={avatar.avatarId} size={48} />
               </Button>
             ))}
           </View>

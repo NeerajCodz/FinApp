@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
-import { TransactionFormScreen, transactionViews, type TransactionFormType } from '@finapp/ui/finance';
+import {
+  TransactionFormScreen,
+  transactionViews,
+  type TransactionFormType,
+} from '@finapp/ui/finance';
 import { parseMinor } from '@convex/shared/money';
 import { minorToDecimal } from '@finapp/ui/finance';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -103,7 +107,11 @@ export default function EditTransactionScreen() {
         : 'This transaction is unavailable.'
       : undefined;
   let amountMinor: bigint | null = null;
-  try { amountMinor = parseMinor(amount, String(account?.currency ?? transaction?.currency ?? 'INR')); } catch { /* Invalid amounts keep save disabled. */ }
+  try {
+    amountMinor = parseMinor(amount, String(account?.currency ?? transaction?.currency ?? 'INR'));
+  } catch {
+    /* Invalid amounts keep save disabled. */
+  }
   const validTransfer =
     type !== 'transfer' ||
     Boolean(
@@ -196,8 +204,22 @@ export default function EditTransactionScreen() {
     <TransactionFormScreen
       status={transaction?.status}
       referenceId={routeId}
-      similarTransactions={transactionViews((transactionState.data??[]).filter(item => !idsOf(item).includes(String(routeId)) && ((categoryId && item.categoryId === categoryId) || (merchant.trim() && item.merchant === merchant.trim()))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,4),accounts,categories)}
-      onOpenTransaction={value => router.push(`/transaction/${encodeURIComponent(value)}` as never)}
+      similarTransactions={transactionViews(
+        (transactionState.data ?? [])
+          .filter(
+            (item) =>
+              !idsOf(item).includes(String(routeId)) &&
+              ((categoryId && item.categoryId === categoryId) ||
+                (merchant.trim() && item.merchant === merchant.trim())),
+          )
+          .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt))
+          .slice(0, 4),
+        accounts,
+        categories,
+      )}
+      onOpenTransaction={(value) =>
+        router.push(`/transaction/${encodeURIComponent(value)}` as never)
+      }
       mode="edit"
       signedIn={Boolean(userId)}
       unavailableMessage={unavailableMessage}

@@ -20,6 +20,7 @@ export type GroupDetailMember = {
   id: string;
   name: string;
   username?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
   role?: string;
 };
@@ -168,7 +169,12 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 <View style={{ flexDirection: 'row' }}>
                   {p.members.slice(0, 5).map((member, index) => (
                     <View key={member.id} style={{ marginLeft: index ? -7 : 0 }}>
-                      <GroupAvatar name={member.name} avatarUrl={member.avatarUrl} size={28} />
+                      <GroupAvatar
+                        name={member.name}
+                        avatarId={member.avatarId}
+                        avatarUrl={member.avatarUrl}
+                        size={28}
+                      />
                     </View>
                   ))}
                 </View>
@@ -275,7 +281,12 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                     paddingVertical: 5,
                   }}
                 >
-                  <GroupAvatar name={member.name} avatarUrl={member.avatarUrl} size={38} />
+                  <GroupAvatar
+                    name={member.name}
+                    avatarId={member.avatarId}
+                    avatarUrl={member.avatarUrl}
+                    size={38}
+                  />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Typography variant="label">{member.name}</Typography>
                     {member.username && (
@@ -376,6 +387,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                       <GroupAvatar
                         name={member.name}
                         avatarUrl={p.members.find((person) => person.id === member.id)?.avatarUrl}
+                        avatarId={p.members.find((person) => person.id === member.id)?.avatarId}
                       />
                       <View style={{ flex: 1, gap: 3 }}>
                         <Typography variant="label">{member.name}</Typography>

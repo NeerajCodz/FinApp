@@ -27,6 +27,7 @@ export type GroupEditMember = {
   name: string;
   username?: string;
   role: string;
+  avatarId?: string;
   avatarUrl?: string;
 };
 export type GroupEditScreenProps = GroupMetadataFieldsProps & {
@@ -338,7 +339,12 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <GroupAvatar name={member.name} avatarUrl={member.avatarUrl} size={36} />
+                        <GroupAvatar
+                          name={member.name}
+                          avatarId={member.avatarId}
+                          avatarUrl={member.avatarUrl}
+                          size={36}
+                        />
                         <View style={{ flex: 1, gap: 3 }}>
                           <Typography variant="label">{member.name}</Typography>
                           {member.username && (

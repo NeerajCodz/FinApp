@@ -45,7 +45,11 @@ export function ActivityHeader({
           aria-label={onAddTransaction ? 'Add transaction' : 'Open analytics'}
           onClick={onAddTransaction ?? onOpenAnalytics}
         >
-          {onAddTransaction ? <Plus size={25} aria-hidden="true" /> : <ChartNoAxesCombined size={19} aria-hidden="true" />}
+          {onAddTransaction ? (
+            <Plus size={25} aria-hidden="true" />
+          ) : (
+            <ChartNoAxesCombined size={19} aria-hidden="true" />
+          )}
         </button>
       </div>
     </header>

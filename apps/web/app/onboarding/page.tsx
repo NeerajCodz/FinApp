@@ -166,7 +166,6 @@ export default function OnboardingPage() {
           ...(profile ?? {}),
           id: profileId,
           ownerId: userId,
-          avatarUrl: selectedAvatar?.url,
           ...update,
         },
         update,
@@ -363,7 +362,7 @@ export default function OnboardingPage() {
                     <ProfilePreview
                       displayName={displayName}
                       username={handle}
-                      avatarUrl={selectedAvatar?.url}
+                      avatarId={avatarId}
                     />
                   </div>
                   <div className="auth-field">

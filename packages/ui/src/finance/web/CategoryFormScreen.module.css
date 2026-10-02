@@ -1,69 +1,354 @@
-.page { display: grid; gap: 16px; min-width: 0; color: var(--finapp-foreground); }
-.back { display: flex; align-items: center; gap: 12px; width: fit-content; border: 0; padding: 0; color: var(--finapp-foreground-muted); background: transparent; font: inherit; font-size: 14px; cursor: pointer; }
-.header { display: flex; align-items: center; gap: 24px; margin: 12px 0 6px; }
-.header h1 { font-size: 38px; line-height: 1.15; margin: 0; letter-spacing: -.03em; }
-.header > span { width: 82px !important; height: 68px !important; border-radius: 12px !important; font-size: 38px !important; }
-.header p { color: var(--finapp-foreground-muted); margin: 8px 0 0; font-size: 16px; }
-.createLayout { width: min(100%, 850px); margin: 4px auto 0; }
-.editLayout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-.panel { padding: 20px; border: 1px solid var(--finapp-border-subtle); border-radius: 11px; background: var(--finapp-card); min-width: 0; }
-.panel h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
-.panel p { font-size: 14px; color: var(--finapp-foreground-muted); line-height: 1.45; }
-.createLayout .panel { padding: 25px 24px; }
-.fields, .field { display: grid; gap: 10px; }
-.field { margin-bottom: 20px; }
-.field label { font-size: 15px; font-weight: 500; }
-.field label span, .field small { color: var(--finapp-foreground-muted); font-weight: 400; }
-.field small { font-size: 13px; }
-.nameType { display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; }
-.nameType .field { margin-bottom: 14px; }
-.editLayout .field { gap: 6px; margin-bottom: 14px; }
-.editLayout .field label { font-size: 13px; }
-.page textarea, .page .finapp-select-trigger { width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--finapp-border); background: var(--finapp-surface-raised); color: var(--finapp-foreground); padding: 12px 14px; font: inherit; font-size: 14px; }
-.page textarea { resize: vertical; }
-.page .finapp-select-trigger { min-height: 40px; padding: 8px 12px; }
-.page textarea:focus-visible, .page .finapp-select-trigger:focus-visible, .back:focus-visible { outline: 2px solid var(--finapp-primary); outline-offset: 2px; }
-.segment { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.segment button { display: flex; align-items: center; gap: 22px; min-height: 66px; padding: 0 22px; border-radius: 10px; border: 1px solid var(--finapp-border); background: transparent; color: var(--finapp-foreground); font: inherit; cursor: pointer; }
-.segment button svg { color: var(--finapp-expense); }
-.segment button[data-kind='income'] svg { color: var(--finapp-income); }
-.segment button span { flex: 1; text-align: left; }
-.segment i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--finapp-foreground-muted); padding: 2px; background-clip: content-box; }
-.segment button[aria-pressed='true'] { border-color: var(--finapp-expense); background: color-mix(in srgb, var(--finapp-expense) 8%, transparent); }
-.segment button[data-kind='income'][aria-pressed='true'] { border-color: var(--finapp-income); background: color-mix(in srgb, var(--finapp-income) 8%, transparent); }
-.segment button[aria-pressed='true'] i { border-color: var(--finapp-expense); background-color: var(--finapp-expense); }
-.segment button[data-kind='income'][aria-pressed='true'] i { border-color: var(--finapp-income); background-color: var(--finapp-income); }
-.stack { display: grid; gap: 16px; }
-.panelHeader { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
-.panelHeader small { color: var(--finapp-foreground-muted); }
-.usage { color: var(--finapp-foreground-muted); font-size: 16px; }
-.usage strong { font-size: 22px; color: var(--finapp-foreground); margin-right: 5px; }
-.track { height: 12px; background: var(--finapp-surface-raised); border-radius: 10px; overflow: hidden; margin: 7px 0 12px; }
-.track span { display: block; height: 100%; background: var(--finapp-income); border-radius: inherit; }
-.track span[data-risk='true'] { background: var(--finapp-warning, #ffd44f); }
-.usageTotals { display: flex; justify-content: space-between; }
-.usageTotals > div { display: grid; gap: 4px; }
-.usageTotals > div:last-child { text-align: right; }
-.usageTotals strong { font-size: 19px; }
-.usageTotals small { color: var(--finapp-foreground-muted); }
-.analytics { display: flex; gap: 16px; align-items: center; }
-.analytics > div { flex: 1; }
-.analytics h2 { margin-bottom: 7px; }
-.analytics p { margin: 0; font-size: 13px; }
-.analytics button { white-space: nowrap; color: var(--finapp-primary); border-color: var(--finapp-primary); }
-.setting { display: flex; gap: 14px; align-items: start; cursor: pointer; padding: 10px 0; font-size: 14px; }
-.setting > span { display: grid; gap: 5px; }
-.setting small { font-size: 12px; color: var(--finapp-foreground-muted); }
-.setting input { appearance: none; width: 47px; height: 26px; border-radius: 18px; background: var(--finapp-border); position: relative; flex: 0 0 auto; cursor: pointer; margin: 0; }
-.setting input::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--finapp-foreground); left: 3px; top: 3px; transition: transform 150ms; }
-.setting input:checked { background: var(--finapp-primary); }
-.setting input:checked::after { transform: translateX(21px); }
-.appearance { display: flex; gap: 12px; flex-wrap: wrap; }
-.counter { text-align: right; }
-.recent, .error { grid-column: 1 / -1; }
-.footer { display: flex; justify-content: space-between; gap: 12px; }
-.footer button { border-radius: 8px; min-height: 45px; }
-.error { color: var(--finapp-expense); }
-.empty { padding: 22px 0; }
-@media(max-width: 800px) { .editLayout { grid-template-columns: 1fr; } .header h1 { font-size: 30px; } .createLayout .panel { padding: 18px; } .analytics { flex-wrap: wrap; } }
-@media(max-width: 480px) { .segment button { padding: 0 12px; gap: 10px; } .nameType { grid-template-columns: 1fr; } }
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  color: var(--finapp-foreground);
+}
+.back {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  color: var(--finapp-foreground-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 12px 0 6px;
+}
+.header h1 {
+  font-size: 38px;
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.03em;
+}
+.header > span {
+  width: 82px !important;
+  height: 68px !important;
+  border-radius: 12px !important;
+  font-size: 38px !important;
+}
+.header p {
+  color: var(--finapp-foreground-muted);
+  margin: 8px 0 0;
+  font-size: 16px;
+}
+.createLayout {
+  width: min(100%, 850px);
+  margin: 4px auto 0;
+}
+.editLayout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.panel {
+  padding: 20px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 11px;
+  background: var(--finapp-card);
+  min-width: 0;
+}
+.panel h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.panel p {
+  font-size: 14px;
+  color: var(--finapp-foreground-muted);
+  line-height: 1.45;
+}
+.createLayout .panel {
+  padding: 25px 24px;
+}
+.fields,
+.field {
+  display: grid;
+  gap: 10px;
+}
+.field {
+  margin-bottom: 20px;
+}
+.field label {
+  font-size: 15px;
+  font-weight: 500;
+}
+.field label span,
+.field small {
+  color: var(--finapp-foreground-muted);
+  font-weight: 400;
+}
+.field small {
+  font-size: 13px;
+}
+.nameType {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 12px;
+}
+.nameType .field {
+  margin-bottom: 14px;
+}
+.editLayout .field {
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.editLayout .field label {
+  font-size: 13px;
+}
+.page textarea,
+.page .finapp-select-trigger {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--finapp-border);
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 14px;
+}
+.page textarea {
+  resize: vertical;
+}
+.page .finapp-select-trigger {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+.page textarea:focus-visible,
+.page .finapp-select-trigger:focus-visible,
+.back:focus-visible {
+  outline: 2px solid var(--finapp-primary);
+  outline-offset: 2px;
+}
+.segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.segment button {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-height: 66px;
+  padding: 0 22px;
+  border-radius: 10px;
+  border: 1px solid var(--finapp-border);
+  background: transparent;
+  color: var(--finapp-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.segment button svg {
+  color: var(--finapp-expense);
+}
+.segment button[data-kind='income'] svg {
+  color: var(--finapp-income);
+}
+.segment button span {
+  flex: 1;
+  text-align: left;
+}
+.segment i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--finapp-foreground-muted);
+  padding: 2px;
+  background-clip: content-box;
+}
+.segment button[aria-pressed='true'] {
+  border-color: var(--finapp-expense);
+  background: color-mix(in srgb, var(--finapp-expense) 8%, transparent);
+}
+.segment button[data-kind='income'][aria-pressed='true'] {
+  border-color: var(--finapp-income);
+  background: color-mix(in srgb, var(--finapp-income) 8%, transparent);
+}
+.segment button[aria-pressed='true'] i {
+  border-color: var(--finapp-expense);
+  background-color: var(--finapp-expense);
+}
+.segment button[data-kind='income'][aria-pressed='true'] i {
+  border-color: var(--finapp-income);
+  background-color: var(--finapp-income);
+}
+.stack {
+  display: grid;
+  gap: 16px;
+}
+.panelHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panelHeader small {
+  color: var(--finapp-foreground-muted);
+}
+.usage {
+  color: var(--finapp-foreground-muted);
+  font-size: 16px;
+}
+.usage strong {
+  font-size: 22px;
+  color: var(--finapp-foreground);
+  margin-right: 5px;
+}
+.track {
+  height: 12px;
+  background: var(--finapp-surface-raised);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 7px 0 12px;
+}
+.track span {
+  display: block;
+  height: 100%;
+  background: var(--finapp-income);
+  border-radius: inherit;
+}
+.track span[data-risk='true'] {
+  background: var(--finapp-warning, #ffd44f);
+}
+.usageTotals {
+  display: flex;
+  justify-content: space-between;
+}
+.usageTotals > div {
+  display: grid;
+  gap: 4px;
+}
+.usageTotals > div:last-child {
+  text-align: right;
+}
+.usageTotals strong {
+  font-size: 19px;
+}
+.usageTotals small {
+  color: var(--finapp-foreground-muted);
+}
+.analytics {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.analytics > div {
+  flex: 1;
+}
+.analytics h2 {
+  margin-bottom: 7px;
+}
+.analytics p {
+  margin: 0;
+  font-size: 13px;
+}
+.analytics button {
+  white-space: nowrap;
+  color: var(--finapp-primary);
+  border-color: var(--finapp-primary);
+}
+.setting {
+  display: flex;
+  gap: 14px;
+  align-items: start;
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 14px;
+}
+.setting > span {
+  display: grid;
+  gap: 5px;
+}
+.setting small {
+  font-size: 12px;
+  color: var(--finapp-foreground-muted);
+}
+.setting input {
+  appearance: none;
+  width: 47px;
+  height: 26px;
+  border-radius: 18px;
+  background: var(--finapp-border);
+  position: relative;
+  flex: 0 0 auto;
+  cursor: pointer;
+  margin: 0;
+}
+.setting input::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--finapp-foreground);
+  left: 3px;
+  top: 3px;
+  transition: transform 150ms;
+}
+.setting input:checked {
+  background: var(--finapp-primary);
+}
+.setting input:checked::after {
+  transform: translateX(21px);
+}
+.appearance {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.counter {
+  text-align: right;
+}
+.recent,
+.error {
+  grid-column: 1 / -1;
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.footer button {
+  border-radius: 8px;
+  min-height: 45px;
+}
+.error {
+  color: var(--finapp-expense);
+}
+.empty {
+  padding: 22px 0;
+}
+@media (max-width: 800px) {
+  .editLayout {
+    grid-template-columns: 1fr;
+  }
+  .header h1 {
+    font-size: 30px;
+  }
+  .createLayout .panel {
+    padding: 18px;
+  }
+  .analytics {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 480px) {
+  .segment button {
+    padding: 0 12px;
+    gap: 10px;
+  }
+  .nameType {
+    grid-template-columns: 1fr;
+  }
+}

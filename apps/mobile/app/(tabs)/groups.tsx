@@ -38,6 +38,7 @@ type Member = LocalRecord & {
   username?: string;
   name?: string;
   memberId?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
   role?: string;
 };
@@ -156,6 +157,7 @@ export default function GroupsScreen() {
               member.name ??
               (member.username ? `@${member.username}` : 'Group member'),
             avatarUrl: member.avatarUrl ?? undefined,
+            avatarId: member.avatarId,
           })),
           role: currentMember?.role,
           memberCount: groupMembers.length,

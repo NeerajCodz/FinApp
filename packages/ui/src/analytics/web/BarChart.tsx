@@ -58,7 +58,11 @@ export function BarChart({
     <div
       role="group"
       aria-label="Spending bar chart. Use the arrow keys to inspect values."
-      style={{ width: '100%', overflowX: horizontal ? 'auto' : undefined }}
+      style={{
+        minWidth: 0,
+        width: '100%',
+        overflowX: horizontal || values.length > 7 ? 'auto' : undefined,
+      }}
     >
       <div
         style={{

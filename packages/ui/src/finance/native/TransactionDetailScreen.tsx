@@ -146,13 +146,30 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <View style={{width:64,height:64,borderRadius:14,backgroundColor:tokens.surfaceRaised,alignItems:'center',justifyContent:'center'}}><CategoryIcon label={category} icon={categoryIcon} /></View>
+          <View
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 14,
+              backgroundColor: tokens.surfaceRaised,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CategoryIcon label={category} icon={categoryIcon} />
+          </View>
           <View style={{ flex: 1 }}>
             <Typography variant="heading">{title}</Typography>
             {merchant && <Typography variant="caption">{merchant}</Typography>}
           </View>
         </View>
-        <Money amountMinor={amountMinor} currency={currency} type={type} size="hero" color={type==='income'||type==='refund'?tokens.income:tokens.expense} />
+        <Money
+          amountMinor={amountMinor}
+          currency={currency}
+          type={type}
+          size="hero"
+          color={type === 'income' || type === 'refund' ? tokens.income : tokens.expense}
+        />
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Button variant="outline" disabled={!canEdit || !onEdit} onPress={onEdit}>
             <NotePencil size={17} color={tokens.foreground} /> Edit
@@ -212,7 +229,12 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
         <SettingsRow label="Date & time" value={date} />
         <Separator />
         <SettingsRow label="Status" value={status ?? 'Saved'} />
-        {props.referenceId && <><Separator/><SettingsRow label="Reference ID" value={props.referenceId}/></>}
+        {props.referenceId && (
+          <>
+            <Separator />
+            <SettingsRow label="Reference ID" value={props.referenceId} />
+          </>
+        )}
         {merchant && (
           <>
             <Separator />
@@ -226,10 +248,23 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
           </>
         ) : null}
       </View>
-      <View style={{padding:16,borderWidth:1,borderColor:tokens.borderSubtle,borderRadius:12,backgroundColor:tokens.surfaceRaised}}>
+      <View
+        style={{
+          padding: 16,
+          borderWidth: 1,
+          borderColor: tokens.borderSubtle,
+          borderRadius: 12,
+          backgroundColor: tokens.surfaceRaised,
+        }}
+      >
         <Typography variant="heading">Related transactions</Typography>
-        <Typography variant="caption">Other transactions from this merchant or in this category.</Typography>
-        <TransactionCards items={props.relatedTransactions??[]} onSelect={props.onOpenTransaction}/>
+        <Typography variant="caption">
+          Other transactions from this merchant or in this category.
+        </Typography>
+        <TransactionCards
+          items={props.relatedTransactions ?? []}
+          onSelect={props.onOpenTransaction}
+        />
       </View>
     </ScrollView>
   );

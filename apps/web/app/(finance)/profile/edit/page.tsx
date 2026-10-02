@@ -105,7 +105,6 @@ export default function EditProfilePage() {
         ...profile,
         ...localUpdate,
         username: normalizedUsername,
-        ...(selectedAvatar ? { avatarUrl: selectedAvatar.url } : {}),
       };
       if (phone !== profile.phone) next.phoneVerificationTime = undefined;
       await commitLocalWrite(userId, 'profile', 'user.update', next, localUpdate, {
@@ -239,7 +238,7 @@ export default function EditProfilePage() {
                     cursor: 'pointer',
                   }}
                 >
-                  <Avatar initials="" label={item.avatarId} imageUrl={item.url} size={48} />
+                  <Avatar initials="" label={item.avatarId} avatarId={item.avatarId} size={48} />
                 </button>
               ))}
             </div>

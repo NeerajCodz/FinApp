@@ -47,7 +47,8 @@ export function aggregateBudgetSpending(
       transaction.occurredAt >= budget.endAt ||
       (budget.categoryId !== undefined && transaction.categoryId !== budget.categoryId) ||
       (budget.accountId !== undefined && transaction.accountId !== budget.accountId) ||
-      (budget.accountIds !== undefined && budget.accountIds.length > 0 &&
+      (budget.accountIds !== undefined &&
+        budget.accountIds.length > 0 &&
         !budget.accountIds.includes(transaction.accountId)) ||
       (transaction.categoryId !== undefined && excludedCategoryIds?.has(transaction.categoryId))
     )

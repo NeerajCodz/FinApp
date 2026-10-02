@@ -3,7 +3,11 @@
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { parseMinor } from '@convex/shared/money';
-import { TransactionFormScreen, transactionViews, type TransactionFormType } from '@finapp/ui/finance';
+import {
+  TransactionFormScreen,
+  transactionViews,
+  type TransactionFormType,
+} from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -197,8 +201,22 @@ export default function EditTransactionPage() {
     <TransactionFormScreen
       status={transaction?.status}
       referenceId={routeId}
-      similarTransactions={transactionViews(transactionState.records.filter(record => userId && belongsToUser(record,userId) && !matchesId(record,routeId) && ((categoryId && record.categoryId === categoryId) || (merchant.trim() && record.merchant === merchant.trim()))).sort((a,b)=>Number(b.occurredAt)-Number(a.occurredAt)).slice(0,4),accounts,categories)}
-      onOpenTransaction={id => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      similarTransactions={transactionViews(
+        transactionState.records
+          .filter(
+            (record) =>
+              userId &&
+              belongsToUser(record, userId) &&
+              !matchesId(record, routeId) &&
+              ((categoryId && record.categoryId === categoryId) ||
+                (merchant.trim() && record.merchant === merchant.trim())),
+          )
+          .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt))
+          .slice(0, 4),
+        accounts,
+        categories,
+      )}
+      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
       mode="edit"
       signedIn={Boolean(userId)}
       unavailableMessage={unavailableMessage}

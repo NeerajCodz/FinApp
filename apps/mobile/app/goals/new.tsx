@@ -17,12 +17,14 @@ export default function NewGoalScreen() {
     userId,
     'settings',
   );
-  const accounts = useLocalRecords<LocalRecord & {
-    name?: string;
-    currency?: string;
-    archivedAt?: number;
-    cloudId?: string;
-  }>(userId, 'account');
+  const accounts = useLocalRecords<
+    LocalRecord & {
+      name?: string;
+      currency?: string;
+      archivedAt?: number;
+      cloudId?: string;
+    }
+  >(userId, 'account');
   const currency = resolveDefaultCurrency(profiles.data, settings.data) ?? '';
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -94,7 +96,14 @@ export default function NewGoalScreen() {
           userId,
           'goalContribution',
           'goal.contribute',
-          { ownerId: userId, goalId, amountMinor: initialSavedMinor, currency, occurredAt, createdAt: occurredAt },
+          {
+            ownerId: userId,
+            goalId,
+            amountMinor: initialSavedMinor,
+            currency,
+            occurredAt,
+            createdAt: occurredAt,
+          },
           { goalId, amountMinor: initialSavedMinor },
           { dependencies: [`goal:${goalId}`] },
         );

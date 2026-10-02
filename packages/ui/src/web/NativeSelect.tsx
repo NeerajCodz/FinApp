@@ -19,19 +19,29 @@ export type NativeSelectProps = {
 };
 
 export function NativeSelect({
-  options, value, onChange, label, disabled = false, className, id, name, required,
+  options,
+  value,
+  onChange,
+  label,
+  disabled = false,
+  className,
+  id,
+  name,
+  required,
   'aria-describedby': ariaDescribedBy,
 }: NativeSelectProps) {
-  return <Select
-    options={options as readonly SelectOption[]}
-    value={value}
-    onChange={onChange}
-    label={label}
-    disabled={disabled}
-    className={className}
-    id={id}
-    name={name}
-    required={required}
-    aria-describedby={ariaDescribedBy}
-  />;
+  return (
+    <Select
+      options={options as readonly SelectOption[]}
+      value={value}
+      onChange={onChange}
+      label={label}
+      disabled={disabled}
+      className={className}
+      id={id}
+      name={name}
+      required={required}
+      aria-describedby={ariaDescribedBy}
+    />
+  );
 }

@@ -110,8 +110,10 @@ export default function PersonalBudgetDetailPage() {
         categoryIds.has(String(row.categoryId ?? '')) &&
         (!budget?.accountIds?.length ||
           (typeof row.accountId === 'string' &&
-            budget.accountIds.some((id) => accountAliases.has(id) &&
-              aliases(accountAliases.get(id)!).includes(row.accountId!)))),
+            budget.accountIds.some(
+              (id) =>
+                accountAliases.has(id) && aliases(accountAliases.get(id)!).includes(row.accountId!),
+            ))),
     )
     .sort((a, b) => Number(b.occurredAt ?? 0) - Number(a.occurredAt ?? 0));
   const spent = matching.reduce((sum, row) => sum + asMinor(row.amountMinor), 0n);
@@ -150,8 +152,7 @@ export default function PersonalBudgetDetailPage() {
         Sign in to review this category budget.
       </SignInGate>
     );
-  if (budgets.loading || accountState.loading)
-    return <p role="status">Opening budget…</p>;
+  if (budgets.loading || accountState.loading) return <p role="status">Opening budget…</p>;
   if (budgets.error || accountState.error)
     return (
       <p role="alert">

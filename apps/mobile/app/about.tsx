@@ -1,9 +1,10 @@
 import React from 'react';
-import { Linking, ScrollView, View } from 'react-native';
+import { Image, Linking, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Heart } from '@finapp/ui/icons/native';
 import { IconButton, Text, Typography, useTheme } from '@finapp/ui/native';
+import appIcon from '../assets/icon.png';
 
 const DEVELOPER_URL = 'https://github.com/NeerajCodz';
 
@@ -38,10 +39,17 @@ export default function AboutScreen() {
         <Typography variant="title">About Finapp</Typography>
       </View>
 
+      <Image
+        source={appIcon}
+        accessible
+        accessibilityLabel="Finapp app logo"
+        style={{ width: 96, height: 96, borderRadius: 22, alignSelf: 'center' }}
+      />
+
       <View style={{ gap: 20 }}>
         <View style={{ gap: 6 }}>
           <Typography variant="heading">About Finapp</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>v1.0.0</Text>
+          <Text style={{ color: tokens.foregroundMuted }}>v1.1.1</Text>
         </View>
         <View style={{ gap: 6 }}>
           <Typography variant="label">Developer</Typography>

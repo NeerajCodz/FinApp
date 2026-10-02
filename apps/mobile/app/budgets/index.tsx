@@ -134,10 +134,7 @@ export default function BudgetScreen() {
     })
     .sort((a, b) => a.startAt - b.startAt || a.name.localeCompare(b.name));
   const error =
-    budgetState.error ??
-    categoryState.error ??
-    transactionState.error ??
-    accountState.error;
+    budgetState.error ?? categoryState.error ?? transactionState.error ?? accountState.error;
   return (
     <>
       <View

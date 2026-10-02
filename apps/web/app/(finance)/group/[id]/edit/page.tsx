@@ -34,6 +34,7 @@ type Member = LocalRecord & {
   username?: string;
   displayName?: string;
   name?: string;
+  avatarId?: string;
   updatedAt?: number;
 };
 const aliases = (record: LocalRecord) =>
@@ -165,6 +166,7 @@ export default function GroupSettingsPage() {
         username: member.username,
         displayName: member.displayName,
         avatarUrl: member.avatarUrl,
+        avatarId: member.avatarId,
       }))
     : localMembers;
   const remoteRole = remoteGroup?.members.find((member) => member.id === userId)?.role;
@@ -392,6 +394,7 @@ export default function GroupSettingsPage() {
         username: typeof member.username === 'string' ? member.username : undefined,
         role: String(member.role ?? 'member'),
         avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
+        avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
       }))}
       currentRole={currentRole}
       canManage={canManage}
