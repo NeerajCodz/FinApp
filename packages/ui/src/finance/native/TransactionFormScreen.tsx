@@ -321,28 +321,62 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
         {picker === 'date' ? (
           <DateTimePicker value={occurredAt} showTime={hasTime} onChange={onDateChange} />
         ) : (
-          <ScrollView style={{ maxHeight: 360 }}>
-            {options.map((item) => (
-              <React.Fragment key={item.id}>
-                <SettingsRow
-                  label={item.name}
-                  leadingIcon={
-                    picker === 'category' ? (
-                      <CategoryIcon label={item.name} icon={item.icon} />
-                    ) : undefined
-                  }
-                  value={item.id === selectedId ? 'Selected' : item.currency}
+          options.length ? (
+            <ScrollView style={{ maxHeight: 360 }}>
+              {options.map((item) => (
+                <React.Fragment key={item.id}>
+                  <SettingsRow
+                    label={item.name}
+                    leadingIcon={
+                      picker === 'category' ? (
+                        <CategoryIcon label={item.name} icon={item.icon} />
+                      ) : undefined
+                    }
+                    value={item.id === selectedId ? 'Selected' : item.currency}
+                    onPress={() => {
+                      if (picker === 'category') onCategoryChange(item.id);
+                      else if (picker === 'destination') onDestinationChange(item.id);
+                      else onAccountChange(item.id);
+                      setPicker(null);
+                    }}
+                  />
+                  <Separator />
+                </React.Fragment>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={{ gap: 12, padding: 16 }}>
+              <Typography variant="body">
+                {picker === 'category'
+                  ? 'No categories yet.'
+                  : picker === 'destination'
+                    ? 'No other accounts use this currency yet.'
+                    : 'No accounts yet.'}
+              </Typography>
+              {picker === 'category' && onManageCategories ? (
+                <Button
+                  variant="outline"
                   onPress={() => {
-                    if (picker === 'category') onCategoryChange(item.id);
-                    else if (picker === 'destination') onDestinationChange(item.id);
-                    else onAccountChange(item.id);
                     setPicker(null);
+                    onManageCategories();
                   }}
-                />
-                <Separator />
-              </React.Fragment>
-            ))}
-          </ScrollView>
+                >
+                  Create a category
+                </Button>
+              ) : null}
+              {picker !== 'category' && onAddAccount ? (
+                <Button
+                  variant="outline"
+                  onPress={() => {
+                    setPicker(null);
+                    onAddAccount();
+                  }}
+                >
+                  Add an account
+                </Button>
+              ) : null}
+            </View>
+          )
         )}
       </Sheet>
     </KeyboardAvoidingView>
