@@ -6,14 +6,14 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { ArrowLeft, Bell, Check, ChevronRight, Settings2 } from 'lucide-react';
-import { Button, Card, Empty, IconButton, Text, Typography, useTheme } from '@finapp/ui/web';
+import { Button, Card, IconButton, Text, Typography, useTheme } from '@finapp/ui/web';
 import {
   notificationRoute,
   notificationTypes,
   normalizeNotificationPreferences,
   type NotificationType,
 } from '@convex/notifications/domain';
-import { InvitationNotificationActions } from '@finapp/ui/finance';
+import { FinanceEmptyState, InvitationNotificationActions } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -447,7 +447,8 @@ export default function NotificationsPage() {
       )}
 
       {visible.length === 0 && !notificationState.loading && !settingsState.loading && (
-        <Empty
+        <FinanceEmptyState
+          kind="invitation"
           title={
             unreadOnly
               ? 'Nothing unread'
@@ -462,7 +463,6 @@ export default function NotificationsPage() {
                 ? `No ${labels[typeFilter].toLowerCase()} match these filters.`
                 : 'Budget changes, shared expenses, reminders, and sync issues will appear here.'
           }
-          icon={<Bell size={20} aria-hidden="true" />}
         />
       )}
       {!isConnected && <Text>Offline · showing saved activity</Text>}

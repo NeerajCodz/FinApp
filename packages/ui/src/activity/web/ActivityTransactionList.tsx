@@ -1,7 +1,8 @@
 'use client';
 
-import { Card, Empty, Typography } from '@finapp/ui/web';
+import { Card, Typography } from '@finapp/ui/web';
 import { TransactionRow, type TransactionType } from '@finapp/ui/finance';
+import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 
 export type ActivityTransactionItem = {
   id: string;
@@ -39,7 +40,9 @@ export function ActivityTransactionList({
       {loading ? (
         <Typography variant="small">Loading activity…</Typography>
       ) : items.length === 0 ? (
-        <Empty
+        <FinanceEmptyState
+          kind={query ? 'search' : 'activity'}
+          compact
           title={query ? 'No search matches' : 'No activity in this period'}
           description={
             query

@@ -18,6 +18,7 @@ import {
   Typography,
   useTheme,
 } from '@finapp/ui/native';
+import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import { CategoryEmojiPicker } from './CategoryEmojiPicker';
@@ -424,12 +425,12 @@ export function CategoryDetailScreen({
                 ))}
               </View>
             ) : (
-              <Typography
-                variant="caption"
-                style={{ color: tokens.foregroundMuted, paddingVertical: 18 }}
-              >
-                No posted activity in this range.
-              </Typography>
+              <FinanceEmptyState
+                kind="analytics"
+                title="No activity in this range."
+                description="Posted transactions will appear in this category chart when available."
+                compact
+              />
             )}
             <View style={styles.chartFooter}>
               <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
@@ -644,9 +645,12 @@ export function CategoryDetailScreen({
                 </View>
               ))
             ) : (
-              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-                No merchant details in this period.
-              </Typography>
+              <FinanceEmptyState
+                kind="analytics"
+                title="No merchant details this period."
+                description="Merchant information will appear here when transactions include it."
+                compact
+              />
             )}
           </View>
           <View style={styles.card}>
@@ -679,7 +683,8 @@ export function CategoryDetailScreen({
                   />
                 ))
             ) : (
-              <Empty
+              <FinanceEmptyState
+                kind="category"
                 title="No transactions in this category."
                 description="Choose this category when adding income or spending to see activity here."
                 action={
@@ -687,6 +692,7 @@ export function CategoryDetailScreen({
                     Add transaction
                   </Button>
                 }
+                compact
               />
             )}
           </View>

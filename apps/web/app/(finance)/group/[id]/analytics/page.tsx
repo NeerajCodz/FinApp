@@ -3,13 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ChartNoAxesCombined } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered } from '@/lib/offline/repository';
 import type { LocalRecord } from '@/lib/offline/repository';
 
+import { FinanceEmptyState } from '@finapp/ui/finance';
 type Group = LocalRecord & { name?: string; currency?: string };
 type Transaction = LocalRecord & {
   groupId?: string;
@@ -237,11 +238,11 @@ export default function GroupAnalyticsPage() {
           <p>{rangeError}</p>
         </section>
       ) : expenses.length === 0 ? (
-        <section className="finance-chart-panel" style={{ padding: 28 }}>
-          <ChartNoAxesCombined size={26} aria-hidden="true" />
-          <h2>No group spending yet</h2>
-          <p>Posted expenses will appear here once the group ledger has activity.</p>
-        </section>
+        <FinanceEmptyState
+          kind="analytics"
+          title="No group spending yet"
+          description="Posted expenses will appear here once the group ledger has activity."
+        />
       ) : (
         <>
           <section
@@ -344,7 +345,12 @@ export default function GroupAnalyticsPage() {
                 ))}
               </div>
             ) : (
-              <p>No category details are available for these expenses.</p>
+              <FinanceEmptyState
+                kind="category"
+                compact
+                title="No category details"
+                description="Category details will appear when expenses have categories."
+              />
             )}
           </section>
         </>

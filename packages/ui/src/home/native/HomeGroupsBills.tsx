@@ -4,6 +4,7 @@ import { CalendarDays, UsersThree } from '@finapp/ui/icons/native';
 import { Button, Card, SectionHeader, Text, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
 import type { HomeDashboardData } from '../model';
+import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 
 export function HomeGroupsBills({
   data,
@@ -63,14 +64,17 @@ export function HomeGroupsBills({
             </TouchableOpacity>
           ))
         ) : (
-          <View style={{ alignItems: 'center', paddingVertical: 10, gap: 7 }}>
-            <Text style={{ color: tokens.foregroundMuted, textAlign: 'center' }}>
-              No shared groups yet.
-            </Text>
-            <Button size="sm" variant="outline" onPress={onSeeAllGroups}>
-              Create a group
-            </Button>
-          </View>
+          <FinanceEmptyState
+            kind="group"
+            title="No shared groups yet."
+            description="Create a group to organize expenses you share."
+            compact
+            action={
+              <Button size="sm" variant="outline" onPress={onSeeAllGroups}>
+                Create a group
+              </Button>
+            }
+          />
         )}
       </Card>
       <Card style={{ gap: 5 }}>
@@ -118,12 +122,17 @@ export function HomeGroupsBills({
             </View>
           ))
         ) : (
-          <View style={{ alignItems: 'center', paddingVertical: 10, gap: 7 }}>
-            <Text style={{ color: tokens.foregroundMuted }}>No bills due in the next 30 days.</Text>
-            <Button size="sm" variant="outline" onPress={onSeeAllBills}>
-              Manage recurring
-            </Button>
-          </View>
+          <FinanceEmptyState
+            kind="recurring"
+            title="No bills due in the next 30 days."
+            description="Upcoming recurring payments will appear here."
+            compact
+            action={
+              <Button size="sm" variant="outline" onPress={onSeeAllBills}>
+                Manage recurring
+              </Button>
+            }
+          />
         )}
       </Card>
     </View>

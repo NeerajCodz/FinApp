@@ -7,6 +7,7 @@ import { formatMinor } from '../money';
 import { formatTransactionDate } from '../datetime';
 import { CategoryIcon } from './CategoryIcon';
 import styles from './CategoriesOverview.module.css';
+import { FinanceEmptyState } from './FinanceEmptyState';
 
 export type CategoryOverviewItem = {
   id: string;
@@ -165,16 +166,19 @@ export function CategoriesOverview({
             Loading your categories…
           </div>
         ) : items.length === 0 ? (
-          <Empty
-            title="No categories yet."
-            description="Create a category to organize your income and spending."
+          <FinanceEmptyState
+            kind="category"
+            title="No categories yet"
+            description="Give income and spending a clear place to land. Create a category to make your activity easier to understand."
             action={<Button onPress={onAddCategory}>Add category</Button>}
           />
         ) : visible.length === 0 ? (
-          <Empty
-            title="No matching categories."
+          <FinanceEmptyState
+            kind="search"
+            compact
+            title="No matching categories"
             description={
-              query ? 'Try a different search or filter.' : 'No categories match this filter yet.'
+              query ? 'Try another search or category filter.' : 'No categories match this filter.'
             }
           />
         ) : (

@@ -5,6 +5,7 @@ import { Typography, useTheme } from '@finapp/ui/native';
 import { CategoryIcon } from '../../finance/native/CategoryIcon';
 import { formatMinor } from '@finapp/ui/finance/money';
 import type { AnalyticsBreakdownItem } from '@convex/analytics/domain';
+import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 
 const chartColors = ['volt', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
 
@@ -73,7 +74,12 @@ export function BreakdownDonut({
         </View>
       )}
       {items.length === 0 ? (
-        <Typography variant="small">No posted expenses in this period.</Typography>
+        <FinanceEmptyState
+          kind="analytics"
+          title="No posted expenses in this period."
+          description="Choose another period to review spending by category."
+          compact
+        />
       ) : (
         items.map((item, index) => {
           const percentage =

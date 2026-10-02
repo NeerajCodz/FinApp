@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { Button, Typography, useTheme } from '@finapp/ui/native';
+import { FinanceEmptyState } from './FinanceEmptyState';
 
 export type IncomingInvitation = {
   id: string;
@@ -93,7 +94,12 @@ export function InvitationInbox({
                 Invitations unavailable: {error}
               </Typography>
             ) : !invitations?.length ? (
-              <Typography>No pending group invitations.</Typography>
+              <FinanceEmptyState
+                kind="invitation"
+                title="No pending invitations."
+                description="New group invitations will appear here when someone invites you."
+                compact
+              />
             ) : (
               invitations.map((invite) => (
                 <View
