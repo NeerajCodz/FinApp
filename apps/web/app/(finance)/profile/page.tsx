@@ -41,6 +41,7 @@ type Profile = LocalRecord & {
   phone?: string;
   phoneVerificationTime?: number;
   defaultCurrency?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
 };
 const links = [
@@ -131,6 +132,7 @@ export default function ProfilePage() {
               label="Your profile"
               size={68}
               imageUrl={profile?.avatarUrl}
+              avatarId={profile?.avatarId}
             />
             <div style={{ display: 'grid', minWidth: 0, gap: 3 }}>
               <Typography variant="heading">{profile?.displayName ?? 'Your profile'}</Typography>

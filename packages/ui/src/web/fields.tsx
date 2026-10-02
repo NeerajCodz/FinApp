@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { resolveAvatarAsset } from '../avatar-assets.web';
 import { Typography } from './typography';
 
 export type InputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> & {
@@ -71,13 +72,16 @@ export function Avatar({
   size = 42,
   className,
   imageUrl,
+  avatarId,
 }: {
   initials: string;
   label?: string;
   size?: number;
   className?: string;
   imageUrl?: string | null;
+  avatarId?: string;
 }) {
+  const imageSource = resolveAvatarAsset(avatarId, size) ?? imageUrl;
   return (
     <span
       role="img"
@@ -91,9 +95,9 @@ export function Avatar({
         overflow: 'hidden',
       }}
     >
-      {imageUrl ? (
+      {imageSource ? (
         <img
-          src={imageUrl}
+          src={imageSource}
           alt=""
           aria-hidden="true"
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}

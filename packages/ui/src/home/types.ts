@@ -5,6 +5,7 @@ export type HomePerson = {
   id: string;
   username?: string;
   name: string;
+  avatarId?: string;
   image?: string | null;
   transactionCount: number;
   amountMinor: bigint;

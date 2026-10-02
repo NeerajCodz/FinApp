@@ -214,6 +214,7 @@ export default function GroupHomeScreen() {
         accessibleLabel: `${ownMessage ? 'You' : message.senderName}, ${date}`,
         sender: message.senderName,
         senderAvatarUrl: message.senderAvatarUrl,
+        senderAvatarId: message.senderAvatarId,
         ownMessage,
         text: message.kind === 'text' ? message.text : undefined,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
@@ -252,6 +253,7 @@ export default function GroupHomeScreen() {
         id: member.id,
         name: member.id === userId ? 'You' : member.displayName,
         username: member.username,
+        avatarId: member.avatarId,
         avatarUrl: member.avatarUrl,
         role: member.role,
       }))
@@ -263,6 +265,7 @@ export default function GroupHomeScreen() {
             : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
         username: typeof member.username === 'string' ? member.username : undefined,
         avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : null,
+        avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
         role: typeof member.role === 'string' ? member.role : undefined,
       }));
   const detailActivities: GroupDetailActivity[] = recent.map((expense) => ({

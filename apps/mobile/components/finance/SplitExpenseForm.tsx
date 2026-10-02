@@ -10,7 +10,7 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { parseMinor } from '@/lib/money';
 import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
 
-type Member = { userId: string; name: string; avatarUrl?: string | null };
+type Member = { userId: string; name: string; avatarId?: string; avatarUrl?: string | null };
 function memberName(record: LocalRecord | undefined, fallback: string): string {
   return String(record?.displayName ?? record?.name ?? record?.username ?? fallback);
 }
@@ -50,6 +50,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
     members.push({
       userId,
       name: memberName(profiles?.[0], 'Signed-in member'),
+      avatarId: typeof profiles?.[0]?.avatarId === 'string' ? profiles[0].avatarId : undefined,
       avatarUrl: typeof profiles?.[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null,
     });
   for (const item of memberships ?? []) {
@@ -65,6 +66,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
       userId: memberId,
       name: memberName(item, `Member ${memberId.slice(-6)}`),
       avatarUrl: typeof item.avatarUrl === 'string' ? item.avatarUrl : null,
+      avatarId: typeof item.avatarId === 'string' ? item.avatarId : undefined,
     });
   }
   const compatibleAccounts = (accounts ?? []).filter(
@@ -229,6 +231,8 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
       selectedAccountId={account ? recordId(account) : ''}
       members={members}
       payerName={payerName}
+      payerAvatarId={typeof profiles?.[0]?.avatarId === 'string' ? profiles[0].avatarId : undefined}
+      payerAvatarUrl={typeof profiles?.[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null}
       title={title}
       amount={amount}
       method={method}

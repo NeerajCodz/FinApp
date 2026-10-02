@@ -14,8 +14,26 @@ export function GroupTile({ icon = 'phosphor:UsersThree', color, size = 52 }: { 
   return <View style={{ width: size, height: size, borderRadius: Math.min(18, size / 4), backgroundColor: color ?? tokens.primary, alignItems: 'center', justifyContent: 'center' }}><EntityIcon value={icon} size={size * 0.54} color={tokens.primaryForeground} /></View>;
 }
 
-export function GroupAvatar({ name, avatarUrl, size = 34 }: { name: string; avatarUrl?: string | null; size?: number }) {
-  return <Avatar size={size} label={name} imageUrl={avatarUrl ?? undefined} initials={name.split(/\s+/).map(part => part[0] ?? '').join('').slice(0, 2).toUpperCase()} />;
+export function GroupAvatar({
+  name,
+  avatarUrl,
+  avatarId,
+  size = 34,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  avatarId?: string;
+  size?: number;
+}) {
+  return (
+    <Avatar
+      size={size}
+      label={name}
+      imageUrl={avatarUrl ?? undefined}
+      avatarId={avatarId}
+      initials={name.split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toUpperCase()}
+    />
+  );
 }
 
 export function GroupHeading({ title, subtitle, onBack }: { title: string; subtitle?: string; onBack?: () => void }) {

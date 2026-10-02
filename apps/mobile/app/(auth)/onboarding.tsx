@@ -195,7 +195,7 @@ export default function OnboardingScreen() {
         userId,
         'profile',
         'user.update',
-        { ...(profile ?? {}), ...profileUpdate, avatarUrl: selectedAvatar?.url },
+        { ...(profile ?? {}), ...profileUpdate },
         profileUpdate,
         { recordId: String(profile?.id ?? profile?._id ?? userId) },
       );
@@ -313,7 +313,7 @@ export default function OnboardingScreen() {
             <ProfilePreview
               displayName={displayName}
               username={handle}
-              avatarUrl={selectedAvatar?.url}
+              avatarId={avatarId}
             />
             <Label style={{ marginBottom: 0 }}>Username</Label>
             <Input

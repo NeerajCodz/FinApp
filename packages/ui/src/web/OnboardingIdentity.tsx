@@ -3,15 +3,15 @@
 import { Check } from 'lucide-react';
 import { Avatar } from './fields';
 
-type AvatarChoice = { avatarId: string; url: string };
+type AvatarChoice = { avatarId: string };
 
 type ProfilePreviewProps = {
   displayName: string;
   username: string;
-  avatarUrl?: string;
+  avatarId?: string;
 };
 
-export function ProfilePreview({ displayName, username, avatarUrl }: ProfilePreviewProps) {
+export function ProfilePreview({ displayName, username, avatarId }: ProfilePreviewProps) {
   const name = displayName.trim() || 'Your name';
   const initials = name
     .split(/\s+/)
@@ -22,7 +22,7 @@ export function ProfilePreview({ displayName, username, avatarUrl }: ProfilePrev
 
   return (
     <div className="finapp-onboarding-profile" aria-live="polite">
-      <Avatar initials={initials} label={name} imageUrl={avatarUrl} size={68} />
+      <Avatar initials={initials} label={name} avatarId={avatarId} size={68} />
       <div className="finapp-onboarding-profile__copy">
         <span className="finapp-onboarding-profile__eyebrow">PROFILE PREVIEW</span>
         <strong>{name}</strong>
@@ -55,7 +55,7 @@ export function OnboardingAvatarPicker({
           className="finapp-onboarding-avatar-picker__choice"
           data-selected={selectedId === avatar.avatarId || undefined}
         >
-          <Avatar initials="" label={avatar.avatarId} imageUrl={avatar.url} size={42} />
+          <Avatar initials="" label={avatar.avatarId} avatarId={avatar.avatarId} size={42} />
           {selectedId === avatar.avatarId && (
             <span className="finapp-onboarding-avatar-picker__check" aria-hidden="true">
               <Check size={11} strokeWidth={3} />

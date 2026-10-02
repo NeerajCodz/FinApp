@@ -10,6 +10,7 @@ export type GroupDetailMember = {
   id: string;
   name: string;
   username?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
   role?: string;
 };
@@ -122,7 +123,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
         </div>
         <span className={s.avatars}>
           {p.members.slice(0, 6).map((member) => (
-            <PersonAvatar key={member.id} name={member.name} url={member.avatarUrl} size={38} />
+            <PersonAvatar key={member.id} name={member.name} url={member.avatarUrl} avatarId={member.avatarId} size={38} />
           ))}
         </span>
         <div className={s.actions}>
@@ -191,7 +192,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
             <div className={s.members}>
               {p.members.map((member) => (
                 <div key={member.id} className={s.member}>
-                  <PersonAvatar name={member.name} url={member.avatarUrl} size={42} />
+                  <PersonAvatar name={member.name} url={member.avatarUrl} avatarId={member.avatarId} size={42} />
                   <div className={s.memberCopy}>
                     {member.username ? (
                       <button
@@ -326,6 +327,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                     <PersonAvatar
                       name={member.name}
                       url={p.members.find((person) => person.id === member.id)?.avatarUrl}
+                      avatarId={p.members.find((person) => person.id === member.id)?.avatarId}
                       size={30}
                     />
                     <div className={s.activityCopy}>
@@ -406,6 +408,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                   <PersonAvatar
                     name={item.ownMessage ? 'You' : (item.sender ?? 'Member')}
                     url={item.senderAvatarUrl}
+                    avatarId={item.senderAvatarId}
                     size={28}
                   />
                   <div className={s.activityCopy}>

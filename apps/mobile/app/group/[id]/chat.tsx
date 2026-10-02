@@ -43,6 +43,7 @@ export default function GroupChatRoute() {
         id: member.id,
         name: member.id === userId ? 'You' : member.displayName,
         username: member.username,
+        avatarId: member.avatarId,
         avatarUrl: member.avatarUrl ?? undefined,
       }))
     : (memberships.data ?? [])
@@ -59,6 +60,7 @@ export default function GroupChatRoute() {
               ? 'You'
               : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
           username: typeof member.username === 'string' ? member.username : undefined,
+          avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
           avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
         }));
   const expenseEvents = (transactions.data ?? [])
@@ -104,6 +106,7 @@ export default function GroupChatRoute() {
       accessibleLabel: `${message.senderId === userId ? 'You' : message.senderName}, ${new Date(message.createdAt).toLocaleString()}`,
       sender: message.senderName,
       senderAvatarUrl: message.senderAvatarUrl,
+      senderAvatarId: message.senderAvatarId,
       ownMessage: message.senderId === userId,
       text: message.kind === 'text' ? message.text : undefined,
       attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,

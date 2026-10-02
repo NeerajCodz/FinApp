@@ -428,8 +428,8 @@ export default defineSchema({
   avatars: defineTable({
     avatarId: v.string(),
     gender: v.union(v.literal('neutral'), v.literal('male'), v.literal('female')),
-    storageId: v.id('_storage'),
-    url: v.string(),
+    storageId: v.optional(v.id('_storage')),
+    url: optionalText,
     createdAt: timestamp,
     updatedAt: timestamp,
   })

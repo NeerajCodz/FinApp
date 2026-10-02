@@ -28,6 +28,7 @@ type GroupMemberRecord = LocalRecord & {
   userId?: string;
   memberId?: string;
   username?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
 };
 type TimelineRecord = LocalRecord & {
@@ -197,6 +198,7 @@ export default function PersonTimelineScreen() {
             label={`@${handle}`}
             size={60}
             imageUrl={matchingMembers[0]?.avatarUrl}
+            avatarId={matchingMembers[0]?.avatarId}
           />
           <View style={{ flex: 1, gap: 3 }}>
             <Typography variant="heading">@{handle}</Typography>

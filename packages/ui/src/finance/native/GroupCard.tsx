@@ -11,7 +11,7 @@ export function GroupCard({ name, meta, balance, meaning, icon, color, descripti
   icon?: string;
   color?: string;
   description?: string;
-  members?: readonly { name: string; avatarUrl?: string }[];
+  members?: readonly { name: string; avatarId?: string; avatarUrl?: string }[];
   role?: string;
   onPress?: PressableProps['onPress'];
   onOpenChat?: PressableProps['onPress'];

@@ -6,6 +6,6 @@ export const list = query({
     const avatars = await ctx.db.query('avatars').collect();
     return avatars
       .sort((left, right) => Number(left.avatarId.slice(2)) - Number(right.avatarId.slice(2)))
-      .map(({ avatarId, gender, url }) => ({ avatarId, gender, url }));
+      .map(({ avatarId, gender }) => ({ avatarId, gender }));
   },
 });

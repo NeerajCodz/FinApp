@@ -26,6 +26,13 @@ both the Profile page and Settings. Profile name, username, phone, and avatar ed
 use the existing offline-first sync flow. Notification and sync actions live in the
 home header; they are not repeated across other screens.
 
+The 101 built-in avatars ship as transparent 384px, 192px, and 96px WebP variants
+under `assets/avatar/{high,medium,low}`. Run `bun run generate:avatars` to rebuild
+them from the source PNGs; native and web components select high above 64px,
+medium above 32px, and low at 32px or below. `bun run cleanup:avatar-storage`
+removes only storage objects referenced by the built-in catalog and preserves
+user-uploaded profile photos and other Convex Storage objects.
+
 An unverified existing account returns to email verification, then completes
 onboarding before entering the app. Group-invitation links keep their destination
 through sign-in, verification, and onboarding.

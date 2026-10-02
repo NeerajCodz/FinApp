@@ -1,11 +1,10 @@
 import React from 'react';
-import { Image, ScrollView, TouchableOpacity, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { UsersThree } from '@finapp/ui/icons/native';
-import { SectionHeader, Text, Typography, useTheme } from '@finapp/ui/native';
+import { Avatar, SectionHeader, Text, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
 import type { HomePerson } from '../types';
 import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
-
 export function HomePeople({
   people,
   loading,
@@ -62,28 +61,13 @@ export function HomePeople({
                 backgroundColor: tokens.card,
               }}
             >
-              {person.image ? (
-                <Image
-                  source={{ uri: person.image }}
-                  accessibilityLabel=""
-                  style={{ width: 42, height: 42, borderRadius: 21 }}
-                />
-              ) : (
-                <View
-                  style={{
-                    width: 42,
-                    height: 42,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 21,
-                    backgroundColor: tokens.surfaceSubtle,
-                  }}
-                >
-                  <Text style={{ color: tokens.primary, fontSize: 18 }}>
-                    {person.name.trim().slice(0, 1).toLocaleUpperCase() || 'F'}
-                  </Text>
-                </View>
-              )}
+              <Avatar
+                initials={person.name.trim().slice(0, 1).toLocaleUpperCase() || 'F'}
+                label={person.name}
+                avatarId={person.avatarId}
+                imageUrl={person.image}
+                size={42}
+              />
               <Typography
                 variant="bodyLarge"
                 numberOfLines={1}

@@ -18,6 +18,7 @@ export type GroupEditMember = {
   name: string;
   username?: string;
   role: string;
+  avatarId?: string;
   avatarUrl?: string;
 };
 export type GroupEditScreenProps = {
@@ -312,7 +313,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                         <tr key={m.id}>
                           <td>
                             <div className={s.member}>
-                              <PersonAvatar name={m.name} url={m.avatarUrl} size={34} />
+                              <PersonAvatar name={m.name} url={m.avatarUrl} avatarId={m.avatarId} size={34} />
                               <strong>{m.name}</strong>
                             </div>
                           </td>

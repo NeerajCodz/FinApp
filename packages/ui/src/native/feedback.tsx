@@ -1,21 +1,25 @@
 import React from 'react';
 import { AccessibilityInfo, Animated, Easing, Image, View } from 'react-native';
 import { ReceiptText } from 'lucide-react-native';
+import { resolveAvatarAsset } from '../avatar-assets.native';
 import { useTheme } from './ThemeProvider';
 import { Text, Typography } from './typography';
-
 export function Avatar({
   initials,
   label,
   size = 42,
   imageUrl,
+  avatarId,
 }: {
   initials: string;
   label?: string;
   size?: number;
   imageUrl?: string | null;
+  avatarId?: string;
 }) {
   const { tokens } = useTheme();
+  const localImage = resolveAvatarAsset(avatarId, size);
+  const imageSource = localImage ?? (imageUrl ? { uri: imageUrl } : undefined);
   return (
     <View
       accessibilityRole="image"
@@ -32,9 +36,9 @@ export function Avatar({
         overflow: 'hidden',
       }}
     >
-      {imageUrl ? (
+      {imageSource ? (
         <Image
-          source={{ uri: imageUrl }}
+          source={imageSource}
           resizeMode="cover"
           style={{ width: size, height: size }}
         />

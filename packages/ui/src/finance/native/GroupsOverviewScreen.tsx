@@ -21,7 +21,7 @@ export type GroupOverviewItem = {
   balance: string;
   balanceMeaning: string;
   description?: string;
-  members?: readonly { name: string; avatarUrl?: string }[];
+  members?: readonly { name: string; avatarId?: string; avatarUrl?: string }[];
   role?: string;
 };
 export type GroupOverviewSummary = { currency: string; owed: string; owing: string };

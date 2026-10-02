@@ -44,6 +44,7 @@ export default function GroupSettingsScreen() {
         role: member.role,
         username: member.username,
         displayName: member.displayName,
+        avatarId: member.avatarId,
         avatarUrl: member.avatarUrl,
       }))
     : localMembers;
@@ -303,6 +304,7 @@ export default function GroupSettingsScreen() {
         name: String(member.displayName ?? member.name ?? member.username ?? 'Member'),
         username: typeof member.username === 'string' ? member.username : undefined,
         role: String(member.role ?? 'member'),
+        avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
         avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
       }))}
       currentRole={

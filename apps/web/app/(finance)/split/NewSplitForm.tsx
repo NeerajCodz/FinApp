@@ -23,6 +23,7 @@ type Member = LocalRecord & {
   username?: string;
   displayName?: string;
   name?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
 };
 type Account = LocalRecord & {
@@ -71,11 +72,12 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const group = activeGroups.find((item) => aliases(item).includes(groupId));
   const groupIds = group ? aliases(group) : [];
   const currency = group?.currency ?? '';
-  const groupMembers: Array<{ userId: string; name: string; avatarUrl?: string | null }> = [];
+  const groupMembers: Array<{ userId: string; name: string; avatarId?: string; avatarUrl?: string | null }> = [];
   if (userId)
     groupMembers.push({
       userId,
       name: String(profiles[0]?.displayName ?? profiles[0]?.name ?? 'Signed-in member'),
+      avatarId: typeof profiles[0]?.avatarId === 'string' ? profiles[0].avatarId : undefined,
       avatarUrl: typeof profiles[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null,
     });
   const seenMembers = new Set(groupMembers.map((member) => member.userId));
@@ -97,6 +99,7 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
           (member.username ? `@${member.username}` : `Member ${memberUserId.slice(-6)}`),
       ),
       avatarUrl: member.avatarUrl,
+      avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
     });
   }
   const accountOptions = accounts.filter(
@@ -279,6 +282,8 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       selectedAccountId={selectedAccount ? idOf(selectedAccount) : ''}
       members={groupMembers}
       payerName={String(profiles[0]?.displayName ?? profiles[0]?.name ?? 'Signed-in member')}
+      payerAvatarId={typeof profiles[0]?.avatarId === 'string' ? profiles[0].avatarId : undefined}
+      payerAvatarUrl={typeof profiles[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null}
       title={title}
       amount={amount}
       method={method}

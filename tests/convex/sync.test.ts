@@ -379,7 +379,7 @@ describe('authenticated local-first sync contract', () => {
     expect(secondSettlements.settlements.page).toHaveLength(1);
     expect(secondSettlements.settlements.isDone).toBe(true);
   });
-  it('persists a gender-matched avatar and exposes its catalog URL', async () => {
+  it('persists a gender-matched avatar ID without exposing a catalog URL', async () => {
     const { t, authenticated } = await makeAuthenticatedUser();
     const storageId = await t.run((ctx) =>
       ctx.storage.store(new Blob([new Uint8Array([1])], { type: 'image/png' })),
@@ -403,7 +403,7 @@ describe('authenticated local-first sync contract', () => {
     const profile = await authenticated.query(api.users.queries.current, {});
     expect(profile?.avatarId).toBe('AV1');
     expect(profile?.gender).toBe('male');
-    expect(profile?.avatarUrl).toBe('https://avatars.example/AV1.png');
+    expect(profile?.avatarUrl).toBeNull();
     const groupId = await authenticated.mutation(api.groups.mutations.create, {
       name: 'Avatar group',
       currency: 'INR',
@@ -416,7 +416,7 @@ describe('authenticated local-first sync contract', () => {
         expect.objectContaining({
           avatarId: 'AV1',
           gender: 'male',
-          avatarUrl: 'https://avatars.example/AV1.png',
+          avatarUrl: null,
         }),
       ]),
     );

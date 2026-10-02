@@ -41,6 +41,7 @@ type Member = LocalRecord & {
   username?: string;
   displayName?: string;
   name?: string;
+  avatarId?: string;
   avatarUrl?: string | null;
 };
 type LedgerRecord = LocalRecord & {
@@ -360,6 +361,7 @@ export default function GroupHomePage() {
     ? remoteGroup.members.map((member) => ({
         id: member.id,
         username: member.username,
+        avatarId: member.avatarId,
         avatarUrl: member.avatarUrl,
         role: member.role,
         name: member.id === userId ? 'You' : member.displayName,
@@ -368,6 +370,7 @@ export default function GroupHomePage() {
         id: String(member.userId ?? member.memberId ?? recordId(member)),
         username: member.username,
         avatarUrl: member.avatarUrl,
+        avatarId: member.avatarId,
         role: member.role,
         name:
           member.userId === userId
@@ -445,6 +448,7 @@ export default function GroupHomePage() {
         accessibleLabel: `${ownMessage ? 'You' : message.senderName}, ${date.toLocaleString()}`,
         sender: message.senderName,
         senderAvatarUrl: message.senderAvatarUrl,
+        senderAvatarId: message.senderAvatarId,
         ownMessage,
         text: message.kind === 'text' ? message.text : undefined,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,

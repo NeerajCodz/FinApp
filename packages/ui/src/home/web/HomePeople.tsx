@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, UsersRound } from 'lucide-react';
+import { Avatar } from '@finapp/ui/web';
 import { formatMinor } from '@convex/shared/money';
 import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 import type { HomePerson } from '../types';
@@ -42,13 +43,13 @@ export function HomePeople({
               disabled={!person.username}
               onClick={() => person.username && onOpenPerson(person.username)}
             >
-              {person.image ? (
-                <img src={person.image} alt="" />
-              ) : (
-                <span className="finance-home-person-avatar" aria-hidden="true">
-                  {person.name.trim().slice(0, 1).toLocaleUpperCase() || 'F'}
-                </span>
-              )}
+              <Avatar
+                initials={person.name.trim().slice(0, 1).toLocaleUpperCase() || 'F'}
+                label={person.name}
+                avatarId={person.avatarId}
+                imageUrl={person.image}
+                size={42}
+              />
               <span className="finance-home-person-name">{person.name}</span>
               <small>{person.transactionCount} shared transactions</small>
               <strong>{formatMinor(person.amountMinor, currency)}</strong>
