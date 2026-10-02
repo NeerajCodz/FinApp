@@ -30,7 +30,7 @@ export default function TwoFactorScreen() {
       const result = await signIn('password', form);
       if (!result.signingIn) throw new Error('That code could not be verified.');
       router.replace(
-        inviteToken ? { pathname: '/group-invite', params: { token: inviteToken } } : '/(tabs)',
+        inviteToken ? { pathname: '/group/invite', params: { token: inviteToken } } : '/(tabs)',
       );
     } catch (cause) {
       const message = formatAuthError(cause, 'verification');

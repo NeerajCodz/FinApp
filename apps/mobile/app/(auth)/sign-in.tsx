@@ -63,7 +63,7 @@ export default function SignInScreen() {
         const signInResult = await signIn('password', form);
         if (!signInResult.signingIn) throw new Error('Unable to sign in');
         router.replace(
-          inviteToken ? { pathname: '/group-invite', params: { token: inviteToken } } : '/(tabs)',
+          inviteToken ? { pathname: '/group/invite', params: { token: inviteToken } } : '/(tabs)',
         );
       } else {
         router.replace({

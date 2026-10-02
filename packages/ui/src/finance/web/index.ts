@@ -1,3 +1,8 @@
+export {
+  INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  INVITATION_LINK_EXPIRY_OPTIONS,
+  type InvitationLinkExpiryMs,
+} from '../groupInvitationExpiry';
 export { FinanceBrand } from './FinanceBrand';
 export { FinanceWorkspace } from './FinanceWorkspace';
 export { resolveDefaultCurrency, type CurrencyPreferenceRecord } from '../defaultCurrency';

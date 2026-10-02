@@ -55,10 +55,10 @@ time; future-dated expenses remain visible in full-period totals. Groups use
 and `/group/:id/new`. Incoming invitations can be accepted or declined from the
 Groups inbox or directly from their notification. Group metadata, settings,
 member management, and invitation-link creation are admin-only. Public
-`/group-invite?token=...` links show a safe group preview, expire after seven
-days, and require sign-in before explicit acceptance; creating a replacement
-revokes the previous active link. Accepted members can contribute shared
-expenses, chat and share bill images, and record settlements. Group balances
+`/group/invite?token=...` links show a safe group preview, require sign-in before explicit
+acceptance, and expire after a configurable 1, 7 (default), or 30 days; generating another link
+invalidates the previous one, and admins can revoke links at any time. Accepted members can
+contribute shared expenses, chat and share bill images, and record settlements. Group balances
 are shown only when the complete group ledger is available; unsupported
 scheduled settlements are not inferred.
 

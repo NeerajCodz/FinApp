@@ -9,7 +9,11 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
 import { recordId, recordIds } from '@/lib/ledger';
-import { GroupEditScreen } from '@finapp/ui/finance';
+import {
+  GroupEditScreen,
+  INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  type InvitationLinkExpiryMs,
+} from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 export default function GroupSettingsScreen() {
@@ -50,6 +54,9 @@ export default function GroupSettingsScreen() {
   const [retentionDraft, setRetentionDraft] = useState<number | null>(null);
   const [invitationUrl, setInvitationUrl] = useState('');
   const [invitationExpiresAt, setInvitationExpiresAt] = useState<number>();
+  const [invitationExpiryMs, setInvitationExpiryMs] = useState<InvitationLinkExpiryMs>(
+    INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  );
   const [invitationBusy, setInvitationBusy] = useState(false);
   const [invitationError, setInvitationError] = useState('');
   const [invitationStatus, setInvitationStatus] = useState('');
@@ -218,11 +225,14 @@ export default function GroupSettingsScreen() {
     setInvitationError('');
     setInvitationStatus('');
     try {
-      const result = await createInvitationLink({ groupId: cloudGroupId as Id<'groups'> });
-      const url = Linking.createURL('/group-invite', { queryParams: { token: result.token } });
+      const result = await createInvitationLink({
+        groupId: cloudGroupId as Id<'groups'>,
+        expiresInMs: invitationExpiryMs,
+      });
+      const url = Linking.createURL('/group/invite', { queryParams: { token: result.token } });
       setInvitationUrl(url);
       setInvitationExpiresAt(result.expiresAt);
-      setInvitationStatus('Invitation link created. The previous link, if any, has been revoked.');
+      setInvitationStatus('New link generated. Any previous active link was invalidated.');
     } catch (cause) {
       setInvitationError(
         cause instanceof Error ? cause.message : 'Could not create an invitation link.',
@@ -240,7 +250,7 @@ export default function GroupSettingsScreen() {
       await revokeInvitationLink({ groupId: cloudGroupId as Id<'groups'> });
       setInvitationUrl('');
       setInvitationExpiresAt(undefined);
-      setInvitationStatus('Invitation link revoked.');
+      setInvitationStatus('Invitation link reset and revoked.');
     } catch (cause) {
       setInvitationError(
         cause instanceof Error ? cause.message : 'Could not revoke the invitation link.',
@@ -329,6 +339,8 @@ export default function GroupSettingsScreen() {
       }
       invitationUrl={canManage ? invitationUrl : undefined}
       invitationExpiresAt={canManage ? invitationExpiresAt : undefined}
+      invitationExpiryMs={canManage ? invitationExpiryMs : undefined}
+      onInvitationExpiryChange={setInvitationExpiryMs}
       invitationBusy={invitationBusy}
       invitationError={invitationError}
       invitationStatus={invitationStatus}

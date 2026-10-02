@@ -228,7 +228,7 @@ export default function OnboardingScreen() {
       }
       router.replace(
         inviteToken
-          ? { pathname: '/group-invite', params: { token: inviteToken } }
+          ? { pathname: '/group/invite', params: { token: inviteToken } }
           : mode === 'shared'
             ? '/(tabs)/groups'
             : '/(tabs)',

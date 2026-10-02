@@ -19,7 +19,7 @@ describe('public group invitation route', () => {
   it('accepts only an opaque hex token and encodes it into the local join path', () => {
     const token = 'ab'.repeat(32);
 
-    expect(groupInvitationPath(token)).toBe(`/group-invite?token=${token}`);
+    expect(groupInvitationPath(token)).toBe(`/group/invite?token=${token}`);
     expect(groupInvitationPath(`${token}https://attacker.example`)).toBeNull();
   });
 });
