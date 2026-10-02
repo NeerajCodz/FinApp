@@ -94,10 +94,10 @@ export function ToggleGroup(props: ToggleGroupProps) {
             style={{
               minHeight: 40,
               padding: '0.55rem 0.9rem',
-              border: `1px solid ${isSelected ? 'var(--finapp-primary, #B7FF4A)' : 'var(--finapp-border, #333)'}`,
+              border: `1px solid ${isSelected ? 'var(--finapp-primary)' : 'var(--finapp-border, #333)'}`,
               borderRadius: 999,
               background: isSelected
-                ? 'var(--finapp-primary, #B7FF4A)'
+                ? 'var(--finapp-primary)'
                 : 'var(--finapp-surface-subtle, #111)',
               color: isSelected
                 ? 'var(--finapp-primary-foreground, #000)'

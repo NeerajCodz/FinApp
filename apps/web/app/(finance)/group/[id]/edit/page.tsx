@@ -58,6 +58,7 @@ export default function GroupSettingsPage() {
   } = useLocalRecords<Member>('groupMember');
   const [name, setName] = React.useState('');
   const [saving, setSaving] = React.useState('');
+  const actionLock = React.useRef(false);
   const [successMessage, setSuccessMessage] = React.useState('');
   const [error, setError] = React.useState('');
   const [memberInput, setMemberInput] = React.useState('');
@@ -75,7 +76,8 @@ export default function GroupSettingsPage() {
   const createInvitationLink = useMutation(api.groups.mutations.createInvitationLink);
   const revokeInvitationLink = useMutation(api.groups.mutations.revokeInvitationLink);
   async function createInvitation() {
-    if (!canManage || !cloudGroupId || invitationBusy) return;
+    if (!canManage || !cloudGroupId || actionLock.current) return;
+    actionLock.current = true;
     setInvitationBusy(true);
     setInvitationError('');
     setInvitationStatus('');
@@ -94,11 +96,13 @@ export default function GroupSettingsPage() {
         cause instanceof Error ? cause.message : 'Could not create an invitation link.',
       );
     } finally {
+      actionLock.current = false;
       setInvitationBusy(false);
     }
   }
   async function revokeInvitation() {
-    if (!canManage || !cloudGroupId || invitationBusy) return;
+    if (!canManage || !cloudGroupId || actionLock.current) return;
+    actionLock.current = true;
     setInvitationBusy(true);
     setInvitationError('');
     setInvitationStatus('');
@@ -112,11 +116,14 @@ export default function GroupSettingsPage() {
         cause instanceof Error ? cause.message : 'Could not revoke the invitation link.',
       );
     } finally {
+      actionLock.current = false;
       setInvitationBusy(false);
     }
   }
   async function shareInvitation() {
-    if (!invitationUrl) return;
+    if (!invitationUrl || actionLock.current) return;
+    actionLock.current = true;
+    setInvitationBusy(true);
     try {
       if (navigator.share) {
         await navigator.share({ title: `Join ${group?.name ?? 'my group'}`, url: invitationUrl });
@@ -128,6 +135,9 @@ export default function GroupSettingsPage() {
     } catch (cause) {
       if (cause instanceof Error && cause.name !== 'AbortError')
         setInvitationError('Could not share the link. Select and copy it instead.');
+    } finally {
+      actionLock.current = false;
+      setInvitationBusy(false);
     }
   }
   const updateGroupSettings = useMutation(api.groups.mutations.updateSettings);
@@ -196,12 +206,13 @@ export default function GroupSettingsPage() {
 
   async function saveName(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userId || !group || saving) return;
+    if (!userId || !group || actionLock.current) return;
     if (!name.trim()) {
       setError('Enter a group name.');
       return;
     }
     const payloadGroupId = String(group._id ?? group.cloudId ?? group.id ?? '');
+    actionLock.current = true;
     setSaving('name');
     setError('');
     try {
@@ -220,15 +231,17 @@ export default function GroupSettingsPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update this group.');
     } finally {
+      actionLock.current = false;
       setSaving('');
     }
   }
 
   async function changeRole(member: Member, role: 'admin' | 'member') {
-    if (!canManage || !cloudGroupId || saving) return;
+    if (!canManage || !cloudGroupId || actionLock.current) return;
     const memberUserId = String(member.userId ?? member.memberId ?? '');
     const memberId = localId(member);
     if (!memberUserId || !memberId) return;
+    actionLock.current = true;
     setSaving(memberId);
     setError('');
     try {
@@ -240,12 +253,14 @@ export default function GroupSettingsPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update this member role.');
     } finally {
+      actionLock.current = false;
       setSaving('');
     }
   }
 
   async function saveGroupAppearance() {
-    if (!canManage || !cloudGroupId || saving || !iconDraft || !colorDraft) return;
+    if (!canManage || !cloudGroupId || actionLock.current || !iconDraft || !colorDraft) return;
+    actionLock.current = true;
     setSaving('appearance');
     setError('');
     try {
@@ -257,12 +272,14 @@ export default function GroupSettingsPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update the group appearance.');
     } finally {
+      actionLock.current = false;
       setSaving('');
     }
   }
 
   async function saveRetention() {
-    if (!canManage || !cloudGroupId || saving) return;
+    if (!canManage || !cloudGroupId || actionLock.current) return;
+    actionLock.current = true;
     setSaving('retention');
     setError('');
     try {
@@ -273,12 +290,14 @@ export default function GroupSettingsPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update message retention.');
     } finally {
+      actionLock.current = false;
       setSaving('');
     }
   }
 
   async function addMember() {
-    if (!canManage || !cloudGroupId || saving) return;
+    if (!canManage || !cloudGroupId || actionLock.current) return;
+    actionLock.current = true;
     setSaving('member-add');
     setError('');
     setSuccessMessage('');
@@ -292,15 +311,17 @@ export default function GroupSettingsPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not add this member.');
     } finally {
+      actionLock.current = false;
       setSaving('');
     }
   }
 
   async function removeMember(member: Member) {
-    if (!canManage || !cloudGroupId || saving) return;
+    if (!canManage || !cloudGroupId || actionLock.current) return;
     const memberUserId = String(member.userId ?? member.memberId ?? '');
     if (!memberUserId) return;
     const memberId = localId(member);
+    actionLock.current = true;
     setSaving(memberId);
     setError('');
     try {
@@ -311,6 +332,7 @@ export default function GroupSettingsPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not remove this member.');
     } finally {
+      actionLock.current = false;
       setSaving('');
     }
   }

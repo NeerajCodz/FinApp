@@ -65,7 +65,9 @@ member management, and invitation-link creation are admin-only. Public
 acceptance, and expire after a configurable 1, 7 (default), or 30 days; generating another link
 invalidates the previous one, and admins can revoke links at any time. Accepted members can
 contribute shared expenses, chat and share bill images, and record settlements. Group balances
-are shown only when the complete group ledger is available; unsupported
+are shown only when the complete group ledger is available; integer minor-unit values saved as
+safe numbers or integer strings are normalized without guessing missing splits. Async buttons
+remain pending until their action settles to prevent duplicate submissions. Unsupported
 scheduled settlements are not inferred.
 
 ### Coin implementation

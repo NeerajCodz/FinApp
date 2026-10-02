@@ -7,7 +7,7 @@ import { formatMinor } from '@finapp/ui/finance/money';
 import type { AnalyticsBreakdownItem } from '@convex/analytics/domain';
 import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 
-const chartColors = ['volt', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
+const chartColors = ['primary', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
 
 export function BreakdownDonut({
   items,
@@ -23,7 +23,9 @@ export function BreakdownDonut({
   iconForCategory?: (id: string) => string | undefined;
 }) {
   const { tokens } = useTheme();
-  const colors = chartColors.map((name) => tokens.chart[name]);
+  const colors = chartColors.map((name) =>
+    name === 'primary' ? tokens.primary : tokens.chart[name],
+  );
   const radius = 48;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;

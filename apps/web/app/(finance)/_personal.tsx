@@ -9,6 +9,13 @@ import type { LocalRecord } from '@/lib/offline/repository';
 export function idOf(record: LocalRecord): string {
   return String(record.id ?? record._id ?? record.cloudId ?? '');
 }
+export function routeIdFor(id: string): string {
+  return id.startsWith('local-') ? id.slice('local-'.length) : id;
+}
+
+export function matchesRouteId(record: LocalRecord, id: string): boolean {
+  return aliasesOf(record).some((alias) => alias === id || routeIdFor(alias) === id);
+}
 
 export function aliasesOf(record: LocalRecord): string[] {
   return [record.id, record._id, record.cloudId].filter(

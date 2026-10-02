@@ -54,6 +54,7 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const [basis, setBasis] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const saveLock = React.useRef(false);
   React.useEffect(() => {
     if (!userId) return;
     setGroupId(lockedGroupId);
@@ -163,8 +164,16 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
 
   async function saveExpense(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userId || !group || !selectedAccount || totalMinor === null || validation || saving)
+    if (
+      !userId ||
+      !group ||
+      !selectedAccount ||
+      totalMinor === null ||
+      validation ||
+      saveLock.current
+    )
       return;
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -242,6 +251,7 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this split.');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }

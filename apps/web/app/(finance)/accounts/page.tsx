@@ -5,7 +5,7 @@ import { AccountsIndexView } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
-import { aliasesOf, asMinor, belongsToUser, idOf, SignInGate } from '../_personal';
+import { aliasesOf, asMinor, belongsToUser, idOf, routeIdFor, SignInGate } from '../_personal';
 
 type Account = LocalRecord & {
   name?: string;
@@ -79,7 +79,7 @@ export default function AccountsPage() {
         return delta + source + destination;
       }, 0n);
       return {
-        id: accountId,
+        id: routeIdFor(accountId),
         name: record.name ?? 'Account',
         type: record.type ?? 'other',
         customType: record.customType,

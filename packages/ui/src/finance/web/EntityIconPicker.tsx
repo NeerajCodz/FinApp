@@ -74,10 +74,16 @@ const phosphorIcons = Object.entries(PhosphorIcons)
   .sort((left, right) => left.name.localeCompare(right.name));
 
 const phosphorIconsByName: Record<string, PhosphorIconComponent> = {};
-for (const { name, Icon } of phosphorIcons) phosphorIconsByName[name] = Icon;
+for (const { name, Icon } of phosphorIcons) {
+  phosphorIconsByName[name] = Icon;
+  phosphorIconsByName[name.toLowerCase().replace(/[^a-z0-9]/g, '')] = Icon;
+}
 
 function phosphorComponentFor(value: string): PhosphorIconComponent | undefined {
-  return phosphorIconsByName[value.slice('phosphor:'.length)];
+  const name = value.slice('phosphor:'.length);
+  return (
+    phosphorIconsByName[name] ?? phosphorIconsByName[name.toLowerCase().replace(/[^a-z0-9]/g, '')]
+  );
 }
 
 const iconsByName: Record<string, LucideIconComponent> = {};
@@ -110,6 +116,12 @@ export function EntityIcon({
   const Icon = componentFor(value);
   if (Icon) return <Icon size={size} color={color ?? tokens.primary} aria-hidden="true" />;
   if (value.startsWith('lucide:')) {
+    const Fallback = iconsByName.CircleHelp;
+    return Fallback ? (
+      <Fallback size={size} color={color ?? tokens.primary} aria-hidden="true" />
+    ) : null;
+  }
+  if (value.startsWith('phosphor:')) {
     const Fallback = iconsByName.CircleHelp;
     return Fallback ? (
       <Fallback size={size} color={color ?? tokens.primary} aria-hidden="true" />

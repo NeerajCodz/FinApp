@@ -165,7 +165,7 @@ export function createTokens(mode: ThemeMode = 'dark', accentValue: string = 'vo
     popoverForeground: foreground,
     primary,
     primaryForeground,
-    controlDisabledBackground: isDark ? '#263611' : '#E4E4E4',
+    controlDisabledBackground: isDark ? '#191919' : '#E4E4E4',
     controlDisabledForeground: isDark ? '#FFFFFFA3' : '#0000007A',
     secondary: foreground,
     secondaryForeground: background,

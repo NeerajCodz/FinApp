@@ -37,7 +37,9 @@ export default function NewGroupPage() {
   const [phoneInput, setPhoneInput] = React.useState('');
   const [phones, setPhones] = React.useState<string[]>([]);
   const [busy, setBusy] = React.useState(false);
+  const submitLock = React.useRef(false);
   const [contactBusy, setContactBusy] = React.useState(false);
+  const contactLock = React.useRef(false);
   const [error, setError] = React.useState('');
   const profile = profiles[0];
   React.useEffect(() => {
@@ -91,7 +93,8 @@ export default function NewGroupPage() {
   }
 
   async function chooseContacts() {
-    if (!phoneVerified || !pickerAvailable) return;
+    if (!phoneVerified || !pickerAvailable || contactLock.current) return;
+    contactLock.current = true;
     setContactBusy(true);
     setError('');
     try {
@@ -105,13 +108,14 @@ export default function NewGroupPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The selected contacts were not added.');
     } finally {
+      contactLock.current = false;
       setContactBusy(false);
     }
   }
 
   async function createGroup(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userId || busy) return;
+    if (!userId || submitLock.current) return;
     if (!name.trim()) {
       setError('Enter a group name.');
       return;
@@ -124,6 +128,7 @@ export default function NewGroupPage() {
       setError('Phone invitations require a manually verified phone number.');
       return;
     }
+    submitLock.current = true;
     setBusy(true);
     setError('');
     try {
@@ -162,6 +167,7 @@ export default function NewGroupPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create the group.');
     } finally {
+      submitLock.current = false;
       setBusy(false);
     }
   }

@@ -31,11 +31,13 @@ export function InvitationInbox({
   const { tokens } = useTheme();
   const [busy, setBusy] = React.useState<string | null>(null);
   const [result, setResult] = React.useState('');
+  const busyRef = React.useRef(false);
   const [actionError, setActionError] = React.useState('');
   if (!open) return null;
   const respond = async (invite: IncomingInvitation, response: 'accept' | 'decline') => {
-    if (busy) return;
-    setBusy(invite.id);
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(`${invite.id}:${response}`);
     setActionError('');
     try {
       await onRespond(invite.id, response);
@@ -47,6 +49,7 @@ export function InvitationInbox({
         cause instanceof Error ? cause.message : 'Could not respond to this invitation.',
       );
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   };
@@ -128,14 +131,14 @@ export function InvitationInbox({
               </span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Button disabled={busy !== null} onPress={() => void respond(invite, 'accept')}>
-                  {busy === invite.id ? 'Working…' : 'Accept'}
+                  {busy === `${invite.id}:accept` ? 'Accepting…' : 'Accept'}
                 </Button>
                 <Button
                   variant="outline"
                   disabled={busy !== null}
                   onPress={() => void respond(invite, 'decline')}
                 >
-                  Decline
+                  {busy === `${invite.id}:decline` ? 'Declining…' : 'Decline'}
                 </Button>
               </div>
             </article>
@@ -152,8 +155,9 @@ export function InvitationNotificationActions({
   invitation?: IncomingInvitation;
   onRespond: InvitationResponse;
 }) {
-  const [busy, setBusy] = React.useState(false);
+  const [busy, setBusy] = React.useState<'accept' | 'decline' | null>(null);
   const [result, setResult] = React.useState('');
+  const busyRef = React.useRef(false);
   const [error, setError] = React.useState('');
   if (!invitation)
     return result ? (
@@ -162,8 +166,9 @@ export function InvitationNotificationActions({
       </p>
     ) : null;
   const respond = async (response: 'accept' | 'decline') => {
-    if (busy) return;
-    setBusy(true);
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(response);
     setError('');
     try {
       await onRespond(invitation.id, response);
@@ -171,7 +176,8 @@ export function InvitationNotificationActions({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not respond to invitation.');
     } finally {
-      setBusy(false);
+      busyRef.current = false;
+      setBusy(null);
     }
   };
   return (
@@ -179,11 +185,11 @@ export function InvitationNotificationActions({
       aria-label={`Invitation actions for ${invitation.groupName}`}
       style={{ display: 'flex', gap: 8, alignItems: 'center', paddingBottom: 12 }}
     >
-      <Button disabled={busy} onPress={() => void respond('accept')}>
-        {busy ? 'Working…' : 'Accept invitation'}
+      <Button disabled={busy !== null} onPress={() => void respond('accept')}>
+        {busy === 'accept' ? 'Accepting…' : 'Accept invitation'}
       </Button>
-      <Button variant="outline" disabled={busy} onPress={() => void respond('decline')}>
-        Decline
+      <Button variant="outline" disabled={busy !== null} onPress={() => void respond('decline')}>
+        {busy === 'decline' ? 'Declining…' : 'Decline'}
       </Button>
       {result && (
         <span role="status" aria-live="polite">

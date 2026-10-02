@@ -6,7 +6,7 @@ import { ArrowLeft, Check } from 'lucide-react';
 import { Button, IconButton, Text, Typography, useTheme } from '@finapp/ui/web';
 import { EntityColorPicker } from '@finapp/ui/finance';
 import type { Appearance } from '@finapp/ui/web';
-import { isAccentColor, type AccentName } from '@finapp/ui/tokens';
+import { accentPalette, isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -18,7 +18,7 @@ const options: { value: Appearance; label: string }[] = [
   { value: 'light', label: 'Light' },
 ];
 const accents: { value: AccentName; label: string; color: string }[] = [
-  { value: 'volt', label: 'Volt', color: '#B7FF4A' },
+  { value: 'volt', label: 'Volt', color: accentPalette.volt },
   { value: 'white', label: 'White', color: '#FFFFFF' },
   { value: 'blue', label: 'Blue', color: '#5B8CFF' },
 ];
@@ -133,7 +133,7 @@ export default function AppearanceSettingsPage() {
                   ? accent
                   : accents.find((option) => option.value === accent)?.color
               }
-              onChange={(color) => void chooseAccent(color ?? '#B7FF4A')}
+              onChange={(color) => void chooseAccent(color ?? accentPalette.volt)}
               label={isAccentColor(accent) ? 'Change custom accent' : 'Choose custom accent'}
             />
           </div>

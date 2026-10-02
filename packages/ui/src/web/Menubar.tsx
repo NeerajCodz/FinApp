@@ -119,7 +119,7 @@ export function Menubar({
               padding: '0.5rem 0.85rem',
               border: 0,
               borderRadius: 10,
-              background: selected ? 'var(--finapp-primary, #b7ff4a)' : 'transparent',
+              background: selected ? 'var(--finapp-primary)' : 'transparent',
               color: selected
                 ? 'var(--finapp-primary-foreground, #101010)'
                 : 'var(--finapp-foreground, #f5f5f5)',

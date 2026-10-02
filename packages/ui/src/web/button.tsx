@@ -6,11 +6,13 @@ export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'des
 
 export type ButtonSize = 'sm' | 'default' | 'lg' | 'icon';
 
+type ButtonAction = (event: React.MouseEvent<HTMLButtonElement>) => unknown;
+
 export type ButtonProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  onPress?: React.MouseEventHandler<HTMLButtonElement>;
-  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  onPress?: ButtonAction;
+  onClick?: ButtonAction;
   accessibilityLabel?: string;
   accessibilityRole?: React.AriaRole;
   accessibilityHint?: string;
@@ -32,14 +34,29 @@ export function Button({
   'aria-description': ariaDescription,
   ...props
 }: ButtonProps) {
-  const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
-    onPress?.(event);
-    onClick?.(event);
+  const [pending, setPending] = React.useState(false);
+  const pendingRef = React.useRef(false);
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (pendingRef.current || props.disabled) return;
+    const results = [onPress?.(event), onClick?.(event)].filter(
+      (result): result is PromiseLike<unknown> =>
+        typeof result === 'object' && result !== null && 'then' in result,
+    );
+    if (!results.length) return;
+    pendingRef.current = true;
+    setPending(true);
+    const release = () => {
+      pendingRef.current = false;
+      setPending(false);
+    };
+    void Promise.all(results.map((result) => Promise.resolve(result))).finally(release);
   };
   return (
     <button
       {...props}
       type={type}
+      disabled={pending || props.disabled}
+      aria-busy={pending || props['aria-busy'] || undefined}
       onClick={handleClick}
       role={accessibilityRole ?? role}
       aria-label={accessibilityLabel ?? ariaLabel}
@@ -49,6 +66,11 @@ export function Button({
         .join(' ')}
     >
       {children}
+      {pending && (
+        <span aria-hidden="true" style={{ marginInlineStart: 6 }}>
+          …
+        </span>
+      )}
     </button>
   );
 }

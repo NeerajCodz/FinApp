@@ -52,7 +52,7 @@
 .search input:focus-visible {
   box-shadow: none;
 }
- .selectLabel {
+.selectLabel {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -71,7 +71,7 @@
   font-size: 0.75rem !important;
 }
 .selectLabel:focus-within {
-  outline: 2px solid var(--finance-lime, #b7ff4a);
+  outline: 2px solid var(--finance-lime, var(--finapp-primary));
   outline-offset: 1px;
 }
 .toolbar {
@@ -103,7 +103,7 @@
 .ranked button:focus-visible,
 .usageGrid button:focus-visible,
 .performance button:focus-visible {
-  outline: 2px solid var(--finance-lime, #b7ff4a);
+  outline: 2px solid var(--finance-lime, var(--finapp-primary));
   outline-offset: 2px;
 }
 .toolbar .active {
@@ -134,8 +134,8 @@
   height: 48px;
   flex: 0 0 48px;
   border-radius: 10px;
-  color: var(--finance-lime, #b7ff4a);
-  background: color-mix(in srgb, var(--finance-lime, #b7ff4a) 12%, transparent);
+  color: var(--finance-lime, var(--finapp-primary));
+  background: color-mix(in srgb, var(--finance-lime, var(--finapp-primary)) 12%, transparent);
 }
 .metric[data-tone='expense'] .metricIcon {
   color: var(--finance-expense, #ff6877);
@@ -175,7 +175,7 @@
 }
 .chartGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.03fr) minmax(0, .96fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.03fr) minmax(0, 0.96fr);
   gap: 10px;
 }
 .panel {
@@ -438,7 +438,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--finance-lime, #b7ff4a);
+  background: var(--finance-lime, var(--finapp-primary));
 }
 .usageTrack b[data-risk='true'],
 .performanceLimit i b[data-risk='true'] {
@@ -466,8 +466,8 @@
   height: 32px;
   flex: 0 0 32px;
   border-radius: 9px;
-  color: var(--finance-lime, #b7ff4a);
-  background: color-mix(in srgb, var(--finance-lime, #b7ff4a) 12%, transparent);
+  color: var(--finance-lime, var(--finapp-primary));
+  background: color-mix(in srgb, var(--finance-lime, var(--finapp-primary)) 12%, transparent);
 }
 .insight[data-tone='expense'] > span {
   color: var(--finance-expense, #ff6877);

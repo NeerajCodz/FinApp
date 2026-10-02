@@ -10,7 +10,7 @@ import {
   Wallet,
   AlertTriangle,
 } from 'lucide-react';
-import { Empty, Input, Select, Typography } from '@finapp/ui/web';
+import { Empty, Input, Select, Typography, useTheme } from '@finapp/ui/web';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import { FinanceEmptyState } from './FinanceEmptyState';
@@ -61,16 +61,11 @@ export type CategoryAnalyticsScreenProps = {
 
 type Period = 'week' | 'month' | 'year';
 type Scope = 'all' | 'expense' | 'income' | 'with-limit';
-const palette = [
-  '#ff697a',
-  '#ffa347',
-  '#5e9bff',
-  '#a785ff',
-  '#f4d34e',
-  '#48d79b',
-  '#57d9d0',
-  '#b7ff4a',
-];
+const palette = ['#ff697a', '#ffa347', '#5e9bff', '#a785ff', '#f4d34e', '#48d79b', '#57d9d0'];
+function categoryColor(index: number, primary: string) {
+  const colorIndex = index % (palette.length + 1);
+  return colorIndex === palette.length ? primary : palette[colorIndex]!;
+}
 const day = 86_400_000;
 
 function asPercent(numerator: bigint, denominator: bigint) {
@@ -107,6 +102,7 @@ export function CategoryAnalyticsScreen({
   error,
   onOpenCategory,
 }: CategoryAnalyticsScreenProps) {
+  const { tokens } = useTheme();
   const [period, setPeriod] = useState<Period>('month');
   const [scope, setScope] = useState<Scope>('all');
   const [accountId, setAccountId] = useState('all');
@@ -464,7 +460,7 @@ export function CategoryAnalyticsScreen({
                             cy="70"
                             r="51"
                             fill="none"
-                            stroke={palette[index % palette.length]}
+                            stroke={categoryColor(index, tokens.primary)}
                             strokeWidth="15"
                             strokeDasharray={`${length} ${circumference - length}`}
                             strokeDashoffset={-offset}
@@ -481,7 +477,7 @@ export function CategoryAnalyticsScreen({
                   <div className={styles.legend}>
                     {donutLegendRows.map((item, index) => (
                       <button type="button" key={item.id} onClick={() => onOpenCategory(item.id)}>
-                        <i style={{ background: palette[index % palette.length] }} />
+                        <i style={{ background: categoryColor(index, tokens.primary) }} />
                         <span>{item.name}</span>
                         <small>{asPercent(item.spent, donutTotal)}%</small>
                         <strong>{formatMinor(item.spent, currency)}</strong>
@@ -489,7 +485,7 @@ export function CategoryAnalyticsScreen({
                     ))}
                     {donutOther > 0n && (
                       <button type="button" disabled>
-                        <i style={{ background: palette[8 % palette.length] }} />
+                        <i style={{ background: categoryColor(8, tokens.primary) }} />
                         <span>Other categories</span>
                         <small>{asPercent(donutOther, donutTotal)}%</small>
                         <strong>{formatMinor(donutOther, currency)}</strong>
@@ -510,7 +506,7 @@ export function CategoryAnalyticsScreen({
                       <b
                         style={{
                           width: `${Math.max(5, asPercent(item.spent, expenseRows[0]?.spent ?? 0n))}%`,
-                          background: palette[index % palette.length],
+                          background: categoryColor(index, tokens.primary),
                         }}
                       />
                     </i>
@@ -548,11 +544,10 @@ export function CategoryAnalyticsScreen({
                             key={category.id}
                             style={{
                               height: `${maxMonth > 0n ? Math.max(2, Number((value * 10000n) / maxMonth) / 100) : 0}%`,
-                              background:
-                                palette[
-                                  scopedCategories.findIndex((item) => item.id === category.id) %
-                                    palette.length
-                                ],
+                              background: categoryColor(
+                                scopedCategories.findIndex((item) => item.id === category.id),
+                                tokens.primary,
+                              ),
                             }}
                           />
                         ))}
@@ -573,11 +568,10 @@ export function CategoryAnalyticsScreen({
                     <span key={item.id}>
                       <i
                         style={{
-                          background:
-                            palette[
-                              scopedCategories.findIndex((category) => category.id === item.id) %
-                                palette.length
-                            ],
+                          background: categoryColor(
+                            scopedCategories.findIndex((category) => category.id === item.id),
+                            tokens.primary,
+                          ),
                         }}
                       />
                       {item.name}
