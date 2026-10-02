@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ChartLineUp } from '@finapp/ui/icons/native';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Empty, IconButton, Typography, useTheme } from '@finapp/ui/native';
