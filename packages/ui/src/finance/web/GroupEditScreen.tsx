@@ -185,8 +185,8 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
               <h2>Public invites</h2>
               <p className={s.muted}>
                 Anyone with this link can join the group. Choose how long new links stay active.
-                Generating or rotating a link invalidates any previous active link; reset revokes it.
-                Only admins can manage links.
+                Generating or rotating a link invalidates any previous active link; reset revokes
+                it. Only admins can manage links.
               </p>
               <p className={s.muted}>Link lifetime</p>
               <div className={s.actions} role="group" aria-label="Invitation link lifetime">
@@ -254,7 +254,10 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                 >
                   Reset link
                 </Button>
-                <Button disabled={p.invitationBusy || !p.cloudGroupId} onPress={p.onCreateInvitation}>
+                <Button
+                  disabled={p.invitationBusy || !p.cloudGroupId}
+                  onPress={p.onCreateInvitation}
+                >
                   {p.invitationBusy
                     ? 'Working…'
                     : p.invitationUrl
