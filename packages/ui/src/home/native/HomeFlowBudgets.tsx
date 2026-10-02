@@ -3,6 +3,7 @@ import { TouchableOpacity, View } from 'react-native';
 import { Wallet } from '@finapp/ui/icons/native';
 import { Button, Card, SectionHeader, Tabs, Text, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
+import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 import { CashFlowChart } from '../../analytics/native/CashFlowChart';
 import type { HomeDashboardData } from '../model';
 type CashFlowRange = 'week' | 'month' | 'year';
@@ -95,15 +96,17 @@ export function HomeFlowBudgets({
             );
           })
         ) : (
-          <View style={{ alignItems: 'center', paddingVertical: 14, gap: 7 }}>
-            <Wallet size={21} color={tokens.foregroundMuted} />
-            <Text style={{ color: tokens.foregroundMuted, textAlign: 'center' }}>
-              No active budgets for this period.
-            </Text>
-            <Button size="sm" variant="outline" onPress={onSeeAllBudgets}>
-              Create a budget
-            </Button>
-          </View>
+          <FinanceEmptyState
+            kind="budget"
+            title="No active budgets this period."
+            description="Set a limit on a category to give your spending a plan."
+            compact
+            action={
+              <Button size="sm" variant="outline" onPress={onSeeAllBudgets}>
+                Create a budget
+              </Button>
+            }
+          />
         )}
       </Card>
     </View>

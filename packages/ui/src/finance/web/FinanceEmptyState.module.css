@@ -1,0 +1,89 @@
+.emptyState {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: 300px;
+  padding: 32px 22px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  background: var(--finapp-card);
+  color: var(--finapp-foreground);
+  text-align: center;
+}
+
+.illustration {
+  display: block;
+  width: 156px;
+  height: 108px;
+  overflow: visible;
+}
+
+.copy {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: 48ch;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(18px, 2vw, 23px);
+  font-weight: 620;
+  line-height: 1.2;
+  letter-spacing: -0.35px;
+  text-wrap: balance;
+}
+
+.description {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 14px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.action {
+  margin-top: 4px;
+}
+
+.compact {
+  min-height: 0;
+  gap: 7px;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+}
+
+.illustration[data-compact] {
+  width: 96px;
+  height: 66px;
+}
+
+.compact .copy {
+  gap: 4px;
+}
+
+.compact .title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.compact .description {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .emptyState {
+    min-height: 250px;
+    padding: 26px 16px;
+  }
+
+  .compact {
+    min-height: 0;
+    padding: 10px 4px;
+  }
+}

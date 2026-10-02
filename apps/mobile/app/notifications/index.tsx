@@ -12,7 +12,7 @@ import {
   notificationTypes,
   type NotificationType,
 } from '@convex/notifications/domain';
-import { InvitationNotificationActions } from '@finapp/ui/finance';
+import { FinanceEmptyState, InvitationNotificationActions } from '@finapp/ui/finance';
 import { Button, IconButton, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -372,42 +372,24 @@ export default function NotificationsScreen() {
       )}
 
       {visible?.length === 0 && (
-        <View
-          style={{
-            flex: 1,
-            minHeight: 260,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-            paddingHorizontal: 24,
-          }}
-        >
-          <View
-            style={{
-              width: 68,
-              height: 68,
-              borderRadius: 22,
-              backgroundColor: tokens.surfaceRaised,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Bell size={28} color={tokens.primary} />
-          </View>
-          <Typography variant="heading" style={{ textAlign: 'center' }}>
-            {unreadOnly
-              ? 'Nothing unread'
-              : typeFilter
-                ? `No ${notificationLabels[typeFilter].toLowerCase()} yet`
-                : 'No notifications yet'}
-          </Typography>
-          <Text style={{ color: tokens.foregroundMuted, textAlign: 'center', maxWidth: 280 }}>
-            {unreadOnly
-              ? 'New unread updates will appear in this list.'
-              : typeFilter
-                ? `No ${notificationLabels[typeFilter].toLowerCase()} match these filters.`
-                : 'Budget changes, shared expenses, reminders, and sync issues will appear here.'}
-          </Text>
+        <View style={{ flex: 1, minHeight: 260, gap: 12 }}>
+          <FinanceEmptyState
+            kind={unreadOnly || typeFilter ? 'search' : 'activity'}
+            title={
+              unreadOnly
+                ? 'Nothing unread.'
+                : typeFilter
+                  ? `No ${notificationLabels[typeFilter].toLowerCase()} yet.`
+                  : 'No notifications yet.'
+            }
+            description={
+              unreadOnly
+                ? 'New unread updates will appear in this list.'
+                : typeFilter
+                  ? `No ${notificationLabels[typeFilter].toLowerCase()} match these filters.`
+                  : 'Budget changes, shared expenses, reminders, and sync issues will appear here.'
+            }
+          />
           {!isConnected && (
             <Typography variant="small" style={{ textAlign: 'center' }}>
               Offline · showing saved activity

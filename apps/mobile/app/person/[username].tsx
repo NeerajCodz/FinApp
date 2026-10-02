@@ -3,16 +3,13 @@ import { ScrollView, View } from 'react-native';
 import { ArrowLeft, ArrowLeftRight, UsersThree } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
 import {
-  Avatar,
-  Button,
-  Empty,
-  IconButton,
-  SectionHeader,
-  Text,
-  Typography,
-} from '@finapp/ui/native';
+  FinanceEmptyState,
+  formatTransactionDate,
+  Money,
+  TransactionRow,
+} from '@finapp/ui/finance';
+import { Avatar, Button, IconButton, SectionHeader, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import {
   useLocalGroupRange,
@@ -99,9 +96,11 @@ function GroupTimeline({
       ))}
     </>
   ) : (
-    <Empty
+    <FinanceEmptyState
+      kind="activity"
       title="Nothing shared yet."
       description="Expenses between you will appear here, grouped across your shared groups."
+      compact
     />
   );
 }
@@ -283,9 +282,11 @@ export default function PersonTimelineScreen() {
             />
           ))
         ) : (
-          <Empty
+          <FinanceEmptyState
+            kind="group"
             title="Nothing shared yet."
             description="Expenses between you will appear here, grouped across your shared groups."
+            compact
           />
         )}
       </View>

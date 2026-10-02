@@ -4,6 +4,7 @@ import { ArrowLeft, ChartLineUp } from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Empty, IconButton, Typography, useTheme } from '@finapp/ui/native';
+import { FinanceEmptyState } from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
@@ -125,13 +126,11 @@ export default function GroupAnalyticsScreen() {
           </Typography>
         </View>
       ) : expenses.length === 0 ? (
-        <View style={{ alignItems: 'center', gap: 10, paddingVertical: 28 }}>
-          <ChartLineUp size={28} color={tokens.foregroundMuted} />
-          <Typography variant="bodyLarge">No group spending yet</Typography>
-          <Typography variant="small" style={{ textAlign: 'center' }}>
-            Posted expenses will appear here once the group ledger has activity.
-          </Typography>
-        </View>
+        <FinanceEmptyState
+          kind="analytics"
+          title="No group spending yet."
+          description="Posted expenses will appear here once the group ledger has activity."
+        />
       ) : (
         <>
           <View accessibilityLabel="Group spending summary" style={{ gap: 10 }}>
@@ -223,9 +222,12 @@ export default function GroupAnalyticsScreen() {
                 </View>
               ))
             ) : (
-              <Typography variant="small">
-                No category details are available for these expenses.
-              </Typography>
+              <FinanceEmptyState
+                kind="analytics"
+                title="No category breakdown available."
+                description="Category details will appear when posted expenses include categories."
+                compact
+              />
             )}
           </View>
         </>

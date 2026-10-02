@@ -3,8 +3,229 @@ import { Button } from '@finapp/ui/web';
 import { ChevronRight, Calendar } from 'lucide-react';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
-import { Metrics,Panel,Bar } from './GoalsBudgetsParts';
+import { Metrics, Panel, Bar } from './GoalsBudgetsParts';
+import { FinanceEmptyState } from './FinanceEmptyState';
 import s from './GoalsBudgets.module.css';
-export type BudgetOverviewItem={id:string;name:string;category:string;icon?:string;currency:string;spentMinor:bigint;limitMinor:bigint;startAt:number;endAt:number;alertThreshold?:number};
-export type BudgetOverviewScreenProps={items:readonly BudgetOverviewItem[];loading?:boolean;error?:string|null;onCreate:()=>void;onOpen:(id:string)=>void;onAnalytics?:()=>void};
-export function BudgetOverviewScreen(p:BudgetOverviewScreenProps){const same=p.items.every(r=>r.currency===p.items[0]?.currency);const currency=p.items[0]?.currency??'INR';const limit=p.items.reduce((n,r)=>n+r.limitMinor,0n);const spent=p.items.reduce((n,r)=>n+r.spentMinor,0n);const over=p.items.filter(r=>r.spentMinor>r.limitMinor);const alerts=p.items.filter(r=>r.limitMinor>0n&&r.spentMinor*100n>=r.limitMinor*BigInt(Math.round(r.alertThreshold??80)));const money=(value:bigint)=>same?formatMinor(value,currency):'Multiple currencies';return <div className={s.page}><header className={s.header}><div><h1 className={s.heading}>Budgets</h1><p className={s.subtitle}>Monitor category limits and control your spending.</p></div><div className={s.actions}>{p.onAnalytics&&<Button onPress={p.onAnalytics}>View budget analytics</Button>}<Button variant={p.onAnalytics?'outline':'primary'} onPress={p.onCreate}>＋ New budget</Button></div></header>{p.loading?<p role="status">Loading your budgets…</p>:p.error?<p role="alert" className={s.error}>{p.error}</p>:!p.items.length?<Panel title="No category budgets yet"><p className={s.muted}>Set a limit for a category you already use. Only posted expenses count.</p><Button onPress={p.onCreate}>Create a budget</Button></Panel>:<><Metrics items={[{label:'Total period budget',value:money(limit),detail:'Across active budgets'},{label:'Total spent',value:money(spent),detail:'Posted expenses',tone:'var(--finapp-destructive)'},{label:'Remaining budget',value:money(limit-spent),detail:'Available in this period'},{label:'Over-budget categories',value:over.length,detail:`of ${p.items.length} categories`,tone:'var(--finapp-destructive)'}]}/><div className={s.overview}><Panel title="Budget by Category"><div className={s.cardGrid}>{p.items.map(r=>{const ratio=r.limitMinor>0n?Number(r.spentMinor*100n/r.limitMinor):0;const risk=ratio>=100?'Over budget':ratio>=(r.alertThreshold??80)?'At risk':'On track';const tone=ratio>=100?'var(--finapp-destructive)':ratio>=(r.alertThreshold??80)?'#f6c543':undefined;return <article key={r.id} className={s.budgetCard}><div className={s.actions}><span className={s.tile}><CategoryIcon label={r.category} icon={r.icon}/></span><div className={s.grow}><h3>{r.name}</h3><p className={s.muted}>{r.category}</p></div><span className={`${s.badge} ${ratio>=100?s.negative:ratio>=(r.alertThreshold??80)?s.warning:s.positive}`}>● {risk}</span></div><div className={s.between}><span><strong>{formatMinor(r.spentMinor,r.currency)}</strong> <span className={s.muted}>/ {formatMinor(r.limitMinor,r.currency)}</span></span><strong style={{color:tone}}>{ratio}%</strong></div><Bar value={ratio} tone={tone}/><div className={s.cardFooter}><span className={s.actions}><Calendar size={15}/>{Math.max(0,Math.ceil((r.endAt-Date.now())/86400000))} days left</span><span className={ratio>100?s.negative:s.muted}>{formatMinor(r.limitMinor-r.spentMinor,r.currency)} {ratio>100?'over':'remaining'}</span><button className={s.linkButton} onClick={()=>p.onOpen(r.id)}>View budget <ChevronRight size={15}/></button></div></article>})}</div></Panel><aside className={s.stack}><Panel title="Budget Alerts">{alerts.length?alerts.map(r=><button key={r.id} className={s.linkButton} style={{width:'100%',textAlign:'left'}} onClick={()=>p.onOpen(r.id)}><div className={s.row} style={{width:'100%'}}><span className={s.tile}><CategoryIcon label={r.category} icon={r.icon}/></span><span className={s.grow}><strong>{r.name} {r.spentMinor>r.limitMinor?'is over budget':'is nearing its limit'}</strong><br/><span className={s.muted}>{r.spentMinor>r.limitMinor?`${formatMinor(r.spentMinor-r.limitMinor,r.currency)} more than your limit.`:`${Number(r.spentMinor*100n/r.limitMinor)}% of your limit used.`}</span></span><ChevronRight size={16}/></div></button>):<p className={s.muted}>All categories are below their alert thresholds.</p>}</Panel><Panel title="Spending vs Budget">{same?<><div className={s.between}><span>Spent {money(spent)}</span><span className={s.muted}>Remaining {money(limit-spent)}</span></div><Bar value={limit>0n?Number(spent*100n/limit):0} large/><div className={s.between}><strong>{limit>0n?Number(spent*100n/limit):0}% used</strong><strong>{money(limit)} budget</strong></div></>:<p className={s.muted}>Different currencies are not combined.</p>}</Panel><Panel title="Your budget periods">{p.items.slice(0,5).map(r=><div className={s.row} key={r.id}><span className={s.grow}>{r.name}</span><span className={s.muted}>{new Date(r.startAt).toLocaleDateString()} – {new Date(r.endAt-1).toLocaleDateString()}</span></div>)}</Panel></aside></div></>}</div>}
+export type BudgetOverviewItem = {
+  id: string;
+  name: string;
+  category: string;
+  icon?: string;
+  currency: string;
+  spentMinor: bigint;
+  limitMinor: bigint;
+  startAt: number;
+  endAt: number;
+  alertThreshold?: number;
+};
+export type BudgetOverviewScreenProps = {
+  items: readonly BudgetOverviewItem[];
+  loading?: boolean;
+  error?: string | null;
+  onCreate: () => void;
+  onOpen: (id: string) => void;
+  onAnalytics?: () => void;
+};
+export function BudgetOverviewScreen(p: BudgetOverviewScreenProps) {
+  const same = p.items.every((r) => r.currency === p.items[0]?.currency),
+    currency = p.items[0]?.currency ?? 'INR';
+  const limit = p.items.reduce((n, r) => n + r.limitMinor, 0n),
+    spent = p.items.reduce((n, r) => n + r.spentMinor, 0n);
+  const over = p.items.filter((r) => r.spentMinor > r.limitMinor),
+    alerts = p.items.filter(
+      (r) =>
+        r.limitMinor > 0n &&
+        r.spentMinor * 100n >= r.limitMinor * BigInt(Math.round(r.alertThreshold ?? 80)),
+    );
+  const money = (value: bigint) => (same ? formatMinor(value, currency) : 'Multiple currencies');
+  return (
+    <div className={s.page}>
+      <header className={s.header}>
+        <div>
+          <h1 className={s.heading}>Budgets</h1>
+          <p className={s.subtitle}>Monitor category limits and control your spending.</p>
+        </div>
+        <div className={s.actions}>
+          {p.onAnalytics && <Button onPress={p.onAnalytics}>View budget analytics</Button>}
+          <Button variant={p.onAnalytics ? 'outline' : 'primary'} onPress={p.onCreate}>
+            ＋ New budget
+          </Button>
+        </div>
+      </header>
+      {p.loading ? (
+        <p role="status">Loading your budgets…</p>
+      ) : p.error ? (
+        <p role="alert" className={s.error}>
+          {p.error}
+        </p>
+      ) : !p.items.length ? (
+        <FinanceEmptyState
+          kind="budget"
+          title="No category budgets yet"
+          description="Set a limit for a category you already use. Only posted expenses count."
+          action={<Button onPress={p.onCreate}>Create a budget</Button>}
+        />
+      ) : (
+        <>
+          <Metrics
+            items={[
+              {
+                label: 'Total period budget',
+                value: money(limit),
+                detail: 'Across active budgets',
+              },
+              {
+                label: 'Total spent',
+                value: money(spent),
+                detail: 'Posted expenses',
+                tone: 'var(--finapp-destructive)',
+              },
+              {
+                label: 'Remaining budget',
+                value: money(limit - spent),
+                detail: 'Available in this period',
+              },
+              {
+                label: 'Over-budget categories',
+                value: over.length,
+                detail: `of ${p.items.length} categories`,
+                tone: 'var(--finapp-destructive)',
+              },
+            ]}
+          />
+          <div className={s.overview}>
+            <Panel title="Budget by Category">
+              <div className={s.cardGrid}>
+                {p.items.map((r) => {
+                  const ratio =
+                      r.limitMinor > 0n ? Number((r.spentMinor * 100n) / r.limitMinor) : 0,
+                    risk =
+                      ratio >= 100
+                        ? 'Over budget'
+                        : ratio >= (r.alertThreshold ?? 80)
+                          ? 'At risk'
+                          : 'On track',
+                    tone =
+                      ratio >= 100
+                        ? 'var(--finapp-destructive)'
+                        : ratio >= (r.alertThreshold ?? 80)
+                          ? '#f6c543'
+                          : undefined;
+                  return (
+                    <article key={r.id} className={s.budgetCard}>
+                      <div className={s.actions}>
+                        <span className={s.tile}>
+                          <CategoryIcon label={r.category} icon={r.icon} />
+                        </span>
+                        <div className={s.grow}>
+                          <h3>{r.name}</h3>
+                          <p className={s.muted}>{r.category}</p>
+                        </div>
+                        <span
+                          className={`${s.badge} ${ratio >= 100 ? s.negative : ratio >= (r.alertThreshold ?? 80) ? s.warning : s.positive}`}
+                        >
+                          ● {risk}
+                        </span>
+                      </div>
+                      <div className={s.between}>
+                        <span>
+                          <strong>{formatMinor(r.spentMinor, r.currency)}</strong>{' '}
+                          <span className={s.muted}>/ {formatMinor(r.limitMinor, r.currency)}</span>
+                        </span>
+                        <strong style={{ color: tone }}>{ratio}%</strong>
+                      </div>
+                      <Bar value={ratio} tone={tone} />
+                      <div className={s.cardFooter}>
+                        <span className={s.actions}>
+                          <Calendar size={15} />
+                          {Math.max(0, Math.ceil((r.endAt - Date.now()) / 86400000))} days left
+                        </span>
+                        <span className={ratio > 100 ? s.negative : s.muted}>
+                          {formatMinor(r.limitMinor - r.spentMinor, r.currency)}{' '}
+                          {ratio > 100 ? 'over' : 'remaining'}
+                        </span>
+                        <button className={s.linkButton} onClick={() => p.onOpen(r.id)}>
+                          View budget <ChevronRight size={15} />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </Panel>
+            <aside className={s.stack}>
+              <Panel title="Budget Alerts">
+                {alerts.length ? (
+                  alerts.map((r) => (
+                    <button
+                      key={r.id}
+                      className={s.linkButton}
+                      style={{ width: '100%', textAlign: 'left' }}
+                      onClick={() => p.onOpen(r.id)}
+                    >
+                      <div className={s.row} style={{ width: '100%' }}>
+                        <span className={s.tile}>
+                          <CategoryIcon label={r.category} icon={r.icon} />
+                        </span>
+                        <span className={s.grow}>
+                          <strong>
+                            {r.name}{' '}
+                            {r.spentMinor > r.limitMinor
+                              ? 'is over budget'
+                              : 'is nearing its limit'}
+                          </strong>
+                          <br />
+                          <span className={s.muted}>
+                            {r.spentMinor > r.limitMinor
+                              ? `${formatMinor(r.spentMinor - r.limitMinor, r.currency)} more than your limit.`
+                              : `${Number((r.spentMinor * 100n) / r.limitMinor)}% of your limit used.`}
+                          </span>
+                        </span>
+                        <ChevronRight size={16} />
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <FinanceEmptyState
+                    kind="budget"
+                    compact
+                    title="No budget alerts"
+                    description="All categories are below their alert thresholds."
+                  />
+                )}
+              </Panel>
+              <Panel title="Spending vs Budget">
+                {same ? (
+                  <>
+                    <div className={s.between}>
+                      <span>Spent {money(spent)}</span>
+                      <span className={s.muted}>Remaining {money(limit - spent)}</span>
+                    </div>
+                    <Bar value={limit > 0n ? Number((spent * 100n) / limit) : 0} large />
+                    <div className={s.between}>
+                      <strong>{limit > 0n ? Number((spent * 100n) / limit) : 0}% used</strong>
+                      <strong>{money(limit)} budget</strong>
+                    </div>
+                  </>
+                ) : (
+                  <p className={s.muted}>Different currencies are not combined.</p>
+                )}
+              </Panel>
+              <Panel title="Your budget periods">
+                {p.items.slice(0, 5).map((r) => (
+                  <div className={s.row} key={r.id}>
+                    <span className={s.grow}>{r.name}</span>
+                    <span className={s.muted}>
+                      {new Date(r.startAt).toLocaleDateString()} –{' '}
+                      {new Date(r.endAt - 1).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </Panel>
+            </aside>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

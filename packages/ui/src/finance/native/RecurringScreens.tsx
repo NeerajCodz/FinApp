@@ -1,7 +1,8 @@
 import React from 'react';
 import { ScrollView, View, TouchableOpacity } from 'react-native';
 import { ArrowLeft, ArrowRight, CalendarDays } from '@finapp/ui/icons/native';
-import { Button, Card, Empty, Input, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Card, Input, Typography, useTheme } from '@finapp/ui/native';
+import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import { CurrencyInput } from './CurrencyInput';
@@ -203,7 +204,8 @@ export function RecurringIndexView({
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      style={{flex:1,backgroundColor:tokens.background}} contentContainerStyle={{ padding: 16, paddingBottom: 36, gap: 16 }}
+      style={{ flex: 1, backgroundColor: tokens.background }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 36, gap: 16 }}
     >
       <View
         style={{
@@ -215,7 +217,9 @@ export function RecurringIndexView({
       >
         <View style={{ flex: 1 }}>
           <Typography variant="title">Recurring</Typography>
-          <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>Manage your subscriptions, bills and recurring income.</Typography>
+          <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+            Manage your subscriptions, bills and recurring income.
+          </Typography>
         </View>
         {!adding && (
           <Button disabled={loading || !!error || pending} onPress={() => setAdding(true)}>
@@ -224,7 +228,7 @@ export function RecurringIndexView({
         )}
       </View>
       {!loading && !error && (
-        <View style={{ flexDirection:'row',flexWrap:'wrap',gap:10 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           {[
             [
               'Total recurring',
@@ -259,7 +263,7 @@ export function RecurringIndexView({
             ],
             ['Upcoming this week', String(upcomingCount), 'Next 7 days'],
           ].map(([label, value, note]) => (
-            <Card key={label} style={{ padding: 14, gap: 5, width:'48%',borderRadius:12 }}>
+            <Card key={label} style={{ padding: 14, gap: 5, width: '48%', borderRadius: 12 }}>
               <Typography variant="caption">{label}</Typography>
               <Typography variant="heading">{value}</Typography>
               <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
@@ -288,10 +292,10 @@ export function RecurringIndexView({
         </Typography>
       )}
       {!loading && !error && visible.length === 0 && !adding && (
-        <Empty
-          title="No recurring reminders"
-          description="Add a reminder for a repeating expense. You choose when to record it."
-          icon={<CalendarDays size={22} color={tokens.primary} />}
+        <FinanceEmptyState
+          kind="recurring"
+          title="No reminders on the calendar yet."
+          description="Add a reminder for a repeating expense; you choose when to record it."
           action={<Button onPress={() => setAdding(true)}>Add reminder</Button>}
         />
       )}
@@ -323,9 +327,11 @@ export function RecurringIndexView({
             ))}
           </View>
           {displayed.length ? (
-            <Card style={{ padding: 16, gap: 2,borderRadius:12 }}>
+            <Card style={{ padding: 16, gap: 2, borderRadius: 12 }}>
               <Typography variant="heading">Your recurring transactions</Typography>
-              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>Subscriptions, bills and recurring income.</Typography>
+              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                Subscriptions, bills and recurring income.
+              </Typography>
               <View style={{ height: 10 }} />
               {displayed.map((rule) => {
                 const money = amountText(rule);
@@ -364,28 +370,62 @@ export function RecurringIndexView({
                       onPress={() => onOpen(rule.id)}
                       style={{ flex: 1, minWidth: 0, gap: 3 }}
                     >
-                      <Typography variant="bodyLarge" numberOfLines={1}>{rule.name || 'Recurring reminder'}</Typography>
-                      <Typography variant="caption" style={{color:tokens.foregroundMuted}}>{rule.frequency || 'Schedule'} · {rule.enabled ? `Next ${dateText(at)}` : 'Paused'}</Typography>
-                      <Typography variant="caption" style={{color:tokens.foregroundMuted}}>Unassigned category · {accounts.find(account=>account.id===rule.template?.accountId||account.cloudId===rule.template?.accountId)?.name??'Account unavailable'}</Typography>
-                      {money && <Typography variant="bodyLarge" style={{color:income?tokens.income:tokens.expense}}>{income?'+':'−'}{money}</Typography>}
+                      <Typography variant="bodyLarge" numberOfLines={1}>
+                        {rule.name || 'Recurring reminder'}
+                      </Typography>
+                      <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                        {rule.frequency || 'Schedule'} ·{' '}
+                        {rule.enabled ? `Next ${dateText(at)}` : 'Paused'}
+                      </Typography>
+                      <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                        Unassigned category ·{' '}
+                        {accounts.find(
+                          (account) =>
+                            account.id === rule.template?.accountId ||
+                            account.cloudId === rule.template?.accountId,
+                        )?.name ?? 'Account unavailable'}
+                      </Typography>
+                      {money && (
+                        <Typography
+                          variant="bodyLarge"
+                          style={{ color: income ? tokens.income : tokens.expense }}
+                        >
+                          {income ? '+' : '−'}
+                          {money}
+                        </Typography>
+                      )}
                     </TouchableOpacity>
                     <TouchableOpacity
                       accessibilityRole="button"
                       accessibilityLabel={`${rule.enabled ? 'Pause' : 'Resume'} ${rule.name || 'reminder'}`}
                       disabled={pending}
                       onPress={() => onToggle(rule)}
-                      style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 10,borderRadius:7,backgroundColor:tokens.surfaceRaised }}
+                      style={{
+                        minHeight: 44,
+                        justifyContent: 'center',
+                        paddingHorizontal: 10,
+                        borderRadius: 7,
+                        backgroundColor: tokens.surfaceRaised,
+                      }}
                     >
-                      <Typography variant="small" style={{ color: rule.enabled?tokens.income:tokens.warning }}>{rule.enabled ? 'Active' : 'Paused'}</Typography>
+                      <Typography
+                        variant="small"
+                        style={{ color: rule.enabled ? tokens.income : tokens.warning }}
+                      >
+                        {rule.enabled ? 'Active' : 'Paused'}
+                      </Typography>
                     </TouchableOpacity>
                   </View>
                 );
               })}
             </Card>
           ) : (
-            <Card style={{ padding: 18 }}>
-              <Typography variant="small">No schedules match this search or filter.</Typography>
-            </Card>
+            <FinanceEmptyState
+              kind="search"
+              title="No schedules match this search or filter."
+              description="Try another search or filter to see saved reminders."
+              compact
+            />
           )}
         </View>
       )}
@@ -423,7 +463,11 @@ export function RecurringIndexView({
               </Button>
             </View>
           )}
-          <CurrencyInput currency={selectedAccount?.currency??'INR'} value={amount} onChangeText={setAmount}/>
+          <CurrencyInput
+            currency={selectedAccount?.currency ?? 'INR'}
+            value={amount}
+            onChangeText={setAmount}
+          />
           <Typography variant="label">Repeat from tomorrow</Typography>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
             {frequencies.map((option) => (
@@ -541,7 +585,10 @@ export function RecurringDetailView({
         })()
       : null;
   return (
-    <ScrollView style={{flex:1,backgroundColor:tokens.background}} contentContainerStyle={{ padding: 16, paddingBottom: 36, gap: 16 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: tokens.background }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 36, gap: 16 }}
+    >
       <Button variant="ghost" onPress={onBack}>
         <ArrowLeft size={18} color={tokens.foreground} /> Recurring
       </Button>
@@ -561,27 +608,27 @@ export function RecurringDetailView({
           {actionError}
         </Typography>
       )}
-      <View style={{flexDirection:'row',flexWrap:'wrap',gap:10}}>
-      {[
-        ['Amount', amount || 'Not set'],
-        ['Annual estimate', annualText || 'Not available'],
-        ['Next occurrence', rule.enabled ? dateText(dates[0] ?? rule.nextOccurrence) : 'Paused'],
-        ['Status', rule.enabled ? 'Active' : 'Paused'],
-      ].map(([label, value]) => (
-        <Card key={label} style={{ padding: 14, gap: 5,width:'48%',borderRadius:12 }}>
-          <Typography variant="caption">{label}</Typography>
-          <Typography variant="heading">{value}</Typography>
-        </Card>
-      ))}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        {[
+          ['Amount', amount || 'Not set'],
+          ['Annual estimate', annualText || 'Not available'],
+          ['Next occurrence', rule.enabled ? dateText(dates[0] ?? rule.nextOccurrence) : 'Paused'],
+          ['Status', rule.enabled ? 'Active' : 'Paused'],
+        ].map(([label, value]) => (
+          <Card key={label} style={{ padding: 14, gap: 5, width: '48%', borderRadius: 12 }}>
+            <Typography variant="caption">{label}</Typography>
+            <Typography variant="heading">{value}</Typography>
+          </Card>
+        ))}
       </View>
-      <Card style={{ padding: 17, gap: 8,borderRadius:12 }}>
+      <Card style={{ padding: 17, gap: 8, borderRadius: 12 }}>
         <Typography variant="heading">Recurring details</Typography>
         <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
           Information stored with this schedule.
         </Typography>
         {[
           ['Name', rule.name || 'Recurring reminder'],
-          ['Category','Unassigned'],
+          ['Category', 'Unassigned'],
           ['Amount', amount || 'Not set'],
           ['Frequency', normalized],
           ['Interval', `Every ${Math.max(1, Number(rule.interval ?? 1))} ${frequency}`],
@@ -610,9 +657,11 @@ export function RecurringDetailView({
           </View>
         ))}
       </Card>
-      <Card style={{ padding: 17, gap: 6,borderRadius:12 }}>
+      <Card style={{ padding: 17, gap: 6, borderRadius: 12 }}>
         <Typography variant="heading">Next reminders</Typography>
-        <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>Upcoming reminder dates, not confirmed payments.</Typography>
+        <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+          Upcoming reminder dates, not confirmed payments.
+        </Typography>
         {dates.length ? (
           dates.map((at) => (
             <View
@@ -630,7 +679,12 @@ export function RecurringDetailView({
               <Typography variant="small" style={{ flex: 1 }}>
                 {dateText(at)}
               </Typography>
-              <Typography variant="bodyLarge" style={{color:rule.template?.type==='income'?tokens.income:tokens.expense}}>{amount || '—'}</Typography>
+              <Typography
+                variant="bodyLarge"
+                style={{ color: rule.template?.type === 'income' ? tokens.income : tokens.expense }}
+              >
+                {amount || '—'}
+              </Typography>
             </View>
           ))
         ) : (
@@ -644,10 +698,15 @@ export function RecurringDetailView({
           </Typography>
         )}
       </Card>
-      <Card style={{padding:16,gap:10,borderRadius:12}}>
+      <Card style={{ padding: 16, gap: 10, borderRadius: 12 }}>
         <Typography variant="heading">Transaction history</Typography>
-        <Typography variant="caption">Recorded transactions associated with this reminder.</Typography>
-        <Typography variant="small" style={{color:tokens.foregroundMuted,paddingVertical:20}}>This reminder does not have linked transaction history. Past reminder dates are not recorded payments.</Typography>
+        <Typography variant="caption">
+          Recorded transactions associated with this reminder.
+        </Typography>
+        <Typography variant="small" style={{ color: tokens.foregroundMuted, paddingVertical: 20 }}>
+          This reminder does not have linked transaction history. Past reminder dates are not
+          recorded payments.
+        </Typography>
       </Card>
     </ScrollView>
   );

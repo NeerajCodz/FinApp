@@ -2,6 +2,7 @@
 import React from 'react';
 import { Button, Typography } from '@finapp/ui/web';
 import { useTheme } from '@finapp/ui/web';
+import { FinanceEmptyState } from './FinanceEmptyState';
 
 export type IncomingInvitation = {
   id: string;
@@ -100,7 +101,12 @@ export function InvitationInbox({
         ) : error ? (
           <p role="alert">Invitations unavailable: {error}</p>
         ) : !invitations?.length ? (
-          <p>No pending group invitations.</p>
+          <FinanceEmptyState
+            kind="invitation"
+            compact
+            title="No pending invitations"
+            description="Group invitations will appear here when someone invites you to join."
+          />
         ) : (
           invitations.map((invite) => (
             <article
