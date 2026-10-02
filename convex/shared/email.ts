@@ -21,87 +21,132 @@ function escapeHtml(value: string): string {
 
 type OtpPurpose = 'verify' | 'reset' | 'two-factor' | 'app-lock-reset';
 
+const EMAIL_LOGO_CID = 'finapp-logo';
+const EMAIL_LOGO_PNG_URL =
+  'https://raw.githubusercontent.com/NeerajCodz/FinApp/main/apps/mobile/assets/icon.png';
+
 function otpEmailTemplate(purpose: OtpPurpose, token: string) {
   const content = {
     verify: {
-      subject: 'Verify your Finapp email',
+      subject: 'Your Finapp verification code',
       title: 'Verify your email',
-      action:
-        'Use this code to verify your email address and finish setting up your Finapp account.',
-      text: `Your Finapp verification code is ${token}. It expires in 10 minutes. If you did not create a Finapp account, ignore this email.`,
-      notice: 'If you did not create a Finapp account, you can safely ignore this email.',
+      eyebrow: 'EMAIL VERIFICATION',
+      action: 'Enter this one-time code to verify your email and finish creating your account.',
+      notice: 'If you did not create a Finapp account, you can safely ignore this message.',
     },
     reset: {
-      subject: 'Reset your Finapp password',
+      subject: 'Your Finapp password reset code',
       title: 'Reset your password',
-      action: 'Use this code to securely reset your Finapp password.',
-      text: `Your Finapp password reset code is ${token}. It expires in 10 minutes. If you did not request a reset, ignore this email.`,
-      notice: 'If you did not request a password reset, you can safely ignore this email.',
+      eyebrow: 'PASSWORD RESET',
+      action: 'Enter this one-time code to securely reset your Finapp password.',
+      notice: 'If you did not request a password reset, no action is needed.',
     },
     'two-factor': {
       subject: 'Your Finapp sign-in code',
-      title: 'Complete your sign-in',
-      action: 'Enter this code in Finapp to finish signing in. Never share this code with anyone.',
-      text: `Your Finapp two-factor sign-in code is ${token}. It expires in 10 minutes. If you did not try to sign in, ignore this email and secure your account.`,
-      notice: 'If you did not try to sign in, ignore this email and secure your account.',
+      title: 'Finish signing in',
+      eyebrow: 'SECURE SIGN-IN',
+      action: 'Enter this one-time code on the sign-in screen. Never share it with anyone.',
+      notice: 'If you did not try to sign in, change your password and secure your account.',
     },
     'app-lock-reset': {
-      subject: 'Reset your Finapp app passcode',
+      subject: 'Your Finapp app passcode reset code',
       title: 'Reset your app passcode',
-      action:
-        'Enter this code in Finapp to reset the passcode on this device. Never share this code.',
-      text: `Your Finapp app passcode reset code is ${token}. It expires in 10 minutes. If you did not request this, ignore this email and secure your account.`,
-      notice: 'If you did not request this, ignore this email and secure your account.',
+      eyebrow: 'DEVICE SECURITY',
+      action: 'Enter this one-time code in Finapp to reset the passcode on this device.',
+      notice: 'If you did not request this reset, no action is needed.',
     },
   }[purpose];
   const safeToken = escapeHtml(token);
+  const expiryMinutes = OTP_MAX_AGE_SECONDS / 60;
+  const text = [
+    content.action,
+    `Your one-time code: ${token}`,
+    `This code expires in ${expiryMinutes} minutes.`,
+    content.notice,
+    'Finapp · Your money, your people, one clear place.',
+  ].join('\n\n');
   const html = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="supported-color-schemes" content="dark">
     <title>${content.title} · Finapp</title>
+    <style>
+      @media only screen and (max-width: 600px) {
+        .email-gutter { padding: 24px 12px !important; }
+        .email-content { padding-right: 22px !important; padding-left: 22px !important; }
+      }
+    </style>
   </head>
-  <body style="margin:0;background:#f1f3ef;padding:32px 12px;font-family:Arial,Helvetica,sans-serif;color:#171914;">
+  <body style="margin:0;padding:0;background-color:#050505;color:#f5f7f1;font-family:Arial,Helvetica,sans-serif;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${content.action}</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#050505" style="width:100%;border-collapse:collapse;background-color:#050505;">
       <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;border-collapse:separate;border-spacing:0;background:#ffffff;border:1px solid #e1e4dc;border-radius:20px;">
+        <td class="email-gutter" align="center" style="padding:40px 16px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#10120e" style="width:100%;max-width:560px;border:1px solid #2c3027;border-collapse:separate;border-spacing:0;background-color:#10120e;border-radius:16px;">
             <tr>
-              <td style="padding:28px 32px 12px;">
-                <table role="presentation" cellspacing="0" cellpadding="0">
-                  <tr>
-                    <td width="14" height="14" style="width:14px;height:14px;border-radius:50%;background:#a3ff3b;"></td>
-                    <td style="padding-left:9px;font-size:16px;font-weight:700;letter-spacing:-0.3px;">Finapp</td>
-                  </tr>
-                </table>
-              </td>
+              <td height="4" bgcolor="#b7ff4a" style="height:4px;background-color:#b7ff4a;border-radius:16px 16px 0 0;"></td>
             </tr>
             <tr>
-              <td style="padding:20px 32px 32px;">
-                <p style="margin:0 0 12px;color:#6b7065;font-size:11px;font-weight:700;letter-spacing:1.5px;">PRIVATE MONEY, CLEARLY</p>
-                <h1 style="margin:0 0 14px;font-size:26px;line-height:1.2;letter-spacing:-0.6px;">${content.title}</h1>
-                <p style="margin:0 0 22px;color:#50554b;font-size:15px;line-height:1.6;">${content.action}</p>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;background:#f4f6f1;border-radius:14px;">
+              <td class="email-content" style="padding:28px 34px 10px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                   <tr>
-                    <td align="center" style="padding:18px 12px;">
-                      <p style="margin:0;color:#181a15;font-size:30px;font-weight:700;letter-spacing:8px;line-height:1.4;">${safeToken}</p>
+                    <td style="padding-right:12px;">
+                      <img src="cid:${EMAIL_LOGO_CID}" width="40" height="40" alt="Finapp" style="display:block;width:40px;height:40px;border:0;border-radius:50%;">
+                    </td>
+                    <td>
+                      <p style="margin:0;color:#f5f7f1;font-size:18px;font-weight:700;letter-spacing:-0.4px;">finapp<span style="color:#b7ff4a;">.</span></p>
+                      <p style="margin:3px 0 0;color:#a5aa9d;font-size:11px;line-height:1.4;">Your money, in focus.</p>
                     </td>
                   </tr>
                 </table>
-                <p style="margin:18px 0 0;color:#50554b;font-size:14px;line-height:1.6;">This code expires in <strong>10 minutes</strong>.</p>
-                <p style="margin:12px 0 0;color:#777c71;font-size:13px;line-height:1.6;">${content.notice}</p>
+              </td>
+            </tr>
+            <tr>
+              <td class="email-content" style="padding:24px 34px 34px;">
+                <p style="margin:0 0 12px;color:#b7ff4a;font-size:11px;font-weight:700;letter-spacing:1.4px;">${content.eyebrow}</p>
+                <h1 style="margin:0 0 14px;color:#f5f7f1;font-size:27px;font-weight:700;line-height:1.2;letter-spacing:-0.6px;">${content.title}</h1>
+                <p style="margin:0 0 24px;color:#c5c9bf;font-size:15px;line-height:1.65;">${content.action}</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#b7ff4a" style="width:100%;border-collapse:separate;border-spacing:0;background-color:#b7ff4a;border-radius:12px;">
+                  <tr>
+                    <td align="center" style="padding:18px 12px;">
+                      <p style="margin:0;color:#050505;font-family:Arial,Helvetica,sans-serif;font-size:31px;font-weight:700;letter-spacing:8px;line-height:1.35;">${safeToken}</p>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:16px 0 0;color:#f5f7f1;font-size:14px;line-height:1.6;">This code expires in <strong>${expiryMinutes} minutes</strong>.</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:22px;border-collapse:collapse;">
+                  <tr>
+                    <td width="3" bgcolor="#b7ff4a" style="width:3px;background-color:#b7ff4a;"></td>
+                    <td bgcolor="#191c16" style="padding:13px 15px;background-color:#191c16;">
+                      <p style="margin:0;color:#b7bbaf;font-size:13px;line-height:1.6;">${content.notice}</p>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
           </table>
-          <p style="margin:18px 0 0;color:#777c71;font-size:12px;line-height:1.5;">Finapp · Your money, your people, one clear place.</p>
+          <p style="margin:18px 0 0;color:#858b7d;font-size:12px;line-height:1.6;">Finapp · Your money, your people, one clear place.</p>
+          <p style="margin:5px 0 0;color:#656b5f;font-size:11px;line-height:1.5;">Automated account security message</p>
         </td>
       </tr>
     </table>
   </body>
 </html>`;
-  return { subject: content.subject, text: content.text, html };
+  return {
+    subject: content.subject,
+    text,
+    html,
+    attachments: [
+      {
+        path: EMAIL_LOGO_PNG_URL,
+        filename: 'finapp-logo.png',
+        content_id: EMAIL_LOGO_CID,
+      },
+    ],
+  };
 }
 
 export function generateOtp(): string {
