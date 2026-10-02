@@ -10,6 +10,7 @@ import { BudgetProgress } from './BudgetProgress';
 import { TransactionRow } from './TransactionRow';
 import { formatTransactionDate } from '../datetime';
 import styles from './CategoryDetailScreen.module.css';
+import { FinanceEmptyState } from './FinanceEmptyState';
 
 export type CategoryDetailRecord = {
   id: string;
@@ -363,7 +364,12 @@ export function CategoryDetailScreen({
                 </div>
               </div>
               {inPeriod.length === 0 ? (
-                <p className={styles.noData}>No posted transactions in this range.</p>
+                <FinanceEmptyState
+                  kind="analytics"
+                  compact
+                  title="No posted transactions in this range"
+                  description="Category activity will appear when transactions are assigned here."
+                />
               ) : (
                 <div
                   className={styles.chart}
@@ -566,7 +572,12 @@ export function CategoryDetailScreen({
                   ))}
                 </div>
               ) : (
-                <p className={styles.noData}>No merchant details in this period.</p>
+                <FinanceEmptyState
+                  kind="analytics"
+                  compact
+                  title="No merchant details in this period"
+                  description="Merchant totals appear when matching transactions include merchant information."
+                />
               )}
             </article>
           </section>
@@ -582,9 +593,10 @@ export function CategoryDetailScreen({
               <ReceiptText size={18} aria-hidden="true" />
             </div>
             {validTransactions.length === 0 ? (
-              <Empty
-                title="No transactions in this category."
-                description="Choose this category when adding income or spending to see activity here."
+              <FinanceEmptyState
+                kind="category"
+                title="No transactions in this category"
+                description="Choose this category when adding income or spending to build its activity history."
                 action={<Button onPress={onAddTransaction}>Add transaction</Button>}
               />
             ) : (

@@ -5,6 +5,7 @@ import { Plus, PencilSimple, ChatCircle, Crown } from '@phosphor-icons/react';
 import { formatMinor } from '@convex/shared/money';
 import type { GroupChatScreenProps } from './GroupChatScreen';
 import { GroupPage, Crumb, Tile, Metric, PersonAvatar, s } from './GroupUI';
+import { FinanceEmptyState } from './FinanceEmptyState';
 export type GroupDetailMember = {
   id: string;
   name: string;
@@ -272,7 +273,8 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 </table>
               </div>
             ) : (
-              <Empty
+              <FinanceEmptyState
+                kind="group"
                 title="No shared expenses"
                 description="Add an expense to start your group history."
                 action={
@@ -296,7 +298,12 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
               </div>
             ))}
             {!p.settlements.length && (
-              <p className={s.muted}>No recorded settlements in the loaded history.</p>
+              <FinanceEmptyState
+                kind="group"
+                compact
+                title="No recorded settlements"
+                description="Payments between group members will appear here."
+              />
             )}
           </section>
         </div>
@@ -373,7 +380,12 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 </div>
               </div>
             ) : (
-              <p className={s.muted}>Add expenses to see a category breakdown.</p>
+              <FinanceEmptyState
+                kind="analytics"
+                compact
+                title="No group spending to break down"
+                description="Add shared expenses to see how the group's spending is distributed."
+              />
             )}
             <p className={s.muted}>
               This chart describes the expenses shown, not a partial all-time total.
@@ -408,15 +420,25 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                   <small className={s.muted}>{item.date}</small>
                 </div>
               ))}
-            {!p.chat.items.some((item) => item.kind === 'message') && (
-              <p className={s.muted}>
-                {p.chat.loading
-                  ? 'Loading saved messages…'
-                  : p.chat.canSend
-                    ? 'No messages yet. Start the conversation.'
-                    : 'Connect and sync the group to load messages.'}
-              </p>
-            )}
+            {!p.chat.items.some((item) => item.kind === 'message') &&
+              (p.chat.loading ? (
+                <p className={s.muted} role="status">
+                  Loading saved messages…
+                </p>
+              ) : p.chat.error ? (
+                <p className={s.muted} role="alert">
+                  {p.chat.error}
+                </p>
+              ) : p.chat.canSend ? (
+                <FinanceEmptyState
+                  kind="activity"
+                  compact
+                  title="No messages yet"
+                  description="Start the conversation with your group."
+                />
+              ) : (
+                <p className={s.muted}>Connect and sync the group to load messages.</p>
+              ))}
             <Button size="sm" variant="outline" onPress={p.onOpenChat}>
               Open group chat
             </Button>

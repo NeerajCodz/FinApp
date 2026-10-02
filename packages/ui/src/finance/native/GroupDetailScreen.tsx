@@ -1,3 +1,4 @@
+import { FinanceEmptyState } from './FinanceEmptyState';
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Button, Empty, Typography, useTheme } from '@finapp/ui/native';
@@ -342,9 +343,11 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 </Pressable>
               ))
             ) : (
-              <Empty
-                title="No shared expenses"
-                description="Add an expense to start your group history."
+              <FinanceEmptyState
+                kind="activity"
+                title="Your group history starts with an expense."
+                description="Add a shared expense to keep the group ledger up to date."
+                compact
                 action={
                   <Button variant="outline" onPress={p.onAddExpense}>
                     Add expense
@@ -416,7 +419,12 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 </View>
               ))
             ) : (
-              <Typography variant="small">No settlements recorded for this group yet.</Typography>
+              <FinanceEmptyState
+                kind="activity"
+                title="No settlements recorded yet."
+                description="Settlements you record for this group will appear here."
+                compact
+              />
             )}
           </GroupPanel>
           <GroupPanel>

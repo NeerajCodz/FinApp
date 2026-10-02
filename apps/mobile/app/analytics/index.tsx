@@ -21,6 +21,7 @@ import {
   MetricPair,
   TransactionRow,
 } from '@finapp/ui/finance';
+import { FinanceEmptyState } from '@finapp/ui/finance';
 import {
   Button,
   Empty,
@@ -129,7 +130,12 @@ function RankedBreakdown({
   const { tokens } = useTheme();
   if (!items.length)
     return (
-      <Typography variant="small">No posted expenses match this period and filter.</Typography>
+      <FinanceEmptyState
+        kind="analytics"
+        title="No posted expenses match this period."
+        description="Choose another period or filter to see spending rankings."
+        compact
+      />
     );
   return (
     <View style={{ gap: 4 }}>
@@ -297,7 +303,8 @@ function AnalyticsContent() {
         .filter(
           (account) =>
             account.includeInAnalytics !== false &&
-            account.archivedAt === undefined && (account.currency ?? defaultCurrency) === currency,
+            account.archivedAt === undefined &&
+            (account.currency ?? defaultCurrency) === currency,
         )
         .flatMap((account) => {
           const id = recordId(account);
@@ -355,7 +362,9 @@ function AnalyticsContent() {
       return transaction ? [transaction] : [];
     });
     const categoriesForAnalytics = analyticsEntities(categoryState.data);
-    const accountsForAnalytics = analyticsEntities(accountState.data.filter(account => account.includeInAnalytics !== false));
+    const accountsForAnalytics = analyticsEntities(
+      accountState.data.filter((account) => account.includeInAnalytics !== false),
+    );
     const current = aggregateAnalytics(
       transactions,
       categoriesForAnalytics,
@@ -565,8 +574,11 @@ function AnalyticsContent() {
           transaction.occurredAt >= budget.endAt
         )
           return sum;
-        if (accounts.get(transaction.accountId ?? '')?.includeInAnalytics === false ||
-          categories.get(transaction.categoryId ?? '')?.includeInBudgets === false) return sum;
+        if (
+          accounts.get(transaction.accountId ?? '')?.includeInAnalytics === false ||
+          categories.get(transaction.categoryId ?? '')?.includeInBudgets === false
+        )
+          return sum;
         if (budget.categoryId) {
           const transactionCategory = categories.get(transaction.categoryId ?? '');
           const budgetCategory = categories.get(budget.categoryId);
@@ -585,10 +597,20 @@ function AnalyticsContent() {
               : transaction.accountId === budget.accountId;
           if (!matches) return sum;
         }
-        if (Array.isArray(budget.accountIds) && budget.accountIds.length && !budget.accountIds.some(id => {
-          const scopedAccount = typeof id === 'string' ? accounts.get(id) : undefined;
-          return typeof id === 'string' && (scopedAccount ? recordIds(scopedAccount) : [id]).includes(transaction.accountId ?? '');
-        })) return sum;
+        if (
+          Array.isArray(budget.accountIds) &&
+          budget.accountIds.length &&
+          !budget.accountIds.some((id) => {
+            const scopedAccount = typeof id === 'string' ? accounts.get(id) : undefined;
+            return (
+              typeof id === 'string' &&
+              (scopedAccount ? recordIds(scopedAccount) : [id]).includes(
+                transaction.accountId ?? '',
+              )
+            );
+          })
+        )
+          return sum;
         return sum + transaction.amountMinor;
       }, 0n);
       return { budget, spentMinor };
@@ -989,8 +1011,9 @@ function AnalyticsContent() {
               ))}
             </View>
             {transactionCount === 0 && (
-              <Empty
-                title="No activity in this period"
+              <FinanceEmptyState
+                kind="activity"
+                title="No activity in this period."
                 description="Record a transaction to start seeing trends from your local finance data."
                 action={
                   <Button
@@ -1053,7 +1076,12 @@ function AnalyticsContent() {
                   />
                 )
               ) : (
-                <Typography variant="small">No posted expenses to chart in this period.</Typography>
+                <FinanceEmptyState
+                  kind="analytics"
+                  title="No posted expenses to chart."
+                  description="Choose another period or record an expense to see spending trends."
+                  compact
+                />
               )}
             </Panel>
             <Panel title="Spending by category">
@@ -1091,7 +1119,12 @@ function AnalyticsContent() {
                   orientation="horizontal"
                 />
               ) : (
-                <Typography variant="small">No posted expenses in this period.</Typography>
+                <FinanceEmptyState
+                  kind="analytics"
+                  title="No posted expenses in this period."
+                  description="Category spending will appear when expenses are recorded."
+                  compact
+                />
               )}
             </Panel>
             <Panel
@@ -1170,9 +1203,11 @@ function AnalyticsContent() {
                     })}
                 </View>
               ) : (
-                <Empty
-                  title="No account activity"
+                <FinanceEmptyState
+                  kind="account"
+                  title="No account activity."
                   description="Accounts in this currency will appear here."
+                  compact
                 />
               )}
             </Panel>
@@ -1248,9 +1283,11 @@ function AnalyticsContent() {
                   })}
                 </View>
               ) : budgetState.data ? (
-                <Empty
-                  title="No active budgets"
+                <FinanceEmptyState
+                  kind="budget"
+                  title="No active budgets."
                   description="Saved budget progress will appear here."
+                  compact
                   action={
                     <Button
                       size="sm"
@@ -1329,9 +1366,11 @@ function AnalyticsContent() {
                     })}
                   </View>
                 ) : (
-                  <Empty
-                    title="No active reminders"
+                  <FinanceEmptyState
+                    kind="recurring"
+                    title="No active reminders."
                     description="Upcoming recurring rules will appear here."
+                    compact
                     action={
                       <Button
                         size="sm"
@@ -1374,9 +1413,12 @@ function AnalyticsContent() {
                 </Typography>
               </View>
               {groupExpenses.length === 0 && settlements.length === 0 ? (
-                <Typography variant="small">
-                  No shared expenses or settlements in this period.
-                </Typography>
+                <FinanceEmptyState
+                  kind="group"
+                  title="No shared activity in this period."
+                  description="Group expenses and settlements will appear here when recorded."
+                  compact
+                />
               ) : (
                 <View style={{ gap: 2 }}>
                   {groupExpenses
@@ -1488,9 +1530,11 @@ function AnalyticsContent() {
                   ) : null;
                 })
               ) : (
-                <Empty
-                  title={typeFilter === 'income' ? 'No income yet' : 'No transactions to rank'}
+                <FinanceEmptyState
+                  kind="transaction"
+                  title={typeFilter === 'income' ? 'No income yet.' : 'No transactions to rank.'}
                   description="Posted transactions matching this period and filter will appear here."
+                  compact
                 />
               )}
             </Panel>

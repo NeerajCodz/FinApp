@@ -8,7 +8,12 @@ import { api } from '@convex/_generated/api';
 import { calculateBilateralBalance } from '@convex/splits/domain';
 import { ArrowLeft, ArrowLeftRight, ArrowRight, UsersRound } from 'lucide-react';
 import { Avatar, Card, Empty, SectionHeader, Separator } from '@finapp/ui/web';
-import { formatTransactionDate, Money, TransactionRow } from '@finapp/ui/finance';
+import {
+  FinanceEmptyState,
+  formatTransactionDate,
+  Money,
+  TransactionRow,
+} from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
@@ -344,7 +349,8 @@ export default function PersonPage() {
             })}
           </div>
         ) : (
-          <Empty
+          <FinanceEmptyState
+            kind="activity"
             title="Nothing shared yet."
             description="Expenses between you will appear here, grouped across your shared groups."
           />

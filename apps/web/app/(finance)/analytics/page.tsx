@@ -3,8 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, ReceiptText } from 'lucide-react';
-import { Button, Card, Empty, Typography, useTheme } from '@finapp/ui/web';
+import { ArrowRight } from 'lucide-react';
+import { Button, Card, Typography, useTheme } from '@finapp/ui/web';
 import {
   AnalyticsChartPanel,
   AnalyticsFilters,
@@ -15,7 +15,12 @@ import {
   CashFlowChart,
   SpendingLineChart,
 } from '@finapp/ui/analytics';
-import { BudgetProgress, TransactionRow, formatTransactionDate } from '@finapp/ui/finance';
+import {
+  BudgetProgress,
+  FinanceEmptyState,
+  TransactionRow,
+  formatTransactionDate,
+} from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
   getAnalyticsCalendarDate,
@@ -362,7 +367,8 @@ export default function AnalyticsPage() {
   const filteredTransactions = React.useMemo(
     () =>
       analyticsTransactions.filter((transaction) => {
-        if (accountById.get(transaction.accountId ?? '')?.includeInAnalytics === false) return false;
+        if (accountById.get(transaction.accountId ?? '')?.includeInAnalytics === false)
+          return false;
         const account = accountById.get(accountFilter);
         const category = categoryById.get(categoryFilter);
         if (
@@ -412,7 +418,8 @@ export default function AnalyticsPage() {
   const rangeRecords = React.useMemo(() => {
     if (!range) return [];
     return transactionState.records.filter((record) => {
-      if (accountById.get(String(record.accountId ?? ''))?.includeInAnalytics === false) return false;
+      if (accountById.get(String(record.accountId ?? ''))?.includeInAnalytics === false)
+        return false;
       const occurredAt = Number(record.occurredAt ?? 0);
       const account = accountById.get(accountFilter);
       const category = categoryById.get(categoryFilter);
@@ -574,10 +581,16 @@ export default function AnalyticsPage() {
         (!budgetAccount || !idAliases(budgetAccount).includes(String(record.accountId ?? '')))
       )
         return sum;
-      if (budget.accountIds?.length && !budget.accountIds.some(id => {
-        const scopedAccount = accountById.get(id);
-        return (scopedAccount ? idAliases(scopedAccount) : [id]).includes(String(record.accountId ?? ''));
-      })) return sum;
+      if (
+        budget.accountIds?.length &&
+        !budget.accountIds.some((id) => {
+          const scopedAccount = accountById.get(id);
+          return (scopedAccount ? idAliases(scopedAccount) : [id]).includes(
+            String(record.accountId ?? ''),
+          );
+        })
+      )
+        return sum;
       return sum + amountAsBigInt(record.amountMinor);
     }, 0n);
 
@@ -818,15 +831,20 @@ export default function AnalyticsPage() {
                 value: savingsRate === null ? '—' : `${savingsRate}%`,
                 color: tokens.primary,
               },
-              { label: 'Transactions', icon: 'transactions', value: String(transactionCount), color: tokens.foreground },
+              {
+                label: 'Transactions',
+                icon: 'transactions',
+                value: String(transactionCount),
+                color: tokens.foreground,
+              },
             ]}
           />
 
           {transactionCount === 0 && (
-            <Empty
+            <FinanceEmptyState
+              kind="analytics"
               title="No activity in this period"
               description="Record a transaction to start seeing trends from your local finance data."
-              icon={<ReceiptText size={20} aria-hidden="true" />}
               action={
                 <Link className="finance-inline-link" href="/transaction/new">
                   Add transaction
@@ -850,7 +868,12 @@ export default function AnalyticsPage() {
                   }
                 />
               ) : (
-                <Typography variant="caption">No cash flow in this period.</Typography>
+                <FinanceEmptyState
+                  kind="analytics"
+                  compact
+                  title="No cash flow in this period"
+                  description="Cash flow will appear when you record income or expenses in this period."
+                />
               )}
             </AnalyticsChartPanel>
             <AnalyticsChartPanel
@@ -884,7 +907,12 @@ export default function AnalyticsPage() {
                   orientation="horizontal"
                 />
               ) : (
-                <Typography variant="caption">No posted expenses in this period.</Typography>
+                <FinanceEmptyState
+                  kind="analytics"
+                  compact
+                  title="No posted expenses"
+                  description="Posted expenses in this period will appear here."
+                />
               )}
             </AnalyticsChartPanel>
           </section>
@@ -983,7 +1011,9 @@ export default function AnalyticsPage() {
                     );
                   })
               ) : (
-                <Empty
+                <FinanceEmptyState
+                  kind="account"
+                  compact
                   title="No account activity"
                   description="Accounts in this currency will appear here."
                 />
@@ -1027,7 +1057,9 @@ export default function AnalyticsPage() {
                   />
                 ))
               ) : (
-                <Empty
+                <FinanceEmptyState
+                  kind="budget"
+                  compact
                   title="No budgets yet"
                   description="Create a budget to keep an eye on your plan."
                   action={
@@ -1086,7 +1118,9 @@ export default function AnalyticsPage() {
                   );
                 })
               ) : (
-                <Empty
+                <FinanceEmptyState
+                  kind="recurring"
+                  compact
                   title="No recurring payments"
                   description="Enabled recurring records will be listed here."
                 />
@@ -1146,7 +1180,9 @@ export default function AnalyticsPage() {
                   );
                 })
               ) : (
-                <Empty
+                <FinanceEmptyState
+                  kind="group"
+                  compact
                   title="No shared groups"
                   description="Group activity will appear after you join or create a group."
                 />
@@ -1195,7 +1231,9 @@ export default function AnalyticsPage() {
                   );
                 })
               ) : (
-                <Empty
+                <FinanceEmptyState
+                  kind="transaction"
+                  compact
                   title="No expenses yet"
                   description="Posted expenses in this period will appear here."
                 />
@@ -1228,7 +1266,12 @@ export default function AnalyticsPage() {
                   </Link>
                 ))
               ) : (
-                <Typography variant="caption">No merchant totals in this range.</Typography>
+                <FinanceEmptyState
+                  kind="transaction"
+                  compact
+                  title="No merchant totals"
+                  description="Merchant totals will appear when expenses are recorded in this range."
+                />
               )}
             </Card>
             <Card style={{ display: 'grid', alignContent: 'start', gap: 10, padding: 15 }}>
@@ -1276,7 +1319,12 @@ export default function AnalyticsPage() {
                   })}
                 </div>
               ) : (
-                <Typography variant="caption">No category totals in this range.</Typography>
+                <FinanceEmptyState
+                  kind="category"
+                  compact
+                  title="No category totals"
+                  description="Category totals will appear when categorized expenses are recorded."
+                />
               )}
             </Card>
           </section>

@@ -9,6 +9,7 @@ import {
   type IncomingInvitation,
   type InvitationResponse,
 } from './IncomingInvitations';
+import { FinanceEmptyState } from './FinanceEmptyState';
 export type GroupOverviewItem = {
   id: string;
   name: string;
@@ -164,7 +165,8 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
                 icon={<UsersThree size={25} />}
               />
             ) : !filtered.length ? (
-              <Empty
+              <FinanceEmptyState
+                kind={query ? 'search' : 'group'}
                 title={query ? 'No matching groups' : 'No groups yet'}
                 description={
                   query
@@ -219,12 +221,15 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
                     </li>
                   ))}
                 </ul>
+              ) : p.balancesLoading ? (
+                <p className={s.muted}>Loading recent activity…</p>
               ) : (
-                <p className={s.muted}>
-                  {p.balancesLoading
-                    ? 'Loading recent activity…'
-                    : 'No recent activity in the loaded ledgers.'}
-                </p>
+                <FinanceEmptyState
+                  kind="activity"
+                  compact
+                  title="No recent group activity"
+                  description="Activity appears here after expenses and settlements are recorded."
+                />
               )}
             </section>
             <section className={s.panel}>
