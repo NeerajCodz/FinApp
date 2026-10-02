@@ -5,6 +5,7 @@ import { ArrowLeft } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityFilters } from '@finapp/ui/activity';
 import { CategoryIcon, DateSection, TransactionRow } from '@finapp/ui/finance';
+import { FinanceEmptyState } from '@finapp/ui/finance';
 import { Button, Empty, IconButton, Input, Typography, useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
 
@@ -703,8 +704,9 @@ export default function ActivityScreen() {
           Loading activity…
         </Typography>
       ) : ready && sections.length === 0 && rangeState.covered ? (
-        <Empty
-          title={query ? 'No search matches' : 'No activity this period'}
+        <FinanceEmptyState
+          kind={query ? 'search' : 'activity'}
+          title={query ? 'No search matches.' : 'No activity this period.'}
           description={
             query
               ? 'Try another title, merchant, category, account, or amount.'
@@ -712,9 +714,12 @@ export default function ActivityScreen() {
           }
         />
       ) : ready && sections.length === 0 ? (
-        <Typography variant="small">
-          No matching saved rows. Refresh to confirm the full period.
-        </Typography>
+        <FinanceEmptyState
+          kind="search"
+          title="No matching saved rows."
+          description="Refresh to confirm the full period."
+          compact
+        />
       ) : ready ? (
         <>
           {sections.map(([date, records]) => (

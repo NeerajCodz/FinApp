@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowUpRight, PiggyBank } from 'lucide-react';
 import { formatMinor } from '@convex/shared/money';
 import type { HomeDashboardData } from '../model';
+import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 
 export function HomeGoalsCategories({
   data,
@@ -70,11 +71,13 @@ export function HomeGoalsCategories({
             })}
           </div>
         ) : (
-          <div className="finance-home-empty-block">
-            <PiggyBank size={21} aria-hidden="true" />
-            <p>No active savings goals yet.</p>
-            <a href="/goals">Create a goal</a>
-          </div>
+          <FinanceEmptyState
+            kind="goal"
+            compact
+            title="No active savings goals yet"
+            description="Set a target and build progress one contribution at a time."
+            action={<a href="/goals">Create a goal</a>}
+          />
         )}
       </section>
       <section className="finance-home-panel">
@@ -113,11 +116,13 @@ export function HomeGoalsCategories({
             })}
           </div>
         ) : (
-          <div className="finance-home-empty-block">
-            <span aria-hidden="true">◌</span>
-            <p>No spending recorded in this period.</p>
-            <a href="/categories">Browse categories</a>
-          </div>
+          <FinanceEmptyState
+            kind="category"
+            compact
+            title="No spending recorded in this period"
+            description="Category spending appears when transactions are posted."
+            action={<a href="/categories">Browse categories</a>}
+          />
         )}
       </section>
     </div>

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Empty, Input, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Input, Typography, useTheme } from '@finapp/ui/native';
+import { FinanceEmptyState } from './FinanceEmptyState';
 import { GroupCard } from './GroupCard';
 import { GroupHeading, GroupMetric, GroupNote, GroupPanel, GroupTile } from './GroupPrimitives';
 import {
@@ -166,7 +167,9 @@ export function GroupsOverviewScreen({
       {loading ? (
         <Typography accessibilityLiveRegion="polite">Loading groups…</Typography>
       ) : error ? (
-        <Empty title="Groups unavailable" description={error} />
+        <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
+          {error}
+        </Typography>
       ) : filtered.length ? (
         filtered.map((group) => (
           <GroupCard
@@ -179,9 +182,12 @@ export function GroupsOverviewScreen({
           />
         ))
       ) : (
-        <Empty
-          title={query ? 'No matching groups' : 'No groups yet'}
-          description={query ? 'Try another name.' : 'Create a group for expenses you share.'}
+        <FinanceEmptyState
+          kind={query ? 'search' : 'group'}
+          title={query ? 'No matching groups' : 'Start a group for shared plans.'}
+          description={
+            query ? 'Try another name.' : 'Create a group to organize expenses you share.'
+          }
           action={!query ? <Button onPress={onCreate}>Create group</Button> : undefined}
         />
       )}
@@ -220,12 +226,15 @@ export function GroupsOverviewScreen({
               <Typography variant="label">{activity.amount}</Typography>
             </View>
           ))
+        ) : balancesLoading ? (
+          <Typography variant="small">Loading recent activity…</Typography>
         ) : (
-          <Typography variant="small">
-            {balancesLoading
-              ? 'Loading recent activity…'
-              : 'No activity is available from the loaded ledgers.'}
-          </Typography>
+          <FinanceEmptyState
+            kind="activity"
+            title="No recent group activity."
+            description="Shared expenses and settlements will appear here as your groups are used."
+            compact
+          />
         )}
       </GroupPanel>
       <GroupPanel>

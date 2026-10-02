@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, View } from 'react-native';
 import { Button, Text, Typography, useTheme } from '@finapp/ui/native';
+import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import {
@@ -110,7 +111,10 @@ export function BudgetDetailScreen({
           ['Remaining', formatMinor(dashboard.remaining, currency)],
           ['Daily average', formatMinor(dashboard.average, currency)],
           ['Forecasted spend', formatMinor(dashboard.forecast, currency)],
-          ['Status', ratio >= 100 ? 'Over budget' : dashboard.forecast > limit ? 'At risk' : 'On track'],
+          [
+            'Status',
+            ratio >= 100 ? 'Over budget' : dashboard.forecast > limit ? 'At risk' : 'On track',
+          ],
         ].map(([label, value]) => (
           <View
             key={label}
@@ -127,26 +131,35 @@ export function BudgetDetailScreen({
           </View>
         ))}
       </View>
-      <View style={{ gap: 12, padding: 16, borderRadius: 15, backgroundColor: tokens.surfaceRaised }}>
+      <View
+        style={{ gap: 12, padding: 16, borderRadius: 15, backgroundColor: tokens.surfaceRaised }}
+      >
         <Typography variant="title">Budget progress</Typography>
         <Text style={{ color: tokens.foregroundMuted }}>
-          {new Date(start).toLocaleDateString()} – {new Date(end - 1).toLocaleDateString()} · {dashboard.daysLeft} days left
+          {new Date(start).toLocaleDateString()} – {new Date(end - 1).toLocaleDateString()} ·{' '}
+          {dashboard.daysLeft} days left
         </Text>
         <Bar value={ratio} large tone={ratio >= 100 ? tokens.destructive : undefined} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
           <Text>{formatMinor(dashboard.spent, currency)} spent</Text>
-          <Text>{formatMinor(limit, currency)} limit · {Math.round(ratio)}%</Text>
+          <Text>
+            {formatMinor(limit, currency)} limit · {Math.round(ratio)}%
+          </Text>
         </View>
         <Text style={{ color: tokens.foregroundMuted }}>
           At your current pace, projected spending is {formatMinor(dashboard.forecast, currency)}.
         </Text>
       </View>
-      <View style={{ gap: 12, padding: 16, borderRadius: 15, backgroundColor: tokens.surfaceRaised }}>
+      <View
+        style={{ gap: 12, padding: 16, borderRadius: 15, backgroundColor: tokens.surfaceRaised }}
+      >
         <Typography variant="title">Spending over time</Typography>
         <Text style={{ color: tokens.foregroundMuted }}>Daily spending in this budget cycle.</Text>
         <Bars rows={dashboard.buckets} currency={currency} />
       </View>
-      <View style={{ gap: 12, padding: 16, borderRadius: 15, backgroundColor: tokens.surfaceRaised }}>
+      <View
+        style={{ gap: 12, padding: 16, borderRadius: 15, backgroundColor: tokens.surfaceRaised }}
+      >
         <Typography variant="title">Spending by merchant</Typography>
         <Ring
           segments={dashboard.merchants}
@@ -170,7 +183,10 @@ export function BudgetDetailScreen({
           value={
             settings?.accountIds?.length
               ? settings.accountIds
-                  .map((id) => accounts.find((account) => account.id === id)?.name ?? 'Unavailable account')
+                  .map(
+                    (id) =>
+                      accounts.find((account) => account.id === id)?.name ?? 'Unavailable account',
+                  )
                   .join(', ')
               : 'All accounts'
           }
@@ -185,7 +201,10 @@ export function BudgetDetailScreen({
         />
         <DetailRow label="Rollover" value="No rollover" />
         <DetailRow label="Alerts" value={`${settings?.alertThreshold ?? 80}% of limit`} />
-        <DetailRow label="Include in analytics" value={settings?.includeInAnalytics === false ? 'No' : 'Yes'} />
+        <DetailRow
+          label="Include in analytics"
+          value={settings?.includeInAnalytics === false ? 'No' : 'Yes'}
+        />
         <DetailRow label="Notes" value={settings?.notes?.trim() || 'No notes'} />
       </View>
       <Button variant="outline" disabled={pending} onPress={onArchive}>
@@ -212,7 +231,12 @@ export function BudgetDetailScreen({
           ))}
         </View>
       ) : (
-        <Text>No posted expenses are available for this budget.</Text>
+        <FinanceEmptyState
+          kind="budget"
+          title="No posted expenses yet."
+          description="Posted expenses assigned to this budget will appear here."
+          compact
+        />
       )}
     </ScrollView>
   );

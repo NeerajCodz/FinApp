@@ -7,6 +7,7 @@ import { formatMinor } from '../money';
 import { formatTransactionDate } from '../datetime';
 import { Bar, Ring, Legend, Metrics, Panel } from './GoalsBudgetsParts';
 import s from './GoalsBudgets.module.css';
+import { FinanceEmptyState } from './FinanceEmptyState';
 export type GoalOverviewItem = {
   id: string;
   name: string;
@@ -92,80 +93,16 @@ export function GoalsOverviewScreen(p: GoalsOverviewScreenProps) {
           <Button onPress={p.onRetry}>Retry</Button>
         </Panel>
       ) : !p.goals.length ? (
-        <section className={s.emptyGoals} aria-labelledby="goals-empty-title">
-          <svg className={s.goalEmptyIllustration} viewBox="0 0 240 180" aria-hidden="true">
-            <circle cx="120" cy="77" r="61" fill="var(--finapp-surface-raised)" />
-            <circle
-              cx="120"
-              cy="77"
-              r="41"
-              fill="none"
-              stroke="var(--finapp-border)"
-              strokeWidth="2"
-            />
-            <circle
-              cx="120"
-              cy="77"
-              r="27"
-              fill="none"
-              stroke="var(--finapp-primary)"
-              strokeWidth="3"
-            />
-            <circle cx="120" cy="77" r="11" fill="var(--finapp-primary)" opacity=".28" />
-            <circle cx="120" cy="77" r="4" fill="var(--finapp-primary)" />
-            <path
-              d="m153 42-30 30m20-36 16 16-7 2-2 7-16-16"
-              fill="none"
-              stroke="var(--finapp-foreground)"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="3"
-            />
-            <path
-              d="M52 136h136"
-              stroke="var(--finapp-border)"
-              strokeLinecap="round"
-              strokeWidth="2"
-            />
-            <rect
-              x="63"
-              y="119"
-              width="45"
-              height="17"
-              rx="8.5"
-              fill="var(--finapp-card)"
-              stroke="var(--finapp-border)"
-              strokeWidth="2"
-            />
-            <path
-              d="M75 128h21"
-              stroke="var(--finapp-primary)"
-              strokeLinecap="round"
-              strokeWidth="2"
-            />
-            <rect
-              x="132"
-              y="111"
-              width="45"
-              height="25"
-              rx="12.5"
-              fill="var(--finapp-card)"
-              stroke="var(--finapp-border)"
-              strokeWidth="2"
-            />
-            <path
-              d="M145 124h19"
-              stroke="var(--finapp-primary)"
-              strokeLinecap="round"
-              strokeWidth="2"
-            />
-          </svg>
-          <h2 id="goals-empty-title">No goals</h2>
-          <p>
-            What are you looking forward to? Set a target and build progress one contribution at a
-            time.
-          </p>
-        </section>
+        <FinanceEmptyState
+          kind="goal"
+          title="No goals yet"
+          description="What are you looking forward to? Set a target and build progress one contribution at a time."
+          action={
+            <Button onPress={p.defaultCurrency ? p.onAdd : p.onSetCurrency}>
+              {p.defaultCurrency ? 'Create a goal' : 'Set default currency'}
+            </Button>
+          }
+        />
       ) : (
         <>
           <Metrics
@@ -271,7 +208,14 @@ export function GoalsOverviewScreen(p: GoalsOverviewScreenProps) {
                     </div>
                   </article>
                 ))}
-                {!visible.length && <p className={s.muted}>No goals in this view.</p>}
+                {!visible.length && (
+                  <FinanceEmptyState
+                    kind="search"
+                    compact
+                    title="No goals in this view"
+                    description="Choose a different goal status or search term to see goals."
+                  />
+                )}
               </div>
             </Panel>
             <aside className={s.stack}>

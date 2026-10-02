@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { Button, Empty } from '@finapp/ui/web';
-import { formatTransactionDate, TransactionRow } from '@finapp/ui/finance';
+import { FinanceEmptyState, formatTransactionDate, TransactionRow } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered } from '@/lib/offline/repository';
@@ -209,7 +209,8 @@ export default function GroupExpensesPage() {
           })}
         </div>
       ) : (
-        <Empty
+        <FinanceEmptyState
+          kind="transaction"
           title="No group expenses"
           description="Add the first expense and choose who shared it."
           action={

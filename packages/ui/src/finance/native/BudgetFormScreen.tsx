@@ -4,6 +4,7 @@ import { Button, IconButton, Input, Label, Text, Typography, useTheme } from '@f
 import { CategoryIcon } from './CategoryIcon';
 import { EntityIconPicker } from './EntityIconPicker';
 import type { BudgetSettings } from '../budgetDashboard';
+import { FinanceEmptyState } from './FinanceEmptyState';
 
 export type BudgetCategoryOption = { id: string; name: string; icon?: string };
 export type BudgetFormScreenProps = {
@@ -148,7 +149,12 @@ export function BudgetFormScreen(props: BudgetFormScreenProps) {
                   );
                 })
               ) : (
-                <Text>No available categories. Create a category first.</Text>
+                <FinanceEmptyState
+                  kind="category"
+                  title="No available categories."
+                  description="Create a category before setting up a category budget."
+                  compact
+                />
               )}
             </View>
             <View style={{ gap: 10 }}>
@@ -169,16 +175,30 @@ export function BudgetFormScreen(props: BudgetFormScreenProps) {
                 />
               </View>
             </View>
-            <View style={{ gap: 12, borderTopWidth: 1, borderColor: tokens.borderSubtle, paddingTop: 14 }}>
+            <View
+              style={{
+                gap: 12,
+                borderTopWidth: 1,
+                borderColor: tokens.borderSubtle,
+                paddingTop: 14,
+              }}
+            >
               <Typography variant="bodyLarge">Account scope</Typography>
               <Pressable
                 accessibilityRole="radio"
                 accessibilityState={{ checked: !settings.accountIds?.length }}
                 onPress={() => setSettings({ accountIds: [] })}
-                style={{ padding: 12, borderWidth: 1, borderColor: tokens.border, borderRadius: 12 }}
+                style={{
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  borderRadius: 12,
+                }}
               >
                 <Text>All accounts</Text>
-                <Text style={{ color: tokens.foregroundMuted }}>Include expenses from every linked account.</Text>
+                <Text style={{ color: tokens.foregroundMuted }}>
+                  Include expenses from every linked account.
+                </Text>
               </Pressable>
               {(props.accounts ?? []).map((account) => {
                 const selected = settings.accountIds?.includes(account.id) ?? false;
@@ -215,7 +235,9 @@ export function BudgetFormScreen(props: BudgetFormScreenProps) {
               <Pressable
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: settings.includeInAnalytics !== false }}
-                onPress={() => setSettings({ includeInAnalytics: settings.includeInAnalytics === false })}
+                onPress={() =>
+                  setSettings({ includeInAnalytics: settings.includeInAnalytics === false })
+                }
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
               >
                 <Text style={{ color: tokens.primary }}>
@@ -223,7 +245,9 @@ export function BudgetFormScreen(props: BudgetFormScreenProps) {
                 </Text>
                 <View style={{ flex: 1 }}>
                   <Text>Include in analytics</Text>
-                  <Text style={{ color: tokens.foregroundMuted }}>Show this budget in charts and insights.</Text>
+                  <Text style={{ color: tokens.foregroundMuted }}>
+                    Show this budget in charts and insights.
+                  </Text>
                 </View>
               </Pressable>
               <View style={{ gap: 8 }}>

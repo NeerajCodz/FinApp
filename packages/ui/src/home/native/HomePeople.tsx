@@ -4,6 +4,7 @@ import { UsersThree } from '@finapp/ui/icons/native';
 import { SectionHeader, Text, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
 import type { HomePerson } from '../types';
+import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 
 export function HomePeople({
   people,
@@ -100,9 +101,12 @@ export function HomePeople({
           ))}
         </ScrollView>
       ) : (
-        <Text style={{ color: tokens.foregroundMuted, lineHeight: 20 }}>
-          Shared expenses with group members will appear here once you transact together.
-        </Text>
+        <FinanceEmptyState
+          kind="group"
+          title="No shared activity yet."
+          description="Shared expenses with group members will appear here once you transact together."
+          compact
+        />
       )}
     </View>
   );

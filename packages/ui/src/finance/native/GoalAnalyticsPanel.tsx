@@ -1,3 +1,4 @@
+import { FinanceEmptyState } from './FinanceEmptyState';
 import React from 'react';
 import { Text, View } from 'react-native';
 import { ArrowLeft } from '@finapp/ui/icons/native';
@@ -193,9 +194,12 @@ export function GoalAnalyticsPanel({
           <View style={{ gap: 8, padding: 16, borderRadius: 16, backgroundColor: surface }}>
             <Typography variant="heading">Contribution sources</Typography>
             {insights.sources.length === 0 ? (
-              <Text style={{ color: tokens.foregroundMuted }}>
-                No linked account contributions recorded.
-              </Text>
+              <FinanceEmptyState
+                kind="contribution"
+                title="No linked contributions yet."
+                description="Link a savings account to follow contributions toward this goal."
+                compact
+              />
             ) : (
               insights.sources.map((source) => (
                 <View
@@ -267,7 +271,12 @@ export function GoalAnalyticsPanel({
       <View style={{ gap: 8 }}>
         <Typography variant="heading">Recent contributions</Typography>
         {history.length === 0 ? (
-          <Text style={{ color: tokens.foregroundMuted }}>No contributions recorded yet.</Text>
+          <FinanceEmptyState
+            kind="contribution"
+            title="No contributions recorded yet."
+            description="Contributions you make toward this goal will appear here."
+            compact
+          />
         ) : (
           history.map((entry) => (
             <View

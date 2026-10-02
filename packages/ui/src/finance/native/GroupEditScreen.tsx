@@ -6,6 +6,7 @@ import {
   type InvitationLinkExpiryMs,
 } from '../groupInvitationExpiry';
 import { Button, Empty, Input, Label, Typography, useTheme } from '@finapp/ui/native';
+import { FinanceEmptyState } from './FinanceEmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIconPicker } from './EntityIconPicker';
@@ -381,11 +382,16 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                     </View>
                   );
                 })
+              ) : search ? (
+                <FinanceEmptyState
+                  kind="search"
+                  title="No matching members."
+                  description="Try another name or username."
+                  compact
+                />
               ) : (
                 <Typography variant="small">
-                  {search
-                    ? 'No matching members.'
-                    : 'Membership is not cached yet. Details appear after sync completes.'}
+                  Membership is not cached yet. Details appear after sync completes.
                 </Typography>
               )}
             </GroupPanel>
