@@ -4,7 +4,6 @@ import { Button, Card, SectionHeader, Typography } from '@finapp/ui/native';
 import { TransactionRow } from '@finapp/ui/finance';
 import { formatTransactionDate } from '../../finance/datetime';
 import type { HomeDashboardData } from '../model';
-import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 
 export function HomeRecent({
   data,
@@ -46,12 +45,9 @@ export function HomeRecent({
           />
         ))
       ) : (
-        <FinanceEmptyState
-          kind="search"
-          title="No transactions match your filters."
-          description="Adjust your filters or add a transaction to see recent activity."
-          compact
-        />
+        <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+          <Typography variant="small">No transactions match your filters.</Typography>
+        </View>
       )}
     </Card>
   );

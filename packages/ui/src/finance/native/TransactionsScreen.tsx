@@ -1,60 +1,13 @@
 import React from 'react';
 import { ScrollView, View, Pressable } from 'react-native';
-import { FinanceEmptyState } from './FinanceEmptyState';
 import { Button, Input, Text, Typography, useTheme } from '@finapp/ui/native';
 import { CategoryIcon } from './CategoryIcon';
 import { Money } from './Money';
 import type { TransactionsScreenProps, TransactionTableItem } from '../web/TransactionsScreen';
 import { compareTransactionAmounts } from '../transactionComparison';
 export type { TransactionsScreenProps, TransactionTableItem } from '../web/TransactionsScreen';
-export function TransactionCards({
-  items,
-  onSelect,
-}: {
-  items: readonly TransactionTableItem[];
-  onSelect?: (id: string) => void;
-}) {
-  const { tokens } = useTheme();
-  return items.length ? (
-    <View style={{ gap: 0 }}>
-      {items.map((item, index) => (
-        <Pressable
-          key={item.id}
-          accessibilityRole={onSelect ? 'button' : undefined}
-          onPress={() => onSelect?.(item.id)}
-          style={({ pressed }) => ({
-            paddingVertical: 13,
-            borderBottomWidth: index === items.length - 1 ? 0 : 1,
-            borderColor: tokens.borderSubtle,
-            opacity: pressed ? 0.7 : 1,
-            gap: 7,
-          })}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <CategoryIcon label={item.category} icon={item.categoryIcon} />
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ fontWeight: '600' }}>{item.title}</Text>
-              {(item.note || item.merchant) && (
-                <Typography variant="caption">{item.note || item.merchant}</Typography>
-              )}
-            </View>
-            <Money amountMinor={item.amountMinor} currency={item.currency} type={item.type} />
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 42 }}>
-            <Typography variant="caption">{item.date}</Typography>
-            <Typography variant="caption">{item.account ?? 'Unassigned account'}</Typography>
-          </View>
-        </Pressable>
-      ))}
-    </View>
-  ) : (
-    <FinanceEmptyState
-      kind="transaction"
-      title="Your transaction history starts here."
-      description="Add a transaction to keep spending and income organized."
-      compact
-    />
-  );
+export function TransactionCards({items,onSelect}: {items:readonly TransactionTableItem[];onSelect?:(id:string)=>void}) {
+ const {tokens}=useTheme();return <View style={{gap:0}}>{items.length?items.map((item,index)=><Pressable key={item.id} accessibilityRole={onSelect?'button':undefined} onPress={()=>onSelect?.(item.id)} style={({pressed})=>({paddingVertical:13,borderBottomWidth:index===items.length-1?0:1,borderColor:tokens.borderSubtle,opacity:pressed?.7:1,gap:7})}><View style={{flexDirection:'row',alignItems:'center',gap:10}}><CategoryIcon label={item.category} icon={item.categoryIcon}/><View style={{flex:1,gap:3}}><Text style={{fontWeight:'600'}}>{item.title}</Text>{(item.note||item.merchant)&&<Typography variant="caption">{item.note||item.merchant}</Typography>}</View><Money amountMinor={item.amountMinor} currency={item.currency} type={item.type}/></View><View style={{flexDirection:'row',justifyContent:'space-between',gap:8,paddingLeft:42}}><Typography variant="caption">{item.category} · {item.account??'Unassigned'}{item.destination?` → ${item.destination}`:''}</Typography><Typography variant="caption">{item.date}</Typography></View></Pressable>):<Typography variant="caption" style={{paddingVertical:24,textAlign:'center'}}>No transactions to show.</Typography>}</View>;
 }
 export function TransactionsScreen(p: TransactionsScreenProps) {
   const { tokens } = useTheme();
@@ -173,17 +126,6 @@ export function TransactionsScreen(p: TransactionsScreenProps) {
       <View style={panel}>
         {p.loading ? (
           <Typography variant="caption">Loading transactions…</Typography>
-        ) : p.error || p.rangeError ? null : p.items.length === 0 ? (
-          <FinanceEmptyState
-            kind={p.query ? 'search' : 'transaction'}
-            title={p.query ? 'No matching transactions.' : 'No transactions in this period.'}
-            description={
-              p.query
-                ? 'Try another search or adjust the selected month and filters.'
-                : 'Transactions matching this month and filter will appear here.'
-            }
-            compact
-          />
         ) : (
           <TransactionCards items={p.items} onSelect={p.onSelect} />
         )}

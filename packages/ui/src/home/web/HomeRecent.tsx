@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowUpRight as OpenIcon, ReceiptText } from 'lucide-react';
 import { TransactionRow } from '@finapp/ui/finance';
 import { formatTransactionDate } from '../../finance/datetime';
-import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 import type { HomeDashboardData } from '../model';
 
 export function HomeRecent({
@@ -52,12 +51,10 @@ export function HomeRecent({
           ))}
         </div>
       ) : (
-        <FinanceEmptyState
-          kind="activity"
-          compact
-          title="No transactions match your filters"
-          description="Recent activity will appear here when it matches the selected filters."
-        />
+        <div className="finance-home-empty-block">
+          <ReceiptText size={21} aria-hidden="true" />
+          <p>No transactions match your filters.</p>
+        </div>
       )}
     </section>
   );

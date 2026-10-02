@@ -10,8 +10,7 @@ import {
   ReceiptText as Tag,
   Wallet,
 } from '@finapp/ui/icons/native';
-import { Input, Typography, useTheme } from '@finapp/ui/native';
-import { FinanceEmptyState } from './FinanceEmptyState';
+import { Empty, Input, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 
@@ -468,12 +467,9 @@ export function CategoryAnalyticsScreen({
                 </View>
               </View>
             ) : (
-              <FinanceEmptyState
-                kind="analytics"
-                title="No spending in this period."
-                description="Posted expenses will appear here when you have activity in the selected range."
-                compact
-              />
+              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                No posted expenses in this range.
+              </Typography>
             )}
           </View>
           <View style={styles.card}>
@@ -503,12 +499,9 @@ export function CategoryAnalyticsScreen({
               </TouchableOpacity>
             ))}
             {expenseRows.length === 0 && (
-              <FinanceEmptyState
-                kind="analytics"
-                title="No posted expenses in this range."
-                description="Choose another period to review category spending."
-                compact
-              />
+              <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                No posted expenses in this range.
+              </Typography>
             )}
           </View>
           <View style={styles.card}>
@@ -698,11 +691,9 @@ export function CategoryAnalyticsScreen({
                 );
               })
             ) : (
-              <FinanceEmptyState
-                kind="search"
+              <Empty
                 title="No matching categories."
                 description="Change the filters to see category performance."
-                compact
               />
             )}
           </View>

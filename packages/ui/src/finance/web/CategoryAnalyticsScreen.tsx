@@ -13,7 +13,6 @@ import {
 import { Empty, Input, Select, Typography } from '@finapp/ui/web';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
-import { FinanceEmptyState } from './FinanceEmptyState';
 import styles from './CategoryAnalyticsScreen.module.css';
 
 export type AnalyticsCategory = {
@@ -309,44 +308,10 @@ export function CategoryAnalyticsScreen({
               accessibilityLabel="Search categories"
             />
           </label>
-          <Select
-            label="Period"
-            className={styles.selectLabel}
-            value={period}
-            onChange={(value) => setPeriod(value as Period)}
-            options={[
-              { value: 'week', label: 'This week' },
-              { value: 'month', label: 'This month' },
-              { value: 'year', label: 'This year' },
-            ]}
-          />
-          <Select
-            label="Account"
-            className={styles.selectLabel}
-            value={accountId}
-            onChange={setAccountId}
-            options={[
-              { value: 'all', label: 'All accounts' },
-              ...accounts.map((item) => ({ value: item.id, label: item.name })),
-            ]}
-          />
-          <Select
-            label="Category"
-            className={styles.selectLabel}
-            value={categoryId}
-            onChange={setCategoryId}
-            options={[
-              { value: 'all', label: 'All categories' },
-              ...categories.map((item) => ({ value: item.id, label: item.name })),
-            ]}
-          />
-          <Select
-            label="Currency"
-            className={styles.selectLabel}
-            value={currency}
-            onChange={setCurrency}
-            options={currencyOptions}
-          />
+          <Select label="Period" className={styles.selectLabel} value={period} onChange={value => setPeriod(value as Period)} options={[{value:'week',label:'This week'},{value:'month',label:'This month'},{value:'year',label:'This year'}]} />
+          <Select label="Account" className={styles.selectLabel} value={accountId} onChange={setAccountId} options={[{value:'all',label:'All accounts'},...accounts.map(item => ({value:item.id,label:item.name}))]} />
+          <Select label="Category" className={styles.selectLabel} value={categoryId} onChange={setCategoryId} options={[{value:'all',label:'All categories'},...categories.map(item => ({value:item.id,label:item.name}))]} />
+          <Select label="Currency" className={styles.selectLabel} value={currency} onChange={setCurrency} options={currencyOptions} />
         </div>
       </header>
       <div className={styles.toolbar} role="group" aria-label="Category type filter">
@@ -418,12 +383,7 @@ export function CategoryAnalyticsScreen({
             <article className={`${styles.panel} ${styles.donutPanel}`}>
               <PanelHeading title="Expense distribution" note={`By category · ${periodName}`} />
               {donutRows.length === 0 ? (
-                <FinanceEmptyState
-                  kind="analytics"
-                  compact
-                  title="No posted expenses in this range"
-                  description="Expense distribution will appear when matching activity is recorded."
-                />
+                <p className={styles.noData}>No posted expenses in this range.</p>
               ) : (
                 <div className={styles.donutLayout}>
                   <div
@@ -519,12 +479,7 @@ export function CategoryAnalyticsScreen({
                 ))}
               </div>
               {expenseRows.length === 0 && (
-                <FinanceEmptyState
-                  kind="analytics"
-                  compact
-                  title="No posted expenses in this range"
-                  description="Category spending will appear when matching activity is recorded."
-                />
+                <p className={styles.noData}>No posted expenses in this range.</p>
               )}
             </article>
             <article className={`${styles.panel} ${styles.monthlyPanel}`}>
@@ -615,12 +570,7 @@ export function CategoryAnalyticsScreen({
                 })}
               </div>
             ) : (
-              <FinanceEmptyState
-                kind="category"
-                compact
-                title="No category limits set"
-                description="Set a monthly limit to track category spending against a target."
-              />
+              <p className={styles.noData}>No active category limits are set.</p>
             )}
           </section>
           <section className={styles.panel}>
@@ -758,10 +708,8 @@ export function CategoryAnalyticsScreen({
                 </table>
               </div>
             ) : (
-              <FinanceEmptyState
-                kind="search"
-                compact
-                title="No matching categories"
+              <Empty
+                title="No matching categories."
                 description="Try changing the account, currency, category, or search filters."
               />
             )}

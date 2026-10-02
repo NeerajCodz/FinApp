@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowUpRight, CalendarClock, UsersRound } from 'lucide-react';
 import { formatMinor } from '@convex/shared/money';
 import type { HomeDashboardData } from '../model';
-import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 
 export function HomeGroupsBills({
   data,
@@ -53,13 +52,11 @@ export function HomeGroupsBills({
             ))}
           </div>
         ) : (
-          <FinanceEmptyState
-            kind="group"
-            compact
-            title="No shared groups yet"
-            description="Share expenses and keep track of balances together."
-            action={<a href="/groups">Create a group</a>}
-          />
+          <div className="finance-home-empty-block">
+            <UsersRound size={21} aria-hidden="true" />
+            <p>No shared groups yet.</p>
+            <a href="/groups">Create a group</a>
+          </div>
         )}
       </section>
       <section className="finance-home-panel">
@@ -93,13 +90,11 @@ export function HomeGroupsBills({
             ))}
           </div>
         ) : (
-          <FinanceEmptyState
-            kind="recurring"
-            compact
-            title="No bills due in the next 30 days"
-            description="Upcoming recurring payments will appear here."
-            action={<a href="/recurring">Manage recurring</a>}
-          />
+          <div className="finance-home-empty-block">
+            <CalendarClock size={21} aria-hidden="true" />
+            <p>No bills due in the next 30 days.</p>
+            <a href="/recurring">Manage recurring</a>
+          </div>
         )}
       </section>
     </div>

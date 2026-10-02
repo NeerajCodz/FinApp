@@ -4,7 +4,6 @@ import { Wallet } from '@finapp/ui/icons/native';
 import { Button, Card, SectionHeader, Text, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
 import { CategoryIcon } from '@finapp/ui/finance';
-import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 import type { HomeDashboardData } from '../model';
 
 export function HomeGoalsCategories({
@@ -103,17 +102,12 @@ export function HomeGoalsCategories({
             );
           })
         ) : (
-          <FinanceEmptyState
-            kind="goal"
-            title="No active savings goals yet."
-            description="Choose a target and track your progress over time."
-            compact
-            action={
-              <Button size="sm" variant="outline" onPress={onSeeAllGoals}>
-                Create a goal
-              </Button>
-            }
-          />
+          <View style={{ alignItems: 'center', paddingVertical: 10, gap: 7 }}>
+            <Text style={{ color: tokens.foregroundMuted }}>No active savings goals yet.</Text>
+            <Button size="sm" variant="outline" onPress={onSeeAllGoals}>
+              Create a goal
+            </Button>
+          </View>
         )}
       </Card>
       <Card style={{ gap: 5 }}>
@@ -168,17 +162,14 @@ export function HomeGoalsCategories({
             );
           })
         ) : (
-          <FinanceEmptyState
-            kind="analytics"
-            title="No spending in this period."
-            description="Category spending will appear here when transactions are recorded."
-            compact
-            action={
-              <Button size="sm" variant="outline" onPress={onSeeAllCategories}>
-                Browse categories
-              </Button>
-            }
-          />
+          <View style={{ alignItems: 'center', paddingVertical: 10, gap: 7 }}>
+            <Text style={{ color: tokens.foregroundMuted }}>
+              No spending recorded in this period.
+            </Text>
+            <Button size="sm" variant="outline" onPress={onSeeAllCategories}>
+              Browse categories
+            </Button>
+          </View>
         )}
       </Card>
     </View>
