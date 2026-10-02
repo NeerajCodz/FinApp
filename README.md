@@ -51,6 +51,11 @@ Transactions use `/transactions`, `/transaction/new`, `/transaction/:id`, and
 `/transaction/:id/edit`; recurring rules use `/recurring` and
 `/recurring/:recurringId`. Goals use `/goals`, `/goals/new`, and
 `/goals/:id[/edit|/analytics]`.
+Transfer forms explain when no other account in the selected currency can receive
+a transfer, with an account-creation action on both web and native.
+
+On narrow screens, analytics charts with long ranges scroll within their panel,
+and category creation stays inside the viewport.
 
 Budgets use `/budgets` and `/budgets/new`; an individual budget uses
 `/budget/:id`, `/budget/:id/edit`, and `/budget/:id/analytics`. Budget details
@@ -86,8 +91,9 @@ scheduled settlements are not inferred.
 
 The native coin requires a build containing `expo-gl`.
 
-The public `/about` page and the About rows in Settings and Profile show version
-`v1.0.0` and link the developer credit to GitHub.
+The native and web About screens show `v1.1.1` with a centered Finapp app icon
+and a GitHub developer link. The About rows in Settings and Profile open those
+screens.
 
 ### Development
 
