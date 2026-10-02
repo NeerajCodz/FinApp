@@ -3,7 +3,7 @@ const pendingGroupInvitationKey = 'finapp.pending-group-invitation';
 export function groupInvitationPath(token: string): string | null {
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
   const query = new URLSearchParams({ token });
-  return `/group-invite?${query.toString()}`;
+  return `/group/invite?${query.toString()}`;
 }
 
 export function rememberPendingGroupInvitation(token: string): boolean {

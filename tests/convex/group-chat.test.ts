@@ -295,6 +295,7 @@ describe('group collaboration permissions', () => {
     const link = await admin.mutation(api.groups.mutations.createInvitationLink, {
       groupId: fixture.groupId,
     });
+    expect(link.expiresAt).toBe(Date.now() + 7 * DAY);
     const preview = await outsider.query(api.groups.queries.previewInvitationLink, {
       token: link.token,
     });
@@ -326,6 +327,9 @@ describe('group collaboration permissions', () => {
     const revokedLink = await admin.mutation(api.groups.mutations.createInvitationLink, {
       groupId: fixture.groupId,
     });
+    expect(
+      await target.query(api.groups.queries.previewInvitationLink, { token: link.token }),
+    ).toBeNull();
     await expect(
       member.mutation(api.groups.mutations.revokeInvitationLink, {
         groupId: fixture.groupId,
@@ -344,8 +348,10 @@ describe('group collaboration permissions', () => {
     ).toBeNull();
     const expiringLink = await admin.mutation(api.groups.mutations.createInvitationLink, {
       groupId: fixture.groupId,
+      expiresInMs: DAY,
     });
-    vi.advanceTimersByTime(7 * DAY + 1);
+    expect(expiringLink.expiresAt).toBe(Date.now() + DAY);
+    vi.advanceTimersByTime(DAY + 1);
     expect(
       await target.query(api.groups.queries.previewInvitationLink, { token: expiringLink.token }),
     ).toBeNull();

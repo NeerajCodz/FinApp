@@ -1,4 +1,5 @@
 'use client';
+
 import React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
@@ -6,7 +7,8 @@ import { api } from '@convex/_generated/api';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { clearPendingGroupInvitation, rememberPendingGroupInvitation } from '@/lib/authRoutes';
 import { GroupInvitationJoinScreen } from '@finapp/ui/finance';
-export default function GroupInvitationPage() {
+
+function GroupInvitationContent() {
   const token = useSearchParams().get('token') ?? '';
   const validToken = /^[0-9a-f]{64}$/.test(token);
   const router = useRouter();
@@ -51,5 +53,13 @@ export default function GroupInvitationPage() {
         }
       }}
     />
+  );
+}
+
+export default function GroupInvitationPage() {
+  return (
+    <React.Suspense fallback={<main role="status">Checking invitation…</main>}>
+      <GroupInvitationContent />
+    </React.Suspense>
   );
 }

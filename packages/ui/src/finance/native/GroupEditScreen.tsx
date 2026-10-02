@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import {
+  INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  INVITATION_LINK_EXPIRY_OPTIONS,
+  type InvitationLinkExpiryMs,
+} from '../groupInvitationExpiry';
 import { Button, Empty, Input, Label, Typography, useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntityColorPicker } from './EntityColorPicker';
@@ -65,6 +70,8 @@ export type GroupEditScreenProps = GroupMetadataFieldsProps & {
   onSaveDetails?: () => void;
   invitationUrl?: string;
   invitationExpiresAt?: number;
+  invitationExpiryMs?: InvitationLinkExpiryMs;
+  onInvitationExpiryChange?: (value: InvitationLinkExpiryMs) => void;
   invitationBusy?: boolean;
   invitationError?: string;
   invitationStatus?: string;
@@ -208,12 +215,29 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
             </GroupPanel>
             {p.canManage && (
               <GroupPanel>
-                <Typography variant="heading">Public invites</Typography>
                 <Typography variant="caption">
-                  Anyone who receives this link can join the group. Links expire after 7 days.
-                  Generating another link revokes the previous one. Only admins can create, share,
-                  or revoke links.
+                  Anyone with this link can join the group. Choose how long new links stay active.
+                  Generating or rotating a link invalidates any previous active link; reset revokes
+                  it. Only admins can manage links.
                 </Typography>
+                <Typography variant="caption">Link lifetime</Typography>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {INVITATION_LINK_EXPIRY_OPTIONS.map(({ value, label }) => (
+                    <Button
+                      key={value}
+                      size="sm"
+                      variant={
+                        (p.invitationExpiryMs ?? INVITATION_LINK_DEFAULT_EXPIRY_MS) === value
+                          ? 'secondary'
+                          : 'outline'
+                      }
+                      disabled={p.invitationBusy}
+                      onPress={() => p.onInvitationExpiryChange?.(value)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </View>
                 {p.invitationUrl && (
                   <>
                     <Label>
@@ -236,13 +260,6 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                       >
                         Share link
                       </Button>
-                      <Button
-                        variant="outline"
-                        disabled={p.invitationBusy}
-                        onPress={p.onRevokeInvitation}
-                      >
-                        Revoke link
-                      </Button>
                     </View>
                   </>
                 )}
@@ -256,16 +273,25 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                     {p.invitationError}
                   </Typography>
                 )}
-                <Button
-                  disabled={p.invitationBusy || !p.cloudGroupId}
-                  onPress={p.onCreateInvitation}
-                >
-                  {p.invitationBusy
-                    ? 'Working…'
-                    : p.invitationUrl
-                      ? 'Generate replacement link'
-                      : 'Create invitation link'}
-                </Button>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <Button
+                    variant="outline"
+                    disabled={p.invitationBusy || !p.cloudGroupId}
+                    onPress={p.onRevokeInvitation}
+                  >
+                    Reset link
+                  </Button>
+                  <Button
+                    disabled={p.invitationBusy || !p.cloudGroupId}
+                    onPress={p.onCreateInvitation}
+                  >
+                    {p.invitationBusy
+                      ? 'Working…'
+                      : p.invitationUrl
+                        ? 'Rotate link'
+                        : 'Generate new link'}
+                  </Button>
+                </View>
               </GroupPanel>
             )}
             <GroupPanel>

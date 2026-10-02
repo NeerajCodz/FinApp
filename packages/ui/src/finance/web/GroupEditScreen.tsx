@@ -1,5 +1,10 @@
 'use client';
 import React, { useState } from 'react';
+import {
+  INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  INVITATION_LINK_EXPIRY_OPTIONS,
+  type InvitationLinkExpiryMs,
+} from '../groupInvitationExpiry';
 import { Button, Input, Empty } from '@finapp/ui/web';
 import { Plus, Crown, ArrowUp, ArrowDown, ChartBar } from '@phosphor-icons/react';
 import { EntityColorPicker } from './EntityColorPicker';
@@ -53,6 +58,8 @@ export type GroupEditScreenProps = {
   onOpenAnalytics: () => void;
   invitationUrl?: string;
   invitationExpiresAt?: number;
+  invitationExpiryMs?: InvitationLinkExpiryMs;
+  onInvitationExpiryChange?: (value: InvitationLinkExpiryMs) => void;
   invitationBusy?: boolean;
   invitationError?: string;
   invitationStatus?: string;
@@ -177,10 +184,28 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
             <section className={s.panel}>
               <h2>Public invites</h2>
               <p className={s.muted}>
-                Anyone who receives this link can join the group. Links expire after 7 days.
-                Generating another link revokes the previous one. Only admins can create, share, or
-                revoke links.
+                Anyone with this link can join the group. Choose how long new links stay active.
+                Generating or rotating a link invalidates any previous active link; reset revokes
+                it. Only admins can manage links.
               </p>
+              <p className={s.muted}>Link lifetime</p>
+              <div className={s.actions} role="group" aria-label="Invitation link lifetime">
+                {INVITATION_LINK_EXPIRY_OPTIONS.map(({ value, label }) => (
+                  <Button
+                    key={value}
+                    size="sm"
+                    variant={
+                      (p.invitationExpiryMs ?? INVITATION_LINK_DEFAULT_EXPIRY_MS) === value
+                        ? 'secondary'
+                        : 'outline'
+                    }
+                    disabled={p.invitationBusy}
+                    onPress={() => p.onInvitationExpiryChange?.(value)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
               {p.invitationUrl && (
                 <>
                   <label className={s.field}>
@@ -208,14 +233,6 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                     >
                       Share / copy link
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={p.invitationBusy}
-                      onPress={p.onRevokeInvitation}
-                    >
-                      Revoke link
-                    </Button>
                   </div>
                 </>
               )}
@@ -229,13 +246,25 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                   {p.invitationError}
                 </p>
               )}
-              <Button disabled={p.invitationBusy || !p.cloudGroupId} onPress={p.onCreateInvitation}>
-                {p.invitationBusy
-                  ? 'Working…'
-                  : p.invitationUrl
-                    ? 'Generate replacement link'
-                    : 'Create invitation link'}
-              </Button>
+              <div className={s.actions}>
+                <Button
+                  variant="outline"
+                  disabled={p.invitationBusy || !p.cloudGroupId}
+                  onPress={p.onRevokeInvitation}
+                >
+                  Reset link
+                </Button>
+                <Button
+                  disabled={p.invitationBusy || !p.cloudGroupId}
+                  onPress={p.onCreateInvitation}
+                >
+                  {p.invitationBusy
+                    ? 'Working…'
+                    : p.invitationUrl
+                      ? 'Rotate link'
+                      : 'Generate new link'}
+                </Button>
+              </div>
             </section>
           )}
           <section className={s.panel}>

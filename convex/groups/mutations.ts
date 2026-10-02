@@ -680,8 +680,20 @@ async function hashInvitationToken(token: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+const INVITATION_LINK_DEFAULT_EXPIRY_MS = 7 * 86_400_000;
+const INVITATION_LINK_EXPIRY_OPTIONS = [86_400_000, 7 * 86_400_000, 30 * 86_400_000] as const;
+
 export const createInvitationLink = mutation({
-  args: { groupId: v.id('groups') },
+  args: {
+    groupId: v.id('groups'),
+    expiresInMs: v.optional(
+      v.union(
+        v.literal(INVITATION_LINK_EXPIRY_OPTIONS[0]),
+        v.literal(INVITATION_LINK_EXPIRY_OPTIONS[1]),
+        v.literal(INVITATION_LINK_EXPIRY_OPTIONS[2]),
+      ),
+    ),
+  },
   handler: async (ctx, args) => {
     const actor = await requireUser(ctx);
     if (!actor) throw new Error('AUTH_REQUIRED');
@@ -699,6 +711,7 @@ export const createInvitationLink = mutation({
       memberships.map((member) => ({ userId: String(member.userId), role: member.role })),
     );
     const now = Date.now();
+    const expiresAt = now + (args.expiresInMs ?? INVITATION_LINK_DEFAULT_EXPIRY_MS);
     const activeLinks = await ctx.db
       .query('groupInvitationLinks')
       .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
@@ -712,10 +725,10 @@ export const createInvitationLink = mutation({
       groupId: args.groupId,
       creatorId: actor._id,
       tokenHash: await hashInvitationToken(token),
-      expiresAt: now + 7 * 86_400_000,
+      expiresAt,
       createdAt: now,
     });
-    return { token, expiresAt: now + 7 * 86_400_000 };
+    return { token, expiresAt };
   },
 });
 

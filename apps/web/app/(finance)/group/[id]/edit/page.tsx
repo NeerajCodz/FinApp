@@ -11,7 +11,11 @@ import { Empty } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { GroupEditScreen } from '@finapp/ui/finance';
+import {
+  GroupEditScreen,
+  INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  type InvitationLinkExpiryMs,
+} from '@finapp/ui/finance';
 
 type Group = LocalRecord & {
   name?: string;
@@ -62,6 +66,9 @@ export default function GroupSettingsPage() {
   const [retentionDraft, setRetentionDraft] = React.useState<number | null>(null);
   const [invitationUrl, setInvitationUrl] = React.useState('');
   const [invitationExpiresAt, setInvitationExpiresAt] = React.useState<number>();
+  const [invitationExpiryMs, setInvitationExpiryMs] = React.useState<InvitationLinkExpiryMs>(
+    INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  );
   const [invitationBusy, setInvitationBusy] = React.useState(false);
   const [invitationError, setInvitationError] = React.useState('');
   const [invitationStatus, setInvitationStatus] = React.useState('');
@@ -73,12 +80,15 @@ export default function GroupSettingsPage() {
     setInvitationError('');
     setInvitationStatus('');
     try {
-      const result = await createInvitationLink({ groupId: cloudGroupId as Id<'groups'> });
+      const result = await createInvitationLink({
+        groupId: cloudGroupId as Id<'groups'>,
+        expiresInMs: invitationExpiryMs,
+      });
       setInvitationUrl(
-        `${window.location.origin}/group-invite?token=${encodeURIComponent(result.token)}`,
+        `${window.location.origin}/group/invite?token=${encodeURIComponent(result.token)}`,
       );
       setInvitationExpiresAt(result.expiresAt);
-      setInvitationStatus('Invitation link created. The previous link, if any, has been revoked.');
+      setInvitationStatus('New link generated. Any previous active link was invalidated.');
     } catch (cause) {
       setInvitationError(
         cause instanceof Error ? cause.message : 'Could not create an invitation link.',
@@ -96,7 +106,7 @@ export default function GroupSettingsPage() {
       await revokeInvitationLink({ groupId: cloudGroupId as Id<'groups'> });
       setInvitationUrl('');
       setInvitationExpiresAt(undefined);
-      setInvitationStatus('Invitation link revoked.');
+      setInvitationStatus('Invitation link reset and revoked.');
     } catch (cause) {
       setInvitationError(
         cause instanceof Error ? cause.message : 'Could not revoke the invitation link.',
@@ -389,6 +399,8 @@ export default function GroupSettingsPage() {
       onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(currentGroupId)}/analytics`)}
       invitationUrl={canManage ? invitationUrl : undefined}
       invitationExpiresAt={canManage ? invitationExpiresAt : undefined}
+      invitationExpiryMs={canManage ? invitationExpiryMs : undefined}
+      onInvitationExpiryChange={setInvitationExpiryMs}
       invitationBusy={invitationBusy}
       invitationError={invitationError}
       invitationStatus={invitationStatus}
