@@ -30,6 +30,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const initializedSelection = useRef(Boolean(userId));
   const [basis, setBasis] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
   const [error, setError] = useState('');
   useEffect(() => {
     if (userId && !initializedSelection.current) {
@@ -133,7 +134,9 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
   }
 
   async function save() {
-    if (saving || validation || !userId || !group || !account || amountMinor === null) return;
+    if (saveLock.current || validation || !userId || !group || !account || amountMinor === null)
+      return;
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -204,6 +207,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this split.');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }

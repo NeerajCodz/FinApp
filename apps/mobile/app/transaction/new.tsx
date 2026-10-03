@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
@@ -57,6 +57,7 @@ export default function NewTransactionScreen() {
   });
   const [hasTime, setHasTime] = useState(scalar(params.hasTime) === 'true');
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
   const [savingDefault, setSavingDefault] = useState(false);
   const [error, setError] = useState('');
   const { userId } = useLocalSync();
@@ -66,8 +67,12 @@ export default function NewTransactionScreen() {
   const profile = profileState.data?.[0];
   const accounts = accountState.data?.filter((item) => item.archivedAt === undefined) ?? [];
   const categories = categoryState.data?.filter((item) => item.archivedAt === undefined) ?? [];
+  const preferredCurrencyAccount = accounts.find(
+    (item) => item.currency === profile?.defaultCurrency,
+  );
   const account =
     accounts.find((item) => [item.id, item._id, item.cloudId].includes(accountId)) ??
+    preferredCurrencyAccount ??
     accounts.find((item) =>
       [item.id, item._id, item.cloudId].includes(String(profile?.defaultAccountId)),
     ) ??
@@ -94,9 +99,6 @@ export default function NewTransactionScreen() {
     [category.id, category._id, category.cloudId].includes(defaultCategoryId),
   );
   useEffect(() => {
-    if (!accountId && account) setAccountId(recordId(account));
-  }, [accountId, account]);
-  useEffect(() => {
     if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));
   }, [category, categoryId, type]);
   let amountMinor: bigint | null = null;
@@ -112,6 +114,7 @@ export default function NewTransactionScreen() {
       recordId(destination) === recordId(account!));
 
   async function save() {
+    if (saveLock.current) return;
     if (
       !userId ||
       !account ||
@@ -121,6 +124,7 @@ export default function NewTransactionScreen() {
       (type === 'transfer' ? invalidTransfer : !category)
     )
       return;
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -163,6 +167,7 @@ export default function NewTransactionScreen() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not save ${type}`);
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }

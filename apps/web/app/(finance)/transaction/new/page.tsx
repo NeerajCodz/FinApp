@@ -44,6 +44,7 @@ export default function NewPersonalTransactionPage() {
   const [savingDefault, setSavingDefault] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const createLock = React.useRef(false);
   const appliedQuery = React.useRef(false);
   const queryOverrides = React.useRef({ account: false, category: false });
   const accounts = accountState.records.filter(
@@ -53,7 +54,18 @@ export default function NewPersonalTransactionPage() {
     (item) => userId && belongsToUser(item, userId) && item.archivedAt === undefined,
   );
   const profile = profileState.records.find((item) => userId && belongsToUser(item, userId));
-  const source = accounts.find((item) => matchesId(item, accountId));
+  const source =
+    accounts.find((item) => matchesId(item, accountId)) ??
+    (!queryOverrides.current.account
+      ? profile?.defaultAccountId &&
+        accounts.some(
+          (item) =>
+            matchesId(item, profile.defaultAccountId!) &&
+            (!profile.defaultCurrency || item.currency === profile.defaultCurrency),
+        )
+        ? accounts.find((item) => matchesId(item, profile.defaultAccountId!))
+        : (accounts.find((item) => item.currency === profile?.defaultCurrency) ?? accounts[0])
+      : undefined);
   const destination = accounts.find((item) => matchesId(item, destinationId));
   const category = categories.find((item) => matchesId(item, categoryId));
   const defaultCategoryField =
@@ -91,15 +103,6 @@ export default function NewPersonalTransactionPage() {
     if (query.get('title')) setTitle(query.get('title')!);
     if (query.get('merchant')) setMerchant(query.get('merchant')!);
   }, []);
-  React.useEffect(() => {
-    if (!accountId && accounts.length && !queryOverrides.current.account)
-      setAccountId(
-        profile?.defaultAccountId &&
-          accounts.some((item) => matchesId(item, profile.defaultAccountId!))
-          ? profile.defaultAccountId
-          : idOf(accounts[0]!),
-      );
-  }, [accountId, accounts, profile?.defaultAccountId]);
   React.useEffect(() => {
     const defaultId =
       type === 'income' ? profile?.defaultIncomeCategoryId : profile?.defaultExpenseCategoryId;
@@ -164,6 +167,7 @@ export default function NewPersonalTransactionPage() {
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (createLock.current) return;
     if (!userId) {
       setError('Sign in before creating a transaction.');
       return;
@@ -189,6 +193,7 @@ export default function NewPersonalTransactionPage() {
       setError('Choose a valid transaction date.');
       return;
     }
+    createLock.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -249,6 +254,7 @@ export default function NewPersonalTransactionPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create this transaction.');
     } finally {
+      createLock.current = false;
       setSaving(false);
     }
   }
