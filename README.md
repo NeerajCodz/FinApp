@@ -58,6 +58,12 @@ Transactions use `/transactions`, `/transaction/new`, `/transaction/:id`, and
 `/transaction/:id/edit`; recurring rules use `/recurring` and
 `/recurring/:recurringId`. Goals use `/goals`, `/goals/new`, and
 `/goals/:id[/edit|/analytics]`.
+Personal transactions can be soft-deleted from their detail page or selected
+in batches from the Transactions list on web and mobile; local deletions sync
+through the offline-first flow. New transactions prefer an account matching the
+profile's default currency before falling back to the configured account.
+Creation actions remain pending and block duplicate submissions while writes
+are in progress.
 Transfer forms explain when no other account in the selected currency can receive
 a transfer, with an account-creation action on both web and native.
 
@@ -76,11 +82,14 @@ member management, and invitation-link creation are admin-only. Public
 `/group/invite?token=...` links show a safe group preview, require sign-in before explicit
 acceptance, and expire after a configurable 1, 7 (default), or 30 days; generating another link
 invalidates the previous one, and admins can revoke links at any time. Accepted members can
-contribute shared expenses, chat and share bill images, and record settlements. Group balances
-are shown only when the complete group ledger is available; integer minor-unit values saved as
-safe numbers or integer strings are normalized without guessing missing splits. Async buttons
-remain pending until their action settles to prevent duplicate submissions. Unsupported
-scheduled settlements are not inferred.
+contribute shared expenses, chat and share bill images, and record settlements. Group balances are
+shown only when the complete group ledger is available; integer minor-unit values saved as safe
+numbers or integer strings are normalized without guessing missing splits. Async buttons remain
+pending until their action settles to prevent duplicate submissions. Unsupported scheduled
+settlements are not inferred.
+
+The web Groups page also includes joined groups from the authenticated membership query when an
+existing browser's local group cache is incomplete.
 
 ### Coin implementation
 
@@ -98,12 +107,13 @@ scheduled settlements are not inferred.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.1.3` with a centered Finapp app icon
+The native and web About screens show `v1.1.4` with a centered Finapp app icon
 and a GitHub developer link. Native coin drift uses browser-independent math,
 avoiding the Android startup error `ReferenceError: document is not defined`.
 Authentication screens now use a centered, larger coin and a single form title;
 mobile Activity links directly to Analytics and Transactions.
 The About rows in Settings and Profile open those screens.
+On mobile, the shared navigation header is shown only on Home.
 
 ### Development
 
