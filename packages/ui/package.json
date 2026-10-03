@@ -1,6 +1,6 @@
 {
   "name": "@finapp/ui",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "exports": {
     "./native": "./src/native/index.tsx",
@@ -50,7 +50,6 @@
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
     "@phosphor-icons/react": "^2.1.10",
-    "animejs": "^4.5.0",
     "earcut": "^3.2.4",
     "phosphor-react-native": "^3.0.6"
   },

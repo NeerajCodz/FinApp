@@ -158,7 +158,6 @@ export function CoinLogo({
       renderer.current?.dispose();
       renderer.current = null;
       context.current = null;
-      float.dispose();
     };
   }, []);
 
