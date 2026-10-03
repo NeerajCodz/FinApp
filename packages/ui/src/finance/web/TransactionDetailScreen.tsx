@@ -29,9 +29,13 @@ export type TransactionDetailScreenProps = {
   missingId?: boolean;
   canEdit?: boolean;
   canDuplicate?: boolean;
+  canDelete?: boolean;
+  deletePending?: boolean;
+  actionError?: string | null;
   onBack: () => void;
   onEdit?: () => void;
   onDuplicate?: () => void;
+  onDelete?: () => void;
   onRetry?: () => void;
   referenceId?: string;
   relatedTransactions?: readonly TransactionTableItem[];
@@ -124,7 +128,17 @@ export function TransactionDetailScreen(p: TransactionDetailScreenProps) {
                 Duplicate
               </Button>
             )}
+            {p.canDelete && p.onDelete && (
+              <Button variant="destructive" disabled={p.deletePending} onPress={p.onDelete}>
+                {p.deletePending ? 'Deleting…' : 'Delete transaction'}
+              </Button>
+            )}
           </div>
+          {p.actionError && (
+            <p role="alert" className={styles.error}>
+              {p.actionError}
+            </p>
+          )}
           {p.note && (
             <div className={styles.notePanel}>
               <h3>Transaction notes</h3>

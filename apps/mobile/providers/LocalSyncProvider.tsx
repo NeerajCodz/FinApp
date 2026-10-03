@@ -320,6 +320,14 @@ async function sendMutation(
           : {}),
       } as never);
     }
+    case 'transaction.delete': {
+      const transactionId = String(payload.transactionId);
+      const mappedTransactionId = await getMappedCloudId(userId, 'transaction', transactionId);
+      return convex.mutation(api.transactions.mutations.softDelete, {
+        ...payload,
+        transactionId: mappedTransactionId ?? transactionId,
+      } as never);
+    }
     case 'group.create':
       return convex.mutation(api.groups.mutations.create, payload as never);
     case 'group.update': {

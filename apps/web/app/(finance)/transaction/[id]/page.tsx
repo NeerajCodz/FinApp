@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import React from 'react';
 import {
   TransactionDetailScreen,
   transactionViews,
@@ -10,7 +11,7 @@ import {
 } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import type { LocalRecord } from '@/lib/offline/repository';
+import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import {
   aliasesOf,
   asMinor,
@@ -49,6 +50,8 @@ export default function PersonalTransactionDetailPage() {
   const categoryState = useLocalRecords<Category>('category');
   const profileState = useLocalRecords<Profile>('profile');
   const tagState = useLocalRecords('transactionTag');
+  const [deletePending, setDeletePending] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const transaction = transactionState.records.find(
     (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
@@ -122,6 +125,39 @@ export default function PersonalTransactionDetailPage() {
     if (transaction.merchant) query.set('merchant', transaction.merchant);
     router.push(`/transaction/new?${query.toString()}`);
   }
+  const canDelete = Boolean(
+    transaction &&
+    userId &&
+    transaction.ownerId === userId &&
+    transaction.groupId === undefined &&
+    transaction.deletedAt === undefined,
+  );
+  async function deleteTransaction() {
+    if (!transaction || !userId || !canDelete || deletePending) return;
+    if (!window.confirm('Delete this transaction? It will be removed from your ledger.')) return;
+    const id = String(transaction.id ?? transaction._id ?? transaction.cloudId ?? '');
+    if (!id) {
+      setActionError('Transaction is unavailable.');
+      return;
+    }
+    setDeletePending(true);
+    setActionError(null);
+    try {
+      await commitLocalWrite(
+        userId,
+        'transaction',
+        'transaction.delete',
+        { ...transaction, deletedAt: Date.now() },
+        { transactionId: id },
+        { recordId: id },
+      );
+      router.push('/transactions');
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Could not delete transaction.');
+    } finally {
+      setDeletePending(false);
+    }
+  }
   if (!userId)
     return (
       <SignInGate eyebrow="TRANSACTION DETAIL" title="Your ledger stays private.">
@@ -191,6 +227,10 @@ export default function PersonalTransactionDetailPage() {
       missingId={!routeId}
       canEdit={canEdit}
       canDuplicate={canDuplicate}
+      canDelete={canDelete}
+      deletePending={deletePending}
+      actionError={actionError}
+      onDelete={deleteTransaction}
       onBack={() => router.push('/transactions')}
       onEdit={() => router.push(`/transaction/${encodeURIComponent(routeId)}/edit`)}
       onDuplicate={duplicate}

@@ -1,11 +1,12 @@
 import React from 'react';
+import { Alert, View } from 'react-native';
 import { router } from 'expo-router';
-import { View } from 'react-native';
 import { TransactionsScreen, transactionViews } from '@finapp/ui/finance';
 import { Typography } from '@finapp/ui/native';
+import { commitLocalWrite } from '@/local/commands';
+import type { LocalRecord } from '@/local/repository';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import type { LocalRecord } from '@/local/repository';
 export default function TransactionsRoute() {
   const { userId, fetchTransactionRange } = useLocalSync();
   const [query, setQuery] = React.useState(''),
@@ -14,6 +15,9 @@ export default function TransactionsRoute() {
       const now = new Date();
       return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     });
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [deletePending, setDeletePending] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
   const [year, monthNumber] = month.split('-').map(Number),
     startAt = new Date(year!, monthNumber! - 1, 1).getTime(),
     endAt = new Date(year!, monthNumber!, 1).getTime(),
@@ -78,6 +82,59 @@ export default function TransactionsRoute() {
         .toLocaleLowerCase()
         .includes(query.trim().toLocaleLowerCase()),
   );
+  const selectableIds = new Set(
+    items.flatMap((item) => {
+      const record = records.find(
+        (candidate) => String(candidate.id ?? candidate._id ?? candidate.cloudId ?? '') === item.id,
+      );
+      return record?.ownerId === userId && record.groupId === undefined ? [item.id] : [];
+    }),
+  );
+  React.useEffect(() => {
+    setSelectedIds((current) => {
+      const visible = current.filter((id) => selectableIds.has(id));
+      return visible.length === current.length ? current : visible;
+    });
+  }, [selectableIds]);
+  const deleteSelected = () => {
+    if (!userId || deletePending || selectedIds.length === 0) return;
+    Alert.alert('Delete transactions?', `Delete ${selectedIds.length} selected transaction(s)?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          setDeletePending(true);
+          setActionError(null);
+          void Promise.all(
+            selectedIds.map(async (id) => {
+              if (!selectableIds.has(id)) throw new Error('Transaction is not deletable.');
+              const record = records.find(
+                (candidate) =>
+                  String(candidate.id ?? candidate._id ?? candidate.cloudId ?? '') === id,
+              );
+              if (!record) throw new Error('Transaction is unavailable.');
+              await commitLocalWrite(
+                userId,
+                'transaction',
+                'transaction.delete',
+                { ...record, deletedAt: Date.now() },
+                { transactionId: id },
+                { recordId: id },
+              );
+            }),
+          )
+            .then(() => setSelectedIds((current) => current.filter((id) => !selectableIds.has(id))))
+            .catch((cause: unknown) =>
+              setActionError(
+                cause instanceof Error ? cause.message : 'Could not delete transactions.',
+              ),
+            )
+            .finally(() => setDeletePending(false));
+        },
+      },
+    ]);
+  };
   if (!userId)
     return (
       <View style={{ padding: 24 }}>
@@ -106,6 +163,18 @@ export default function TransactionsRoute() {
       onMonthChange={setMonth}
       onTypeFilterChange={setTypeFilter}
       onSelect={(id) => router.push(`/transaction/${encodeURIComponent(id)}` as never)}
+      selectableIds={selectableIds}
+      selectedIds={selectedIds}
+      selectedCount={selectedIds.length}
+      deletePending={deletePending}
+      actionError={actionError}
+      onToggleSelect={(id) =>
+        setSelectedIds((current) =>
+          current.includes(id) ? current.filter((selected) => selected !== id) : [...current, id],
+        )
+      }
+      onClearSelection={() => setSelectedIds([])}
+      onDeleteSelected={deleteSelected}
       onCreate={() => router.push('/transaction/new')}
     />
   );

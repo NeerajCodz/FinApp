@@ -7,7 +7,7 @@ import { formatTransactionDate, type TransactionType } from '@finapp/ui/finance'
 import { formatMinor } from '@convex/shared/money';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { readLocal, type LocalRecord } from '@/lib/offline/repository';
+import { commitLocalWrite, readLocal, type LocalRecord } from '@/lib/offline/repository';
 import { aliasesOf, asMinor, belongsToUser, idOf, SignInGate } from '../_personal';
 
 type Transaction = LocalRecord & {
@@ -45,6 +45,9 @@ export default function TransactionsPage() {
   const [query, setQuery] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('all');
   const [rangeError, setRangeError] = React.useState('');
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [deletePending, setDeletePending] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
   const [month, setMonth] = React.useState(() => {
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -159,6 +162,46 @@ export default function TransactionsPage() {
       },
     ];
   });
+  const selectableIds = new Set(
+    items.flatMap((item) => {
+      const record = transactions.find((candidate) => idOf(candidate) === item.id);
+      return record?.ownerId === userId && record.groupId === undefined ? [item.id] : [];
+    }),
+  );
+  React.useEffect(() => {
+    setSelectedIds((current) => {
+      const visible = current.filter((id) => selectableIds.has(id));
+      return visible.length === current.length ? current : visible;
+    });
+  }, [selectableIds]);
+  async function deleteSelected() {
+    if (!userId || deletePending || selectedIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.length} selected transaction(s)?`)) return;
+    setDeletePending(true);
+    setActionError(null);
+    try {
+      await Promise.all(
+        selectedIds.map(async (id) => {
+          if (!selectableIds.has(id)) throw new Error('Transaction is not deletable.');
+          const record = transactions.find((candidate) => idOf(candidate) === id);
+          if (!record) throw new Error('Transaction is unavailable.');
+          await commitLocalWrite(
+            userId,
+            'transaction',
+            'transaction.delete',
+            { ...record, deletedAt: Date.now() },
+            { transactionId: id },
+            { recordId: id },
+          );
+        }),
+      );
+      setSelectedIds([]);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Could not delete transactions.');
+    } finally {
+      setDeletePending(false);
+    }
+  }
   const currency = String(profile?.defaultCurrency ?? transactions[0]?.currency ?? 'INR');
   const previousTransactions = previousRecords?.filter(
     (record) =>
@@ -249,6 +292,18 @@ export default function TransactionsPage() {
       onMonthChange={setMonth}
       onTypeFilterChange={setTypeFilter}
       onSelect={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      selectableIds={selectableIds}
+      selectedIds={selectedIds}
+      selectedCount={selectedIds.length}
+      deletePending={deletePending}
+      actionError={actionError}
+      onToggleSelect={(id) =>
+        setSelectedIds((current) =>
+          current.includes(id) ? current.filter((selected) => selected !== id) : [...current, id],
+        )
+      }
+      onClearSelection={() => setSelectedIds([])}
+      onDeleteSelected={() => void deleteSelected()}
       onCreate={() => router.push('/transaction/new')}
     />
   );

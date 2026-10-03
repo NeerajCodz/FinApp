@@ -299,6 +299,12 @@ async function sendMutation(
       } as never);
       return;
     }
+    case 'transaction.delete':
+      await convex.mutation(api.transactions.mutations.softDelete, {
+        ...payload,
+        transactionId: await mapId('transaction', String(payload.transactionId)),
+      } as never);
+      return;
     case 'group.create':
       await convex.mutation(api.groups.mutations.create, payload as never);
       return;
