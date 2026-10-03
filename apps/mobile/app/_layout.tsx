@@ -179,7 +179,7 @@ function ThemedStack() {
       <StatusBar style={tokens.background === '#000000' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerShown: true,
+          headerShown: false,
           headerTitle: '',
           headerLeft: () => <FinanceBrand />,
           headerBackVisible: false,
