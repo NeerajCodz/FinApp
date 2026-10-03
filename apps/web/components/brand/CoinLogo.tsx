@@ -227,7 +227,6 @@ export function CoinLogo({
       motion.removeEventListener('change', sync);
       renderer?.dispose();
       syncRef.current = () => {};
-      float.dispose();
     };
   }, [paused]);
 

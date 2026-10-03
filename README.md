@@ -98,9 +98,10 @@ scheduled settlements are not inferred.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.1.1` with a centered Finapp app icon
-and a GitHub developer link. The About rows in Settings and Profile open those
-screens.
+The native and web About screens show `v1.1.2` with a centered Finapp app icon
+and a GitHub developer link. Native coin drift uses browser-independent math,
+avoiding the Android startup error `ReferenceError: document is not defined`.
+The About rows in Settings and Profile open those screens.
 
 ### Development
 

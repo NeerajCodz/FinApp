@@ -21,7 +21,7 @@
     },
     "apps/mobile": {
       "name": "@finapp/mobile",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "dependencies": {
         "@convex-dev/auth": "^0.0.95",
         "@expo-google-fonts/space-grotesk": "^0.4.1",
@@ -68,7 +68,7 @@
     },
     "apps/web": {
       "name": "@finapp/web",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "dependencies": {
         "@convex-dev/auth": "^0.0.95",
         "@finapp/ui": "workspace:*",
@@ -92,11 +92,10 @@
     },
     "packages/ui": {
       "name": "@finapp/ui",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "dependencies": {
         "@emoji-mart/data": "^1.2.1",
         "@phosphor-icons/react": "^2.1.10",
-        "animejs": "^4.5.0",
         "earcut": "^3.2.4",
         "phosphor-react-native": "^3.0.6",
       },
@@ -779,8 +778,6 @@
     "agent-cli-detector": ["agent-cli-detector@0.1.7", "", { "bin": { "agent-cli-detector": "dist/cli.js" } }, "sha512-d8OWDVdZMgjhLUT9ZPgSv/BdFFF9pVuscC0JdUSz3bjwE15gcp6u/o0/JooM2yyAWC49KThFhXlgTXRa9B7yng=="],
 
     "ajv": ["ajv@6.15.0", "", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw=="],
-
-    "animejs": ["animejs@4.5.0", "", { "peerDependencies": { "@types/three": ">=0.150.0", "three": ">=0.150.0" }, "optionalPeers": ["@types/three", "three"] }, "sha512-NQimYX+lz8WaXonGS9zVVoviCIAjONeJayxacUditaivYLqyXgGjFKjuyl0aUUhFKm5MriX9ty1TGovNzoJQWA=="],
 
     "anser": ["anser@1.4.10", "", {}, "sha512-hCv9AqTQ8ycjpSd3upOJd7vFwW1JaoYQ7tpham03GJ1ca8/65rqn0RpaWpItOAd6ylW9wAw6luXYPJIyPFVOww=="],
 
