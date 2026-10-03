@@ -49,7 +49,7 @@ export default function AboutScreen() {
       <View style={{ gap: 20 }}>
         <View style={{ gap: 6 }}>
           <Typography variant="heading">About Finapp</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>v1.1.2</Text>
+          <Text style={{ color: tokens.foregroundMuted }}>v1.1.3</Text>
         </View>
         <View style={{ gap: 6 }}>
           <Typography variant="label">Developer</Typography>

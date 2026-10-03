@@ -79,7 +79,6 @@ export default function VerifyScreen() {
         </Button>
       }
     >
-      <Typography variant="heading">Verify your email</Typography>
       <Label>Six-digit email code</Label>
       <InputOTP
         value={code}

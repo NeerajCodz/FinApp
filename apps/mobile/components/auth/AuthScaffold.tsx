@@ -43,12 +43,12 @@ export function AuthScaffold({
       ? 180
       : wide
         ? 320
-        : Math.min(width - 64, 276)
+        : Math.min(width - 40, 340)
     : compact
-      ? 80
+      ? 112
       : wide
-        ? 200
-        : 112;
+        ? 220
+        : Math.min(width - 56, 208);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: tokens.background }]}>
@@ -94,11 +94,7 @@ export function AuthScaffold({
               ]}
             >
               <View style={[styles.story, { flex: wide ? 1 : undefined }]}>
-                <View
-                  pointerEvents="auto"
-                  accessible={false}
-                  style={{ alignSelf: hero || wide ? 'center' : 'flex-start' }}
-                >
+                <View pointerEvents="auto" accessible={false} style={{ alignSelf: 'center' }}>
                   <CoinLogo size={coinSize} interactive />
                 </View>
                 <View style={{ gap: 14 }}>

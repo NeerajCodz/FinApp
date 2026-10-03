@@ -68,7 +68,6 @@ export default function TwoFactorScreen() {
         </Button>
       }
     >
-      <Typography variant="heading">Confirm it’s you</Typography>
       <Label>Six-digit sign-in code</Label>
       <InputOTP
         value={code}

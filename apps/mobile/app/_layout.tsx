@@ -190,7 +190,9 @@ function ThemedStack() {
           animation: reduceMotion ? 'none' : 'fade_from_bottom',
           animationDuration: reduceMotion ? 0 : 280,
         }}
-      />
+      >
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      </Stack>
     </>
   );
 }

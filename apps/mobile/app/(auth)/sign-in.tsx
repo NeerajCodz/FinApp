@@ -6,7 +6,7 @@ import { api } from '@convex/_generated/api';
 import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { Button, Input, Label, PasswordField, Typography } from '@finapp/ui/native';
+import { Button, Input, Label, PasswordField } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit, isIdentifier } from '@/components/auth/AuthFields';
 import { isGroupInvitationToken } from '@/lib/authRoutes';
@@ -106,10 +106,6 @@ export default function SignInScreen() {
         </Button>
       }
     >
-      <View style={{ gap: 6 }}>
-        <Typography variant="heading">Sign in to Finapp</Typography>
-        <Typography variant="small">A little clarity starts here.</Typography>
-      </View>
       <View style={{ gap: 8 }}>
         <Label style={{ marginBottom: 0 }}>Email or username</Label>
         <Input

@@ -22,7 +22,7 @@ export default function AboutPage() {
           />
         </div>
         <section style={{ display: 'grid', gap: 12 }}>
-          <Typography variant="bodyLarge">v1.1.2</Typography>
+          <Typography variant="bodyLarge">v1.1.3</Typography>
           <Typography variant="bodyLarge">
             Developer{' '}
             <a

@@ -98,9 +98,11 @@ scheduled settlements are not inferred.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.1.2` with a centered Finapp app icon
+The native and web About screens show `v1.1.3` with a centered Finapp app icon
 and a GitHub developer link. Native coin drift uses browser-independent math,
 avoiding the Android startup error `ReferenceError: document is not defined`.
+Authentication screens now use a centered, larger coin and a single form title;
+mobile Activity links directly to Analytics and Transactions.
 The About rows in Settings and Profile open those screens.
 
 ### Development
