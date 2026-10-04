@@ -1,6 +1,6 @@
 {
   "name": "@finapp/ui",
-  "version": "1.1.2",
+  "version": "1.1.5",
   "private": true,
   "exports": {
     "./native": "./src/native/index.tsx",

@@ -10,9 +10,15 @@ export type { TransactionsScreenProps, TransactionTableItem } from '../web/Trans
 export function TransactionCards({
   items,
   onSelect,
+  selectedIds,
+  onToggleSelect,
+  selectableIds,
 }: {
   items: readonly TransactionTableItem[];
   onSelect?: (id: string) => void;
+  selectedIds?: readonly string[];
+  onToggleSelect?: (id: string) => void;
+  selectableIds?: ReadonlySet<string>;
 }) {
   const { tokens } = useTheme();
   return items.length ? (
@@ -31,7 +37,29 @@ export function TransactionCards({
           })}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <CategoryIcon label={item.category} icon={item.categoryIcon} />
+            {onToggleSelect && (
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityLabel={`Select ${item.title}`}
+                accessibilityState={{
+                  checked: selectedIds?.includes(item.id) ?? false,
+                  disabled: !selectableIds?.has(item.id),
+                }}
+                disabled={!selectableIds?.has(item.id)}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onToggleSelect(item.id);
+                }}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderWidth: 1,
+                  borderRadius: 5,
+                  borderColor: tokens.borderSubtle,
+                  backgroundColor: selectedIds?.includes(item.id) ? tokens.primary : 'transparent',
+                }}
+              />
+            )}
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={{ fontWeight: '600' }}>{item.title}</Text>
               {(item.note || item.merchant) && (
@@ -170,6 +198,23 @@ export function TransactionsScreen(p: TransactionsScreenProps) {
         </Text>
       )}
       {p.rangeError && <Typography variant="caption">{p.rangeError}</Typography>}
+      {p.actionError && (
+        <Text accessibilityRole="alert" style={{ color: tokens.expense }}>
+          {p.actionError}
+        </Text>
+      )}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {(p.selectedCount ?? 0) > 0 && (
+          <>
+            <Button size="sm" variant="outline" onPress={p.onClearSelection}>
+              Clear selection ({p.selectedCount})
+            </Button>
+            <Button size="sm" disabled={p.deletePending} onPress={p.onDeleteSelected}>
+              {p.deletePending ? 'Deleting…' : `Delete selected (${p.selectedCount})`}
+            </Button>
+          </>
+        )}
+      </View>
       <View style={panel}>
         {p.loading ? (
           <Typography variant="caption">Loading transactions…</Typography>
@@ -185,7 +230,13 @@ export function TransactionsScreen(p: TransactionsScreenProps) {
             compact
           />
         ) : (
-          <TransactionCards items={p.items} onSelect={p.onSelect} />
+          <TransactionCards
+            items={p.items}
+            onSelect={p.onSelect}
+            selectedIds={p.selectedIds}
+            onToggleSelect={p.onToggleSelect}
+            selectableIds={p.selectableIds}
+          />
         )}
       </View>
       <Button onPress={p.onCreate}>Add transaction</Button>

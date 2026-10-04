@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { useMutation, useQuery } from 'convex/react';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { api } from '@convex/_generated/api';
 import * as Haptics from 'expo-haptics';
 import { ArrowLeft } from '@finapp/ui/icons/native';
@@ -14,7 +15,11 @@ import { PasscodeInput } from '@/lib/security/PasscodeInput';
 
 export default function SecuritySettingsScreen() {
   const { lock, ready, changeLock } = useAppLock();
-  const securityPreferences = useQuery(api.users.queries.securityPreferences, {});
+  const { isConnected } = useLocalSync();
+  const securityPreferences = useQuery(
+    api.users.queries.securityPreferences,
+    isConnected ? {} : 'skip',
+  );
   const setTwoFactorEnabled = useMutation(api.users.mutations.setTwoFactorEnabled);
   const [available, setAvailable] = React.useState(false);
   const [pending, setPending] = React.useState(false);
@@ -28,6 +33,10 @@ export default function SecuritySettingsScreen() {
   const insets = useSafeAreaInsets();
 
   async function toggleTwoFactor() {
+    if (!isConnected) {
+      setTwoFactorMessage('You are offline. Reconnect to change two-factor sign-in.');
+      return;
+    }
     if (!securityPreferences || twoFactorPending) return;
     const next = !securityPreferences.twoFactorEnabled;
     setTwoFactorPending(true);
@@ -130,8 +139,10 @@ export default function SecuritySettingsScreen() {
                 ? 'Turn off two-factor sign-in'
                 : 'Enable two-factor sign-in'}
           </Button>
-          {!!twoFactorMessage && (
-            <Text style={{ color: tokens.foregroundMuted }}>{twoFactorMessage}</Text>
+          {!!(twoFactorMessage || !isConnected) && (
+            <Text style={{ color: tokens.foregroundMuted }}>
+              {twoFactorMessage || 'Offline. Reconnect to view or change server security settings.'}
+            </Text>
           )}
         </View>
         <Separator />

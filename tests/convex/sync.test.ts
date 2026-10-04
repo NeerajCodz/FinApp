@@ -77,6 +77,77 @@ describe('authenticated local-first sync contract', () => {
     ).rejects.toThrow('INVALID_DATE_RANGE');
   });
 
+  it('soft-deletes only owned personal transactions and replays the deletion idempotently', async () => {
+    const { t, authenticated } = await makeAuthenticatedUser();
+    const accountId = await authenticated.mutation(api.accounts.mutations.create, {
+      name: 'Deletion test account',
+      type: 'cash',
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+      isIncludedInTotal: true,
+    });
+    const transactionId = await authenticated.mutation(api.transactions.mutations.create, {
+      accountId,
+      type: 'expense',
+      amountMinor: 100n,
+      currency: 'INR',
+      title: 'Delete me',
+      occurredAt: 1_000,
+      clientMutationId: 'sync-delete-personal',
+    });
+    const deleteArgs = {
+      transactionId,
+      clientMutationId: 'sync-delete-once',
+    };
+
+    expect(await authenticated.mutation(api.transactions.mutations.softDelete, deleteArgs)).toBe(
+      transactionId,
+    );
+    expect(await authenticated.mutation(api.transactions.mutations.softDelete, deleteArgs)).toBe(
+      transactionId,
+    );
+    expect(await t.run((ctx) => ctx.db.get(transactionId))).toMatchObject({
+      deletedAt: expect.any(Number),
+    });
+
+    const otherIdentity = {
+      subject: 'sync-contract-other-user',
+      email: 'sync-other@example.com',
+    };
+    await t.run((ctx) =>
+      ctx.db.insert('users', {
+        emailVerificationTime: 1,
+        identityId: otherIdentity.subject,
+        email: otherIdentity.email,
+        displayName: 'Other User',
+      }),
+    );
+    const other = t.withIdentity(otherIdentity);
+    await expect(
+      other.mutation(api.transactions.mutations.softDelete, {
+        transactionId,
+        clientMutationId: 'sync-delete-not-owner',
+      }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+
+    const groupTransactionId = await authenticated.mutation(api.transactions.mutations.create, {
+      accountId,
+      type: 'expense',
+      amountMinor: 100n,
+      currency: 'INR',
+      title: 'Shared transaction',
+      occurredAt: 2_000,
+      clientMutationId: 'sync-delete-group-create',
+    });
+    await t.run((ctx) => ctx.db.patch(groupTransactionId, { groupId: 'shared-group' }));
+    await expect(
+      authenticated.mutation(api.transactions.mutations.softDelete, {
+        transactionId: groupTransactionId,
+        clientMutationId: 'sync-delete-group',
+      }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+  });
+
   it('persists client UUIDs and rejects a collision while replaying idempotently', async () => {
     const { t, userId, authenticated } = await makeAuthenticatedUser();
     const clientId = '82d3a038-b0d0-4fb7-84c9-8207143ca190';

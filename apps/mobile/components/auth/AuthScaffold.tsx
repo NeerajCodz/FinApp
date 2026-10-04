@@ -11,7 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft } from '@finapp/ui/icons/native';
 import { IconButton, Text, Typography, useTheme } from '@finapp/ui/native';
-import { CoinLogo } from '@/components/brand/CoinLogo';
 
 export function AuthScaffold({
   title,
@@ -38,17 +37,6 @@ export function AuthScaffold({
   const { width, height } = useWindowDimensions();
   const wide = width >= 840;
   const compact = height < 620;
-  const coinSize = hero
-    ? compact
-      ? 180
-      : wide
-        ? 320
-        : Math.min(width - 64, 276)
-    : compact
-      ? 80
-      : wide
-        ? 200
-        : 112;
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: tokens.background }]}>
@@ -78,9 +66,6 @@ export function AuthScaffold({
                   <ArrowLeft size={20} color={tokens.foreground} />
                 </IconButton>
               )}
-              <Text style={styles.wordmark}>
-                finapp<Text style={{ color: tokens.primary }}>.</Text>
-              </Text>
               <View style={{ marginLeft: 'auto' }}>{headerRight}</View>
             </View>
             <View
@@ -94,13 +79,6 @@ export function AuthScaffold({
               ]}
             >
               <View style={[styles.story, { flex: wide ? 1 : undefined }]}>
-                <View
-                  pointerEvents="auto"
-                  accessible={false}
-                  style={{ alignSelf: hero || wide ? 'center' : 'flex-start' }}
-                >
-                  <CoinLogo size={coinSize} interactive />
-                </View>
                 <View style={{ gap: 14 }}>
                   <Typography variant="caption" style={{ color: tokens.primary, letterSpacing: 2 }}>
                     {eyebrow.toUpperCase()}
@@ -151,12 +129,6 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingTop: 12, paddingBottom: 24 },
   container: { flexGrow: 1, width: '100%', alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
-  wordmark: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 26,
-    lineHeight: 34,
-    letterSpacing: -1.2,
-  },
   body: { flexGrow: 1, justifyContent: 'center' },
   story: { gap: 20, justifyContent: 'center' },
   title: { fontFamily: 'SpaceGrotesk_600SemiBold', letterSpacing: -1.8 },

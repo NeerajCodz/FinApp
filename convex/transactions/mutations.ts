@@ -365,3 +365,57 @@ export const update = mutation({
     return args.transactionId;
   },
 });
+export const softDelete = mutation({
+  args: {
+    transactionId: v.id('transactions'),
+    clientMutationId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new DomainError('AUTH_REQUIRED');
+    const previousReceipt = await getMutationReceipt(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'transaction.delete',
+    );
+    if (previousReceipt) {
+      const previousId = ctx.db.normalizeId('transactions', previousReceipt.resultEntityId ?? '');
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const transaction = await ctx.db.get(args.transactionId);
+    if (
+      !transaction ||
+      transaction.ownerId !== user._id ||
+      transaction.deletedAt !== undefined ||
+      transaction.groupId !== undefined
+    )
+      throw new DomainError('INSUFFICIENT_PERMISSION');
+    const deletedAt = Date.now();
+    await ctx.db.patch(args.transactionId, { deletedAt, updatedAt: deletedAt });
+    const updated = await ctx.db.get(args.transactionId);
+    if (!updated) throw new DomainError('INSUFFICIENT_PERMISSION');
+    const revision = await recordSyncChange(
+      ctx,
+      user._id,
+      'transactions',
+      args.transactionId,
+      deletedAt,
+      { ...updated, _id: args.transactionId },
+      undefined,
+      args.clientMutationId,
+    );
+    await storeMutationReceipt(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'transaction.delete',
+      args.transactionId,
+      args.transactionId,
+      revision,
+      deletedAt,
+    );
+    return args.transactionId;
+  },
+});

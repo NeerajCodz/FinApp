@@ -27,10 +27,12 @@ export default function NewGoalScreen() {
   >(userId, 'account');
   const currency = resolveDefaultCurrency(profiles.data, settings.data) ?? '';
   const [saving, setSaving] = React.useState(false);
+  const saveLock = React.useRef(false);
   const [error, setError] = React.useState('');
 
   async function save(values: GoalEditorValues) {
-    if (!userId || !currency || saving) return;
+    if (!userId || !currency || saveLock.current) return;
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -112,6 +114,7 @@ export default function NewGoalScreen() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this goal.');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }

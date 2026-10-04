@@ -93,28 +93,33 @@ export default function EditProfilePage() {
           ? { avatarId: selectedAvatar.avatarId, gender: selectedAvatar.gender }
           : {}),
       };
-      if (usernameChanged && isConnected) {
-        const savedProfile = await updateUser({ username: normalizedUsername });
-        await upsertCloudPage(userId, 'profile', [savedProfile as unknown as LocalRecord]);
-      }
-      const localUpdate = {
-        ...identity,
-        ...(!isConnected || !usernameChanged ? { username: normalizedUsername } : {}),
-      };
-      const next: Profile = {
-        ...profile,
-        ...localUpdate,
-        username: normalizedUsername,
-      };
+      const next: Profile = { ...profile, ...identity };
       if (phone !== profile.phone) next.phoneVerificationTime = undefined;
-      await commitLocalWrite(userId, 'profile', 'user.update', next, localUpdate, {
+      await commitLocalWrite(userId, 'profile', 'user.update', next, identity, {
         recordId: String(profile.id ?? profile._id ?? userId),
       });
-      setMessage(
-        isConnected && usernameChanged
-          ? 'Profile saved to your account.'
-          : 'Saved on this device. It will sync when connected.',
-      );
+
+      if (usernameChanged && isConnected) {
+        try {
+          const savedProfile = await updateUser({ ...identity, username: normalizedUsername });
+          await upsertCloudPage(userId, 'profile', [savedProfile as unknown as LocalRecord]);
+          setMessage('Profile saved to your account.');
+        } catch (cause) {
+          setMessage(
+            `Your profile details were saved on this device, but the username was not changed: ${
+              cause instanceof Error ? cause.message : 'the server could not update it.'
+            }`,
+          );
+        }
+      } else if (usernameChanged) {
+        setMessage('Profile details saved on this device. Reconnect to change your username.');
+      } else {
+        setMessage(
+          isConnected
+            ? 'Profile saved to your account.'
+            : 'Saved on this device. It will sync when connected.',
+        );
+      }
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Could not save profile changes.');
     } finally {
@@ -163,8 +168,12 @@ export default function EditProfilePage() {
               value={username}
               onChangeText={setUsername}
               aria-invalid={Boolean(usernameError)}
+              disabled={!isConnected}
               required
             />
+            {!isConnected && (
+              <Text role="status">Username changes require a live Convex connection.</Text>
+            )}
             {usernameError && <Text role="alert">{usernameError}</Text>}
             <Text>3–32 letters, numbers, or underscores.</Text>
             <Label htmlFor="profile-phone">Phone number</Label>

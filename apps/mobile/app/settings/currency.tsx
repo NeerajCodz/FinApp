@@ -24,6 +24,8 @@ export default function CurrencySettingsScreen() {
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
   const [currency, setCurrency] = useState('INR');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const options = useMemo(() => [...currencies], []);
@@ -56,24 +58,32 @@ export default function CurrencySettingsScreen() {
             <Button
               key={option}
               size="sm"
-              variant={selected === option ? 'primary' : 'outline'}
+              disabled={!userId || pending}
               onPress={async () => {
-                if (!userId) return;
-                const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
-                await commitLocalWrite(
-                  userId,
-                  'profile',
-                  'user.update',
-                  { ...currentProfile, defaultCurrency: option },
-                  {
-                    displayName: String(currentProfile.displayName ?? 'Your profile'),
-                    defaultCurrency: option,
-                  },
-                  {
-                    recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
-                  },
-                );
-                setCurrency(option);
+                if (!userId || pending) return;
+                setPending(true);
+                setError('');
+                try {
+                  const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
+                  await commitLocalWrite(
+                    userId,
+                    'profile',
+                    'user.update',
+                    { ...currentProfile, defaultCurrency: option },
+                    {
+                      displayName: String(currentProfile.displayName ?? 'Your profile'),
+                      defaultCurrency: option,
+                    },
+                    {
+                      recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
+                    },
+                  );
+                  setCurrency(option);
+                } catch (cause) {
+                  setError(cause instanceof Error ? cause.message : 'Could not save currency.');
+                } finally {
+                  setPending(false);
+                }
               }}
               style={{ width: '31%', minHeight: 44 }}
             >
@@ -81,6 +91,11 @@ export default function CurrencySettingsScreen() {
             </Button>
           ))}
         </View>
+        {error ? (
+          <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
+            {error}
+          </Text>
+        ) : null}
         <Typography variant="caption">
           Selected: {currencyLabel(selected)} · {selected}
         </Typography>

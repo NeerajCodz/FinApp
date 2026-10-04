@@ -20,8 +20,11 @@ import {
 } from '@/lib/security/webauthn-lock';
 
 export default function SecuritySettingsPage() {
-  const { userId } = useBrowserSync();
-  const securityPreferences = useQuery(api.users.queries.securityPreferences, userId ? {} : 'skip');
+  const { userId, isConnected } = useBrowserSync();
+  const securityPreferences = useQuery(
+    api.users.queries.securityPreferences,
+    userId && isConnected ? {} : 'skip',
+  );
   const setTwoFactorEnabled = useMutation(api.users.mutations.setTwoFactorEnabled);
   const [available, setAvailable] = React.useState(false);
   const [webAuthnEnabled, setWebAuthnEnabled] = React.useState(false);
@@ -35,6 +38,10 @@ export default function SecuritySettingsPage() {
   const [twoFactorMessage, setTwoFactorMessage] = React.useState('');
 
   async function toggleTwoFactor() {
+    if (!isConnected) {
+      setTwoFactorMessage('You are offline. Reconnect to change two-factor sign-in.');
+      return;
+    }
     if (!securityPreferences || twoFactorPending) return;
     const next = !securityPreferences.twoFactorEnabled;
     setTwoFactorPending(true);
@@ -293,9 +300,9 @@ export default function SecuritySettingsPage() {
               ? 'Turn off two-factor sign-in'
               : 'Enable two-factor sign-in'}
         </Button>
-        {twoFactorMessage && (
+        {(twoFactorMessage || !isConnected) && (
           <p className="finance-muted" role="status">
-            {twoFactorMessage}
+            {twoFactorMessage || 'Offline. Reconnect to view or change server security settings.'}
           </p>
         )}
       </Card>

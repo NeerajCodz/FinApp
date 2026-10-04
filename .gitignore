@@ -8,6 +8,7 @@ apps/mobile/dist/
 !.env.example
 *.key
 .tmp-*
+artifacts/
 apps/web/.next/
 apps/web/out/
 apps/web/node_modules/

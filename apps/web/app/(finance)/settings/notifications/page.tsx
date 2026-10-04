@@ -45,7 +45,9 @@ export default function NotificationSettingsPage() {
   const { records, loading, error } = useLocalRecords<SettingsRecord>('settings');
   const { tokens } = useTheme();
   const setting = records[0];
-  const [preferences, setPreferences] = React.useState<NotificationPreferences | null>(null);
+  const [preferences, setPreferences] = React.useState<NotificationPreferences>(
+    defaultNotificationPreferences,
+  );
   const [permission, setPermission] = React.useState<NotificationPermission | 'unsupported' | null>(
     null,
   );
@@ -69,19 +71,26 @@ export default function NotificationSettingsPage() {
     );
 
   async function change(type: NotificationType, value: boolean) {
-    if (!userId || !setting || !preferences || saving) return;
+    if (!userId || !preferences || saving) return;
     const next = { ...preferences, [type]: value };
     setPreferences(next);
     setSaving(true);
     setMessage('');
     try {
+      const current =
+        setting ??
+        ({
+          id: `settings:${userId}`,
+          ownerId: userId,
+          notificationPreferences: defaultNotificationPreferences,
+        } as SettingsRecord);
       await commitLocalWrite(
         userId,
         'settings',
         'notification.preferences',
-        { ...setting, notificationPreferences: next },
+        { ...current, notificationPreferences: next },
         { preferences: next },
-        { recordId: String(setting.id ?? setting._id ?? '') },
+        { recordId: String(current.id ?? current._id ?? `settings:${userId}`) },
       );
       setMessage('Saved on this device. Preferences sync when connected.');
     } catch (cause) {
@@ -135,8 +144,7 @@ export default function NotificationSettingsPage() {
           Retry loading preferences
         </Button>
       )}
-      {!loading && !error && !setting && <Text>Connect once to load your account settings.</Text>}
-      {!loading && !error && setting && (
+      {!loading && !error && (
         <div>
           {options.map((option, index) => (
             <div key={option.type}>

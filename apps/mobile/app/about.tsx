@@ -1,10 +1,11 @@
 import React from 'react';
-import { Image, Linking, ScrollView, View } from 'react-native';
+import { Linking, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Heart } from '@finapp/ui/icons/native';
 import { IconButton, Text, Typography, useTheme } from '@finapp/ui/native';
-import appIcon from '../assets/icon.png';
+import { CoinLogo } from '@/components/brand/CoinLogo';
+import { APP_VERSION } from '@convex/shared/version';
 
 const DEVELOPER_URL = 'https://github.com/NeerajCodz';
 
@@ -39,17 +40,12 @@ export default function AboutScreen() {
         <Typography variant="title">About Finapp</Typography>
       </View>
 
-      <Image
-        source={appIcon}
-        accessible
-        accessibilityLabel="Finapp app logo"
-        style={{ width: 96, height: 96, borderRadius: 22, alignSelf: 'center' }}
-      />
+      <CoinLogo size={180} />
 
       <View style={{ gap: 20 }}>
         <View style={{ gap: 6 }}>
           <Typography variant="heading">About Finapp</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>v1.1.2</Text>
+          <Text style={{ color: tokens.foregroundMuted }}>{APP_VERSION}</Text>
         </View>
         <View style={{ gap: 6 }}>
           <Typography variant="label">Developer</Typography>

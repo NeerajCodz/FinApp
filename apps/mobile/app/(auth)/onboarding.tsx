@@ -10,12 +10,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { api } from '@convex/_generated/api';
-import { useConvexAuth, useQuery } from 'convex/react';
+import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { currencies } from '@convex/shared/validators';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
-import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
+import { upsertCloudPage, type LocalRecord } from '@/local/repository';
 import {
   Button,
   Input,
@@ -96,12 +96,13 @@ export default function OnboardingScreen() {
   const [gender, setGender] = useState<'neutral' | 'male' | 'female'>('neutral');
   const [avatarId, setAvatarId] = useState('AV0');
   const [mode, setMode] = useState('personal');
-  const { userId } = useLocalSync();
+  const { userId, isConnected } = useLocalSync();
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
   const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const auth = useConvexAuth();
   const verification = useQuery(api.users.queries.current, {});
+  const updateUser = useMutation(api.users.mutations.update);
   React.useEffect(() => {
     if (auth.isLoading || verification === undefined) return;
     if (!auth.isAuthenticated) {
@@ -180,12 +181,20 @@ export default function OnboardingScreen() {
       setStep((current) => current + 1);
       return;
     }
+
+    if (handle !== normalizeHandle(String(profile?.username ?? '')) && !isConnected) {
+      setError('A live Convex connection is required to set your username.');
+      return;
+    }
     setPending(true);
     try {
       if (!userId) throw new Error('AUTH_REQUIRED');
+      if (handle !== normalizeHandle(String(profile?.username ?? ''))) {
+        const updated = await updateUser({ username: handle });
+        await upsertCloudPage(userId, 'profile', [updated as unknown as LocalRecord]);
+      }
       const profileUpdate = {
         displayName: displayName.trim(),
-        username: handle,
         phone: phone.trim() || undefined,
         defaultCurrency: currency,
         avatarId,
@@ -195,7 +204,7 @@ export default function OnboardingScreen() {
         userId,
         'profile',
         'user.update',
-        { ...(profile ?? {}), ...profileUpdate },
+        { ...(profile ?? {}), ...profileUpdate, username: handle },
         profileUpdate,
         { recordId: String(profile?.id ?? profile?._id ?? userId) },
       );
@@ -328,11 +337,14 @@ export default function OnboardingScreen() {
               returnKeyType="next"
               onSubmitEditing={goForward}
               error={!!error}
+              editable={!pending && isConnected}
             />
             <Typography variant="small">
-              {handle && canContinue
-                ? `You’ll share as @${handle}`
-                : 'Use 3–32 letters, numbers or underscores.'}
+              {!isConnected
+                ? 'Username changes require a live Convex connection.'
+                : handle && canContinue
+                  ? `You’ll share as @${handle}`
+                  : 'Use 3–32 letters, numbers or underscores.'}
             </Typography>
             <Label style={{ marginBottom: 0 }}>Gender</Label>
             <View style={{ flexDirection: 'row', gap: 8 }}>

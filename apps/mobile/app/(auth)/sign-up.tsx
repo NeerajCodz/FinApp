@@ -77,10 +77,6 @@ export default function SignUpScreen() {
         </Button>
       }
     >
-      <View style={{ gap: 6 }}>
-        <Typography variant="heading">Create your account</Typography>
-        <Typography variant="small">Your everyday money, brought together.</Typography>
-      </View>
       <View style={{ gap: 8 }}>
         <Label style={{ marginBottom: 0 }}>Email address</Label>
         <Input

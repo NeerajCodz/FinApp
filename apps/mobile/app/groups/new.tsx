@@ -25,6 +25,7 @@ export default function NewGroupScreen() {
   const [contactPhones, setContactPhones] = useState<string[]>([]);
   const [contactNames, setContactNames] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const saveLock = React.useRef(false);
   const [contactBusy, setContactBusy] = useState(false);
   const [error, setError] = useState('');
   const { userId } = useLocalSync();
@@ -71,7 +72,7 @@ export default function NewGroupScreen() {
   }
 
   async function save() {
-    if (!userId || saving) return;
+    if (!userId || saveLock.current) return;
     const cleanName = name.trim();
     if (!cleanName) {
       setError('Enter a group name.');
@@ -89,6 +90,7 @@ export default function NewGroupScreen() {
       setError('Phone invitations require a manually verified phone number.');
       return;
     }
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -121,6 +123,7 @@ export default function NewGroupScreen() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create group');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }

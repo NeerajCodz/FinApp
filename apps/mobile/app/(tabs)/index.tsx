@@ -11,7 +11,7 @@ import {
 } from '@convex/notifications/domain';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeDashboard, buildHomeDashboard, type HomeRecord } from '@finapp/ui/home';
-import { resolveDefaultCurrency } from '@finapp/ui/finance';
+import { FinanceBrand, resolveDefaultCurrency } from '@finapp/ui/finance';
 import { Button, Input, Sheet, Text, Typography, useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
 import { useLocalRecords, useLocalTransactionRange } from '@/hooks/useLocalRecords';
@@ -256,6 +256,7 @@ export default function HomeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        <FinanceBrand />
         <HomeDashboard
           data={data}
           people={people}

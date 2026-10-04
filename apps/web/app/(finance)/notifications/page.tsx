@@ -430,6 +430,12 @@ export default function NotificationsPage() {
                             (invite) => invite.id === event.entityId,
                           )}
                           onRespond={async (inviteId, response) => {
+                            if (!isConnected) {
+                              const message =
+                                'You are offline. Reconnect to respond to this invitation.';
+                              setErrorMessage(message);
+                              throw new Error(message);
+                            }
                             await respondToInvitation({
                               inviteId: inviteId as Id<'groupInvites'>,
                               response,

@@ -8,15 +8,19 @@ export default function GroupInvitationRoute() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
   const token = Array.isArray(params.token) ? (params.token[0] ?? '') : (params.token ?? '');
   const validToken = /^[0-9a-f]{64}$/.test(token);
-  const { userId } = useLocalSync();
+  const { userId, isConnected } = useLocalSync();
   const preview = useQuery(
     api.groups.queries.previewInvitationLink,
-    validToken ? { token } : 'skip',
+    validToken && isConnected ? { token } : 'skip',
   );
   const join = useMutation(api.groups.mutations.joinByInvitationLink);
   const [joining, setJoining] = React.useState(false);
   const [error, setError] = React.useState('');
   async function accept() {
+    if (!isConnected) {
+      setError('You are offline. Reconnect to verify and accept this invitation.');
+      return;
+    }
     if (!userId || !validToken || !preview || joining) return;
     setJoining(true);
     setError('');
@@ -33,14 +37,17 @@ export default function GroupInvitationRoute() {
       setJoining(false);
     }
   }
-  const busy = Boolean(validToken) && preview === undefined;
+  const busy = Boolean(validToken && isConnected) && preview === undefined;
   return (
     <GroupInvitationJoinScreen
       preview={validToken ? (preview ?? null) : null}
       loading={busy}
       authRequired={!userId}
       joining={joining}
-      error={error}
+      error={
+        error ||
+        (!isConnected ? 'You are offline. Reconnect to verify and accept this invitation.' : '')
+      }
       onJoin={() => void accept()}
       onSignIn={() => {
         if (validToken)

@@ -98,6 +98,7 @@ export default function GroupsPage() {
     userId && isConnected ? {} : 'skip',
   );
   const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
+  const cloudGroups = useQuery(api.groups.queries.list, userId && isConnected ? {} : 'skip');
   const groupsState = useLocalRecords<Group>('group');
   const membersState = useLocalRecords<Member>('groupMember');
   const transactionsState = useLocalRecords<LedgerRecord>('transaction');
@@ -106,10 +107,29 @@ export default function GroupsPage() {
   const settlementsState = useLocalRecords<LedgerRecord>('settlement');
   const [rangeStates, setRangeStates] = React.useState<Record<string, RangeState>>({});
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
-  const activeGroups = React.useMemo(
-    () => groupsState.records.filter((group) => group.archivedAt === undefined),
-    [groupsState.records],
-  );
+  const activeGroups = React.useMemo(() => {
+    const mergedGroups = [...groupsState.records];
+    if (userId && isConnected && cloudGroups !== undefined) {
+      for (const cloudGroup of cloudGroups as unknown as Group[]) {
+        const cloudAliases = aliases(cloudGroup);
+        const localIndex = mergedGroups.findIndex((group) =>
+          aliases(group).some((alias) => cloudAliases.includes(alias)),
+        );
+        if (localIndex === -1) {
+          mergedGroups.push(cloudGroup);
+        } else {
+          const localGroup = mergedGroups[localIndex]!;
+          mergedGroups[localIndex] = {
+            ...localGroup,
+            ...cloudGroup,
+            id: localGroup.id ?? cloudGroup._id,
+            cloudId: cloudGroup._id,
+          };
+        }
+      }
+    }
+    return mergedGroups.filter((group) => group.archivedAt === undefined);
+  }, [cloudGroups, groupsState.records, isConnected, userId]);
   React.useEffect(() => {
     if (!userId || groupsState.loading) {
       setRangeStates({});
@@ -168,7 +188,8 @@ export default function GroupsPage() {
     transactionsState.loading ||
     payersState.loading ||
     participantsState.loading ||
-    settlementsState.loading;
+    settlementsState.loading ||
+    Boolean(userId && isConnected && cloudGroups === undefined);
   const recordsError =
     groupsState.error ??
     membersState.error ??
@@ -362,6 +383,8 @@ export default function GroupsPage() {
         userId && !isConnected ? 'Connect to the internet to view invitations.' : undefined
       }
       onRespondToInvitation={async (inviteId, response) => {
+        if (!isConnected)
+          throw new Error('You are offline. Reconnect to respond to this invitation.');
         await respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response });
       }}
       showInvitations={searchParams.get('invitations') === '1'}

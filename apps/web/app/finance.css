@@ -814,16 +814,6 @@
   font-size: 0.82rem;
   text-decoration: none;
 }
-.privacy-brand {
-  color: var(--finance-text);
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.06em;
-  text-decoration: none;
-}
-.privacy-brand span {
-  color: var(--finance-lime);
-}
 .privacy-content {
   max-width: 760px;
   margin: 62px auto 0;

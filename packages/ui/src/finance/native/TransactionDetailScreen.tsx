@@ -34,14 +34,18 @@ export type TransactionDetailScreenProps = {
   loading?: boolean;
   error?: string | null;
   unavailable?: boolean;
+  referenceId?: string;
   missingId?: boolean;
   canEdit?: boolean;
   canDuplicate?: boolean;
+  canDelete?: boolean;
+  deletePending?: boolean;
+  actionError?: string | null;
   onBack: () => void;
   onEdit?: () => void;
   onDuplicate?: () => void;
+  onDelete?: () => void;
   onRetry?: () => void;
-  referenceId?: string;
   relatedTransactions?: readonly TransactionTableItem[];
   onOpenTransaction?: (id: string) => void;
   tags?: readonly string[];
@@ -68,9 +72,13 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
     missingId = false,
     canEdit = false,
     canDuplicate = false,
+    canDelete = false,
+    deletePending = false,
     onBack,
     onEdit,
     onDuplicate,
+    onDelete,
+    actionError,
     onRetry,
   } = props;
   const { tokens } = useTheme();
@@ -178,6 +186,16 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
             <ArrowRight size={17} color={tokens.foreground} /> Duplicate
           </Button>
         </View>
+        {canDelete && (
+          <Button variant="destructive" disabled={deletePending} onPress={onDelete}>
+            {deletePending ? 'Deleting…' : 'Delete transaction'}
+          </Button>
+        )}
+        {actionError && (
+          <Text accessibilityRole="alert" style={{ color: tokens.expense }}>
+            {actionError}
+          </Text>
+        )}
         <Typography variant="caption">{date}</Typography>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <SemanticMarker type={semanticType} />

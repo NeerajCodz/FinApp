@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { formatAuthError } from '@convex/shared/authErrors';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { toast } from '@/lib/toast';
-import { Button, Input, InputOTP, Label, PasswordField, Typography } from '@finapp/ui/native';
+import { Button, Input, InputOTP, Label, PasswordField } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthError, AuthSubmit, isEmail } from '@/components/auth/AuthFields';
 
@@ -97,9 +97,6 @@ export default function ForgotPasswordScreen() {
         </Button>
       }
     >
-      <Typography variant="heading">
-        {requested ? 'Choose a new password' : 'Reset your password'}
-      </Typography>
       {!requested ? (
         <View style={{ gap: 8 }}>
           <Label style={{ marginBottom: 0 }}>Email address</Label>

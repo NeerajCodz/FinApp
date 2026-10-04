@@ -65,28 +65,48 @@ export default function EditProfileScreen() {
     try {
       const update = {
         displayName: (draft.displayName ?? '').trim(),
-        username: normalizedUsername,
         phone: (draft.phone ?? '').trim() || undefined,
         gender: draft.gender || undefined,
         avatarId: draft.avatarId || undefined,
       };
-      const next: Profile = {
-        ...profile,
-        ...update,
-      };
+      const usernameChanged = normalizedUsername !== normalizeUsername(profile.username ?? '');
+      const next: Profile = { ...profile, ...update };
+      const identityChanged =
+        update.displayName !== profile.displayName ||
+        update.phone !== profile.phone ||
+        update.gender !== profile.gender ||
+        update.avatarId !== profile.avatarId;
       if (update.phone !== profile.phone) next.phoneVerificationTime = undefined;
       const recordId = String(profile.id ?? profile._id ?? userId);
-      if (normalizedUsername !== profile.username && connection.isWebSocketConnected) {
-        await updateUser({ username: normalizedUsername });
-        await upsertCloudPage(userId, 'profile', [next]);
-        const localUpdate = {
-          displayName: update.displayName,
-          phone: update.phone,
-          gender: update.gender,
-          avatarId: update.avatarId,
-        };
-        await commitLocalWrite(userId, 'profile', 'user.update', next, localUpdate, { recordId });
-      } else await commitLocalWrite(userId, 'profile', 'user.update', next, update, { recordId });
+      if (identityChanged) {
+        await commitLocalWrite(userId, 'profile', 'user.update', next, update, { recordId });
+      }
+      if (usernameChanged) {
+        if (!connection.isWebSocketConnected) {
+          setError(
+            identityChanged
+              ? 'Profile details saved on this device. A live Convex connection is required to change your username.'
+              : 'A live Convex connection is required to change your username.',
+          );
+          return;
+        }
+        try {
+          const updated = await updateUser({ ...update, username: normalizedUsername });
+          await upsertCloudPage(userId, 'profile', [updated as unknown as LocalRecord]);
+        } catch (cause) {
+          const detail = connection.isWebSocketConnected
+            ? cause instanceof Error
+              ? cause.message
+              : 'The server could not update your username.'
+            : 'A live Convex connection is required to change your username.';
+          setError(
+            identityChanged
+              ? `Profile details saved on this device, but the username was not changed: ${detail}`
+              : `Could not change your username: ${detail}`,
+          );
+          return;
+        }
+      }
       if (router.canGoBack()) router.back();
       else router.replace('/(tabs)/profile' as never);
     } catch (cause) {
@@ -144,8 +164,14 @@ export default function EditProfileScreen() {
             autoCapitalize="none"
             value={String(draft.username ?? '')}
             onChangeText={(value) => setDraft((current) => ({ ...current, username: value }))}
+            editable={connection.isWebSocketConnected}
             placeholder="username"
           />
+          {!connection.isWebSocketConnected && (
+            <Typography variant="caption">
+              Username changes require a live Convex connection.
+            </Typography>
+          )}
           {invalidUsername && (
             <Typography style={{ color: tokens.destructive }}>
               Use 3–32 letters, numbers, or underscores.

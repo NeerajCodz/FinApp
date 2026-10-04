@@ -22,9 +22,10 @@ name, username, and gender selection, with a live profile preview that reflects 
 entered name and selected avatar.
 
 Profile details are edited at `/profile/edit` on web and native, reachable from
-both the Profile page and Settings. Profile name, username, phone, and avatar edits
-use the existing offline-first sync flow. Notification and sync actions live in the
-home header; they are not repeated across other screens.
+both the Profile page and Settings. Profile name, phone, and avatar edits use the existing
+offline-first sync flow. Username changes require a live Convex connection and stay unchanged
+offline. Notification and sync actions live in the home header; they are not repeated across
+other screens.
 
 The 101 built-in avatars ship as transparent 384px, 192px, and 96px WebP variants
 under `assets/avatar/{high,medium,low}`. Run `bun run generate:avatars` to rebuild
@@ -58,6 +59,12 @@ Transactions use `/transactions`, `/transaction/new`, `/transaction/:id`, and
 `/transaction/:id/edit`; recurring rules use `/recurring` and
 `/recurring/:recurringId`. Goals use `/goals`, `/goals/new`, and
 `/goals/:id[/edit|/analytics]`.
+Personal transactions can be soft-deleted from their detail page or selected
+in batches from the Transactions list on web and mobile; local deletions sync
+through the offline-first flow. New transactions prefer an account matching the
+profile's default currency before falling back to the configured account.
+Creation actions remain pending and block duplicate submissions while writes
+are in progress.
 Transfer forms explain when no other account in the selected currency can receive
 a transfer, with an account-creation action on both web and native.
 
@@ -76,11 +83,19 @@ member management, and invitation-link creation are admin-only. Public
 `/group/invite?token=...` links show a safe group preview, require sign-in before explicit
 acceptance, and expire after a configurable 1, 7 (default), or 30 days; generating another link
 invalidates the previous one, and admins can revoke links at any time. Accepted members can
-contribute shared expenses, chat and share bill images, and record settlements. Group balances
-are shown only when the complete group ledger is available; integer minor-unit values saved as
-safe numbers or integer strings are normalized without guessing missing splits. Async buttons
-remain pending until their action settles to prevent duplicate submissions. Unsupported
-scheduled settlements are not inferred.
+contribute shared expenses, chat and share bill images, and record settlements. Group balances are
+shown only when the complete group ledger is available; integer minor-unit values saved as safe
+numbers or integer strings are normalized without guessing missing splits. Async buttons remain
+pending until their action settles to prevent duplicate submissions. Unsupported scheduled
+settlements are not inferred.
+Personal-finance changes and supported group-ledger writes persist to the local database and
+durable sync outbox before they are sent to the server. They remain visible offline and replay
+when connected. Group invitations, membership and role changes, chat and bill uploads, username
+lookup, authentication, and server-managed security controls require a live connection; device
+app-lock controls remain local.
+
+The web Groups page also includes joined groups from the authenticated membership query when an
+existing browser's local group cache is incomplete.
 
 ### Coin implementation
 
@@ -98,10 +113,17 @@ scheduled settlements are not inferred.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.1.2` with a centered Finapp app icon
-and a GitHub developer link. Native coin drift uses browser-independent math,
-avoiding the Android startup error `ReferenceError: document is not defined`.
+The native and web About screens show `v1.1.5` with the centered 3D `CoinLogo` and a
+GitHub developer link. Native coin drift uses browser-independent math, avoiding the
+Android startup error `ReferenceError: document is not defined`; GPU-unavailable
+surfaces use the app icon fallback.
+The Finapp wordmark appears only on the public web landing page and signed-in Home
+surfaces. Welcome, authentication, privacy, and other screens omit it; About uses
+the 3D coin.
+Mobile Activity links directly to Analytics and Transactions.
+The Convex deployment exposes `GET /version`, returning `{ "version": "v1.1.5" }`.
 The About rows in Settings and Profile open those screens.
+On mobile, the shared navigation header is shown only on Home.
 
 ### Development
 

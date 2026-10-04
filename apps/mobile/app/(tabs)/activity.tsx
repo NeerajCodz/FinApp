@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from '@finapp/ui/icons/native';
+import { ArrowLeft, ArrowLeftRight, ChartLineUp } from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityFilters } from '@finapp/ui/activity';
 import { CategoryIcon, DateSection, TransactionRow } from '@finapp/ui/finance';
 import { FinanceEmptyState } from '@finapp/ui/finance';
-import { Button, Empty, IconButton, Input, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Empty, IconButton, Input, Text, Typography, useTheme } from '@finapp/ui/native';
 import { layoutTokens } from '@finapp/ui/tokens';
 
 import {
@@ -440,8 +440,25 @@ export default function ActivityScreen() {
             <Typography variant="small">Your saved transactions, in one place.</Typography>
           </View>
         </View>
-        <Button size="sm" variant="ghost" onPress={() => router.push('/analytics' as never)}>
-          Analytics
+      </View>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Button
+          size="lg"
+          variant="outline"
+          style={{ flex: 1, minHeight: 52, borderRadius: 16 }}
+          onPress={() => router.push('/analytics' as never)}
+        >
+          <ChartLineUp size={18} color={tokens.foreground} />
+          <Text style={{ marginLeft: 8, fontFamily: 'SpaceGrotesk_500Medium' }}>Analytics</Text>
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          style={{ flex: 1, minHeight: 52, borderRadius: 16 }}
+          onPress={() => router.push('/transactions' as never)}
+        >
+          <ArrowLeftRight size={18} color={tokens.foreground} />
+          <Text style={{ marginLeft: 8, fontFamily: 'SpaceGrotesk_500Medium' }}>Transactions</Text>
         </Button>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

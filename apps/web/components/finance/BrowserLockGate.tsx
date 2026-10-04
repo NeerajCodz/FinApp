@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
+import { formatAuthError } from '@convex/shared/authErrors';
 import { Button, Card, Input, Label } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import {
@@ -174,7 +175,7 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
       setChallengeId(challenge.challengeId);
       setCode('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send a recovery code.');
+      setError(formatAuthError(cause, 'verification'));
     } finally {
       setPending(false);
     }
@@ -195,7 +196,7 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
       setCode('');
       setPasscode('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not verify the recovery code.');
+      setError(formatAuthError(cause, 'verification'));
     } finally {
       setPending(false);
     }

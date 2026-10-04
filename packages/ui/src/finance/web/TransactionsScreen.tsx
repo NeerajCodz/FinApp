@@ -9,7 +9,7 @@ import {
   Search,
   Wallet,
 } from 'lucide-react';
-import { CustomSelect } from '@finapp/ui/web';
+import { Button, CustomSelect } from '@finapp/ui/web';
 import { CategoryIcon } from './CategoryIcon';
 import { Money } from './Money';
 import type { TransactionType } from '../types';
@@ -35,11 +35,18 @@ export function TransactionTable({
   items,
   compact = false,
   onSelect,
+  selectedIds,
+  onToggleSelect,
+  selectableIds,
 }: {
   items: readonly TransactionTableItem[];
   compact?: boolean;
   onSelect?: (id: string) => void;
+  selectedIds?: readonly string[];
+  onToggleSelect?: (id: string) => void;
+  selectableIds?: ReadonlySet<string>;
 }) {
+  const selected = new Set(selectedIds ?? []);
   return items.length ? (
     <table className={styles.table}>
       <thead>
@@ -70,6 +77,18 @@ export function TransactionTable({
               }
             }}
           >
+            {onToggleSelect && (
+              <td>
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${item.title}`}
+                  disabled={!selectableIds?.has(item.id)}
+                  checked={selected.has(item.id)}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={() => onToggleSelect(item.id)}
+                />
+              </td>
+            )}
             <td>{index + 1}</td>
             <td>
               <div className={styles.identity}>
@@ -136,6 +155,14 @@ export type TransactionsScreenProps = {
   onTypeFilterChange: (value: string) => void;
   onSelect: (id: string) => void;
   onCreate: () => void;
+  selectableIds?: ReadonlySet<string>;
+  selectedIds?: readonly string[];
+  onToggleSelect?: (id: string) => void;
+  onClearSelection?: () => void;
+  onDeleteSelected?: () => void;
+  deletePending?: boolean;
+  actionError?: string | null;
+  selectedCount?: number;
 };
 export function TransactionsScreen(p: TransactionsScreenProps) {
   const average = p.expenseCount ? p.totalExpense / BigInt(p.expenseCount) : 0n;
@@ -238,13 +265,34 @@ export function TransactionsScreen(p: TransactionsScreenProps) {
           {p.rangeError}
         </p>
       )}
+      {p.actionError && (
+        <p role="alert" className={styles.error}>
+          {p.actionError}
+        </p>
+      )}
+      {p.onToggleSelect && (p.selectedCount ?? 0) > 0 && (
+        <div className={styles.controls}>
+          <button type="button" className={styles.back} onClick={p.onClearSelection}>
+            Clear selection ({p.selectedCount})
+          </button>
+          <Button variant="outline" disabled={p.deletePending} onPress={p.onDeleteSelected}>
+            {p.deletePending ? 'Deleting…' : `Delete selected (${p.selectedCount})`}
+          </Button>
+        </div>
+      )}
       <section className={styles.tablePanel} aria-label="Transactions">
         {p.loading ? (
           <p className={styles.empty} role="status">
             Loading transactions…
           </p>
         ) : (
-          <TransactionTable items={p.items} onSelect={p.onSelect} />
+          <TransactionTable
+            items={p.items}
+            onSelect={p.onSelect}
+            selectedIds={p.selectedIds}
+            onToggleSelect={p.onToggleSelect}
+            selectableIds={p.selectableIds}
+          />
         )}
       </section>
       <button className={styles.fab} onClick={p.onCreate} aria-label="Add transaction">

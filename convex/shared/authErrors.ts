@@ -39,6 +39,14 @@ function errorText(cause: unknown): string {
 export function formatAuthError(cause: unknown, context: AuthFailureContext): string {
   const message = errorText(cause).toLowerCase();
 
+  if (
+    /failed to fetch|fetch failed|network(?: request)? failed|internet disconnected|offline|net::err_|econn(?:refused|reset|aborted)|etimedout|timed out|network is unreachable/.test(
+      message,
+    )
+  ) {
+    return 'Check your internet connection and try again.';
+  }
+
   if (/password_too_short|invalid password|password.{0,30}(too short|at least 8)/.test(message)) {
     return context === 'password-reset'
       ? 'Your new password must be at least eight characters.'

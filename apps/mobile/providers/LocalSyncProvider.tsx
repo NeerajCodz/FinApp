@@ -320,6 +320,14 @@ async function sendMutation(
           : {}),
       } as never);
     }
+    case 'transaction.delete': {
+      const transactionId = String(payload.transactionId);
+      const mappedTransactionId = await getMappedCloudId(userId, 'transaction', transactionId);
+      return convex.mutation(api.transactions.mutations.softDelete, {
+        ...payload,
+        transactionId: mappedTransactionId ?? transactionId,
+      } as never);
+    }
     case 'group.create':
       return convex.mutation(api.groups.mutations.create, payload as never);
     case 'group.update': {
@@ -437,10 +445,26 @@ async function sendMutation(
     }
     case 'user.update':
       return convex.mutation(api.users.mutations.update, payload as never);
-    case 'user.defaultAccount':
-      return convex.mutation(api.users.mutations.setDefaultAccount, payload as never);
-    case 'user.defaultCategory':
-      return convex.mutation(api.users.mutations.setDefaultCategory, payload as never);
+    case 'user.defaultAccount': {
+      const accountId =
+        typeof payload.accountId === 'string'
+          ? ((await getMappedCloudId(userId, 'account', payload.accountId)) ?? payload.accountId)
+          : null;
+      return convex.mutation(api.users.mutations.setDefaultAccount, {
+        ...payload,
+        accountId,
+      } as never);
+    }
+    case 'user.defaultCategory': {
+      const categoryId =
+        typeof payload.categoryId === 'string'
+          ? ((await getMappedCloudId(userId, 'category', payload.categoryId)) ?? payload.categoryId)
+          : null;
+      return convex.mutation(api.users.mutations.setDefaultCategory, {
+        ...payload,
+        categoryId,
+      } as never);
+    }
     default:
       throw new Error(`UNSUPPORTED_SYNC_OPERATION:${entry.operation}`);
   }
