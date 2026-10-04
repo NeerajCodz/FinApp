@@ -17,6 +17,7 @@ import {
   Landmark,
   Tags,
   Target,
+  UserRound,
   UsersRound,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -44,6 +45,7 @@ const navigation: NavItem[] = [
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/groups', label: 'Groups', icon: UsersRound },
   { href: '/categories', label: 'Categories', icon: Tags },
+  { href: '/people', label: 'People', icon: UserRound },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
@@ -51,6 +53,7 @@ const mobileNavigation = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
   { href: '/groups', label: 'Groups', icon: UsersRound },
+  { href: '/people', label: 'People', icon: UserRound },
   { href: '/profile', label: 'Profile', icon: CircleUserRound },
 ] satisfies NavItem[];
 type QuickAddLabel = (typeof quickAddActions)[number]['label'];

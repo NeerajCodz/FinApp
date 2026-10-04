@@ -21,6 +21,7 @@ export type GroupChatItem = {
   amount?: string;
   icon?: string;
   color?: string;
+  readBy?: readonly string[];
   onPress?: () => void;
 };
 
@@ -43,6 +44,9 @@ export type GroupChatScreenProps = {
     avatarId?: string;
     avatarUrl?: string | null;
   }[];
+  typingNames?: readonly string[];
+  onTypingChange?: (typing: boolean) => void;
+  onBack?: () => void;
   onOpenGroup?: () => void;
   onAddExpense?: () => void;
   onOpenSettings?: () => void;
@@ -56,17 +60,45 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
       timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
     }
   }, [p.canSend, p.items.length]);
+  const onTypingChangeRef = useRef(p.onTypingChange);
+  onTypingChangeRef.current = p.onTypingChange;
+  useEffect(() => {
+    const stopTyping = () => onTypingChangeRef.current?.(false);
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') stopTyping();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', stopTyping);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', stopTyping);
+      stopTyping();
+    };
+  }, []);
 
   const members = p.members ?? [];
-  const media = p.items.filter((item) => item.attachmentUrl);
   const timeline = (
-    <section id="group-chat" className={`${s.panel} ${s.chat}`}>
+    <section
+      id="group-chat"
+      className={`${s.panel} ${s.chat}`}
+      style={
+        p.embedded
+          ? undefined
+          : {
+              height: 'calc(100dvh - 190px)',
+              minHeight: 360,
+              display: 'flex',
+              flexDirection: 'column',
+            }
+      }
+    >
       <div
         ref={timelineRef}
         className={s.timeline}
         role="log"
         aria-label="Group messages"
         aria-live="polite"
+        style={!p.embedded ? { flex: 1, height: 'auto', minHeight: 0 } : undefined}
       >
         {p.loading && (
           <p className={s.muted} role="status">
@@ -151,9 +183,19 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                   </div>
                 )}
               </div>
+              {item.ownMessage && !!item.readBy?.length && (
+                <small aria-label={`Seen by ${item.readBy.join(', ')}`}>
+                  Seen by {item.readBy.join(', ')}
+                </small>
+              )}
             </div>
           </article>
         ))}
+        {!!p.typingNames?.length && (
+          <p className={s.muted} role="status">
+            {p.typingNames.join(', ')} {p.typingNames.length === 1 ? 'is' : 'are'} typing…
+          </p>
+        )}
         {!p.loading && !p.error && !p.items.length && (
           <FinanceEmptyState
             kind="activity"
@@ -178,7 +220,12 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
             aria-label="Group message"
             rows={1}
             value={p.draft}
-            onChange={(event) => p.onDraftChange(event.currentTarget.value)}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              p.onDraftChange(value);
+              p.onTypingChange?.(Boolean(value.trim()));
+            }}
+            onBlur={() => p.onTypingChange?.(false)}
             maxLength={4000}
             placeholder={`Message ${p.group?.name ?? 'the group'}…`}
             disabled={p.pending}
@@ -216,18 +263,22 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
     </section>
   );
 
-  if (p.embedded || !p.group) return <GroupPage>{timeline}</GroupPage>;
+  if (p.embedded) return <GroupPage>{timeline}</GroupPage>;
 
   return (
     <GroupPage>
-      <Crumb onBack={p.onOpenGroup ?? (() => {})} name={p.group.name} current="Chat" />
+      <Crumb
+        onBack={p.onBack ?? p.onOpenGroup ?? (() => {})}
+        name={p.group?.name ?? 'Group'}
+        current="Chat"
+      />
       <header className={s.hero}>
-        <Tile large icon={p.group.icon} color={p.group.color} />
+        {p.group && <Tile large icon={p.group.icon} color={p.group.color} />}
         <div className={s.heroCopy}>
-          <h1>{p.group.name}</h1>
-          <p className={s.subtitle}>Shared plans, expenses and receipts.</p>
+          <h1>{p.group?.name ?? 'Group chat'}</h1>
+          <p className={s.subtitle}>Messages, activity and shared receipts.</p>
           <p className={s.muted}>
-            {members.length} members · {p.group.currency}
+            {members.length} members{p.group?.currency ? ` · ${p.group.currency}` : ''}
           </p>
         </div>
         <span className={s.avatars}>
@@ -252,84 +303,14 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
               <Plus size={17} /> Add expense
             </Button>
           )}
+          {p.onOpenSettings && (
+            <Button variant="outline" onPress={p.onOpenSettings}>
+              Edit group
+            </Button>
+          )}
         </div>
       </header>
-      <div className={s.columns}>
-        {timeline}
-        <aside className={s.stack}>
-          <section className={s.panel}>
-            <div className={s.panelHead}>
-              <h3>Group info</h3>
-              {p.onOpenSettings && (
-                <Button size="sm" variant="outline" onPress={p.onOpenSettings}>
-                  Edit
-                </Button>
-              )}
-            </div>
-            <div className={s.tip}>
-              <Tile icon={p.group.icon} color={p.group.color} />
-              <div>
-                <h3>{p.group.name}</h3>
-                <p>{p.group.currency} · Shared ledger</p>
-              </div>
-            </div>
-            <p className={s.muted}>Only saved group records and messages appear here.</p>
-          </section>
-          <section className={s.panel}>
-            <h3>Members ({members.length})</h3>
-            {members.map((member) => (
-              <div className={s.member} key={member.id}>
-                <PersonAvatar
-                  name={member.name}
-                  url={member.avatarUrl}
-                  avatarId={member.avatarId}
-                />
-                <span className={s.activityCopy}>{member.name}</span>
-                <span className={s.badge}>Member</span>
-              </div>
-            ))}
-            {!members.length && <p className={s.muted}>Membership is not cached yet.</p>}
-            <p className={s.muted}>Live presence and read receipts are not available.</p>
-          </section>
-          <section className={s.panel}>
-            <h3>Balances &amp; settlements</h3>
-            <p className={s.muted}>
-              Open the group to see complete member balances and record payments.
-            </p>
-            {p.onOpenGroup && (
-              <Button size="sm" variant="outline" onPress={p.onOpenGroup}>
-                View balances →
-              </Button>
-            )}
-          </section>
-          <section className={s.panel}>
-            <h3>Shared media &amp; receipts</h3>
-            {p.loading ? (
-              <p className={s.muted} role="status">
-                Loading shared images…
-              </p>
-            ) : p.error ? null : media.length ? (
-              <div className={s.media}>
-                {media.map((item) => (
-                  <a key={item.id} href={item.attachmentUrl!} target="_blank" rel="noreferrer">
-                    <img
-                      src={item.attachmentUrl!}
-                      alt={`Receipt shared by ${item.sender ?? 'a member'}`}
-                    />
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <FinanceEmptyState
-                kind="activity"
-                compact
-                title="No shared images yet"
-                description="Bills and receipts shared in chat will collect here."
-              />
-            )}
-          </section>
-        </aside>
-      </div>
+      {timeline}
     </GroupPage>
   );
 }

@@ -178,7 +178,9 @@ export default function DashboardPage() {
         onSeeAllCategories={() => router.push('/categories')}
         onOpenGroup={(id) => router.push(`/group/${encodeURIComponent(id)}`)}
         onSeeAllGroups={() => router.push('/groups')}
-        onOpenPerson={(username) => router.push(`/person/${encodeURIComponent(username)}`)}
+        onOpenPerson={(username) =>
+          router.push(`/@${encodeURIComponent(username.replace(/^@+/, ''))}`)
+        }
         onSeeAllBills={() => router.push('/recurring')}
       />
       <SpendingPeriodSheet

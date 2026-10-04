@@ -284,8 +284,8 @@ export default function HomeScreen() {
           onOpenCategory={(id) => router.push(`/category/${id}` as never)}
           onSeeAllCategories={() => router.push('/categories' as never)}
           onOpenGroup={(id) => router.push(`/group/${id}` as never)}
-          onSeeAllGroups={() => router.push('/(tabs)/groups' as never)}
-          onOpenPerson={(username) => router.push(`/person/${username}` as never)}
+          onSeeAllGroups={() => router.push('/(tabs)/people' as never)}
+          onOpenPerson={(username) => router.push(`/@${encodeURIComponent(username)}` as never)}
           onSeeAllBills={() => router.push('/recurring' as never)}
         />
       </ScrollView>

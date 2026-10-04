@@ -96,7 +96,7 @@ export default function NotificationsScreen() {
       await markNotificationAsRead(userId, event);
       const destination = notificationRoute(event);
       if (destination === '/groups?invitations=1')
-        router.push('/(tabs)/groups?invitations=1' as never);
+        router.push('/(tabs)/people?invitations=1' as never);
       else if (destination !== '/notifications') router.push(destination as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not open this notification.');

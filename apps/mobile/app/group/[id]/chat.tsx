@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { useMutation, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@convex/_generated/api';
@@ -32,6 +33,37 @@ export default function GroupChatRoute() {
     api.groups.queries.chatMessages,
     canUseChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
   );
+  const scopeState = useQuery(
+    api.presence.queries.scopeState,
+    canUseChat ? { scopeType: 'group', scopeId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const setTypingMutation = useMutation(api.presence.mutations.setTyping);
+  const markGroupSeen = useMutation(api.presence.mutations.markGroupSeen);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const typingActive = useRef(false);
+  const typingLastSent = useRef(0);
+  const markedSeenIds = useRef(new Set<string>());
+  useEffect(() => {
+    const stopTyping = () => {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      typingTimer.current = undefined;
+      if (typingActive.current && cloudGroupId) {
+        typingActive.current = false;
+        void setTypingMutation({
+          scopeType: 'group',
+          scopeId: cloudGroupId as Id<'groups'>,
+          typing: false,
+        }).catch(() => {});
+      }
+    };
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') stopTyping();
+    });
+    return () => {
+      subscription.remove();
+      stopTyping();
+    };
+  }, [cloudGroupId, setTypingMutation]);
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
@@ -63,6 +95,60 @@ export default function GroupChatRoute() {
           avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
           avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
         }));
+  const memberName = (memberId: string) =>
+    memberId === userId
+      ? 'You'
+      : (members.find((member) => member.id === memberId)?.name ?? 'Group member');
+  const typingNames = (scopeState?.typingUserIds ?? [])
+    .filter(
+      (typingUserId) =>
+        typingUserId !== userId && members.some((member) => member.id === typingUserId),
+    )
+    .map(memberName);
+  function setTyping(typing: boolean) {
+    if (typing && !canUseChat) return;
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = undefined;
+    if (typing) {
+      const now = Date.now();
+      if (!typingActive.current || now - typingLastSent.current >= 4_000) {
+        typingActive.current = true;
+        typingLastSent.current = now;
+        void setTypingMutation({
+          scopeType: 'group',
+          scopeId: cloudGroupId as Id<'groups'>,
+          typing: true,
+        }).catch(() => {
+          typingActive.current = false;
+        });
+      }
+      typingTimer.current = setTimeout(() => setTyping(false), 2_500);
+      return;
+    }
+    if (!typingActive.current) return;
+    typingActive.current = false;
+    void setTypingMutation({
+      scopeType: 'group',
+      scopeId: cloudGroupId as Id<'groups'>,
+      typing: false,
+    }).catch(() => {});
+  }
+  useEffect(() => {
+    if (!userId || !canUseChat || !chatMessages) return;
+    for (const message of chatMessages) {
+      if (
+        String(message.senderId) !== String(userId) &&
+        !message.seenBy?.some((seenById) => String(seenById) === String(userId)) &&
+        !markedSeenIds.current.has(String(message.id))
+      ) {
+        const messageId = String(message.id);
+        markedSeenIds.current.add(messageId);
+        void markGroupSeen({ messageId: message.id }).catch(() => {
+          markedSeenIds.current.delete(messageId);
+        });
+      }
+    }
+  }, [canUseChat, chatMessages, markGroupSeen, userId]);
   const expenseEvents = (transactions.data ?? [])
     .filter(
       (expense) =>
@@ -110,6 +196,11 @@ export default function GroupChatRoute() {
       ownMessage: message.senderId === userId,
       text: message.kind === 'text' ? message.text : undefined,
       attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+      readBy: message.seenBy
+        ?.filter(
+          (seenById) => seenById !== userId && members.some((member) => member.id === seenById),
+        )
+        .map(memberName),
     })),
   ]
     .sort((left, right) => left.timestamp - right.timestamp)
@@ -130,6 +221,7 @@ export default function GroupChatRoute() {
     try {
       await sendChatText({ groupId: cloudGroupId as Id<'groups'>, text: draft.trim() });
       setDraft('');
+      setTyping(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not send this message.');
     } finally {
@@ -206,6 +298,8 @@ export default function GroupChatRoute() {
           : undefined
       }
       members={members}
+      typingNames={typingNames}
+      onTypingChange={setTyping}
       onOpenGroup={() => router.push({ pathname: '/group/[id]', params: { id: id ?? '' } })}
       onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
       onOpenSettings={() => router.push({ pathname: '/group/[id]/edit', params: { id: id ?? '' } })}

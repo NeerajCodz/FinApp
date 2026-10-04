@@ -6,7 +6,6 @@ import { ImageSquare, PaperPlaneTilt } from 'phosphor-react-native';
 import { Money } from './Money';
 import {
   GroupAvatar,
-  GroupHeading,
   GroupMetadataSummary,
   GroupPanel,
   GroupTile,
@@ -31,6 +30,7 @@ export type GroupChatItem = {
   currency?: string;
   icon?: string;
   color?: string;
+  readBy?: readonly string[];
   onPress?: () => void;
 };
 export type GroupChatScreenProps = {
@@ -53,6 +53,8 @@ export type GroupChatScreenProps = {
     avatarId?: string;
     avatarUrl?: string;
   }[];
+  typingNames?: readonly string[];
+  onTypingChange?: (typing: boolean) => void;
   onOpenGroup?: () => void;
   onAddExpense?: () => void;
   onOpenSettings?: () => void;
@@ -66,10 +68,46 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
   useEffect(() => {
     if (p.canSend && p.items.length) timelineRef.current?.scrollToEnd({ animated: true });
   }, [p.canSend, p.items.length]);
-  const media = p.items.filter((item) => item.attachmentUrl);
   const content = (
     <>
-      {p.embedded ? (
+      {!p.embedded && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingVertical: 4,
+          }}
+        >
+          {p.onBack && (
+            <Button size="sm" variant="outline" onPress={p.onBack}>
+              ‹ Back
+            </Button>
+          )}
+          <View style={{ flex: 1 }}>
+            <Typography variant="heading">{p.group?.name ?? 'Group chat'}</Typography>
+            <Typography variant="caption">
+              {p.group?.currency ? `${p.group.currency} · ` : ''}Group chat
+            </Typography>
+          </View>
+          {p.onOpenGroup && (
+            <Button size="sm" variant="outline" onPress={p.onOpenGroup}>
+              Group
+            </Button>
+          )}
+          {p.onAddExpense && (
+            <Button size="sm" onPress={p.onAddExpense}>
+              + Expense
+            </Button>
+          )}
+          {p.onOpenSettings && (
+            <Button size="sm" variant="outline" onPress={p.onOpenSettings}>
+              Edit
+            </Button>
+          )}
+        </View>
+      )}
+      {p.embedded && (
         <View
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
@@ -80,50 +118,25 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
             </Button>
           )}
         </View>
-      ) : (
-        <GroupHeading
-          title={p.group?.name ?? 'Group chat'}
-          subtitle="Chat and share receipts with your group."
-          onBack={p.onBack}
-        />
       )}
-      {!p.embedded && p.group && (
+      {p.embedded && p.group && (
         <GroupPanel>
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
             <GroupTile icon={p.group.icon} color={p.group.color} size={68} />
             <View style={{ flex: 1, gap: 4 }}>
               <Typography variant="heading">{p.group.name}</Typography>
               <Typography variant="caption">{p.group.currency} · Shared expenses</Typography>
-              <View style={{ flexDirection: 'row' }}>
-                {p.members?.slice(0, 5).map((member, index) => (
-                  <View key={member.id} style={{ marginLeft: index ? -6 : 0 }}>
-                    <GroupAvatar
-                      name={member.name}
-                      avatarId={member.avatarId}
-                      avatarUrl={member.avatarUrl}
-                      size={26}
-                    />
-                  </View>
-                ))}
-              </View>
             </View>
           </View>
           <GroupMetadataSummary group={p.group} />
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {p.onOpenGroup && (
-              <Button size="sm" variant="outline" onPress={p.onOpenGroup}>
-                View group
-              </Button>
-            )}
-            {p.onAddExpense && (
-              <Button size="sm" onPress={p.onAddExpense}>
-                + Add expense
-              </Button>
-            )}
-          </View>
+          {p.onBack && (
+            <Button size="sm" variant="outline" onPress={p.onBack}>
+              Open chat
+            </Button>
+          )}
         </GroupPanel>
       )}
-      <GroupPanel style={{ padding: 10, gap: 10 }}>
+      <GroupPanel style={{ padding: 10, gap: 10, flex: p.embedded ? undefined : 1 }}>
         <ScrollView
           ref={timelineRef}
           nestedScrollEnabled
@@ -131,7 +144,11 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
           accessibilityRole="list"
           accessibilityLabel="Group messages"
           accessibilityLiveRegion="polite"
-          style={{ minHeight: p.embedded ? 160 : 300, maxHeight: p.embedded ? 340 : 520 }}
+          style={{
+            flex: 1,
+            minHeight: p.embedded ? 160 : 0,
+            maxHeight: p.embedded ? 340 : undefined,
+          }}
           contentContainerStyle={{ padding: 4, gap: 16, flexGrow: 1 }}
         >
           {p.loading && <Typography variant="small">Loading saved messages…</Typography>}
@@ -244,8 +261,21 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                   </Pressable>
                 )}
               </View>
+              {item.ownMessage && !!item.readBy?.length && (
+                <Typography
+                  variant="caption"
+                  accessibilityLabel={`Seen by ${item.readBy.join(', ')}`}
+                >
+                  Seen by {item.readBy.join(', ')}
+                </Typography>
+              )}
             </View>
           ))}
+          {!!p.typingNames?.length && (
+            <Typography variant="caption" accessibilityLiveRegion="polite">
+              {p.typingNames.join(', ')} {p.typingNames.length === 1 ? 'is' : 'are'} typing…
+            </Typography>
+          )}
           {!p.loading && !p.error && !p.items.length && (
             <FinanceEmptyState
               kind="group"
@@ -279,7 +309,11 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                 accessibilityLabel="Group message"
                 style={{ flex: 1 }}
                 value={p.draft}
-                onChangeText={p.onDraftChange}
+                onChangeText={(value) => {
+                  p.onDraftChange(value);
+                  p.onTypingChange?.(Boolean(value.trim()));
+                }}
+                onBlur={() => p.onTypingChange?.(false)}
                 multiline
                 maxLength={4000}
                 placeholder={p.group ? `Message ${p.group.name}…` : 'Write a message…'}
@@ -320,115 +354,6 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
           </Typography>
         )}
       </GroupPanel>
-      {!p.embedded && (
-        <>
-          <GroupPanel>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <Typography variant="heading">Group info</Typography>
-              {p.onOpenSettings && (
-                <Button size="sm" variant="outline" onPress={p.onOpenSettings}>
-                  Edit
-                </Button>
-              )}
-            </View>
-            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-              <GroupTile icon={p.group?.icon} color={p.group?.color} size={56} />
-              <View style={{ flex: 1, gap: 4 }}>
-                <Typography variant="heading">
-                  {p.group?.name ?? 'Group details unavailable'}
-                </Typography>
-                <Typography variant="caption">
-                  {p.group?.currency ?? 'Currency unavailable'}
-                </Typography>
-              </View>
-            </View>
-            {p.group && <GroupMetadataSummary group={p.group} />}
-            <Typography variant="caption">
-              Messages and bill images save online. They are not queued for offline sending.
-            </Typography>
-          </GroupPanel>
-          <GroupPanel>
-            <Typography variant="heading">Members ({p.members?.length ?? 0})</Typography>
-            {p.members?.length ? (
-              p.members.map((member) => (
-                <View
-                  key={member.id}
-                  style={{
-                    flexDirection: 'row',
-                    gap: 10,
-                    alignItems: 'center',
-                    paddingVertical: 4,
-                  }}
-                >
-                  <GroupAvatar
-                    name={member.name}
-                    avatarId={member.avatarId}
-                    avatarUrl={member.avatarUrl}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Typography variant="label">{member.name}</Typography>
-                    {member.username && (
-                      <Typography variant="caption">
-                        @{member.username.replace(/^@+/, '')}
-                      </Typography>
-                    )}
-                  </View>
-                </View>
-              ))
-            ) : p.members ? (
-              <FinanceEmptyState
-                kind="group"
-                title="No members yet."
-                description="Group members will appear here when membership is available."
-                compact
-              />
-            ) : (
-              <Typography variant="caption">Member details are not available yet.</Typography>
-            )}
-          </GroupPanel>
-          <GroupPanel>
-            <Typography variant="heading">Group balances</Typography>
-            <Typography variant="small">
-              Open the group to view complete member balances and record a settlement. Chat does not
-              provide live balance totals.
-            </Typography>
-            {p.onOpenGroup && (
-              <Button variant="outline" onPress={p.onOpenGroup}>
-                View group balances
-              </Button>
-            )}
-          </GroupPanel>
-          <GroupPanel>
-            <Typography variant="heading">Shared media & receipts</Typography>
-            {media.length ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {media.map((item) => (
-                  <Image
-                    key={item.id}
-                    source={{ uri: item.attachmentUrl! }}
-                    accessibilityLabel={`Receipt shared by ${item.sender ?? 'a member'}`}
-                    resizeMode="cover"
-                    style={{ width: 72, height: 88, borderRadius: 6 }}
-                  />
-                ))}
-              </View>
-            ) : !p.loading && !p.error ? (
-              <FinanceEmptyState
-                kind="activity"
-                title="No shared images yet."
-                description="Receipts shared in this conversation will appear here."
-                compact
-              />
-            ) : null}
-          </GroupPanel>
-        </>
-      )}
     </>
   );
   if (p.embedded) return <View style={{ gap: 12 }}>{content}</View>;
@@ -437,17 +362,17 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: tokens.background }}
     >
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
+      <View
+        style={{
+          flex: 1,
           paddingHorizontal: 20,
           paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 20,
-          gap: 16,
+          paddingBottom: insets.bottom + 12,
+          gap: 12,
         }}
       >
         {content}
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }

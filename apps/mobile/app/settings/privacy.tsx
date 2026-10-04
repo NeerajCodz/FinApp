@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, Switch, View } from 'react-native';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { ArrowLeft } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,8 +14,11 @@ import { Button, IconButton, Separator, Text, Typography } from '@finapp/ui/nati
 import { useTheme } from '@finapp/ui/native';
 export default function PrivacySettingsScreen() {
   const [exporting, setExporting] = useState(false);
+  const [updatingPresence, setUpdatingPresence] = useState(false);
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const privacy = useQuery(api.presence.queries.privacySettings, {});
+  const setPrivacy = useMutation(api.presence.mutations.setPrivacy);
   const { userId } = useLocalSync();
   const transactions = useLocalRecords<LocalRecord>(userId, 'transaction');
   const accounts = useLocalRecords<LocalRecord>(userId, 'account');
@@ -66,6 +71,69 @@ export default function PrivacySettingsScreen() {
         <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
           Ordinary telemetry never includes balances, amounts, account names, or transaction notes.
         </Text>
+      </View>
+
+      <Separator />
+
+      <View style={{ gap: 14 }}>
+        <Typography variant="label">Presence</Typography>
+        <Text style={{ color: tokens.foregroundMuted }}>
+          Choose what people in your chats can see when you use Finapp.
+        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Typography variant="bodyLarge">Show active status</Typography>
+            <Text style={{ color: tokens.foregroundMuted, fontSize: 13 }}>
+              Let people you chat with know when you are active.
+            </Text>
+          </View>
+          <Switch
+            value={privacy?.showActive ?? true}
+            disabled={!privacy || updatingPresence}
+            onValueChange={(showActive) => {
+              if (!privacy) return;
+              setUpdatingPresence(true);
+              void setPrivacy({ showActive, showLastSeen: privacy.showLastSeen })
+                .catch(() => toast.error('Could not update privacy settings'))
+                .finally(() => setUpdatingPresence(false));
+            }}
+            trackColor={{ true: tokens.primary }}
+          />
+        </View>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Typography variant="bodyLarge">Show last seen</Typography>
+            <Text style={{ color: tokens.foregroundMuted, fontSize: 13 }}>
+              Let people you chat with see when you were last active.
+            </Text>
+          </View>
+          <Switch
+            value={privacy?.showLastSeen ?? true}
+            disabled={!privacy || updatingPresence}
+            onValueChange={(showLastSeen) => {
+              if (!privacy) return;
+              setUpdatingPresence(true);
+              void setPrivacy({ showActive: privacy.showActive, showLastSeen })
+                .catch(() => toast.error('Could not update privacy settings'))
+                .finally(() => setUpdatingPresence(false));
+            }}
+            trackColor={{ true: tokens.primary }}
+          />
+        </View>
       </View>
 
       <Separator />
