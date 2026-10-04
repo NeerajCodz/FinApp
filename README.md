@@ -22,9 +22,10 @@ name, username, and gender selection, with a live profile preview that reflects 
 entered name and selected avatar.
 
 Profile details are edited at `/profile/edit` on web and native, reachable from
-both the Profile page and Settings. Profile name, username, phone, and avatar edits
-use the existing offline-first sync flow. Notification and sync actions live in the
-home header; they are not repeated across other screens.
+both the Profile page and Settings. Profile name, phone, and avatar edits use the existing
+offline-first sync flow. Username changes require a live Convex connection and stay unchanged
+offline. Notification and sync actions live in the home header; they are not repeated across
+other screens.
 
 The 101 built-in avatars ship as transparent 384px, 192px, and 96px WebP variants
 under `assets/avatar/{high,medium,low}`. Run `bun run generate:avatars` to rebuild
@@ -87,6 +88,11 @@ shown only when the complete group ledger is available; integer minor-unit value
 numbers or integer strings are normalized without guessing missing splits. Async buttons remain
 pending until their action settles to prevent duplicate submissions. Unsupported scheduled
 settlements are not inferred.
+Personal-finance changes and supported group-ledger writes persist to the local database and
+durable sync outbox before they are sent to the server. They remain visible offline and replay
+when connected. Group invitations, membership and role changes, chat and bill uploads, username
+lookup, authentication, and server-managed security controls require a live connection; device
+app-lock controls remain local.
 
 The web Groups page also includes joined groups from the authenticated membership query when an
 existing browser's local group cache is incomplete.
