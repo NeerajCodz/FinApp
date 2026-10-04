@@ -2,6 +2,7 @@
 
 import { Heart } from 'lucide-react';
 import { CoinLogo } from '@/components/brand/CoinLogo';
+import { APP_VERSION } from '@convex/shared/version';
 import { Typography, useTheme } from '@finapp/ui/web';
 
 export default function AboutPage() {
@@ -17,7 +18,7 @@ export default function AboutPage() {
           </div>
         </div>
         <section style={{ display: 'grid', gap: 12 }}>
-          <Typography variant="bodyLarge">v1.1.4</Typography>
+          <Typography variant="bodyLarge">{APP_VERSION}</Typography>
           <Typography variant="bodyLarge">
             Developer{' '}
             <a
