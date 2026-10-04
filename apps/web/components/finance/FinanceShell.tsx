@@ -132,9 +132,13 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       <FinanceWorkspace
         onAdd={openQuickAdd}
         brandLink={
-          <Link href="/dashboard" aria-label="Finapp overview">
-            <FinanceBrand />
-          </Link>
+          pathname === '/dashboard' ? (
+            <Link href="/dashboard" aria-label="Finapp overview">
+              <FinanceBrand />
+            </Link>
+          ) : (
+            <></>
+          )
         }
         navigation={
           <>

@@ -10,7 +10,6 @@ import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from '@finapp/ui/native';
 import { Button, View } from '@finapp/ui/native';
-import { FinanceBrand } from '@finapp/ui/finance';
 import type { AccentValue } from '@finapp/ui/tokens';
 import Storage from 'expo-sqlite/kv-store';
 import { api } from '@convex/_generated/api';
@@ -181,7 +180,6 @@ function ThemedStack() {
         screenOptions={{
           headerShown: false,
           headerTitle: '',
-          headerLeft: () => <FinanceBrand />,
           headerBackVisible: false,
           headerShadowVisible: false,
           headerStyle: { backgroundColor: tokens.background },
