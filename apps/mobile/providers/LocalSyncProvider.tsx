@@ -450,20 +450,20 @@ async function sendMutation(
         typeof payload.accountId === 'string'
           ? ((await getMappedCloudId(userId, 'account', payload.accountId)) ?? payload.accountId)
           : null;
-      return convex.mutation(
-        api.users.mutations.setDefaultAccount,
-        { ...payload, accountId } as never,
-      );
+      return convex.mutation(api.users.mutations.setDefaultAccount, {
+        ...payload,
+        accountId,
+      } as never);
     }
     case 'user.defaultCategory': {
       const categoryId =
         typeof payload.categoryId === 'string'
           ? ((await getMappedCloudId(userId, 'category', payload.categoryId)) ?? payload.categoryId)
           : null;
-      return convex.mutation(
-        api.users.mutations.setDefaultCategory,
-        { ...payload, categoryId } as never,
-      );
+      return convex.mutation(api.users.mutations.setDefaultCategory, {
+        ...payload,
+        categoryId,
+      } as never);
     }
     default:
       throw new Error(`UNSUPPORTED_SYNC_OPERATION:${entry.operation}`);

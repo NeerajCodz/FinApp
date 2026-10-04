@@ -320,8 +320,8 @@ export default function PersonPage() {
       )}
       {!isConnected && !person && !matchingMember && (
         <p className="finance-form-note" role="status">
-          Offline. Username lookup requires an internet connection; saved group members and
-          expenses remain visible.
+          Offline. Username lookup requires an internet connection; saved group members and expenses
+          remain visible.
         </p>
       )}
       {!person && !matchingMember && searchResult && (

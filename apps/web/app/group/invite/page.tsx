@@ -49,7 +49,8 @@ function GroupInvitationContent() {
       authRequired={!userId}
       joining={joining}
       error={
-        error || (!isConnected ? 'You are offline. Reconnect to verify and accept this invitation.' : '')
+        error ||
+        (!isConnected ? 'You are offline. Reconnect to verify and accept this invitation.' : '')
       }
       onJoin={() => void accept()}
       onSignIn={() => {

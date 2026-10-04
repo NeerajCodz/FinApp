@@ -144,8 +144,7 @@ export default function OnboardingPage() {
 
   async function finish() {
     if (!userId || !auth.isAuthenticated || saving) return;
-    const existingUsername =
-      profile?.username?.replace(/^@+/, '').trim().toLowerCase() ?? '';
+    const existingUsername = profile?.username?.replace(/^@+/, '').trim().toLowerCase() ?? '';
     if (handle !== existingUsername && !isConnected) {
       setError('A live Convex connection is required to set your username.');
       return;

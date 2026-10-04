@@ -69,8 +69,7 @@ export default function EditProfileScreen() {
         gender: draft.gender || undefined,
         avatarId: draft.avatarId || undefined,
       };
-      const usernameChanged =
-        normalizedUsername !== normalizeUsername(profile.username ?? '');
+      const usernameChanged = normalizedUsername !== normalizeUsername(profile.username ?? '');
       const next: Profile = { ...profile, ...update };
       const identityChanged =
         update.displayName !== profile.displayName ||
