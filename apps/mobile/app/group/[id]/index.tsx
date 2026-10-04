@@ -95,7 +95,15 @@ export default function GroupHomeScreen() {
   };
 
   async function submitChatMessage() {
-    if (!canUseGroupChat || !chatDraft.trim() || chatPending) return;
+    if (!canUseGroupChat) {
+      setChatError(
+        isConnected
+          ? 'Sync this group before sending messages.'
+          : 'You are offline. Reconnect to send group messages.',
+      );
+      return;
+    }
+    if (!chatDraft.trim() || chatPending) return;
     setChatPending(true);
     setChatError('');
     try {
@@ -112,7 +120,15 @@ export default function GroupHomeScreen() {
   }
 
   async function pickBillImage() {
-    if (!canUseGroupChat || chatPending) return;
+    if (!canUseGroupChat) {
+      setChatError(
+        isConnected
+          ? 'Sync this group before uploading attachments.'
+          : 'You are offline. Reconnect to upload a group attachment.',
+      );
+      return;
+    }
+    if (chatPending) return;
     setChatError('');
     let selection: ImagePicker.ImagePickerResult;
     try {

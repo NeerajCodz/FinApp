@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useConvexAuth, useQuery } from 'convex/react';
+import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import {
@@ -18,7 +18,7 @@ import {
 import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { commitLocalWrite, upsertCloudPage, type LocalRecord } from '@/lib/offline/repository';
 import { pendingGroupInvitationPath } from '@/lib/authRoutes';
 
 type Profile = LocalRecord & {
@@ -73,7 +73,7 @@ function currencyLabel(currency: string) {
 export default function OnboardingPage() {
   const [step, setStep] = React.useState(0);
   const auth = useConvexAuth();
-  const { userId } = useBrowserSync();
+  const { userId, isConnected } = useBrowserSync();
   const { records: profiles } = useLocalRecords<Profile>('profile');
   const profile = profiles[0];
   const router = useRouter();
@@ -88,6 +88,7 @@ export default function OnboardingPage() {
     }
   }, [auth.isAuthenticated, auth.isLoading, router, verification]);
   const avatarCatalog = useQuery(api.avatars.queries.list, {});
+  const updateUser = useMutation(api.users.mutations.update);
   const [currencyOpen, setCurrencyOpen] = React.useState(false);
   const [currency, setCurrency] = React.useState<Currency>(
     Intl.NumberFormat().resolvedOptions().locale.startsWith('en-US') ? 'USD' : 'INR',
@@ -143,14 +144,24 @@ export default function OnboardingPage() {
 
   async function finish() {
     if (!userId || !auth.isAuthenticated || saving) return;
+    const existingUsername =
+      profile?.username?.replace(/^@+/, '').trim().toLowerCase() ?? '';
+    if (handle !== existingUsername && !isConnected) {
+      setError('A live Convex connection is required to set your username.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       const timezone =
         profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const usernameChanged = handle !== existingUsername;
+      if (usernameChanged) {
+        const updated = await updateUser({ username: handle });
+        await upsertCloudPage(userId, 'profile', [updated as unknown as LocalRecord]);
+      }
       const update = {
         displayName: displayName.trim(),
-        username: handle,
         defaultCurrency: currency,
         timezone,
         phone: phone.trim() || undefined,
@@ -167,6 +178,7 @@ export default function OnboardingPage() {
           id: profileId,
           ownerId: userId,
           ...update,
+          username: handle,
         },
         update,
         { recordId: profileId },
@@ -376,7 +388,13 @@ export default function OnboardingPage() {
                       value={username}
                       onChangeText={setUsername}
                       error={!!error}
+                      disabled={!isConnected}
                     />
+                    {!isConnected && (
+                      <span className="auth-helper" role="status">
+                        Username changes require a live Convex connection.
+                      </span>
+                    )}
                     {handle && (
                       <span className="auth-helper auth-handle">You will share as @{handle}</span>
                     )}

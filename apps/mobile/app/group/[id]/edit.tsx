@@ -19,7 +19,7 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 export default function GroupSettingsScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { userId } = useLocalSync();
+  const { userId, isConnected } = useLocalSync();
   const groupState = useLocalRecords<LocalRecord>(userId, 'group');
   const memberState = useLocalRecords<LocalRecord>(userId, 'groupMember');
   const group = groupState.data?.find((record) => id && recordIds(record).includes(id));
@@ -128,6 +128,10 @@ export default function GroupSettingsScreen() {
   }
 
   async function toggleAdmin(member: LocalRecord, makeAdmin: boolean) {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to manage group members.');
+      return;
+    }
     if (!canManage || !cloudGroupId || pending) return;
     const memberUserId = typeof member.userId === 'string' ? member.userId : '';
     const memberRecordId = recordId(member);
@@ -148,6 +152,10 @@ export default function GroupSettingsScreen() {
   }
 
   async function saveGroupAppearance() {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to update group settings.');
+      return;
+    }
     if (!canManage || !cloudGroupId || pending || !iconDraft || !colorDraft) return;
     setPending('appearance');
     setActionError('');
@@ -165,6 +173,10 @@ export default function GroupSettingsScreen() {
   }
 
   async function saveRetention() {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to update group settings.');
+      return;
+    }
     if (!canManage || !cloudGroupId || pending) return;
     setPending('retention');
     setActionError('');
@@ -183,6 +195,10 @@ export default function GroupSettingsScreen() {
   }
 
   async function addMember() {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to invite group members.');
+      return;
+    }
     if (!canManage || !cloudGroupId || pending) return;
     setPending('member-add');
     setActionError('');
@@ -202,6 +218,10 @@ export default function GroupSettingsScreen() {
   }
 
   async function removeMember(member: LocalRecord) {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to manage group members.');
+      return;
+    }
     if (!canManage || !cloudGroupId || pending) return;
     const memberUserId = typeof member.userId === 'string' ? member.userId : '';
     if (!memberUserId) return;
@@ -221,6 +241,10 @@ export default function GroupSettingsScreen() {
   }
 
   async function createInvitation() {
+    if (!isConnected) {
+      setInvitationError('You are offline. Reconnect to create an invitation link.');
+      return;
+    }
     if (!canManage || !cloudGroupId || invitationBusy) return;
     setInvitationBusy(true);
     setInvitationError('');
@@ -243,6 +267,10 @@ export default function GroupSettingsScreen() {
     }
   }
   async function revokeInvitation() {
+    if (!isConnected) {
+      setInvitationError('You are offline. Reconnect to revoke the invitation link.');
+      return;
+    }
     if (!canManage || !cloudGroupId || invitationBusy) return;
     setInvitationBusy(true);
     setInvitationError('');
@@ -314,7 +342,12 @@ export default function GroupSettingsScreen() {
       loading={groupState.loading}
       membersLoading={memberState.loading}
       loadError={groupState.error?.message ?? memberState.error?.message}
-      error={actionError || undefined}
+      error={
+        actionError ||
+        (!isConnected
+          ? 'Offline. Reconnect to manage group settings, invitations, and membership.'
+          : undefined)
+      }
       successMessage={successMessage}
       saving={pending}
       cloudGroupId={cloudGroupId}

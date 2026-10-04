@@ -76,7 +76,7 @@ export default function PersonPage() {
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
   const searchResult = useQuery(
     api.users.queries.search,
-    userId && handle.length >= 2 ? { query: handle } : 'skip',
+    userId && isConnected && handle.length >= 2 ? { query: handle } : 'skip',
   ) as UserSearchResult[] | undefined;
   const {
     records: groups,
@@ -232,7 +232,7 @@ export default function PersonPage() {
     !settlementsLoading &&
     !settlementsError;
   const recent = expenses;
-  const searchPending = !person && !matchingMember && searchResult === undefined;
+  const searchPending = isConnected && !person && !matchingMember && searchResult === undefined;
   const routeToSettle = personId ?? handle;
 
   return (
@@ -316,6 +316,12 @@ export default function PersonPage() {
         <p className="finance-form-note" role="status">
           Searching the server for this username. Group membership and expenses remain
           browser-local.
+        </p>
+      )}
+      {!isConnected && !person && !matchingMember && (
+        <p className="finance-form-note" role="status">
+          Offline. Username lookup requires an internet connection; saved group members and
+          expenses remain visible.
         </p>
       )}
       {!person && !matchingMember && searchResult && (

@@ -305,6 +305,8 @@ export default function GroupsScreen() {
         invitations={incomingInvitations}
         invitationsLoading={Boolean(userId && isConnected && incomingInvitations === undefined)}
         onRespondToInvitation={async (inviteId, response) => {
+          if (!isConnected)
+            throw new Error('You are offline. Reconnect to respond to this invitation.');
           await respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response });
         }}
         invitationsError={

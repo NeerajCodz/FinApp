@@ -383,6 +383,8 @@ export default function GroupsPage() {
         userId && !isConnected ? 'Connect to the internet to view invitations.' : undefined
       }
       onRespondToInvitation={async (inviteId, response) => {
+        if (!isConnected)
+          throw new Error('You are offline. Reconnect to respond to this invitation.');
         await respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response });
       }}
       showInvitations={searchParams.get('invitations') === '1'}

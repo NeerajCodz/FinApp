@@ -116,7 +116,15 @@ export default function GroupChatRoute() {
     .map(({ timestamp: _timestamp, ...item }) => item);
 
   async function sendMessage() {
-    if (!canUseChat || !draft.trim() || pending) return;
+    if (!canUseChat) {
+      setError(
+        isConnected
+          ? 'Sync this group before sending messages.'
+          : 'You are offline. Reconnect to send group messages.',
+      );
+      return;
+    }
+    if (!draft.trim() || pending) return;
     setPending(true);
     setError('');
     try {
@@ -128,9 +136,16 @@ export default function GroupChatRoute() {
       setPending(false);
     }
   }
-
   async function chooseBillImage() {
-    if (!canUseChat || pending) return;
+    if (!canUseChat) {
+      setError(
+        isConnected
+          ? 'Sync this group before uploading attachments.'
+          : 'You are offline. Reconnect to upload a group attachment.',
+      );
+      return;
+    }
+    if (pending) return;
     setError('');
     let selection: ImagePicker.ImagePickerResult;
     try {

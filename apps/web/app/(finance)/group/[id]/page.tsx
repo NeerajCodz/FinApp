@@ -481,7 +481,15 @@ export default function GroupHomePage() {
   });
   async function submitChatMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canUseGroupChat || !chatDraft.trim() || chatLock.current) return;
+    if (!canUseGroupChat) {
+      setChatError(
+        isConnected
+          ? 'Sync this group before sending messages.'
+          : 'You are offline. Reconnect to send group messages.',
+      );
+      return;
+    }
+    if (!chatDraft.trim() || chatLock.current) return;
     chatLock.current = true;
     setChatPending(true);
     setChatError('');
@@ -498,7 +506,6 @@ export default function GroupHomePage() {
       setChatPending(false);
     }
   }
-
   async function uploadBillImage(event: React.ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const file = input.files?.[0];
@@ -511,7 +518,15 @@ export default function GroupHomePage() {
       setChatError('Choose a JPEG, PNG, or WebP bill image up to 5 MB.');
       return;
     }
-    if (!canUseGroupChat || chatLock.current) return;
+    if (!canUseGroupChat) {
+      setChatError(
+        isConnected
+          ? 'Sync this group before uploading attachments.'
+          : 'You are offline. Reconnect to upload a group attachment.',
+      );
+      return;
+    }
+    if (chatLock.current) return;
     chatLock.current = true;
     setChatPending(true);
     setChatError('');

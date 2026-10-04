@@ -355,6 +355,10 @@ export default function NotificationsScreen() {
                             (invite) => invite.id === event.entityId,
                           )}
                           onRespond={async (inviteId, response) => {
+                            if (!isConnected) {
+                              setError('You are offline. Reconnect to respond to this invitation.');
+                              throw new Error('You are offline. Reconnect to respond to this invitation.');
+                            }
                             await respondToInvitation({
                               inviteId: inviteId as Id<'groupInvites'>,
                               response,

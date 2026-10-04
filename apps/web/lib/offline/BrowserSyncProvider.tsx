@@ -397,10 +397,28 @@ async function sendMutation(
       await convex.mutation(api.users.mutations.update, payload as never);
       return;
     case 'user.defaultAccount':
-      await convex.mutation(api.users.mutations.setDefaultAccount, payload as never);
+      await convex.mutation(
+        api.users.mutations.setDefaultAccount,
+        {
+          ...payload,
+          accountId:
+            payload.accountId === null
+              ? null
+              : await mapId('account', payload.accountId),
+        } as never,
+      );
       return;
     case 'user.defaultCategory':
-      await convex.mutation(api.users.mutations.setDefaultCategory, payload as never);
+      await convex.mutation(
+        api.users.mutations.setDefaultCategory,
+        {
+          ...payload,
+          categoryId:
+            payload.categoryId === null
+              ? null
+              : await mapId('category', payload.categoryId),
+        } as never,
+      );
       return;
     default:
       throw new Error(`UNSUPPORTED_SYNC_OPERATION:${entry.operation}`);
