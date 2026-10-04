@@ -97,6 +97,19 @@ app-lock controls remain local.
 The web Groups page also includes joined groups from the authenticated membership query when an
 existing browser's local group cache is incomplete.
 
+### People and messaging
+
+The People tab on mobile combines friend discovery, incoming and outgoing requests,
+direct conversations, and existing group management. Web exposes `/people` alongside
+the Groups workspace. Public `/@username` profiles expose safe identity fields without
+sign-in; shared group activity appears only when both the profile owner and viewer are
+active members of that group.
+
+Accepted friends can start direct conversations from People or a profile. Direct and
+group chats use dedicated chat screens with image attachments, live typing and presence
+indicators, and participant-scoped read receipts. Settings expose controls for showing
+active status and last-seen time; hiding active status also hides typing indicators.
+
 ### Coin implementation
 
 - `packages/ui/src/coin/geometry.ts`: volt faces, a beveled/reeded edge, shallow
@@ -117,9 +130,10 @@ The native and web About screens show `v1.1.5` with the centered 3D `CoinLogo` a
 GitHub developer link. Native coin drift uses browser-independent math, avoiding the
 Android startup error `ReferenceError: document is not defined`; GPU-unavailable
 surfaces use the app icon fallback.
-The Finapp wordmark appears only on the public web landing page and signed-in Home
-surfaces. Welcome, authentication, privacy, and other screens omit it; About uses
-the 3D coin.
+The Finapp wordmark and “Back in your corner” tagline appear on sign-in and sign-up,
+alongside the public web landing page and signed-in Home surfaces. Welcome uses a centered
+interactive 3D coin; About uses the centered interactive coin. Privacy and other screens
+omit the wordmark.
 Mobile Activity links directly to Analytics and Transactions.
 The Convex deployment exposes `GET /version`, returning `{ "version": "v1.1.5" }`.
 The About rows in Settings and Profile open those screens.

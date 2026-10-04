@@ -58,6 +58,7 @@ export function SignUpForm() {
 
   return (
     <AuthFrame
+      brand
       eyebrow="YOUR NEXT CHAPTER"
       title="Make room for clarity."
       description="A private space for your everyday money. Start with your email and a password."

@@ -85,7 +85,7 @@ export default function SignInScreen() {
 
   return (
     <AuthScaffold
-      eyebrow="Welcome back"
+      brand
       title={<>Back in{`\n`}your corner.</>}
       description="Your spending, your plans, your people. Pick up right where you left off."
       footer={

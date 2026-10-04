@@ -8,12 +8,14 @@ export function AuthFrame({
   description,
   children,
   footer,
+  brand = false,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   children: ReactNode;
-  footer: ReactNode;
+  footer?: ReactNode;
+  brand?: boolean;
 }) {
   return (
     <ThemeProvider forcedMode="dark">
@@ -42,6 +44,14 @@ export function AuthFrame({
           </aside>
           <section className="auth-content" aria-labelledby="auth-title">
             <div className="auth-card">
+              {brand && (
+                <div className="auth-brand" aria-label="finapp. Back in your corner.">
+                  <span>
+                    finapp<span aria-hidden="true">.</span>
+                  </span>
+                  <small>Back in your corner.</small>
+                </div>
+              )}
               <span className="auth-eyebrow">{eyebrow}</span>
               <h1 id="auth-title">{title}</h1>
               <p className="auth-description">{description}</p>

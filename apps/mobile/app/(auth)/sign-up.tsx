@@ -56,7 +56,7 @@ export default function SignUpScreen() {
 
   return (
     <AuthScaffold
-      eyebrow="A fresh start"
+      brand
       title={<>Make room{`\n`}for clarity.</>}
       description="Build a money habit that works for you. Start with an account, then set your own pace."
       footer={
