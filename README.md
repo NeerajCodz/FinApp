@@ -113,7 +113,7 @@ existing browser's local group cache is incomplete.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.1.4` with the centered 3D `CoinLogo` and a
+The native and web About screens show `v1.1.5` with the centered 3D `CoinLogo` and a
 GitHub developer link. Native coin drift uses browser-independent math, avoiding the
 Android startup error `ReferenceError: document is not defined`; GPU-unavailable
 surfaces use the app icon fallback.
@@ -121,6 +121,7 @@ The Finapp wordmark appears only on the public web landing page and signed-in Ho
 surfaces. Welcome, authentication, privacy, and other screens omit it; About uses
 the 3D coin.
 Mobile Activity links directly to Analytics and Transactions.
+The Convex deployment exposes `GET /version`, returning `{ "version": "v1.1.5" }`.
 The About rows in Settings and Profile open those screens.
 On mobile, the shared navigation header is shown only on Home.
 
