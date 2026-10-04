@@ -47,6 +47,15 @@ describe('formatAuthError', () => {
     );
   });
 
+  it('asks users to reconnect when an auth request fails on the network', () => {
+    expect(formatAuthError(new TypeError('Failed to fetch'), 'sign-in')).toBe(
+      'Check your internet connection and try again.',
+    );
+    expect(formatAuthError(new Error('Network request failed'), 'verification')).toBe(
+      'Check your internet connection and try again.',
+    );
+  });
+
   it('uses context-specific fallback copy instead of exposing unknown backend errors', () => {
     expect(formatAuthError(new Error('ConvexError: internal stack trace'), 'sign-in')).toBe(
       'We could not sign you in. Check your details and try again.',
