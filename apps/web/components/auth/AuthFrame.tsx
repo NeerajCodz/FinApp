@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@finapp/ui/web';
-import { CoinLogo } from '@/components/brand/CoinLogo';
 
 export function AuthFrame({
   eyebrow,
@@ -20,9 +19,6 @@ export function AuthFrame({
     <ThemeProvider forcedMode="dark">
       <main className="auth-layout">
         <header className="auth-header">
-          <Link href="/" className="auth-wordmark" aria-label="Finapp home">
-            finapp<span aria-hidden="true">.</span>
-          </Link>
           <Link href="/welcome" className="auth-home-link">
             <span aria-hidden="true">←</span> Back to welcome
           </Link>
@@ -39,9 +35,6 @@ export function AuthFrame({
               <span className="auth-story-detail">
                 Spending, saving, and shared expenses. One clear place to make sense of it all.
               </span>
-            </div>
-            <div className="auth-coin-stage">
-              <CoinLogo className="auth-coin" interactive />
             </div>
             <span className="auth-story-foot">
               PRIVATE BY DEFAULT <i aria-hidden="true" /> ALWAYS YOURS

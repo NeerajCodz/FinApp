@@ -4,9 +4,6 @@ export default function PrivacyPage() {
   return (
     <main className="privacy-page">
       <nav className="privacy-nav" aria-label="Privacy navigation">
-        <Link className="privacy-brand" href="/">
-          finapp<span>.</span>
-        </Link>
         <Link href="/sign-in">Sign in</Link>
       </nav>
       <article className="privacy-content">

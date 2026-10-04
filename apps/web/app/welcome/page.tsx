@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
 import { Button, ThemeProvider } from '@finapp/ui/web';
-import { CoinLogo } from '@/components/brand/CoinLogo';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 export default function WelcomePage() {
@@ -22,9 +21,6 @@ export default function WelcomePage() {
     <ThemeProvider forcedMode="dark">
       <main className="auth-welcome">
         <header className="auth-header">
-          <Link href="/" className="auth-wordmark" aria-label="Finapp home">
-            finapp<span aria-hidden="true">.</span>
-          </Link>
           <Link href="/" className="auth-home-link">
             Explore Finapp <span aria-hidden="true">↗</span>
           </Link>
@@ -66,11 +62,6 @@ export default function WelcomePage() {
                 <p>Private by default. Built for everyday money.</p>
               </div>
             )}
-          </div>
-          <div className="auth-welcome-visual">
-            <div className="auth-welcome-orbit" aria-hidden="true" />
-            <CoinLogo className="auth-welcome-coin" interactive />
-            <span className="auth-welcome-caption">A fresh perspective on everyday money.</span>
           </div>
         </section>
         <section className="auth-welcome-features" aria-label="Your Finapp space">
