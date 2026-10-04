@@ -1,8 +1,7 @@
 'use client';
 
 import { Heart } from 'lucide-react';
-import Image from 'next/image';
-import appIcon from '../../../mobile/assets/icon.png';
+import { CoinLogo } from '@/components/brand/CoinLogo';
 import { Typography, useTheme } from '@finapp/ui/web';
 
 export default function AboutPage() {
@@ -13,13 +12,9 @@ export default function AboutPage() {
       <section className="finance-page" style={{ maxWidth: 640, marginInline: 'auto', gap: 24 }}>
         <Typography variant="title">About Finapp</Typography>
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <Image
-            src={appIcon}
-            alt="Finapp app logo"
-            width={96}
-            height={96}
-            style={{ borderRadius: 22 }}
-          />
+          <div style={{ width: 180 }}>
+            <CoinLogo interactive />
+          </div>
         </div>
         <section style={{ display: 'grid', gap: 12 }}>
           <Typography variant="bodyLarge">v1.1.4</Typography>
