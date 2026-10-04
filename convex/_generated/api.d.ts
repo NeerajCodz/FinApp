@@ -55,6 +55,7 @@ import type * as shared_errors from "../shared/errors.js";
 import type * as shared_money from "../shared/money.js";
 import type * as shared_permissions from "../shared/permissions.js";
 import type * as shared_validators from "../shared/validators.js";
+import type * as shared_version from "../shared/version.js";
 import type * as splits_domain from "../splits/domain.js";
 import type * as splits_mutations from "../splits/mutations.js";
 import type * as sync_common from "../sync/common.js";
@@ -122,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   "shared/money": typeof shared_money;
   "shared/permissions": typeof shared_permissions;
   "shared/validators": typeof shared_validators;
+  "shared/version": typeof shared_version;
   "splits/domain": typeof splits_domain;
   "splits/mutations": typeof splits_mutations;
   "sync/common": typeof sync_common;
