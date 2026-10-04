@@ -218,6 +218,7 @@ export const detail = query({
 export const chatMessages = query({
   args: { groupId: v.id('groups') },
   handler: async (ctx, args) => {
+    const now = Date.now();
     const user = await getOptionalUser(ctx);
     if (!user) return [];
     const group = await ctx.db.get(args.groupId);
@@ -229,7 +230,11 @@ export const chatMessages = query({
       )
       .unique();
     if (!membership) return [];
-    const now = Date.now();
+    const currentMembers = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .collect();
+    const currentMemberIds = new Set(currentMembers.map((member) => member.userId));
     const messages = (
       await ctx.db
         .query('groupMessages')
@@ -239,9 +244,13 @@ export const chatMessages = query({
     ).filter((message) => message.expiresAt === undefined || message.expiresAt > now);
     return Promise.all(
       messages.map(async (message) => {
-        const [sender, attachmentUrl] = await Promise.all([
+        const [sender, attachmentUrl, reads] = await Promise.all([
           ctx.db.get(message.senderId),
           message.storageId ? ctx.storage.getUrl(message.storageId) : Promise.resolve(null),
+          ctx.db
+            .query('groupMessageReads')
+            .withIndex('by_message_user', (query) => query.eq('messageId', message._id))
+            .collect(),
         ]);
         return {
           id: message._id,
@@ -256,6 +265,9 @@ export const chatMessages = query({
           attachmentUrl,
           ...(message.mimeType === undefined ? {} : { mimeType: message.mimeType }),
           ...(message.size === undefined ? {} : { size: message.size }),
+          seenBy: reads
+            .filter((receipt) => currentMemberIds.has(receipt.userId))
+            .map((receipt) => receipt.userId),
         };
       }),
     );

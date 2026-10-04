@@ -936,11 +936,17 @@ export const sendBillAttachment = mutation({
       await ctx.storage.delete(args.storageId);
       return null;
     }
-    const existing = await ctx.db
-      .query('groupMessages')
-      .withIndex('by_storage', (query) => query.eq('storageId', args.storageId))
-      .unique();
-    if (existing) throw new Error('BILL_IMAGE_ALREADY_ATTACHED');
+    const [existingGroup, existingDirect] = await Promise.all([
+      ctx.db
+        .query('groupMessages')
+        .withIndex('by_storage', (query) => query.eq('storageId', args.storageId))
+        .unique(),
+      ctx.db
+        .query('directMessages')
+        .withIndex('by_storage', (query) => query.eq('storageId', args.storageId))
+        .unique(),
+    ]);
+    if (existingGroup || existingDirect) throw new Error('BILL_IMAGE_ALREADY_ATTACHED');
     const now = Date.now();
     const expiresAt = group.messageRetentionMs ? now + group.messageRetentionMs : undefined;
     const messageId = await ctx.db.insert('groupMessages', {
@@ -973,6 +979,11 @@ export const deleteExpiredMessage = internalMutation({
       return;
     }
     if (message.storageId) await ctx.storage.delete(message.storageId);
+    const reads = await ctx.db
+      .query('groupMessageReads')
+      .withIndex('by_message_user', (query) => query.eq('messageId', messageId))
+      .collect();
+    await Promise.all(reads.map((read) => ctx.db.delete(read._id)));
     await ctx.db.delete(messageId);
   },
 });
