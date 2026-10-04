@@ -1,0 +1,44 @@
+{
+  "cli": {
+    "version": ">= 24.10.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "production": {
+      "distribution": "internal",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://keen-corgi-894.convex.cloud",
+        "EXPO_PUBLIC_CONVEX_SITE_URL": "https://keen-corgi-894.convex.site",
+        "EXPO_PUBLIC_APP_ENV": "production"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production-armeabi-v7a": {
+      "extends": "production",
+      "android": {
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=armeabi-v7a"
+      }
+    },
+    "production-arm64-v8a": {
+      "extends": "production",
+      "android": {
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
+      }
+    },
+    "production-x86": {
+      "extends": "production",
+      "android": {
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=x86"
+      }
+    },
+    "production-x86_64": {
+      "extends": "production",
+      "android": {
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=x86_64"
+      }
+    }
+  }
+}

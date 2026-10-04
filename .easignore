@@ -1,0 +1,36 @@
+# Copy root and mobile ignore rules so EAS excludes the same local files as Git.
+node_modules/
+apps/mobile/node_modules/
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/web-build/
+apps/mobile/expo-env.d.ts
+apps/mobile/.kotlin/
+apps/mobile/*.tsbuildinfo
+apps/mobile/.metro-health-check*
+apps/mobile/*.orig.*
+apps/mobile/*.jks
+apps/mobile/*.p8
+apps/mobile/*.p12
+apps/mobile/*.key
+apps/mobile/*.mobileprovision
+apps/mobile/*.pem
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+.expo/
+.env
+.env.*
+!.env.example
+*.key
+.tmp-*
+artifacts/
+.convex/
+.git/
+.agents/
+.claude/
+design-references/
+
+# Mobile uses Expo prebuild; native output and Gradle caches are regenerated on EAS.
+apps/mobile/android/
+apps/mobile/ios/
