@@ -1,10 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
-import { Button, ThemeProvider } from '@finapp/ui/web';
+import { ThemeProvider } from '@finapp/ui/web';
+import { CoinLogo } from '@/components/brand/CoinLogo';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 
 export default function WelcomePage() {
@@ -21,45 +23,72 @@ export default function WelcomePage() {
     <ThemeProvider forcedMode="dark">
       <main className="auth-welcome">
         <header className="auth-header">
-          <Link href="/" className="auth-home-link">
-            Explore Finapp <span aria-hidden="true">↗</span>
+          <Link href="/" className="auth-home-link auth-welcome-brand" aria-label="Finapp home">
+            <span className="auth-welcome-brand-mark" aria-hidden="true">
+              F
+            </span>
+            <span>finapp</span>
           </Link>
+          <span className="auth-welcome-header-note">Your money. Your moment.</span>
         </header>
         <section className="auth-welcome-hero" aria-labelledby="welcome-title">
           <div className="auth-welcome-copy">
             <p className="auth-eyebrow">PRIVATE MONEY, CLEARLY</p>
             <h1 id="welcome-title">
-              Your money.
+              Less noise.
               <br />
-              <span>In your corner.</span>
+              <span>More clarity.</span>
             </h1>
             <p className="auth-welcome-description">
-              Your money. Your people. One clear place. Get a little more perspective on what comes
-              in, what goes out, and what comes next.
+              See spending, savings goals, and shared expenses together. Know what comes next.
             </p>
-            {restoring ? (
+            <div className="auth-welcome-visuals">
+              <figure className="auth-welcome-photo auth-welcome-photo--mountains">
+                <Image
+                  src="/landing/mountain-goal.webp"
+                  alt="Sunrise over mountain peaks above a sea of clouds"
+                  fill
+                  priority
+                  sizes="(max-width: 760px) 62vw, (max-width: 1200px) 48vw, 580px"
+                />
+                <figcaption>
+                  <span>The long view</span>
+                  <strong>Make room for the plans that matter.</strong>
+                </figcaption>
+              </figure>
+              <figure className="auth-welcome-photo auth-welcome-photo--shared">
+                <Image
+                  src="/landing/shared-table.webp"
+                  alt="A warmly lit restaurant set for a shared meal"
+                  fill
+                  sizes="(max-width: 760px) 34vw, (max-width: 1200px) 31vw, 390px"
+                />
+                <figcaption>
+                  <span>Everyday, together</span>
+                  <strong>Keep shared spending clear.</strong>
+                </figcaption>
+              </figure>
+            </div>
+          </div>
+          <div className="auth-welcome-entry">
+            <div className="auth-welcome-coin-stage">
+              <CoinLogo className="auth-welcome-coin" interactive />
+            </div>
+            <div className="auth-welcome-actions">
+              <Link href="/sign-up" className="auth-welcome-action auth-welcome-action--primary">
+                Create account <span aria-hidden="true">↗</span>
+              </Link>
+              <Link href="/sign-in" className="auth-welcome-action">
+                Sign in <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+            {restoring && (
               <div className="auth-restoring" role="status" aria-live="polite">
                 <span className="auth-status-dot" aria-hidden="true" />
                 <div>
                   <h2>{userId ? 'Opening your space.' : 'Restoring your space.'}</h2>
                   <p>Your saved records are being checked before the ledger opens.</p>
                 </div>
-              </div>
-            ) : (
-              <div className="auth-welcome-actions">
-                <Button size="lg" onPress={() => router.push('/sign-up')}>
-                  Create your account{' '}
-                  <span className="auth-button-arrow" aria-hidden="true">
-                    ↗
-                  </span>
-                </Button>
-                <Link href="/sign-in" className="auth-welcome-sign-in">
-                  Already have an account?{' '}
-                  <span>
-                    Sign in <span aria-hidden="true">→</span>
-                  </span>
-                </Link>
-                <p>Private by default. Built for everyday money.</p>
               </div>
             )}
           </div>
