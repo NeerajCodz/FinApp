@@ -2,7 +2,7 @@
   "expo": {
     "name": "Finapp",
     "slug": "finapp",
-    "version": "1.1.5",
+    "version": "1.2.0",
     "scheme": "finapp",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.neerajcodz.finapp",
-      "versionCode": 6,
+      "versionCode": 7,
       "intentFilters": [
         {
           "action": "VIEW",
