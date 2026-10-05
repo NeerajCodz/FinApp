@@ -9,6 +9,8 @@ export {
   type FinanceEmptyKind,
   type FinanceEmptyStateProps,
 } from './FinanceEmptyState';
+export { SocialPersonRow, SocialSection } from './SocialComponents';
+export type { SocialProfileSummary, SocialRelationshipStatus } from '../social';
 export { resolveDefaultCurrency, type CurrencyPreferenceRecord } from '../defaultCurrency';
 export {
   AccountsIndexView,
