@@ -69,7 +69,7 @@
 }
 .auth-story-coin {
   width: min(100%, 220px);
-  margin: 20px 0 22px;
+  margin: 20px auto 22px;
 }
 .auth-story-index,
 .auth-story-foot,
@@ -639,7 +639,7 @@ form.auth-form {
   }
   .auth-story-coin {
     width: min(100%, 112px);
-    margin: 6px 0 0;
+    margin: 6px auto 0;
   }
   .auth-story-copy > p {
     margin: 8px 0 0;
