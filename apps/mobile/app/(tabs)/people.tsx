@@ -9,10 +9,13 @@ import {
   FinanceEmptyState,
   SocialPersonRow,
   SocialSection,
+  type IncomingInvitation,
   type SocialProfileSummary,
 } from '@finapp/ui/finance';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { RequestsSheet } from '@/components/social/RequestsSheet';
 import { toast } from '@/lib/toast';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 type Profile = SocialProfileSummary & { id: Id<'users'> };
 type SuggestedProfile = Profile & { mutualFriendCount: number };
@@ -22,51 +25,59 @@ type Conversation = Profile & {
   id: Id<'directConversations'>;
   userId: Id<'users'>;
   updatedAt: number;
-  lastMessage: null | {
-    kind: 'text' | 'image';
-    text: string;
-    createdAt: number;
-    mine: boolean;
-    seen: boolean;
-  };
+  lastMessage: null | { text?: string };
 };
-type PeopleFilter = 'all' | 'friends' | 'requests' | 'messages';
+type PeopleFilter = 'all' | 'nearby' | 'college' | 'mutuals';
 
 const filters: { id: PeopleFilter; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'friends', label: 'Friends' },
-  { id: 'requests', label: 'Requests' },
-  { id: 'messages', label: 'Messages' },
+  { id: 'nearby', label: 'Nearby' },
+  { id: 'college', label: 'Same College' },
+  { id: 'mutuals', label: 'Mutuals' },
 ];
+const PURPLE = '#C277F5';
 
 export default function PeopleScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const { userId, isConnected } = useLocalSync();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<PeopleFilter>('all');
-  const friends = useQuery(api.social.queries.friends, {}) as Profile[] | undefined;
-  const requests = useQuery(api.social.queries.requests, {}) as Requests | undefined;
-  const suggestions = useQuery(api.social.queries.suggestions, {}) as
-    SuggestedProfile[] | undefined;
-  const conversations = useQuery(api.directMessages.queries.listConversations, {}) as
-    Conversation[] | undefined;
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const friends = useQuery(api.social.queries.friends, userId && isConnected ? {} : 'skip') as
+    Profile[] | undefined;
+  const requests = useQuery(api.social.queries.requests, userId && isConnected ? {} : 'skip') as
+    Requests | undefined;
+  const suggestions = useQuery(
+    api.social.queries.suggestions,
+    userId && isConnected ? {} : 'skip',
+  ) as SuggestedProfile[] | undefined;
+  const conversations = useQuery(
+    api.directMessages.queries.listConversations,
+    userId && isConnected ? {} : 'skip',
+  ) as Conversation[] | undefined;
+  const invitations = useQuery(
+    api.groups.queries.incomingInvitations,
+    userId && isConnected ? {} : 'skip',
+  ) as IncomingInvitation[] | undefined;
   const results = useQuery(
     api.users.queries.search,
-    search.trim().length >= 2 ? { query: search.trim() } : 'skip',
+    userId && isConnected && search.trim().length >= 2 ? { query: search.trim() } : 'skip',
   ) as Profile[] | undefined;
   const sendRequest = useMutation(api.social.mutations.sendRequest);
   const respondToRequest = useMutation(api.social.mutations.respondToRequest);
   const cancelRequest = useMutation(api.social.mutations.cancelRequest);
+  const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
   const startConversation = useMutation(api.directMessages.mutations.startConversation);
   const friendIds = useMemo(
     () => new Set((friends ?? []).map((person) => String(person.id))),
     [friends],
   );
-
-  function openProfile(profile: Profile) {
-    if (profile.username)
-      router.push(`/@${encodeURIComponent(profile.username.replace(/^@+/, ''))}` as never);
-  }
+  const outgoingIds = useMemo(
+    () => new Set((requests?.outgoing ?? []).map((row) => String(row.user.id))),
+    [requests],
+  );
+  const requestCount = (requests?.incoming.length ?? 0) + (invitations?.length ?? 0);
 
   async function runAction(action: () => Promise<unknown>) {
     try {
@@ -76,118 +87,99 @@ export default function PeopleScreen() {
     }
   }
 
-  async function openConversation(userId: Id<'users'>) {
+  function openProfile(profile: Profile) {
+    if (profile.username)
+      router.push(`/@${encodeURIComponent(profile.username.replace(/^@+/, ''))}` as never);
+  }
+
+  async function openConversation(personId: Id<'users'>) {
     await runAction(async () => {
-      const conversationId = await startConversation({ userId });
+      const conversationId = await startConversation({ userId: personId });
       router.push(`/messages/${encodeURIComponent(String(conversationId))}` as never);
     });
   }
 
-  function requestFor(profile: Profile) {
-    return {
-      incoming: requests?.incoming.find((row) => row.user.id === profile.id),
-      outgoing: requests?.outgoing.find((row) => row.user.id === profile.id),
-    };
-  }
-
-  function actionFor(profile: Profile, incoming?: RequestRow, outgoing?: RequestRow) {
-    if (friendIds.has(String(profile.id)))
-      return (
-        <Button size="sm" variant="outline" onPress={() => void openConversation(profile.id)}>
-          Message
-        </Button>
-      );
-    if (incoming)
-      return (
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <Button
-            size="sm"
-            onPress={() =>
-              void runAction(() =>
-                respondToRequest({ requestId: incoming.requestId, response: 'accept' }),
-              )
-            }
-          >
-            Accept
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onPress={() =>
-              void runAction(() =>
-                respondToRequest({ requestId: incoming.requestId, response: 'decline' }),
-              )
-            }
-          >
-            Decline
-          </Button>
-        </View>
-      );
-    if (outgoing)
-      return (
-        <Button
-          size="sm"
-          variant="outline"
-          onPress={() => void runAction(() => cancelRequest({ requestId: outgoing.requestId }))}
-        >
-          Cancel
-        </Button>
-      );
-    return (
-      <Button
-        size="sm"
-        variant="outline"
-        onPress={() => void runAction(() => sendRequest({ recipientId: profile.id }))}
-      >
-        Add friend
-      </Button>
-    );
-  }
-
-  function personRow(
-    profile: Profile,
-    detail?: string,
-    incoming?: RequestRow,
-    outgoing?: RequestRow,
-  ) {
+  function personRow(profile: Profile, detail?: string) {
+    const isFriend = friendIds.has(String(profile.id));
+    const hasIncoming = requests?.incoming.some((row) => row.user.id === profile.id);
+    const hasOutgoing = outgoingIds.has(String(profile.id));
     return (
       <SocialPersonRow
-        key={String(incoming?.requestId ?? outgoing?.requestId ?? profile.id)}
+        key={String(profile.id)}
         profile={profile}
         detail={detail}
         onPress={() => openProfile(profile)}
-        action={actionFor(profile, incoming, outgoing)}
+        action={
+          <Button
+            size="sm"
+            variant={isFriend ? 'outline' : 'primary'}
+            onPress={() => {
+              if (isFriend) void openConversation(profile.id);
+              else if (hasIncoming || hasOutgoing) setInboxOpen(true);
+              else void runAction(() => sendRequest({ recipientId: profile.id }));
+            }}
+          >
+            {isFriend ? 'Chat' : hasIncoming ? 'Respond' : hasOutgoing ? 'Pending' : 'Add friend'}
+          </Button>
+        }
       />
     );
   }
 
-  const show = (section: PeopleFilter) => filter === 'all' || filter === section;
-  const requestCount = requests ? requests.incoming.length + requests.outgoing.length : undefined;
+  async function respondToFriendRequest(requestId: string, response: 'accept' | 'decline') {
+    if (!isConnected) throw new Error('Reconnect to respond to friend requests.');
+    await respondToRequest({ requestId: requestId as Id<'friendRequests'>, response });
+  }
+
+  async function cancelFriendRequest(requestId: string) {
+    if (!isConnected) throw new Error('Reconnect to cancel friend requests.');
+    await cancelRequest({ requestId: requestId as Id<'friendRequests'> });
+  }
+
+  async function respondToGroupInvitation(inviteId: string, response: 'accept' | 'decline') {
+    if (!isConnected) throw new Error('Reconnect to respond to group invitations.');
+    await respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response });
+  }
+
+  const filteredPeople = (suggestions ?? []).filter((profile) =>
+    filter === 'mutuals' ? profile.mutualFriendCount > 0 : true,
+  );
+  const searchResults = (results ?? []).filter((profile) => String(profile.id) !== userId);
+  const loading = Boolean(userId && isConnected && suggestions === undefined);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 14,
-        paddingBottom: insets.bottom + 26,
-        gap: 20,
-      }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={{ gap: 6 }}>
-        <Text
-          style={{ color: tokens.primary, fontSize: 11, fontWeight: '700', letterSpacing: 1.4 }}
-        >
-          YOUR NETWORK
-        </Text>
-        <Typography variant="title">People</Typography>
-        <Text style={{ color: tokens.foregroundMuted, lineHeight: 21 }}>
-          Find friends, manage requests, and keep conversations together.
-        </Text>
-      </View>
+    <>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: tokens.background }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 14,
+          paddingBottom: insets.bottom + 26,
+          gap: 20,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1, gap: 5 }}>
+            <Text style={{ color: PURPLE, fontSize: 11, fontWeight: '700', letterSpacing: 1.3 }}>
+              PEOPLE
+            </Text>
+            <Typography variant="title">People</Typography>
+            <Text style={{ color: tokens.foregroundMuted, lineHeight: 21 }}>
+              Find your people and grow your network.
+            </Text>
+          </View>
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={() => setInboxOpen(true)}
+            accessibilityLabel={requestCount ? `Requests, ${requestCount} pending` : 'Requests'}
+          >
+            Requests{requestCount ? ` ${requestCount}` : ''}
+          </Button>
+        </View>
 
-      <View style={{ gap: 12 }}>
         <Input
           value={search}
           onChangeText={setSearch}
@@ -196,6 +188,7 @@ export default function PeopleScreen() {
           autoCapitalize="none"
           autoCorrect={false}
         />
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -210,92 +203,69 @@ export default function PeopleScreen() {
               onPress={() => setFilter(item.id)}
             >
               {item.label}
-              {item.id === 'requests' && requestCount !== undefined ? ` ${requestCount}` : ''}
             </Button>
           ))}
         </ScrollView>
-      </View>
 
-      {search.trim().length >= 2 && (
-        <SocialSection
-          title="Search results"
-          count={results?.filter((item) => item.username).length ?? 0}
-        >
-          {results === undefined ? (
-            <Text style={{ color: tokens.foregroundMuted }}>Searching people…</Text>
-          ) : results.filter((item) => item.username).length ? (
-            results
-              .filter((person) => person.username)
-              .map((profile) => {
-                const { incoming, outgoing } = requestFor(profile);
-                return personRow(
+        {search.trim().length >= 2 ? (
+          <SocialSection title="Search results" count={searchResults.length}>
+            {results === undefined ? (
+              <Text style={{ color: tokens.foregroundMuted }}>Searching people…</Text>
+            ) : searchResults.length ? (
+              searchResults
+                .filter((profile) => profile.username)
+                .map((profile) => personRow(profile))
+            ) : (
+              <FinanceEmptyState
+                kind="search"
+                title="No matching people."
+                description="Try another username."
+                compact
+              />
+            )}
+          </SocialSection>
+        ) : filter === 'nearby' || filter === 'college' ? (
+          <FinanceEmptyState
+            kind="people"
+            title={
+              filter === 'nearby'
+                ? 'Nearby discovery is not available yet.'
+                : 'College discovery is not available yet.'
+            }
+            description="Location and college details are not part of profiles yet."
+            compact
+          />
+        ) : (
+          <SocialSection
+            title={filter === 'mutuals' ? 'People with mutual friends' : 'People you may know'}
+            count={filteredPeople.length}
+          >
+            {loading ? (
+              <Text style={{ color: tokens.foregroundMuted }}>
+                Finding people from your mutual connections…
+              </Text>
+            ) : filteredPeople.length ? (
+              filteredPeople.map((profile) =>
+                personRow(
                   profile,
-                  incoming ? 'Wants to connect' : outgoing ? 'Request pending' : undefined,
-                  incoming,
-                  outgoing,
-                );
-              })
-          ) : (
-            <FinanceEmptyState
-              kind="search"
-              title="No matching people."
-              description="Try another username."
-              compact
-            />
-          )}
-        </SocialSection>
-      )}
-
-      {show('requests') && (
-        <>
-          <SocialSection title="Pending requests" count={requests?.incoming.length ?? 0}>
-            {requests === undefined ? (
-              <Text style={{ color: tokens.foregroundMuted }}>Loading requests…</Text>
-            ) : requests.incoming.length ? (
-              requests.incoming.map(({ requestId, user, createdAt }) =>
-                personRow(user, `Requested ${new Date(createdAt).toLocaleDateString()}`, {
-                  requestId,
-                  user,
-                  createdAt,
-                }),
+                  `${profile.mutualFriendCount} mutual ${profile.mutualFriendCount === 1 ? 'friend' : 'friends'}`,
+                ),
               )
             ) : (
               <FinanceEmptyState
                 kind="people"
-                title="No requests waiting."
-                description="New friend requests will appear here."
+                title={filter === 'mutuals' ? 'No mutuals to show yet.' : 'No suggestions yet.'}
+                description="Add friends to build your network and discover mutual connections."
                 compact
               />
             )}
           </SocialSection>
-          <SocialSection title="Sent requests" count={requests?.outgoing.length ?? 0}>
-            {requests === undefined ? (
-              <Text style={{ color: tokens.foregroundMuted }}>Loading sent requests…</Text>
-            ) : requests.outgoing.length ? (
-              requests.outgoing.map(({ requestId, user, createdAt }) =>
-                personRow(user, `Sent ${new Date(createdAt).toLocaleDateString()}`, undefined, {
-                  requestId,
-                  user,
-                  createdAt,
-                }),
-              )
-            ) : (
-              <FinanceEmptyState
-                kind="people"
-                title="No sent requests."
-                description="Friend requests you send will stay here until they respond."
-                compact
-              />
-            )}
-          </SocialSection>
-        </>
-      )}
+        )}
 
-      {show('friends') && (
         <SocialSection title="Friends" count={friends?.length ?? 0}>
-          {friends === undefined ? (
+          {friends === undefined && userId && isConnected ? (
             <Text style={{ color: tokens.foregroundMuted }}>Loading friends…</Text>
-          ) : friends.length ? (
+          ) : friends?.length ? (
             friends.map((profile) => personRow(profile, 'Friend'))
           ) : (
             <FinanceEmptyState
@@ -306,41 +276,12 @@ export default function PeopleScreen() {
             />
           )}
         </SocialSection>
-      )}
 
-      {show('friends') && (
-        <SocialSection title="People you may know" count={suggestions?.length ?? 0}>
-          {suggestions === undefined ? (
-            <Text style={{ color: tokens.foregroundMuted }}>
-              Finding people from your mutual connections…
-            </Text>
-          ) : suggestions.length ? (
-            suggestions.map((profile) => {
-              const { incoming, outgoing } = requestFor(profile);
-              return personRow(
-                profile,
-                `${profile.mutualFriendCount} mutual ${profile.mutualFriendCount === 1 ? 'friend' : 'friends'}`,
-                incoming,
-                outgoing,
-              );
-            })
-          ) : (
-            <FinanceEmptyState
-              kind="people"
-              title="No suggestions yet."
-              description="Add friends to build your network and discover mutual connections."
-              compact
-            />
-          )}
-        </SocialSection>
-      )}
-
-      {show('messages') && (
         <SocialSection title="Recent conversations" count={conversations?.length ?? 0}>
-          {conversations === undefined ? (
+          {conversations === undefined && userId && isConnected ? (
             <Text style={{ color: tokens.foregroundMuted }}>Loading conversations…</Text>
-          ) : conversations.length ? (
-            conversations.map((conversation) => (
+          ) : conversations?.length ? (
+            conversations.slice(0, 4).map((conversation) => (
               <SocialPersonRow
                 key={String(conversation.id)}
                 profile={{
@@ -364,7 +305,7 @@ export default function PeopleScreen() {
                       )
                     }
                   >
-                    Open
+                    Chat
                   </Button>
                 }
               />
@@ -378,20 +319,23 @@ export default function PeopleScreen() {
             />
           )}
         </SocialSection>
-      )}
+      </ScrollView>
 
-      {show('friends') && (
-        <SocialSection title="Groups">
-          <View style={{ gap: 12 }}>
-            <Text style={{ color: tokens.foregroundMuted, lineHeight: 20 }}>
-              Create a group to split expenses with friends or family.
-            </Text>
-            <Button variant="outline" onPress={() => router.push('/groups/new' as never)}>
-              Create a group
-            </Button>
-          </View>
-        </SocialSection>
-      )}
-    </ScrollView>
+      <RequestsSheet
+        visible={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        requests={requests}
+        invitations={invitations}
+        requestsLoading={Boolean(userId && isConnected && requests === undefined)}
+        invitationsLoading={Boolean(userId && isConnected && invitations === undefined)}
+        requestsError={userId && !isConnected ? 'Reconnect to view friend requests.' : undefined}
+        invitationsError={
+          userId && !isConnected ? 'Reconnect to view group invitations.' : undefined
+        }
+        onRespondToRequest={respondToFriendRequest}
+        onCancelRequest={cancelFriendRequest}
+        onRespondToInvitation={respondToGroupInvitation}
+      />
+    </>
   );
 }

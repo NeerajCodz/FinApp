@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { ArrowRight, Bell, MessageCircle, Search, UsersRound, UserPlus } from 'lucide-react';
+import { ArrowRight, Bell, MessageCircle, Search, UsersRound, UserPlus, X } from 'lucide-react';
 import { Button, Input } from '@finapp/ui/web';
 import {
   FinanceEmptyState,
@@ -55,6 +55,7 @@ export default function PeoplePage() {
   const router = useRouter();
   const { userId, isConnected } = useBrowserSync();
   const searchRef = React.useRef<HTMLInputElement>(null);
+  const [requestsOpen, setRequestsOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [filter, setFilter] = React.useState<PeopleFilter>('all');
   const [suggestionSort, setSuggestionSort] = React.useState<'mutuals' | 'name'>('mutuals');
@@ -64,6 +65,10 @@ export default function PeoplePage() {
     Profile[] | undefined;
   const requests = useQuery(api.social.queries.requests, userId && isConnected ? {} : 'skip') as
     Requests | undefined;
+  const invitations = useQuery(
+    api.groups.queries.incomingInvitations,
+    userId && isConnected ? {} : 'skip',
+  );
   const suggestions = useQuery(
     api.social.queries.suggestions,
     userId && isConnected ? {} : 'skip',
@@ -79,9 +84,10 @@ export default function PeoplePage() {
   const sendRequest = useMutation(api.social.mutations.sendRequest);
   const respondToRequest = useMutation(api.social.mutations.respondToRequest);
   const cancelRequest = useMutation(api.social.mutations.cancelRequest);
+  const respondToInvitation = useMutation(api.groups.mutations.respondToInvitation);
   const startConversation = useMutation(api.directMessages.mutations.startConversation);
   const friendIds = new Set((friends ?? []).map((person) => person.id));
-  const pendingCount = (requests?.incoming.length ?? 0) + (requests?.outgoing.length ?? 0);
+  const pendingCount = (requests?.incoming.length ?? 0) + (invitations?.length ?? 0);
   const peopleCount = new Set([
     ...(friends ?? []).map((person) => String(person.id)),
     ...(requests?.incoming ?? []).map((row) => String(row.user.id)),
@@ -99,6 +105,24 @@ export default function PeoplePage() {
       .includes(query.trim().toLowerCase()),
   );
 
+  React.useEffect(() => {
+    if (!requestsOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRequestsOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [requestsOpen]);
+
+  async function respondToGroupInvitation(inviteId: string, response: 'accept' | 'decline') {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to respond to this invitation.');
+      return;
+    }
+    await perform(inviteId, () =>
+      respondToInvitation({ inviteId: inviteId as Id<'groupInvites'>, response }),
+    );
+  }
   async function perform(id: string, action: () => Promise<unknown>) {
     setBusyId(id);
     setActionError('');
@@ -113,7 +137,12 @@ export default function PeoplePage() {
     }
   }
 
-  function relationshipAction(profile: Profile, request?: RequestRow, outgoing?: RequestRow) {
+  function relationshipAction(
+    profile: Profile,
+    request?: RequestRow,
+    outgoing?: RequestRow,
+    inRequestsDialog = false,
+  ) {
     if (friendIds.has(profile.id))
       return (
         <Button
@@ -124,6 +153,18 @@ export default function PeoplePage() {
           onPress={() => void openConversation(profile.id)}
         >
           <MessageCircle size={15} aria-hidden="true" /> Message
+        </Button>
+      );
+    if (request && !inRequestsDialog)
+      return (
+        <Button type="button" variant="outline" size="sm" onPress={() => setRequestsOpen(true)}>
+          Respond
+        </Button>
+      );
+    if (outgoing && !inRequestsDialog)
+      return (
+        <Button type="button" variant="outline" size="sm" onPress={() => setRequestsOpen(true)}>
+          Pending
         </Button>
       );
     if (request)
@@ -230,9 +271,19 @@ export default function PeoplePage() {
           <h1>People</h1>
           <p>Find friends, settle balances, and manage your network.</p>
         </div>
-        <Link className="people-notification-link" href="/notifications" aria-label="Notifications">
-          <Bell size={18} aria-hidden="true" />
-        </Link>
+        <div className="people-header-actions">
+          <Button type="button" variant="outline" onPress={() => setRequestsOpen(true)}>
+            Requests
+            {pendingCount > 0 && <span className="people-request-count">{pendingCount}</span>}
+          </Button>
+          <Link
+            className="people-notification-link"
+            href="/notifications"
+            aria-label="Notifications"
+          >
+            <Bell size={18} aria-hidden="true" />
+          </Link>
+        </div>
       </header>
 
       <form
@@ -330,43 +381,6 @@ export default function PeoplePage() {
             </SocialSection>
           )}
 
-          {filter === 'all' || filter === 'requests' ? (
-            <SocialSection
-              title="Pending requests"
-              count={requests?.incoming.length ?? 0}
-              action={
-                <Link href="#outgoing-requests" className="people-see-all">
-                  Sent requests
-                </Link>
-              }
-            >
-              {requests === undefined ? (
-                <p role="status" className="finance-muted">
-                  Loading requests…
-                </p>
-              ) : requests.incoming.length ? (
-                <div className="people-card-grid people-card-grid--requests">
-                  {requests.incoming.slice(0, 4).map((row) => (
-                    <SocialPersonCard
-                      key={row.requestId}
-                      profile={row.user}
-                      href={profileHref(row.user)}
-                      detail={`Requested ${timeAgo(row.createdAt)}`}
-                      action={relationshipAction(row.user, row)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <FinanceEmptyState
-                  kind="people"
-                  title="No requests waiting."
-                  description="New friend requests will appear here. Keep discovering people you know."
-                  compact
-                />
-              )}
-            </SocialSection>
-          ) : null}
-
           {filter === 'all' || filter === 'friends' ? (
             <SocialSection
               title="Friends"
@@ -463,39 +477,6 @@ export default function PeoplePage() {
                   kind="people"
                   title="No suggestions yet."
                   description="Add friends to build your network. We’ll suggest verified people connected to your circle."
-                  compact
-                />
-              )}
-            </SocialSection>
-          ) : null}
-
-          {filter === 'all' || filter === 'requests' ? (
-            <SocialSection
-              id="outgoing-requests"
-              title="Sent requests"
-              count={requests?.outgoing.length ?? 0}
-            >
-              {requests === undefined ? (
-                <p role="status" className="finance-muted">
-                  Loading sent requests…
-                </p>
-              ) : requests.outgoing.length ? (
-                <div className="people-card-grid">
-                  {requests.outgoing.map((row) => (
-                    <SocialPersonCard
-                      key={row.requestId}
-                      profile={row.user}
-                      href={profileHref(row.user)}
-                      detail={`Sent ${timeAgo(row.createdAt)}`}
-                      action={relationshipAction(row.user, undefined, row)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <FinanceEmptyState
-                  kind="people"
-                  title="No sent requests."
-                  description="Friend requests you send will stay here until they respond."
                   compact
                 />
               )}
@@ -632,6 +613,127 @@ export default function PeoplePage() {
           </section>
         </aside>
       </div>
+      {requestsOpen && (
+        <div
+          className="people-requests-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setRequestsOpen(false);
+          }}
+        >
+          <section
+            className="people-requests-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="people-requests-title"
+          >
+            <header className="people-requests-dialog-heading">
+              <h2 id="people-requests-title">Requests</h2>
+              <button
+                type="button"
+                onClick={() => setRequestsOpen(false)}
+                aria-label="Close requests"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+            {!isConnected && (
+              <p className="finance-form-note" role="status">
+                You’re offline. Reconnect to manage requests and invitations.
+              </p>
+            )}
+            {actionError && (
+              <p className="finance-form-error" role="alert">
+                {actionError}
+              </p>
+            )}
+            <SocialSection
+              title="Friend requests"
+              count={(requests?.incoming.length ?? 0) + (requests?.outgoing.length ?? 0)}
+            >
+              {requests === undefined ? (
+                <p role="status" className="finance-muted">
+                  Loading requests…
+                </p>
+              ) : requests.incoming.length || requests.outgoing.length ? (
+                <div className="people-card-grid people-card-grid--requests">
+                  {requests.incoming.map((row) => (
+                    <SocialPersonCard
+                      key={row.requestId}
+                      profile={row.user}
+                      href={profileHref(row.user)}
+                      detail={`Requested ${timeAgo(row.createdAt)}`}
+                      action={relationshipAction(row.user, row, undefined, true)}
+                    />
+                  ))}
+                  {requests.outgoing.map((row) => (
+                    <SocialPersonCard
+                      key={row.requestId}
+                      profile={row.user}
+                      href={profileHref(row.user)}
+                      detail={`Sent ${timeAgo(row.createdAt)}`}
+                      action={relationshipAction(row.user, undefined, row, true)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <FinanceEmptyState
+                  kind="people"
+                  title="No friend requests."
+                  description="Incoming and sent friend requests will appear here."
+                  compact
+                />
+              )}
+            </SocialSection>
+            <SocialSection title="Group invitations" count={invitations?.length ?? 0}>
+              {!isConnected ? (
+                <p role="status" className="finance-muted">
+                  Connect to the internet to view invitations.
+                </p>
+              ) : invitations === undefined ? (
+                <p role="status" className="finance-muted">
+                  Loading invitations…
+                </p>
+              ) : invitations.length ? (
+                invitations.map((invite) => (
+                  <article className="people-group-invitation" key={invite.id}>
+                    <strong>
+                      {invite.groupName} · {invite.currency}
+                    </strong>
+                    <span>
+                      Invited by {invite.inviter.displayName}
+                      {invite.inviter.username ? ` (@${invite.inviter.username})` : ''}
+                    </span>
+                    <div className="people-actions-inline">
+                      <Button
+                        size="sm"
+                        disabled={busyId === invite.id || !isConnected}
+                        onPress={() => void respondToGroupInvitation(invite.id, 'accept')}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === invite.id || !isConnected}
+                        onPress={() => void respondToGroupInvitation(invite.id, 'decline')}
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <FinanceEmptyState
+                  kind="invitation"
+                  title="No group invitations."
+                  description="Group invitations will appear here when someone invites you."
+                  compact
+                />
+              )}
+            </SocialSection>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

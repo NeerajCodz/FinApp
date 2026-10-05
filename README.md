@@ -94,16 +94,17 @@ when connected. Group invitations, membership and role changes, chat and bill up
 lookup, authentication, and server-managed security controls require a live connection; device
 app-lock controls remain local.
 
-The web Groups page also includes joined groups from the authenticated membership query when an
-existing browser's local group cache is incomplete.
+Web Groups and mobile Groups/Home screens also include joined groups from the authenticated
+membership query when the local group cache is incomplete.
 
 ### People and messaging
 
-The People tab on mobile and `/people` on web support friend discovery, username search,
-incoming and outgoing requests, and recent conversations. Suggestion lists surface mutual
-friend counts; the Groups workspace remains available through its dedicated routes. Public
-`/@username` profiles expose safe identity fields without sign-in; shared group activity
-appears only when both the profile owner and viewer are active members of that group.
+The People & Groups Home screen on mobile links to dedicated People and Groups workspaces.
+Mobile and web People pages support friend discovery, username search, incoming and outgoing
+requests, and recent conversations. Requests and group invitations are managed from a popup;
+suggestion lists surface mutual friend counts. Public `/@username` profiles expose safe identity
+fields without sign-in; shared group activity appears only when both the profile owner and viewer
+are active members of that group.
 
 Profile links use `/@username` on both web and mobile. Legacy web `/user/...` and `/people/...` URLs permanently redirect to this canonical path.
 
@@ -130,7 +131,7 @@ active status also hides typing indicators.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.2.0` with the centered 3D `CoinLogo` and a
+The native and web About screens show `v1.2.1` with the centered 3D `CoinLogo` and a
 GitHub developer link. Native coin drift uses browser-independent math, avoiding the
 Android startup error `ReferenceError: document is not defined`; GPU-unavailable
 surfaces use the app icon fallback.
@@ -140,7 +141,7 @@ The web welcome page pairs that story and local lifestyle photography with an in
 direct create-account/sign-in actions. The native welcome and About screens use the centered
 interactive 3D coin. Privacy and other screens omit the wordmark.
 Mobile Activity links directly to Analytics and Transactions.
-The Convex deployment exposes `GET /version`, returning `{ "version": "v1.2.0" }`.
+The Convex deployment exposes `GET /version`, returning `{ "version": "v1.2.1" }`.
 The About rows in Settings and Profile open those screens.
 On mobile, the shared navigation header is shown only on Home.
 
