@@ -23,7 +23,24 @@ export const listConversations = query({
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .map(async (row) => {
           const userId = row.userLowId === actor._id ? row.userHighId : row.userLowId;
-          const user = await ctx.db.get(userId);
+          const [user, latestMessages] = await Promise.all([
+            ctx.db.get(userId),
+            ctx.db
+              .query('directMessages')
+              .withIndex('by_conversation_createdAt', (q) => q.eq('conversationId', row._id))
+              .order('desc')
+              .take(1),
+          ]);
+          const latest = latestMessages[0];
+          const readerId = latest?.senderId === actor._id ? userId : actor._id;
+          const read = latest
+            ? await ctx.db
+                .query('directMessageReads')
+                .withIndex('by_message_user', (q) =>
+                  q.eq('messageId', latest._id).eq('userId', readerId),
+                )
+                .unique()
+            : null;
           return {
             id: row._id,
             userId,
@@ -36,6 +53,15 @@ export const listConversations = query({
                   avatarUrl: await avatarUrlForUser(ctx, user),
                 }
               : {}),
+            lastMessage: latest
+              ? {
+                  kind: latest.kind,
+                  ...(latest.kind === 'text' ? { text: latest.text ?? '' } : { text: 'Photo' }),
+                  createdAt: latest.createdAt,
+                  mine: latest.senderId === actor._id,
+                  seen: read !== null,
+                }
+              : null,
           };
         }),
     );
