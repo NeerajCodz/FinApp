@@ -21,7 +21,7 @@ export function Avatar({
   const [failedImageKey, setFailedImageKey] = React.useState<string | null>(null);
   const localImage = resolveAvatarAsset(avatarId, size);
   const imageSource = localImage ?? (imageUrl ? { uri: imageUrl } : undefined);
-  const imageKey = avatarId ? `avatar:${avatarId}` : imageUrl ? `url:${imageUrl}` : null;
+  const imageKey = localImage ? `avatar:${avatarId}` : imageUrl ? `url:${imageUrl}` : null;
   const showImage = Boolean(imageSource && imageKey && failedImageKey !== imageKey);
   return (
     <View
