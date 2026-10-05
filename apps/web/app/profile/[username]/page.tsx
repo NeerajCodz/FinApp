@@ -71,8 +71,8 @@ const startAt = endAt - 90 * 24 * 60 * 60 * 1000;
 
 export default function PersonPage() {
   const { username: routeUsername } = useParams<{ username: string }>();
-  const validRoute = routeUsername.startsWith('@') && !routeUsername.startsWith('@@');
-  const routeHandle = validRoute ? routeUsername.slice(1).trim() : '';
+  const routeHandle = routeUsername.replace(/^@+/, '').trim();
+  const validRoute = /^[a-z0-9_]{3,32}$/i.test(routeHandle);
   const handle = routeHandle.toLowerCase();
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
   const publicProfile = useQuery(

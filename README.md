@@ -105,6 +105,8 @@ the Groups workspace. Public `/@username` profiles expose safe identity fields w
 sign-in; shared group activity appears only when both the profile owner and viewer are
 active members of that group.
 
+Profile links use `/@username` on both web and mobile. Legacy web `/user/...` and `/people/...` URLs permanently redirect to this canonical path.
+
 Accepted friends can start direct conversations from People or a profile. Direct and
 group chats use dedicated chat screens with image attachments, live typing and presence
 indicators, and participant-scoped read receipts. Settings expose controls for showing
