@@ -67,6 +67,10 @@
   position: relative;
   z-index: 1;
 }
+.auth-story-coin {
+  width: min(100%, 220px);
+  margin: 20px 0 22px;
+}
 .auth-story-index,
 .auth-story-foot,
 .auth-eyebrow {
@@ -620,12 +624,12 @@ form.auth-form {
     width: min(100%, 480px);
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    gap: 28px;
-    padding-block: 24px 32px;
+    gap: 2px;
+    padding-block: 0;
   }
   .auth-story {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(100px, 36%);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: 12px;
   }
@@ -633,8 +637,12 @@ form.auth-form {
     font-size: 0.53rem;
     letter-spacing: 0.08em;
   }
+  .auth-story-coin {
+    width: min(100%, 112px);
+    margin: 6px 0 0;
+  }
   .auth-story-copy > p {
-    margin: 12px 0 0;
+    margin: 8px 0 0;
     font-size: clamp(1.65rem, 6vw, 2.5rem);
   }
   .auth-story-detail,
@@ -662,7 +670,7 @@ form.auth-form {
     width: min(100%, 480px);
   }
   .auth-layout > .auth-content > .auth-card {
-    margin-block: 32px;
+    margin-block: 4px;
   }
   .auth-welcome-hero {
     width: min(100%, 480px);

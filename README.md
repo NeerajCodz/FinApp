@@ -131,9 +131,9 @@ GitHub developer link. Native coin drift uses browser-independent math, avoiding
 Android startup error `ReferenceError: document is not defined`; GPU-unavailable
 surfaces use the app icon fallback.
 Native sign-in and sign-up use the Finapp wordmark and “Back in your corner” tagline. Web
-sign-in, sign-up, and welcome keep their main-branch presentation. The native welcome and
-About screens use the centered interactive 3D coin. Privacy and other screens omit the
-wordmark.
+sign-in and sign-up show an interactive 3D coin above the “Less noise. More clarity.” story;
+the web welcome page remains unchanged. The native welcome and About screens use the
+centered interactive 3D coin. Privacy and other screens omit the wordmark.
 Mobile Activity links directly to Analytics and Transactions.
 The Convex deployment exposes `GET /version`, returning `{ "version": "v1.1.5" }`.
 The About rows in Settings and Profile open those screens.

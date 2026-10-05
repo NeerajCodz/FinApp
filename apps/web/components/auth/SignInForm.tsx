@@ -71,6 +71,7 @@ export function SignInForm() {
 
   return (
     <AuthFrame
+      coin
       eyebrow="WELCOME BACK"
       title="Back in focus."
       description="Sign in to your money, your plans, and the people you share them with."
