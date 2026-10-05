@@ -138,3 +138,36 @@ export const sendImage = mutation({
     return messageId;
   },
 });
+export const toggleReaction = mutation({
+  args: {
+    messageId: v.id('directMessages'),
+    emoji: v.union(v.literal('❤️'), v.literal('👍'), v.literal('😂'), v.literal('😮')),
+  },
+  handler: async (ctx, { messageId, emoji }) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const message = await ctx.db.get(messageId);
+    if (!message) throw new Error('MESSAGE_UNAVAILABLE');
+    await getConversationForParticipant(ctx, message.conversationId, actor._id);
+    const existing = await ctx.db
+      .query('directMessageReactions')
+      .withIndex('by_message_user', (q) => q.eq('messageId', messageId).eq('userId', actor._id))
+      .unique();
+    if (existing?.emoji === emoji) {
+      await ctx.db.delete(existing._id);
+      return { active: false as const, emoji: null };
+    }
+    if (existing) {
+      await ctx.db.patch(existing._id, { emoji, createdAt: Date.now() });
+    } else {
+      await ctx.db.insert('directMessageReactions', {
+        messageId,
+        conversationId: message.conversationId,
+        userId: actor._id,
+        emoji,
+        createdAt: Date.now(),
+      });
+    }
+    return { active: true as const, emoji };
+  },
+});

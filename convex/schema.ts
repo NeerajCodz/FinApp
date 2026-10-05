@@ -325,6 +325,15 @@ export default defineSchema({
   })
     .index('by_conversation_createdAt', ['conversationId', 'createdAt'])
     .index('by_storage', ['storageId']),
+  directMessageReactions: defineTable({
+    messageId: v.id('directMessages'),
+    conversationId: v.id('directConversations'),
+    userId: v.id('users'),
+    emoji: v.union(v.literal('❤️'), v.literal('👍'), v.literal('😂'), v.literal('😮')),
+    createdAt: timestamp,
+  })
+    .index('by_message_user', ['messageId', 'userId'])
+    .index('by_conversation', ['conversationId']),
   groupMessageReads: defineTable({
     messageId: v.id('groupMessages'),
     groupId: v.id('groups'),

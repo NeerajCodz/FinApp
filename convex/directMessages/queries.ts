@@ -92,7 +92,7 @@ export const messages = query({
               ? conversation.userHighId
               : conversation.userLowId
             : actor._id;
-        const [read, sender] = await Promise.all([
+        const [read, sender, reactions] = await Promise.all([
           ctx.db
             .query('directMessageReads')
             .withIndex('by_message_user', (q) =>
@@ -100,7 +100,14 @@ export const messages = query({
             )
             .unique(),
           ctx.db.get(message.senderId),
+          ctx.db
+            .query('directMessageReactions')
+            .withIndex('by_message_user', (q) => q.eq('messageId', message._id))
+            .collect(),
         ]);
+        const reactionCounts = new Map<string, number>();
+        for (const reaction of reactions)
+          reactionCounts.set(reaction.emoji, (reactionCounts.get(reaction.emoji) ?? 0) + 1);
         return {
           id: message._id,
           senderId: message.senderId,
@@ -114,6 +121,8 @@ export const messages = query({
           createdAt: message.createdAt,
           seen: read !== null,
           senderName: sender?.displayName ?? sender?.name ?? 'Finapp user',
+          reactions: [...reactionCounts].map(([emoji, count]) => ({ emoji, count })),
+          myReaction: reactions.find((reaction) => reaction.userId === actor._id)?.emoji ?? null,
         };
       }),
     );
