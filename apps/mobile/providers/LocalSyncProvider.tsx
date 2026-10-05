@@ -500,6 +500,25 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const scopedStatus = statusUserId === userId ? status : emptyStatus;
   const scopedFailedEntries = statusUserId === userId ? failedEntries : [];
   const scopedConflicts = statusUserId === userId ? conflicts : [];
+  React.useEffect(() => {
+    if (!validatedOnline) return;
+    let foreground = AppState.currentState === 'active';
+    const heartbeat = () => {
+      if (foreground) {
+        void convex.mutation(api.presence.mutations.heartbeat, {}).catch(() => undefined);
+      }
+    };
+    heartbeat();
+    const interval = setInterval(heartbeat, 45_000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      foreground = state === 'active';
+      if (foreground) heartbeat();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [convex, validatedOnline]);
 
   React.useEffect(() => {
     let active = true;

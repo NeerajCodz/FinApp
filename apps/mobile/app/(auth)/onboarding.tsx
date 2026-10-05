@@ -239,7 +239,7 @@ export default function OnboardingScreen() {
         inviteToken
           ? { pathname: '/group/invite', params: { token: inviteToken } }
           : mode === 'shared'
-            ? '/(tabs)/groups'
+            ? '/(tabs)/people'
             : '/(tabs)',
       );
     } catch (cause) {

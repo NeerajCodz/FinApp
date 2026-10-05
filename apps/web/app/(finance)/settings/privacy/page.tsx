@@ -4,6 +4,8 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button, IconButton, Separator, Text, Typography, useTheme } from '@finapp/ui/web';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -14,6 +16,27 @@ export default function PrivacySettingsPage() {
   const { userId } = useBrowserSync();
   const router = useRouter();
   const { tokens } = useTheme();
+  async function updatePresence(key: 'showActive' | 'showLastSeen', value: boolean) {
+    if (!presenceSettings || presenceSaving) return;
+    setPresenceSaving(true);
+    setPresenceError('');
+    try {
+      await setPrivacy({
+        showActive: key === 'showActive' ? value : presenceSettings.showActive,
+        showLastSeen: key === 'showLastSeen' ? value : presenceSettings.showLastSeen,
+      });
+    } catch (cause) {
+      setPresenceError(
+        cause instanceof Error ? cause.message : 'Could not update presence privacy.',
+      );
+    } finally {
+      setPresenceSaving(false);
+    }
+  }
+  const presenceSettings = useQuery(api.presence.queries.privacySettings, userId ? {} : 'skip');
+  const setPrivacy = useMutation(api.presence.mutations.setPrivacy);
+  const [presenceError, setPresenceError] = React.useState('');
+  const [presenceSaving, setPresenceSaving] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const [message, setMessage] = React.useState('');
   const accounts = useLocalRecords<LocalRecord>('account');
@@ -72,6 +95,40 @@ export default function PrivacySettingsPage() {
         <Text style={{ maxWidth: 320 }}>
           Ordinary telemetry never includes balances, amounts, account names, or transaction notes.
         </Text>
+      </section>
+      <section style={{ display: 'grid', gap: 12 }}>
+        <Typography variant="label">Presence visibility</Typography>
+        <Text>
+          Choose what people in your chats can see about your availability. These settings also
+          control typing and last-seen indicators.
+        </Text>
+        {presenceSettings === undefined ? (
+          <Text role="status">Loading visibility settings…</Text>
+        ) : presenceSettings === null ? (
+          <Text role="alert">Visibility settings are unavailable.</Text>
+        ) : (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={presenceSettings.showActive}
+                disabled={presenceSaving}
+                onChange={(event) => void updatePresence('showActive', event.target.checked)}
+              />
+              Show when I’m active
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={presenceSettings.showLastSeen}
+                disabled={presenceSaving}
+                onChange={(event) => void updatePresence('showLastSeen', event.target.checked)}
+              />
+              Show my last seen
+            </label>
+          </>
+        )}
+        {presenceError && <Text role="alert">{presenceError}</Text>}
       </section>
 
       <Separator />

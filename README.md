@@ -97,6 +97,23 @@ app-lock controls remain local.
 The web Groups page also includes joined groups from the authenticated membership query when an
 existing browser's local group cache is incomplete.
 
+### People and messaging
+
+The People tab on mobile and `/people` on web support friend discovery, username search,
+incoming and outgoing requests, and recent conversations. Suggestion lists surface mutual
+friend counts; the Groups workspace remains available through its dedicated routes. Public
+`/@username` profiles expose safe identity fields without sign-in; shared group activity
+appears only when both the profile owner and viewer are active members of that group.
+
+Profile links use `/@username` on both web and mobile. Legacy web `/user/...` and `/people/...` URLs permanently redirect to this canonical path.
+
+Accepted friends can start direct conversations from People or a profile. Direct and
+group chats use dedicated chat screens with image attachments, live typing and presence
+indicators, participant-scoped read receipts, and direct-message reactions. Each participant
+has one reaction per message; selecting the same reaction removes it, and selecting another
+replaces it. Settings expose controls for showing active status and last-seen time; hiding
+active status also hides typing indicators.
+
 ### Coin implementation
 
 - `packages/ui/src/coin/geometry.ts`: volt faces, a beveled/reeded edge, shallow
@@ -117,9 +134,11 @@ The native and web About screens show `v1.1.5` with the centered 3D `CoinLogo` a
 GitHub developer link. Native coin drift uses browser-independent math, avoiding the
 Android startup error `ReferenceError: document is not defined`; GPU-unavailable
 surfaces use the app icon fallback.
-The Finapp wordmark appears only on the public web landing page and signed-in Home
-surfaces. Welcome, authentication, privacy, and other screens omit it; About uses
-the 3D coin.
+Native sign-in and sign-up use the Finapp wordmark and “Back in your corner” tagline. Web
+sign-in and sign-up show an interactive 3D coin above the “Less noise. More clarity.” story.
+The web welcome page pairs that story and local lifestyle photography with an interactive coin and
+direct create-account/sign-in actions. The native welcome and About screens use the centered
+interactive 3D coin. Privacy and other screens omit the wordmark.
 Mobile Activity links directly to Analytics and Transactions.
 The Convex deployment exposes `GET /version`, returning `{ "version": "v1.1.5" }`.
 The About rows in Settings and Profile open those screens.

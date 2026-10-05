@@ -21,16 +21,18 @@ export function AuthScaffold({
   hero = false,
   back = true,
   onBack,
+  brand = false,
   headerRight,
 }: {
   title: React.ReactNode;
-  eyebrow: string;
+  eyebrow?: string;
   description?: React.ReactNode;
   children?: React.ReactNode;
   footer?: React.ReactNode;
   hero?: boolean;
   back?: boolean;
   onBack?: () => void;
+  brand?: boolean;
   headerRight?: React.ReactNode;
 }) {
   const { tokens } = useTheme();
@@ -73,21 +75,24 @@ export function AuthScaffold({
                 styles.body,
                 {
                   flexDirection: wide ? 'row' : 'column',
-                  gap: wide ? 64 : 28,
-                  paddingVertical: compact ? 24 : 36,
+                  gap: wide ? 64 : compact ? 14 : 28,
+                  paddingVertical: compact ? 10 : 36,
                 },
               ]}
             >
               <View style={[styles.story, { flex: wide ? 1 : undefined }]}>
                 <View style={{ gap: 14 }}>
                   <Typography variant="caption" style={{ color: tokens.primary, letterSpacing: 2 }}>
-                    {eyebrow.toUpperCase()}
+                    {eyebrow?.toUpperCase() ?? ''}
                   </Typography>
                   <Typography
                     accessibilityRole="header"
                     style={[
                       styles.title,
-                      { fontSize: hero || wide ? 48 : 36, lineHeight: hero || wide ? 52 : 40 },
+                      {
+                        fontSize: compact ? 28 : hero || wide ? 48 : 36,
+                        lineHeight: compact ? 32 : hero || wide ? 52 : 40,
+                      },
                     ]}
                   >
                     {title}
@@ -100,11 +105,32 @@ export function AuthScaffold({
                 </View>
               </View>
               <View style={[styles.formColumn, { flex: wide ? 1 : undefined }]}>
+                {brand && (
+                  <View style={{ alignItems: 'center', paddingBottom: 4 }}>
+                    <Text
+                      accessibilityRole="header"
+                      style={{
+                        fontFamily: 'SpaceGrotesk_600SemiBold',
+                        fontSize: 36,
+                        letterSpacing: -2,
+                        color: tokens.foreground,
+                      }}
+                    >
+                      finapp<Text style={{ color: tokens.primary }}>.</Text>
+                    </Text>
+                    <Text style={{ color: tokens.foregroundMuted }}>Back in your corner.</Text>
+                  </View>
+                )}
                 {children && (
                   <View
                     style={[
                       styles.form,
-                      { backgroundColor: tokens.card, borderColor: tokens.borderSubtle },
+                      {
+                        backgroundColor: tokens.card,
+                        borderColor: tokens.borderSubtle,
+                        padding: compact ? 14 : 20,
+                        gap: compact ? 12 : 20,
+                      },
                     ]}
                   >
                     {children}

@@ -462,6 +462,23 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       window.removeEventListener('offline', update);
     };
   }, []);
+  React.useEffect(() => {
+    if (!validatedOnline) return;
+    const heartbeat = () => {
+      if (document.visibilityState === 'visible') {
+        void convex.mutation(api.presence.mutations.heartbeat, {}).catch(() => undefined);
+      }
+    };
+    heartbeat();
+    const interval = window.setInterval(heartbeat, 45_000);
+    document.addEventListener('visibilitychange', heartbeat);
+    window.addEventListener('focus', heartbeat);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', heartbeat);
+      window.removeEventListener('focus', heartbeat);
+    };
+  }, [convex, validatedOnline]);
 
   React.useEffect(() => {
     try {

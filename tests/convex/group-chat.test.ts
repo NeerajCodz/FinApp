@@ -386,6 +386,14 @@ describe('group chat retention', () => {
       text: '  Taxi receipt  ',
     });
 
+    await t.run((ctx) =>
+      ctx.db.insert('groupMessageReads', {
+        messageId,
+        groupId: fixture.groupId,
+        userId: fixture.memberId,
+        seenAt: startedAt.getTime(),
+      }),
+    );
     expect(
       await outsider.query(api.groups.queries.chatMessages, { groupId: fixture.groupId }),
     ).toEqual([]);
@@ -423,6 +431,14 @@ describe('group chat retention', () => {
     ).toEqual([]);
     await t.finishAllScheduledFunctions(() => vi.runAllTimers());
     expect(await t.run((ctx) => ctx.db.get(messageId))).toBeNull();
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query('groupMessageReads')
+          .withIndex('by_message_user', (query) => query.eq('messageId', messageId))
+          .collect(),
+      ),
+    ).toEqual([]);
   });
 
   it('does not delete messages after an admin disables retention', async () => {

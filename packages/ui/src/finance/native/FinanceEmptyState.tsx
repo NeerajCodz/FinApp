@@ -15,7 +15,9 @@ export type FinanceEmptyKind =
   | 'recurring'
   | 'search'
   | 'contribution'
-  | 'invitation';
+  | 'invitation'
+  | 'people'
+  | 'message';
 
 export type FinanceEmptyStateProps = {
   kind: FinanceEmptyKind;
@@ -326,6 +328,43 @@ function Illustration({
           <Circle cx="132" cy="38" r="13" fill={primary} />
           <Path
             d="m127 38 4 4 7-8"
+            fill="none"
+            stroke={background}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
+      {kind === 'people' && (
+        <>
+          <Circle cx="96" cy="48" r="14" fill={primary} />
+          <Circle cx="64" cy="61" r="10" fill={muted} />
+          <Circle cx="128" cy="61" r="10" fill={muted} />
+          <Path
+            d="M75 99c1-17 8-27 21-27s20 10 21 27m-66 0c1-13 7-21 17-22m56 22c-1-13-7-21-17-22"
+            fill={background}
+            stroke={border}
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <Circle cx="143" cy="40" r="11" fill={primary} />
+          <Path d="M143 34v12m-6-6h12" stroke={background} strokeWidth="2" strokeLinecap="round" />
+        </>
+      )}
+      {kind === 'message' && (
+        <>
+          <Path
+            d="M49 39h78a10 10 0 0 1 10 10v33a10 10 0 0 1-10 10H88l-20 15V92h-19a10 10 0 0 1-10-10V49a10 10 0 0 1 10-10"
+            fill={background}
+            stroke={border}
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <Path d="M62 58h54M62 71h37" stroke={muted} strokeWidth="4" strokeLinecap="round" />
+          <Circle cx="137" cy="97" r="14" fill={primary} />
+          <Path
+            d="m132 97 4 4 7-8"
             fill="none"
             stroke={background}
             strokeWidth="2"

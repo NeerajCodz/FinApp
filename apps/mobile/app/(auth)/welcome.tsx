@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Button, Text, Typography, useTheme } from '@finapp/ui/native';
 import { AuthScaffold } from '@/components/auth/AuthScaffold';
 import { AuthSubmit } from '@/components/auth/AuthFields';
+import { CoinLogo } from '@/components/brand/CoinLogo';
 
 export default function WelcomeScreen() {
   const { tokens } = useTheme();
@@ -46,30 +47,8 @@ export default function WelcomeScreen() {
         </>
       }
     >
-      <View style={{ gap: 18 }}>
-        <Typography variant="heading">A clearer everyday.</Typography>
-        {[
-          ['01', 'Know where it goes', 'Keep spending and balances in view.'],
-          ['02', 'Plan what comes next', 'Give your budgets a place to live.'],
-          ['03', 'Share without the guesswork', 'Track groups and split expenses.'],
-        ].map(([number, title, description]) => (
-          <View key={number} style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
-            <Text
-              style={{
-                color: tokens.primary,
-                fontSize: 12,
-                lineHeight: 24,
-                fontVariant: ['tabular-nums'],
-              }}
-            >
-              {number}
-            </Text>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ fontFamily: 'SpaceGrotesk_500Medium' }}>{title}</Text>
-              <Typography variant="small">{description}</Typography>
-            </View>
-          </View>
-        ))}
+      <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+        <CoinLogo size={220} interactive />
       </View>
     </AuthScaffold>
   );

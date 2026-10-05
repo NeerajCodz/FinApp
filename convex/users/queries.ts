@@ -97,3 +97,21 @@ export const search = query({
     );
   },
 });
+export const publicProfile = query({
+  args: { username: v.string() },
+  handler: async (ctx, { username }) => {
+    const normalized = normalizeUsername(username);
+    if (!/^[a-z0-9_]{3,32}$/.test(normalized)) return null;
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_username', (q) => q.eq('username', normalized))
+      .unique();
+    if (!user || user.deletedAt !== undefined) return null;
+    return {
+      username: user.username,
+      displayName: user.displayName ?? user.name ?? 'Finapp user',
+      ...(user.avatarId === undefined ? {} : { avatarId: user.avatarId }),
+      avatarUrl: await avatarUrlForUser(ctx, user),
+    };
+  },
+});

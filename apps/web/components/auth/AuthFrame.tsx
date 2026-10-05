@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@finapp/ui/web';
+import { CoinLogo } from '@/components/brand/CoinLogo';
 
 export function AuthFrame({
   eyebrow,
@@ -8,12 +9,14 @@ export function AuthFrame({
   description,
   children,
   footer,
+  coin = false,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   children: ReactNode;
   footer: ReactNode;
+  coin?: boolean;
 }) {
   return (
     <ThemeProvider forcedMode="dark">
@@ -27,6 +30,11 @@ export function AuthFrame({
           <aside className="auth-story" aria-label="About your Finapp account">
             <div className="auth-story-copy">
               <span className="auth-story-index">YOUR MONEY. YOUR MOMENT.</span>
+              {coin && (
+                <div className="auth-story-coin">
+                  <CoinLogo interactive />
+                </div>
+              )}
               <p>
                 Less noise.
                 <br />

@@ -201,11 +201,12 @@ export function CoinLogo({
           ? 'Interactive Finapp volt coin. Drag to spin.'
           : 'Finapp volt coin with a black F'
       }
-      pointerEvents={interactive ? 'auto' : 'none'}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-      onTouchCancel={onTouchEnd}
+      onStartShouldSetResponder={() => interactive}
+      onMoveShouldSetResponder={() => interactive}
+      onResponderGrant={onTouchStart}
+      onResponderMove={onTouchMove}
+      onResponderRelease={onTouchEnd}
+      onResponderTerminate={onTouchEnd}
     >
       {!available && <Image source={appIcon} style={styles.fallback} accessibilityElementsHidden />}
       <GLView

@@ -51,6 +51,8 @@ export default defineSchema({
     appLockPreferences: v.any(),
     twoFactorEnabled: v.optional(v.boolean()),
     updatedAt: timestamp,
+    showActive: v.optional(v.boolean()),
+    showLastSeen: v.optional(v.boolean()),
   }).index('by_user', ['userId']),
   devices: defineTable({
     userId: v.id('users'),
@@ -280,6 +282,94 @@ export default defineSchema({
   })
     .index('by_group_createdAt', ['groupId', 'createdAt'])
     .index('by_storage', ['storageId']),
+  friendRequests: defineTable({
+    requesterId: v.id('users'),
+    recipientId: v.id('users'),
+    status: v.union(
+      v.literal('pending'),
+      v.literal('accepted'),
+      v.literal('declined'),
+      v.literal('canceled'),
+    ),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+    .index('by_requester_status', ['requesterId', 'status'])
+    .index('by_recipient_status', ['recipientId', 'status'])
+    .index('by_pair', ['requesterId', 'recipientId']),
+  friendships: defineTable({
+    userLowId: v.id('users'),
+    userHighId: v.id('users'),
+    createdAt: timestamp,
+  })
+    .index('by_low', ['userLowId'])
+    .index('by_high', ['userHighId'])
+    .index('by_pair', ['userLowId', 'userHighId']),
+  directConversations: defineTable({
+    userLowId: v.id('users'),
+    userHighId: v.id('users'),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+    .index('by_pair', ['userLowId', 'userHighId'])
+    .index('by_high', ['userHighId']),
+  directMessages: defineTable({
+    conversationId: v.id('directConversations'),
+    senderId: v.id('users'),
+    kind: v.union(v.literal('text'), v.literal('image')),
+    text: optionalText,
+    storageId: v.optional(v.id('_storage')),
+    mimeType: optionalText,
+    size: v.optional(v.number()),
+    createdAt: timestamp,
+  })
+    .index('by_conversation_createdAt', ['conversationId', 'createdAt'])
+    .index('by_storage', ['storageId']),
+  directMessageReactions: defineTable({
+    messageId: v.id('directMessages'),
+    conversationId: v.id('directConversations'),
+    userId: v.id('users'),
+    emoji: v.union(v.literal('❤️'), v.literal('👍'), v.literal('😂'), v.literal('😮')),
+    createdAt: timestamp,
+  })
+    .index('by_message_user', ['messageId', 'userId'])
+    .index('by_conversation', ['conversationId']),
+  groupMessageReads: defineTable({
+    messageId: v.id('groupMessages'),
+    groupId: v.id('groups'),
+    userId: v.id('users'),
+    seenAt: timestamp,
+  })
+    .index('by_message_user', ['messageId', 'userId'])
+    .index('by_group_user', ['groupId', 'userId']),
+  presence: defineTable({
+    userId: v.id('users'),
+    activeUntil: timestamp,
+    lastSeenAt: timestamp,
+    updatedAt: timestamp,
+  }).index('by_user', ['userId']),
+  typingIndicators: defineTable({
+    scopeType: v.union(v.literal('group'), v.literal('direct')),
+    scopeId: v.union(v.id('groups'), v.id('directConversations')),
+    userId: v.id('users'),
+    typingUntil: timestamp,
+    updatedAt: timestamp,
+  })
+    .index('by_scope_user', ['scopeType', 'scopeId', 'userId'])
+    .index('by_scope', ['scopeType', 'scopeId']),
+  directUploadTickets: defineTable({
+    ticket: v.string(),
+    userId: v.id('users'),
+    conversationId: v.id('directConversations'),
+    createdAt: timestamp,
+    usedAt: optionalTime,
+  }).index('by_ticket', ['ticket']),
+  directMessageReads: defineTable({
+    messageId: v.id('directMessages'),
+    conversationId: v.id('directConversations'),
+    userId: v.id('users'),
+    seenAt: timestamp,
+  }).index('by_message_user', ['messageId', 'userId']),
   expensePayers: defineTable({
     transactionId: v.id('transactions'),
     userId: v.id('users'),

@@ -40,7 +40,9 @@ export default function AboutScreen() {
         <Typography variant="title">About Finapp</Typography>
       </View>
 
-      <CoinLogo size={180} />
+      <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+        <CoinLogo size={180} interactive />
+      </View>
 
       <View style={{ gap: 20 }}>
         <View style={{ gap: 6 }}>

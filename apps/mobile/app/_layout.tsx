@@ -1,7 +1,7 @@
 import '../global.css';
 import React from 'react';
 import Constants from 'expo-constants';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { ConvexReactClient, useConvexConnectionState, useQuery } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -76,8 +76,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
   const { tokens } = useTheme();
+  const pathname = usePathname();
   const isAuthRoute = segments[0] === '(auth)';
-  const privateRoute = !isAuthRoute && !localUserId;
+  const publicProfileRoute = pathname.startsWith('/@') && !pathname.startsWith('/@@');
+  const privateRoute = !isAuthRoute && !publicProfileRoute && !localUserId;
   const [authTimedOut, setAuthTimedOut] = React.useState(false);
   const [cachedIdentity, setCachedIdentity] = React.useState<string | null | undefined>();
 
@@ -100,11 +102,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       !isLoading &&
       !isAuthenticated &&
       !localUserId &&
-      !isAuthRoute &&
+      !publicProfileRoute &&
       (connection.isWebSocketConnected || cachedIdentity === null)
     )
       router.replace('/(auth)/welcome');
   }, [
+    publicProfileRoute,
     cachedIdentity,
     connection.isWebSocketConnected,
     isAuthRoute,

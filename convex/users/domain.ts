@@ -28,7 +28,8 @@ export type UserSettings = {
   appearance: 'system' | 'light' | 'dark';
   notificationPreferences: Record<string, boolean>;
   appLockPreferences: { enabled: boolean; fallback: 'device-pin' | 'disabled' };
-  twoFactorEnabled?: boolean;
+  showActive?: boolean;
+  showLastSeen?: boolean;
 };
 
 export type ProfileUpdate = Partial<

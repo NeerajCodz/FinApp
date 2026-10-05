@@ -156,6 +156,14 @@ export default function GroupHomePage() {
     api.groups.queries.chatMessages,
     canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
   );
+  const chatScopeState = useQuery(
+    api.presence.queries.scopeState,
+    canUseGroupChat && standaloneChat
+      ? { scopeType: 'group', scopeId: cloudGroupId as Id<'groups'> }
+      : 'skip',
+  );
+  const setChatTypingMutation = useMutation(api.presence.mutations.setTyping);
+  const markGroupMessageSeen = useMutation(api.presence.mutations.markGroupSeen);
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
@@ -163,6 +171,10 @@ export default function GroupHomePage() {
   const [chatPending, setChatPending] = React.useState(false);
   const chatLock = React.useRef(false);
   const [chatError, setChatError] = React.useState('');
+  const chatTypingTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const chatTypingActive = React.useRef(false);
+  const chatTypingLastSent = React.useRef(0);
+  const markedSeenMessageIds = React.useRef(new Set<string>());
 
   React.useEffect(() => {
     if (!userId || !group) return;
@@ -257,6 +269,75 @@ export default function GroupHomePage() {
     participants,
     settlements,
   ]);
+  const updateChatTyping = React.useCallback(
+    (typing: boolean) => {
+      if (chatTypingTimer.current) clearTimeout(chatTypingTimer.current);
+      chatTypingTimer.current = undefined;
+      if (typing) {
+        if (!canUseGroupChat) return;
+        const now = Date.now();
+        if (!chatTypingActive.current || now - chatTypingLastSent.current >= 4_000) {
+          chatTypingActive.current = true;
+          chatTypingLastSent.current = now;
+          void setChatTypingMutation({
+            scopeType: 'group',
+            scopeId: cloudGroupId as Id<'groups'>,
+            typing: true,
+          }).catch(() => {
+            chatTypingActive.current = false;
+          });
+        }
+        chatTypingTimer.current = setTimeout(() => {
+          chatTypingTimer.current = undefined;
+          if (!chatTypingActive.current) return;
+          chatTypingActive.current = false;
+          void setChatTypingMutation({
+            scopeType: 'group',
+            scopeId: cloudGroupId as Id<'groups'>,
+            typing: false,
+          }).catch(() => undefined);
+        }, 2_500);
+        return;
+      }
+      if (!chatTypingActive.current) return;
+      chatTypingActive.current = false;
+      void setChatTypingMutation({
+        scopeType: 'group',
+        scopeId: cloudGroupId as Id<'groups'>,
+        typing: false,
+      }).catch(() => undefined);
+    },
+    [canUseGroupChat, cloudGroupId, setChatTypingMutation],
+  );
+  React.useEffect(() => () => updateChatTyping(false), [updateChatTyping]);
+  React.useEffect(() => {
+    if (!standaloneChat || !userId || !chatMessages) return;
+    for (const message of chatMessages) {
+      const messageId = String(message.id);
+      if (
+        message.senderId === userId ||
+        message.seenBy?.some((seenById) => String(seenById) === String(userId)) ||
+        markedSeenMessageIds.current.has(messageId)
+      )
+        continue;
+      markedSeenMessageIds.current.add(messageId);
+      void markGroupMessageSeen({ messageId: message.id }).catch(() => {
+        markedSeenMessageIds.current.delete(messageId);
+      });
+    }
+  }, [chatMessages, markGroupMessageSeen, standaloneChat, userId]);
+  const chatTypingNames = (chatScopeState?.typingUserIds ?? [])
+    .filter((id) => id !== userId)
+    .map((id) => {
+      const remoteMember = remoteGroup?.members.find((member) => member.id === id);
+      const localMember = members.find((member) => member.userId === id || member.memberId === id);
+      return (
+        remoteMember?.displayName ??
+        localMember?.displayName ??
+        localMember?.name ??
+        (localMember?.username ? `@${localMember.username}` : `Member ${id.slice(-6)}`)
+      );
+    });
 
   if (!userId)
     return (
@@ -452,6 +533,12 @@ export default function GroupHomePage() {
         ownMessage,
         text: message.kind === 'text' ? message.text : undefined,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+        readBy: message.seenBy
+          ?.filter(
+            (seenById) =>
+              seenById !== userId && memberNames.some((member) => member.id === seenById),
+          )
+          .map((seenById) => memberName(seenById)),
       };
     }
     if (item.kind === 'expense') {
@@ -499,6 +586,7 @@ export default function GroupHomePage() {
         text: chatDraft.trim(),
       });
       setChatDraft('');
+      updateChatTyping(false);
     } catch (cause) {
       setChatError(cause instanceof Error ? cause.message : 'Could not send this message.');
     } finally {
@@ -581,6 +669,14 @@ export default function GroupHomePage() {
       ...member,
       avatarUrl: member.avatarUrl ?? undefined,
     })),
+    typingNames: chatTypingNames,
+    onTypingChange: updateChatTyping,
+    onBack: () =>
+      router.push(
+        standaloneChat
+          ? `/group/${encodeURIComponent(localGroupId)}`
+          : `/group/${encodeURIComponent(localGroupId)}/chat`,
+      ),
     embedded: !standaloneChat,
     onOpenGroup: () => router.push(`/group/${encodeURIComponent(localGroupId)}`),
     onAddExpense: () => router.push(`/group/${encodeURIComponent(localGroupId)}/new`),
@@ -657,7 +753,7 @@ export default function GroupHomePage() {
       onSettle={() => router.push(`/settle/new?groupId=${encodeURIComponent(localGroupId)}`)}
       onAddExpense={() => router.push(`/group/${encodeURIComponent(localGroupId)}/new`)}
       onOpenPerson={(username) =>
-        router.push(`/person/${encodeURIComponent(username.replace(/^@+/, ''))}`)
+        router.push(`/@${encodeURIComponent(username.replace(/^@+/, ''))}`)
       }
       onOpenActivity={(activityId) => router.push(`/transaction/${encodeURIComponent(activityId)}`)}
     />

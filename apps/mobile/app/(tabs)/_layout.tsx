@@ -19,7 +19,7 @@ const SIGNATURE_BAR_HEIGHT = 96;
 const navItems = [
   { label: 'Home', route: '/(tabs)', match: '/(tabs)', icon: House },
   { label: 'Activity', route: '/(tabs)/activity', match: '/activity', icon: ClockCounterClockwise },
-  { label: 'Groups', route: '/(tabs)/groups', match: '/groups', icon: UsersThree },
+  { label: 'People', route: '/(tabs)/people', match: '/people', icon: UsersThree },
   { label: 'Profile', route: '/(tabs)/profile', match: '/profile', icon: UserCircle },
 ] as const;
 

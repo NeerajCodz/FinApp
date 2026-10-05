@@ -18,8 +18,11 @@ export function Avatar({
   avatarId?: string;
 }) {
   const { tokens } = useTheme();
+  const [failedImageKey, setFailedImageKey] = React.useState<string | null>(null);
   const localImage = resolveAvatarAsset(avatarId, size);
   const imageSource = localImage ?? (imageUrl ? { uri: imageUrl } : undefined);
+  const imageKey = localImage ? `avatar:${avatarId}` : imageUrl ? `url:${imageUrl}` : null;
+  const showImage = Boolean(imageSource && imageKey && failedImageKey !== imageKey);
   return (
     <View
       accessibilityRole="image"
@@ -36,8 +39,13 @@ export function Avatar({
         overflow: 'hidden',
       }}
     >
-      {imageSource ? (
-        <Image source={imageSource} resizeMode="cover" style={{ width: size, height: size }} />
+      {showImage ? (
+        <Image
+          source={imageSource}
+          resizeMode="cover"
+          style={{ width: size, height: size }}
+          onError={() => setFailedImageKey(imageKey)}
+        />
       ) : (
         <Text
           style={{

@@ -1392,7 +1392,7 @@ function AnalyticsContent() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onPress={() => router.push('/(tabs)/groups' as never)}
+                  onPress={() => router.push('/(tabs)/people' as never)}
                 >
                   View groups
                 </Button>
