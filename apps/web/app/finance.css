@@ -130,6 +130,98 @@
   letter-spacing: -0.075em;
   line-height: 1;
 }
+.public-profile-page {
+  display: grid;
+  min-height: 100svh;
+  padding: clamp(24px, 4vw, 52px) clamp(18px, 4vw, 64px) calc(32px + env(safe-area-inset-bottom));
+  background: var(--finance-background);
+}
+.public-profile-content {
+  width: min(100%, 760px);
+  margin: auto;
+  align-content: center;
+  gap: 20px;
+}
+.public-profile-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.public-profile-heading .finance-secondary-action {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+}
+.public-profile-heading h1 {
+  margin: 0;
+  color: var(--finance-muted);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.public-profile-eyebrow {
+  margin: 0;
+  color: var(--finance-lime);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.public-profile-card {
+  display: grid;
+  gap: 22px;
+  border: 1px solid var(--finance-line);
+  border-radius: 24px;
+  padding: clamp(24px, 5vw, 44px);
+  background:
+    radial-gradient(
+      ellipse at top left,
+      color-mix(in srgb, var(--finance-lime) 12%, transparent),
+      transparent 48%
+    ),
+    var(--finance-panel);
+}
+.public-profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.public-profile-identity {
+  display: grid;
+  gap: 9px;
+}
+.public-profile-identity h2 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 500;
+  letter-spacing: -0.07em;
+  line-height: 1;
+}
+.public-profile-handle {
+  margin: 0;
+  color: var(--finance-muted);
+  font-size: 0.93rem;
+}
+.public-profile-note,
+.public-profile-error > p:not(.public-profile-eyebrow) {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--finance-muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+.public-profile-error {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+.public-profile-error h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
 .finance-muted {
   margin: 12px 0 0;
   color: var(--finance-muted);
@@ -616,6 +708,21 @@
   }
 }
 @media (max-width: 570px) {
+  .public-profile-page {
+    padding: 22px 15px calc(26px + env(safe-area-inset-bottom));
+  }
+  .public-profile-content {
+    width: 100%;
+    gap: 16px;
+  }
+  .public-profile-card {
+    gap: 18px;
+    border-radius: 20px;
+    padding: 22px;
+  }
+  .public-profile-hero {
+    gap: 18px;
+  }
   .finance-sync-window-options {
     grid-template-columns: minmax(0, 1fr);
   }
