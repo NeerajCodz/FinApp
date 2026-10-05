@@ -20,11 +20,24 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.neerajcodz.finapp"
+      "bundleIdentifier": "com.neerajcodz.finapp",
+      "associatedDomains": ["applinks:fin.neeraj.fyi"]
     },
     "android": {
       "package": "com.neerajcodz.finapp",
       "versionCode": 6,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "fin.neeraj.fyi", "pathPrefix": "/@" },
+            { "scheme": "https", "host": "fin.neeraj.fyi", "pathPrefix": "/user/" },
+            { "scheme": "https", "host": "fin.neeraj.fyi", "pathPrefix": "/people/" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
