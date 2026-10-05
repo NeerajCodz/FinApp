@@ -29,7 +29,10 @@ type Message = {
   createdAt: number;
   seen: boolean;
   senderName: string;
+  reactions?: { emoji: string; count: number }[];
+  myReaction?: string | null;
 };
+const reactionChoices = ['❤️', '👍', '😂', '😮'] as const;
 type Conversation = {
   id: Id<'directConversations'>;
   userId: Id<'users'>;
@@ -49,6 +52,8 @@ export default function DirectConversationScreen() {
   const listRef = useRef<ScrollView>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [reactionMenuId, setReactionMenuId] = useState<Id<'directMessages'> | null>(null);
+  const [reactingMessageId, setReactingMessageId] = useState<Id<'directMessages'> | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const typingActive = useRef(false);
   const typingLastSent = useRef(0);
@@ -67,6 +72,7 @@ export default function DirectConversationScreen() {
   const sendImage = useMutation(api.directMessages.mutations.sendImage);
   const markSeen = useMutation(api.presence.mutations.markDirectSeen);
   const setTyping = useMutation(api.presence.mutations.setTyping);
+  const toggleReaction = useMutation(api.directMessages.mutations.toggleReaction);
   const conversation = useMemo(
     () => conversations?.find((row) => String(row.id) === String(conversationId)),
     [conversations, conversationId],
@@ -78,6 +84,17 @@ export default function DirectConversationScreen() {
       : participant?.lastSeenAt
         ? `Last seen ${new Date(participant.lastSeenAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
         : '';
+  async function react(messageId: Id<'directMessages'>, emoji: (typeof reactionChoices)[number]) {
+    if (reactingMessageId) return;
+    setReactingMessageId(messageId);
+    try {
+      await toggleReaction({ messageId, emoji });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update this reaction');
+    } finally {
+      setReactingMessageId(null);
+    }
+  }
 
   useEffect(() => {
     if (!messages?.length || !userId) return;
@@ -287,6 +304,76 @@ export default function DirectConversationScreen() {
                     })}
                     {mine && message.seen ? ' · Seen' : ''}
                   </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                    {message.reactions?.map(({ emoji, count }) => (
+                      <TouchableOpacity
+                        key={emoji}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${emoji} reaction, ${count} ${count === 1 ? 'person' : 'people'}`}
+                        accessibilityState={{ selected: message.myReaction === emoji }}
+                        disabled={reactingMessageId === message.id}
+                        onPress={() =>
+                          void react(message.id, emoji as (typeof reactionChoices)[number])
+                        }
+                        style={{
+                          borderWidth: 1,
+                          borderColor:
+                            message.myReaction === emoji ? tokens.primary : tokens.borderSubtle,
+                          borderRadius: 14,
+                          paddingHorizontal: 7,
+                          paddingVertical: 3,
+                          backgroundColor: tokens.surfaceRaised,
+                        }}
+                      >
+                        <Text style={{ color: tokens.foreground, fontSize: 12 }}>
+                          {emoji} {count}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Add a reaction"
+                      accessibilityState={{ expanded: reactionMenuId === message.id }}
+                      onPress={() =>
+                        setReactionMenuId((current) => (current === message.id ? null : message.id))
+                      }
+                      style={{
+                        borderWidth: 1,
+                        borderColor: tokens.borderSubtle,
+                        borderRadius: 14,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        backgroundColor: tokens.surfaceRaised,
+                      }}
+                    >
+                      <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>+</Text>
+                    </TouchableOpacity>
+                    {reactionMenuId === message.id &&
+                      reactionChoices.map((emoji) => (
+                        <TouchableOpacity
+                          key={emoji}
+                          accessibilityRole="button"
+                          accessibilityLabel={`React with ${emoji}`}
+                          accessibilityState={{ selected: message.myReaction === emoji }}
+                          disabled={reactingMessageId === message.id}
+                          onPress={() => {
+                            void react(message.id, emoji);
+                            setReactionMenuId(null);
+                          }}
+                          style={{
+                            borderWidth: 1,
+                            borderColor:
+                              message.myReaction === emoji ? tokens.primary : tokens.borderSubtle,
+                            borderRadius: 14,
+                            paddingHorizontal: 7,
+                            paddingVertical: 3,
+                            backgroundColor: tokens.surfaceRaised,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                  </View>
                 </View>
               );
             })}

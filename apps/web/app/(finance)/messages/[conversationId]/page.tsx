@@ -19,7 +19,10 @@ type Message = {
   mimeType?: string;
   createdAt: number;
   seen: boolean;
+  reactions?: { emoji: string; count: number }[];
+  myReaction?: string | null;
 };
+const reactionChoices = ['❤️', '👍', '😂', '😮'] as const;
 type Conversation = {
   id: string;
   userId: string;
@@ -49,6 +52,8 @@ export default function DirectConversationPage() {
   const [text, setText] = React.useState('');
   const [error, setError] = React.useState('');
   const [sending, setSending] = React.useState(false);
+  const [reactionMenuId, setReactionMenuId] = React.useState<string | null>(null);
+  const [reactingMessageId, setReactingMessageId] = React.useState<string | null>(null);
   const [typing, setTyping] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const seenRef = React.useRef(new Set<string>());
@@ -70,6 +75,7 @@ export default function DirectConversationPage() {
   const sendImage = useMutation(api.directMessages.mutations.sendImage);
   const setTypingMutation = useMutation(api.presence.mutations.setTyping);
   const markDirectSeen = useMutation(api.presence.mutations.markDirectSeen);
+  const toggleReaction = useMutation(api.directMessages.mutations.toggleReaction);
   const conversation = conversations?.find((row) => row.id === conversationId);
   const peerPresence = presence?.participants[0];
   const peerTyping = Boolean(conversation && presence?.typingUserIds.includes(conversation.userId));
@@ -118,6 +124,18 @@ export default function DirectConversationPage() {
       stop();
     };
   }, [conversationId, setTypingMutation, typing, userId]);
+  async function react(messageId: string, emoji: (typeof reactionChoices)[number]) {
+    if (reactingMessageId) return;
+    setReactingMessageId(messageId);
+    setError('');
+    try {
+      await toggleReaction({ messageId: messageId as never, emoji });
+    } catch {
+      setError('Could not update this reaction. Try again.');
+    } finally {
+      setReactingMessageId(null);
+    }
+  }
 
   async function submitText(event: React.FormEvent) {
     event.preventDefault();
@@ -312,6 +330,58 @@ export default function DirectConversationPage() {
                   {timeLabel(message.createdAt)}
                   {mine && message.seen ? ' · Seen' : ''}
                 </small>
+                <div className="direct-message-reactions">
+                  {(message.reactions ?? []).map(({ emoji, count }) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={message.myReaction === emoji ? 'is-active' : ''}
+                      aria-label={`${emoji} reaction, ${count} ${count === 1 ? 'person' : 'people'}${message.myReaction === emoji ? ', yours' : ''}`}
+                      aria-pressed={message.myReaction === emoji}
+                      disabled={!isConnected || reactingMessageId === message.id}
+                      onClick={() =>
+                        void react(message.id, emoji as (typeof reactionChoices)[number])
+                      }
+                    >
+                      {emoji} <span>{count}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="direct-message-reaction-add"
+                    aria-label="Add a reaction"
+                    aria-expanded={reactionMenuId === message.id}
+                    disabled={!isConnected || reactingMessageId === message.id}
+                    onClick={() =>
+                      setReactionMenuId((current) => (current === message.id ? null : message.id))
+                    }
+                  >
+                    +
+                  </button>
+                  {reactionMenuId === message.id && (
+                    <div
+                      className="direct-message-reaction-picker"
+                      role="group"
+                      aria-label="Choose a reaction"
+                    >
+                      {reactionChoices.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          aria-label={`React with ${emoji}`}
+                          aria-pressed={message.myReaction === emoji}
+                          disabled={!isConnected || reactingMessageId === message.id}
+                          onClick={() => {
+                            void react(message.id, emoji);
+                            setReactionMenuId(null);
+                          }}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </article>
             );
           })}

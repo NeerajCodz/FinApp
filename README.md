@@ -99,18 +99,20 @@ existing browser's local group cache is incomplete.
 
 ### People and messaging
 
-The People tab on mobile combines friend discovery, incoming and outgoing requests,
-direct conversations, and existing group management. Web exposes `/people` alongside
-the Groups workspace. Public `/@username` profiles expose safe identity fields without
-sign-in; shared group activity appears only when both the profile owner and viewer are
-active members of that group.
+The People tab on mobile and `/people` on web support friend discovery, username search,
+incoming and outgoing requests, and recent conversations. Suggestion lists surface mutual
+friend counts; the Groups workspace remains available through its dedicated routes. Public
+`/@username` profiles expose safe identity fields without sign-in; shared group activity
+appears only when both the profile owner and viewer are active members of that group.
 
 Profile links use `/@username` on both web and mobile. Legacy web `/user/...` and `/people/...` URLs permanently redirect to this canonical path.
 
 Accepted friends can start direct conversations from People or a profile. Direct and
 group chats use dedicated chat screens with image attachments, live typing and presence
-indicators, and participant-scoped read receipts. Settings expose controls for showing
-active status and last-seen time; hiding active status also hides typing indicators.
+indicators, participant-scoped read receipts, and direct-message reactions. Each participant
+has one reaction per message; selecting the same reaction removes it, and selecting another
+replaces it. Settings expose controls for showing active status and last-seen time; hiding
+active status also hides typing indicators.
 
 ### Coin implementation
 
