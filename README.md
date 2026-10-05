@@ -130,7 +130,7 @@ active status also hides typing indicators.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.1.5` with the centered 3D `CoinLogo` and a
+The native and web About screens show `v1.2.0` with the centered 3D `CoinLogo` and a
 GitHub developer link. Native coin drift uses browser-independent math, avoiding the
 Android startup error `ReferenceError: document is not defined`; GPU-unavailable
 surfaces use the app icon fallback.
@@ -140,7 +140,7 @@ The web welcome page pairs that story and local lifestyle photography with an in
 direct create-account/sign-in actions. The native welcome and About screens use the centered
 interactive 3D coin. Privacy and other screens omit the wordmark.
 Mobile Activity links directly to Analytics and Transactions.
-The Convex deployment exposes `GET /version`, returning `{ "version": "v1.1.5" }`.
+The Convex deployment exposes `GET /version`, returning `{ "version": "v1.2.0" }`.
 The About rows in Settings and Profile open those screens.
 On mobile, the shared navigation header is shown only on Home.
 
