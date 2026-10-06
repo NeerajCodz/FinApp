@@ -1177,7 +1177,7 @@ describe('Convex public runtime functions', () => {
         id: otherUserId,
         displayName: 'Rahul',
         username: 'rahul_42',
-        image: undefined,
+        avatarUrl: undefined,
       },
     ]);
     await expect(

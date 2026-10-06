@@ -23,6 +23,17 @@ export function Avatar({
   const imageSource = localImage ?? (imageUrl ? { uri: imageUrl } : undefined);
   const imageKey = localImage ? `avatar:${avatarId}` : imageUrl ? `url:${imageUrl}` : null;
   const showImage = Boolean(imageSource && imageKey && failedImageKey !== imageKey);
+  const fallback = (
+    <Text
+      style={{
+        color: tokens.foreground,
+        fontFamily: 'SpaceGrotesk_600SemiBold',
+        fontSize: size * 0.32,
+      }}
+    >
+      {initials.slice(0, 2).toUpperCase() || 'F'}
+    </Text>
+  );
   return (
     <View
       accessibilityRole="image"
@@ -40,22 +51,17 @@ export function Avatar({
       }}
     >
       {showImage ? (
-        <Image
-          source={imageSource}
-          resizeMode="cover"
-          style={{ width: size, height: size }}
-          onError={() => setFailedImageKey(imageKey)}
-        />
+        <>
+          {fallback}
+          <Image
+            source={imageSource}
+            resizeMode="cover"
+            style={{ position: 'absolute', width: size, height: size }}
+            onError={() => setFailedImageKey(imageKey)}
+          />
+        </>
       ) : (
-        <Text
-          style={{
-            color: tokens.foreground,
-            fontFamily: 'SpaceGrotesk_600SemiBold',
-            fontSize: size * 0.32,
-          }}
-        >
-          {initials.slice(0, 2).toUpperCase()}
-        </Text>
+        fallback
       )}
     </View>
   );

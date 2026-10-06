@@ -10,40 +10,29 @@ import {
   type IncomingInvitation,
   type InvitationResponse,
 } from './IncomingInvitations';
-const NETWORK_PURPLE = '#C277F5';
-const ICON_INK = '#16131B';
+import { contrastForeground } from '../../tokens';
+import { DEFAULT_GROUP_COLOR } from '../groupColor';
+
 export type GroupOverviewItem = {
   id: string;
   name: string;
-  currency: string;
   icon?: string;
   color?: string;
   memberCount: number;
-  balance: string;
-  balanceMeaning: string;
   description?: string;
   members?: readonly { name: string; avatarId?: string; avatarUrl?: string }[];
-  role?: string;
 };
-export type GroupOverviewSummary = { currency: string; owed: string; owing: string };
 export type GroupOverviewActivity = {
-  id: string;
-  title: string;
   groupName: string;
-  kind: 'expense' | 'settlement';
-  amount: string;
   date: string;
 };
 export type GroupsOverviewScreenProps = {
   groups: readonly GroupOverviewItem[];
-  summaries: readonly GroupOverviewSummary[];
   activities: readonly GroupOverviewActivity[];
-  balancesLoading: boolean;
   loading: boolean;
   error?: string;
   onCreate: () => void;
   onOpenGroup: (id: string) => void;
-  onOpenChat: (id: string) => void;
   invitations?: readonly IncomingInvitation[];
   invitationsLoading: boolean;
   invitationsError?: string;
@@ -82,39 +71,45 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
   const renderGroup = (group: GroupOverviewItem) => {
     const members = group.members ?? [];
     const activity = lastActivityByGroup.get(group.name);
+    const color = group.color ?? DEFAULT_GROUP_COLOR;
     return (
       <Pressable
         key={group.id}
         accessibilityRole="button"
         accessibilityLabel={`Open ${group.name}`}
         onPress={() => p.onOpenGroup(group.id)}
-        style={({ pressed }) => ({
-          minHeight: 108,
+        style={{
+          width: '100%',
+          minHeight: 112,
           flexDirection: 'row',
           alignItems: 'center',
           gap: 13,
           borderWidth: 1,
           borderColor: tokens.borderSubtle,
           borderRadius: 16,
-          paddingHorizontal: 13,
+          paddingHorizontal: 12,
           paddingVertical: 12,
-          backgroundColor: pressed ? tokens.surfaceRaised : tokens.surfaceSubtle,
-        })}
+          backgroundColor: tokens.surfaceSubtle,
+        }}
       >
         <View
           style={{
             width: 58,
             height: 58,
-            borderRadius: 16,
+            borderRadius: 14,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: group.color ?? tokens.surfaceRaised,
+            backgroundColor: color,
           }}
         >
-          <EntityIcon value={group.icon ?? 'phosphor:UsersThree'} size={32} color={ICON_INK} />
+          <EntityIcon
+            value={group.icon ?? 'phosphor:UsersThree'}
+            size={32}
+            color={contrastForeground(color)}
+          />
         </View>
-        <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-          <Typography variant="label" numberOfLines={1}>
+        <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
+          <Typography variant="label" numberOfLines={1} style={{ fontSize: 15 }}>
             {group.name}
           </Typography>
           <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }} numberOfLines={1}>
@@ -139,7 +134,7 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
                   <Avatar
                     label={member.name}
                     initials={member.name
-                      .split(/\\s+/)
+                      .split(/\s+/)
                       .map((part) => part[0] ?? '')
                       .join('')
                       .slice(0, 2)
@@ -172,7 +167,7 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
             </View>
           )}
         </View>
-        <ChevronRight size={20} color={tokens.foregroundMuted} />
+        <ChevronRight size={21} color={tokens.foregroundMuted} />
       </Pressable>
     );
   };
@@ -186,6 +181,7 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
           paddingTop: insets.top + 14,
           paddingBottom: insets.bottom + 24,
           gap: 17,
+          alignItems: 'stretch',
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -193,21 +189,23 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1, gap: 5 }}>
             <Text
-              style={{ color: NETWORK_PURPLE, fontSize: 11, fontWeight: '700', letterSpacing: 1.3 }}
+              style={{ color: tokens.primary, fontSize: 11, fontWeight: '700', letterSpacing: 1.3 }}
             >
               GROUPS
             </Text>
-            <Typography variant="title">Groups</Typography>
+            <Typography variant="title" style={{ fontSize: 32, lineHeight: 38 }}>
+              Groups
+            </Typography>
             <Text style={{ color: tokens.foregroundMuted, lineHeight: 20 }}>
               Split expenses, chat, and plan together.
             </Text>
           </View>
           <Button
             onPress={p.onCreate}
-            style={{ minHeight: 42, paddingHorizontal: 15, backgroundColor: NETWORK_PURPLE }}
+            style={{ minHeight: 42, paddingHorizontal: 15, backgroundColor: tokens.primary }}
           >
-            <Plus size={18} color={ICON_INK} />
-            <Text style={{ color: ICON_INK, fontWeight: '700' }}>New</Text>
+            <Plus size={18} color={tokens.primaryForeground} />
+            <Text style={{ color: tokens.primaryForeground, fontWeight: '700' }}>New</Text>
           </Button>
         </View>
 
@@ -248,13 +246,15 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
                 minHeight: 38,
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: filter === item.id ? NETWORK_PURPLE : tokens.borderSubtle,
+                borderColor: filter === item.id ? tokens.primary : tokens.borderSubtle,
                 borderRadius: 13,
                 paddingHorizontal: 16,
-                backgroundColor: filter === item.id ? NETWORK_PURPLE : 'transparent',
+                backgroundColor: filter === item.id ? tokens.primary : 'transparent',
               }}
             >
-              <Text style={{ color: filter === item.id ? ICON_INK : tokens.foreground }}>
+              <Text
+                style={{ color: filter === item.id ? tokens.primaryForeground : tokens.foreground }}
+              >
                 {item.label}
               </Text>
             </Pressable>
@@ -269,7 +269,7 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
         {p.loading ? (
           <Typography accessibilityLiveRegion="polite">Loading groups…</Typography>
         ) : filtered.length ? (
-          <View style={{ gap: 9 }}>{filtered.map(renderGroup)}</View>
+          <View style={{ gap: 10 }}>{filtered.map(renderGroup)}</View>
         ) : (
           <FinanceEmptyState
             kind={query ? 'search' : 'group'}

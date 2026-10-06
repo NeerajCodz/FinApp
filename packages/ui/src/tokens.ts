@@ -35,7 +35,7 @@ export function isAccentColor(value: string): value is `#${string}` {
   return /^#[\da-f]{6}$/i.test(value);
 }
 
-function contrastForeground(color: string): string {
+export function contrastForeground(color: string): string {
   const channels = color
     .match(/[\da-f]{2}/gi)
     ?.map((channel) => Number.parseInt(channel, 16) / 255);
@@ -161,7 +161,7 @@ export function createTokens(mode: ThemeMode = 'dark', accentValue: string = 'vo
     foregroundDisabled: inverseOpacity.disabled,
     card: inverseOpacity.surfaceSubtle,
     cardForeground: foreground,
-    popover: isDark ? '#080808' : '#F7F7F7',
+    popover: isDark ? '#111316' : '#F7F7F7',
     popoverForeground: foreground,
     primary,
     primaryForeground,

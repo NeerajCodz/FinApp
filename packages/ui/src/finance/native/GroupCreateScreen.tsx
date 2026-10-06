@@ -14,6 +14,7 @@ import {
   GroupTile,
   type GroupMetadataFieldsProps,
 } from './GroupPrimitives';
+import { DEFAULT_GROUP_COLOR } from '../groupColor';
 
 export type GroupCreateSuggestion = {
   id: string;
@@ -79,7 +80,7 @@ export function GroupCreateScreen(p: GroupCreateScreenProps) {
     {
       name: 'Custom group',
       icon: 'phosphor:GearSix',
-      color: tokens.primary,
+      color: DEFAULT_GROUP_COLOR,
       text: 'Start with your own name and appearance.',
     },
   ];

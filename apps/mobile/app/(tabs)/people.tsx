@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Search, UserPlus } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -27,15 +28,13 @@ type Conversation = Profile & {
   updatedAt: number;
   lastMessage: null | { text?: string };
 };
-type PeopleFilter = 'all' | 'nearby' | 'college' | 'mutuals';
+type PeopleFilter = 'all' | 'nearby' | 'mutuals';
 
 const filters: { id: PeopleFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'nearby', label: 'Nearby' },
-  { id: 'college', label: 'Same College' },
   { id: 'mutuals', label: 'Mutuals' },
 ];
-const PURPLE = '#C277F5';
 
 export default function PeopleScreen() {
   const { tokens } = useTheme();
@@ -156,40 +155,93 @@ export default function PeopleScreen() {
           paddingTop: insets.top + 14,
           paddingBottom: insets.bottom + 26,
           gap: 20,
+          alignItems: 'stretch',
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1, gap: 5 }}>
-            <Text style={{ color: PURPLE, fontSize: 11, fontWeight: '700', letterSpacing: 1.3 }}>
+            <Text
+              style={{ color: tokens.primary, fontSize: 11, fontWeight: '700', letterSpacing: 1.3 }}
+            >
               PEOPLE
             </Text>
-            <Typography variant="title">People</Typography>
+            <Typography variant="title" style={{ fontSize: 32, lineHeight: 38 }}>
+              People
+            </Typography>
             <Text style={{ color: tokens.foregroundMuted, lineHeight: 21 }}>
-              Find your people and grow your network.
+              Find people to connect and share expenses.
             </Text>
           </View>
-          <Button
-            size="sm"
-            variant="outline"
-            onPress={() => setInboxOpen(true)}
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel={requestCount ? `Requests, ${requestCount} pending` : 'Requests'}
+            onPress={() => setInboxOpen(true)}
+            style={{
+              position: 'relative',
+              minHeight: 42,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 7,
+              borderWidth: 1,
+              borderColor: tokens.borderSubtle,
+              borderRadius: 13,
+              paddingHorizontal: 11,
+              backgroundColor: tokens.surfaceSubtle,
+            }}
           >
-            Requests{requestCount ? ` ${requestCount}` : ''}
-          </Button>
+            <UserPlus size={17} color={tokens.foreground} />
+            <Text style={{ fontSize: 12, fontWeight: '600' }}>Requests</Text>
+            {requestCount > 0 ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: -7,
+                  right: -7,
+                  width: 19,
+                  height: 19,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: tokens.primary,
+                }}
+              >
+                <Text style={{ color: tokens.primaryForeground, fontSize: 10, fontWeight: '700' }}>
+                  {requestCount > 9 ? '9+' : requestCount}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
 
-        <Input
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search by username"
-          accessibilityLabel="Search people by username"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View
+          style={{
+            minHeight: 50,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            borderRadius: 13,
+            paddingHorizontal: 13,
+            backgroundColor: tokens.surfaceSubtle,
+          }}
+        >
+          <Search size={19} color={tokens.foregroundMuted} />
+          <Input
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by username"
+            accessibilityLabel="Search people by username"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent', minHeight: 46 }}
+          />
+        </View>
 
         <ScrollView
+          style={{ width: '100%' }}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 8 }}
@@ -224,15 +276,11 @@ export default function PeopleScreen() {
               />
             )}
           </SocialSection>
-        ) : filter === 'nearby' || filter === 'college' ? (
+        ) : filter === 'nearby' ? (
           <FinanceEmptyState
             kind="people"
-            title={
-              filter === 'nearby'
-                ? 'Nearby discovery is not available yet.'
-                : 'College discovery is not available yet.'
-            }
-            description="Location and college details are not part of profiles yet."
+            title="Nearby discovery is not available yet."
+            description="Location details are not part of profiles yet."
             compact
           />
         ) : (

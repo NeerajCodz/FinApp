@@ -92,7 +92,7 @@ export const search = query({
           username: user.username,
           gender: user.gender,
           avatarId: user.avatarId,
-          image: (await avatarUrlForUser(ctx, user)) ?? undefined,
+          avatarUrl: (await avatarUrlForUser(ctx, user)) ?? undefined,
         })),
     );
   },

@@ -22,7 +22,7 @@ export function SocialPersonRow({
       <Avatar
         label={profile.displayName}
         initials={profile.displayName.trim().slice(0, 2).toLocaleUpperCase() || 'F'}
-        size={compact ? 40 : 48}
+        size={compact ? 40 : 58}
         avatarId={profile.avatarId}
         imageUrl={profile.avatarUrl ?? undefined}
       />
@@ -46,12 +46,12 @@ export function SocialPersonRow({
   return (
     <View
       style={{
-        minHeight: compact ? 58 : 72,
+        minHeight: compact ? 58 : 86,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
         paddingHorizontal: compact ? 0 : 12,
-        paddingVertical: compact ? 5 : 10,
+        paddingVertical: compact ? 5 : 12,
         borderRadius: 14,
         borderWidth: compact ? 0 : 1,
         borderColor: tokens.borderSubtle,

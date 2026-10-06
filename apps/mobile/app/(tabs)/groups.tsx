@@ -11,16 +11,11 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 type GroupOverviewActivity = {
-  id: string;
-  title: string;
   groupName: string;
-  kind: 'expense' | 'settlement';
-  amount: string;
   date: string;
 };
 type Group = LocalRecord & {
   name?: string;
-  currency?: string;
   icon?: string;
   color?: string;
   description?: string;
@@ -36,7 +31,6 @@ type Member = LocalRecord & {
   username?: string;
   avatarId?: string;
   avatarUrl?: string | null;
-  role?: string;
 };
 type ActivityRecord = LocalRecord & {
   groupId?: string;
@@ -103,14 +97,11 @@ export default function GroupsScreen() {
         return {
           id: recordId(group),
           name: typeof group.name === 'string' ? group.name : 'Unnamed group',
-          currency: typeof group.currency === 'string' ? group.currency : '',
           icon: typeof group.icon === 'string' ? group.icon : undefined,
           color: typeof group.color === 'string' ? group.color : undefined,
           description: typeof group.description === 'string' ? group.description : undefined,
           members,
           memberCount: details?.members?.length ?? localMembers.length,
-          balance: '',
-          balanceMeaning: '',
         };
       }),
     [groupsState.groupDetails, groups, memberState.data],
@@ -135,13 +126,7 @@ export default function GroupsScreen() {
       .map((record) => {
         const group = byAlias.get(record.groupId!)!;
         return {
-          id: recordId(record) || `${record.groupId}:${record.occurredAt ?? 0}`,
-          title: String(
-            record.title ?? (record.type === 'settlement' ? 'Settlement recorded' : 'New expense'),
-          ),
           groupName: String(group.name ?? 'Group'),
-          kind: record.type === 'settlement' ? 'settlement' : 'expense',
-          amount: '',
           date: timeAgo(record.occurredAt ?? 0),
         };
       });
@@ -156,14 +141,11 @@ export default function GroupsScreen() {
   return (
     <GroupsOverviewScreen
       groups={overviewGroups}
-      summaries={[]}
       activities={activities}
-      balancesLoading={false}
       loading={loading}
       error={overviewGroups.length ? undefined : recordsError}
       onCreate={() => router.push('/groups/new' as never)}
       onOpenGroup={(id) => router.push(`/group/${encodeURIComponent(id)}` as never)}
-      onOpenChat={(id) => router.push(`/group/${encodeURIComponent(id)}/chat` as never)}
       invitations={invitations}
       invitationsLoading={Boolean(userId && isConnected && invitations === undefined)}
       invitationsError={
