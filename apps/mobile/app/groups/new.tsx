@@ -8,7 +8,7 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import { pickDeviceContact, type DeviceContact } from '@/lib/contacts';
 import type { LocalRecord } from '@/local/repository';
-import { GroupCreateScreen } from '@finapp/ui/finance';
+import { DEFAULT_GROUP_COLOR, GroupCreateScreen } from '@finapp/ui/finance';
 import { groupMetadataDraft, groupMetadataPayload } from '@/components/finance/groupFormData';
 function normalizeHandle(value: string) {
   return value.replace(/^@+/, '').trim().toLowerCase();
@@ -16,7 +16,7 @@ function normalizeHandle(value: string) {
 
 export default function NewGroupScreen() {
   const [icon, setIcon] = useState<string | undefined>('phosphor:UsersThree');
-  const [color, setColor] = useState<string | undefined>('#78e6a0');
+  const [color, setColor] = useState<string | undefined>(DEFAULT_GROUP_COLOR);
   const [currency, setCurrency] = useState('');
   const [name, setName] = useState('');
   const [details, setDetails] = useState(() => groupMetadataDraft());

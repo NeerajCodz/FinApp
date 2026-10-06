@@ -4,6 +4,11 @@ import { Avatar, Button, IconButton, Input, Label, Typography, useTheme } from '
 import { ArrowLeft } from '@finapp/ui/icons/native';
 import { EntityIcon } from './EntityIconPicker';
 
+import { contrastForeground } from '../../tokens';
+import { DEFAULT_GROUP_COLOR } from '../groupColor';
+
+export { DEFAULT_GROUP_COLOR } from '../groupColor';
+
 export function GroupPanel({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   const { tokens } = useTheme();
   return (
@@ -34,19 +39,22 @@ export function GroupTile({
   color?: string;
   size?: number;
 }) {
-  const { tokens } = useTheme();
   return (
     <View
       style={{
         width: size,
         height: size,
         borderRadius: Math.min(18, size / 4),
-        backgroundColor: color ?? tokens.primary,
+        backgroundColor: color ?? DEFAULT_GROUP_COLOR,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <EntityIcon value={icon} size={size * 0.54} color={tokens.primaryForeground} />
+      <EntityIcon
+        value={icon}
+        size={size * 0.54}
+        color={contrastForeground(color ?? DEFAULT_GROUP_COLOR)}
+      />
     </View>
   );
 }

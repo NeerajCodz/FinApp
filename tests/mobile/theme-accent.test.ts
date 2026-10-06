@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { accentPalette, createTokens, neutralOpacity } from '@finapp/ui/tokens';
+import { DEFAULT_GROUP_COLOR } from '../../packages/ui/src/finance/groupColor';
 
 describe('Finapp visual identity', () => {
   it('exposes the supported named application accents', () => {
@@ -20,5 +21,11 @@ describe('Finapp visual identity', () => {
     expect(tokens.surfaceRaised).toBe(neutralOpacity.white6);
     expect(tokens.border).toBe(neutralOpacity.white12);
     expect(tokens.borderSubtle).toBe(neutralOpacity.white8);
+  });
+
+  it('keeps the group default color separate from the account accent', () => {
+    expect(DEFAULT_GROUP_COLOR).toBe('#78E6A0');
+    expect(DEFAULT_GROUP_COLOR).not.toBe(createTokens('dark', 'volt').primary);
+    expect(DEFAULT_GROUP_COLOR).not.toBe(createTokens('dark', '#C084FC').primary);
   });
 });

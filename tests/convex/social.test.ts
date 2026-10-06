@@ -186,4 +186,33 @@ describe('social discovery and relationship summaries', () => {
     expect(anonymous?.status).toBe('unknown');
     expect(anonymous?.mutualFriends).toEqual([]);
   });
+  it('includes avatar URLs in social request and people search profiles', async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(async (ctx) => {
+      const viewer = await createUser(ctx, 'viewer');
+      const profile = await createUser(ctx, 'profile');
+      const avatarUrl = 'https://images.example.test/profile.png';
+      await ctx.db.patch(profile, { image: avatarUrl });
+      await ctx.db.insert('friendRequests', {
+        requesterId: viewer,
+        recipientId: profile,
+        status: 'pending',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      return { viewer, profile, avatarUrl };
+    });
+    const viewer = t.withIdentity({ subject: `${fixture.viewer}|session` });
+
+    const [requests, results] = await Promise.all([
+      viewer.query(api.social.queries.requests, {}),
+      viewer.query(api.users.queries.search, { query: 'profile' }),
+    ]);
+
+    expect(requests.outgoing).toMatchObject([
+      { user: { id: fixture.profile, avatarUrl: fixture.avatarUrl } },
+    ]);
+    expect(results).toMatchObject([{ id: fixture.profile, avatarUrl: fixture.avatarUrl }]);
+    expect(results[0]).not.toHaveProperty('image');
+  });
 });

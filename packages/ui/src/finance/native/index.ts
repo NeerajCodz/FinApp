@@ -3,6 +3,7 @@ export {
   INVITATION_LINK_EXPIRY_OPTIONS,
   type InvitationLinkExpiryMs,
 } from '../groupInvitationExpiry';
+export { DEFAULT_GROUP_COLOR } from '../groupColor';
 export { FinanceBrand } from './FinanceBrand';
 export {
   FinanceEmptyState,

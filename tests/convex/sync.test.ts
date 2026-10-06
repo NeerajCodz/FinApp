@@ -498,4 +498,50 @@ describe('authenticated local-first sync contract', () => {
       }),
     ).rejects.toThrow('AVATAR_GENDER_MISMATCH');
   });
+  it('includes member avatars in the local group bootstrap projection', async () => {
+    const { t, userId, authenticated } = await makeAuthenticatedUser();
+    const fixture = await t.run(async (ctx) => {
+      const avatarUrl = 'https://images.example.test/member.png';
+      const other = await ctx.db.insert('users', {
+        identityId: 'sync-member',
+        email: 'member@example.com',
+        displayName: 'Sync Member',
+        avatarId: 'member-avatar',
+        image: avatarUrl,
+      });
+      const groupId = await ctx.db.insert('groups', {
+        ownerId: userId,
+        name: 'Shared group',
+        currency: 'INR',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert('groupMembers', {
+        groupId,
+        userId,
+        role: 'owner',
+        joinedAt: 1,
+      });
+      await ctx.db.insert('groupMembers', {
+        groupId,
+        userId: other,
+        role: 'member',
+        joinedAt: 1,
+      });
+      return { other, avatarUrl };
+    });
+
+    const bootstrap = await authenticated.query(api.sync.queries.bootstrapSection, {
+      section: 'groupMemberships',
+      paginationOpts: { numItems: 20, cursor: null },
+    });
+
+    expect(bootstrap.related.members).toContainEqual(
+      expect.objectContaining({
+        userId: fixture.other,
+        avatarId: 'member-avatar',
+        avatarUrl: fixture.avatarUrl,
+      }),
+    );
+  });
 });

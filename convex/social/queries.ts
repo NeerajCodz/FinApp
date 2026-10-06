@@ -28,9 +28,14 @@ export const friends = query({
     ]);
     const ids = [...asLow.map((row) => row.userHighId), ...asHigh.map((row) => row.userLowId)];
     const users = await Promise.all(ids.map((id) => ctx.db.get(id)));
-    return users.flatMap((user) =>
-      user && user.deletedAt === undefined ? [safeProfile(user)] : [],
+    const profiles = await Promise.all(
+      users.map(async (user) =>
+        user && user.deletedAt === undefined
+          ? { ...safeProfile(user), avatarUrl: await avatarUrlForUser(ctx, user) }
+          : null,
+      ),
     );
+    return profiles.filter((profile): profile is NonNullable<typeof profile> => profile !== null);
   },
 });
 
@@ -59,19 +64,31 @@ export const requests = query({
     ];
     const users = await Promise.all(userIds.map((id) => ctx.db.get(id)));
     const userById = new Map(userIds.map((id, index) => [id, users[index] ?? null]));
-    const toProfile = (id: Id<'users'>) => {
+    const toProfile = async (id: Id<'users'>) => {
       const user = userById.get(id);
-      return user && user.deletedAt === undefined ? safeProfile(user) : null;
+      return user && user.deletedAt === undefined
+        ? { ...safeProfile(user), avatarUrl: await avatarUrlForUser(ctx, user) }
+        : null;
     };
+    const incomingProfiles = await Promise.all(
+      incoming.map(async (request) => ({
+        request,
+        user: await toProfile(request.requesterId),
+      })),
+    );
+    const outgoingProfiles = await Promise.all(
+      outgoing.map(async (request) => ({
+        request,
+        user: await toProfile(request.recipientId),
+      })),
+    );
     return {
-      incoming: incoming.flatMap((request) => {
-        const user = toProfile(request.requesterId);
-        return user ? [{ requestId: request._id, createdAt: request.createdAt, user }] : [];
-      }),
-      outgoing: outgoing.flatMap((request) => {
-        const user = toProfile(request.recipientId);
-        return user ? [{ requestId: request._id, createdAt: request.createdAt, user }] : [];
-      }),
+      incoming: incomingProfiles.flatMap(({ request, user }) =>
+        user ? [{ requestId: request._id, createdAt: request.createdAt, user }] : [],
+      ),
+      outgoing: outgoingProfiles.flatMap(({ request, user }) =>
+        user ? [{ requestId: request._id, createdAt: request.createdAt, user }] : [],
+      ),
     };
   },
 });

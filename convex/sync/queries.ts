@@ -191,6 +191,8 @@ export const bootstrapSection = query({
           ...member,
           displayName: person?.displayName ?? person?.name ?? 'Finapp user',
           username: person?.username,
+          avatarId: person?.avatarId,
+          avatarUrl: person ? await avatarUrlForUser(ctx, person) : null,
         };
       }),
     );
