@@ -25,6 +25,17 @@ import { commitLocalWrite } from '../../apps/mobile/local/commands';
 import { createOutboxEntry } from '../../apps/mobile/local/outbox/queue';
 import { syncOutbox } from '../../apps/mobile/local/sync/engine';
 import { deserializeLocalValue } from '../../apps/mobile/local/serialization';
+vi.mock('expo-constants', () => ({
+  default: {
+    appOwnership: null,
+    executionEnvironment: 'standalone',
+    expoConfig: {
+      owner: 'neerajcodz',
+      slug: 'finapp',
+      extra: { eas: { projectId: 'project-test' } },
+    },
+  },
+}));
 vi.mock('expo-secure-store', () => ({
   getItemAsync: async () => 'test-key',
   setItemAsync: async () => undefined,

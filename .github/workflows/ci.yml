@@ -23,6 +23,10 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - run: bun run expo:doctor
+        env:
+          EXPO_PUBLIC_CONVEX_URL: https://keen-corgi-894.convex.cloud
+          EXPO_PUBLIC_CONVEX_SITE_URL: https://keen-corgi-894.convex.site
+          EXPO_PUBLIC_APP_ENV: production
       - name: Convex validation
         run: |
           if [ -n "$CONVEX_DEPLOYMENT" ]; then

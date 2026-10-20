@@ -2,7 +2,7 @@
   "expo": {
     "name": "Finapp",
     "slug": "finapp",
-    "version": "1.2.1",
+    "version": "1.3.0",
     "scheme": "finapp",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -25,15 +25,27 @@
     },
     "android": {
       "package": "com.neerajcodz.finapp",
-      "versionCode": 8,
+      "versionCode": 9,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "fin.neeraj.fyi", "pathPrefix": "/@" },
-            { "scheme": "https", "host": "fin.neeraj.fyi", "pathPrefix": "/user/" },
-            { "scheme": "https", "host": "fin.neeraj.fyi", "pathPrefix": "/people/" }
+            {
+              "scheme": "https",
+              "host": "fin.neeraj.fyi",
+              "pathPrefix": "/@"
+            },
+            {
+              "scheme": "https",
+              "host": "fin.neeraj.fyi",
+              "pathPrefix": "/user/"
+            },
+            {
+              "scheme": "https",
+              "host": "fin.neeraj.fyi",
+              "pathPrefix": "/people/"
+            }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
@@ -55,6 +67,12 @@
         "projectId": "4b1aa903-c0f5-480f-a7ff-7f3ce4ff27ee"
       }
     },
-    "owner": "neerajcodz"
+    "owner": "neerajcodz",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4b1aa903-c0f5-480f-a7ff-7f3ce4ff27ee"
+    }
   }
 }

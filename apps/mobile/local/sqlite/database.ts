@@ -1,4 +1,6 @@
+import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
+import type { AESEncryptionKey } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
@@ -100,11 +102,228 @@ async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
   }
 }
 
+const expoGoEncryptionKeyPrefix = 'finapp.sqlite.aes-key.v1.';
+const expoGoSnapshotAad = Uint8Array.from(
+  Array.from('finapp.sqlite.snapshot.v1', (character) => character.charCodeAt(0)),
+);
+let rawDatabase: SQLite.SQLiteDatabase | null = null;
+let expoGoStorage = false;
+let expoGoDirty = false;
+let expoGoKey: AESEncryptionKey | null = null;
+let expoGoKeyName: string | null = null;
+let expoGoSnapshot: File | null = null;
+let expoGoSnapshotNext: File | null = null;
+let expoGoSnapshotPrevious: File | null = null;
+let expoGoLegacyDatabase: File | null = null;
+let persistenceTail: Promise<void> = Promise.resolve();
+
+function expoGoStorageScope(): string {
+  const config = Constants.expoConfig;
+  const projectId = config?.extra?.eas?.projectId;
+  const scope =
+    typeof projectId === 'string' && projectId
+      ? projectId
+      : `${config?.owner ?? ''}-${config?.slug ?? ''}`;
+  if (!scope || scope === '-') throw new Error('EXPO_GO_PROJECT_SCOPE_REQUIRED');
+  return scope.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function makeExpoGoFiles(): {
+  snapshot: File;
+  next: File;
+  previous: File;
+  legacyDatabase: File;
+} {
+  const directory = String(SQLite.defaultDatabaseDirectory).replace(/\/+$/, '');
+  const scope = expoGoStorageScope();
+  const snapshotPath = `${directory}/finapp-${scope}.sqlite.aes`;
+  return {
+    snapshot: new File(fileUri(snapshotPath)),
+    next: new File(fileUri(`${snapshotPath}.next`)),
+    previous: new File(fileUri(`${snapshotPath}.previous`)),
+    legacyDatabase: new File(fileUri(`${directory}/${databaseName}`)),
+  };
+}
+
+async function readExpoGoEncryptionKey(required: boolean): Promise<AESEncryptionKey | null> {
+  if (!expoGoKeyName) throw new Error('EXPO_GO_PROJECT_SCOPE_REQUIRED');
+  const savedKey = await SecureStore.getItemAsync(expoGoKeyName);
+  if (!savedKey) {
+    if (required) throw new Error('EXPO_GO_DATABASE_KEY_MISSING');
+    return null;
+  }
+  try {
+    return await Crypto.AESEncryptionKey.import(savedKey, 'hex');
+  } catch (cause) {
+    throw new Error('EXPO_GO_DATABASE_KEY_INVALID', { cause });
+  }
+}
+
+async function createExpoGoEncryptionKey(): Promise<AESEncryptionKey> {
+  if (!expoGoKeyName) throw new Error('EXPO_GO_PROJECT_SCOPE_REQUIRED');
+  const key = await Crypto.AESEncryptionKey.generate(Crypto.AESKeySize.AES256);
+  const encodedKey = await key.encoded('hex');
+  await SecureStore.setItemAsync(expoGoKeyName, encodedKey, {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  });
+  return key;
+}
+
+async function decryptExpoGoSnapshot(file: File, key: AESEncryptionKey): Promise<Uint8Array> {
+  try {
+    const sealed = Crypto.AESSealedData.fromCombined(await file.bytes());
+    return await Crypto.aesDecryptAsync(sealed, key, { additionalData: expoGoSnapshotAad });
+  } catch (cause) {
+    throw new Error('EXPO_GO_DATABASE_AUTHENTICATION_FAILED', { cause });
+  }
+}
+
+function removeExpoGoLegacyDatabase(): void {
+  if (!expoGoLegacyDatabase) return;
+  for (const suffix of ['', '-wal', '-shm']) {
+    const file = suffix
+      ? new File(fileUri(`${expoGoLegacyDatabase.uri}${suffix}`))
+      : expoGoLegacyDatabase;
+    if (file.exists) file.delete();
+  }
+  expoGoLegacyDatabase = null;
+}
+async function openExpoGoDatabase(): Promise<SQLite.SQLiteDatabase> {
+  const files = makeExpoGoFiles();
+  expoGoSnapshot = files.snapshot;
+  expoGoSnapshotNext = files.next;
+  expoGoSnapshotPrevious = files.previous;
+  expoGoLegacyDatabase = files.legacyDatabase;
+  const scope = expoGoStorageScope();
+  expoGoKeyName = `${expoGoEncryptionKeyPrefix}${scope}`;
+
+  if (!files.snapshot.exists) {
+    if (files.previous.exists) files.previous.moveSync(files.snapshot);
+    else if (files.next.exists) files.next.moveSync(files.snapshot);
+  }
+
+  if (files.snapshot.exists) {
+    const key = await readExpoGoEncryptionKey(true);
+    if (!key) throw new Error('EXPO_GO_DATABASE_KEY_MISSING');
+    expoGoKey = key;
+    const plaintext = await decryptExpoGoSnapshot(files.snapshot, key);
+    const db = await SQLite.deserializeDatabaseAsync(plaintext);
+    if (files.previous.exists) files.previous.delete();
+    if (files.next.exists) files.next.delete();
+    return db;
+  }
+
+  if (files.legacyDatabase.exists) {
+    let legacy: SQLite.SQLiteDatabase | null = null;
+    try {
+      legacy = await SQLite.openDatabaseAsync(databaseName);
+      const firstTable = legacy.getFirstSync<{ name: string }>(
+        'SELECT name FROM sqlite_master LIMIT 1',
+      );
+      if (!firstTable) {
+        await legacy.closeAsync();
+        legacy = null;
+        removeExpoGoLegacyDatabase();
+        return SQLite.openDatabaseAsync(':memory:');
+      }
+      const serialized = legacy.serializeSync();
+      await legacy.closeAsync();
+      legacy = null;
+      expoGoDirty = true;
+      return await SQLite.deserializeDatabaseAsync(serialized);
+    } catch (cause) {
+      if (legacy) await legacy.closeAsync().catch(() => undefined);
+      throw new Error('EXPO_GO_LEGACY_DATABASE_UNREADABLE', { cause });
+    }
+  }
+
+  return SQLite.openDatabaseAsync(':memory:');
+}
+
+function trackExpoGoWrites(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatabase {
+  return new Proxy(db, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target) as unknown;
+      if (property === 'runSync' || property === 'execSync') {
+        return (...args: unknown[]) => {
+          const result = (value as (...arguments_: unknown[]) => unknown).apply(target, args);
+          expoGoDirty = true;
+          return result;
+        };
+      }
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+function writeExpoGoSnapshot(bytes: Uint8Array): void {
+  if (!expoGoSnapshot || !expoGoSnapshotNext || !expoGoSnapshotPrevious) {
+    throw new Error('EXPO_GO_DATABASE_STORAGE_UNAVAILABLE');
+  }
+  if (expoGoSnapshotNext.exists) expoGoSnapshotNext.delete();
+  expoGoSnapshotNext.create();
+  expoGoSnapshotNext.write(bytes);
+  if (expoGoSnapshot.exists) {
+    if (expoGoSnapshotPrevious.exists) expoGoSnapshotPrevious.delete();
+    expoGoSnapshot.moveSync(expoGoSnapshotPrevious);
+  }
+  try {
+    expoGoSnapshotNext.moveSync(expoGoSnapshot);
+    if (expoGoSnapshotPrevious.exists) expoGoSnapshotPrevious.delete();
+  } catch (error) {
+    if (!expoGoSnapshot.exists && expoGoSnapshotPrevious.exists) {
+      expoGoSnapshotPrevious.moveSync(expoGoSnapshot);
+    }
+    throw error;
+  }
+}
+
+export function persistLocalDatabase(): Promise<void> {
+  if (!expoGoStorage || !rawDatabase || !expoGoDirty) return Promise.resolve();
+  const persist = persistenceTail
+    .catch(() => undefined)
+    .then(async () => {
+      if (!expoGoStorage || !rawDatabase || !expoGoDirty) return;
+      expoGoDirty = false;
+      try {
+        const key =
+          expoGoKey ??
+          (await readExpoGoEncryptionKey(false)) ??
+          (await createExpoGoEncryptionKey());
+        expoGoKey = key;
+        const serialized = await rawDatabase.serializeAsync();
+        const sealed = await Crypto.aesEncryptAsync(serialized, key, {
+          additionalData: expoGoSnapshotAad,
+        });
+        writeExpoGoSnapshot(await sealed.combined());
+        if (expoGoLegacyDatabase?.exists) removeExpoGoLegacyDatabase();
+      } catch (error) {
+        expoGoDirty = true;
+        throw error;
+      }
+    });
+  persistenceTail = persist;
+  return persist;
+}
+
 export async function getLocalDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (database) return database;
-  initialization ??= openEncryptedDatabase().then((db) => {
-    database = db;
-    return db;
+  initialization ??= (async () => {
+    expoGoStorage =
+      Constants.executionEnvironment === 'storeClient' && Constants.appOwnership === 'expo';
+    const opened = expoGoStorage ? await openExpoGoDatabase() : await openEncryptedDatabase();
+    rawDatabase = opened;
+    const ready = expoGoStorage ? trackExpoGoWrites(opened) : opened;
+    database = ready;
+    if (expoGoDirty) await persistLocalDatabase();
+    return ready;
+  })().catch(async (error: unknown) => {
+    if (rawDatabase) await rawDatabase.closeAsync().catch(() => undefined);
+    database = null;
+    rawDatabase = null;
+    initialization = null;
+    expoGoStorage = false;
+    throw error;
   });
   return initialization;
 }
@@ -460,4 +679,5 @@ export async function initializeLocalDatabase(): Promise<void> {
     `);
     db.execSync('PRAGMA user_version = 5');
   });
+  await persistLocalDatabase();
 }

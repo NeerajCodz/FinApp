@@ -1,6 +1,6 @@
 import React from 'react';
+import Constants from 'expo-constants';
 import { AppState } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
 import type { GroupSettlementRangeResult, GroupTransactionRangeResult } from '@convex/sync/types';
@@ -1014,19 +1014,29 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   }, [userId, scopedFailedEntries]);
 
   React.useEffect(() => {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-      }),
+    if (Constants.executionEnvironment === 'storeClient' && Constants.appOwnership === 'expo')
+      return;
+    let active = true;
+    let subscription: { remove: () => void } | null = null;
+    void import('expo-notifications').then((Notifications) => {
+      if (!active) return;
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowBanner: true,
+          shouldShowList: true,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+        }),
+      });
+      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        if (response.notification.request.content.data?.url === '/recurring')
+          router.push('/recurring');
+      });
     });
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      if (response.notification.request.content.data?.url === '/recurring')
-        router.push('/recurring');
-    });
-    return () => subscription.remove();
+    return () => {
+      active = false;
+      subscription?.remove();
+    };
   }, []);
 
   return (
