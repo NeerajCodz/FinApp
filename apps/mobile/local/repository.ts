@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { getLocalDatabase, initializeLocalDatabase } from './sqlite/database';
+import { getLocalDatabase, initializeLocalDatabase, persistLocalDatabase } from './sqlite/database';
 import type { OutboxEntry } from './outbox/queue';
 import { deserializeLocalValue, serializeLocalValue } from './serialization';
 export type LocalEntity =
@@ -463,6 +463,7 @@ export async function applyLocalMutationAndEnqueue(
       entry.createdAt,
     );
   });
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -542,6 +543,7 @@ export async function upsertCloudPage(
       }
     }
   });
+  await persistLocalDatabase();
 }
 
 export async function applyCloudChanges(
@@ -742,6 +744,7 @@ export async function applyCloudChanges(
       Date.now(),
     );
   });
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -807,6 +810,7 @@ export async function recordCoverage(
     endAt,
     Date.now(),
   );
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -930,6 +934,7 @@ export async function markSynced(
       localId,
     );
   });
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -958,6 +963,7 @@ export async function markOperationSynced(
       localId,
     );
   });
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -969,6 +975,7 @@ export async function retryFailed(userId: string): Promise<void> {
     "UPDATE outbox SET status = 'pending', nextRetryAt = NULL WHERE userId = ? AND status = 'failed'",
     userId,
   );
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -981,6 +988,7 @@ export async function retryFailedEntry(userId: string, localId: string): Promise
     userId,
     localId,
   );
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -992,6 +1000,7 @@ export async function recoverInterruptedSync(userId: string): Promise<void> {
     "UPDATE outbox SET status = 'pending', nextRetryAt = NULL WHERE userId = ? AND status = 'syncing'",
     userId,
   );
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -1028,6 +1037,7 @@ export async function markBootstrapCompleted(userId: string): Promise<void> {
      ON CONFLICT(userId, key) DO UPDATE SET value = '1'`,
     userId,
   );
+  await persistLocalDatabase();
 }
 
 export async function getSyncRevision(userId: string): Promise<string> {
@@ -1092,6 +1102,7 @@ export async function setSyncWindow(userId: string, days: LocalSyncWindow): Prom
       now,
     );
   });
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -1254,6 +1265,7 @@ export async function resolveConflict(
       conflict.recordId,
     );
   });
+  await persistLocalDatabase();
   notify(userId);
 }
 
@@ -1275,6 +1287,7 @@ export async function putLocalNotification(
     Number(record.createdAt),
     encode({ ...record, id, eventKey }),
   );
+  await persistLocalDatabase();
   if (result.changes > 0) notify(userId);
 }
 
@@ -1297,5 +1310,6 @@ export async function markDeviceNotificationRead(userId: string, id: string): Pr
     userId,
     id,
   );
+  await persistLocalDatabase();
   notify(userId);
 }

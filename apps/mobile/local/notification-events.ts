@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import {
@@ -13,6 +13,12 @@ import {
   readLocal,
   type LocalRecord,
 } from './repository';
+const isExpoGo =
+  Constants.executionEnvironment === 'storeClient' && Constants.appOwnership === 'expo';
+
+async function loadNotifications() {
+  return isExpoGo ? null : import('expo-notifications');
+}
 
 export type NotificationRecord = LocalRecord & {
   id: string;
@@ -67,6 +73,8 @@ export async function markNotificationAsRead(userId: string, record: Notificatio
 }
 
 export async function permissionStatus() {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return 'denied' as const;
   const result = await Notifications.getPermissionsAsync();
   return result.granted || result.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
     ? ('granted' as const)
@@ -76,6 +84,8 @@ export async function permissionStatus() {
 }
 
 export async function requestNotificationPermission() {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return false;
   const result = await Notifications.requestPermissionsAsync();
   return result.granted || result.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
 }
@@ -83,6 +93,8 @@ export async function requestNotificationPermission() {
 const recurringPrefix = 'finapp-recurring:';
 
 export async function clearDeviceReminders(userId: string) {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   for (const item of scheduled) {
     if (item.identifier.startsWith(`${recurringPrefix}${userId}:`))
@@ -123,6 +135,8 @@ export async function reconcileRecurringNotifications(userId: string, isActive?:
         future.set(`${userPrefix}${rule.id}:${next}`, { date: next, name: rule.name });
     }
   if (isActive && !isActive()) return;
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   for (const item of scheduled) {
     if (item.identifier.startsWith(userPrefix) && !future.has(item.identifier))

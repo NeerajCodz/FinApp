@@ -14,31 +14,36 @@
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "production"
     },
     "production-armeabi-v7a": {
       "extends": "production",
       "android": {
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=armeabi-v7a"
-      }
+      },
+      "channel": "production"
     },
     "production-arm64-v8a": {
       "extends": "production",
       "android": {
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
-      }
+      },
+      "channel": "production"
     },
     "production-x86": {
       "extends": "production",
       "android": {
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=x86"
-      }
+      },
+      "channel": "production"
     },
     "production-x86_64": {
       "extends": "production",
       "android": {
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=x86_64"
-      }
+      },
+      "channel": "production"
     }
   }
 }

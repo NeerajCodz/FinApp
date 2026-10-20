@@ -94,6 +94,13 @@ when connected. Group invitations, membership and role changes, chat and bill up
 lookup, authentication, and server-managed security controls require a live connection; device
 app-lock controls remain local.
 
+Installed native builds keep the existing SQLCipher database. Expo Go cannot load SQLCipher, so its
+SQLite connection stays in memory and v1.3.0 stores project-scoped AES-256-GCM-authenticated
+snapshots using an encryption key held in SecureStore. Existing plaintext Expo Go databases are
+encrypted before the source file is removed; unreadable or unauthenticated data fails closed.
+
+To preview in Expo Go over WAN, run `bunx expo start --go --tunnel` from `apps/mobile`; Expo CLI and Expo Go must be signed into the same account, and the development server must stay online. Expo Go skips device notification handlers and scheduling because SDK 57's notifications package attempts unsupported push registration at import time. New native EAS builds include `expo-updates`, use the app-version runtime and the `production` channel; publish compatible JavaScript/assets with `npx eas-cli@latest update --channel production --environment production --message "<message>"`. EAS Updates do not load in Expo Go, which continues to use Metro. Native builds retain SQLCipher.
+
 Web Groups and mobile Groups/Home screens also include joined groups from the authenticated
 membership query when the local group cache is incomplete.
 
@@ -131,7 +138,7 @@ active status also hides typing indicators.
 
 The native coin requires a build containing `expo-gl`.
 
-The native and web About screens show `v1.2.1` with the centered 3D `CoinLogo` and a
+The native and web About screens show `v1.3.0` with the centered 3D `CoinLogo` and a
 GitHub developer link. Native coin drift uses browser-independent math, avoiding the
 Android startup error `ReferenceError: document is not defined`; GPU-unavailable
 surfaces use the app icon fallback.
@@ -141,7 +148,7 @@ The web welcome page pairs that story and local lifestyle photography with an in
 direct create-account/sign-in actions. The native welcome and About screens use the centered
 interactive 3D coin. Privacy and other screens omit the wordmark.
 Mobile Activity links directly to Analytics and Transactions.
-The Convex deployment exposes `GET /version`, returning `{ "version": "v1.2.1" }`.
+The Convex deployment exposes `GET /version`, returning `{ "version": "v1.3.0" }`.
 The About rows in Settings and Profile open those screens.
 On mobile, the shared navigation header is shown only on Home.
 

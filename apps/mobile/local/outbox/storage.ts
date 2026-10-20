@@ -1,4 +1,8 @@
-import { getLocalDatabase, initializeLocalDatabase } from '../sqlite/database';
+import {
+  getLocalDatabase,
+  initializeLocalDatabase,
+  persistLocalDatabase,
+} from '../sqlite/database';
 import type { OutboxEntry } from './queue';
 
 export async function enqueueOffline(entry: OutboxEntry, userId: string): Promise<void> {
@@ -25,6 +29,7 @@ export async function enqueueOffline(entry: OutboxEntry, userId: string): Promis
       entry.status,
     );
   });
+  await persistLocalDatabase();
 }
 
 export async function updateOutboxStatus(
@@ -49,4 +54,5 @@ export async function updateOutboxStatus(
     userId,
     localId,
   );
+  await persistLocalDatabase();
 }
