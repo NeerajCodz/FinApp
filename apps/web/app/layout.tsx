@@ -7,6 +7,7 @@ import './coin.css';
 import './landing.css';
 import './auth.css';
 import './finance.css';
+import './mcp.css';
 import { Providers } from './providers';
 
 const spaceGrotesk = localFont({
