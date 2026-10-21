@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { ArrowLeft } from 'lucide-react';
 import { Button, InputOTP } from '@finapp/ui/web';
+import { safeMcpReturnPath } from '@/lib/authRoutes';
 
 export default function VerifyPage() {
   const router = useRouter();
   const [email, setEmail] = React.useState('');
   const [next, setNext] = React.useState<'dashboard' | 'onboarding'>('dashboard');
+  const [returnTo, setReturnTo] = React.useState<string | null>(null);
   const [code, setCode] = React.useState('');
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -18,6 +20,7 @@ export default function VerifyPage() {
     if (!parsedEmail) router.replace('/sign-in');
     setEmail(parsedEmail);
     setNext(params.get('next') === 'onboarding' ? 'onboarding' : 'dashboard');
+    setReturnTo(safeMcpReturnPath(params.get('returnTo')));
   }, [router]);
   const [error, setError] = React.useState('');
   const [pending, setPending] = React.useState(false);
@@ -35,7 +38,8 @@ export default function VerifyPage() {
     try {
       const result = await signIn('password', form);
       if (!result.signingIn) throw new Error('That code could not be verified.');
-      router.replace(next === 'onboarding' ? '/onboarding' : '/dashboard');
+      const onboardingUrl = returnTo ? `/onboarding?returnTo=${encodeURIComponent(returnTo)}` : '/onboarding';
+      router.replace(next === 'onboarding' ? onboardingUrl : '/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not verify this code.');
     } finally {

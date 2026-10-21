@@ -11,7 +11,13 @@ import { Button, Input, Label, PasswordField } from '@finapp/ui/web';
 import { pendingGroupInvitationPath, unverifiedSignInVerificationUrl } from '@/lib/authRoutes';
 import { AuthFrame } from './AuthFrame';
 
-export function SignInForm() {
+export function SignInForm({
+  nextPath,
+  context,
+}: {
+  nextPath?: string;
+  context?: { title: string; description: string };
+} = {}) {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -50,7 +56,7 @@ export function SignInForm() {
         form.set('password', password);
         form.set('flow', 'verification-required');
         await signIn('password', form);
-        router.replace(unverifiedSignInVerificationUrl(result.email));
+        router.replace(unverifiedSignInVerificationUrl(result.email, nextPath));
       } else if (result.status === 'two-factor-disabled') {
         const form = new FormData();
         form.set('email', identifier.trim());
@@ -58,15 +64,111 @@ export function SignInForm() {
         form.set('flow', 'signIn');
         const signInResult = await signIn('password', form);
         if (!signInResult.signingIn) throw new Error('Unable to sign in. Try again.');
-        router.replace(pendingGroupInvitationPath() ?? '/dashboard');
+        router.replace(nextPath ?? pendingGroupInvitationPath() ?? '/dashboard');
       } else {
-        router.replace(`/two-factor?challengeId=${encodeURIComponent(result.challengeId)}`);
+        const next = nextPath ? `&next=${encodeURIComponent(nextPath)}` : '';
+        router.replace(`/two-factor?challengeId=${encodeURIComponent(result.challengeId)}${next}`);
       }
     } catch (cause) {
       setError(formatAuthError(cause, 'sign-in'));
     } finally {
       setPending(false);
     }
+  }
+
+  const form = (
+    <form
+      method="post"
+      onSubmit={submit}
+      noValidate
+      aria-busy={pending}
+      aria-describedby={error ? 'sign-in-error' : undefined}
+    >
+      <div className="auth-field">
+        <Label htmlFor="identifier">Email or username</Label>
+        <Input
+          id="identifier"
+          name="identifier"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="you@example.com or @you"
+          value={identifier}
+          onChangeText={(value) => {
+            setIdentifier(value);
+            setFieldErrors((current) => ({ ...current, identifier: '' }));
+            setError('');
+          }}
+          error={Boolean(fieldErrors.identifier)}
+          aria-describedby={fieldErrors.identifier ? 'identifier-error' : undefined}
+          disabled={pending}
+          required
+        />
+        {fieldErrors.identifier && (
+          <p id="identifier-error" className="auth-field-error" role="alert">
+            {fieldErrors.identifier}
+          </p>
+        )}
+      </div>
+      <div className="auth-field">
+        <div className="auth-label-row">
+          <Label htmlFor="password">Password</Label>
+          <Link
+            href={`/forgot-password${identifier.includes('@') ? `?email=${encodeURIComponent(identifier.trim().toLowerCase())}` : ''}`}
+          >
+            Forgot password?
+          </Link>
+        </div>
+        <PasswordField
+          id="password"
+          name="password"
+          autoComplete="current-password"
+          placeholder="Your password"
+          value={password}
+          onChangeText={(value) => {
+            setPassword(value);
+            setFieldErrors((current) => ({ ...current, password: '' }));
+            setError('');
+          }}
+          error={Boolean(fieldErrors.password)}
+          aria-describedby={fieldErrors.password ? 'password-error' : undefined}
+          disabled={pending}
+          required
+        />
+        {fieldErrors.password && (
+          <p id="password-error" className="auth-field-error" role="alert">
+            {fieldErrors.password}
+          </p>
+        )}
+      </div>
+      {error && (
+        <p id="sign-in-error" className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
+      <Button type="submit" size="lg" disabled={pending} aria-busy={pending}>
+        {pending ? 'Signing you in…' : 'Sign in'}
+        <span className="auth-button-arrow" aria-hidden="true">
+          ↗
+        </span>
+      </Button>
+      <p className="auth-form-note">
+        If you use email two-factor sign-in, we’ll ask for your code next.
+      </p>
+    </form>
+  );
+
+  if (context) {
+    return (
+      <section className="mcp-login-form" aria-labelledby="mcp-login-title">
+        <p className="mcp-access-eyebrow">01 / SIGN IN</p>
+        <h1 id="mcp-login-title">{context.title}</h1>
+        <p className="mcp-access-description">{context.description}</p>
+        <div className="auth-form">{form}</div>
+      </section>
+    );
   }
 
   return (
@@ -81,87 +183,7 @@ export function SignInForm() {
         </span>
       }
     >
-      <form
-        method="post"
-        onSubmit={submit}
-        noValidate
-        aria-busy={pending}
-        aria-describedby={error ? 'sign-in-error' : undefined}
-      >
-        <div className="auth-field">
-          <Label htmlFor="identifier">Email or username</Label>
-          <Input
-            id="identifier"
-            name="identifier"
-            type="text"
-            autoComplete="username"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="you@example.com or @you"
-            value={identifier}
-            onChangeText={(value) => {
-              setIdentifier(value);
-              setFieldErrors((current) => ({ ...current, identifier: '' }));
-              setError('');
-            }}
-            error={Boolean(fieldErrors.identifier)}
-            aria-describedby={fieldErrors.identifier ? 'identifier-error' : undefined}
-            disabled={pending}
-            required
-          />
-          {fieldErrors.identifier && (
-            <p id="identifier-error" className="auth-field-error" role="alert">
-              {fieldErrors.identifier}
-            </p>
-          )}
-        </div>
-        <div className="auth-field">
-          <div className="auth-label-row">
-            <Label htmlFor="password">Password</Label>
-            <Link
-              href={`/forgot-password${identifier.includes('@') ? `?email=${encodeURIComponent(identifier.trim().toLowerCase())}` : ''}`}
-            >
-              Forgot password?
-            </Link>
-          </div>
-          <PasswordField
-            id="password"
-            name="password"
-            autoComplete="current-password"
-            placeholder="Your password"
-            value={password}
-            onChangeText={(value) => {
-              setPassword(value);
-              setFieldErrors((current) => ({ ...current, password: '' }));
-              setError('');
-            }}
-            error={Boolean(fieldErrors.password)}
-            aria-describedby={fieldErrors.password ? 'password-error' : undefined}
-            disabled={pending}
-            required
-          />
-          {fieldErrors.password && (
-            <p id="password-error" className="auth-field-error" role="alert">
-              {fieldErrors.password}
-            </p>
-          )}
-        </div>
-        {error && (
-          <p id="sign-in-error" className="auth-error" role="alert">
-            {error}
-          </p>
-        )}
-        <Button type="submit" size="lg" disabled={pending} aria-busy={pending}>
-          {pending ? 'Signing you in…' : 'Sign in'}
-          <span className="auth-button-arrow" aria-hidden="true">
-            ↗
-          </span>
-        </Button>
-        <p className="auth-form-note">
-          If you use email two-factor sign-in, we’ll ask for your code next.
-        </p>
-      </form>
+      {form}
     </AuthFrame>
   );
 }
