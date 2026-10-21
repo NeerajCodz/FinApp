@@ -42,7 +42,10 @@ function withCors(response: Response, request: Request): Response {
 }
 
 function unauthorized() {
-  const metadata = new URL('/.well-known/oauth-protected-resource/mcp', mcpResourceUrl()).toString();
+  const metadata = new URL(
+    '/.well-known/oauth-protected-resource/mcp',
+    mcpResourceUrl(),
+  ).toString();
   return new Response(JSON.stringify({ error: 'unauthorized' }), {
     status: 401,
     headers: {
@@ -104,6 +107,7 @@ export async function POST(request: Request) {
     maxRequestBodySize: 1_048_576,
   });
   try {
+    await server.connect(transport);
     const response = await transport.handleRequest(request);
     return withCors(response, request);
   } catch {
@@ -119,7 +123,10 @@ export async function GET(request: Request) {
   if (!allowedOrigin(request.headers.get('origin'), request)) {
     return new Response('Forbidden origin.', { status: 403 });
   }
-  return withCors(new Response(null, { status: 405, headers: { Allow: 'POST, OPTIONS' } }), request);
+  return withCors(
+    new Response(null, { status: 405, headers: { Allow: 'POST, OPTIONS' } }),
+    request,
+  );
 }
 
 export async function DELETE(request: Request) {
@@ -127,7 +134,10 @@ export async function DELETE(request: Request) {
   if (!allowedOrigin(request.headers.get('origin'), request)) {
     return new Response('Forbidden origin.', { status: 403 });
   }
-  return withCors(new Response(null, { status: 405, headers: { Allow: 'POST, OPTIONS' } }), request);
+  return withCors(
+    new Response(null, { status: 405, headers: { Allow: 'POST, OPTIONS' } }),
+    request,
+  );
 }
 
 export async function OPTIONS(request: Request) {

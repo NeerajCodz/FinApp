@@ -8,6 +8,10 @@ export default defineConfig({
         find: /^@convex\//,
         replacement: fileURLToPath(new URL('../../convex/', import.meta.url)),
       },
+      {
+        find: /^@\//,
+        replacement: fileURLToPath(new URL('./', import.meta.url)),
+      },
     ],
   },
   test: {

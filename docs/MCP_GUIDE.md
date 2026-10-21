@@ -245,6 +245,17 @@ A production deployment is not fully verified until the authenticated steps
 pass against its intended Convex backend. Do not substitute fixture-based UI
 checks or an in-memory MCP test for a real OAuth/Convex deployment test.
 
+For the HTTP dispatch regression check from the repository root:
+
+```sh
+bun run --cwd apps/web test ../../tests/web/mcp-http.test.ts
+```
+
+This test uses the real MCP HTTP client/transport with an isolated authorization
+fixture. It catches an endpoint that never connects its MCP server to the
+transport, and checks missing-token/revoked-grant rejection. It does not verify
+production credentials or database records.
+
 ## Troubleshooting
 
 | Symptom                                    | Check                                                                                                                                      |
