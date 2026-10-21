@@ -23,7 +23,7 @@ export async function GET() {
       'finapp:write:personal',
     ],
     client_id_metadata_document_supported: false,
- 
+
     resource: mcpResourceUrl(),
   };
   return Response.json(metadata, {

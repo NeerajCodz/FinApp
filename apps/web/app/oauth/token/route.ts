@@ -4,7 +4,10 @@ import { convexClient, mcpResourceUrl, signMcpAccessToken } from '@/lib/mcp/oaut
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  if (request.headers.get('content-type')?.split(';', 1)[0]?.trim() !== 'application/x-www-form-urlencoded') {
+  if (
+    request.headers.get('content-type')?.split(';', 1)[0]?.trim() !==
+    'application/x-www-form-urlencoded'
+  ) {
     return Response.json({ error: 'invalid_request' }, { status: 400 });
   }
   const contentLength = Number(request.headers.get('content-length'));

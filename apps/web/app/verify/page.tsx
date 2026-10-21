@@ -38,7 +38,9 @@ export default function VerifyPage() {
     try {
       const result = await signIn('password', form);
       if (!result.signingIn) throw new Error('That code could not be verified.');
-      const onboardingUrl = returnTo ? `/onboarding?returnTo=${encodeURIComponent(returnTo)}` : '/onboarding';
+      const onboardingUrl = returnTo
+        ? `/onboarding?returnTo=${encodeURIComponent(returnTo)}`
+        : '/onboarding';
       router.replace(next === 'onboarding' ? onboardingUrl : '/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not verify this code.');

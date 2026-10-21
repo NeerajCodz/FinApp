@@ -212,7 +212,9 @@ export default function OnboardingPage() {
           },
         );
       }
-      router.replace(returnTo ?? pendingGroupInvitationPath() ?? (mode === 'shared' ? '/groups' : '/dashboard'));
+      router.replace(
+        returnTo ?? pendingGroupInvitationPath() ?? (mode === 'shared' ? '/groups' : '/dashboard'),
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile.');
     } finally {

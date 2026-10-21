@@ -81,7 +81,6 @@ export async function verifyMcpAccessToken(token: string): Promise<McpPrincipal 
   });
   if (typeof payload.sub !== 'string' || typeof payload.grantId !== 'string') return null;
   return { userId: payload.sub, grantId: payload.grantId, scopes: parseScopes(payload.scope) };
-
 }
 
 export function mcpResourceUrl(): string {

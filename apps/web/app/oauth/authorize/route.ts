@@ -10,7 +10,9 @@ export async function GET(request: Request) {
   const redirectUri = params.get('redirect_uri');
   const state = params.get('state');
   const challenge = params.get('code_challenge');
-  const scopes = [...new Set(['finapp:read', ...(params.get('scope') ?? '').split(/\s+/).filter(Boolean)])];
+  const scopes = [
+    ...new Set(['finapp:read', ...(params.get('scope') ?? '').split(/\s+/).filter(Boolean)]),
+  ];
   if (
     responseType !== 'code' ||
     !clientId ||
@@ -27,7 +29,9 @@ export async function GET(request: Request) {
   if (resource !== mcpResourceUrl()) {
     return Response.json({ error: 'invalid_target' }, { status: 400 });
   }
-  const client = await convexClient().query(api.mcpOAuth.client, { clientId }).catch(() => null);
+  const client = await convexClient()
+    .query(api.mcpOAuth.client, { clientId })
+    .catch(() => null);
   if (!client || !client.redirectUris.includes(redirectUri)) {
     return Response.json({ error: 'invalid_client' }, { status: 400 });
   }

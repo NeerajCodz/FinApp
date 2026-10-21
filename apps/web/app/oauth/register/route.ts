@@ -25,7 +25,8 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: 'invalid_client_metadata' }, { status: 400 });
   }
-  if (text.length > 16_384) return Response.json({ error: 'invalid_client_metadata' }, { status: 413 });
+  if (text.length > 16_384)
+    return Response.json({ error: 'invalid_client_metadata' }, { status: 413 });
   let metadata: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(text);
@@ -36,13 +37,13 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: 'invalid_client_metadata' }, { status: 400 });
   }
-  const clientName =
-    typeof metadata.client_name === 'string' ? metadata.client_name : 'MCP client';
+  const clientName = typeof metadata.client_name === 'string' ? metadata.client_name : 'MCP client';
   if (
     (metadata.client_name !== undefined && typeof metadata.client_name !== 'string') ||
     !Array.isArray(metadata.redirect_uris) ||
     metadata.redirect_uris.some((uri) => typeof uri !== 'string') ||
-    (metadata.token_endpoint_auth_method !== undefined && metadata.token_endpoint_auth_method !== 'none') ||
+    (metadata.token_endpoint_auth_method !== undefined &&
+      metadata.token_endpoint_auth_method !== 'none') ||
     (metadata.grant_types !== undefined &&
       (!Array.isArray(metadata.grant_types) ||
         !metadata.grant_types.includes('authorization_code') ||

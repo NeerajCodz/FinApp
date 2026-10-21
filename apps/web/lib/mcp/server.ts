@@ -1,4 +1,3 @@
-
 import { api } from '@convex/_generated/api';
 import { ConvexHttpClient } from 'convex/browser';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -6,8 +5,18 @@ import { z } from 'zod';
 
 const readScope = 'finapp:read';
 const pageShape = {
-  limit: z.number().int().min(1).max(100).default(25).describe('Maximum results to return; hard limit 100.'),
-  cursor: z.string().nullable().optional().describe('Cursor from the previous page; omit for the first page.'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(25)
+    .describe('Maximum results to return; hard limit 100.'),
+  cursor: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Cursor from the previous page; omit for the first page.'),
   startAt: z.number().optional().describe('Inclusive Unix timestamp in milliseconds.'),
   endAt: z.number().optional().describe('Exclusive Unix timestamp in milliseconds.'),
 };
@@ -17,7 +26,9 @@ type ToolExecutor = (args: ToolArgs) => Promise<unknown>;
 
 function mcpResult(data: unknown) {
   const structuredContent = JSON.parse(
-    JSON.stringify(data, (_key, value: unknown) => (typeof value === 'bigint' ? value.toString() : value)),
+    JSON.stringify(data, (_key, value: unknown) =>
+      typeof value === 'bigint' ? value.toString() : value,
+    ),
   ) as unknown;
   const json = JSON.stringify(structuredContent);
   return {
@@ -26,7 +37,11 @@ function mcpResult(data: unknown) {
   };
 }
 
-export function createMcpServer(client: ConvexHttpClient, scopes: readonly string[], grantId: string) {
+export function createMcpServer(
+  client: ConvexHttpClient,
+  scopes: readonly string[],
+  grantId: string,
+) {
   const server = new McpServer(
     { name: 'finapp', version: '1.3.0' },
     {
@@ -59,12 +74,20 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
         title,
         description,
         inputSchema,
-        annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
       async (args) => {
         if (!scopes.includes(readScope)) {
           await recordActivity(name, false);
-          return { isError: true, content: [{ type: 'text', text: 'Missing required scope: finapp:read.' }] };
+          return {
+            isError: true,
+            content: [{ type: 'text', text: 'Missing required scope: finapp:read.' }],
+          };
         }
         try {
           const result = await execute(args as ToolArgs);
@@ -82,7 +105,11 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     name: string,
     title: string,
     description: string,
-    scope: 'finapp:write:finance' | 'finapp:write:social' | 'finapp:write:groups' | 'finapp:write:personal',
+    scope:
+      | 'finapp:write:finance'
+      | 'finapp:write:social'
+      | 'finapp:write:groups'
+      | 'finapp:write:personal',
     inputSchema: Record<string, z.ZodType>,
     execute: ToolExecutor,
     destructive = false,
@@ -103,7 +130,10 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
       async (args) => {
         if (!scopes.includes(scope)) {
           await recordActivity(name, false);
-          return { isError: true, content: [{ type: 'text', text: `Missing required scope: ${scope}.` }] };
+          return {
+            isError: true,
+            content: [{ type: 'text', text: `Missing required scope: ${scope}.` }],
+          };
         }
         try {
           const result = await execute(args as ToolArgs);
@@ -131,9 +161,15 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'finapp.catalog',
     {
       title: 'Discover Finapp domains',
-      description: 'Parent discovery tool. Call first to inspect feature domains, their child tools, and filter/pagination expectations.',
+      description:
+        'Parent discovery tool. Call first to inspect feature domains, their child tools, and filter/pagination expectations.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async () => {
       const data = {
@@ -142,8 +178,13 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
           children: manifest.children,
           filters: manifest.filters,
         })),
-        pagination: { defaultLimit: 25, maximumLimit: 100, cursor: 'Pass nextCursor from a previous result.' },
-        timestamps: 'All time filters are Unix epoch milliseconds; startAt is inclusive and endAt is exclusive. Time-filtered query windows are at most 366 days.',
+        pagination: {
+          defaultLimit: 25,
+          maximumLimit: 100,
+          cursor: 'Pass nextCursor from a previous result.',
+        },
+        timestamps:
+          'All time filters are Unix epoch milliseconds; startAt is inclusive and endAt is exclusive. Time-filtered query windows are at most 366 days.',
       };
       await recordActivity('finapp.catalog', true);
       return mcpResult(data);
@@ -153,7 +194,11 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
   server.registerResource(
     'Finapp capability catalog',
     'finapp://catalog',
-    { mimeType: 'application/json', description: 'Domain parent tool names, available child tools, filters, and pagination contract.' },
+    {
+      mimeType: 'application/json',
+      description:
+        'Domain parent tool names, available child tools, filters, and pagination contract.',
+    },
     async (uri) => ({
       contents: [
         {
@@ -166,7 +211,12 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
               filters: manifest.filters,
             })),
             paging: { defaultLimit: 25, maximumLimit: 100 },
-            time: { unit: 'milliseconds', startAt: 'inclusive', endAt: 'exclusive', maxRangeDays: 366 },
+            time: {
+              unit: 'milliseconds',
+              startAt: 'inclusive',
+              endAt: 'exclusive',
+              maxRangeDays: 366,
+            },
           }),
         },
       ],
@@ -264,7 +314,8 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
         children: manifest.children,
         filters: manifest.filters,
         pagination: { defaultLimit: 25, maximumLimit: 100 },
-        timestamps: 'Unix epoch milliseconds; startAt inclusive and endAt exclusive; max range 366 days.',
+        timestamps:
+          'Unix epoch milliseconds; startAt inclusive and endAt exclusive; max range 366 days.',
       }),
     );
   }
@@ -321,9 +372,11 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     categories: 'List my active categories. Parent: finance.categories. Returns a bounded page.',
     budgets: 'List my active budgets. Parent: finance.budgets. Returns a bounded page.',
     goals: 'List my active goals. Parent: finance.goals. Returns a bounded page.',
-    goalContributions: 'List my goal contributions. Parent: finance.goal_contributions. Filter by time and page.',
+    goalContributions:
+      'List my goal contributions. Parent: finance.goal_contributions. Filter by time and page.',
     recurringRules: 'List my recurring items. Parent: finance.recurring. Returns a bounded page.',
-    notifications: 'List my notifications. Parent: personal.notifications. Filter by time and page.',
+    notifications:
+      'List my notifications. Parent: personal.notifications. Filter by time and page.',
   } as const;
   const recordNames = {
     accounts: 'finapp.finance.accounts.list',
@@ -335,16 +388,21 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     notifications: 'finapp.personal.notifications.list',
   } as const;
   for (const resource of Object.keys(recordNames) as Array<keyof typeof recordNames>) {
-    registerReadTool(recordNames[resource], `List ${resource}`, recordDescriptions[resource], pageShape, async (args) =>
-      client.query(api.mcp.listOwnedRecords, {
-        resource,
-        startAt: args.startAt as number | undefined,
-        endAt: args.endAt as number | undefined,
-        paginationOpts: {
-          numItems: args.limit as number,
-          cursor: (args.cursor as string | null | undefined) ?? null,
-        },
-      }),
+    registerReadTool(
+      recordNames[resource],
+      `List ${resource}`,
+      recordDescriptions[resource],
+      pageShape,
+      async (args) =>
+        client.query(api.mcp.listOwnedRecords, {
+          resource,
+          startAt: args.startAt as number | undefined,
+          endAt: args.endAt as number | undefined,
+          paginationOpts: {
+            numItems: args.limit as number,
+            cursor: (args.cursor as string | null | undefined) ?? null,
+          },
+        }),
     );
   }
 
@@ -480,7 +538,10 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'finapp.groups.list',
     'List my groups',
     'Groups parent: fetch one page of groups the authorized user belongs to.',
-    { limit: z.number().int().min(1).max(100).default(25), cursor: z.string().nullable().optional() },
+    {
+      limit: z.number().int().min(1).max(100).default(25),
+      cursor: z.string().nullable().optional(),
+    },
     (args) =>
       client.query(api.mcp.listGroups, {
         paginationOpts: {
@@ -770,7 +831,9 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'finapp:write:finance',
     {
       transactionId: z.string(),
-      confirm: z.literal(true).describe('Set true only after the user explicitly confirms this deletion.'),
+      confirm: z
+        .literal(true)
+        .describe('Set true only after the user explicitly confirms this deletion.'),
       clientMutationId: mutationId,
     },
     (args) =>
@@ -899,7 +962,8 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'Send a friend request to the selected public Finapp user.',
     'finapp:write:social',
     { recipientId: z.string() },
-    (args) => client.mutation(api.social.mutations.sendRequest, { recipientId: args.recipientId as never }),
+    (args) =>
+      client.mutation(api.social.mutations.sendRequest, { recipientId: args.recipientId as never }),
   );
   registerWriteTool(
     'finapp.social.requests.respond',
@@ -982,14 +1046,17 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
       currency: z.string().length(3),
       occurredAt: z.number().finite(),
       categoryId: z.string().optional(),
-      participants: z.array(
-        z.object({
-          userId: z.string(),
-          amountMinor: minorUnits,
-          method: z.enum(['equal', 'exact', 'percentage', 'shares']),
-          basisValue: z.string().optional(),
-        }),
-      ).min(1).max(100),
+      participants: z
+        .array(
+          z.object({
+            userId: z.string(),
+            amountMinor: minorUnits,
+            method: z.enum(['equal', 'exact', 'percentage', 'shares']),
+            basisValue: z.string().optional(),
+          }),
+        )
+        .min(1)
+        .max(100),
       clientMutationId: mutationId,
     },
     (args) =>
@@ -1085,7 +1152,10 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'Start or retrieve a direct conversation with an accepted friend.',
     'finapp:write:social',
     { userId: z.string() },
-    (args) => client.mutation(api.directMessages.mutations.startConversation, { userId: args.userId as never }),
+    (args) =>
+      client.mutation(api.directMessages.mutations.startConversation, {
+        userId: args.userId as never,
+      }),
   );
 
   registerWriteTool(
@@ -1123,7 +1193,8 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'Cancel an outgoing pending friend request owned by the authenticated user.',
     'finapp:write:social',
     { requestId: z.string() },
-    (args) => client.mutation(api.social.mutations.cancelRequest, { requestId: args.requestId as never }),
+    (args) =>
+      client.mutation(api.social.mutations.cancelRequest, { requestId: args.requestId as never }),
   );
 
   registerWriteTool(
@@ -1146,7 +1217,9 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'finapp:write:finance',
     {
       accountId: z.string(),
-      confirm: z.literal(true).describe('Set true only after the user explicitly confirms this archive.'),
+      confirm: z
+        .literal(true)
+        .describe('Set true only after the user explicitly confirms this archive.'),
       clientMutationId: mutationId,
     },
     (args) =>
@@ -1176,7 +1249,9 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'finapp:write:finance',
     {
       categoryId: z.string(),
-      confirm: z.literal(true).describe('Set true only after the user explicitly confirms this archive.'),
+      confirm: z
+        .literal(true)
+        .describe('Set true only after the user explicitly confirms this archive.'),
       clientMutationId: mutationId,
     },
     (args) =>
@@ -1224,7 +1299,9 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'finapp:write:finance',
     {
       budgetId: z.string(),
-      confirm: z.literal(true).describe('Set true only after the user explicitly confirms this archive.'),
+      confirm: z
+        .literal(true)
+        .describe('Set true only after the user explicitly confirms this archive.'),
       clientMutationId: mutationId,
     },
     (args) =>
@@ -1272,7 +1349,9 @@ export function createMcpServer(client: ConvexHttpClient, scopes: readonly strin
     'finapp:write:finance',
     {
       goalId: z.string(),
-      confirm: z.literal(true).describe('Set true only after the user explicitly confirms this archive.'),
+      confirm: z
+        .literal(true)
+        .describe('Set true only after the user explicitly confirms this archive.'),
       clientMutationId: mutationId,
     },
     (args) =>
