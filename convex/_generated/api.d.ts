@@ -33,6 +33,8 @@ import type * as directMessages_mutations from "../directMessages/mutations.js";
 import type * as directMessages_queries from "../directMessages/queries.js";
 import type * as export_domain from "../export/domain.js";
 import type * as files_domain from "../files/domain.js";
+import type * as mcp from "../mcp.js";
+import type * as mcpOAuth from "../mcpOAuth.js";
 import type * as goals_domain from "../goals/domain.js";
 import type * as goals_mutations from "../goals/mutations.js";
 import type * as groups_domain from "../groups/domain.js";
@@ -107,6 +109,8 @@ declare const fullApi: ApiFromModules<{
   "directMessages/queries": typeof directMessages_queries;
   "export/domain": typeof export_domain;
   "files/domain": typeof files_domain;
+  "mcp": typeof mcp;
+  "mcpOAuth": typeof mcpOAuth;
   "goals/domain": typeof goals_domain;
   "goals/mutations": typeof goals_mutations;
   "groups/domain": typeof groups_domain;

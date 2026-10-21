@@ -507,6 +507,39 @@ export default defineSchema({
   })
     .index('by_recipient_createdAt', ['recipientId', 'createdAt'])
     .index('by_recipient_eventKey', ['recipientId', 'eventKey']),
+  mcpOAuthClients: defineTable({
+    clientId: v.string(),
+    clientName: v.string(),
+    redirectUris: v.array(v.string()),
+    createdAt: timestamp,
+  }).index('by_client_id', ['clientId']),
+  mcpOAuthCodes: defineTable({
+    codeHash: v.string(),
+    clientId: v.string(),
+    userId: v.id('users'),
+    redirectUri: v.string(),
+    codeChallenge: v.string(),
+    scopes: v.array(v.string()),
+    expiresAt: timestamp,
+    consumedAt: optionalTime,
+    createdAt: timestamp,
+  }).index('by_code_hash', ['codeHash']),
+  mcpOAuthGrants: defineTable({
+    clientId: v.string(),
+    userId: v.id('users'),
+    scopes: v.array(v.string()),
+    createdAt: timestamp,
+    revokedAt: optionalTime,
+  })
+    .index('by_user_createdAt', ['userId', 'createdAt'])
+    .index('by_user_client', ['userId', 'clientId']),
+  mcpOAuthActivity: defineTable({
+    userId: v.id('users'),
+    grantId: v.id('mcpOAuthGrants'),
+    toolName: v.string(),
+    succeeded: v.boolean(),
+    createdAt: timestamp,
+  }).index('by_user_createdAt', ['userId', 'createdAt']),
   pushDevices: defineTable({
     userId: v.id('users'),
     token: v.string(),
