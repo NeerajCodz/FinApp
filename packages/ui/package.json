@@ -32,6 +32,7 @@
       "default": "./src/activity/web/index.ts"
     },
     "./icons/native": "./src/icons/native.tsx",
+    "./mcp": "./src/mcp/index.tsx",
     "./finance/money": "./src/finance/money.ts"
   },
   "sideEffects": [

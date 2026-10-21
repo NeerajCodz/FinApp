@@ -11,11 +11,15 @@ import { pendingGroupInvitationPath } from '@/lib/authRoutes';
 export default function TwoFactorPage() {
   const router = useRouter();
   const [challengeId, setChallengeId] = React.useState('');
+  const [nextPath, setNextPath] = React.useState<string | null>(null);
   const [code, setCode] = React.useState('');
   React.useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('challengeId') ?? '';
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('challengeId') ?? '';
+    const next = params.get('next');
     if (!id) router.replace('/sign-in');
     setChallengeId(id);
+    setNextPath(next?.startsWith('/mcp/') && !next.startsWith('//') ? next : null);
   }, [router]);
   const [error, setError] = React.useState('');
   const [pending, setPending] = React.useState(false);
@@ -33,7 +37,7 @@ export default function TwoFactorPage() {
     try {
       const result = await signIn('password', form);
       if (!result.signingIn) throw new Error('That code could not be verified.');
-      router.replace(pendingGroupInvitationPath() ?? '/dashboard');
+      router.replace(nextPath ?? pendingGroupInvitationPath() ?? '/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not verify this code.');
     } finally {

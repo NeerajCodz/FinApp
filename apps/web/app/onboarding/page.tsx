@@ -19,7 +19,7 @@ import { currencies } from '@convex/shared/validators';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, upsertCloudPage, type LocalRecord } from '@/lib/offline/repository';
-import { pendingGroupInvitationPath } from '@/lib/authRoutes';
+import { pendingGroupInvitationPath, safeMcpReturnPath } from '@/lib/authRoutes';
 
 type Profile = LocalRecord & {
   displayName?: string;
@@ -72,13 +72,17 @@ function currencyLabel(currency: string) {
 
 export default function OnboardingPage() {
   const [step, setStep] = React.useState(0);
+  const [returnTo, setReturnTo] = React.useState<string | null>(null);
   const auth = useConvexAuth();
   const { userId, isConnected } = useBrowserSync();
   const { records: profiles } = useLocalRecords<Profile>('profile');
   const profile = profiles[0];
   const router = useRouter();
   const verification = useQuery(api.users.queries.current, {});
+  const avatarCatalog = useQuery(api.avatars.queries.list, {});
   React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setReturnTo(safeMcpReturnPath(params.get('returnTo')));
     if (auth.isLoading || verification === undefined) return;
     if (!auth.isAuthenticated) router.replace('/sign-in');
     else if (verification?.emailVerificationTime === undefined) {
@@ -87,7 +91,6 @@ export default function OnboardingPage() {
       );
     }
   }, [auth.isAuthenticated, auth.isLoading, router, verification]);
-  const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const updateUser = useMutation(api.users.mutations.update);
   const [currencyOpen, setCurrencyOpen] = React.useState(false);
   const [currency, setCurrency] = React.useState<Currency>(
@@ -210,7 +213,7 @@ export default function OnboardingPage() {
         );
       }
       router.replace(
-        pendingGroupInvitationPath() ?? (mode === 'shared' ? '/groups' : '/dashboard'),
+        returnTo ?? pendingGroupInvitationPath() ?? (mode === 'shared' ? '/groups' : '/dashboard'),
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile.');

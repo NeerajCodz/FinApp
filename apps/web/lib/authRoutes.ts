@@ -35,7 +35,13 @@ export function clearPendingGroupInvitation(): void {
   }
 }
 
-export function unverifiedSignInVerificationUrl(email: string): string {
+export function safeMcpReturnPath(path: string | null | undefined): string | null {
+  return path?.startsWith('/mcp/') && !path.startsWith('//') ? path : null;
+}
+
+export function unverifiedSignInVerificationUrl(email: string, returnTo?: string): string {
   const query = new URLSearchParams({ email, next: 'onboarding' });
+  const safeReturnTo = safeMcpReturnPath(returnTo);
+  if (safeReturnTo) query.set('returnTo', safeReturnTo);
   return `/verify?${query.toString()}`;
 }
