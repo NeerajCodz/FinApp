@@ -122,6 +122,60 @@ has one reaction per message; selecting the same reaction removes it, and select
 replaces it. Settings expose controls for showing active status and last-seen time; hiding
 active status also hides typing indicators.
 
+### MCP integrations
+
+The remote Model Context Protocol server is exposed at `/mcp`. The
+`/mcp/dashboard` workspace separates client setup, searchable domain exploration
+with copyable parent tools/prompts, account permissions, and filtered activity
+into keyboard-accessible tabs. Setup guidance covers ChatGPT, Claude, and other
+OAuth-capable remote MCP clients. Signed-in users can review active/revoked
+grants and revoke access; subsequent MCP requests using that grant are rejected.
+`/mcp/login` uses the existing Finapp sign-in flow with integration-specific
+context. `/mcp/authorize` separates required read access from optional writes
+and shows the registered client and return destination before approval.
+OAuth authorization-code + PKCE (S256), dynamic client registration, protected-resource
+metadata, and JWKS are available from the web app. ChatGPT and Claude connect as remote MCP
+clients; their connection UI and available MCP Apps features vary by product, plan, and
+workspace configuration.
+Configure the following values in the web deployment:
+
+- `MCP_ISSUER_URL`: canonical public HTTPS origin of the web app.
+- `MCP_RESOURCE_URL`: `https://<web-origin>/mcp`.
+- `MCP_SIGNING_KEY_ID`: stable key identifier used in JWT headers and JWKS.
+- `MCP_SIGNING_PRIVATE_KEY` and `MCP_SIGNING_PUBLIC_KEY`: matching RS256 PEM
+  key pair. Store the private key only in the server environment; never commit it.
+- `MCP_ALLOWED_ORIGINS`: optional comma-separated browser origins for additional
+  MCP clients. ChatGPT and Claude origins are allowed by default.
+
+Set `MCP_ISSUER_URL` and `MCP_RESOURCE_URL` in the Convex deployment environment
+as well, then deploy the updated Convex auth configuration and schema. Its MCP
+JWT provider validates the resource URL as the token audience. MCP access tokens
+are user-scoped, expire after one hour, and carry explicit `finapp:read`,
+`finapp:write:finance`, `finapp:write:social`, `finapp:write:groups`, and
+`finapp:write:personal` scopes. The consent screen grants read access by
+default; each write scope is opt-in.
+
+Call `finapp.catalog` first, then the matching `finapp.{finance,social,groups,personal}.parent`
+tool. List operations use cursors and a maximum page size of 100. Transaction,
+group expense, settlement, message, dashboard, and analytics reads require a
+date window no longer than 366 days; dashboard and analytics summaries report
+page-level totals until all cursors are consumed. Group membership and ownership
+are checked in Convex for each request. Read tools return safe projections, not
+database documents. Amounts sent to write tools are decimal integer strings in
+minor currency units; mutation tools accept caller-generated UUID idempotency
+keys where the backend supports mutation receipts.
+
+MCP message writes are text-only; media attachments, password/verification
+flows, app-lock secrets, and authentication-security controls are not exposed
+as AI tools. The dashboard keeps at most 100 recent tool names/outcomes per
+account for its filterable activity view; tool arguments and result data are
+never recorded.
+
+The MCP dashboard is a web control plane, not an embedded MCP Apps UI resource.
+The server currently exposes tools and the JSON capability resource
+`finapp://catalog`; clients that support MCP Apps can continue to use the
+tool-only integration.
+
 ### Coin implementation
 
 - `packages/ui/src/coin/geometry.ts`: volt faces, a beveled/reeded edge, shallow
