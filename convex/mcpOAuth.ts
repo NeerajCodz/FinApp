@@ -83,7 +83,11 @@ export const client = query({
       .withIndex('by_client_id', (index) => index.eq('clientId', clientId))
       .unique();
     return record
-      ? { clientId: record.clientId, clientName: record.clientName, redirectUris: record.redirectUris }
+      ? {
+          clientId: record.clientId,
+          clientName: record.clientName,
+          redirectUris: record.redirectUris,
+        }
       : null;
   },
 });
@@ -109,7 +113,8 @@ export const createAuthorizationCode = mutation({
       .query('mcpOAuthClients')
       .withIndex('by_client_id', (index) => index.eq('clientId', args.clientId))
       .unique();
-    if (!client || !client.redirectUris.includes(args.redirectUri)) throw new Error('INVALID_CLIENT');
+    if (!client || !client.redirectUris.includes(args.redirectUri))
+      throw new Error('INVALID_CLIENT');
     if (
       args.scopes.length < 1 ||
       args.scopes.length > 5 ||
@@ -248,7 +253,11 @@ export const recordToolInvocation = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getOptionalUser(ctx);
-    if (!user || user.deletedAt !== undefined || !/^finapp\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$/.test(args.toolName)) {
+    if (
+      !user ||
+      user.deletedAt !== undefined ||
+      !/^finapp\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$/.test(args.toolName)
+    ) {
       throw new Error('INVALID_ACTIVITY');
     }
     const grant = await ctx.db.get(args.grantId);
@@ -267,21 +276,30 @@ export const recordToolInvocation = mutation({
       .withIndex('by_user_createdAt', (index) => index.eq('userId', user._id))
       .order('desc')
       .take(101);
-    if (recent.length > 100) await ctx.db.delete(recent[100]._id);
+    const oldest = recent[100];
+    if (oldest) await ctx.db.delete(oldest._id);
   },
 });
 
 export const listActivity = query({
   args: {
     limit: v.number(),
-    domain: v.optional(v.union(v.literal('finance'), v.literal('social'), v.literal('groups'), v.literal('personal'))),
+    domain: v.optional(
+      v.union(
+        v.literal('finance'),
+        v.literal('social'),
+        v.literal('groups'),
+        v.literal('personal'),
+      ),
+    ),
     succeeded: v.optional(v.boolean()),
     startAt: v.optional(v.number()),
     endAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const user = await getOptionalUser(ctx);
-    if (!user || user.deletedAt !== undefined) return { events: [], retained: 0, matching: 0, hasMore: false };
+    if (!user || user.deletedAt !== undefined)
+      return { events: [], retained: 0, matching: 0, hasMore: false };
     const safeLimit = Math.max(1, Math.min(50, Math.floor(args.limit)));
     const recent = await ctx.db
       .query('mcpOAuthActivity')
@@ -315,6 +333,11 @@ export const listActivity = query({
         };
       }),
     );
-    return { events, retained: recent.length, matching: filtered.length, hasMore: filtered.length > safeLimit };
+    return {
+      events,
+      retained: recent.length,
+      matching: filtered.length,
+      hasMore: filtered.length > safeLimit,
+    };
   },
 });

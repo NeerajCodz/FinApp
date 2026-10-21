@@ -48,10 +48,7 @@ export const listTransactions = query({
     const page = await ctx.db
       .query('transactions')
       .withIndex('by_owner_occurredAt', (index) =>
-        index
-          .eq('ownerId', user._id)
-          .gte('occurredAt', args.startAt)
-          .lt('occurredAt', args.endAt),
+        index.eq('ownerId', user._id).gte('occurredAt', args.startAt).lt('occurredAt', args.endAt),
       )
       .order('desc')
       .paginate(args.paginationOpts);
@@ -81,7 +78,11 @@ export const listTransactions = query({
         occurredAt: transaction.occurredAt,
         status: transaction.status,
       }));
-    return { items: results, nextCursor: page.isDone ? null : page.continueCursor, isDone: page.isDone };
+    return {
+      items: results,
+      nextCursor: page.isDone ? null : page.continueCursor,
+      isDone: page.isDone,
+    };
   },
 });
 
@@ -274,7 +275,11 @@ export const listGroups = query({
   handler: async (ctx, { paginationOpts }) => {
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
-    if (!Number.isInteger(paginationOpts.numItems) || paginationOpts.numItems < 1 || paginationOpts.numItems > 100) {
+    if (
+      !Number.isInteger(paginationOpts.numItems) ||
+      paginationOpts.numItems < 1 ||
+      paginationOpts.numItems > 100
+    ) {
       throw new Error('INVALID_PAGE_SIZE');
     }
     const membershipPage = await ctx.db
@@ -291,7 +296,15 @@ export const listGroups = query({
     return {
       items: groupRows.flatMap(({ group, membership }) =>
         group && group.archivedAt === undefined
-          ? [{ id: group._id, name: group.name, currency: group.currency, memberRole: membership.role, updatedAt: group.updatedAt }]
+          ? [
+              {
+                id: group._id,
+                name: group.name,
+                currency: group.currency,
+                memberRole: membership.role,
+                updatedAt: group.updatedAt,
+              },
+            ]
           : [],
       ),
       nextCursor: membershipPage.isDone ? null : membershipPage.continueCursor,
@@ -323,13 +336,18 @@ export const listGroupExpenses = query({
     }
     const membership = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group_user', (index) => index.eq('groupId', args.groupId).eq('userId', user._id))
+      .withIndex('by_group_user', (index) =>
+        index.eq('groupId', args.groupId).eq('userId', user._id),
+      )
       .unique();
     if (!membership) throw new Error('NOT_MEMBER');
     const page = await ctx.db
       .query('transactions')
       .withIndex('by_group_occurredAt', (index) =>
-        index.eq('groupId', args.groupId).gte('occurredAt', args.startAt).lt('occurredAt', args.endAt),
+        index
+          .eq('groupId', args.groupId)
+          .gte('occurredAt', args.startAt)
+          .lt('occurredAt', args.endAt),
       )
       .order('desc')
       .paginate(args.paginationOpts);
@@ -377,7 +395,9 @@ export const listGroupMessages = query({
     }
     const membership = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group_user', (index) => index.eq('groupId', args.groupId).eq('userId', user._id))
+      .withIndex('by_group_user', (index) =>
+        index.eq('groupId', args.groupId).eq('userId', user._id),
+      )
       .unique();
     if (!membership) throw new Error('NOT_MEMBER');
     const now = Date.now();
@@ -388,7 +408,9 @@ export const listGroupMessages = query({
       )
       .order('desc')
       .paginate(args.paginationOpts);
-    const visible = page.page.filter((message) => message.expiresAt === undefined || message.expiresAt > now);
+    const visible = page.page.filter(
+      (message) => message.expiresAt === undefined || message.expiresAt > now,
+    );
     const senders = await Promise.all(visible.map((message) => ctx.db.get(message.senderId)));
     return {
       items: visible.map((message, index) => ({
@@ -412,7 +434,11 @@ export const listFriends = query({
   handler: async (ctx, args) => {
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
-    if (!Number.isInteger(args.paginationOpts.numItems) || args.paginationOpts.numItems < 1 || args.paginationOpts.numItems > 100) {
+    if (
+      !Number.isInteger(args.paginationOpts.numItems) ||
+      args.paginationOpts.numItems < 1 ||
+      args.paginationOpts.numItems > 100
+    ) {
       throw new Error('INVALID_PAGE_SIZE');
     }
     const page =
@@ -425,12 +451,20 @@ export const listFriends = query({
             .query('friendships')
             .withIndex('by_high', (index) => index.eq('userHighId', user._id))
             .paginate(args.paginationOpts);
-    const friendIds = page.page.map((row) => (args.side === 'low' ? row.userHighId : row.userLowId));
+    const friendIds = page.page.map((row) =>
+      args.side === 'low' ? row.userHighId : row.userLowId,
+    );
     const friends = await Promise.all(friendIds.map((id) => ctx.db.get(id)));
     return {
       items: friends.flatMap((friend) =>
         friend && friend.deletedAt === undefined
-          ? [{ id: friend._id, username: friend.username, displayName: friend.displayName ?? friend.name ?? 'Finapp user' }]
+          ? [
+              {
+                id: friend._id,
+                username: friend.username,
+                displayName: friend.displayName ?? friend.name ?? 'Finapp user',
+              },
+            ]
           : [],
       ),
       nextCursor: page.isDone ? null : page.continueCursor,
@@ -447,7 +481,11 @@ export const listFriendRequests = query({
   handler: async (ctx, args) => {
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
-    if (!Number.isInteger(args.paginationOpts.numItems) || args.paginationOpts.numItems < 1 || args.paginationOpts.numItems > 100) {
+    if (
+      !Number.isInteger(args.paginationOpts.numItems) ||
+      args.paginationOpts.numItems < 1 ||
+      args.paginationOpts.numItems > 100
+    ) {
       throw new Error('INVALID_PAGE_SIZE');
     }
     const page =
@@ -472,15 +510,17 @@ export const listFriendRequests = query({
       items: page.page.flatMap((request, index) => {
         const person = people[index];
         return person && person.deletedAt === undefined
-          ? [{
-              id: request._id,
-              createdAt: request.createdAt,
-              person: {
-                id: person._id,
-                username: person.username,
-                displayName: person.displayName ?? person.name ?? 'Finapp user',
+          ? [
+              {
+                id: request._id,
+                createdAt: request.createdAt,
+                person: {
+                  id: person._id,
+                  username: person.username,
+                  displayName: person.displayName ?? person.name ?? 'Finapp user',
+                },
               },
-            }]
+            ]
           : [];
       }),
       nextCursor: page.isDone ? null : page.continueCursor,
@@ -511,13 +551,18 @@ export const listGroupSettlements = query({
     }
     const membership = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group_user', (index) => index.eq('groupId', args.groupId).eq('userId', user._id))
+      .withIndex('by_group_user', (index) =>
+        index.eq('groupId', args.groupId).eq('userId', user._id),
+      )
       .unique();
     if (!membership) throw new Error('NOT_MEMBER');
     const page = await ctx.db
       .query('settlements')
       .withIndex('by_group_occurredAt', (index) =>
-        index.eq('groupId', args.groupId).gte('occurredAt', args.startAt).lt('occurredAt', args.endAt),
+        index
+          .eq('groupId', args.groupId)
+          .gte('occurredAt', args.startAt)
+          .lt('occurredAt', args.endAt),
       )
       .order('desc')
       .paginate(args.paginationOpts);
@@ -622,7 +667,9 @@ export const searchPeople = query({
     if (!/^[a-z0-9_]{2,32}$/.test(prefix)) throw new Error('INVALID_SEARCH');
     const matches = await ctx.db
       .query('users')
-      .withIndex('by_username', (index) => index.gte('username', prefix).lt('username', `${prefix}\uffff`))
+      .withIndex('by_username', (index) =>
+        index.gte('username', prefix).lt('username', `${prefix}\uffff`),
+      )
       .take(21);
     return matches
       .filter((person) => person._id !== current._id && person.deletedAt === undefined)
@@ -661,7 +708,10 @@ export const analyticsPreview = query({
     const page = await ctx.db
       .query('transactions')
       .withIndex('by_owner_occurredAt', (index) =>
-        index.eq('ownerId', user._id).gte('occurredAt', args.previousStartAt).lt('occurredAt', args.endAt),
+        index
+          .eq('ownerId', user._id)
+          .gte('occurredAt', args.previousStartAt)
+          .lt('occurredAt', args.endAt),
       )
       .order('desc')
       .paginate(args.paginationOpts);
@@ -724,7 +774,9 @@ export const listGroupMembers = query({
     }
     const membership = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group_user', (index) => index.eq('groupId', args.groupId).eq('userId', user._id))
+      .withIndex('by_group_user', (index) =>
+        index.eq('groupId', args.groupId).eq('userId', user._id),
+      )
       .unique();
     if (!membership) throw new Error('NOT_MEMBER');
     const page = await ctx.db
@@ -736,13 +788,15 @@ export const listGroupMembers = query({
       items: page.page.flatMap((member, index) => {
         const profile = profiles[index];
         return profile && profile.deletedAt === undefined
-          ? [{
-              id: member.userId,
-              role: member.role,
-              joinedAt: member.joinedAt,
-              username: profile.username,
-              displayName: profile.displayName ?? profile.name ?? 'Finapp user',
-            }]
+          ? [
+              {
+                id: member.userId,
+                role: member.role,
+                joinedAt: member.joinedAt,
+                username: profile.username,
+                displayName: profile.displayName ?? profile.name ?? 'Finapp user',
+              },
+            ]
           : [];
       }),
       nextCursor: page.isDone ? null : page.continueCursor,
@@ -799,15 +853,20 @@ export const listGroupInvitations = query({
         const group = groups[index];
         const inviter = inviters[index];
         return group && group.archivedAt === undefined
-          ? [{
-              id: invite._id,
-              groupId: group._id,
-              groupName: group.name,
-              createdAt: invite.createdAt,
-              inviter: inviter
-                ? { id: inviter._id, displayName: inviter.displayName ?? inviter.name ?? 'Finapp user' }
-                : null,
-            }]
+          ? [
+              {
+                id: invite._id,
+                groupId: group._id,
+                groupName: group.name,
+                createdAt: invite.createdAt,
+                inviter: inviter
+                  ? {
+                      id: inviter._id,
+                      displayName: inviter.displayName ?? inviter.name ?? 'Finapp user',
+                    }
+                  : null,
+              },
+            ]
           : [];
       }),
       nextCursor: page.isDone ? null : page.continueCursor,
@@ -817,7 +876,10 @@ export const listGroupInvitations = query({
   },
 });
 export const listDirectConversations = query({
-  args: { side: v.union(v.literal('low'), v.literal('high')), paginationOpts: paginationOptsValidator },
+  args: {
+    side: v.union(v.literal('low'), v.literal('high')),
+    paginationOpts: paginationOptsValidator,
+  },
   handler: async (ctx, args) => {
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
@@ -847,15 +909,17 @@ export const listDirectConversations = query({
       items: page.page.flatMap((conversation, index) => {
         const person = people[index];
         if (!person || person.deletedAt !== undefined) return [];
-        return [{
-          id: conversation._id,
-          updatedAt: conversation.updatedAt,
-          person: {
-            id: person._id,
-            username: person.username,
-            displayName: person.displayName ?? person.name ?? 'Finapp user',
+        return [
+          {
+            id: conversation._id,
+            updatedAt: conversation.updatedAt,
+            person: {
+              id: person._id,
+              username: person.username,
+              displayName: person.displayName ?? person.name ?? 'Finapp user',
+            },
           },
-        }];
+        ];
       }),
       nextCursor: page.isDone ? null : page.continueCursor,
       isDone: page.isDone,
