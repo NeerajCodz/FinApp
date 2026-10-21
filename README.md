@@ -124,6 +124,9 @@ active status also hides typing indicators.
 
 ### MCP integrations
 
+See [the MCP guide](docs/MCP_GUIDE.md) for deployment setup, client connection
+steps, tool/filter contracts, verification, and troubleshooting.
+
 The remote Model Context Protocol server is exposed at `/mcp`. The
 `/mcp/dashboard` workspace separates client setup, searchable domain exploration
 with copyable parent tools/prompts, account permissions, and filtered activity
