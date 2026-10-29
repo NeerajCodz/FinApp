@@ -1,5 +1,7 @@
 import { ConvexHttpClient } from 'convex/browser';
 import { exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT } from 'jose';
+import type { JWTPayload } from 'jose';
+import { MCP_CONVEX_AUDIENCE } from '@convex/shared/mcpAuth';
 
 export type McpPrincipal = { userId: string; grantId: string; scopes: string[] };
 const signingAlgorithm = 'RS256' as const;
@@ -32,9 +34,19 @@ export function mcpConvexUrl(): string {
   return url;
 }
 
-export function convexClient(token?: string): ConvexHttpClient {
-  const client = new ConvexHttpClient(mcpConvexUrl());
-  if (token) client.setAuth(token);
+export function convexClient(): ConvexHttpClient {
+  return new ConvexHttpClient(mcpConvexUrl());
+}
+
+export async function mcpBackendClient(principal: McpPrincipal): Promise<ConvexHttpClient> {
+  const client = convexClient();
+  const backendToken = await signMcpToken(
+    principal.userId,
+    { grantId: principal.grantId },
+    MCP_CONVEX_AUDIENCE,
+    '1m',
+  );
+  client.setAuth(backendToken);
   return client;
 }
 
@@ -43,19 +55,28 @@ export async function signMcpAccessToken(
   grantId: string,
   scopes: string[],
 ): Promise<string> {
+  return signMcpToken(userId, { scope: scopes.join(' '), grantId }, mcpResourceUrl(), '1h');
+}
+
+async function signMcpToken(
+  userId: string,
+  claims: JWTPayload,
+  audience: string,
+  lifetime: string,
+): Promise<string> {
   const privateKeyPem = process.env.MCP_SIGNING_PRIVATE_KEY?.replace(/\\n/g, '\n');
   const keyId = process.env.MCP_SIGNING_KEY_ID?.trim();
   if (!privateKeyPem || !keyId) {
     throw new Error('MCP_SIGNING_PRIVATE_KEY and MCP_SIGNING_KEY_ID are required');
   }
   const privateKey = await importPKCS8(privateKeyPem, signingAlgorithm);
-  return new SignJWT({ scope: scopes.join(' '), grantId })
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: signingAlgorithm, kid: keyId, typ: 'JWT' })
     .setIssuer(mcpIssuer())
     .setSubject(userId)
-    .setAudience(mcpResourceUrl())
+    .setAudience(audience)
     .setIssuedAt()
-    .setExpirationTime('1h')
+    .setExpirationTime(lifetime)
     .sign(privateKey);
 }
 

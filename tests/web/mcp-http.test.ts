@@ -11,7 +11,7 @@ vi.mock('@/lib/mcp/oauth', () => ({
     grantId: 'grant-one',
     scopes: ['finapp:read'],
   }),
-  convexClient: () => ({
+  mcpBackendClient: async () => ({
     query: async (reference: Parameters<typeof getFunctionName>[0]) => {
       const name = getFunctionName(reference);
       if (name === 'mcpOAuth:currentUser') return { id: 'user-one', displayName: 'Test account' };
