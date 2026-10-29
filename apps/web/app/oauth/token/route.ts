@@ -1,5 +1,6 @@
 import { api } from '@convex/_generated/api';
-import { convexClient, mcpResourceUrl, signMcpAccessToken } from '@/lib/mcp/oauth';
+import type { FunctionReturnType } from 'convex/server';
+import { convexClient, mcpResourceUrl, prepareMcpAccessTokenSigner } from '@/lib/mcp/oauth';
 
 export const runtime = 'nodejs';
 
@@ -43,24 +44,33 @@ export async function POST(request: Request) {
   const clientId = form.get('client_id');
   const redirectUri = form.get('redirect_uri');
   const codeVerifier = form.get('code_verifier');
-  if (
-    grantType !== 'authorization_code' ||
-    !code ||
-    !clientId ||
-    !redirectUri ||
-    !codeVerifier ||
-    form.get('resource') !== mcpResourceUrl()
-  ) {
+  if (grantType !== 'authorization_code' || !code || !clientId || !redirectUri || !codeVerifier) {
     return Response.json({ error: 'invalid_request' }, { status: 400 });
   }
+  let signAccessToken: Awaited<ReturnType<typeof prepareMcpAccessTokenSigner>>;
   try {
-    const grant = await convexClient().mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+    if (form.get('resource') !== mcpResourceUrl()) {
+      return Response.json({ error: 'invalid_request' }, { status: 400 });
+    }
+    signAccessToken = await prepareMcpAccessTokenSigner();
+  } catch {
+    return Response.json({ error: 'server_error' }, { status: 503 });
+  }
+
+  let grant: FunctionReturnType<typeof api.mcpOAuth.exchangeAuthorizationCode>;
+  try {
+    grant = await convexClient().mutation(api.mcpOAuth.exchangeAuthorizationCode, {
       code,
       clientId,
       redirectUri,
       codeVerifier,
     });
-    const accessToken = await signMcpAccessToken(
+  } catch {
+    return Response.json({ error: 'invalid_grant' }, { status: 400 });
+  }
+
+  try {
+    const accessToken = await signAccessToken(
       String(grant.userId),
       String(grant.grantId),
       grant.scopes,
@@ -75,6 +85,6 @@ export async function POST(request: Request) {
       { headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' } },
     );
   } catch {
-    return Response.json({ error: 'invalid_grant' }, { status: 400 });
+    return Response.json({ error: 'server_error' }, { status: 503 });
   }
 }

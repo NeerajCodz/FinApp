@@ -126,6 +126,11 @@ Verifiers accept the full RFC 7636 unreserved alphabet at lengths 43–128.
 Token request bodies are limited to 16,384 bytes while streaming, including
 requests without a reliable `Content-Length`.
 
+The token endpoint prepares and validates its signing configuration before
+consuming a code. Missing, malformed, or undersized RSA keys return
+`503 server_error` without exchanging the code; retry after correcting the
+server configuration. Signing errors are not reported as `invalid_grant`.
+
 Client-facing access tokens use RS256, expire after one hour, and identify the
 user, grant, issuer, MCP resource audience, and approved scopes. They are not
 Convex credentials. After token validation, the server uses a separate,
@@ -134,9 +139,9 @@ credential is never returned to the client; MCP rejects backend tokens, and
 Convex rejects client-facing MCP tokens. The current implementation does not
 issue refresh tokens; the client must reauthorize when necessary.
 
-Declining a validated request returns to the exact registered client redirect
-URI with `error=access_denied` and the original `state`. Invalid requests never
-produce an external denial callback.
+Declining a validated request uses non-prefetching navigation to the exact
+registered client redirect URI with `error=access_denied` and the original
+`state`. Invalid requests never produce an external denial callback.
 
 | Scope                   | Access through MCP                                                                                                                            |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -40,7 +40,9 @@ export function convexClient(): ConvexHttpClient {
 
 export async function mcpBackendClient(principal: McpPrincipal): Promise<ConvexHttpClient> {
   const client = convexClient();
+  const context = await signingContext();
   const backendToken = await signMcpToken(
+    context,
     principal.userId,
     { grantId: principal.grantId },
     MCP_CONVEX_AUDIENCE,
@@ -50,34 +52,41 @@ export async function mcpBackendClient(principal: McpPrincipal): Promise<ConvexH
   return client;
 }
 
-export async function signMcpAccessToken(
-  userId: string,
-  grantId: string,
-  scopes: string[],
-): Promise<string> {
-  return signMcpToken(userId, { scope: scopes.join(' '), grantId }, mcpResourceUrl(), '1h');
+export async function prepareMcpAccessTokenSigner() {
+  const resource = mcpResourceUrl();
+  const context = await signingContext();
+  return (userId: string, grantId: string, scopes: string[]) =>
+    signMcpToken(context, userId, { scope: scopes.join(' '), grantId }, resource, '1h');
 }
 
-async function signMcpToken(
-  userId: string,
-  claims: JWTPayload,
-  audience: string,
-  lifetime: string,
-): Promise<string> {
+async function signingContext() {
   const privateKeyPem = process.env.MCP_SIGNING_PRIVATE_KEY?.replace(/\\n/g, '\n');
   const keyId = process.env.MCP_SIGNING_KEY_ID?.trim();
   if (!privateKeyPem || !keyId) {
     throw new Error('MCP_SIGNING_PRIVATE_KEY and MCP_SIGNING_KEY_ID are required');
   }
   const privateKey = await importPKCS8(privateKeyPem, signingAlgorithm);
+  const algorithm = privateKey.algorithm as RsaHashedKeyAlgorithm;
+  if (algorithm.modulusLength < 2048)
+    throw new Error('MCP signing keys must be at least 2048 bits');
+  return { privateKey, keyId, issuer: mcpIssuer() };
+}
+
+function signMcpToken(
+  context: Awaited<ReturnType<typeof signingContext>>,
+  userId: string,
+  claims: JWTPayload,
+  audience: string,
+  lifetime: string,
+): Promise<string> {
   return new SignJWT(claims)
-    .setProtectedHeader({ alg: signingAlgorithm, kid: keyId, typ: 'JWT' })
-    .setIssuer(mcpIssuer())
+    .setProtectedHeader({ alg: signingAlgorithm, kid: context.keyId, typ: 'JWT' })
+    .setIssuer(context.issuer)
     .setSubject(userId)
     .setAudience(audience)
     .setIssuedAt()
     .setExpirationTime(lifetime)
-    .sign(privateKey);
+    .sign(context.privateKey);
 }
 
 export async function mcpJwks(): Promise<{ keys: Record<string, unknown>[] }> {

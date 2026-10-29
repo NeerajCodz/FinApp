@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const oauth = vi.hoisted(() => ({
   mutation: vi.fn(),
-  signMcpAccessToken: vi.fn(),
+  prepareSigner: vi.fn(),
+  signAccessToken: vi.fn(),
 }));
 
 vi.mock('@/lib/mcp/oauth', () => ({
   mcpResourceUrl: () => 'https://finapp.test/mcp',
   convexClient: () => ({ mutation: oauth.mutation }),
-  signMcpAccessToken: oauth.signMcpAccessToken,
+  prepareMcpAccessTokenSigner: oauth.prepareSigner,
 }));
 
 import { POST } from '../../apps/web/app/oauth/token/route';
@@ -59,7 +60,8 @@ beforeEach(() => {
     grantId: 'grant-one',
     scopes: ['finapp:read'],
   });
-  oauth.signMcpAccessToken.mockResolvedValue('signed-access-token');
+  oauth.prepareSigner.mockResolvedValue(oauth.signAccessToken);
+  oauth.signAccessToken.mockResolvedValue('signed-access-token');
 });
 
 describe('OAuth token request body limit', () => {
@@ -159,6 +161,14 @@ describe('OAuth token request body limit', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'invalid_grant' });
-    expect(oauth.signMcpAccessToken).not.toHaveBeenCalled();
+    expect(oauth.signAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('reports an unexpected signing failure as a server error, not invalid_grant', async () => {
+    oauth.signAccessToken.mockRejectedValue(new Error('Signing unavailable'));
+    const stream = streamedRequest([encoder.encode(validForm)]);
+    const response = await POST(stream.request);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'server_error' });
   });
 });

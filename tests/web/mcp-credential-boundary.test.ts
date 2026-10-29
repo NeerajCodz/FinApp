@@ -1,20 +1,28 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exportPKCS8, exportSPKI, generateKeyPair, jwtVerify } from 'jose';
 import { api } from '../../convex/_generated/api';
 import {
   mcpBackendClient,
-  signMcpAccessToken,
+  prepareMcpAccessTokenSigner,
   verifyMcpAccessToken,
 } from '../../apps/web/lib/mcp/oauth';
+import { POST as tokenPost } from '../../apps/web/app/oauth/token/route';
 
 let keys: Awaited<ReturnType<typeof generateKeyPair>>;
 let privatePem: string;
 let publicPem: string;
+let weakPrivatePem: string;
 
 beforeAll(async () => {
   keys = await generateKeyPair('RS256', { extractable: true });
   privatePem = await exportPKCS8(keys.privateKey);
   publicPem = await exportSPKI(keys.publicKey);
+  weakPrivatePem = generateKeyPairSync('rsa', {
+    modulusLength: 1024,
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  }).privateKey;
 });
 beforeEach(() => {
   vi.stubEnv('MCP_ISSUER_URL', 'https://finapp.test');
@@ -55,7 +63,8 @@ async function outgoingBackendToken() {
 
 describe('MCP credential boundary', () => {
   it('rejects a client-facing access token under the actual Convex auth provider audience', async () => {
-    const token = await signMcpAccessToken('user-one', 'grant-one', ['finapp:read']);
+    const sign = await prepareMcpAccessTokenSigner();
+    const token = await sign('user-one', 'grant-one', ['finapp:read']);
     const provider = await backendProvider();
     await expect(
       jwtVerify(token, keys.publicKey, {
@@ -93,4 +102,57 @@ describe('MCP credential boundary', () => {
       }),
     ).rejects.toMatchObject({ code: 'ERR_JWT_EXPIRED' });
   });
+
+  it('keeps the prepared signing key stable across later environment changes', async () => {
+    const sign = await prepareMcpAccessTokenSigner();
+    vi.stubEnv('MCP_SIGNING_PRIVATE_KEY', 'invalid after preparation');
+    const token = await sign('user-one', 'grant-one', ['finapp:read']);
+    await expect(verifyMcpAccessToken(token)).resolves.toMatchObject({
+      userId: 'user-one',
+      grantId: 'grant-one',
+    });
+  });
+
+  it.each(['missing', 'malformed', 'weak'] as const)(
+    'returns a server error before consuming the code with a %s signing key',
+    async (failure) => {
+      vi.stubEnv(
+        'MCP_SIGNING_PRIVATE_KEY',
+        failure === 'missing' ? '' : failure === 'weak' ? weakPrivatePem : 'not a PEM key',
+      );
+      const exchange = vi.fn(async () =>
+        Response.json({
+          status: 'success',
+          value: { userId: 'user-one', grantId: 'grant-one', scopes: ['finapp:read'] },
+        }),
+      );
+      vi.stubGlobal('fetch', exchange);
+      const request = () =>
+        new Request('https://finapp.test/oauth/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code: 'a'.repeat(64),
+            client_id: 'b'.repeat(64),
+            redirect_uri: 'https://client.test/callback',
+            code_verifier: 'c'.repeat(43),
+            resource: 'https://finapp.test/mcp',
+          }),
+        });
+      const failed = await tokenPost(request());
+      expect(failed.status).toBe(503);
+      expect(await failed.json()).toEqual({ error: 'server_error' });
+      expect(exchange).not.toHaveBeenCalled();
+
+      vi.stubEnv('MCP_SIGNING_PRIVATE_KEY', privatePem);
+      const retried = await tokenPost(request());
+      expect(retried.status).toBe(200);
+      const body = (await retried.json()) as { access_token: string };
+      await expect(verifyMcpAccessToken(body.access_token)).resolves.toMatchObject({
+        userId: 'user-one',
+        grantId: 'grant-one',
+      });
+    },
+  );
 });
