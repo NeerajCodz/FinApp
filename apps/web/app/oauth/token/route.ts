@@ -14,9 +14,30 @@ export async function POST(request: Request) {
   if (Number.isFinite(contentLength) && contentLength > 16_384) {
     return Response.json({ error: 'invalid_request' }, { status: 413 });
   }
-  const body = await request.text();
-  if (body.length > 16_384) return Response.json({ error: 'invalid_request' }, { status: 413 });
-  const form = new URLSearchParams(body);
+  const bytes = new Uint8Array(16_384);
+  let byteLength = 0;
+  try {
+    const reader = request.body?.getReader();
+    if (reader) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value.byteLength > bytes.byteLength - byteLength) {
+            await reader.cancel().catch(() => undefined);
+            return Response.json({ error: 'invalid_request' }, { status: 413 });
+          }
+          bytes.set(value, byteLength);
+          byteLength += value.byteLength;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+  } catch {
+    return Response.json({ error: 'invalid_request' }, { status: 400 });
+  }
+  const form = new URLSearchParams(new TextDecoder().decode(bytes.subarray(0, byteLength)));
   const grantType = form.get('grant_type');
   const code = form.get('code');
   const clientId = form.get('client_id');
