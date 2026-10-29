@@ -1,4 +1,5 @@
 import type { AuthConfig } from 'convex/server';
+import { MCP_CONVEX_AUDIENCE } from './shared/mcpAuth';
 
 const convexSiteUrl = process.env.CONVEX_SITE_URL;
 if (!convexSiteUrl) throw new Error('CONVEX_SITE_URL is required for Convex authentication.');
@@ -17,7 +18,7 @@ if (mcpIssuer) {
     type: 'customJwt',
     issuer,
     jwks: new URL('/.well-known/jwks.json', issuer).toString(),
-    applicationID: process.env.MCP_RESOURCE_URL ?? new URL('/mcp', issuer).toString(),
+    applicationID: MCP_CONVEX_AUDIENCE,
     algorithm: 'RS256',
   });
 }

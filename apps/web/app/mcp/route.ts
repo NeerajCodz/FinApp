@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { convexClient, mcpResourceUrl, verifyMcpAccessToken } from '@/lib/mcp/oauth';
+import { mcpBackendClient, mcpResourceUrl, verifyMcpAccessToken } from '@/lib/mcp/oauth';
 import type { McpPrincipal } from '@/lib/mcp/oauth';
 import { createMcpServer } from '@/lib/mcp/server';
 
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     return withCors(unauthorized(), request);
   }
 
-  const client = convexClient(token);
+  const client = await mcpBackendClient(principal);
   const profile = await client.query(api.mcpOAuth.currentUser, {}).catch(() => null);
   if (!profile || profile.id !== principal.userId) return withCors(unauthorized(), request);
   const activeGrant = await client

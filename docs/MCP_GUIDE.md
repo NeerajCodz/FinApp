@@ -61,16 +61,17 @@ A grant indicates authorization, not a currently connected client session.
 ## Deployment configuration
 
 Use one canonical public HTTPS origin for the production MCP issuer and
-resource. Keep preview and production configuration separate. The issuer and
-resource must match between the web app and Convex. A build marked successful
-by the hosting provider does not prove that OAuth or Convex functions are ready.
+resource. Keep preview and production configuration separate. The issuer must
+match between the web app and Convex; the client-facing resource audience must
+remain distinct from the backend-only audience. A successful hosting build
+does not prove that OAuth or Convex functions are ready.
 
 | Variable                  | Web deployment                                                                                   | Convex deployment                                                                     |
 | ------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_CONVEX_URL`  | Required; target Convex deployment URL. Rebuild when changing it.                                | Not used by this integration.                                                         |
 | `CONVEX_SITE_URL`         | Existing authentication setup may use its own related settings.                                  | Required by the existing Convex auth provider; preserve the correct deployment value. |
 | `MCP_ISSUER_URL`          | Required; canonical web HTTPS origin, no route path.                                             | Required to enable the MCP JWT provider; use the same issuer.                         |
-| `MCP_RESOURCE_URL`        | Recommended explicit value: `https://your-finapp.example/mcp`. Defaults to `/mcp` on the issuer. | Use the same resource value; defaults to `/mcp` on the issuer.                        |
+| `MCP_RESOURCE_URL`        | Recommended explicit value: `https://your-finapp.example/mcp`. Defaults to `/mcp` on the issuer. | Not used by the Convex provider; its backend-only audience is fixed separately.       |
 | `MCP_SIGNING_KEY_ID`      | Required stable key ID, also exposed as JWKS `kid`.                                              | Not required.                                                                         |
 | `MCP_SIGNING_PRIVATE_KEY` | Required PKCS#8 RSA private key; server-only secret.                                             | Not required; do not distribute the private key.                                      |
 | `MCP_SIGNING_PUBLIC_KEY`  | Required SPKI public key matching the private key.                                               | Not required; Convex reads public JWKS from the issuer.                               |
@@ -97,12 +98,18 @@ replacement with clients because existing one-hour tokens use the previous key.
 1. Configure the web issuer, resource, key pair, key ID, and Convex URL.
 2. Deploy the web app and verify that public JWKS and discovery metadata are
    reachable without hosting-provider login or deployment protection.
-3. Configure the same issuer/resource in the target Convex deployment.
+3. Configure the same issuer in the target Convex deployment.
 4. Deploy the updated Convex schema, functions, and `convex/auth.config.ts` to
    that deployment. The web deployment alone does not deploy these functions.
 5. Complete the verification sequence below using a dedicated account.
 6. Confirm the production alias targets the intended Git commit, not just a
    successful preview deployment.
+
+When upgrading the original MCP provider, deploy the new Convex auth
+configuration before the web cutover. It removes acceptance of client-facing
+resource tokens and allows only `finapp-mcp-backend`. A brief MCP interruption
+while the web deployment catches up is preferable to leaving the direct-token
+bypass active. Existing non-MCP Convex authentication is unchanged.
 
 The existing email/password and email verification/two-factor flow is reused.
 This MCP feature does not configure Google, Apple, or other social sign-in
@@ -113,11 +120,28 @@ providers. Those require separate identity-provider configuration.
 The server uses OAuth authorization-code flow with PKCE `S256`, public clients
 (`token_endpoint_auth_method: none`), exact registered redirect matching, and an
 explicit `resource` parameter identifying the MCP endpoint. Authorization codes
-expire after five minutes and can be exchanged only once.
+expire after five minutes and are consumed atomically with grant creation;
+neither a replay nor revoking the resulting grant can make a code reusable.
+Verifiers accept the full RFC 7636 unreserved alphabet at lengths 43–128.
+Token request bodies are limited to 16,384 bytes while streaming, including
+requests without a reliable `Content-Length`.
 
-Access tokens use RS256, expire after one hour, and identify the user, grant,
-issuer, resource audience, and approved scopes. The current implementation does
-not issue refresh tokens; the client must reauthorize when necessary.
+The token endpoint prepares and validates its signing configuration before
+consuming a code. Missing, malformed, or undersized RSA keys return
+`503 server_error` without exchanging the code; retry after correcting the
+server configuration. Signing errors are not reported as `invalid_grant`.
+
+Client-facing access tokens use RS256, expire after one hour, and identify the
+user, grant, issuer, MCP resource audience, and approved scopes. They are not
+Convex credentials. After token validation, the server uses a separate,
+one-minute JWT with audience `finapp-mcp-backend` for its Convex calls. That
+credential is never returned to the client; MCP rejects backend tokens, and
+Convex rejects client-facing MCP tokens. The current implementation does not
+issue refresh tokens; the client must reauthorize when necessary.
+
+Declining a validated request uses non-prefetching navigation to the exact
+registered client redirect URI with `error=access_denied` and the original
+`state`. Invalid requests never produce an external denial callback.
 
 | Scope                   | Access through MCP                                                                                                                            |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
