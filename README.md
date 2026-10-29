@@ -150,13 +150,15 @@ Configure the following values in the web deployment:
 - `MCP_ALLOWED_ORIGINS`: optional comma-separated browser origins for additional
   MCP clients. ChatGPT and Claude origins are allowed by default.
 
-Set `MCP_ISSUER_URL` and `MCP_RESOURCE_URL` in the Convex deployment environment
-as well, then deploy the updated Convex auth configuration and schema. Its MCP
-JWT provider validates the resource URL as the token audience. MCP access tokens
-are user-scoped, expire after one hour, and carry explicit `finapp:read`,
-`finapp:write:finance`, `finapp:write:social`, `finapp:write:groups`, and
-`finapp:write:personal` scopes. The consent screen grants read access by
-default; each write scope is opt-in.
+Set `MCP_ISSUER_URL` in the Convex deployment environment as well, then deploy
+the updated auth configuration and schema. Convex accepts only the separate
+`finapp-mcp-backend` audience: the web server creates a one-minute backend
+credential after validating a client-facing MCP token. That backend credential
+never leaves the server, and a client's MCP token cannot authenticate directly
+to Convex. Client-facing access tokens remain user-scoped, expire after one
+hour, and carry explicit `finapp:read`, `finapp:write:finance`,
+`finapp:write:social`, `finapp:write:groups`, and `finapp:write:personal` scopes.
+The consent screen grants read access by default; each write scope is opt-in.
 
 Call `finapp.catalog` first, then the matching `finapp.{finance,social,groups,personal}.parent`
 tool. List operations use cursors and a maximum page size of 100. Transaction,
