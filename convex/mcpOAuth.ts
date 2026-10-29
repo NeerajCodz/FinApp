@@ -151,7 +151,7 @@ export const exchangeAuthorizationCode = mutation({
       !/^[a-f\d]{64}$/.test(args.code) ||
       !/^[a-f\d]{64}$/.test(args.clientId) ||
       args.redirectUri.length > 2048 ||
-      !/^[A-Za-z0-9_-]{43,128}$/.test(args.codeVerifier)
+      !/^[A-Za-z0-9._~-]{43,128}$/.test(args.codeVerifier)
     ) {
       throw new Error('INVALID_GRANT');
     }
@@ -176,6 +176,7 @@ export const exchangeAuthorizationCode = mutation({
     if (base64url(new Uint8Array(challenge)) !== code.codeChallenge) {
       throw new Error('INVALID_GRANT');
     }
+    await ctx.db.patch(code._id, { consumedAt: Date.now() });
     const grantId = await ctx.db.insert('mcpOAuthGrants', {
       clientId: code.clientId,
       userId: code.userId,
