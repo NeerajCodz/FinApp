@@ -327,9 +327,9 @@ export function McpAuthorizeScreen() {
                     Decline
                   </span>
                 ) : (
-                  <Link className="mcp-access-decline" href={denialUrl ?? '/mcp/dashboard'}>
+                  <a className="mcp-access-decline" href={denialUrl ?? '/mcp/dashboard'}>
                     Decline
-                  </Link>
+                  </a>
                 )}
                 <Button type="button" onClick={authorize} disabled={pending} aria-busy={pending}>
                   {pending ? 'Connecting…' : 'Approve access'}
