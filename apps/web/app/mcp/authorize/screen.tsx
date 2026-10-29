@@ -6,6 +6,7 @@ import { useConvexAuth, useAuthToken } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Button, ThemeProvider } from '@finapp/ui/web';
+import { authorizationDenialUrl } from '@/lib/mcp/authorizationCallback';
 
 type AuthorizationRequest = {
   clientId: string;
@@ -30,7 +31,7 @@ const scopeCopy: Record<string, { title: string; description: string }> = {
   'finapp:write:social': {
     title: 'Manage social connections',
     description:
-      'Send or respond to friend requests, start direct conversations, and mark notifications read.',
+      'Send or respond to friend requests, start direct conversations, and send direct messages.',
   },
   'finapp:write:groups': {
     title: 'Manage shared groups',
@@ -40,7 +41,7 @@ const scopeCopy: Record<string, { title: string; description: string }> = {
   'finapp:write:personal': {
     title: 'Manage personal settings',
     description:
-      'Update profile details, privacy controls, default account, and notification preferences.',
+      'Update profile details, privacy controls, default account, and notification preferences, or mark notifications read.',
   },
 };
 
@@ -198,6 +199,7 @@ export function McpAuthorizeScreen() {
 
   const writeScopes = request.scope.filter((scope) => scope !== 'finapp:read');
   const selectedWrites = writeScopes.filter((scope) => selectedScopes.includes(scope)).length;
+  const denialUrl = authorizationDenialUrl(request, registeredClient);
 
   function scopeRow(scope: string, required = false) {
     const selected = selectedScopes.includes(scope);
@@ -320,9 +322,15 @@ export function McpAuthorizeScreen() {
                 .
               </p>
               <div className="mcp-access-actions">
-                <Link className="mcp-access-decline" href="/mcp/dashboard">
-                  Decline
-                </Link>
+                {pending ? (
+                  <span className="mcp-access-decline" aria-disabled="true">
+                    Decline
+                  </span>
+                ) : (
+                  <Link className="mcp-access-decline" href={denialUrl ?? '/mcp/dashboard'}>
+                    Decline
+                  </Link>
+                )}
                 <Button type="button" onClick={authorize} disabled={pending} aria-busy={pending}>
                   {pending ? 'Connecting…' : 'Approve access'}
                   <span aria-hidden="true">↗</span>
