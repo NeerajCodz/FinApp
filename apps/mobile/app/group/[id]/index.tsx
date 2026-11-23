@@ -54,7 +54,7 @@ export default function GroupHomeScreen() {
   );
   const chatMessages = useQuery(
     api.groups.queries.chatMessages,
-    canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+    canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'>, limit: 20 } : 'skip',
   );
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);

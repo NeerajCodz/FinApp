@@ -1,44 +1,31 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowLeft, ArrowRight, Plus } from '@finapp/ui/icons/native';
+import { ArrowLeft } from '@finapp/ui/icons/native';
 import { Avatar, IconButton, Text, Typography, useTheme } from '@finapp/ui/native';
+import {
+  ChatThread,
+  firstUnreadMessageId,
+  useLiveTypists,
+  useOptimisticMessages,
+  useReadMarker,
+  useTypingSender,
+  type ChatMessage,
+} from '@finapp/ui/chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toast } from '@/lib/toast';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
-type Message = {
-  id: Id<'directMessages'>;
-  senderId: Id<'users'>;
-  kind: 'text' | 'image';
-  text?: string;
-  attachmentUrl?: string;
-  createdAt: number;
-  seen: boolean;
-  senderName: string;
-  reactions?: { emoji: string; count: number }[];
-  myReaction?: string | null;
-};
-const reactionChoices = ['❤️', '👍', '😂', '😮'] as const;
-type Conversation = {
-  id: Id<'directConversations'>;
-  userId: Id<'users'>;
-  displayName?: string;
-  username?: string;
-  avatarId?: string;
+const PAGE_SIZE = 30;
+const extensionMimeTypes: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
 };
 
 export default function DirectConversationScreen() {
@@ -49,20 +36,18 @@ export default function DirectConversationScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId } = useLocalSync();
-  const listRef = useRef<ScrollView>(null);
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [reactionMenuId, setReactionMenuId] = useState<Id<'directMessages'> | null>(null);
-  const [reactingMessageId, setReactingMessageId] = useState<Id<'directMessages'> | null>(null);
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const typingActive = useRef(false);
-  const typingLastSent = useRef(0);
-  const messages = useQuery(
-    api.directMessages.queries.messages,
+  const [uploading, setUploading] = useState(false);
+  const history = usePaginatedQuery(
+    api.directMessages.queries.messagesPage,
     conversationId ? { conversationId } : 'skip',
-  ) as Message[] | undefined;
-  const conversations = useQuery(api.directMessages.queries.listConversations, {}) as
-    Conversation[] | undefined;
+    { initialNumItems: PAGE_SIZE },
+  );
+  const meta = useQuery(
+    api.directMessages.queries.conversationMeta,
+    conversationId ? { conversationId } : 'skip',
+  );
+  const conversations = useQuery(api.directMessages.queries.listConversations, {});
   const presence = useQuery(
     api.presence.queries.scopeState,
     conversationId ? { scopeType: 'direct', scopeId: conversationId } : 'skip',
@@ -70,102 +55,85 @@ export default function DirectConversationScreen() {
   const sendText = useMutation(api.directMessages.mutations.sendText);
   const createUpload = useMutation(api.directMessages.mutations.createImageUpload);
   const sendImage = useMutation(api.directMessages.mutations.sendImage);
-  const markSeen = useMutation(api.presence.mutations.markDirectSeen);
+  const markRead = useMutation(api.presence.mutations.markRead);
   const setTyping = useMutation(api.presence.mutations.setTyping);
   const toggleReaction = useMutation(api.directMessages.mutations.toggleReaction);
+  const setPinned = useMutation(api.directMessages.mutations.setPinned);
+  const optimistic = useOptimisticMessages((error) =>
+    toast.error(error instanceof Error ? error.message : 'Message could not be sent'),
+  );
+  const typing = useTypingSender(
+    conversationId
+      ? (active) => setTyping({ scopeType: 'direct', scopeId: conversationId, typing: active })
+      : undefined,
+  );
+  const typistIds = useLiveTypists(presence?.typing);
+  const onSeenLatest = useReadMarker(
+    conversationId
+      ? (readAt) => markRead({ scopeType: 'direct', scopeId: conversationId, readAt })
+      : undefined,
+    meta?.myLastReadAt,
+  );
   const conversation = useMemo(
     () => conversations?.find((row) => String(row.id) === String(conversationId)),
     [conversations, conversationId],
   );
   const participant = presence?.participants?.[0];
-  const presenceLabel =
-    participant?.active === true
+  const peerName = conversation?.displayName ?? 'Friend';
+  const presenceLabel = typistIds.length
+    ? 'Typing…'
+    : participant?.active === true
       ? 'Active now'
       : participant?.lastSeenAt
         ? `Last seen ${new Date(participant.lastSeenAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
         : '';
-  async function react(messageId: Id<'directMessages'>, emoji: (typeof reactionChoices)[number]) {
-    if (reactingMessageId) return;
-    setReactingMessageId(messageId);
-    try {
-      await toggleReaction({ messageId, emoji });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not update this reaction');
-    } finally {
-      setReactingMessageId(null);
-    }
-  }
 
-  useEffect(() => {
-    if (!messages?.length || !userId) return;
-    for (const message of messages) {
-      if (String(message.senderId) !== String(userId) && !message.seen)
-        void markSeen({ messageId: message.id }).catch(() => undefined);
-    }
-  }, [messages, userId, markSeen]);
-  useEffect(
-    () => () => {
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-      if (conversationId && typingActive.current) {
-        typingActive.current = false;
-        void setTyping({
-          scopeType: 'direct',
-          scopeId: conversationId,
-          typing: false,
-        }).catch(() => undefined);
-      }
-    },
-    [conversationId, setTyping],
+  const peerLastReadAt = meta?.peerLastReadAt ?? 0;
+  const pinnedIds = useMemo(() => new Set((meta?.pinned ?? []).map((pin) => pin.id)), [meta]);
+  const serverMessages = useMemo<ChatMessage[]>(
+    () =>
+      [...history.results].reverse().map((message) => {
+        const mine = String(message.senderId) === String(userId);
+        return {
+          id: String(message.id),
+          kind: message.kind,
+          createdAt: message.createdAt,
+          mine,
+          senderId: String(message.senderId),
+          senderName: mine ? 'You' : message.senderName,
+          senderAvatarUrl: message.senderAvatarUrl,
+          senderAvatarId: message.senderAvatarId,
+          text: message.text,
+          imageUrl: message.attachmentUrl,
+          reactions: message.reactions,
+          myReaction: message.myReaction,
+          pinned: message.pinnedAt !== null || pinnedIds.has(message.id),
+          canPin: true,
+          seen: mine && peerLastReadAt >= message.createdAt,
+        };
+      }),
+    [history.results, peerLastReadAt, pinnedIds, userId],
   );
-  function stopTyping() {
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = undefined;
-    if (typingActive.current) {
-      typingActive.current = false;
-      void setTyping({ scopeType: 'direct', scopeId: conversationId, typing: false }).catch(
-        () => undefined,
-      );
-    }
-  }
-  function updateText(value: string) {
-    setText(value);
-    const active = Boolean(value.trim());
-    if (!active) {
-      stopTyping();
-      return;
-    }
-    const now = Date.now();
-    if (!typingActive.current || now - typingLastSent.current >= 4_000) {
-      typingActive.current = true;
-      typingLastSent.current = now;
-      void setTyping({ scopeType: 'direct', scopeId: conversationId, typing: true }).catch(
-        () => undefined,
-      );
-    }
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(() => {
-      typingTimer.current = undefined;
-      typingActive.current = false;
-      void setTyping({ scopeType: 'direct', scopeId: conversationId, typing: false }).catch(
-        () => undefined,
-      );
-    }, 1_800);
-  }
-  async function submitText() {
+  const messages = useMemo(
+    () => [...serverMessages, ...optimistic.messages],
+    [optimistic.messages, serverMessages],
+  );
+  // Freeze the unread marker at open so it does not vanish as soon as the pointer advances.
+  const [firstUnreadId, setFirstUnreadId] = useState<string | undefined | null>(null);
+  if (firstUnreadId === null && meta && history.status !== 'LoadingFirstPage')
+    setFirstUnreadId(firstUnreadMessageId(serverMessages, meta.myLastReadAt) ?? undefined);
+
+  function submitText() {
     const value = text.trim();
-    if (!value || sending) return;
-    setSending(true);
-    try {
-      await sendText({ conversationId, text: value });
-      setText('');
-      stopTyping();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Message could not be sent');
-    } finally {
-      setSending(false);
-    }
+    if (!value || !conversationId) return;
+    setText('');
+    typing.stop();
+    optimistic.send({ kind: 'text', text: value, senderName: 'You' }, () =>
+      sendText({ conversationId, text: value }),
+    );
   }
   async function attachImage() {
+    if (!conversationId || uploading) return;
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -173,12 +141,6 @@ export default function DirectConversationScreen() {
       });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
-      const extensionMimeTypes: Record<string, string> = {
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        png: 'image/png',
-        webp: 'image/webp',
-      };
       const extension = asset.fileName?.split('.').pop()?.toLowerCase();
       const mimeType =
         asset.mimeType?.toLowerCase() ?? (extension ? extensionMimeTypes[extension] : undefined);
@@ -186,23 +148,27 @@ export default function DirectConversationScreen() {
         toast.error('Choose a JPEG, PNG, or WebP image');
         return;
       }
-      setSending(true);
+      setUploading(true);
       const image = await (await fetch(asset.uri)).blob();
-      if (!image.size || image.size > 5 * 1024 * 1024)
-        throw new Error('Choose an image up to 5 MB.');
-      const { uploadUrl, ticket } = await createUpload({ conversationId });
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': mimeType },
-        body: image,
+      setUploading(false);
+      if (!image.size || image.size > 5 * 1024 * 1024) {
+        toast.error('Choose an image up to 5 MB.');
+        return;
+      }
+      optimistic.send({ kind: 'image', imageUrl: asset.uri, senderName: 'You' }, async () => {
+        const { uploadUrl, ticket } = await createUpload({ conversationId });
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': mimeType },
+          body: image,
+        });
+        if (!response.ok) throw new Error('Image upload failed');
+        const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
+        await sendImage({ conversationId, storageId, ticket });
       });
-      if (!response.ok) throw new Error('Image upload failed');
-      const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
-      await sendImage({ conversationId, storageId, ticket });
     } catch (error) {
+      setUploading(false);
       toast.error(error instanceof Error ? error.message : 'Image could not be sent');
-    } finally {
-      setSending(false);
     }
   }
 
@@ -229,16 +195,23 @@ export default function DirectConversationScreen() {
         </IconButton>
         {conversation ? (
           <Avatar
-            label={conversation.displayName ?? 'Friend'}
-            initials={(conversation.displayName ?? 'F').slice(0, 2).toUpperCase()}
+            label={peerName}
+            initials={peerName.slice(0, 2).toUpperCase()}
             size={40}
             avatarId={conversation.avatarId}
+            imageUrl={conversation.avatarUrl}
           />
         ) : null}
         <View style={{ flex: 1 }}>
           <Typography variant="label">{conversation?.displayName ?? 'Conversation'}</Typography>
-          <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>
-            {presence?.typingUserIds?.length ? 'Typing…' : presenceLabel}
+          <Text
+            style={{
+              color: typistIds.length ? tokens.primary : tokens.foregroundMuted,
+              fontSize: 12,
+            }}
+            accessibilityLiveRegion="polite"
+          >
+            {presenceLabel}
           </Text>
         </View>
       </View>
@@ -249,185 +222,61 @@ export default function DirectConversationScreen() {
           </Typography>
         </View>
       ) : (
-        <>
-          {messages === undefined ? (
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              <ActivityIndicator color={tokens.primary} />
-            </View>
-          ) : messages.length === 0 ? (
-            <View style={{ alignItems: 'center', padding: 18 }}>
-              <Typography variant="body">No messages yet. Say hello.</Typography>
-            </View>
-          ) : null}
-          <ScrollView
-            ref={listRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ padding: 16, gap: 10 }}
-            keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-          >
-            {(messages ?? []).map((message) => {
-              const mine = String(message.senderId) === String(userId);
-              return (
-                <View
-                  key={String(message.id)}
-                  style={{
-                    alignSelf: mine ? 'flex-end' : 'flex-start',
-                    maxWidth: '82%',
-                    padding: message.kind === 'image' ? 4 : 12,
-                    borderRadius: 18,
-                    backgroundColor: mine ? tokens.primary : tokens.surfaceSubtle,
-                  }}
-                >
-                  {message.kind === 'image' && message.attachmentUrl ? (
-                    <Image
-                      source={{ uri: message.attachmentUrl }}
-                      resizeMode="cover"
-                      style={{ width: 220, height: 220, borderRadius: 14 }}
-                    />
-                  ) : (
-                    <Text style={{ color: mine ? tokens.primaryForeground : tokens.foreground }}>
-                      {message.text}
-                    </Text>
-                  )}
-                  <Text
-                    style={{
-                      color: mine ? tokens.primaryForeground : tokens.foregroundMuted,
-                      fontSize: 10,
-                      marginTop: 5,
-                      textAlign: 'right',
-                    }}
-                  >
-                    {new Date(message.createdAt).toLocaleTimeString([], {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                    {mine && message.seen ? ' · Seen' : ''}
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                    {message.reactions?.map(({ emoji, count }) => (
-                      <TouchableOpacity
-                        key={emoji}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${emoji} reaction, ${count} ${count === 1 ? 'person' : 'people'}`}
-                        accessibilityState={{ selected: message.myReaction === emoji }}
-                        disabled={reactingMessageId === message.id}
-                        onPress={() =>
-                          void react(message.id, emoji as (typeof reactionChoices)[number])
-                        }
-                        style={{
-                          borderWidth: 1,
-                          borderColor:
-                            message.myReaction === emoji ? tokens.primary : tokens.borderSubtle,
-                          borderRadius: 14,
-                          paddingHorizontal: 7,
-                          paddingVertical: 3,
-                          backgroundColor: tokens.surfaceRaised,
-                        }}
-                      >
-                        <Text style={{ color: tokens.foreground, fontSize: 12 }}>
-                          {emoji} {count}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Add a reaction"
-                      accessibilityState={{ expanded: reactionMenuId === message.id }}
-                      onPress={() =>
-                        setReactionMenuId((current) => (current === message.id ? null : message.id))
-                      }
-                      style={{
-                        borderWidth: 1,
-                        borderColor: tokens.borderSubtle,
-                        borderRadius: 14,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        backgroundColor: tokens.surfaceRaised,
-                      }}
-                    >
-                      <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>+</Text>
-                    </TouchableOpacity>
-                    {reactionMenuId === message.id &&
-                      reactionChoices.map((emoji) => (
-                        <TouchableOpacity
-                          key={emoji}
-                          accessibilityRole="button"
-                          accessibilityLabel={`React with ${emoji}`}
-                          accessibilityState={{ selected: message.myReaction === emoji }}
-                          disabled={reactingMessageId === message.id}
-                          onPress={() => {
-                            void react(message.id, emoji);
-                            setReactionMenuId(null);
-                          }}
-                          style={{
-                            borderWidth: 1,
-                            borderColor:
-                              message.myReaction === emoji ? tokens.primary : tokens.borderSubtle,
-                            borderRadius: 14,
-                            paddingHorizontal: 7,
-                            paddingVertical: 3,
-                            backgroundColor: tokens.surfaceRaised,
-                          }}
-                        >
-                          <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-                </View>
-              );
-            })}
-          </ScrollView>
-          <View
-            style={{
-              paddingHorizontal: 12,
-              paddingTop: 8,
-              paddingBottom: Math.max(insets.bottom, 10),
-              borderTopWidth: 1,
-              borderTopColor: tokens.borderSubtle,
-              flexDirection: 'row',
-              alignItems: 'flex-end',
-              gap: 8,
+        <View
+          style={{
+            flex: 1,
+            paddingHorizontal: 12,
+            paddingTop: 6,
+            paddingBottom: Math.max(insets.bottom, 10),
+          }}
+        >
+          <ChatThread
+            mode="direct"
+            messages={messages}
+            loading={history.status === 'LoadingFirstPage'}
+            canLoadOlder={history.status === 'CanLoadMore'}
+            loadingOlder={history.status === 'LoadingMore'}
+            onLoadOlder={() => history.loadMore(PAGE_SIZE)}
+            firstUnreadId={firstUnreadId ?? undefined}
+            typingNames={typistIds.length ? [peerName] : []}
+            pinned={(meta?.pinned ?? []).map((pin) => ({
+              id: String(pin.id),
+              text: pin.text,
+              senderName: String(pin.senderId) === String(userId) ? 'You' : pin.senderName,
+              canUnpin: true,
+            }))}
+            onTogglePin={(id, pinned) =>
+              void setPinned({ messageId: id as Id<'directMessages'>, pinned }).catch((error) =>
+                toast.error(error instanceof Error ? error.message : 'Could not update the pin'),
+              )
+            }
+            onReact={(id, emoji) =>
+              void toggleReaction({ messageId: id as Id<'directMessages'>, emoji }).catch((error) =>
+                toast.error(
+                  error instanceof Error ? error.message : 'Could not update this reaction',
+                ),
+              )
+            }
+            onRetry={optimistic.retry}
+            onDiscard={optimistic.discard}
+            onSeenLatest={onSeenLatest}
+            emptyTitle={`Say hello to ${peerName}`}
+            emptyDescription="Messages, photos and reactions appear here instantly."
+            composer={{
+              draft: text,
+              onDraftChange: (value) => {
+                setText(value);
+                typing.onDraftChange(value);
+              },
+              onSend: submitText,
+              onBlur: typing.stop,
+              onAttach: () => void attachImage(),
+              attachLabel: 'Attach image',
+              uploading,
+              placeholder: 'Message',
             }}
-          >
-            <TouchableOpacity
-              accessibilityLabel="Attach image"
-              disabled={sending}
-              onPress={() => void attachImage()}
-              style={{ padding: 10 }}
-            >
-              <Plus size={21} color={tokens.foregroundMuted} />
-            </TouchableOpacity>
-            <TextInput
-              value={text}
-              onChangeText={updateText}
-              onBlur={stopTyping}
-              placeholder="Message"
-              placeholderTextColor={tokens.foregroundSubtle}
-              multiline
-              maxLength={4000}
-              style={{
-                flex: 1,
-                maxHeight: 110,
-                minHeight: 42,
-                borderRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                color: tokens.foreground,
-                backgroundColor: tokens.surfaceSubtle,
-              }}
-              onSubmitEditing={() => void submitText()}
-            />
-            <TouchableOpacity
-              accessibilityLabel="Send message"
-              disabled={sending || !text.trim()}
-              onPress={() => void submitText()}
-              style={{ padding: 10, opacity: sending || !text.trim() ? 0.5 : 1 }}
-            >
-              <ArrowRight size={20} color={tokens.primary} />
-            </TouchableOpacity>
-          </View>
-        </>
+          />
+        </View>
       )}
     </KeyboardAvoidingView>
   );
