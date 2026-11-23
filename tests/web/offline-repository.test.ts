@@ -3,6 +3,7 @@ import { openWebDatabase, WEB_DATABASE_NAME } from '../../apps/web/lib/offline/d
 import * as repository from '../../apps/web/lib/offline/repository';
 import type { OutboxEntry } from '../../apps/web/lib/offline/repository';
 import { syncOutbox } from '../../apps/web/lib/offline/sync';
+import { projectGroupBalances } from '../../convex/splits/domain';
 
 const userA = 'user-a';
 const userB = 'user-b';
@@ -96,6 +97,9 @@ describe('browser offline repository', () => {
       _id: 'cloud-account-client-id',
       cloudId: 'cloud-account-client-id',
     });
+    expect(await repository.getMappedCloudId(userA, 'account', clientId)).toBe(
+      'cloud-account-client-id',
+    );
 
     const mappedId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
     await repository.commitLocalWrite(
@@ -131,6 +135,89 @@ describe('browser offline repository', () => {
     expect(
       await repository.getLocalRecord(userA, 'account', 'ffffffff-ffff-4fff-8fff-ffffffffffff'),
     ).toBeNull();
+  });
+  it('reconciles confirmed group splits with optimistic rows when the range is fetched again', async () => {
+    const userId = 'user-split-reconciliation';
+    const clientId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const transaction = {
+      id: clientId,
+      groupId: 'cloud-group',
+      amountMinor: 100n,
+      currency: 'USD',
+      type: 'expense',
+      status: 'posted',
+    };
+    await repository.commitLocalWrite(
+      userId,
+      'transaction',
+      'group.addExpense',
+      transaction,
+      {},
+      {
+        clientMutationId: 'split-reconciliation',
+        recordId: clientId,
+        relatedRecords: [
+          {
+            entityType: 'expensePayer',
+            record: {
+              transactionId: clientId,
+              userId: 'alice',
+              memberId: 'alice',
+              amountMinor: 100n,
+            },
+          },
+          {
+            entityType: 'expenseParticipant',
+            record: {
+              transactionId: clientId,
+              userId: 'alice',
+              memberId: 'alice',
+              amountMinor: 40n,
+            },
+          },
+          {
+            entityType: 'expenseParticipant',
+            record: { transactionId: clientId, userId: 'bob', memberId: 'bob', amountMinor: 60n },
+          },
+        ],
+      },
+    );
+    await repository.markSynced(
+      userId,
+      await outboxIdFor(userId, 'split-reconciliation'),
+      'transaction',
+      clientId,
+      {
+        serverId: 'cloud-transaction',
+        revision: '1',
+        updatedAt: Date.now(),
+      },
+    );
+    await repository.upsertCloudPage(userId, 'expensePayer', [
+      {
+        _id: 'cloud-payer',
+        transactionId: 'cloud-transaction',
+        userId: 'alice',
+        amountMinor: 100n,
+      },
+    ]);
+    await repository.upsertCloudPage(userId, 'expenseParticipant', [
+      { _id: 'cloud-alice', transactionId: 'cloud-transaction', userId: 'alice', amountMinor: 40n },
+      { _id: 'cloud-bob', transactionId: 'cloud-transaction', userId: 'bob', amountMinor: 60n },
+    ]);
+    const payers = await repository.readLocal(userId, 'expensePayer');
+    const participants = await repository.readLocal(userId, 'expenseParticipant');
+    expect(payers).toHaveLength(1);
+    expect(participants).toHaveLength(2);
+    expect(
+      projectGroupBalances(
+        { _id: 'cloud-group', currency: 'USD' },
+        await repository.readLocal(userId, 'transaction'),
+        payers,
+        participants,
+        [],
+      ).balances,
+    ).toEqual({ alice: 60n, bob: -60n });
   });
   it('uses cloud clientId identity for incremental cloud changes', async () => {
     const clientId = '12121212-1212-4121-8121-121212121212';

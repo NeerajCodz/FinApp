@@ -215,4 +215,27 @@ describe('social discovery and relationship summaries', () => {
     expect(results).toMatchObject([{ id: fixture.profile, avatarUrl: fixture.avatarUrl }]);
     expect(results[0]).not.toHaveProperty('image');
   });
+  it('bounds username prefix search and excludes the viewer and deleted profiles', async () => {
+    const t = convexTest(schema, modules);
+    const viewerId = await t.run(async (ctx) => {
+      const viewer = await createUser(ctx, 'match_viewer');
+      await createUser(ctx, 'match_00', { deleted: true });
+      await createUser(ctx, 'unrelated');
+      for (let i = 0; i < 25; i++) {
+        await createUser(ctx, `match_${String(i + 1).padStart(2, '0')}`);
+      }
+      return viewer;
+    });
+    const viewer = t.withIdentity({ subject: `${viewerId}|session` });
+    const results = await viewer.query(api.users.queries.searchGroupProfiles, {
+      query: ' @MATCH_',
+    });
+
+    expect(results).toHaveLength(20);
+    expect(results.map((person) => person.username)).toEqual(
+      Array.from({ length: 20 }, (_, i) => `match_${String(i + 1).padStart(2, '0')}`),
+    );
+    expect(await viewer.query(api.users.queries.searchGroupProfiles, { query: 'm' })).toEqual([]);
+    expect(await t.query(api.users.queries.searchGroupProfiles, { query: 'match' })).toEqual([]);
+  });
 });

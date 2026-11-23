@@ -143,7 +143,25 @@ function putRecord(
   type: LocalEntity,
   record: LocalRecord,
 ): void {
+  const sourceTransactionId = record.transactionId;
   record = mapCloudForeignIds(db, userId, record) as LocalRecord;
+  if (
+    (type === 'expensePayer' || type === 'expenseParticipant') &&
+    typeof sourceTransactionId === 'string' &&
+    typeof record.transactionId === 'string' &&
+    sourceTransactionId !== record.transactionId
+  ) {
+    const memberId = record.memberId ?? record.userId;
+    if (typeof memberId === 'string') {
+      const table = type === 'expensePayer' ? 'expensePayers' : 'expenseParticipants';
+      db.runSync(
+        `DELETE FROM ${table} WHERE userId = ? AND transactionId = ? AND memberId = ?`,
+        userId,
+        sourceTransactionId,
+        memberId,
+      );
+    }
+  }
   const id = entityId(record, type);
   const payload = encode(record);
   const cloudId = typeof record.cloudId === 'string' ? record.cloudId : (record._id ?? null);

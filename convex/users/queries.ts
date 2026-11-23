@@ -97,6 +97,35 @@ export const search = query({
     );
   },
 });
+
+export const searchGroupProfiles = query({
+  args: { query: v.string() },
+  handler: async (ctx, args) => {
+    const current = await getOptionalUser(ctx);
+    if (!current) return [];
+    const searchTerm = normalizeUsername(args.query);
+    if (!/^[a-z0-9_]{2,32}$/.test(searchTerm)) return [];
+    const users = await ctx.db
+      .query('users')
+      .withIndex('by_username', (q) =>
+        q.gte('username', searchTerm).lte('username', `${searchTerm}\uffff`),
+      )
+      .filter((q) =>
+        q.and(q.neq(q.field('_id'), current._id), q.eq(q.field('deletedAt'), undefined)),
+      )
+      .take(20);
+    return Promise.all(
+      users.map(async (user) => ({
+        id: user._id,
+        displayName: user.displayName ?? user.name ?? 'Finapp user',
+        username: user.username,
+        gender: user.gender,
+        avatarId: user.avatarId,
+        avatarUrl: (await avatarUrlForUser(ctx, user)) ?? undefined,
+      })),
+    );
+  },
+});
 export const publicProfile = query({
   args: { username: v.string() },
   handler: async (ctx, { username }) => {
