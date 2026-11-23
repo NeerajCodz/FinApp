@@ -16,6 +16,8 @@ import { TransactionCards, type TransactionTableItem } from './TransactionsScree
 import { SemanticMarker } from './SemanticMarker';
 import { SettingsRow } from './ScreenPrimitives';
 import type { SemanticType, TransactionType } from '../types';
+import { LineItemsReceipt } from './LineItems';
+import type { LineItemView } from '../lineItems';
 
 export type TransactionDetailScreenProps = {
   title: string;
@@ -49,6 +51,8 @@ export type TransactionDetailScreenProps = {
   relatedTransactions?: readonly TransactionTableItem[];
   onOpenTransaction?: (id: string) => void;
   tags?: readonly string[];
+  /** Line items, shown as a receipt-style breakdown. */
+  items?: readonly LineItemView[];
 };
 
 export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
@@ -266,6 +270,7 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
           </>
         ) : null}
       </View>
+      {!!props.items?.length && <LineItemsReceipt items={props.items} currency={currency} />}
       <View
         style={{
           padding: 16,

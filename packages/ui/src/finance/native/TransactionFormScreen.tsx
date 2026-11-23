@@ -7,6 +7,7 @@ import {
   Input,
   Separator,
   Sheet,
+  Switch,
   Text,
   Typography,
   useTheme,
@@ -15,6 +16,14 @@ import { CategoryIcon } from './CategoryIcon';
 import { CurrencyInput } from './CurrencyInput';
 import { DateTimePicker } from './DateTimePicker';
 import { TransactionCards, type TransactionTableItem } from './TransactionsScreen';
+import { LineItemsEditor } from './LineItems';
+import {
+  computeLineItems,
+  formatLineAmount,
+  lineItemsTotalInput,
+  startItemizing,
+  type LineItemDraft,
+} from '../lineItems';
 
 export type TransactionFormType = 'expense' | 'income' | 'transfer';
 export type TransactionFormOption = { id: string; name: string; currency?: string; icon?: string };
@@ -63,6 +72,10 @@ export type TransactionFormScreenProps = {
   referenceId?: string;
   similarTransactions?: readonly TransactionTableItem[];
   onOpenTransaction?: (id: string) => void;
+  /** Line items (`null`: not itemized). The amount is their sum while itemized. */
+  items?: readonly LineItemDraft[] | null;
+  /** Enables the "Itemize" section. */
+  onItemsChange?: (items: LineItemDraft[] | null) => void;
 };
 
 export function TransactionFormScreen(props: TransactionFormScreenProps) {
@@ -203,11 +216,53 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
             </View>
           )}
           <Typography variant="label">Amount *</Typography>
-          <CurrencyInput
-            currency={account?.currency ?? currency}
-            value={amount}
-            onChangeText={onAmountChange}
-          />
+          {props.items ? (
+            <View style={{ alignItems: 'center', gap: 4 }}>
+              <Typography
+                variant="display"
+                accessibilityLabel={`Amount ${formatLineAmount(
+                  computeLineItems(props.items, account?.currency ?? currency).totalMinor,
+                  account?.currency ?? currency,
+                )}, the sum of the items`}
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {formatLineAmount(
+                  computeLineItems(props.items, account?.currency ?? currency).totalMinor,
+                  account?.currency ?? currency,
+                )}
+              </Typography>
+              <Typography variant="caption">Sum of the items below</Typography>
+            </View>
+          ) : (
+            <CurrencyInput
+              currency={account?.currency ?? currency}
+              value={amount}
+              onChangeText={onAmountChange}
+            />
+          )}
+          {!!props.onItemsChange && type !== 'transfer' && (
+            <Switch
+              label="Itemize (starters, drinks, tax…)"
+              value={Boolean(props.items)}
+              onValueChange={(on) => {
+                const itemCurrency = account?.currency ?? currency;
+                if (on) props.onItemsChange!(startItemizing(amount, title));
+                else {
+                  const total = computeLineItems(props.items ?? [], itemCurrency).totalMinor;
+                  if (total > 0n) onAmountChange(lineItemsTotalInput(total, itemCurrency));
+                  props.onItemsChange!(null);
+                }
+              }}
+            />
+          )}
+          {!!props.items && !!props.onItemsChange && type !== 'transfer' && (
+            <LineItemsEditor
+              rows={props.items}
+              currency={account?.currency ?? currency}
+              disabled={saving}
+              onChange={props.onItemsChange}
+            />
+          )}
           {type !== 'transfer' && (
             <View style={{ gap: 4 }}>
               <SettingsRow

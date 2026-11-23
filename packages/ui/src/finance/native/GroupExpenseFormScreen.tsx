@@ -29,6 +29,7 @@ import { DateTimePicker } from './DateTimePicker';
 import { EntityIcon } from './EntityIconPicker';
 import { GroupAvatar, GroupHeading, GroupPanel, GroupTile } from './GroupPrimitives';
 import { MemberShareRow, StepProgress, allocationVisualTone } from './SplitVisuals';
+import { LineItemsEditor } from './LineItems';
 
 export type { GroupExpenseMethod } from '../groupExpenseDraft';
 export type GroupExpenseGroupOption = { id: string; name: string; currency?: string };
@@ -108,6 +109,12 @@ const methods: readonly {
     icon: 'phosphor:Percent',
   },
   { value: 'shares', title: 'Shares', description: 'Units, e.g. 2 : 1', icon: 'phosphor:ChartBar' },
+  {
+    value: 'itemized',
+    title: 'By item',
+    description: 'Who had what',
+    icon: 'phosphor:Receipt',
+  },
 ];
 
 function money(value: bigint | null | undefined, currency: string): string {
@@ -350,9 +357,28 @@ function AmountStep({ p }: { p: GroupExpenseFormScreenProps }) {
     if (digit === '.' && c.amount.includes('.')) return;
     if (/^\d{0,12}(\.\d{0,3})?$/.test(next)) c.set('amount', next === '.' ? '0.' : next);
   };
+  if (c.itemize)
+    return (
+      <View style={{ gap: 14 }}>
+        <StepTitle
+          icon="phosphor:Receipt"
+          title="What was on the bill?"
+          hint={`The total is the sum of the items, in ${p.currency}`}
+        />
+        <Switch label="Itemize the bill" value onValueChange={c.setItemize} />
+        <LineItemsEditor
+          rows={c.items}
+          currency={p.currency}
+          rowErrors={c.itemErrors}
+          disabled={p.saving}
+          onChange={c.setItems}
+        />
+      </View>
+    );
   return (
     <View style={{ gap: 14 }}>
       <StepTitle icon="phosphor:Coins" title="How much was it?" hint={`In ${p.currency}`} />
+      <Switch label="Itemize the bill" value={false} onValueChange={c.setItemize} />
       <View
         style={{
           alignItems: 'center',
@@ -743,6 +769,24 @@ function SplitStep({
           })}
         </View>
       </ScrollView>
+      {c.method === 'itemized' && (
+        <View style={{ gap: 8 }}>
+          <Typography variant="label">Who had each item?</Typography>
+          <LineItemsEditor
+            rows={c.items}
+            currency={p.currency}
+            rowErrors={c.itemErrors}
+            disabled={p.saving}
+            onChange={c.setItems}
+            people={c.participantIds.map((id) => ({
+              userId: id,
+              name: memberById(id)?.name ?? 'Member',
+              avatarId: memberById(id)?.avatarId,
+              avatarUrl: memberById(id)?.avatarUrl,
+            }))}
+          />
+        </View>
+      )}
       <StatusPill
         label={c.draft.allocation.label}
         tone={allocationVisualTone(c.draft.allocation.tone)}
@@ -759,7 +803,7 @@ function SplitStep({
               avatarUrl={member?.avatarUrl}
               amount={money(previewFor(id), p.currency)}
             >
-              {c.method !== 'equal' && (
+              {c.method !== 'equal' && c.method !== 'itemized' && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Input
                     accessibilityLabel={`${c.method === 'exact' ? 'Amount' : c.method === 'percentage' ? 'Percent' : 'Shares'} for ${name}`}
