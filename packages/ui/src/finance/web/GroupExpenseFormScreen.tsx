@@ -11,6 +11,7 @@ import {
 import { CurrencyInput } from './CurrencyInput';
 import { formatMinor } from '@convex/shared/money';
 import { GroupPage, Crumb, Tile, PersonAvatar, Tip, s } from './GroupUI';
+import { GroupExpenseDetailsFields, type GroupExpenseDetailsProps } from './GroupMetadataFields';
 export type GroupExpenseMethod = 'equal' | 'exact' | 'percentage' | 'shares';
 export type GroupExpenseGroupOption = { id: string; name: string; currency?: string };
 export type GroupExpenseAccountOption = { id: string; name: string };
@@ -21,8 +22,9 @@ export type GroupExpenseMemberOption = {
   avatarUrl?: string | null;
 };
 export type GroupExpenseShare = { userId: string; amountMinor: bigint };
-export type GroupExpenseFormScreenProps = {
+export type GroupExpenseFormScreenProps = GroupExpenseDetailsProps & {
   signedIn: boolean;
+  mode?: 'create' | 'edit';
   fixedGroupId?: string;
   groups: readonly GroupExpenseGroupOption[];
   selectedGroupId: string;
@@ -46,7 +48,7 @@ export type GroupExpenseFormScreenProps = {
   validation?: string;
   error?: string;
   saving?: boolean;
-  onGroupChange: (id: string) => void;
+  onGroupChange?: (id: string) => void;
   onAccountChange: (id: string) => void;
   onTitleChange: (value: string) => void;
   onAmountChange: (value: string) => void;
@@ -76,7 +78,11 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
   const total = p.totalMinor === null ? '—' : formatMinor(p.totalMinor, p.currency);
   return (
     <GroupPage>
-      <Crumb onBack={p.onBack} name={p.groupName} current="New expense" />
+      <Crumb
+        onBack={p.onBack}
+        name={p.groupName}
+        current={p.mode === 'edit' ? 'Edit expense' : 'New expense'}
+      />
       <div className={s.columns}>
         <div className={s.stack}>
           {p.groupName && (
@@ -103,9 +109,11 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
           )}
           <section className={s.panel}>
             <div>
-              <h2>New expense</h2>
+              <h2>{p.mode === 'edit' ? 'Edit expense' : 'New expense'}</h2>
               <p className={s.muted}>
-                Add an expense and split it with specific people in this group.
+                {p.mode === 'edit'
+                  ? 'Update this expense and its split.'
+                  : 'Add an expense and split it with specific people in this group.'}
               </p>
             </div>
             <form onSubmit={p.onSubmit} className={s.stack}>
@@ -116,7 +124,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                     <CustomSelect
                       aria-label="Group"
                       value={p.selectedGroupId}
-                      onChange={(e) => p.onGroupChange(e.currentTarget.value)}
+                      onChange={(e) => p.onGroupChange?.(e.currentTarget.value)}
                     >
                       <option value="">Choose a saved group</option>
                       {p.groups.map((g) => (
@@ -192,6 +200,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                       )}
                     </label>
                   </div>
+                  {p.mode === 'edit' && <GroupExpenseDetailsFields p={p} />}
                   <section className={s.stack}>
                     <div>
                       <h3>Split method</h3>
@@ -324,7 +333,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
               )}
               <div className={s.actions}>
                 <Button type="submit" disabled={p.saving || Boolean(p.validation)}>
-                  {p.saving ? 'Saving…' : 'Add expense'}
+                  {p.saving ? 'Saving…' : p.mode === 'edit' ? 'Save changes' : 'Add expense'}
                 </Button>
                 <Button type="button" variant="outline" onPress={p.onBack}>
                   Cancel

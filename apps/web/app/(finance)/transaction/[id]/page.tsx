@@ -12,6 +12,7 @@ import {
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { canEditGroupExpense } from '@/lib/groupExpense';
 import {
   aliasesOf,
   asMinor,
@@ -54,7 +55,8 @@ export default function PersonalTransactionDetailPage() {
   const [actionError, setActionError] = React.useState<string | null>(null);
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const transaction = transactionState.records.find(
-    (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
+    (record) =>
+      userId && matchesId(record, routeId) && (record.groupId || belongsToUser(record, userId)),
   );
   const accounts = accountState.records.filter((record) => userId && belongsToUser(record, userId));
   const categories = categoryState.records.filter(
@@ -93,8 +95,10 @@ export default function PersonalTransactionDetailPage() {
     tagState.error;
   const canEdit = Boolean(
     transaction &&
-    !transaction.groupId &&
-    ['expense', 'income', 'transfer'].includes(String(transaction.type)),
+    transaction.deletedAt === undefined &&
+    (transaction.groupId
+      ? canEditGroupExpense(transaction, userId)
+      : ['expense', 'income', 'transfer'].includes(String(transaction.type))),
   );
   const canDuplicate = Boolean(
     transaction &&

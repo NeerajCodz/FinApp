@@ -24,24 +24,6 @@ export default function GroupHomeScreen() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { group, members, ledger, error, loading, retry, userId } = useGroupLedger(id);
   const { isConnected } = useLocalSync();
-  const savedGroups = useLocalRecords(userId, 'group');
-  const savedMemberships = useLocalRecords(userId, 'groupMember');
-  const groupOptions = (savedGroups.data ?? [])
-    .filter(
-      (candidate) =>
-        candidate.deletedAt === undefined &&
-        candidate.archivedAt === undefined &&
-        (savedMemberships.data ?? []).some(
-          (membership) =>
-            membership.deletedAt === undefined &&
-            (membership.userId === userId || membership.memberId === userId) &&
-            typeof membership.groupId === 'string' &&
-            recordIds(candidate).includes(membership.groupId),
-        ),
-    )
-    .map((candidate) => ({ id: recordId(candidate), name: String(candidate.name ?? 'Group') }))
-    .filter((option) => option.id);
-  const localGroupId = group ? recordId(group) : (id ?? '');
   const localSettlements = useLocalRecords(userId, 'settlement');
   const categories = useLocalRecords(userId, 'category');
   const accounts = useLocalRecords(userId, 'account');
@@ -325,11 +307,6 @@ export default function GroupHomeScreen() {
                     : undefined,
             }
           : undefined
-      }
-      groupOptions={groupOptions}
-      currentGroupId={localGroupId}
-      onSelectGroup={(selectedId) =>
-        router.push({ pathname: '/group/[id]', params: { id: selectedId } })
       }
       loading={loading}
       balanceStatus={error ? 'unavailable' : loading || !ledger ? 'loading' : 'ready'}

@@ -55,9 +55,6 @@ export type GroupDetailScreenProps = {
   owed?: string;
   owing?: string;
   memberBalances?: readonly { id: string; name: string; amount: string; meaning: string }[];
-  groupOptions?: readonly { id: string; name: string }[];
-  currentGroupId?: string;
-  onSelectGroup?: (id: string) => void;
   members: readonly GroupDetailMember[];
   activities: readonly GroupDetailActivity[];
   settlements: readonly GroupDetailSettlement[];
@@ -121,31 +118,6 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
       }}
     >
       <GroupHeading title={p.group?.name ?? 'Group'} onBack={p.onBack} />
-      {p.groupOptions?.length && p.onSelectGroup ? (
-        <GroupPanel>
-          <Typography variant="label">Switch group</Typography>
-          {p.groupOptions.map((option, index) => {
-            const duplicate =
-              p.groupOptions!.filter((item) => item.name === option.name).length > 1;
-            return (
-              <Pressable
-                key={option.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${option.name}${duplicate ? `, group ${index + 1}` : ''}${option.id === p.currentGroupId ? ', current group' : ''}`}
-                accessibilityState={{ selected: option.id === p.currentGroupId }}
-                onPress={() => p.onSelectGroup?.(option.id)}
-                style={{ paddingVertical: 9 }}
-              >
-                <Typography variant="small">
-                  {option.id === p.currentGroupId ? '✓ ' : ''}
-                  {option.name}
-                  {duplicate ? ` (${index + 1})` : ''}
-                </Typography>
-              </Pressable>
-            );
-          })}
-        </GroupPanel>
-      ) : null}
       {p.loading ? (
         <Typography>Loading group details…</Typography>
       ) : !p.group ? (

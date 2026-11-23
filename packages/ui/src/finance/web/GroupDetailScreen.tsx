@@ -31,12 +31,8 @@ export type GroupDetailSettlement = {
   amount: string;
   date?: string;
 };
-export type GroupDetailOption = { id: string; name: string };
 export type GroupDetailScreenProps = {
   group: { name: string; currency: string; icon?: string; color?: string };
-  groupOptions?: readonly GroupDetailOption[];
-  currentGroupId?: string;
-  onSelectGroup?: (id: string) => void;
   canSettle: boolean;
   balanceStatus: 'loading' | 'unavailable' | 'ready';
   balance: string;
@@ -85,33 +81,6 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
   return (
     <GroupPage>
       <Crumb onBack={p.onBack} current={p.group.name} />
-      {p.groupOptions && p.onSelectGroup && p.groupOptions.length > 0 && (
-        <label className={s.muted} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          Switch group{' '}
-          <select
-            aria-label="Switch group"
-            value={p.currentGroupId ?? ''}
-            onChange={(event) => p.onSelectGroup?.(event.target.value)}
-            style={{
-              color: 'inherit',
-              background: 'var(--surface, transparent)',
-              border: '1px solid currentColor',
-              borderRadius: 8,
-              padding: '8px 10px',
-            }}
-          >
-            {p.groupOptions.map((option, index) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-                {p.groupOptions!.filter((item) => item.name === option.name).length > 1
-                  ? ` (${index + 1})`
-                  : ''}
-                {option.id === p.currentGroupId ? ' — current group' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
       <header className={s.hero}>
         <Tile large icon={p.group.icon} color={p.group.color} />
         <div className={s.heroCopy}>

@@ -14,6 +14,7 @@ import type { LocalRecord } from '@/local/repository';
 import { Alert } from 'react-native';
 import { commitLocalWrite } from '@/local/commands';
 import { displayAccountName, ledgerTransaction, recordIds, recordIndex } from '@/lib/ledger';
+import { canEditGroupExpense } from '@/lib/groupExpenseEditing';
 
 export default function TransactionDetailRoute() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -56,8 +57,9 @@ export default function TransactionDetailRoute() {
     record?.groupId && transaction?.type === 'expense' ? 'split' : type;
   const editable = Boolean(
     transaction &&
-    !record?.groupId &&
-    ['expense', 'income', 'transfer'].includes(String(transaction.type)),
+    (record?.groupId
+      ? canEditGroupExpense(record, userId)
+      : ['expense', 'income', 'transfer'].includes(String(transaction.type))),
   );
   const duplicable = Boolean(
     transaction &&
@@ -196,7 +198,13 @@ export default function TransactionDetailRoute() {
       actionError={actionError}
       onDelete={deleteTransaction}
       onBack={() => router.back()}
-      onEdit={() => router.push(`/transaction/${encodeURIComponent(String(id))}/edit` as never)}
+      onEdit={() =>
+        router.push(
+          (record?.groupId
+            ? `/group/${encodeURIComponent(String(record.groupId))}/expense/${encodeURIComponent(String(id))}/edit`
+            : `/transaction/${encodeURIComponent(String(id))}/edit`) as never,
+        )
+      }
       onDuplicate={duplicate}
       onRetry={() => {
         transactionState.retry();
