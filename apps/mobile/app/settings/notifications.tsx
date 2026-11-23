@@ -2,6 +2,8 @@ import React from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 import { ArrowLeft, Bell } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
+import { useConvex } from 'convex/react';
+import { registerForPush } from '@/lib/push';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Separator, Switch, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
@@ -56,6 +58,7 @@ export default function NotificationSettingsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId, isConnected } = useLocalSync();
+  const convex = useConvex();
   const settings = useLocalRecords<LocalRecord>(userId, 'settings');
   const [preferences, setPreferences] = React.useState<NotificationPreferences | null>(null);
   const [permission, setPermission] = React.useState<'granted' | 'denied' | 'undetermined' | null>(
@@ -95,7 +98,10 @@ export default function NotificationSettingsScreen() {
     try {
       const granted = await requestNotificationPermission();
       setPermission(granted ? 'granted' : 'denied');
-      if (granted && userId) await reconcileRecurringNotifications(userId);
+      if (granted && userId) {
+        await reconcileRecurringNotifications(userId);
+        if (isConnected) await registerForPush(convex);
+      }
     } catch {
       setError('Could not request notification permission.');
     }

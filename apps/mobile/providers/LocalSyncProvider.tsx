@@ -1,6 +1,8 @@
 import React from 'react';
 import { isExpoGo } from '@/local/runtime';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
+import type { NotificationResponse } from 'expo-notifications';
+import { appPathForNotificationUrl } from '@/lib/push';
 import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
 import type { GroupSettlementRangeResult, GroupTransactionRangeResult } from '@convex/sync/types';
@@ -476,6 +478,8 @@ async function sendMutation(
         notificationId: mapped ?? notificationId,
       } as never);
     }
+    case 'notification.markAllRead':
+      return convex.mutation(api.notifications.mutations.markAllRead, payload as never);
     case 'user.update':
       return convex.mutation(api.users.mutations.update, payload as never);
     case 'user.defaultAccount': {
@@ -1061,24 +1065,36 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   }, [userId, scopedFailedEntries]);
 
   React.useEffect(() => {
-    if (isExpoGo()) return;
+    if (isExpoGo() || Platform.OS === 'web') return;
     let active = true;
     let subscription: { remove: () => void } | null = null;
     void import('expo-notifications')
       .then((Notifications) => {
         if (!active) return;
         Notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldShowBanner: true,
-            shouldShowList: true,
-            shouldPlaySound: false,
-            shouldSetBadge: false,
-          }),
+          // While the app is open, server pushes surface as an in-app toast instead of a banner.
+          handleNotification: async (notification) => {
+            const trigger = notification.request.trigger as { type?: unknown } | null;
+            const remote = trigger?.type === 'push';
+            return {
+              shouldShowBanner: !remote,
+              shouldShowList: true,
+              shouldPlaySound: false,
+              shouldSetBadge: false,
+            };
+          },
         });
-        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-          if (response.notification.request.content.data?.url === '/recurring')
-            router.push('/recurring');
-        });
+        const follow = (response: NotificationResponse | null) => {
+          const path = appPathForNotificationUrl(response?.notification.request.content.data?.url);
+          if (path) router.push(path as never);
+        };
+        subscription = Notifications.addNotificationResponseReceivedListener(follow);
+        // A tap that launched the app from a killed state.
+        const launch = Notifications.getLastNotificationResponse();
+        if (launch) {
+          Notifications.clearLastNotificationResponse();
+          follow(launch);
+        }
       })
       .catch((error: unknown) => {
         console.warn('[local-sync] Notifications are unavailable.', error);

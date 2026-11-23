@@ -69,6 +69,37 @@ export async function markNotificationAsRead(userId: string, record: Notificatio
   );
 }
 
+/**
+ * Marks every given unread notification read with one queued server call. Device-only
+ * reminders (ids starting with `local:`) never reach the server and are updated in place.
+ */
+export async function markAllNotificationsAsRead(
+  userId: string,
+  records: readonly NotificationRecord[],
+) {
+  const unread = records.filter((record) => record.readAt === undefined);
+  for (const record of unread)
+    if (record.id.startsWith('local:')) await markDeviceNotificationRead(userId, record.id);
+  const cloud = unread.filter((record) => !record.id.startsWith('local:'));
+  const [first, ...rest] = cloud;
+  if (!first) return;
+  const readAt = Date.now();
+  await commitLocalWrite(
+    userId,
+    'notification',
+    'notification.markAllRead',
+    { ...first, readAt },
+    { before: Math.max(...cloud.map((record) => record.createdAt)) },
+    {
+      recordId: first.id,
+      relatedRecords: rest.map((record) => ({
+        entityType: 'notification' as const,
+        record: { ...record, readAt },
+      })),
+    },
+  );
+}
+
 export async function permissionStatus() {
   const Notifications = await loadNotifications();
   if (!Notifications) return 'denied' as const;
