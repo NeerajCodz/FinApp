@@ -1,11 +1,36 @@
 import React from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { Button, Input, Label, Typography, useTheme } from '@finapp/ui/native';
+import {
+  Button,
+  FadeIn,
+  HeroCard,
+  IconTile,
+  Input,
+  Label,
+  PressableScale,
+  StatusPill,
+  Switch,
+  Typography,
+  useTheme,
+} from '@finapp/ui/native';
+import { Illustration } from '@finapp/ui/illustrations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatMinor } from '@convex/shared/money';
-import { GroupAvatar, GroupHeading, GroupNote, GroupPanel, GroupTile } from './GroupPrimitives';
+import { withAlpha } from '../../tokens';
+import type { GroupExpenseMethod } from '../groupExpenseDraft';
+import {
+  composerStepLabels,
+  composerSteps,
+  type ComposerStep,
+  type ExpenseComposer,
+} from '../useExpenseComposer';
+import { AmountKeypad } from './AmountKeypad';
+import { DateTimePicker } from './DateTimePicker';
+import { EntityIcon } from './EntityIconPicker';
+import { GroupAvatar, GroupHeading, GroupPanel, GroupTile } from './GroupPrimitives';
+import { MemberShareRow, StepProgress, allocationVisualTone } from './SplitVisuals';
 
-export type GroupExpenseMethod = 'equal' | 'exact' | 'percentage' | 'shares';
+export type { GroupExpenseMethod } from '../groupExpenseDraft';
 export type GroupExpenseGroupOption = { id: string; name: string; currency?: string };
 export type GroupExpenseAccountOption = { id: string; name: string };
 export type GroupExpenseMemberOption = {
@@ -15,6 +40,12 @@ export type GroupExpenseMemberOption = {
   avatarUrl?: string | null;
 };
 export type GroupExpenseShare = { userId: string; amountMinor: bigint };
+export type GroupExpenseCategoryOption = {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+};
 export type GroupExpenseFormScreenProps = {
   signedIn: boolean;
   mode?: 'create' | 'edit';
@@ -30,37 +61,22 @@ export type GroupExpenseFormScreenProps = {
   groupColor?: string;
   currency: string;
   accounts: readonly GroupExpenseAccountOption[];
-  selectedAccountId: string;
+  /** The expense stays on its creator's account (an admin editing someone else's expense). */
+  accountLocked?: boolean;
+  categories?: readonly GroupExpenseCategoryOption[];
   members: readonly GroupExpenseMemberOption[];
-  payerName: string;
-  payerAvatarId?: string;
-  payerAvatarUrl?: string | null;
-  title: string;
-  amount: string;
-  date?: string;
-  onDateChange?: (value: string) => void;
-  categories?: readonly { id: string; name: string; icon?: string; color?: string }[];
-  selectedCategoryId?: string;
-  onCategoryChange?: (id: string) => void;
-  merchant?: string;
-  onMerchantChange?: (value: string) => void;
-  note?: string;
-  onNoteChange?: (value: string) => void;
-  method: GroupExpenseMethod;
-  selectedMemberIds: readonly string[];
-  basis: Readonly<Record<string, string>>;
-  shares: readonly GroupExpenseShare[];
-  totalMinor: bigint | null;
-  validation?: string;
+  currentUserId?: string | null;
+  composer: ExpenseComposer;
+  /**
+   * New expenses are recorded with you as the payer (that is what the server accepts when
+   * adding). Choosing someone else, or several payers, is available when editing.
+   */
+  payerEditable: boolean;
+  /** Offline: the change is saved on this device and syncs later. */
+  offline?: boolean;
   error?: string;
   saving?: boolean;
   onGroupChange?: (id: string) => void;
-  onAccountChange: (id: string) => void;
-  onTitleChange: (value: string) => void;
-  onAmountChange: (value: string) => void;
-  onMethodChange: (method: GroupExpenseMethod) => void;
-  onParticipantChange: (userId: string, selected: boolean) => void;
-  onBasisChange: (userId: string, value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
   onCreateGroup?: () => void;
@@ -73,32 +89,215 @@ const methods: readonly {
   description: string;
   icon: string;
 }[] = [
-  { value: 'equal', title: 'Equal', description: 'Split equally', icon: 'phosphor:UsersThree' },
+  {
+    value: 'equal',
+    title: 'Equally',
+    description: 'Everyone pays the same',
+    icon: 'phosphor:UsersThree',
+  },
   {
     value: 'exact',
-    title: 'Custom',
-    description: 'Set exact amounts',
+    title: 'Exact',
+    description: 'Type each amount',
     icon: 'phosphor:SlidersHorizontal',
   },
   {
     value: 'percentage',
-    title: 'Percentage',
-    description: 'Split by percentage',
+    title: 'Percent',
+    description: 'Shares of 100%',
     icon: 'phosphor:Percent',
   },
-  {
-    value: 'shares',
-    title: 'Shares',
-    description: 'Split by shares / units',
-    icon: 'phosphor:ChartBar',
-  },
+  { value: 'shares', title: 'Shares', description: 'Units, e.g. 2 : 1', icon: 'phosphor:ChartBar' },
 ];
+
+function money(value: bigint | null | undefined, currency: string): string {
+  if (value === null || value === undefined) return '—';
+  try {
+    return formatMinor(value, currency);
+  } catch {
+    return value.toString();
+  }
+}
 
 export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const selected = p.members.filter((member) => p.selectedMemberIds.includes(member.userId));
-  const validPreview = !p.validation && p.totalMinor !== null;
+  const c = p.composer;
+  const [stepIndex, setStepIndex] = React.useState(0);
+  const step: ComposerStep = composerSteps[stepIndex]!;
+  const completed = composerSteps.map((key) => !c.stepErrors[key]);
+  const memberById = (id: string) => p.members.find((member) => member.userId === id);
+  const isLast = stepIndex === composerSteps.length - 1;
+  const groupReady = Boolean(p.selectedGroupId);
+  const stepError = c.stepErrors[step];
+  const title = p.mode === 'edit' ? 'Edit expense' : 'New expense';
+
+  const body = !p.signedIn ? (
+    <GroupPanel>
+      <Illustration scene="welcome" size={150} />
+      <Typography variant="heading">Sign in to split an expense</Typography>
+      <Typography variant="small">Shared expenses live in your saved groups.</Typography>
+      {!!p.onSignIn && <Button onPress={p.onSignIn}>Sign in</Button>}
+    </GroupPanel>
+  ) : p.loading ? (
+    <GroupPanel>
+      <Illustration scene="splitBill" size={150} />
+      <Typography variant="small">Loading expense…</Typography>
+    </GroupPanel>
+  ) : p.dataError || p.unavailableMessage ? (
+    <GroupPanel>
+      <Illustration scene="error" size={150} />
+      <Typography accessibilityRole="alert">{p.dataError || p.unavailableMessage}</Typography>
+      {!!p.dataError && !!p.onRetry && (
+        <Button variant="outline" onPress={p.onRetry}>
+          Retry
+        </Button>
+      )}
+    </GroupPanel>
+  ) : (
+    <>
+      <HeroCard tone="split">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Typography variant="overline" style={{ color: tokens.split }}>
+              {p.groupName ?? 'Shared expense'}
+            </Typography>
+            <Typography
+              variant="display"
+              accessibilityLabel={`Total ${money(c.draft.totalMinor, p.currency)}`}
+              style={{ fontVariant: ['tabular-nums'] }}
+            >
+              {c.draft.totalMinor === null
+                ? money(0n, p.currency || 'INR')
+                : money(c.draft.totalMinor, p.currency)}
+            </Typography>
+            <Typography variant="caption" numberOfLines={1}>
+              {c.title.trim() || 'What was it for?'} · {c.participantIds.length}{' '}
+              {c.participantIds.length === 1 ? 'person' : 'people'}
+            </Typography>
+          </View>
+          <Illustration scene="splitBill" size={120} backdrop={false} />
+        </View>
+        <StepProgress
+          steps={composerSteps.map((key) => ({ key, label: composerStepLabels[key] }))}
+          current={stepIndex}
+          completed={completed}
+          onSelect={setStepIndex}
+        />
+      </HeroCard>
+
+      {!p.fixedGroupId && (
+        <GroupPanel>
+          <Typography variant="heading">Which group?</Typography>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {p.groups.map((group) => {
+                const selected = group.id === p.selectedGroupId;
+                return (
+                  <PressableScale
+                    key={group.id}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${group.name}, ${group.currency ?? 'no currency'}`}
+                    accessibilityState={{ selected }}
+                    disabled={p.saving}
+                    onPress={() => p.onGroupChange?.(group.id)}
+                    style={{
+                      padding: 12,
+                      minWidth: 120,
+                      gap: 4,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: selected ? tokens.primary : tokens.borderSubtle,
+                      backgroundColor: selected ? withAlpha(tokens.primary, 0.08) : tokens.card,
+                    }}
+                  >
+                    <Typography variant="label">{group.name}</Typography>
+                    <Typography variant="caption">{group.currency ?? '—'}</Typography>
+                  </PressableScale>
+                );
+              })}
+            </View>
+          </ScrollView>
+          {!p.groups.length && (
+            <View style={{ alignItems: 'center', gap: 8 }}>
+              <Illustration scene="group" size={130} />
+              <Typography variant="small">No saved groups yet.</Typography>
+            </View>
+          )}
+          {!!p.onCreateGroup && (
+            <Button variant="outline" size="sm" onPress={p.onCreateGroup}>
+              Create a group
+            </Button>
+          )}
+        </GroupPanel>
+      )}
+
+      {groupReady && (
+        <FadeIn key={step}>
+          <GroupPanel>
+            {step === 'amount' && <AmountStep p={p} />}
+            {step === 'details' && <DetailsStep p={p} />}
+            {step === 'paid' && <PaidStep p={p} memberById={memberById} />}
+            {step === 'split' && <SplitStep p={p} memberById={memberById} />}
+          </GroupPanel>
+        </FadeIn>
+      )}
+
+      {!!stepError && groupReady && (
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <EntityIcon value="phosphor:Info" size={16} color={tokens.warning} />
+          <Typography variant="small" accessibilityRole="alert" style={{ flex: 1 }}>
+            {stepError}
+          </Typography>
+        </View>
+      )}
+      {!!p.error && (
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 10,
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: withAlpha(tokens.destructive, 0.1),
+          }}
+        >
+          <EntityIcon value="phosphor:WarningCircle" size={18} color={tokens.destructive} />
+          <Typography accessibilityRole="alert" style={{ flex: 1, color: tokens.destructive }}>
+            {p.error}
+          </Typography>
+        </View>
+      )}
+      {p.offline && (
+        <StatusPill label="Offline · saves on this device and syncs later" tone="warning" />
+      )}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Button
+          variant="outline"
+          style={{ flex: 1 }}
+          disabled={p.saving}
+          onPress={() => (stepIndex ? setStepIndex(stepIndex - 1) : p.onBack())}
+        >
+          {stepIndex ? 'Back' : 'Cancel'}
+        </Button>
+        <Button
+          style={{ flex: 2 }}
+          disabled={
+            p.saving || !groupReady || (isLast ? Boolean(c.validation) : Boolean(stepError))
+          }
+          onPress={() => (isLast ? p.onSubmit() : setStepIndex(stepIndex + 1))}
+        >
+          {isLast
+            ? p.saving
+              ? 'Saving…'
+              : p.mode === 'edit'
+                ? 'Review changes'
+                : 'Add expense'
+            : `Next: ${composerStepLabels[composerSteps[stepIndex + 1]!]}`}
+        </Button>
+      </View>
+    </>
+  );
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -114,522 +313,478 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
         }}
       >
         <GroupHeading
-          title={p.mode === 'edit' ? 'Edit expense' : 'New expense'}
+          title={title}
           subtitle={
             p.mode === 'edit'
-              ? 'Update this shared expense and its split.'
-              : 'Add an expense and split it with specific people in your group.'
+              ? 'Change the amount, who paid or how it is split.'
+              : 'Four quick steps: amount, details, who paid and the split.'
           }
           onBack={p.onBack}
         />
-        {!p.signedIn ? (
-          <GroupPanel>
-            <Typography variant="heading">Sign in to share an expense</Typography>
-            <Typography variant="small">
-              Sign in to create an offline-first shared expense for a saved group.
-            </Typography>
-            {!!p.onSignIn && <Button onPress={p.onSignIn}>Sign in</Button>}
-          </GroupPanel>
-        ) : p.loading ? (
-          <Typography>Loading expense…</Typography>
-        ) : p.dataError || p.unavailableMessage ? (
-          <GroupPanel>
-            <Typography accessibilityRole="alert">{p.dataError || p.unavailableMessage}</Typography>
-            {p.dataError && p.onRetry && (
-              <Button variant="outline" onPress={p.onRetry}>
-                Retry
-              </Button>
-            )}
-          </GroupPanel>
-        ) : (
-          <>
-            {!!p.selectedGroupId && (
-              <GroupPanel>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                  <GroupTile icon={p.groupIcon} color={p.groupColor} size={72} />
-                  <View style={{ flex: 1, gap: 5 }}>
-                    <Typography variant="heading">
-                      {p.groupName ??
-                        p.groups.find((group) => group.id === p.selectedGroupId)?.name ??
-                        'Saved group'}
-                    </Typography>
-                    <Typography variant="caption">Shared expenses · {p.currency}</Typography>
-                    <View style={{ flexDirection: 'row' }}>
-                      {p.members.slice(0, 5).map((member, index) => (
-                        <View key={member.userId} style={{ marginLeft: index ? -6 : 0 }}>
-                          <GroupAvatar
-                            name={member.name}
-                            avatarId={member.avatarId}
-                            avatarUrl={member.avatarUrl}
-                            size={26}
-                          />
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              </GroupPanel>
-            )}
-            {!p.fixedGroupId && (
-              <GroupPanel>
-                <Typography variant="heading">Choose a group</Typography>
-                {p.groups.map((group) => (
-                  <Pressable
-                    key={group.id}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`${group.name}, ${group.currency ?? 'currency unavailable'}`}
-                    accessibilityState={{ selected: group.id === p.selectedGroupId }}
-                    disabled={p.saving}
-                    onPress={() => p.onGroupChange?.(group.id)}
-                    style={{
-                      padding: 12,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor:
-                        group.id === p.selectedGroupId ? tokens.primary : tokens.borderSubtle,
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Typography variant="label">{group.name}</Typography>
-                    <Typography variant="caption">{group.currency}</Typography>
-                  </Pressable>
-                ))}
-                {!p.groups.length && <Typography variant="small">No saved groups yet.</Typography>}
-                {!!p.onCreateGroup && (
-                  <Button variant="outline" onPress={p.onCreateGroup}>
-                    Create a group
-                  </Button>
-                )}
-              </GroupPanel>
-            )}
-            {!!p.selectedGroupId && (
-              <>
-                <GroupPanel>
-                  <Typography variant="heading">Expense details</Typography>
-                  <Label>Expense title *</Label>
-                  <Input
-                    accessibilityLabel="Split expense title"
-                    placeholder="Dinner, travel, supplies"
-                    value={p.title}
-                    onChangeText={p.onTitleChange}
-                    maxLength={120}
-                    editable={!p.saving}
-                  />
-                  {!!p.onMerchantChange && (
-                    <View>
-                      <Label>Merchant / description</Label>
-                      <Input
-                        accessibilityLabel="Expense merchant"
-                        placeholder="Where did you spend?"
-                        value={p.merchant ?? ''}
-                        onChangeText={p.onMerchantChange}
-                        editable={!p.saving}
-                      />
-                    </View>
-                  )}
-                  {!!p.onCategoryChange && (
-                    <View style={{ gap: 8 }}>
-                      <Label>Category</Label>
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                        <Button
-                          size="sm"
-                          variant={!p.selectedCategoryId ? 'secondary' : 'outline'}
-                          disabled={p.saving}
-                          onPress={() => p.onCategoryChange?.('')}
-                        >
-                          Uncategorized
-                        </Button>
-                        {p.categories?.map((category) => (
-                          <Pressable
-                            key={category.id}
-                            accessibilityRole="radio"
-                            accessibilityLabel={category.name}
-                            accessibilityState={{ selected: p.selectedCategoryId === category.id }}
-                            disabled={p.saving}
-                            onPress={() => p.onCategoryChange?.(category.id)}
-                            style={{
-                              padding: 8,
-                              borderWidth: 1,
-                              borderColor:
-                                p.selectedCategoryId === category.id
-                                  ? tokens.primary
-                                  : tokens.borderSubtle,
-                              borderRadius: 8,
-                              flexDirection: 'row',
-                              gap: 8,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <GroupTile
-                              icon={category.icon ?? 'phosphor:Tag'}
-                              color={category.color ?? tokens.warning}
-                              size={26}
-                            />
-                            <Typography variant="small" style={{ color: tokens.foreground }}>
-                              {category.name}
-                            </Typography>
-                          </Pressable>
-                        ))}
-                      </View>
-                      {!p.categories?.length && (
-                        <Typography variant="caption">
-                          No saved categories are available.
-                        </Typography>
-                      )}
-                    </View>
-                  )}
-                  <Label>Amount · {p.currency} *</Label>
-                  <Input
-                    accessibilityLabel={`Amount in ${p.currency}`}
-                    keyboardType="decimal-pad"
-                    placeholder="0.00"
-                    value={p.amount}
-                    onChangeText={p.onAmountChange}
-                    editable={!p.saving}
-                  />
-                  {!!p.onDateChange && (
-                    <View>
-                      <Label>Date *</Label>
-                      <Input
-                        accessibilityLabel="Expense date"
-                        value={p.date ?? ''}
-                        onChangeText={p.onDateChange}
-                        placeholder="YYYY-MM-DD"
-                        autoCapitalize="none"
-                        maxLength={10}
-                        editable={!p.saving}
-                      />
-                    </View>
-                  )}
-                  <Label>Who paid?</Label>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <GroupAvatar
-                      name={p.payerName}
-                      avatarId={p.payerAvatarId}
-                      avatarUrl={p.payerAvatarUrl}
-                    />
-                    <Typography variant="label">{p.payerName}</Typography>
-                  </View>
-                  <Typography variant="caption">
-                    Recorded from your account. Another payer is not supported here.
-                  </Typography>
-                  <Label>Paid from account *</Label>
-                  {p.accounts.map((account) => (
-                    <Pressable
-                      key={account.id}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: account.id === p.selectedAccountId }}
-                      accessibilityLabel={account.name}
-                      disabled={p.saving}
-                      onPress={() => p.onAccountChange(account.id)}
-                      style={{
-                        minHeight: 44,
-                        padding: 12,
-                        borderWidth: 1,
-                        borderColor:
-                          account.id === p.selectedAccountId ? tokens.primary : tokens.borderSubtle,
-                        borderRadius: 8,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 10,
-                      }}
-                    >
-                      <GroupTile icon="phosphor:Wallet" color={tokens.income} size={28} />
-                      <Typography variant="small" style={{ flex: 1, color: tokens.foreground }}>
-                        {account.name}
-                      </Typography>
-                      <Typography style={{ color: tokens.primary }}>
-                        {account.id === p.selectedAccountId ? '●' : '○'}
-                      </Typography>
-                    </Pressable>
-                  ))}
-                  {!p.accounts.length && (
-                    <Typography variant="small">
-                      No account uses {p.currency}. Add one before saving a split.
-                    </Typography>
-                  )}
-                  {!!p.onNoteChange && (
-                    <View>
-                      <Label>Notes (optional)</Label>
-                      <Input
-                        accessibilityLabel="Expense notes"
-                        value={p.note ?? ''}
-                        onChangeText={p.onNoteChange}
-                        placeholder="Add a note for this expense"
-                        multiline
-                        editable={!p.saving}
-                      />
-                    </View>
-                  )}
-                </GroupPanel>
-                <GroupPanel>
-                  <Typography variant="heading">Split method</Typography>
-                  <Typography variant="caption">
-                    Choose how to divide the amount among selected people.
-                  </Typography>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {methods.map((method) => (
-                      <Pressable
-                        key={method.value}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: p.method === method.value }}
-                        accessibilityLabel={`${method.title}, ${method.description}`}
-                        disabled={p.saving}
-                        onPress={() => p.onMethodChange(method.value)}
-                        style={({ pressed }) => ({
-                          flexBasis: '47%',
-                          flexGrow: 1,
-                          padding: 12,
-                          gap: 7,
-                          opacity: pressed ? 0.7 : 1,
-                          borderRadius: 9,
-                          borderWidth: 1,
-                          borderColor:
-                            p.method === method.value ? tokens.primary : tokens.borderSubtle,
-                          backgroundColor:
-                            p.method === method.value ? tokens.secondary : tokens.surfaceRaised,
-                        })}
-                      >
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <GroupTile
-                            icon={method.icon}
-                            size={32}
-                            color={p.method === method.value ? tokens.primary : tokens.split}
-                          />
-                          <Typography
-                            style={{
-                              color:
-                                p.method === method.value ? tokens.primary : tokens.foregroundMuted,
-                            }}
-                          >
-                            {p.method === method.value ? '●' : '○'}
-                          </Typography>
-                        </View>
-                        <Typography variant="label">{method.title}</Typography>
-                        <Typography variant="caption">{method.description}</Typography>
-                      </Pressable>
-                    ))}
-                  </View>
-                </GroupPanel>
-                <GroupPanel>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 10,
-                    }}
-                  >
-                    <Typography variant="heading">Split with</Typography>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={p.saving || !p.members.length}
-                      onPress={() => {
-                        const selectAll = selected.length !== p.members.length;
-                        for (const member of p.members)
-                          if (p.selectedMemberIds.includes(member.userId) !== selectAll)
-                            p.onParticipantChange(member.userId, selectAll);
-                      }}
-                    >
-                      {selected.length === p.members.length && p.members.length
-                        ? 'Clear all'
-                        : 'Select all'}
-                    </Button>
-                  </View>
-                  <Typography variant="caption">
-                    {selected.length} of {p.members.length} selected. Only participants are
-                    included.
-                  </Typography>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {p.members.map((member) => {
-                      const included = p.selectedMemberIds.includes(member.userId);
-                      return (
-                        <Pressable
-                          key={member.userId}
-                          accessibilityRole="checkbox"
-                          accessibilityLabel={`Include ${member.name}`}
-                          accessibilityState={{ checked: included }}
-                          disabled={p.saving}
-                          onPress={() => p.onParticipantChange(member.userId, !included)}
-                          style={{
-                            flexDirection: 'row',
-                            gap: 8,
-                            alignItems: 'center',
-                            padding: 8,
-                            borderWidth: 1,
-                            borderColor: included ? tokens.primary : tokens.borderSubtle,
-                            borderRadius: 9,
-                            backgroundColor: included ? tokens.secondary : tokens.surfaceRaised,
-                          }}
-                        >
-                          <GroupAvatar
-                            name={member.name}
-                            avatarId={member.avatarId}
-                            avatarUrl={member.avatarUrl}
-                            size={30}
-                          />
-                          <Typography variant="small" style={{ color: tokens.foreground }}>
-                            {member.name}
-                          </Typography>
-                          <Typography
-                            style={{ color: included ? tokens.primary : tokens.foregroundMuted }}
-                          >
-                            {included ? '●' : '○'}
-                          </Typography>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {p.method !== 'equal' &&
-                    selected.map((member) => (
-                      <View key={member.userId} style={{ gap: 4 }}>
-                        <Label>
-                          {member.name} ·{' '}
-                          {p.method === 'exact'
-                            ? `amount in ${p.currency}`
-                            : p.method === 'percentage'
-                              ? 'percentage'
-                              : 'shares'}
-                        </Label>
-                        <Input
-                          accessibilityLabel={`${p.method} value for ${member.name}`}
-                          keyboardType={p.method === 'shares' ? 'number-pad' : 'decimal-pad'}
-                          placeholder={
-                            p.method === 'percentage'
-                              ? '0–100%'
-                              : p.method === 'shares'
-                                ? 'Whole shares'
-                                : '0.00'
-                          }
-                          value={p.basis[member.userId] ?? ''}
-                          onChangeText={(value) => p.onBasisChange(member.userId, value)}
-                          editable={!p.saving}
-                        />
-                      </View>
-                    ))}
-                  {p.members.length <= 1 && (
-                    <Typography variant="caption">
-                      Other members appear after their memberships are saved on this device.
-                    </Typography>
-                  )}
-                </GroupPanel>
-                <GroupPanel>
-                  <Typography variant="heading">Split summary</Typography>
-                  <Typography variant="caption">Preview · this expense only</Typography>
-                  <Typography variant="small">Total amount</Typography>
-                  <Typography variant="title" style={{ fontVariant: ['tabular-nums'] }}>
-                    {p.totalMinor !== null
-                      ? formatMinor(p.totalMinor, p.currency)
-                      : 'Enter an amount'}
-                  </Typography>
-                  <Typography variant="label">
-                    {methods.find((method) => method.value === p.method)?.title} split ·{' '}
-                    {selected.length} participants
-                  </Typography>
-                  {validPreview ? (
-                    p.shares.map((share) => {
-                      const member = p.members.find((person) => person.userId === share.userId);
-                      return (
-                        <View
-                          key={share.userId}
-                          style={{
-                            flexDirection: 'row',
-                            gap: 10,
-                            alignItems: 'center',
-                            paddingVertical: 5,
-                          }}
-                        >
-                          <GroupAvatar
-                            name={member?.name ?? 'Member'}
-                            avatarId={member?.avatarId}
-                            avatarUrl={member?.avatarUrl}
-                            size={30}
-                          />
-                          <Typography variant="small" style={{ flex: 1, color: tokens.foreground }}>
-                            {member?.name ?? 'Member'}
-                          </Typography>
-                          <Typography variant="label" style={{ fontVariant: ['tabular-nums'] }}>
-                            {formatMinor(share.amountMinor, p.currency)}
-                          </Typography>
-                        </View>
-                      );
-                    })
-                  ) : (
-                    <Typography variant="small">
-                      Complete the amount and split values to preview each participant’s share.
-                    </Typography>
-                  )}
-                  <View
-                    style={{
-                      paddingTop: 12,
-                      borderTopWidth: 1,
-                      borderColor: tokens.borderSubtle,
-                      gap: 5,
-                    }}
-                  >
-                    <Typography variant="label">Who paid?</Typography>
-                    <Typography variant="small">
-                      {p.payerName} covers the full payment from the selected account.
-                    </Typography>
-                    <Typography variant="caption">
-                      These are this expense’s allocations, not existing group debt or a scheduled
-                      settlement.
-                    </Typography>
-                  </View>
-                </GroupPanel>
-              </>
-            )}
-            <GroupPanel>
-              <Typography variant="heading">Smart tips</Typography>
-              <GroupNote
-                title="Split with specific people"
-                text="Select only people who took part. Others won’t be included in this expense."
-                icon="phosphor:UsersThree"
-                color={tokens.split}
-              />
-              <GroupNote
-                title="Share a receipt"
-                text="After saving, share the bill image in your connected group chat. Receipt upload is not part of this form."
-                icon="phosphor:Receipt"
-                color={tokens.warning}
-              />
-              <GroupNote
-                title="Settle up later"
-                text="The group ledger tracks balances. Record an actual settlement from the group when payment is made."
-                icon="phosphor:ArrowsLeftRight"
-                color={tokens.income}
-              />
-            </GroupPanel>
-            {!!p.validation && (
-              <Typography accessibilityRole="alert" variant="small">
-                {p.validation}
-              </Typography>
-            )}
-            {!!p.error && (
-              <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
-                {p.error}
-              </Typography>
-            )}
-            <Button
-              disabled={p.saving || !!p.validation || !p.selectedGroupId}
-              onPress={p.onSubmit}
-            >
-              {p.saving ? 'Saving…' : p.mode === 'edit' ? 'Save changes' : 'Add expense'}
-            </Button>
-            <Button variant="outline" disabled={p.saving} onPress={p.onBack}>
-              Cancel
-            </Button>
-          </>
-        )}
+        {body}
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function StepTitle({ icon, title, hint }: { icon: string; title: string; hint: string }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+      <IconTile tone="split" size={40}>
+        <EntityIcon value={icon} size={22} color={tokens.split} />
+      </IconTile>
+      <View style={{ flex: 1 }}>
+        <Typography variant="heading">{title}</Typography>
+        <Typography variant="caption">{hint}</Typography>
+      </View>
+    </View>
+  );
+}
+
+function AmountStep({ p }: { p: GroupExpenseFormScreenProps }) {
+  const { tokens } = useTheme();
+  const c = p.composer;
+  const type = (digit: string) => {
+    const next = `${c.amount}${digit}`;
+    if (digit === '.' && c.amount.includes('.')) return;
+    if (/^\d{0,12}(\.\d{0,3})?$/.test(next)) c.set('amount', next === '.' ? '0.' : next);
+  };
+  return (
+    <View style={{ gap: 14 }}>
+      <StepTitle icon="phosphor:Coins" title="How much was it?" hint={`In ${p.currency}`} />
+      <View
+        style={{
+          alignItems: 'center',
+          paddingVertical: 18,
+          borderRadius: 18,
+          backgroundColor: withAlpha(tokens.split, 0.08),
+        }}
+      >
+        <Input
+          accessibilityLabel={`Amount in ${p.currency}`}
+          keyboardType="decimal-pad"
+          placeholder="0.00"
+          value={c.amount}
+          onChangeText={(value) => c.set('amount', value)}
+          editable={!p.saving}
+          style={{
+            fontSize: 40,
+            lineHeight: 48,
+            textAlign: 'center',
+            borderWidth: 0,
+            backgroundColor: 'transparent',
+            minWidth: 200,
+            fontVariant: ['tabular-nums'],
+          }}
+        />
+        <Typography variant="caption">{p.currency}</Typography>
+      </View>
+      <AmountKeypad onDigit={type} />
+      <Button
+        variant="ghost"
+        accessibilityLabel="Delete last digit"
+        disabled={!c.amount}
+        onPress={() => c.set('amount', c.amount.slice(0, -1))}
+      >
+        ⌫ Delete
+      </Button>
+    </View>
+  );
+}
+
+function DetailsStep({ p }: { p: GroupExpenseFormScreenProps }) {
+  const { tokens } = useTheme();
+  const c = p.composer;
+  return (
+    <View style={{ gap: 12 }}>
+      <StepTitle icon="phosphor:Receipt" title="What was it for?" hint="Title, category and date" />
+      <Label>Title *</Label>
+      <Input
+        accessibilityLabel="Expense title"
+        placeholder="Dinner, travel, groceries"
+        value={c.title}
+        onChangeText={(value) => c.set('title', value)}
+        maxLength={120}
+        editable={!p.saving}
+      />
+      {!!p.categories?.length && (
+        <View style={{ gap: 8 }}>
+          <Label>Category</Label>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[
+                { id: '', name: 'None', icon: 'phosphor:Tag', color: undefined },
+                ...p.categories,
+              ].map((category) => {
+                const selected = c.categoryId === category.id;
+                return (
+                  <PressableScale
+                    key={category.id || 'none'}
+                    accessibilityRole="radio"
+                    accessibilityLabel={category.name}
+                    accessibilityState={{ selected }}
+                    disabled={p.saving}
+                    onPress={() => c.set('categoryId', category.id)}
+                    style={{
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: 10,
+                      width: 84,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: selected ? tokens.primary : tokens.borderSubtle,
+                      backgroundColor: selected ? withAlpha(tokens.primary, 0.08) : tokens.card,
+                    }}
+                  >
+                    <GroupTile
+                      icon={category.icon ?? 'phosphor:Tag'}
+                      color={category.color ?? tokens.surfaceRaised}
+                      size={34}
+                    />
+                    <Typography variant="caption" numberOfLines={1}>
+                      {category.name}
+                    </Typography>
+                  </PressableScale>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+      )}
+      <Label>Date</Label>
+      <DateTimePicker value={c.occurredAt} onChange={(value) => c.set('occurredAt', value)} />
+      {p.accountLocked ? (
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+          <IconTile tone="neutral" size={36}>
+            <EntityIcon value="phosphor:Lock" size={18} color={tokens.foregroundMuted} />
+          </IconTile>
+          <Typography variant="small" style={{ flex: 1 }}>
+            Stays on the account of the person who added it.
+          </Typography>
+        </View>
+      ) : (
+        <View style={{ gap: 8 }}>
+          <Label>Booked to account *</Label>
+          {p.accounts.map((account) => {
+            const selected = account.id === c.accountId;
+            return (
+              <PressableScale
+                key={account.id}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={account.name}
+                disabled={p.saving}
+                onPress={() => c.set('accountId', account.id)}
+                style={{
+                  minHeight: 48,
+                  padding: 12,
+                  borderWidth: 1.5,
+                  borderColor: selected ? tokens.primary : tokens.borderSubtle,
+                  borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  backgroundColor: selected ? withAlpha(tokens.primary, 0.08) : tokens.card,
+                }}
+              >
+                <IconTile tone="income" size={32}>
+                  <EntityIcon value="phosphor:Wallet" size={18} color={tokens.income} />
+                </IconTile>
+                <Typography variant="small" style={{ flex: 1, color: tokens.foreground }}>
+                  {account.name}
+                </Typography>
+                {selected && (
+                  <EntityIcon value="phosphor:CheckCircle" size={20} color={tokens.primary} />
+                )}
+              </PressableScale>
+            );
+          })}
+          {!p.accounts.length && (
+            <Typography variant="small">
+              No account uses {p.currency}. Add one before saving a split.
+            </Typography>
+          )}
+        </View>
+      )}
+      <Label>Merchant (optional)</Label>
+      <Input
+        accessibilityLabel="Merchant"
+        placeholder="Where was it?"
+        value={c.merchant}
+        onChangeText={(value) => c.set('merchant', value)}
+        editable={!p.saving}
+      />
+      <Label>Note (optional)</Label>
+      <Input
+        accessibilityLabel="Note"
+        placeholder="Anything the group should know"
+        value={c.note}
+        onChangeText={(value) => c.set('note', value)}
+        multiline
+        editable={!p.saving}
+      />
+    </View>
+  );
+}
+
+function PaidStep({
+  p,
+  memberById,
+}: {
+  p: GroupExpenseFormScreenProps;
+  memberById: (id: string) => GroupExpenseMemberOption | undefined;
+}) {
+  const { tokens } = useTheme();
+  const c = p.composer;
+  const multiple = c.payerIds.length > 1;
+  if (!p.payerEditable) {
+    const me = p.currentUserId ? memberById(p.currentUserId) : undefined;
+    return (
+      <View style={{ gap: 12 }}>
+        <StepTitle icon="phosphor:HandCoins" title="Who paid?" hint="You covered the bill" />
+        <View style={{ alignItems: 'center', gap: 8 }}>
+          <Illustration scene="owedToYou" size={150} />
+          <GroupAvatar
+            name={me?.name ?? 'You'}
+            avatarId={me?.avatarId}
+            avatarUrl={me?.avatarUrl}
+            size={52}
+          />
+          <Typography variant="label">
+            {me?.name ?? 'You'} paid {money(c.draft.totalMinor, p.currency)}
+          </Typography>
+          <StatusPill label="Paid in full" tone="income" />
+        </View>
+        <Typography variant="caption">
+          New expenses are recorded with you as the payer. If someone else paid, save it and then
+          choose Edit on the expense to change who paid or add several payers.
+        </Typography>
+      </View>
+    );
+  }
+  return (
+    <View style={{ gap: 12 }}>
+      <StepTitle
+        icon="phosphor:HandCoins"
+        title="Who paid?"
+        hint={multiple ? 'Enter what each person paid' : 'Tap the person who paid'}
+      />
+      <Switch
+        label="Several people paid"
+        value={multiple}
+        onValueChange={(next) =>
+          c.set(
+            'payerIds',
+            next
+              ? c.payerIds
+                  .concat(p.members.map((m) => m.userId).filter((id) => !c.payerIds.includes(id)))
+                  .slice(0, 2)
+              : c.payerIds.slice(0, 1),
+          )
+        }
+      />
+      {p.members.map((member) => {
+        const selected = c.payerIds.includes(member.userId);
+        return (
+          <PressableScale
+            key={member.userId}
+            accessibilityRole={multiple ? 'checkbox' : 'radio'}
+            accessibilityState={multiple ? { checked: selected } : { selected }}
+            accessibilityLabel={`${member.name} paid`}
+            disabled={p.saving}
+            onPress={() =>
+              multiple ? c.togglePayer(member.userId) : c.set('payerIds', [member.userId])
+            }
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              padding: 10,
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: selected ? tokens.primary : tokens.borderSubtle,
+              backgroundColor: selected ? withAlpha(tokens.primary, 0.08) : tokens.card,
+            }}
+          >
+            <GroupAvatar
+              name={member.name}
+              avatarId={member.avatarId}
+              avatarUrl={member.avatarUrl}
+              size={36}
+            />
+            <Typography variant="label" style={{ flex: 1 }}>
+              {member.name}
+            </Typography>
+            {multiple && selected ? (
+              <Input
+                accessibilityLabel={`Amount ${member.name} paid`}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                value={c.payerAmounts[member.userId] ?? ''}
+                onChangeText={(value) => c.setPayerAmount(member.userId, value)}
+                style={{ width: 110, textAlign: 'right' }}
+              />
+            ) : selected ? (
+              <EntityIcon value="phosphor:CheckCircle" size={22} color={tokens.primary} />
+            ) : null}
+          </PressableScale>
+        );
+      })}
+      <StatusPill
+        label={c.payerDraft.allocation.label}
+        tone={allocationVisualTone(c.payerDraft.allocation.tone)}
+      />
+    </View>
+  );
+}
+
+function SplitStep({
+  p,
+  memberById,
+}: {
+  p: GroupExpenseFormScreenProps;
+  memberById: (id: string) => GroupExpenseMemberOption | undefined;
+}) {
+  const { tokens } = useTheme();
+  const c = p.composer;
+  const allSelected =
+    p.members.length > 0 && p.members.every((m) => c.participantIds.includes(m.userId));
+  const previewFor = (id: string) => c.draft.preview.find((row) => row.userId === id)?.amountMinor;
+  return (
+    <View style={{ gap: 12 }}>
+      <StepTitle
+        icon="phosphor:ChartPieSlice"
+        title="How is it split?"
+        hint="Live preview per person"
+      />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {methods.map((method) => {
+          const selected = c.method === method.value;
+          return (
+            <PressableScale
+              key={method.value}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${method.title}, ${method.description}`}
+              disabled={p.saving}
+              onPress={() => c.setMethod(method.value)}
+              style={{
+                flexBasis: '47%',
+                flexGrow: 1,
+                padding: 12,
+                gap: 6,
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: selected ? tokens.split : tokens.borderSubtle,
+                backgroundColor: selected ? withAlpha(tokens.split, 0.1) : tokens.card,
+              }}
+            >
+              <IconTile tone="split" solid={selected} size={34}>
+                <EntityIcon
+                  value={method.icon}
+                  size={18}
+                  color={selected ? tokens.background : tokens.split}
+                />
+              </IconTile>
+              <Typography variant="label">{method.title}</Typography>
+              <Typography variant="caption">{method.description}</Typography>
+            </PressableScale>
+          );
+        })}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="label">
+          {c.participantIds.length} of {p.members.length} sharing
+        </Typography>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={p.saving || !p.members.length}
+          onPress={() => c.setAllParticipants(allSelected ? [] : p.members.map((m) => m.userId))}
+        >
+          {allSelected ? 'Clear all' : 'Everyone'}
+        </Button>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {p.members.map((member) => {
+            const included = c.participantIds.includes(member.userId);
+            return (
+              <Pressable
+                key={member.userId}
+                accessibilityRole="checkbox"
+                accessibilityLabel={`Include ${member.name}`}
+                accessibilityState={{ checked: included }}
+                disabled={p.saving}
+                onPress={() => c.toggleParticipant(member.userId, !included)}
+                style={{ alignItems: 'center', gap: 4, width: 64, opacity: included ? 1 : 0.5 }}
+              >
+                <View
+                  style={{
+                    borderRadius: 30,
+                    borderWidth: 2,
+                    borderColor: included ? tokens.split : 'transparent',
+                    padding: 2,
+                  }}
+                >
+                  <GroupAvatar
+                    name={member.name}
+                    avatarId={member.avatarId}
+                    avatarUrl={member.avatarUrl}
+                    size={44}
+                  />
+                </View>
+                <Typography variant="caption" numberOfLines={1}>
+                  {member.name.split(' ')[0]}
+                </Typography>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+      <StatusPill
+        label={c.draft.allocation.label}
+        tone={allocationVisualTone(c.draft.allocation.tone)}
+      />
+      <View>
+        {c.participantIds.map((id) => {
+          const member = memberById(id);
+          const name = member?.name ?? 'Member';
+          return (
+            <MemberShareRow
+              key={id}
+              name={name}
+              avatarId={member?.avatarId}
+              avatarUrl={member?.avatarUrl}
+              amount={money(previewFor(id), p.currency)}
+            >
+              {c.method !== 'equal' && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Input
+                    accessibilityLabel={`${c.method === 'exact' ? 'Amount' : c.method === 'percentage' ? 'Percent' : 'Shares'} for ${name}`}
+                    keyboardType={c.method === 'shares' ? 'number-pad' : 'decimal-pad'}
+                    placeholder={
+                      c.method === 'percentage' ? '33.33' : c.method === 'shares' ? '1' : '0.00'
+                    }
+                    value={c.basis[id] ?? ''}
+                    onChangeText={(value) => c.setBasis(id, value)}
+                    editable={!p.saving}
+                    style={{ width: 84, textAlign: 'right' }}
+                  />
+                  {c.method === 'percentage' && <Typography variant="label">%</Typography>}
+                </View>
+              )}
+            </MemberShareRow>
+          );
+        })}
+      </View>
+      {!c.participantIds.length && (
+        <View style={{ alignItems: 'center', gap: 6 }}>
+          <Illustration scene="memberJoined" size={130} />
+          <Typography variant="small">Tap people above to share this expense.</Typography>
+        </View>
+      )}
+    </View>
   );
 }

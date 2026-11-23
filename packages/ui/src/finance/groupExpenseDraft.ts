@@ -99,7 +99,7 @@ export function parseBasisValue(
 /** The editable text for a stored participant row (used when opening an expense to edit). */
 export function basisInputFromRow(
   method: GroupExpenseMethod,
-  row: { amountMinor?: unknown; basisValue?: unknown },
+  row: Readonly<Record<string, unknown>>,
   currency: string,
 ): string {
   if (method === 'equal') return '';

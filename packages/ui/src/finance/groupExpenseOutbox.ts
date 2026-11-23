@@ -56,6 +56,8 @@ export type ExpenseUpdatePlanInput = {
   /** The account (local record) to book against; omit to keep the expense's account. */
   account?: LocalRecord;
   category?: LocalRecord;
+  /** Keep an existing category by id (e.g. an admin editing someone else's expense). */
+  categoryId?: string;
   title: string;
   amountMinor: bigint;
   currency: string;
@@ -72,7 +74,7 @@ export function planExpenseUpdate(input: ExpenseUpdatePlanInput): QueuedWritePla
   const transactionId = localIdOf(input.transaction);
   const expectedVersion = expenseVersion(input.transaction);
   const accountId = input.account ? localIdOf(input.account) : String(input.transaction.accountId);
-  const categoryId = input.category ? localIdOf(input.category) : undefined;
+  const categoryId = input.category ? localIdOf(input.category) : input.categoryId || undefined;
   const now = input.now ?? Date.now();
   const title = input.title.trim();
   const merchant = input.merchant?.trim() || undefined;
