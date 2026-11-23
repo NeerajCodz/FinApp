@@ -979,13 +979,13 @@ export const getTransaction = query({
     const membership = groupId
       ? await ctx.db
           .query('groupMembers')
-          .withIndex('by_group_user', (index) => index.eq('groupId', groupId).eq('userId', user._id))
+          .withIndex('by_group_user', (index) =>
+            index.eq('groupId', groupId).eq('userId', user._id),
+          )
           .unique()
       : null;
     const isOwner = transaction.ownerId === user._id;
-    const readable = groupId
-      ? membership !== null
-      : isOwner && transaction.deletedAt === undefined;
+    const readable = groupId ? membership !== null : isOwner && transaction.deletedAt === undefined;
     if (!readable) throw new Error('TRANSACTION_UNAVAILABLE');
     const names = new Map<string, string>();
     const nameOf = async (userId: Doc<'users'>['_id']) => {
