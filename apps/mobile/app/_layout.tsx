@@ -79,7 +79,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAuthRoute = segments[0] === '(auth)';
   const publicProfileRoute = pathname.startsWith('/@') && !pathname.startsWith('/@@');
-  const privateRoute = !isAuthRoute && !publicProfileRoute && !localUserId;
+  const invitationRoute = pathname === '/group/invite';
+  const privateRoute = !isAuthRoute && !publicProfileRoute && !invitationRoute && !localUserId;
   const [authTimedOut, setAuthTimedOut] = React.useState(false);
   const [cachedIdentity, setCachedIdentity] = React.useState<string | null | undefined>();
 
@@ -102,12 +103,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       !isLoading &&
       !isAuthenticated &&
       !localUserId &&
+      !isAuthRoute &&
       !publicProfileRoute &&
+      !invitationRoute &&
       (connection.isWebSocketConnected || cachedIdentity === null)
     )
       router.replace('/(auth)/welcome');
   }, [
     publicProfileRoute,
+    invitationRoute,
     cachedIdentity,
     connection.isWebSocketConnected,
     isAuthRoute,
@@ -126,7 +130,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [isLoading, privateRoute]);
 
   return (
-    <AppLockProvider userId={localUserId} authRoute={isAuthRoute}>
+    <AppLockProvider
+      userId={invitationRoute && !isAuthenticated ? null : localUserId}
+      authRoute={isAuthRoute}
+    >
       {children}
       {privateRoute && (
         <View
@@ -162,7 +169,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
           )}
         </View>
       )}
-      <BackendConnectionNotice isConnected={connection.isWebSocketConnected} tokens={tokens} />
+      {!invitationRoute && (
+        <BackendConnectionNotice isConnected={connection.isWebSocketConnected} tokens={tokens} />
+      )}
     </AppLockProvider>
   );
 }

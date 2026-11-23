@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clearPendingGroupInvitation,
   groupInvitationPath,
+  pendingGroupInvitationPath,
+  rememberPendingGroupInvitation,
   unverifiedSignInVerificationUrl,
 } from '../../apps/web/lib/authRoutes';
 
@@ -21,5 +24,29 @@ describe('public group invitation route', () => {
 
     expect(groupInvitationPath(token)).toBe(`/group/invite?token=${token}`);
     expect(groupInvitationPath(`${token}https://attacker.example`)).toBeNull();
+  });
+
+  it('retains a valid invitation until it is explicitly cleared', () => {
+    const token = 'cd'.repeat(32);
+    const values = new Map<string, string>();
+    const previousWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        sessionStorage: {
+          setItem: (key: string, value: string) => values.set(key, value),
+          getItem: (key: string) => values.get(key) ?? null,
+          removeItem: (key: string) => values.delete(key),
+        },
+      },
+    });
+    try {
+      expect(rememberPendingGroupInvitation(token)).toBe(true);
+      expect(pendingGroupInvitationPath()).toBe(`/group/invite?token=${token}`);
+      clearPendingGroupInvitation();
+      expect(pendingGroupInvitationPath()).toBeNull();
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: previousWindow });
+    }
   });
 });
