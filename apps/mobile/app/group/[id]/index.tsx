@@ -24,7 +24,6 @@ export default function GroupHomeScreen() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { group, members, ledger, error, loading, retry, userId } = useGroupLedger(id);
   const { isConnected } = useLocalSync();
-  const localGroupId = group ? recordId(group) : (id ?? '');
   const localSettlements = useLocalRecords(userId, 'settlement');
   const categories = useLocalRecords(userId, 'category');
   const accounts = useLocalRecords(userId, 'account');
