@@ -357,3 +357,52 @@ export const balances = query({
     };
   },
 });
+
+/**
+ * Audit trail of one group expense (created, edited, deleted, members added), oldest first,
+ * with the acting member's display name. Deleted expenses keep their history. Returns null for
+ * non-members or malformed ids.
+ */
+export const expenseHistory = query({
+  args: { transactionId: v.string() },
+  handler: async (ctx, args) => {
+    const transactionId = ctx.db.normalizeId('transactions', args.transactionId);
+    if (!transactionId) return null;
+    const user = await getOptionalUser(ctx);
+    if (!user) return null;
+    const transaction = await ctx.db.get(transactionId);
+    if (!transaction?.groupId) return null;
+    const groupId = ctx.db.normalizeId('groups', transaction.groupId);
+    if (!groupId) return null;
+    const membership = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group_user', (query) => query.eq('groupId', groupId).eq('userId', user._id))
+      .unique();
+    if (!membership) return null;
+    const events = (
+      await ctx.db
+        .query('ledgerEvents')
+        .withIndex('by_entity', (query) =>
+          query.eq('entityType', 'transaction').eq('entityId', String(transactionId)),
+        )
+        .collect()
+    ).filter((event) => event.groupId === groupId);
+    const names = new Map<string, string>();
+    for (const actorId of new Set(events.map((event) => event.actorId))) {
+      const actor = await ctx.db.get(actorId);
+      names.set(actorId, actor?.displayName ?? actor?.name ?? 'Former member');
+    }
+    return events
+      .sort((left, right) => left.createdAt - right.createdAt)
+      .map((event) => ({
+        id: event._id,
+        kind: event.kind,
+        actorId: event.actorId,
+        actorName: names.get(event.actorId) ?? 'Former member',
+        summary: event.summary,
+        balanceDeltas: event.balanceDeltas ?? {},
+        version: event.version,
+        createdAt: event.createdAt,
+      }));
+  },
+});
