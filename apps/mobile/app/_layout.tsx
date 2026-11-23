@@ -17,6 +17,7 @@ import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
 import { LocalSyncProvider, useLocalSync } from '@/providers/LocalSyncProvider';
+import { NotificationEffects } from '@/components/notifications/NotificationEffects';
 import { AppLockProvider } from '@/lib/security/AppLockProvider';
 import { readValidatedLocalUserId } from '@/local/identity';
 import { AppErrorBoundary, StaticErrorFallback } from '@/components/AppErrorBoundary';
@@ -223,6 +224,7 @@ export default function RootLayout() {
               <ThemedStack />
             </AuthGate>
             <AppToasts />
+            <NotificationEffects />
           </AppErrorBoundary>
         </AccentSync>
       </ThemeProvider>
