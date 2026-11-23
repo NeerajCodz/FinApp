@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Typography, useTheme } from '@finapp/ui/web';
+import { useTheme } from '@finapp/ui/web';
 
 type LinePoint = { value: number; axisLabel: string; detail: string; amount?: string };
 

@@ -2,7 +2,6 @@ import React from 'react';
 import { ScrollView, View, Pressable } from 'react-native';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { Button, Input, Text, Typography, useTheme } from '@finapp/ui/native';
-import { CategoryIcon } from './CategoryIcon';
 import { Money } from './Money';
 import type { TransactionsScreenProps, TransactionTableItem } from '../web/TransactionsScreen';
 import { compareTransactionAmounts } from '../transactionComparison';

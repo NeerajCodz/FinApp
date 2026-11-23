@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
-import { Wallet } from '@finapp/ui/icons/native';
-import { Button, Card, SectionHeader, Tabs, Text, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Card, SectionHeader, Tabs, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
 import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 import { CashFlowChart } from '../../analytics/native/CashFlowChart';

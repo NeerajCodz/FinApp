@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
-import { Button, Empty } from '@finapp/ui/web';
-import { Plus, PencilSimple, ChatCircle, Crown } from '@phosphor-icons/react';
+import { Button } from '@finapp/ui/web';
+import { Plus, PencilSimple, ChatCircle } from '@phosphor-icons/react';
 import { formatMinor } from '@convex/shared/money';
 import type { GroupChatScreenProps } from './GroupChatScreen';
 import { GroupPage, Crumb, Tile, Metric, PersonAvatar, s } from './GroupUI';
@@ -73,7 +73,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
   const categories = [...categoryTotals.entries()];
   const shownTotal = categories.reduce((sum, [, amount]) => sum + amount, 0n);
   let angle = 0;
-  const stops = categories.map(([category, amount], index) => {
+  const stops = categories.map(([, amount], index) => {
     const start = angle;
     angle += shownTotal > 0n ? Number((amount * 10000n) / shownTotal) / 100 : 0;
     return `${colors[index % colors.length]} ${start}% ${angle}%`;

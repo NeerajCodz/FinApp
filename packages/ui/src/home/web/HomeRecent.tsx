@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight as OpenIcon, ReceiptText } from 'lucide-react';
+import { ArrowUpRight as OpenIcon } from 'lucide-react';
 import { TransactionRow } from '@finapp/ui/finance';
 import { formatTransactionDate } from '../../finance/datetime';
 import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';

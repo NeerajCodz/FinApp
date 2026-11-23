@@ -1,6 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
-import { Button, Card, SectionHeader, Typography } from '@finapp/ui/native';
+import { Button, Card, SectionHeader } from '@finapp/ui/native';
 import { TransactionRow } from '@finapp/ui/finance';
 import { formatTransactionDate } from '../../finance/datetime';
 import type { HomeDashboardData } from '../model';

@@ -91,7 +91,8 @@ export class AppErrorBoundary extends React.Component<
   private retry = () => this.setState({ error: null });
 
   render() {
-    if (this.state.error) return <ThemedErrorFallback error={this.state.error} retry={this.retry} />;
+    if (this.state.error)
+      return <ThemedErrorFallback error={this.state.error} retry={this.retry} />;
     return this.props.children;
   }
 }

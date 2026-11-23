@@ -181,9 +181,7 @@ export const detail = query({
     if (!group || group.archivedAt !== undefined) return null;
     const membership = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group_user', (query) =>
-        query.eq('groupId', groupId).eq('userId', user._id),
-      )
+      .withIndex('by_group_user', (query) => query.eq('groupId', groupId).eq('userId', user._id))
       .unique();
     if (!membership) return null;
     const memberships = await ctx.db
@@ -231,9 +229,7 @@ export const chatMessages = query({
     if (!group || group.archivedAt !== undefined) return [];
     const membership = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group_user', (query) =>
-        query.eq('groupId', groupId).eq('userId', user._id),
-      )
+      .withIndex('by_group_user', (query) => query.eq('groupId', groupId).eq('userId', user._id))
       .unique();
     if (!membership) return [];
     const currentMembers = await ctx.db

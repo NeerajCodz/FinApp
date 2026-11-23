@@ -1028,23 +1028,25 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
     if (isExpoGo()) return;
     let active = true;
     let subscription: { remove: () => void } | null = null;
-    void import('expo-notifications').then((Notifications) => {
-      if (!active) return;
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowBanner: true,
-          shouldShowList: true,
-          shouldPlaySound: false,
-          shouldSetBadge: false,
-        }),
+    void import('expo-notifications')
+      .then((Notifications) => {
+        if (!active) return;
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          }),
+        });
+        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+          if (response.notification.request.content.data?.url === '/recurring')
+            router.push('/recurring');
+        });
+      })
+      .catch((error: unknown) => {
+        console.warn('[local-sync] Notifications are unavailable.', error);
       });
-      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-        if (response.notification.request.content.data?.url === '/recurring')
-          router.push('/recurring');
-      });
-    }).catch((error: unknown) => {
-      console.warn('[local-sync] Notifications are unavailable.', error);
-    });
     return () => {
       active = false;
       subscription?.remove();

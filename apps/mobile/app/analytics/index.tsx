@@ -950,7 +950,9 @@ function AnalyticsContent() {
           <Button onPress={retry}>Retry</Button>
         </View>
       )}
-      {!!rangeState.refreshing && <Typography variant="caption">Refreshing transactions…</Typography>}
+      {!!rangeState.refreshing && (
+        <Typography variant="caption">Refreshing transactions…</Typography>
+      )}
       {!userId || (profileState.data && !profile) ? (
         <Empty
           title="Analytics unavailable"

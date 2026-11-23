@@ -399,7 +399,9 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                     currency={settlement.currency}
                     size="body"
                   />
-                  {!!settlement.date && <Typography variant="caption">{settlement.date}</Typography>}
+                  {!!settlement.date && (
+                    <Typography variant="caption">{settlement.date}</Typography>
+                  )}
                 </View>
               ))
             ) : (

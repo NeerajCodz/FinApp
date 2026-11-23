@@ -80,7 +80,6 @@ export function BudgetDetailScreen({
     limit,
   );
   const ratio = limit > 0n ? Number((spent * 10000n) / limit) / 100 : 0;
-  const remaining = limit - spent;
   return (
     <ScrollView
       contentContainerStyle={{ padding: 22, paddingTop: 16, paddingBottom: 40, gap: 16 }}

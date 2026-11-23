@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, Target } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { formatMinor } from '@convex/shared/money';
 import { CashFlowChart } from '../../analytics/web/CashFlowChart';
 import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
