@@ -5,7 +5,10 @@ import {
   INVITATION_LINK_EXPIRY_OPTIONS,
   type InvitationLinkExpiryMs,
 } from '../groupInvitationExpiry';
-import { Button, Input, Empty, useTheme } from '@finapp/ui/web';
+import { AlertDialog, Button, Input, Empty, StatusPill, useTheme } from '@finapp/ui/web';
+import { formatMinor } from '../money';
+import { shortDate, type BalanceMap, type OutstandingBalance } from '../groupSettle';
+import { OutstandingBalanceDialog, settleStyles } from './GroupSettleParts';
 import { Plus, Crown, ArrowUp, ArrowDown, ChartBar } from '@phosphor-icons/react';
 import { EntityColorPicker } from './EntityColorPicker';
 import { FinanceEmptyState } from './FinanceEmptyState';
@@ -68,10 +71,26 @@ export type GroupEditScreenProps = {
   onCreateInvitation?: () => void;
   onRevokeInvitation?: () => void;
   onShareInvitation?: () => void;
+  /** Local all-time balances, shown beside members and used to guard leave/remove. */
+  balances?: BalanceMap | null;
+  balanceCurrency?: string;
+  meId?: string | null;
+  formerMembers?: readonly { id: string; name: string; avatarId?: string; leftAt: number }[];
+  /** Non-owners may leave the group. */
+  canLeave?: boolean;
+  onLeave?: () => void;
+  /** Open balance blocking a leave/remove; renders the "Settle first" dialog. */
+  balanceGuard?: { memberName: string; self: boolean; balance: OutstandingBalance } | null;
+  onSettleFirst?: () => void;
+  onDismissBalanceGuard?: () => void;
 };
 export function GroupEditScreen(p: GroupEditScreenProps) {
   const { tokens } = useTheme();
   const [search, setSearch] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState<GroupEditMember | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const balanceOf = (member: GroupEditMember) =>
+    p.balances?.[String(member.userId ?? member.memberId ?? member.id)];
   const members = p.members.filter((m) =>
     `${m.name} ${m.username ?? ''}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -324,6 +343,20 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                             </div>
                           </td>
                           <td>
+                            {(() => {
+                              const balance = balanceOf(m);
+                              if (balance === undefined || !p.balanceCurrency) return null;
+                              return balance === 0n ? (
+                                <StatusPill tone="settlement" label="Settled up" />
+                              ) : (
+                                <StatusPill
+                                  tone={balance > 0n ? 'income' : 'expense'}
+                                  label={`${balance > 0n ? 'Gets back' : 'Owes'} ${formatMinor(balance < 0n ? -balance : balance, p.balanceCurrency)}`}
+                                />
+                              );
+                            })()}
+                          </td>
+                          <td>
                             <span
                               className={`${s.badge} ${owner || m.role === 'admin' ? s.admin : ''}`}
                             >
@@ -356,7 +389,9 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                                   size="sm"
                                   variant="outline"
                                   disabled={!!p.saving}
-                                  onPress={() => p.onRemoveMember(m)}
+                                  onPress={() =>
+                                    balanceOf(m) ? p.onRemoveMember(m) : setConfirmRemove(m)
+                                  }
                                 >
                                   {p.saving === m.id ? 'Removing…' : 'Remove'}
                                 </Button>
@@ -382,6 +417,18 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                 title="Membership is not cached yet"
                 description="Member details appear after initial sync completes."
               />
+            )}
+            {!!p.formerMembers?.length && (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <strong style={{ fontSize: 13 }}>Former members</strong>
+                {p.formerMembers.map((former) => (
+                  <div key={former.id} className={settleStyles.former}>
+                    <PersonAvatar name={former.name} avatarId={former.avatarId} size={28} />
+                    <span style={{ flex: 1 }}>{former.name}</span>
+                    <StatusPill tone="neutral" label={`Left ${shortDate(former.leftAt)}`} />
+                  </div>
+                ))}
+              </div>
             )}
           </section>
           <section className={s.panel}>
@@ -476,16 +523,59 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
             <Button variant="outline" onPress={p.onBack}>
               View group & balances
             </Button>
-            <p className={s.muted}>
-              Group export and self-service leave actions are not available here.
-            </p>
           </section>
+          {p.canLeave && p.onLeave && (
+            <section className={settleStyles.danger}>
+              <h3 style={{ margin: 0 }}>Leave group</h3>
+              <p className={s.muted}>
+                You can leave once your balance in this group is zero. Your past expenses stay in
+                the history.
+              </p>
+              <Button
+                variant="destructive"
+                disabled={!!p.saving}
+                onPress={() =>
+                  p.meId && p.balances?.[p.meId] ? p.onLeave?.() : setConfirmLeave(true)
+                }
+              >
+                {p.saving === 'leave' ? 'Leaving…' : 'Leave group'}
+              </Button>
+            </section>
+          )}
           <p className={s.muted}>
             Name changes save locally and sync when connected. Membership and appearance changes
             require the connected group.
           </p>
         </aside>
       </div>
+      <AlertDialog
+        visible={!!confirmRemove}
+        onClose={() => setConfirmRemove(null)}
+        title={`Remove ${confirmRemove?.name ?? 'member'}?`}
+        description="They lose access to the group. Their past expenses and payments stay in the history."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          if (confirmRemove) p.onRemoveMember(confirmRemove);
+        }}
+      />
+      <AlertDialog
+        visible={confirmLeave}
+        onClose={() => setConfirmLeave(false)}
+        title="Leave this group?"
+        description="You will lose access to its expenses and chat. An admin can invite you again."
+        confirmLabel="Leave"
+        destructive
+        onConfirm={() => p.onLeave?.()}
+      />
+      <OutstandingBalanceDialog
+        visible={!!p.balanceGuard}
+        memberName={p.balanceGuard?.memberName ?? ''}
+        self={p.balanceGuard?.self ?? false}
+        balance={p.balanceGuard?.balance ?? null}
+        onClose={() => p.onDismissBalanceGuard?.()}
+        onSettleFirst={() => p.onSettleFirst?.()}
+      />
     </GroupPage>
   );
 }

@@ -11,11 +11,19 @@ import { Empty } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { toast } from 'sonner';
 import {
   GroupEditScreen,
+  groupErrorMessage,
   INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  outstandingBalance,
+  outstandingBalanceFromError,
+  settleFirstCounterpart,
   type InvitationLinkExpiryMs,
+  type OutstandingBalance,
 } from '@finapp/ui/finance';
+import { ListSkeleton } from '@finapp/ui/web';
+import { useGroupLedger } from '@/lib/groups/useGroupLedger';
 
 type Group = LocalRecord & {
   name?: string;
@@ -153,6 +161,14 @@ export default function GroupSettingsPage() {
   const updateMemberRole = useMutation(api.groups.mutations.setMemberRole);
   const addGroupMember = useMutation(api.groups.mutations.addMember);
   const removeGroupMember = useMutation(api.groups.mutations.removeMember);
+  const leaveGroupMutation = useMutation(api.groups.mutations.leaveGroup);
+  const ledger = useGroupLedger(routeId);
+  const [balanceGuard, setBalanceGuard] = React.useState<{
+    memberId: string;
+    memberName: string;
+    self: boolean;
+    balance: OutstandingBalance;
+  } | null>(null);
   const group = groups.find((item) => aliases(item).includes(routeId));
   const groupIds = group ? aliases(group) : [routeId];
   const currentGroupId = group ? localId(group) : routeId;
@@ -181,6 +197,22 @@ export default function GroupSettingsPage() {
   const canManage = Boolean(
     remoteGroup && userId && (remoteGroup.ownerId === userId || remoteRole === 'admin'),
   );
+  const groupCurrency = group?.currency ?? ledger.currency;
+  /** Shows the "Settle first" dialog; returns true when an open balance blocks the action. */
+  function guardBalance(memberId: string, memberName: string, self: boolean, cause?: unknown) {
+    const balance =
+      cause === undefined
+        ? outstandingBalance(ledger.balances, memberId, groupCurrency)
+        : outstandingBalanceFromError(cause);
+    if (!balance) return false;
+    setBalanceGuard({
+      memberId,
+      memberName,
+      self,
+      balance: { ...balance, currency: balance.currency || groupCurrency },
+    });
+    return true;
+  }
   const currentRole =
     remoteGroup?.ownerId === userId ? 'Owner' : remoteRole === 'admin' ? 'Admin' : 'Member';
   const memberRows: Member[] = groupMembers.length
@@ -350,6 +382,8 @@ export default function GroupSettingsPage() {
     if (!canManage || !cloudGroupId || actionLock.current) return;
     const memberUserId = String(member.userId ?? member.memberId ?? '');
     if (!memberUserId) return;
+    const memberName = String(member.displayName ?? member.name ?? member.username ?? 'Member');
+    if (guardBalance(memberUserId, memberName, false)) return;
     const memberId = localId(member);
     actionLock.current = true;
     setSaving(memberId);
@@ -359,8 +393,33 @@ export default function GroupSettingsPage() {
         groupId: cloudGroupId as Id<'groups'>,
         memberUserId: memberUserId as Id<'users'>,
       });
+      toast.success(`${memberName} was removed`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not remove this member.');
+      if (!guardBalance(memberUserId, memberName, false, cause))
+        setError(groupErrorMessage(cause, 'Could not remove this member.'));
+    } finally {
+      actionLock.current = false;
+      setSaving('');
+    }
+  }
+
+  async function leaveGroup() {
+    if (!isConnected) {
+      setError('You are offline. Reconnect to leave the group.');
+      return;
+    }
+    if (!userId || !cloudGroupId || actionLock.current) return;
+    if (guardBalance(userId, 'You', true)) return;
+    actionLock.current = true;
+    setSaving('leave');
+    setError('');
+    try {
+      await leaveGroupMutation({ groupId: cloudGroupId as Id<'groups'> });
+      toast.success(`You left ${group?.name ?? 'the group'}`);
+      router.replace('/groups');
+    } catch (cause) {
+      if (!guardBalance(userId, 'You', true, cause))
+        setError(groupErrorMessage(cause, 'Could not leave the group.'));
     } finally {
       actionLock.current = false;
       setSaving('');
@@ -381,9 +440,7 @@ export default function GroupSettingsPage() {
   if (groupsLoading && !group)
     return (
       <div className="finance-page">
-        <p className="finance-muted" role="status">
-          Opening saved group…
-        </p>
+        <ListSkeleton rows={5} />
       </div>
     );
   if (!group)
@@ -454,7 +511,35 @@ export default function GroupSettingsPage() {
       onMemberInputChange={setMemberInput}
       onAddMember={addMember}
       onChangeRole={(member, role) => void changeRole(member as Member, role)}
-      onRemoveMember={(member) => void removeMember(member as Member)}
+      onRemoveMember={(member) =>
+        void removeMember(
+          (memberRows.find((record) => localId(record) === member.id) ?? member) as Member,
+        )
+      }
+      meId={userId}
+      balances={ledger.balances}
+      balanceCurrency={groupCurrency}
+      formerMembers={remoteGroup?.formerMembers.map((former) => ({
+        id: former.id,
+        name: former.displayName,
+        avatarId: former.avatarId,
+        leftAt: former.leftAt,
+      }))}
+      canLeave={Boolean(remoteGroup && remoteGroup.ownerId !== userId && cloudGroupId)}
+      onLeave={() => void leaveGroup()}
+      balanceGuard={balanceGuard}
+      onDismissBalanceGuard={() => setBalanceGuard(null)}
+      onSettleFirst={() => {
+        const guard = balanceGuard;
+        setBalanceGuard(null);
+        if (!guard) return;
+        const counterpart = guard.self
+          ? settleFirstCounterpart(ledger.balances, guard.memberId)
+          : guard.memberId;
+        router.push(
+          `/settle/new?groupId=${encodeURIComponent(currentGroupId)}${counterpart ? `&member=${encodeURIComponent(counterpart)}` : ''}`,
+        );
+      }}
       onBack={() => router.push(`/group/${encodeURIComponent(currentGroupId)}`)}
       onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(currentGroupId)}/analytics`)}
       invitationUrl={canManage ? invitationUrl : undefined}
