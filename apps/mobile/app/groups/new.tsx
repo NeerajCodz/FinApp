@@ -11,7 +11,7 @@ import type { LocalRecord } from '@/local/repository';
 import { DEFAULT_GROUP_COLOR, GroupCreateScreen } from '@finapp/ui/finance';
 import { groupMetadataDraft, groupMetadataPayload } from '@/components/finance/groupFormData';
 function normalizeHandle(value: string) {
-  return value.replace(/^@+/, '').trim().toLowerCase();
+  return value.trim().replace(/^@+/, '').toLowerCase();
 }
 
 export default function NewGroupScreen() {
@@ -41,9 +41,10 @@ export default function NewGroupScreen() {
     )
       setCurrency(value.toUpperCase());
   }, [currency, profile?.defaultCurrency]);
+  const query = normalizeHandle(memberInput);
   const suggestions = useQuery(
-    api.users.queries.search,
-    normalizeHandle(memberInput).length >= 2 ? { query: normalizeHandle(memberInput) } : 'skip',
+    api.users.queries.searchGroupProfiles,
+    userId && query.length >= 2 ? { query } : 'skip',
   );
 
   function addMember(value = memberInput) {

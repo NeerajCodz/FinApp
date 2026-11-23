@@ -19,6 +19,7 @@ import { DEFAULT_GROUP_COLOR } from '../groupColor';
 export type GroupCreateSuggestion = {
   id: string;
   avatarId?: string;
+  avatarUrl?: string | null;
   username?: string;
   displayName?: string;
 };
@@ -168,6 +169,50 @@ export function GroupCreateScreen(p: GroupCreateScreenProps) {
               Add
             </Button>
           </View>
+          {p.usernameInput.trim().replace(/^@+/, '').length >= 2 && (
+            <View accessibilityLiveRegion="polite" style={{ gap: 6 }}>
+              {p.suggestions === undefined ? (
+                <Typography variant="caption">Searching profiles…</Typography>
+              ) : p.suggestions.length === 0 ? (
+                <Typography variant="caption">No matching usernames found.</Typography>
+              ) : (
+                p.suggestions.map((person) => {
+                  const selected = !!person.username && p.usernames.includes(person.username);
+                  const name = person.displayName || person.username || 'Finapp user';
+                  return (
+                    <Pressable
+                      key={person.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${selected ? 'Added' : 'Add'} ${name}${person.username ? `, @${person.username}` : ''}`}
+                      accessibilityState={{ disabled: !person.username || selected }}
+                      disabled={!person.username || selected}
+                      onPress={() => p.onAddUsername(person.username)}
+                      style={{
+                        minHeight: 64,
+                        padding: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        borderWidth: 1,
+                        borderColor: tokens.borderSubtle,
+                        borderRadius: 8,
+                        backgroundColor: tokens.surfaceRaised,
+                      }}
+                    >
+                      <GroupAvatar name={name} avatarId={person.avatarId} avatarUrl={person.avatarUrl} size={42} />
+                      <View style={{ flex: 1 }}>
+                        <Typography variant="label">{name}</Typography>
+                        <Typography variant="caption">
+                          {person.username ? `@${person.username}` : 'Username unavailable'}
+                        </Typography>
+                      </View>
+                      <Typography variant="small">{selected ? 'Added' : 'Add +'}</Typography>
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
+          )}
           <PeopleRail
             title="Add from contacts"
             phoneVerified={p.phoneVerified}
@@ -222,27 +267,6 @@ export function GroupCreateScreen(p: GroupCreateScreenProps) {
               No invitations added. You can invite people later.
             </Typography>
           )}
-          {p.suggestions?.map((person) => (
-            <Pressable
-              key={person.id}
-              accessibilityRole="button"
-              disabled={!person.username}
-              onPress={() => p.onAddUsername(person.username)}
-              style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-            >
-              <GroupAvatar
-                name={person.displayName ?? person.username ?? 'Finapp user'}
-                avatarId={person.avatarId}
-              />
-              <View style={{ flex: 1 }}>
-                <Typography variant="label">{person.displayName ?? 'Finapp user'}</Typography>
-                <Typography variant="caption">
-                  {person.username ? `@${person.username}` : 'Username unavailable'}
-                </Typography>
-              </View>
-              <Typography variant="small">Add +</Typography>
-            </Pressable>
-          ))}
         </GroupPanel>
         <GroupPanel>
           <Typography variant="heading">Admin & permissions</Typography>

@@ -19,8 +19,8 @@ type ContactPicker = {
     options?: { multiple?: boolean },
   ) => Promise<Array<{ name?: string[]; tel?: string[] }>>;
 };
-type SearchResult = { id: string; username?: string; displayName?: string };
-const normalizeUsername = (value: string) => value.replace(/^@+/, '').trim().toLowerCase();
+type SearchResult = { id: string; username?: string; displayName?: string; avatarId?: string; avatarUrl?: string };
+const normalizeUsername = (value: string) => value.trim().replace(/^@+/, '').toLowerCase();
 const normalizePhone = (value: string) => value.replace(/[\s().-]/g, '');
 
 export default function NewGroupPage() {
@@ -54,7 +54,7 @@ export default function NewGroupPage() {
   const phoneVerified = Boolean(profile?.phone && profile.phoneVerificationTime !== undefined);
   const query = normalizeUsername(usernameInput);
   const suggestions = useQuery(
-    api.users.queries.search,
+    api.users.queries.searchGroupProfiles,
     userId && query.length >= 2 ? { query } : 'skip',
   ) as SearchResult[] | undefined;
   const pickerAvailable =
