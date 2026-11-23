@@ -9,13 +9,20 @@ import {
 import { basisInputFromRow, minorToInput, toBigInt } from '@finapp/ui/finance/expense-draft';
 import { projectExpenseImpact, type ExpenseImpact } from '@finapp/ui/finance/expense-impact';
 import { describeSyncError, syncErrorCode } from '@finapp/ui/finance/sync-errors';
+import { lineItemDrafts } from '@finapp/ui/finance/line-items';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
 import { canEditGroupExpense } from '@/lib/groupExpenseEditing';
 import { rowsForExpense, useExpenseLedger, type GroupPerson } from '@/hooks/useExpenseLedger';
 import { toast } from '@/lib/toast';
 
-const methods: readonly GroupExpenseMethod[] = ['equal', 'exact', 'percentage', 'shares'];
+const methods: readonly GroupExpenseMethod[] = [
+  'equal',
+  'exact',
+  'percentage',
+  'shares',
+  'itemized',
+];
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 export default function EditGroupExpenseScreen() {
@@ -60,7 +67,10 @@ export default function EditGroupExpenseScreen() {
     if (initialized.current || !record || !participantRows.length || !payerRows.length) return;
     initialized.current = true;
     const stored = participantRows[0]?.method;
-    const method = methods.find((item) => item === stored) ?? 'equal';
+    const storedItems = lineItemDrafts(record.items, currency);
+    const found = methods.find((item) => item === stored) ?? 'equal';
+    // An itemized split needs its items; fall back to equal if they never synced.
+    const method = found === 'itemized' && !storedItems.length ? 'equal' : found;
     const multiple = payerRows.length > 1;
     reset({
       title: text(record.title),
@@ -71,6 +81,8 @@ export default function EditGroupExpenseScreen() {
       accountId: text(record.accountId),
       categoryId: text(record.categoryId),
       method,
+      itemize: Boolean(storedItems.length),
+      items: storedItems,
       participantIds: participantRows.map((row) => text(row.userId) || text(row.memberId)),
       basis: Object.fromEntries(
         participantRows.map((row) => [
@@ -148,6 +160,7 @@ export default function EditGroupExpenseScreen() {
         note: composer.note,
         participants: composer.draft.participants,
         payers: composer.payerDraft.payers,
+        items: composer.itemize ? composer.draft.items : [],
       });
       setReviewing(false);
       toast.success('Expense updated', {

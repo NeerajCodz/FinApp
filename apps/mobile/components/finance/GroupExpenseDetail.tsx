@@ -11,6 +11,7 @@ import {
   shareStatus,
 } from '@finapp/ui/finance/expense-impact';
 import { describeSyncError } from '@finapp/ui/finance/sync-errors';
+import { readLineItems } from '@finapp/ui/finance/line-items';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { rowsForExpense, useExpenseLedger } from '@/hooks/useExpenseLedger';
@@ -147,6 +148,8 @@ export function GroupExpenseDetail({ record }: { record: LocalRecord }) {
         )
       }
       onDelete={remove}
+      items={readLineItems(record.items)}
+      itemized={participantRows[0]?.method === 'itemized'}
       onOpenGroup={() => router.push(`/group/${encodeURIComponent(text(record.groupId))}` as never)}
     />
   );
