@@ -19,8 +19,9 @@ function ThemedToaster() {
       closeButton
       toastOptions={{
         style: {
-          background: tokens.surfaceRaised,
-          border: `1px solid ${tokens.borderSubtle}`,
+          // Opaque surface: surfaceRaised is a translucent tint meant for in-page layers.
+          background: tokens.popover,
+          border: `1px solid ${tokens.border}`,
           borderRadius: 14,
           color: tokens.foreground,
           fontFamily: 'var(--font-space-grotesk, sans-serif)',

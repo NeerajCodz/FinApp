@@ -126,3 +126,11 @@ export {
   toneColor,
   type VisualTone,
 } from './visual';
+export {
+  dismissToast,
+  hasToastViewport,
+  showToast,
+  ToastViewport,
+  type ToastInput,
+  type ToastTone,
+} from './toast';
