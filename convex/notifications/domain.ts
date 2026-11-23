@@ -104,3 +104,31 @@ export function isSafeNotificationUrl(value: unknown): value is string {
     !value.startsWith('/\\')
   );
 }
+
+/** Client-facing copy for the result of `notifications.mutations.nudge`. */
+export type NudgeOutcome =
+  { status: 'sent' } | { status: 'alreadySent' } | { status: 'error'; code: string };
+
+export function nudgeErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const known = [
+    'NOTHING_OWED',
+    'INVALID_NUDGE_TARGET',
+    'INSUFFICIENT_PERMISSION',
+    'GROUP_NOT_FOUND',
+    'AUTH_REQUIRED',
+  ];
+  return known.find((code) => message.includes(code)) ?? 'UNKNOWN';
+}
+
+export function nudgeMessage(outcome: NudgeOutcome, name?: string): string {
+  if (outcome.status === 'sent') return name ? `Reminder sent to ${name}.` : 'Reminder sent.';
+  if (outcome.status === 'alreadySent')
+    return name ? `${name} was already reminded today.` : 'Already reminded today.';
+  if (outcome.code === 'NOTHING_OWED')
+    return name
+      ? `${name} doesn’t owe you anything in this group.`
+      : 'Nothing is owed to you here.';
+  if (outcome.code === 'AUTH_REQUIRED') return 'Sign in again to send reminders.';
+  return 'Could not send the reminder. Try again.';
+}

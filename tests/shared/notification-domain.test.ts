@@ -5,6 +5,8 @@ import {
   normalizeNotificationPreferences,
   notificationRoute,
   notificationTypes,
+  nudgeErrorCode,
+  nudgeMessage,
   paymentReminderEntityId,
 } from '../../convex/notifications/domain';
 import {
@@ -82,6 +84,20 @@ describe('notification routes', () => {
     expect(isSafeNotificationUrl('//evil.example')).toBe(false);
     expect(isSafeNotificationUrl('/\\evil.example')).toBe(false);
     expect(isSafeNotificationUrl(42)).toBe(false);
+  });
+});
+
+describe('nudge copy', () => {
+  it('maps server outcomes to messages', () => {
+    expect(nudgeMessage({ status: 'sent' }, 'Asha')).toBe('Reminder sent to Asha.');
+    expect(nudgeMessage({ status: 'alreadySent' })).toBe('Already reminded today.');
+    expect(nudgeErrorCode(new Error('[CONVEX M] Uncaught Error: NOTHING_OWED at handler'))).toBe(
+      'NOTHING_OWED',
+    );
+    expect(nudgeMessage({ status: 'error', code: 'NOTHING_OWED' }, 'Asha')).toContain(
+      'doesn’t owe you',
+    );
+    expect(nudgeErrorCode('boom')).toBe('UNKNOWN');
   });
 });
 
