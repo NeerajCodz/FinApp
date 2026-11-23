@@ -10,10 +10,15 @@ import { createNotification } from '../notifications/mutations';
 import {
   allocateParticipants,
   balanceDeltas,
+  keptLineItems,
   calculateNetBalances,
   matchesAllocation,
+  matchesItemizedAllocation,
+  normalizeLineItems,
   settledImpact,
+  type ParticipantSplitMethod,
 } from '../splits/domain';
+import { lineItemValidator } from '../schema';
 import {
   groupBalances,
   isGroupAdmin,
@@ -25,6 +30,14 @@ import {
 import { formatMinor } from '../shared/money';
 import { assertCurrency } from '../shared/validators';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
+
+const participantMethodValidator = v.union(
+  v.literal('equal'),
+  v.literal('exact'),
+  v.literal('percentage'),
+  v.literal('shares'),
+  v.literal('itemized'),
+);
 
 type InviteTarget = {
   userId?: Id<'users'>;
@@ -1107,15 +1120,12 @@ export const addExpense = mutation({
       v.object({
         userId: v.id('users'),
         amountMinor: v.int64(),
-        method: v.union(
-          v.literal('equal'),
-          v.literal('exact'),
-          v.literal('percentage'),
-          v.literal('shares'),
-        ),
+        method: participantMethodValidator,
         basisValue: v.optional(v.string()),
       }),
     ),
+    /** Line items; required (non-empty) for the `itemized` split method. */
+    items: v.optional(v.array(lineItemValidator)),
     clientMutationId: v.optional(v.string()),
     clientId: v.optional(v.string()),
   },
@@ -1166,30 +1176,11 @@ export const addExpense = mutation({
       )
       .unique();
     if (!membership) throw new Error('NOT_MEMBER');
-    const method = args.participants[0]?.method;
-    if (
-      !method ||
-      new Set(args.participants.map((item) => item.userId)).size !== args.participants.length ||
-      args.participants.some(
-        (item) =>
-          item.method !== method ||
-          item.amountMinor < 0n ||
-          (method === 'equal'
-            ? item.basisValue !== undefined
-            : !/^\d+$/.test(item.basisValue ?? '')),
-      ) ||
-      args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor
-    )
-      throw new Error('INVALID_SPLIT');
-    if (
-      !matchesAllocation(
-        args.amountMinor,
-        args.participants,
-        method,
-        method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
-      )
-    )
-      throw new Error('INVALID_SPLIT');
+    const items = splitLineItems(
+      normalizeLineItems(args.items ?? [], args.amountMinor),
+      args.participants,
+    );
+    assertParticipantSplit(args.amountMinor, args.participants, items);
     for (const participant of args.participants) {
       const participantMembership = await ctx.db
         .query('groupMembers')
@@ -1213,6 +1204,7 @@ export const addExpense = mutation({
       merchant: args.merchant,
       note: args.note?.trim() || undefined,
       occurredAt: args.occurredAt,
+      ...(items.length ? { items } : {}),
       status: 'posted',
       createdAt: now,
       updatedAt: now,
@@ -1313,27 +1305,41 @@ export const addExpense = mutation({
 const splitParticipantValidator = v.object({
   userId: v.id('users'),
   amountMinor: v.int64(),
-  method: v.union(
-    v.literal('equal'),
-    v.literal('exact'),
-    v.literal('percentage'),
-    v.literal('shares'),
-  ),
+  method: participantMethodValidator,
   basisValue: v.optional(v.string()),
 });
 
 type SplitParticipantInput = {
   userId: Id<'users'>;
   amountMinor: bigint;
-  method: 'equal' | 'exact' | 'percentage' | 'shares';
+  method: ParticipantSplitMethod;
   basisValue?: string;
 };
 
+/**
+ * Items as stored for a split: `participantIds` only mean something for an itemized split,
+ * so other methods keep the items as a plain breakdown.
+ */
+function splitLineItems<Item extends { participantIds?: Id<'users'>[] }>(
+  items: readonly Item[],
+  participants: readonly { method: ParticipantSplitMethod }[],
+): Item[] {
+  if (participants[0]?.method === 'itemized') return [...items];
+  return items.map(({ participantIds: _participantIds, ...item }) => item as Item);
+}
+
+/**
+ * Validates participant rows against the total. `equal` and `itemized` rows carry no
+ * basisValue; `itemized` rows must equal the allocation of `items` (each item shared equally
+ * by its participants), which therefore must be non-empty.
+ */
 function assertParticipantSplit(
   amountMinor: bigint,
   participants: readonly SplitParticipantInput[],
+  items: readonly { amountMinor: bigint; participantIds?: readonly string[] }[] = [],
 ) {
   const method = participants[0]?.method;
+  const withoutBasis = method === 'equal' || method === 'itemized';
   if (
     !method ||
     new Set(participants.map((item) => item.userId)).size !== participants.length ||
@@ -1341,9 +1347,17 @@ function assertParticipantSplit(
       (item) =>
         item.method !== method ||
         item.amountMinor < 0n ||
-        (method === 'equal' ? item.basisValue !== undefined : !/^\d+$/.test(item.basisValue ?? '')),
+        (withoutBasis ? item.basisValue !== undefined : !/^\d+$/.test(item.basisValue ?? '')),
     ) ||
-    participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== amountMinor ||
+    participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== amountMinor
+  )
+    throw new Error('INVALID_SPLIT');
+  if (method === 'itemized') {
+    if (!items.length || !matchesItemizedAllocation(amountMinor, participants, items))
+      throw new Error('INVALID_SPLIT');
+    return;
+  }
+  if (
     !matchesAllocation(
       amountMinor,
       participants,
@@ -1394,6 +1408,11 @@ export const updateExpense = mutation({
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
     participants: v.array(splitParticipantValidator),
+    /**
+     * Line items. Omitted: existing items are kept while they still add up to the new amount
+     * (an itemized split then reuses them); `[]` clears them.
+     */
+    items: v.optional(v.array(lineItemValidator)),
     /** Who paid. Omitted: existing payers are scaled to the new total. */
     payers: v.optional(v.array(v.object({ userId: v.id('users'), amountMinor: v.int64() }))),
     /** Version the client edited; a mismatch means someone else changed the expense. */
@@ -1474,7 +1493,13 @@ export const updateExpense = mutation({
       )
         throw new Error('INVALID_CATEGORY');
     }
-    assertParticipantSplit(args.amountMinor, args.participants);
+    const items = splitLineItems(
+      args.items !== undefined
+        ? normalizeLineItems(args.items, args.amountMinor)
+        : (keptLineItems(transaction.items, args.amountMinor) ?? []),
+      args.participants,
+    );
+    assertParticipantSplit(args.amountMinor, args.participants, items);
     // Current members, plus anyone already on this expense (e.g. a member who has left).
     const allowedIds = new Set<string>([
       ...members.map((member) => member.userId),
@@ -1523,6 +1548,7 @@ export const updateExpense = mutation({
       categoryId: args.categoryId,
       merchant: args.merchant?.trim() || undefined,
       note: args.note?.trim() || undefined,
+      items: items.length ? items : undefined,
       version: nextVersion,
       updatedBy: user._id,
       updatedAt: now,
