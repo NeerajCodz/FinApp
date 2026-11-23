@@ -222,7 +222,16 @@ export default function GroupHomePage() {
     return () => {
       active = false;
     };
-  }, [fetchGroupRange, groupReady, isConnected, localGroupId, rangeEndAt, userId, ledgerScope]);
+  }, [
+    fetchGroupRange,
+    groupReady,
+    groupIdentity,
+    isConnected,
+    localGroupId,
+    rangeEndAt,
+    userId,
+    ledgerScope,
+  ]);
 
   React.useEffect(() => {
     if (!userId || rangeStatus !== 'loaded' || coveredScope !== ledgerScope) return;

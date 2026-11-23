@@ -14,7 +14,12 @@ export function useGroupLedger(id: string | undefined) {
   const group = groups.data?.find((record) => id && recordIds(record).includes(id));
   const groupId = group ? recordId(group) : null;
   const endAt = useMemo(() => Date.now() + 1, []);
-  const range = useLocalGroupRange<LocalRecord>(userId, groupId, 0, endAt, fetchGroupRange);
+  const cloudIdentity = group?.cloudId ?? group?._id;
+  const fetchCurrentGroupRange = useMemo(
+    () => (cloudIdentity ? fetchGroupRange : undefined),
+    [cloudIdentity, fetchGroupRange],
+  );
+  const range = useLocalGroupRange<LocalRecord>(userId, groupId, 0, endAt, fetchCurrentGroupRange);
   const projected = useMemo(() => {
     if (
       !group ||

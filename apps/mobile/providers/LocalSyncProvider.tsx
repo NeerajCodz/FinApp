@@ -870,22 +870,24 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
             [record.id, record._id, record.cloudId].includes(groupId),
           )
         : undefined;
-      if (localGroup && !localGroup._id && !localGroup.cloudId && !mappedGroupId) {
+      const cloudGroupId =
+        mappedGroupId ??
+        (typeof localGroup?.cloudId === 'string' ? localGroup.cloudId : localGroup?._id) ??
+        groupId;
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloudGroupId))
         throw new Error('SYNC_PARENT_PENDING');
-      }
-      const cloudGroupId = (mappedGroupId ?? groupId) as never;
       const [transactionPage, settlementPage]: [
         GroupTransactionRangeResult,
         GroupSettlementRangeResult,
       ] = await Promise.all([
         convex.query(api.sync.queries.groupTransactionRange, {
-          groupId: cloudGroupId,
+          groupId: cloudGroupId as never,
           startAt,
           endAt,
           paginationOpts: { numItems: 100, cursor: transactionCursor },
         }),
         convex.query(api.sync.queries.groupSettlementRange, {
-          groupId: cloudGroupId,
+          groupId: cloudGroupId as never,
           startAt,
           endAt,
           paginationOpts: { numItems: 100, cursor: settlementCursor },

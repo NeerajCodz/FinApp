@@ -525,6 +525,64 @@ describe('local financial repository', () => {
     ).toBe('failed');
   });
 
+  it('reconciles split rows received before the transaction ID mapping exists', async () => {
+    const userId = 'user-split-mapping';
+    const payer = {
+      _id: 'cloud-payer',
+      transactionId: 'cloud-expense',
+      userId: 'alice',
+      amountMinor: 100n,
+    };
+    const shares = [
+      { _id: 'cloud-alice', transactionId: 'cloud-expense', userId: 'alice', amountMinor: 40n },
+      { _id: 'cloud-bob', transactionId: 'cloud-expense', userId: 'bob', amountMinor: 60n },
+    ];
+    await repo.upsertCloudPage(userId, 'expensePayer', [payer]);
+    await repo.upsertCloudPage(userId, 'expenseParticipant', shares);
+    const entry = createOutboxEntry('group.addExpense', {}, 'split-map', {
+      entityType: 'transaction',
+      recordId: 'local-expense',
+    });
+    await repo.applyLocalMutationAndEnqueue(
+      userId,
+      'transaction',
+      {
+        id: 'local-expense',
+        accountId: 'account',
+        groupId: 'group',
+        amountMinor: 100n,
+        occurredAt: 1,
+        status: 'posted',
+      },
+      entry,
+    );
+    await repo.markSynced(userId, entry.localId, 'transaction', 'local-expense', {
+      serverId: 'cloud-expense',
+      revision: '1',
+      updatedAt: 2,
+    });
+    await repo.upsertCloudPage(userId, 'expensePayer', [payer]);
+    await repo.upsertCloudPage(userId, 'expenseParticipant', shares);
+    expect(await repo.readLocal(userId, 'expensePayer')).toMatchObject([
+      { transactionId: 'local-expense', userId: 'alice', amountMinor: 100n },
+    ]);
+    expect(await repo.readLocal(userId, 'expenseParticipant')).toHaveLength(2);
+    expect(await repo.readLocal(userId, 'expenseParticipant')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          transactionId: 'local-expense',
+          userId: 'alice',
+          amountMinor: 40n,
+        }),
+        expect.objectContaining({
+          transactionId: 'local-expense',
+          userId: 'bob',
+          amountMinor: 60n,
+        }),
+      ]),
+    );
+  });
+
   it('keeps cloud group references addressable by their stable local route ID', async () => {
     const userId = 'user-group-mapping';
     const groupWrite = createOutboxEntry('group.create', { name: 'Trip' }, 'mutation-group-map', {
