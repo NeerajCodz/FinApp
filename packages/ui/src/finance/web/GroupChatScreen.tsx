@@ -5,6 +5,8 @@ import { Button, useTheme } from '@finapp/ui/web';
 import { Image as ImageIcon, PaperPlaneTilt, Plus } from '@phosphor-icons/react';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { GroupPage, Crumb, Tile, PersonAvatar, s } from './GroupUI';
+import { ChatThread } from '../../chat/web/ChatThread';
+import type { ChatMessage, ChatPerson, ChatPin, ChatReactionEmoji } from '../../chat/model';
 
 export type GroupChatItem = {
   id: string;
@@ -23,6 +25,14 @@ export type GroupChatItem = {
   color?: string;
   readBy?: readonly string[];
   onPress?: () => void;
+  createdAt?: number;
+  senderId?: string;
+  status?: 'sent' | 'pending' | 'failed';
+  reactions?: readonly { emoji: string; count: number }[];
+  myReaction?: string | null;
+  pinned?: boolean;
+  canPin?: boolean;
+  seenByPeople?: readonly ChatPerson[];
 };
 
 export type GroupChatScreenProps = {
@@ -34,8 +44,21 @@ export type GroupChatScreenProps = {
   pending: boolean;
   error?: string;
   onDraftChange: (value: string) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onSubmit?: (event: React.FormEvent<HTMLFormElement>) => void;
+  onUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  /** Full chat screen: send the current draft (optimistic). */
+  onSend?: () => void;
+  onAttachFile?: (file: File) => void;
+  canLoadOlder?: boolean;
+  loadingOlder?: boolean;
+  onLoadOlder?: () => void;
+  firstUnreadId?: string;
+  pinned?: readonly (ChatPin & { canUnpin?: boolean })[];
+  onTogglePin?: (id: string, pinned: boolean) => void;
+  onReact?: (id: string, emoji: ChatReactionEmoji) => void;
+  onRetry?: (id: string) => void;
+  onDiscard?: (id: string) => void;
+  onSeenLatest?: (createdAt: number) => void;
   group?: { name: string; currency: string; icon?: string; color?: string };
   members?: readonly {
     id: string;
@@ -53,14 +76,86 @@ export type GroupChatScreenProps = {
   embedded?: boolean;
 };
 
+function threadMessages(items: readonly GroupChatItem[]): ChatMessage[] {
+  return items.map((item) => {
+    const base = {
+      id: item.id,
+      createdAt: item.createdAt ?? 0,
+      mine: !!item.ownMessage,
+      senderId: item.senderId,
+      senderName: item.ownMessage ? 'You' : item.sender,
+      senderAvatarUrl: item.senderAvatarUrl,
+      senderAvatarId: item.senderAvatarId,
+    };
+    if (item.kind !== 'message')
+      return {
+        ...base,
+        kind: 'event' as const,
+        event: {
+          label: item.kind === 'expense' ? 'Expense added' : 'Settlement recorded',
+          title: item.title ?? '',
+          amount: item.amount,
+          icon: item.icon,
+          color: item.color,
+          onPress: item.onPress,
+        },
+      };
+    return {
+      ...base,
+      kind:
+        item.text === undefined && item.attachmentUrl !== undefined
+          ? ('image' as const)
+          : ('text' as const),
+      text: item.text,
+      imageUrl: item.attachmentUrl,
+      status: item.status,
+      reactions: item.reactions,
+      myReaction: item.myReaction,
+      pinned: item.pinned,
+      canPin: item.canPin,
+      seenBy: item.seenByPeople,
+    };
+  });
+}
+
+function EventCard({ item }: { item: GroupChatItem }) {
+  const { tokens } = useTheme();
+  const body = (
+    <>
+      <Tile
+        icon={
+          item.icon ?? (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')
+        }
+        color={item.color ?? tokens.warning}
+      />
+      <span className={s.activityCopy}>
+        <small>
+          {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'} · {item.date}
+        </small>
+        <span>{item.title}</span>
+        <strong>{item.amount}</strong>
+        {item.onPress && <small>View ledger record →</small>}
+      </span>
+    </>
+  );
+  return item.onPress ? (
+    <button type="button" className={s.expenseBubble} onClick={item.onPress}>
+      {body}
+    </button>
+  ) : (
+    <div className={s.expenseBubble}>{body}</div>
+  );
+}
+
 export function GroupChatScreen(p: GroupChatScreenProps) {
   const { tokens } = useTheme();
   const timelineRef = useRef<HTMLDivElement>(null);
+  const messages = React.useMemo(() => threadMessages(p.items), [p.items]);
   useEffect(() => {
-    if (p.canSend && p.items.length && timelineRef.current) {
+    if (p.embedded && p.canSend && p.items.length && timelineRef.current) {
       timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
     }
-  }, [p.canSend, p.items.length]);
+  }, [p.embedded, p.canSend, p.items.length]);
   const onTypingChangeRef = useRef(p.onTypingChange);
   onTypingChangeRef.current = p.onTypingChange;
   useEffect(() => {
@@ -206,7 +301,11 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
         )}
       </div>
       {p.canSend ? (
-        <form onSubmit={p.onSubmit} className={s.composer} aria-describedby="group-chat-help">
+        <form
+          onSubmit={(event) => (p.onSubmit ? p.onSubmit(event) : event.preventDefault())}
+          className={s.composer}
+          aria-describedby="group-chat-help"
+        >
           <label className={s.upload} title="Attach bill image">
             <ImageIcon size={24} />
             <input
@@ -311,7 +410,67 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
           )}
         </div>
       </header>
-      {timeline}
+      <section
+        id="group-chat"
+        className={`${s.panel} ${s.chat}`}
+        style={{
+          height: 'calc(100dvh - 190px)',
+          minHeight: 420,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <ChatThread
+          mode="group"
+          messages={messages}
+          loading={p.loading}
+          canLoadOlder={p.canLoadOlder}
+          loadingOlder={p.loadingOlder}
+          onLoadOlder={p.onLoadOlder}
+          firstUnreadId={p.firstUnreadId}
+          typingNames={p.typingNames}
+          pinned={p.pinned}
+          onTogglePin={p.onTogglePin}
+          onReact={p.onReact}
+          onRetry={p.onRetry}
+          onDiscard={p.onDiscard}
+          onSeenLatest={p.onSeenLatest}
+          error={p.error}
+          renderEvent={(message) => {
+            const item = p.items.find((entry) => entry.id === message.id);
+            return item ? <EventCard item={item} /> : null;
+          }}
+          emptyTitle="Start the conversation"
+          emptyDescription="Share a note or attach a bill for the group."
+          composer={
+            p.canSend
+              ? {
+                  draft: p.draft,
+                  onDraftChange: (value) => {
+                    p.onDraftChange(value);
+                    p.onTypingChange?.(Boolean(value.trim()));
+                  },
+                  onSend: () => p.onSend?.(),
+                  onBlur: () => p.onTypingChange?.(false),
+                  onAttachFile: p.onAttachFile,
+                  attachLabel: 'Attach bill image',
+                  uploading: p.pending,
+                  placeholder: `Message ${p.group?.name ?? 'the group'}…`,
+                }
+              : undefined
+          }
+          footer={
+            <div className={s.panel}>
+              <strong>{p.connected ? 'Chat is not synced yet' : 'Group chat is offline'}</strong>
+              <p className={s.muted}>
+                {p.connected
+                  ? 'Sync this saved group before sending messages or bill images.'
+                  : 'Connect to the internet to load and send messages. The group ledger remains available offline.'}
+              </p>
+            </div>
+          }
+        />
+      </section>
     </GroupPage>
   );
 }
