@@ -17,6 +17,11 @@ export type GroupExpenseMemberOption = {
 export type GroupExpenseShare = { userId: string; amountMinor: bigint };
 export type GroupExpenseFormScreenProps = {
   signedIn: boolean;
+  mode?: 'create' | 'edit';
+  loading?: boolean;
+  dataError?: string;
+  unavailableMessage?: string;
+  onRetry?: () => void;
   fixedGroupId?: string;
   groups: readonly GroupExpenseGroupOption[];
   selectedGroupId: string;
@@ -49,7 +54,7 @@ export type GroupExpenseFormScreenProps = {
   validation?: string;
   error?: string;
   saving?: boolean;
-  onGroupChange: (id: string) => void;
+  onGroupChange?: (id: string) => void;
   onAccountChange: (id: string) => void;
   onTitleChange: (value: string) => void;
   onAmountChange: (value: string) => void;
@@ -109,8 +114,12 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
         }}
       >
         <GroupHeading
-          title="New expense"
-          subtitle="Add an expense and split it with specific people in your group."
+          title={p.mode === 'edit' ? 'Edit expense' : 'New expense'}
+          subtitle={
+            p.mode === 'edit'
+              ? 'Update this shared expense and its split.'
+              : 'Add an expense and split it with specific people in your group.'
+          }
           onBack={p.onBack}
         />
         {!p.signedIn ? (
@@ -120,6 +129,17 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
               Sign in to create an offline-first shared expense for a saved group.
             </Typography>
             {p.onSignIn && <Button onPress={p.onSignIn}>Sign in</Button>}
+          </GroupPanel>
+        ) : p.loading ? (
+          <Typography>Loading expense…</Typography>
+        ) : p.dataError || p.unavailableMessage ? (
+          <GroupPanel>
+            <Typography accessibilityRole="alert">{p.dataError || p.unavailableMessage}</Typography>
+            {p.dataError && p.onRetry && (
+              <Button variant="outline" onPress={p.onRetry}>
+                Retry
+              </Button>
+            )}
           </GroupPanel>
         ) : (
           <>
@@ -160,7 +180,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                     accessibilityLabel={`${group.name}, ${group.currency ?? 'currency unavailable'}`}
                     accessibilityState={{ selected: group.id === p.selectedGroupId }}
                     disabled={p.saving}
-                    onPress={() => p.onGroupChange(group.id)}
+                    onPress={() => p.onGroupChange?.(group.id)}
                     style={{
                       padding: 12,
                       borderRadius: 8,
@@ -602,7 +622,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
               disabled={p.saving || !!p.validation || !p.selectedGroupId}
               onPress={p.onSubmit}
             >
-              {p.saving ? 'Saving…' : 'Add expense'}
+              {p.saving ? 'Saving…' : p.mode === 'edit' ? 'Save changes' : 'Add expense'}
             </Button>
             <Button variant="outline" disabled={p.saving} onPress={p.onBack}>
               Cancel

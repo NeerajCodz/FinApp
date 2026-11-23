@@ -68,6 +68,7 @@ export default function GroupExpensesScreen() {
                 Number(expense.occurredAt ?? Date.now()),
                 Boolean(expense.hasTime),
               )}
+              onPress={() => router.push(`/transaction/${encodeURIComponent(String(expense.id ?? expense._id ?? ''))}` as never)}
             />
           ))}
         </View>

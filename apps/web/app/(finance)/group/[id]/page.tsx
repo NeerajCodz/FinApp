@@ -130,19 +130,6 @@ export default function GroupHomePage() {
   const groupIds = group ? recordIds(group) : [groupId];
   const localGroupId = group ? recordId(group) : groupId;
   const groupReady = Boolean(group);
-  const groupOptions = groups
-    .filter((candidate) => {
-      if (candidate.deletedAt !== undefined || candidate.archivedAt !== undefined) return false;
-      return members.some(
-        (member) =>
-          member.deletedAt === undefined &&
-          (member.userId === userId || member.memberId === userId) &&
-          typeof member.groupId === 'string' &&
-          recordIds(candidate).includes(member.groupId),
-      );
-    })
-    .map((candidate) => ({ id: recordId(candidate), name: candidate.name ?? 'Group' }))
-    .filter((option) => option.id);
   const rangeEndAt = React.useMemo(() => Date.now() + 1, []);
   const groupIdentity = group ? String(group.cloudId ?? group._id ?? '') : '';
   const ledgerScope = `${userId ?? ''}:${localGroupId}:${rangeEndAt}`;
@@ -701,9 +688,6 @@ export default function GroupHomePage() {
         icon: remoteGroup?.icon ?? group.icon,
         color: remoteGroup?.color ?? group.color,
       }}
-      groupOptions={groupOptions}
-      currentGroupId={localGroupId}
-      onSelectGroup={(selectedId) => router.push(`/group/${encodeURIComponent(selectedId)}`)}
       canSettle={!ledgerUnavailable && myBalance !== 0n}
       balanceStatus={
         (rangeStatus === 'loading' ||

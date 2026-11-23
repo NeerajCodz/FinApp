@@ -1191,3 +1191,222 @@ export const addExpense = mutation({
     return transactionId;
   },
 });
+
+export const updateExpense = mutation({
+  args: {
+    transactionId: v.id('transactions'),
+    accountId: v.id('accounts'),
+    title: v.string(),
+    amountMinor: v.int64(),
+    currency: v.string(),
+    occurredAt: v.number(),
+    categoryId: v.optional(v.id('categories')),
+    merchant: v.optional(v.string()),
+    note: v.optional(v.string()),
+    participants: v.array(
+      v.object({
+        userId: v.id('users'),
+        amountMinor: v.int64(),
+        method: v.union(
+          v.literal('equal'),
+          v.literal('exact'),
+          v.literal('percentage'),
+          v.literal('shares'),
+        ),
+        basisValue: v.optional(v.string()),
+      }),
+    ),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.updateExpense',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('transactions', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const transaction = await ctx.db.get(args.transactionId);
+    if (
+      !transaction ||
+      transaction.ownerId !== user._id ||
+      !transaction.groupId ||
+      transaction.type !== 'expense' ||
+      transaction.deletedAt !== undefined ||
+      transaction.status !== 'posted'
+    )
+      throw new Error('INSUFFICIENT_PERMISSION');
+    const groupId = ctx.db.normalizeId('groups', transaction.groupId);
+    if (!groupId) throw new Error('INSUFFICIENT_PERMISSION');
+    const [group, account, members, payers, previousParticipants] = await Promise.all([
+      ctx.db.get(groupId),
+      ctx.db.get(args.accountId),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (q) => q.eq('groupId', groupId))
+        .collect(),
+      ctx.db
+        .query('expensePayers')
+        .withIndex('by_transaction', (q) => q.eq('transactionId', args.transactionId))
+        .collect(),
+      ctx.db
+        .query('expenseParticipants')
+        .withIndex('by_transaction', (q) => q.eq('transactionId', args.transactionId))
+        .collect(),
+    ]);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_ARCHIVED');
+    if (!members.some((member) => member.userId === user._id)) throw new Error('NOT_MEMBER');
+    if (!account || account.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
+    const currency = args.currency.toUpperCase();
+    assertCurrency(currency);
+    if (
+      currency !== group.currency ||
+      currency !== account.currency ||
+      account.archivedAt !== undefined
+    )
+      throw new Error('CURRENCY_MISMATCH');
+    if (args.amountMinor <= 0n || !args.title.trim()) throw new Error('INVALID_AMOUNT');
+    if (!Number.isSafeInteger(args.occurredAt) || args.occurredAt <= 0)
+      throw new Error('INVALID_TRANSACTION');
+    if (args.categoryId !== undefined) {
+      const category = await ctx.db.get(args.categoryId);
+      if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
+        throw new Error('INVALID_CATEGORY');
+    }
+    const method = args.participants[0]?.method;
+    if (
+      !method ||
+      new Set(args.participants.map((item) => item.userId)).size !== args.participants.length ||
+      args.participants.some(
+        (item) =>
+          item.method !== method ||
+          item.amountMinor < 0n ||
+          (method === 'equal'
+            ? item.basisValue !== undefined
+            : !/^\d+$/.test(item.basisValue ?? '')),
+      ) ||
+      args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor
+    )
+      throw new Error('INVALID_SPLIT');
+    const allocation = allocateParticipants(
+      args.amountMinor,
+      args.participants.map((item) => item.userId),
+      method,
+      method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
+    );
+    if (
+      allocation.some((item, index) => item.amountMinor !== args.participants[index]?.amountMinor)
+    )
+      throw new Error('INVALID_SPLIT');
+    const memberIds = new Set(members.map((member) => member.userId));
+    if (args.participants.some((participant) => !memberIds.has(participant.userId)))
+      throw new Error('NOT_MEMBER');
+    if (
+      !payers.length ||
+      new Set(payers.map((payer) => payer.userId)).size !== payers.length ||
+      payers.some((payer) => payer.amountMinor < 0n) ||
+      payers.reduce((sum, payer) => sum + payer.amountMinor, 0n) !== transaction.amountMinor
+    )
+      throw new Error('INVALID_SPLIT');
+    const payerAllocation = allocateParticipants(
+      args.amountMinor,
+      payers.map((payer) => payer.userId),
+      'shares',
+      payers.map((payer) => payer.amountMinor),
+    );
+    const now = Date.now();
+    await ctx.db.patch(args.transactionId, {
+      accountId: args.accountId,
+      title: args.title.trim(),
+      amountMinor: args.amountMinor,
+      currency,
+      occurredAt: args.occurredAt,
+      categoryId: args.categoryId,
+      merchant: args.merchant?.trim() || undefined,
+      note: args.note?.trim() || undefined,
+      updatedAt: now,
+    });
+    for (let index = 0; index < payers.length; index++) {
+      await ctx.db.patch(payers[index]!._id, { amountMinor: payerAllocation[index]!.amountMinor });
+    }
+    const remaining = new Map(
+      previousParticipants.map((participant) => [participant.userId, participant]),
+    );
+    for (const participant of args.participants) {
+      const existing = remaining.get(participant.userId);
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          amountMinor: participant.amountMinor,
+          method: participant.method,
+          basisValue: participant.basisValue,
+        });
+        remaining.delete(participant.userId);
+      } else {
+        await ctx.db.insert('expenseParticipants', {
+          transactionId: args.transactionId,
+          ...participant,
+        });
+      }
+    }
+    for (const participant of remaining.values()) await ctx.db.delete(participant._id);
+    await ctx.db.patch(groupId, { updatedAt: now });
+    const [updated, updatedPayers, updatedParticipants] = await Promise.all([
+      ctx.db.get(args.transactionId),
+      ctx.db
+        .query('expensePayers')
+        .withIndex('by_transaction', (q) => q.eq('transactionId', args.transactionId))
+        .collect(),
+      ctx.db
+        .query('expenseParticipants')
+        .withIndex('by_transaction', (q) => q.eq('transactionId', args.transactionId))
+        .collect(),
+    ]);
+    const scopes = members.map((member) => member.userId);
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.updateExpense',
+      args.transactionId,
+      'transactions',
+      String(args.transactionId),
+      now,
+      updated,
+      scopes,
+    );
+    for (const scope of scopes) {
+      for (const payer of updatedPayers)
+        await recordSyncChange(ctx, scope, 'expensePayers', String(payer._id), now, payer);
+      for (const participant of updatedParticipants)
+        await recordSyncChange(
+          ctx,
+          scope,
+          'expenseParticipants',
+          String(participant._id),
+          now,
+          participant,
+        );
+      for (const participant of remaining.values())
+        await recordSyncChange(
+          ctx,
+          scope,
+          'expenseParticipants',
+          String(participant._id),
+          now,
+          undefined,
+          now,
+        );
+      await recordSyncChange(ctx, scope, 'groups', String(groupId), now, {
+        ...group,
+        updatedAt: now,
+      });
+    }
+    return args.transactionId;
+  },
+});

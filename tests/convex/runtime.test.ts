@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
+import { calculateNetBalances } from '../../convex/splits/domain';
 
 vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
 vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
@@ -1334,6 +1335,94 @@ describe('Convex public runtime functions', () => {
     expect(
       await authenticated.query(api.groups.queries.personTimeline, { username: '@rahul_42' }),
     ).toMatchObject([{ id: transactionId, title: 'Hotel', amountMinor: 240000n }]);
+    const edit = {
+      transactionId,
+      accountId,
+      title: 'Hotel updated',
+      amountMinor: 120000n,
+      currency: 'INR',
+      occurredAt: Date.UTC(2026, 7, 27),
+      participants: [
+        { userId: ownerId, amountMinor: 60000n, method: 'equal' as const },
+        { userId: memberId, amountMinor: 60000n, method: 'equal' as const },
+      ],
+      clientMutationId: 'group-expense-edit',
+    };
+    await expect(memberActor.mutation(api.groups.mutations.updateExpense, edit)).rejects.toThrow(
+      'INSUFFICIENT_PERMISSION',
+    );
+    await expect(
+      authenticated.mutation(api.groups.mutations.updateExpense, {
+        ...edit,
+        participants: [{ userId: ownerId, amountMinor: 119999n, method: 'equal' }],
+      }),
+    ).rejects.toThrow('INVALID_SPLIT');
+    expect(await authenticated.mutation(api.groups.mutations.updateExpense, edit)).toBe(
+      transactionId,
+    );
+    expect(
+      await authenticated.mutation(api.groups.mutations.updateExpense, {
+        ...edit,
+        title: 'Replay must not change this',
+      }),
+    ).toBe(transactionId);
+    const ledger = await t.run(async (ctx) => ({
+      transaction: await ctx.db.get(transactionId),
+      payers: await ctx.db.query('expensePayers').collect(),
+      participants: await ctx.db.query('expenseParticipants').collect(),
+      changes: await ctx.db.query('syncChanges').collect(),
+    }));
+    expect(ledger.transaction).toMatchObject({
+      title: 'Hotel updated',
+      amountMinor: 120000n,
+      groupId,
+      ownerId,
+    });
+    expect(ledger.payers).toMatchObject([{ transactionId, userId: ownerId, amountMinor: 120000n }]);
+    expect(ledger.participants).toMatchObject(edit.participants);
+    expect(calculateNetBalances(ledger.payers, ledger.participants, [])).toMatchObject({
+      [ownerId]: 60000n,
+      [memberId]: -60000n,
+    });
+    expect(ledger.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scopeUserId: memberId,
+          entityType: 'transactions',
+          documentId: transactionId,
+        }),
+        expect.objectContaining({
+          scopeUserId: memberId,
+          entityType: 'expensePayers',
+          documentId: ledger.payers[0]!._id,
+        }),
+        expect.objectContaining({
+          scopeUserId: memberId,
+          entityType: 'expenseParticipants',
+          documentId: ledger.participants[1]!._id,
+        }),
+      ]),
+    );
+    await authenticated.mutation(api.groups.mutations.updateExpense, {
+      ...edit,
+      clientMutationId: 'group-expense-remove-member',
+      participants: [{ userId: ownerId, amountMinor: 120000n, method: 'equal' }],
+    });
+    const removedChanges = await t.run((ctx) => ctx.db.query('syncChanges').collect());
+    expect(removedChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scopeUserId: memberId,
+          entityType: 'expenseParticipants',
+          documentId: ledger.participants[1]!._id,
+          deletedAt: expect.any(Number),
+        }),
+      ]),
+    );
+    await authenticated.mutation(api.groups.mutations.updateExpense, {
+      ...edit,
+      clientMutationId: 'group-expense-restore-member',
+    });
     const settlement = {
       groupId,
       fromUserId: memberId,
@@ -1358,6 +1447,39 @@ describe('Convex public runtime functions', () => {
         amountMinor: 60001n,
       }),
     ).rejects.toThrow('SETTLEMENT_EXCEEDS_BALANCE');
+    await t.run(async (ctx) => {
+      await ctx.db.patch(ledger.payers[0]!._id, { amountMinor: 90000n });
+      await ctx.db.insert('expensePayers', {
+        transactionId,
+        userId: memberId,
+        amountMinor: 30000n,
+      });
+    });
+    await authenticated.mutation(api.groups.mutations.updateExpense, {
+      ...edit,
+      amountMinor: 180000n,
+      participants: [
+        { userId: ownerId, amountMinor: 90000n, method: 'equal' },
+        { userId: memberId, amountMinor: 90000n, method: 'equal' },
+      ],
+      clientMutationId: 'group-expense-multiple-payers',
+    });
+    const multiPayerLedger = await t.run(async (ctx) => ({
+      payers: await ctx.db.query('expensePayers').collect(),
+      participants: await ctx.db.query('expenseParticipants').collect(),
+      settlements: await ctx.db.query('settlements').collect(),
+    }));
+    expect(multiPayerLedger.payers).toMatchObject([
+      { userId: ownerId, amountMinor: 135000n },
+      { userId: memberId, amountMinor: 45000n },
+    ]);
+    expect(
+      calculateNetBalances(
+        multiPayerLedger.payers,
+        multiPayerLedger.participants,
+        multiPayerLedger.settlements,
+      ),
+    ).toMatchObject({ [ownerId]: -15000n, [memberId]: 15000n });
   });
 
   it('updates only owned goals, persists supported fields, validates values, and replays edits safely', async () => {

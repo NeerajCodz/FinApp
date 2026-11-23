@@ -11,6 +11,7 @@ import {
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { GroupExpenseEditor } from './GroupExpenseEditor';
 import {
   aliasesOf,
   belongsToUser,
@@ -51,7 +52,8 @@ export default function EditTransactionPage() {
   const profileState = useLocalRecords<Profile>('profile');
   const routeId = Array.isArray(params.id) ? params.id[0] : params.id;
   const transaction = transactionState.records.find(
-    (record) => userId && belongsToUser(record, userId) && matchesId(record, routeId),
+    (record) =>
+      userId && matchesId(record, routeId) && (record.groupId || belongsToUser(record, userId)),
   );
   const accounts = accountState.records.filter(
     (record) => userId && belongsToUser(record, userId) && record.archivedAt === undefined,
@@ -195,6 +197,10 @@ export default function EditTransactionPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (transaction?.groupId && transaction.type === 'expense' && transaction.status === 'posted') {
+    return <GroupExpenseEditor transaction={transaction} />;
   }
 
   return (
