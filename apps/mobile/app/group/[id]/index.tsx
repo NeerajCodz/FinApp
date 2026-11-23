@@ -14,7 +14,9 @@ import {
   type GroupDetailActivity,
   type GroupDetailMember,
   type GroupDetailSettlement,
+  IncludePastExpensesSheet,
 } from '@finapp/ui/finance';
+import { useLateJoiners } from '@/hooks/useLateJoiners';
 import { recordId, recordIds } from '@/lib/ledger';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
@@ -22,7 +24,8 @@ import type { LocalRecord } from '@/local/repository';
 export default function GroupHomeScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { group, members, ledger, error, loading, retry, userId } = useGroupLedger(id);
+  const { group, members, participants, ledger, error, loading, retry, userId } =
+    useGroupLedger(id);
   const { isConnected } = useLocalSync();
   const localSettlements = useLocalRecords(userId, 'settlement');
   const categories = useLocalRecords(userId, 'category');
@@ -36,7 +39,7 @@ export default function GroupHomeScreen() {
     ) ?? [];
   const recent = [...(ledger?.expenses ?? [])]
     .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt))
-    .slice(0, 5);
+    .slice(0, 8);
   const balance = userId ? (ledger?.balances[userId] ?? 0n) : 0n;
   const groupIdentity = String(
     (group as { cloudId?: string; _id?: string } | undefined)?.cloudId ??
@@ -176,8 +179,13 @@ export default function GroupHomeScreen() {
   const settlementMemberName = (memberId: string) => {
     if (memberId === userId) return 'You';
     const member = groupMembers.find((record) => (record.userId ?? record.memberId) === memberId);
+    const former = remoteGroup?.formerMembers.find((entry) => entry.id === memberId);
     return String(
-      member?.displayName ?? member?.name ?? member?.username ?? `Member ${memberId.slice(-6)}`,
+      member?.displayName ??
+        member?.name ??
+        member?.username ??
+        former?.displayName ??
+        `Member ${memberId.slice(-6)}`,
     );
   };
   const chatTimelineItems = [
@@ -254,6 +262,7 @@ export default function GroupHomeScreen() {
         avatarId: member.avatarId,
         avatarUrl: member.avatarUrl,
         role: member.role,
+        joinedAt: member.joinedAt,
       }))
     : groupMembers.map((member) => ({
         id: String(member.userId ?? member.memberId ?? recordId(member)),
@@ -265,13 +274,34 @@ export default function GroupHomeScreen() {
         avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : null,
         avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
         role: typeof member.role === 'string' ? member.role : undefined,
+        joinedAt: typeof member.joinedAt === 'number' ? member.joinedAt : undefined,
       }));
+  const myRole = detailMembers.find((member) => member.id === userId)?.role;
+  const isAdmin =
+    (remoteGroup ? remoteGroup.ownerId === userId : group?.ownerId === userId) ||
+    myRole === 'owner' ||
+    myRole === 'admin';
+  const lateJoiners = useLateJoiners({
+    cloudGroupId,
+    currency: ledger?.currency ?? String(group?.currency ?? ''),
+    expenses: ledger?.expenses ?? [],
+    participants,
+    members: detailMembers.map((member) => ({
+      userId: member.id,
+      name: member.name,
+      joinedAt: member.joinedAt,
+    })),
+    meId: userId,
+    isAdmin,
+    isConnected,
+  });
   const detailActivities: GroupDetailActivity[] = recent.map((expense) => ({
     id: recordId(expense),
     title: String(expense.title ?? 'Group expense'),
     amountMinor: expense.amountMinor as bigint,
     currency: String(group?.currency ?? ledger?.currency ?? ''),
     date: formatTransactionDate(Number(expense.occurredAt ?? 0), Boolean(expense.hasTime)),
+    occurredAt: Number(expense.occurredAt ?? 0),
     ...expenseMetadata(expense),
   }));
   const detailSettlements: GroupDetailSettlement[] = recentSettlements.map((settlement) => ({
@@ -283,106 +313,119 @@ export default function GroupHomeScreen() {
       typeof settlement.occurredAt === 'number'
         ? formatTransactionDate(settlement.occurredAt, true)
         : undefined,
+    note: typeof settlement.note === 'string' ? settlement.note : undefined,
   }));
   const ledgerComplete = Boolean(ledger) && !loading && !error;
   const currency = ledger?.currency ?? '';
   return (
-    <GroupDetailScreen
-      group={
-        group
-          ? {
-              name: String(group.name ?? 'Group'),
-              currency: String(group.currency ?? ledger?.currency ?? ''),
-              icon:
-                typeof remoteGroup?.icon === 'string'
-                  ? remoteGroup.icon
-                  : typeof group.icon === 'string'
-                    ? group.icon
-                    : undefined,
-              color:
-                typeof remoteGroup?.color === 'string'
-                  ? remoteGroup.color
-                  : typeof group.color === 'string'
-                    ? group.color
-                    : undefined,
-            }
-          : undefined
-      }
-      loading={loading}
-      balanceStatus={error ? 'unavailable' : loading || !ledger ? 'loading' : 'ready'}
-      balanceMinor={balance}
-      balanceCurrency={ledger?.currency ?? ''}
-      balanceMeaning={balance > 0n ? 'Owed to you' : balance < 0n ? 'You owe' : 'You are settled'}
-      balanceError={error?.message}
-      canSettle={ledgerComplete && balance !== 0n}
-      totalSpend={
-        ledgerComplete && ledger
-          ? formatMinor(
-              ledger.expenses.reduce((sum, expense) => sum + (expense.amountMinor as bigint), 0n),
-              currency,
-            )
-          : undefined
-      }
-      owed={ledgerComplete ? formatMinor(balance > 0n ? balance : 0n, currency) : undefined}
-      owing={ledgerComplete ? formatMinor(balance < 0n ? -balance : 0n, currency) : undefined}
-      memberBalances={
-        ledgerComplete && ledger
-          ? Object.entries(ledger.balances).map(([memberId, amount]) => ({
-              id: memberId,
-              name:
-                detailMembers.find((member) => member.id === memberId)?.name ??
-                settlementMemberName(memberId),
-              amount: formatMinor(amount < 0n ? -amount : amount, currency),
-              meaning: amount > 0n ? 'Owed by group' : amount < 0n ? 'Owes group' : 'Settled',
-            }))
-          : undefined
-      }
-      members={detailMembers}
-      activities={detailActivities}
-      settlements={detailSettlements}
-      settlementsLoading={localSettlements.loading}
-      settlementsError={localSettlements.error?.message}
-      chat={{
-        embedded: true,
-        group: group
-          ? {
-              name: String(group.name ?? 'Group'),
-              currency: String(group.currency ?? ledger?.currency ?? ''),
-              icon: remoteGroup?.icon ?? (typeof group.icon === 'string' ? group.icon : undefined),
-              color:
-                remoteGroup?.color ?? (typeof group.color === 'string' ? group.color : undefined),
-            }
-          : undefined,
-        members: detailMembers.map((member) => ({
-          ...member,
-          avatarUrl: member.avatarUrl ?? undefined,
-        })),
-        items: groupChatItems,
-        loading: canUseGroupChat && chatMessages === undefined,
-        canSend: canUseGroupChat,
-        connected: isConnected,
-        draft: chatDraft,
-        pending: chatPending,
-        error: chatError || undefined,
-        onDraftChange: setChatDraft,
-        onSend: () => void submitChatMessage(),
-        onChooseBillImage: () => void pickBillImage(),
-      }}
-      onBack={() => router.back()}
-      onOpenChat={() => router.push({ pathname: '/group/[id]/chat', params: { id: id ?? '' } })}
-      onOpenAnalytics={() =>
-        router.push({ pathname: '/group/[id]/analytics', params: { id: id ?? '' } })
-      }
-      onOpenSettings={() => router.push({ pathname: '/group/[id]/edit', params: { id: id ?? '' } })}
-      onOpenBalances={() =>
-        router.push({ pathname: '/group/[id]/balances', params: { id: id ?? '' } })
-      }
-      onSettle={() => router.push({ pathname: '/settle/new', params: { groupId: id ?? '' } })}
-      onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
-      onOpenActivity={(activityId) =>
-        router.push({ pathname: '/transaction/[id]', params: { id: activityId } })
-      }
-      onRetry={retry}
-    />
+    <>
+      <GroupDetailScreen
+        group={
+          group
+            ? {
+                name: String(group.name ?? 'Group'),
+                currency: String(group.currency ?? ledger?.currency ?? ''),
+                icon:
+                  typeof remoteGroup?.icon === 'string'
+                    ? remoteGroup.icon
+                    : typeof group.icon === 'string'
+                      ? group.icon
+                      : undefined,
+                color:
+                  typeof remoteGroup?.color === 'string'
+                    ? remoteGroup.color
+                    : typeof group.color === 'string'
+                      ? group.color
+                      : undefined,
+              }
+            : undefined
+        }
+        loading={loading}
+        balanceStatus={error ? 'unavailable' : loading || !ledger ? 'loading' : 'ready'}
+        balanceMinor={balance}
+        balanceCurrency={ledger?.currency ?? ''}
+        balanceMeaning={balance > 0n ? 'Owed to you' : balance < 0n ? 'You owe' : 'You are settled'}
+        balanceError={error?.message}
+        canSettle={ledgerComplete && balance !== 0n}
+        totalSpend={
+          ledgerComplete && ledger
+            ? formatMinor(
+                ledger.expenses.reduce((sum, expense) => sum + (expense.amountMinor as bigint), 0n),
+                currency,
+              )
+            : undefined
+        }
+        owed={ledgerComplete ? formatMinor(balance > 0n ? balance : 0n, currency) : undefined}
+        owing={ledgerComplete ? formatMinor(balance < 0n ? -balance : 0n, currency) : undefined}
+        balances={ledgerComplete ? ledger?.balances : undefined}
+        meId={userId}
+        formerMembers={remoteGroup?.formerMembers.map((former) => ({
+          id: former.id,
+          name: former.displayName,
+          avatarId: former.avatarId,
+          leftAt: former.leftAt,
+        }))}
+        joins={lateJoiners.joins}
+        lateJoiners={lateJoiners.banners}
+        onIncludeLateJoiner={lateJoiners.open}
+        onDismissLateJoiner={lateJoiners.dismiss}
+        members={detailMembers}
+        activities={detailActivities}
+        settlements={detailSettlements}
+        settlementsLoading={localSettlements.loading}
+        settlementsError={localSettlements.error?.message}
+        chat={{
+          embedded: true,
+          group: group
+            ? {
+                name: String(group.name ?? 'Group'),
+                currency: String(group.currency ?? ledger?.currency ?? ''),
+                icon:
+                  remoteGroup?.icon ?? (typeof group.icon === 'string' ? group.icon : undefined),
+                color:
+                  remoteGroup?.color ?? (typeof group.color === 'string' ? group.color : undefined),
+              }
+            : undefined,
+          members: detailMembers.map((member) => ({
+            ...member,
+            avatarUrl: member.avatarUrl ?? undefined,
+          })),
+          items: groupChatItems,
+          loading: canUseGroupChat && chatMessages === undefined,
+          canSend: canUseGroupChat,
+          connected: isConnected,
+          draft: chatDraft,
+          pending: chatPending,
+          error: chatError || undefined,
+          onDraftChange: setChatDraft,
+          onSend: () => void submitChatMessage(),
+          onChooseBillImage: () => void pickBillImage(),
+        }}
+        onBack={() => router.back()}
+        onOpenChat={() => router.push({ pathname: '/group/[id]/chat', params: { id: id ?? '' } })}
+        onOpenAnalytics={() =>
+          router.push({ pathname: '/group/[id]/analytics', params: { id: id ?? '' } })
+        }
+        onOpenSettings={() =>
+          router.push({ pathname: '/group/[id]/edit', params: { id: id ?? '' } })
+        }
+        onOpenBalances={() =>
+          router.push({ pathname: '/group/[id]/balances', params: { id: id ?? '' } })
+        }
+        onSettle={() => router.push({ pathname: '/settle/new', params: { groupId: id ?? '' } })}
+        onSettleWith={(memberId) =>
+          router.push({ pathname: '/settle/new', params: { groupId: id ?? '', member: memberId } })
+        }
+        onOpenExpenses={() =>
+          router.push({ pathname: '/group/[id]/expenses', params: { id: id ?? '' } })
+        }
+        onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
+        onOpenActivity={(activityId) =>
+          router.push({ pathname: '/transaction/[id]', params: { id: activityId } })
+        }
+        onRetry={retry}
+      />
+      <IncludePastExpensesSheet {...lateJoiners.sheet} />
+    </>
   );
 }

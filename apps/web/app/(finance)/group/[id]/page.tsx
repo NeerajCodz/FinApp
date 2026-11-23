@@ -9,7 +9,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { ArrowRight } from 'lucide-react';
 import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
-import { Empty } from '@finapp/ui/web';
+import { Empty, ListSkeleton } from '@finapp/ui/web';
 import { formatTransactionDate } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -23,6 +23,8 @@ import {
   type GroupDetailSettlement,
 } from '@finapp/ui/finance';
 import type { GroupChatItem } from '@finapp/ui/finance';
+import { IncludePastExpensesSheet } from '@finapp/ui/finance';
+import { useLateJoiners } from '@/lib/groups/useLateJoiners';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type Group = LocalRecord & {
@@ -43,6 +45,7 @@ type Member = LocalRecord & {
   name?: string;
   avatarId?: string;
   avatarUrl?: string | null;
+  joinedAt?: number;
 };
 type LedgerRecord = LocalRecord & {
   groupId?: string;
@@ -64,6 +67,7 @@ type LedgerRecord = LocalRecord & {
   participants?: Array<{ userId: string; amountMinor: bigint | number | string }>;
   payerUserId?: string;
   payerAmountMinor?: bigint | number | string;
+  note?: string;
 };
 const asMinor = (value: unknown) =>
   typeof value === 'bigint'
@@ -335,6 +339,55 @@ export default function GroupHomePage() {
       );
     });
 
+  const joinMembers = remoteGroup
+    ? remoteGroup.members.map((member) => ({
+        userId: member.id,
+        name: member.id === userId ? 'You' : member.displayName,
+        joinedAt: member.joinedAt,
+        role: member.role as string | undefined,
+      }))
+    : members
+        .filter(
+          (member) =>
+            member.deletedAt === undefined &&
+            typeof member.groupId === 'string' &&
+            groupIds.includes(member.groupId),
+        )
+        .map((member) => ({
+          userId: String(member.userId ?? member.memberId ?? ''),
+          name:
+            member.userId === userId
+              ? 'You'
+              : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
+          joinedAt: member.joinedAt,
+          role: member.role,
+        }));
+  const myRole = joinMembers.find((member) => member.userId === userId)?.role;
+  const ledgerExpenses = group
+    ? transactions.filter(
+        (record) =>
+          typeof record.groupId === 'string' &&
+          groupIds.includes(record.groupId) &&
+          record.type === 'expense' &&
+          record.status === 'posted' &&
+          record.deletedAt === undefined &&
+          record.currency === (group.currency ?? 'INR'),
+      )
+    : [];
+  const lateJoiners = useLateJoiners({
+    cloudGroupId,
+    currency: group?.currency ?? 'INR',
+    expenses: ledgerExpenses,
+    participants,
+    members: joinMembers,
+    meId: userId,
+    isAdmin:
+      (remoteGroup ? remoteGroup.ownerId === userId : group?.ownerId === userId) ||
+      myRole === 'owner' ||
+      myRole === 'admin',
+    isConnected,
+  });
+
   if (!userId)
     return (
       <section className="finance-welcome">
@@ -349,9 +402,7 @@ export default function GroupHomePage() {
   if (groupsLoading && !group)
     return (
       <div className="finance-page">
-        <p className="finance-muted" role="status">
-          Opening saved group…
-        </p>
+        <ListSkeleton rows={5} />
       </div>
     );
   if (!group)
@@ -433,7 +484,7 @@ export default function GroupHomePage() {
   const myBalance = ledgerUnavailable ? 0n : userId ? (balanceByUser[userId] ?? 0n) : 0n;
   const recent = [...activeExpenses]
     .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
-    .slice(0, 5);
+    .slice(0, 8);
   const memberNames: GroupDetailMember[] = remoteGroup?.members
     ? remoteGroup.members.map((member) => ({
         id: member.id,
@@ -442,6 +493,7 @@ export default function GroupHomePage() {
         avatarUrl: member.avatarUrl,
         role: member.role,
         name: member.id === userId ? 'You' : member.displayName,
+        joinedAt: member.joinedAt,
       }))
     : groupMembers.map((member) => ({
         id: String(member.userId ?? member.memberId ?? recordId(member)),
@@ -449,6 +501,7 @@ export default function GroupHomePage() {
         avatarUrl: member.avatarUrl,
         avatarId: member.avatarId,
         role: member.role,
+        joinedAt: member.joinedAt,
         name:
           member.userId === userId
             ? 'You'
@@ -476,6 +529,7 @@ export default function GroupHomePage() {
     id === userId
       ? 'You'
       : (memberNames.find((member) => member.id === id)?.name ??
+        remoteGroup?.formerMembers.find((member) => member.id === id)?.displayName ??
         (id ? `Member ${id.slice(-6)}` : 'Group member'));
   const formatDate = (value: unknown, hasTime?: boolean) =>
     formatTransactionDate(Number(value ?? Date.now()), hasTime);
@@ -644,13 +698,16 @@ export default function GroupHomePage() {
     amountMinor: asMinor(expense.amountMinor),
     currency: group.currency ?? 'INR',
     date: formatDate(expense.occurredAt, expense.hasTime),
+    occurredAt: Number(expense.occurredAt ?? 0),
     ...expenseMetadata(expense),
   }));
   const detailSettlements: GroupDetailSettlement[] = recentSettlements.map((settlement) => ({
     id: recordId(settlement),
     description: `${memberName(String(settlement.fromUserId ?? ''))} paid ${memberName(String(settlement.toUserId ?? ''))}`,
-    amount: formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR'),
+    amountMinor: asMinor(settlement.amountMinor),
+    currency: group.currency ?? 'INR',
     date: settlement.occurredAt === undefined ? undefined : formatDate(settlement.occurredAt, true),
+    note: typeof settlement.note === 'string' ? settlement.note : undefined,
   }));
   const balanceMeaning =
     myBalance === 0n ? 'You are settled' : myBalance > 0n ? 'Owed to you' : 'You owe';
@@ -690,65 +747,95 @@ export default function GroupHomePage() {
   };
   if (standaloneChat) return <GroupChatScreen {...chat} />;
   return (
-    <GroupDetailScreen
-      group={{
-        name: group.name ?? 'Group',
-        currency: group.currency ?? 'INR',
-        icon: remoteGroup?.icon ?? group.icon,
-        color: remoteGroup?.color ?? group.color,
-      }}
-      canSettle={!ledgerUnavailable && myBalance !== 0n}
-      balanceStatus={
-        (rangeStatus === 'loading' ||
-          recordsLoading ||
-          (rangeStatus === 'loaded' && !rangeComplete)) &&
-        !ledgerError
-          ? 'loading'
-          : ledgerUnavailable
-            ? 'unavailable'
-            : 'ready'
-      }
-      balance={formatMinor(myBalance, group.currency ?? 'INR')}
-      balanceMeaning={balanceMeaning}
-      balanceError={ledgerError || (rangeStatus === 'error' ? rangeError : undefined)}
-      totalSpend={
-        ledgerUnavailable ? undefined : formatMinor(totalSpendMinor, group.currency ?? 'INR')
-      }
-      owed={
-        ledgerUnavailable
-          ? undefined
-          : formatMinor(myBalance > 0n ? myBalance : 0n, group.currency ?? 'INR')
-      }
-      owing={
-        ledgerUnavailable
-          ? undefined
-          : formatMinor(myBalance < 0n ? -myBalance : 0n, group.currency ?? 'INR')
-      }
-      memberBalances={
-        ledgerUnavailable
-          ? undefined
-          : Object.entries(balanceByUser).map(([id, amount]) => ({
-              id,
-              name: memberName(id),
-              amount: formatMinor(amount < 0n ? -amount : amount, group.currency ?? 'INR'),
-              meaning: amount > 0n ? 'Owed by group' : amount < 0n ? 'Owes group' : 'Settled',
-            }))
-      }
-      members={detailMembers}
-      activities={detailActivities}
-      settlements={detailSettlements}
-      chat={chat}
-      onBack={() => router.push('/groups')}
-      onOpenChat={() => router.push(`/group/${encodeURIComponent(localGroupId)}/chat`)}
-      onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(localGroupId)}/analytics`)}
-      onOpenSettings={() => router.push(`/group/${encodeURIComponent(localGroupId)}/edit`)}
-      onOpenBalances={() => router.push(`/group/${encodeURIComponent(localGroupId)}/balances`)}
-      onSettle={() => router.push(`/settle/new?groupId=${encodeURIComponent(localGroupId)}`)}
-      onAddExpense={() => router.push(`/group/${encodeURIComponent(localGroupId)}/new`)}
-      onOpenPerson={(username) =>
-        router.push(`/@${encodeURIComponent(username.replace(/^@+/, ''))}`)
-      }
-      onOpenActivity={(activityId) => router.push(`/transaction/${encodeURIComponent(activityId)}`)}
-    />
+    <>
+      <GroupDetailScreen
+        group={{
+          name: group.name ?? 'Group',
+          currency: group.currency ?? 'INR',
+          icon: remoteGroup?.icon ?? group.icon,
+          color: remoteGroup?.color ?? group.color,
+        }}
+        canSettle={!ledgerUnavailable && myBalance !== 0n}
+        balanceStatus={
+          (rangeStatus === 'loading' ||
+            recordsLoading ||
+            (rangeStatus === 'loaded' && !rangeComplete)) &&
+          !ledgerError
+            ? 'loading'
+            : ledgerUnavailable
+              ? 'unavailable'
+              : 'ready'
+        }
+        balanceMinor={myBalance}
+        balanceMeaning={balanceMeaning}
+        balanceError={ledgerError || (rangeStatus === 'error' ? rangeError : undefined)}
+        totalSpend={
+          ledgerUnavailable ? undefined : formatMinor(totalSpendMinor, group.currency ?? 'INR')
+        }
+        owed={
+          ledgerUnavailable
+            ? undefined
+            : formatMinor(myBalance > 0n ? myBalance : 0n, group.currency ?? 'INR')
+        }
+        owing={
+          ledgerUnavailable
+            ? undefined
+            : formatMinor(myBalance < 0n ? -myBalance : 0n, group.currency ?? 'INR')
+        }
+        balances={ledgerUnavailable ? undefined : balanceByUser}
+        meId={userId}
+        formerMembers={remoteGroup?.formerMembers.map((former) => ({
+          id: former.id,
+          name: former.displayName,
+          avatarId: former.avatarId,
+          leftAt: former.leftAt,
+        }))}
+        joins={lateJoiners.joins}
+        lateJoiners={lateJoiners.banners}
+        onIncludeLateJoiner={lateJoiners.open}
+        onDismissLateJoiner={lateJoiners.dismiss}
+        activitiesLoading={transactionsLoading && !detailActivities.length}
+        members={detailMembers}
+        activities={detailActivities}
+        settlements={detailSettlements}
+        chat={chat}
+        onBack={() => router.push('/groups')}
+        onOpenChat={() => router.push(`/group/${encodeURIComponent(localGroupId)}/chat`)}
+        onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(localGroupId)}/analytics`)}
+        onOpenSettings={() => router.push(`/group/${encodeURIComponent(localGroupId)}/edit`)}
+        onOpenBalances={() => router.push(`/group/${encodeURIComponent(localGroupId)}/balances`)}
+        onSettle={() => router.push(`/settle/new?groupId=${encodeURIComponent(localGroupId)}`)}
+        onSettleWith={(memberId) =>
+          router.push(
+            `/settle/new?groupId=${encodeURIComponent(localGroupId)}&member=${encodeURIComponent(memberId)}`,
+          )
+        }
+        onOpenExpenses={() => router.push(`/group/${encodeURIComponent(localGroupId)}/expenses`)}
+        onRetry={() => {
+          setCoveredScope('');
+          setRangeStatus('idle');
+          void fetchGroupRange(localGroupId, 0, rangeEndAt).then(
+            () => {
+              setCoveredScope(ledgerScope);
+              setRangeStatus('loaded');
+            },
+            (cause: unknown) => {
+              setRangeStatus('error');
+              setRangeError(
+                cause instanceof Error ? cause.message : 'The group range could not be loaded.',
+              );
+            },
+          );
+        }}
+        onAddExpense={() => router.push(`/group/${encodeURIComponent(localGroupId)}/new`)}
+        onOpenPerson={(username) =>
+          router.push(`/@${encodeURIComponent(username.replace(/^@+/, ''))}`)
+        }
+        onOpenActivity={(activityId) =>
+          router.push(`/transaction/${encodeURIComponent(activityId)}`)
+        }
+      />
+      <IncludePastExpensesSheet {...lateJoiners.sheet} />
+    </>
   );
 }

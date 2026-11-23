@@ -1,20 +1,41 @@
-import { FinanceEmptyState } from './FinanceEmptyState';
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { Button, Empty, Typography, useTheme } from '@finapp/ui/native';
+import { ScrollView, View } from 'react-native';
+import {
+  Button,
+  IconButton,
+  ListSkeleton,
+  StatTile,
+  Typography,
+  useTheme,
+} from '@finapp/ui/native';
+import {
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowUpRight,
+  ChartLineUp,
+  Gear,
+  Plus,
+  Wallet,
+} from '@finapp/ui/icons/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatMinor } from '@convex/shared/money';
+import { layoutTokens, space } from '../../tokens';
+import { simplifyDebts } from '@convex/splits/domain';
+import type { BalanceMap, TimelineJoin } from '../groupSettle';
 import { GroupChatScreen, type GroupChatScreenProps } from './GroupChatScreen';
+import { GroupTile, type GroupMetadata } from './GroupPrimitives';
 import {
-  GroupAvatar,
-  GroupHeading,
-  GroupMetadataSummary,
-  GroupMetric,
-  GroupPanel,
-  GroupTile,
-  type GroupMetadata,
-} from './GroupPrimitives';
-import { Money } from './Money';
+  GroupExpenseTimeline,
+  IllustratedState,
+  LateJoinerBanner,
+  MemberBalanceBars,
+  NetPositionHero,
+  SectionTitle,
+  SettleCard,
+  SettlementHistoryRow,
+  SuggestedTransfers,
+  type SettlePerson,
+} from './GroupSettleParts';
 
 export type GroupDetailMember = {
   id: string;
@@ -23,6 +44,13 @@ export type GroupDetailMember = {
   avatarId?: string;
   avatarUrl?: string | null;
   role?: string;
+  joinedAt?: number;
+};
+export type GroupDetailFormerMember = {
+  id: string;
+  name: string;
+  avatarId?: string;
+  leftAt: number;
 };
 export type GroupDetailActivity = {
   id: string;
@@ -30,6 +58,7 @@ export type GroupDetailActivity = {
   amountMinor: bigint;
   currency: string;
   date: string;
+  occurredAt?: number;
   category?: string;
   account?: string;
   icon?: string;
@@ -41,6 +70,7 @@ export type GroupDetailSettlement = {
   amountMinor: bigint;
   currency: string;
   date?: string;
+  note?: string;
 };
 export type GroupDetailScreenProps = {
   group?: GroupMetadata & { name: string; currency: string; icon?: string; color?: string };
@@ -54,8 +84,17 @@ export type GroupDetailScreenProps = {
   totalSpend?: string;
   owed?: string;
   owing?: string;
-  memberBalances?: readonly { id: string; name: string; amount: string; meaning: string }[];
+  /** Every member's net balance (positive: owed to them). */
+  balances?: BalanceMap;
+  meId?: string | null;
   members: readonly GroupDetailMember[];
+  formerMembers?: readonly GroupDetailFormerMember[];
+  /** Members who joined after earlier expenses, for the timeline markers. */
+  joins?: readonly TimelineJoin[];
+  /** Admin prompt: members who missed past expenses. */
+  lateJoiners?: readonly { userId: string; name: string; missedCount: number }[];
+  onIncludeLateJoiner?: (userId: string) => void;
+  onDismissLateJoiner?: (userId: string) => void;
   activities: readonly GroupDetailActivity[];
   settlements: readonly GroupDetailSettlement[];
   settlementsLoading: boolean;
@@ -66,7 +105,9 @@ export type GroupDetailScreenProps = {
   onOpenAnalytics: () => void;
   onOpenSettings: () => void;
   onOpenBalances: () => void;
+  onOpenExpenses?: () => void;
   onSettle: () => void;
+  onSettleWith?: (memberId: string) => void;
   onAddExpense: () => void;
   onOpenActivity: (id: string) => void;
   onRetry: () => void;
@@ -76,7 +117,23 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const ready = p.balanceStatus === 'ready' && !p.balanceError;
-  const unavailable = p.balanceStatus === 'loading' ? 'Loading…' : 'Unavailable';
+  const people: SettlePerson[] = useMemo(
+    () => [
+      ...p.members.map((member) => ({
+        id: member.id,
+        name: member.name,
+        avatarUrl: member.avatarUrl,
+        avatarId: member.avatarId,
+      })),
+      ...(p.formerMembers ?? [])
+        .filter((former) => !p.members.some((member) => member.id === former.id))
+        .map((former) => ({ ...former })),
+    ],
+    [p.formerMembers, p.members],
+  );
+  const transfers = useMemo(() => (p.balances ? simplifyDebts(p.balances) : []), [p.balances]);
+  const allSettled =
+    ready && !!p.balances && Object.values(p.balances).every((value) => value === 0n);
   const insights = useMemo(() => {
     const totals = new Map<string, bigint>();
     const categories = new Map<
@@ -106,22 +163,46 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
         : 0,
     }));
   }, [p.activities]);
+  const pending = p.balanceStatus === 'loading' ? 'Loading…' : '—';
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
-        paddingHorizontal: 20,
+        paddingHorizontal: layoutTokens.screenX,
         paddingTop: insets.top + 12,
         paddingBottom: insets.bottom + 28,
-        gap: 16,
+        gap: space.xl,
       }}
     >
-      <GroupHeading title={p.group?.name ?? 'Group'} onBack={p.onBack} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <IconButton label="Go back" variant="ghost" onPress={p.onBack}>
+          <ArrowLeft size={20} color={tokens.foreground} />
+        </IconButton>
+        {p.group ? <GroupTile icon={p.group.icon} color={p.group.color} size={36} /> : null}
+        <View style={{ flex: 1 }}>
+          <Typography variant="heading" numberOfLines={1}>
+            {p.group?.name ?? 'Group'}
+          </Typography>
+          {p.group ? (
+            <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+              {p.members.length} member{p.members.length === 1 ? '' : 's'} · {p.group.currency}
+            </Typography>
+          ) : null}
+        </View>
+        {p.group ? (
+          <IconButton label="Group settings" variant="ghost" onPress={p.onOpenSettings}>
+            <Gear size={20} color={tokens.foreground} />
+          </IconButton>
+        ) : null}
+      </View>
       {p.loading ? (
-        <Typography>Loading group details…</Typography>
+        <SettleCard>
+          <ListSkeleton rows={4} />
+        </SettleCard>
       ) : !p.group ? (
-        <Empty
+        <IllustratedState
+          scene="error"
           title="Group unavailable"
           description="This group is not saved on this device."
           action={
@@ -132,205 +213,175 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
         />
       ) : (
         <>
-          <GroupPanel>
-            <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-              <GroupTile icon={p.group.icon} color={p.group.color} size={80} />
-              <View style={{ flex: 1, gap: 6 }}>
-                <Typography variant="heading">{p.group.name}</Typography>
-                <Typography variant="caption">Shared expenses · {p.group.currency}</Typography>
-                <View style={{ flexDirection: 'row' }}>
-                  {p.members.slice(0, 5).map((member, index) => (
-                    <View key={member.id} style={{ marginLeft: index ? -7 : 0 }}>
-                      <GroupAvatar
-                        name={member.name}
-                        avatarId={member.avatarId}
-                        avatarUrl={member.avatarUrl}
-                        size={28}
-                      />
-                    </View>
-                  ))}
-                </View>
+          {ready ? (
+            <NetPositionHero
+              balanceMinor={p.balanceMinor}
+              currency={p.balanceCurrency}
+              title={p.balanceMeaning}
+              people={p.members}
+            >
+              <View style={{ flexDirection: 'row', gap: space.sm }}>
+                {p.canSettle ? (
+                  <Button style={{ flex: 1 }} onPress={p.onSettle}>
+                    Settle up
+                  </Button>
+                ) : null}
+                <Button
+                  style={{ flex: 1 }}
+                  variant={p.canSettle ? 'outline' : 'primary'}
+                  onPress={p.onAddExpense}
+                >
+                  <Plus
+                    size={16}
+                    color={p.canSettle ? tokens.foreground : tokens.primaryForeground}
+                  />{' '}
+                  Add expense
+                </Button>
               </View>
-            </View>
-            <GroupMetadataSummary group={p.group} />
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Button style={{ flex: 1 }} size="sm" variant="outline" onPress={p.onOpenSettings}>
-                Edit group
+            </NetPositionHero>
+          ) : (
+            <SettleCard>
+              {p.balanceStatus === 'loading' ? (
+                <ListSkeleton rows={2} avatar={false} />
+              ) : (
+                <IllustratedState
+                  scene="offline"
+                  title="Balances unavailable"
+                  description={`Complete group balances could not be loaded, so no partial value is shown.${p.balanceError ? ` ${p.balanceError}` : ''}`}
+                  action={
+                    <Button variant="outline" onPress={p.onRetry}>
+                      Retry
+                    </Button>
+                  }
+                />
+              )}
+              <Button variant="outline" onPress={p.onAddExpense}>
+                + Add expense
               </Button>
-              <Button style={{ flex: 1 }} size="sm" variant="outline" onPress={p.onOpenChat}>
-                Open chat
-              </Button>
-            </View>
-            <Button onPress={p.onAddExpense}>+ Add expense</Button>
-          </GroupPanel>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-            <GroupMetric
-              title="Total group spend"
-              value={ready ? (p.totalSpend ?? 'Unavailable') : unavailable}
-              detail="Complete history only"
-              icon="phosphor:Wallet"
-              color={tokens.income}
+            </SettleCard>
+          )}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
+            <StatTile
+              label="Total spend"
+              value={ready ? (p.totalSpend ?? '—') : pending}
+              icon={<Wallet size={16} color={tokens.primary} />}
+              tone="accent"
+              style={{ minWidth: '100%' }}
             />
-            <GroupMetric
-              title="You are owed"
-              value={
-                ready
-                  ? (p.owed ??
-                    formatMinor(p.balanceMinor > 0n ? p.balanceMinor : 0n, p.balanceCurrency))
-                  : unavailable
-              }
-              detail="Your net group balance"
-              icon="phosphor:ArrowDownLeft"
-              color={tokens.income}
-            />
-            <GroupMetric
-              title="You owe"
+            <StatTile
+              label="You owe"
               value={
                 ready
                   ? (p.owing ??
                     formatMinor(p.balanceMinor < 0n ? -p.balanceMinor : 0n, p.balanceCurrency))
-                  : unavailable
+                  : pending
               }
-              detail="Your net group balance"
-              icon="phosphor:ArrowUpRight"
-              color={tokens.expense}
+              icon={<ArrowUpRight size={16} color={tokens.expense} />}
+              tone="expense"
+              style={{ minWidth: 140 }}
             />
-            <GroupMetric
-              title="Unsettled members"
+            <StatTile
+              label="Owed to you"
               value={
-                ready && p.memberBalances
-                  ? String(p.memberBalances.filter((member) => member.meaning !== 'Settled').length)
-                  : unavailable
+                ready
+                  ? (p.owed ??
+                    formatMinor(p.balanceMinor > 0n ? p.balanceMinor : 0n, p.balanceCurrency))
+                  : pending
               }
-              detail="Group balances, not scheduled payments"
-              icon="phosphor:Receipt"
-              color={tokens.warning}
-            />
-            <GroupMetric
-              title="Members"
-              value={String(p.members.length)}
-              detail="Saved membership"
-              icon="phosphor:UsersThree"
-              color={tokens.split}
+              icon={<ArrowDownRight size={16} color={tokens.income} />}
+              tone="income"
+              style={{ minWidth: 140 }}
             />
           </View>
-          {!ready && (
-            <GroupPanel>
-              <Typography accessibilityRole={p.balanceError ? 'alert' : undefined} variant="small">
-                {p.balanceStatus === 'loading'
-                  ? 'Loading complete group history…'
-                  : 'Complete group balances are unavailable. No partial all-time value is shown.'}{' '}
-                {p.balanceError}
-              </Typography>
-              {!!p.balanceError && (
-                <Button variant="outline" onPress={p.onRetry}>
-                  Retry
+          {p.lateJoiners?.map((joiner) => (
+            <LateJoinerBanner
+              key={joiner.userId}
+              name={joiner.name}
+              missedCount={joiner.missedCount}
+              onInclude={() => p.onIncludeLateJoiner?.(joiner.userId)}
+              onDismiss={
+                p.onDismissLateJoiner ? () => p.onDismissLateJoiner?.(joiner.userId) : undefined
+              }
+            />
+          ))}
+          <SettleCard>
+            <SectionTitle
+              title="Balances"
+              caption="Who gets back and who owes, across all time."
+              action={
+                <Button size="sm" variant="ghost" onPress={p.onOpenBalances}>
+                  View all
                 </Button>
-              )}
-            </GroupPanel>
-          )}
-          <GroupPanel>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <Typography variant="heading">Members ({p.members.length})</Typography>
-              <Button size="sm" variant="outline" onPress={p.onOpenSettings}>
-                Manage
-              </Button>
-            </View>
-            {p.members.length ? (
-              p.members.map((member) => (
-                <View
-                  key={member.id}
-                  style={{
-                    flexDirection: 'row',
-                    gap: 10,
-                    alignItems: 'center',
-                    paddingVertical: 5,
-                  }}
-                >
-                  <GroupAvatar
-                    name={member.name}
-                    avatarId={member.avatarId}
-                    avatarUrl={member.avatarUrl}
-                    size={38}
-                  />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Typography variant="label">{member.name}</Typography>
-                    {!!member.username && (
-                      <Typography variant="caption">
-                        @{member.username.replace(/^@+/, '')}
-                      </Typography>
-                    )}
+              }
+            />
+            {!ready ? (
+              <ListSkeleton rows={3} />
+            ) : allSettled ? (
+              <IllustratedState
+                scene="allSettled"
+                title="Everyone is settled up"
+                description="New shared expenses will show up here."
+              />
+            ) : p.balances ? (
+              <>
+                <MemberBalanceBars
+                  balances={p.balances}
+                  currency={p.balanceCurrency}
+                  people={people}
+                  meId={p.meId}
+                  onPressMember={p.onSettleWith}
+                />
+                {transfers.length > 0 && (
+                  <View style={{ gap: space.sm }}>
+                    <Typography variant="label">Suggested transfers</Typography>
+                    <SuggestedTransfers
+                      transfers={transfers}
+                      currency={p.balanceCurrency}
+                      people={people}
+                      meId={p.meId}
+                      limit={3}
+                      onSettle={
+                        p.onSettleWith
+                          ? (transfer) =>
+                              p.onSettleWith?.(
+                                transfer.fromUserId === p.meId
+                                  ? transfer.toUserId
+                                  : transfer.fromUserId,
+                              )
+                          : undefined
+                      }
+                    />
                   </View>
-                  <Typography
-                    variant="caption"
-                    style={{
-                      color:
-                        member.role === 'owner' || member.role === 'admin'
-                          ? tokens.primary
-                          : tokens.foregroundMuted,
-                    }}
-                  >
-                    {member.role ?? 'Member'}
-                  </Typography>
-                </View>
-              ))
-            ) : (
-              <Typography variant="small">No members are saved on this device yet.</Typography>
-            )}
-          </GroupPanel>
-          <GroupPanel>
-            <Typography variant="heading">Recent group expenses</Typography>
-            <Typography variant="caption">
-              Loaded expenses · {p.activities.length} records. This list is not an all-time total.
-            </Typography>
+                )}
+              </>
+            ) : null}
+          </SettleCard>
+          <SettleCard>
+            <SectionTitle
+              title="Recent expenses"
+              action={
+                p.onOpenExpenses ? (
+                  <Button size="sm" variant="ghost" onPress={p.onOpenExpenses}>
+                    See all
+                  </Button>
+                ) : undefined
+              }
+            />
             {p.activities.length ? (
-              p.activities.map((activity) => (
-                <Pressable
-                  key={activity.id}
-                  accessibilityRole="button"
-                  onPress={() => p.onOpenActivity(activity.id)}
-                  style={({ pressed }) => ({
-                    opacity: pressed ? 0.7 : 1,
-                    paddingVertical: 10,
-                    borderBottomWidth: 1,
-                    borderColor: tokens.borderSubtle,
-                    flexDirection: 'row',
-                    gap: 10,
-                    alignItems: 'center',
-                  })}
-                >
-                  <GroupTile
-                    icon={activity.icon ?? 'phosphor:Receipt'}
-                    color={activity.color ?? tokens.warning}
-                    size={36}
-                  />
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Typography variant="label">{activity.title}</Typography>
-                    <Typography variant="caption">
-                      {activity.category ?? 'Category unavailable'} ·{' '}
-                      {activity.account ?? 'Account unavailable'}
-                    </Typography>
-                    <Typography variant="caption">{activity.date}</Typography>
-                  </View>
-                  <Money
-                    amountMinor={activity.amountMinor}
-                    currency={activity.currency}
-                    size="body"
-                  />
-                </Pressable>
-              ))
+              <GroupExpenseTimeline
+                expenses={p.activities.map((activity) => ({
+                  ...activity,
+                  occurredAt: activity.occurredAt ?? 0,
+                  detail: [activity.category, activity.account].filter(Boolean).join(' · '),
+                }))}
+                joins={p.joins}
+                onOpen={p.onOpenActivity}
+              />
             ) : (
-              <FinanceEmptyState
-                kind="activity"
-                title="Your group history starts with an expense."
-                description="Add a shared expense to keep the group ledger up to date."
-                compact
+              <IllustratedState
+                scene="splitBill"
+                title="Your group history starts with an expense"
+                description="Add a shared expense and choose who was part of it."
                 action={
                   <Button variant="outline" onPress={p.onAddExpense}>
                     Add expense
@@ -338,97 +389,52 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 }
               />
             )}
-          </GroupPanel>
-          <GroupPanel>
-            <Typography variant="heading">Balances & settlements</Typography>
-            {ready ? (
-              <>
-                <Typography variant="caption">Your net balance · {p.balanceMeaning}</Typography>
-                <Money amountMinor={p.balanceMinor} currency={p.balanceCurrency} size="body" />
-                {p.memberBalances?.length ? (
-                  p.memberBalances.map((member) => (
-                    <View
-                      key={member.id}
-                      style={{
-                        flexDirection: 'row',
-                        gap: 10,
-                        alignItems: 'center',
-                        paddingVertical: 7,
-                      }}
-                    >
-                      <GroupAvatar
-                        name={member.name}
-                        avatarUrl={p.members.find((person) => person.id === member.id)?.avatarUrl}
-                        avatarId={p.members.find((person) => person.id === member.id)?.avatarId}
-                      />
-                      <View style={{ flex: 1, gap: 3 }}>
-                        <Typography variant="label">{member.name}</Typography>
-                        <Typography variant="caption">{member.meaning}</Typography>
-                      </View>
-                      <Typography variant="label">{member.amount}</Typography>
-                    </View>
-                  ))
-                ) : (
-                  <Typography variant="caption">
-                    Open balances to view available member balances.
-                  </Typography>
-                )}
-                <Button variant="outline" onPress={p.onOpenBalances}>
-                  View member balances
-                </Button>
-                {!!p.canSettle && <Button onPress={p.onSettle}>Record a settlement</Button>}
-              </>
-            ) : (
-              <Typography variant="small">
-                Member balances need a complete ledger. No partial balances are displayed.
-              </Typography>
-            )}
-            <Typography variant="label">Recent recorded settlements</Typography>
+          </SettleCard>
+          <SettleCard>
+            <SectionTitle title="Recent settlements" />
             {p.settlementsError ? (
               <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
                 {p.settlementsError}
               </Typography>
             ) : p.settlementsLoading ? (
-              <Typography variant="small">Loading settlements…</Typography>
+              <ListSkeleton rows={2} />
             ) : p.settlements.length ? (
               p.settlements.map((settlement) => (
-                <View key={settlement.id} style={{ paddingVertical: 8, gap: 4 }}>
-                  <Typography variant="label">{settlement.description}</Typography>
-                  <Money
-                    amountMinor={settlement.amountMinor}
-                    currency={settlement.currency}
-                    size="body"
-                  />
-                  {!!settlement.date && (
-                    <Typography variant="caption">{settlement.date}</Typography>
-                  )}
-                </View>
+                <SettlementHistoryRow
+                  key={settlement.id}
+                  description={settlement.description}
+                  amountMinor={settlement.amountMinor}
+                  currency={settlement.currency}
+                  date={settlement.date}
+                  note={settlement.note}
+                />
               ))
             ) : (
-              <FinanceEmptyState
-                kind="activity"
-                title="No settlements recorded yet."
-                description="Settlements you record for this group will appear here."
-                compact
+              <IllustratedState
+                scene="history"
+                title="No payments yet"
+                description="Payments you record between members will appear here."
               />
             )}
-          </GroupPanel>
-          <GroupPanel>
-            <Typography variant="heading">Split insights</Typography>
-            <Typography variant="caption">
-              By category · loaded expenses only, separated by currency.
-            </Typography>
-            {insights.length ? (
-              insights.map((insight) => (
-                <View
-                  key={`${insight.currency}:${insight.category}`}
-                  style={{ gap: 7, paddingVertical: 5 }}
-                >
-                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          </SettleCard>
+          {insights.length > 0 && (
+            <SettleCard>
+              <SectionTitle
+                title="Where it goes"
+                caption="By category · recent expenses"
+                action={
+                  <Button size="sm" variant="ghost" onPress={p.onOpenAnalytics}>
+                    <ChartLineUp size={16} color={tokens.foreground} />
+                  </Button>
+                }
+              />
+              {insights.map((insight) => (
+                <View key={`${insight.currency}:${insight.category}`} style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
                     <GroupTile
                       icon={insight.icon ?? 'phosphor:ChartPie'}
                       color={insight.color ?? tokens.split}
-                      size={28}
+                      size={26}
                     />
                     <Typography variant="small" style={{ flex: 1 }}>
                       {insight.category}
@@ -454,16 +460,9 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                     />
                   </View>
                 </View>
-              ))
-            ) : (
-              <Typography variant="small">
-                Category insights appear when expenses are available.
-              </Typography>
-            )}
-            <Button variant="outline" onPress={p.onOpenAnalytics}>
-              View group analytics
-            </Button>
-          </GroupPanel>
+              ))}
+            </SettleCard>
+          )}
           <GroupChatScreen
             {...p.chat}
             group={p.group}

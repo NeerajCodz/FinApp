@@ -2,103 +2,68 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
-import { Button, Empty } from '@finapp/ui/web';
-import { FinanceEmptyState, formatTransactionDate, TransactionRow } from '@finapp/ui/finance';
-import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
+import { Button, ListSkeleton } from '@finapp/ui/web';
+import {
+  GroupExpenseTimeline,
+  IllustratedState,
+  IncludePastExpensesSheet,
+  LateJoinerBanner,
+  SettleCard,
+  settleStyles,
+} from '@finapp/ui/finance';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { isGroupRangeCovered } from '@/lib/offline/repository';
 import type { LocalRecord } from '@/lib/offline/repository';
+import { asMinor, localRecordId, recordAliases, useGroupLedger } from '@/lib/groups/useGroupLedger';
+import { useLateJoiners } from '@/lib/groups/useLateJoiners';
 
-type Group = LocalRecord & { name?: string; currency?: string };
-type Expense = LocalRecord & {
-  groupId?: string;
-  type?: string;
-  title?: string;
-  amountMinor?: bigint | number | string;
-  currency?: string;
-  occurredAt?: number;
-  hasTime?: boolean;
-  status?: string;
-  deletedAt?: number;
-};
-const asMinor = (value: unknown) =>
-  typeof value === 'bigint'
-    ? value
-    : typeof value === 'number' && Number.isFinite(value)
-      ? BigInt(Math.trunc(value))
-      : typeof value === 'string' && /^-?\d+$/.test(value)
-        ? BigInt(value)
-        : 0n;
-const aliases = (record: LocalRecord) =>
-  [record.id, record._id, record.cloudId].filter(
-    (value): value is string => typeof value === 'string',
-  );
-const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
+type Category = LocalRecord & { name?: string; icon?: string; color?: string };
 
 export default function GroupExpensesPage() {
-  const params = useParams<{ id: string }>();
-  const routeId = params.id;
-  const { userId, isConnected, fetchGroupRange } = useBrowserSync();
-  const startAt = React.useMemo(() => Date.now() - 90 * 24 * 60 * 60 * 1000, []);
-  const endAt = React.useMemo(() => Date.now() + 1, []);
-  const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
-  const { records: transactions, loading: transactionsLoading } =
-    useLocalRecords<Expense>('transaction');
-  const [rangeStatus, setRangeStatus] = React.useState<
-    'idle' | 'loading' | 'loaded' | 'uncached' | 'error'
-  >('idle');
-  const [rangeError, setRangeError] = React.useState('');
-  const group = groups.find((item) => aliases(item).includes(routeId));
-  const groupId = group ? idOf(group) : routeId;
-  const groupReady = Boolean(group);
-
-  React.useEffect(() => {
-    if (!userId || !group) return;
-    let active = true;
-    if (!isConnected) {
-      void isGroupRangeCovered(userId, groupId, startAt, endAt).then(
-        (covered) => {
-          if (!active) return;
-          setRangeStatus(covered ? 'loaded' : 'uncached');
-          setRangeError(
-            covered
-              ? ''
-              : 'Offline. Saved expenses remain visible, but this 90-day range may not be complete.',
-          );
-        },
-        (cause: unknown) => {
-          if (!active) return;
-          setRangeStatus('error');
-          setRangeError(
-            cause instanceof Error ? cause.message : 'Saved range coverage could not be checked.',
-          );
-        },
-      );
-      return () => {
-        active = false;
-      };
-    }
-    setRangeStatus('loading');
-    setRangeError('');
-    void fetchGroupRange(groupId, startAt, endAt).then(
-      () => {
-        if (active) setRangeStatus('loaded');
-      },
-      (cause: unknown) => {
-        if (active) {
-          setRangeStatus('error');
-          setRangeError(
-            cause instanceof Error ? cause.message : 'The group range could not be loaded.',
-          );
-        }
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [fetchGroupRange, groupReady, groupId, isConnected, startAt, endAt, userId]);
+  const router = useRouter();
+  const { id: routeId } = useParams<{ id: string }>();
+  const ledger = useGroupLedger(routeId);
+  const { userId, isConnected, group, groupId, cloudGroupId, members, participants, currency } =
+    ledger;
+  const { records: categories } = useLocalRecords<Category>('category');
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    isConnected && cloudGroupId ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
+  const currentMembers = remoteGroup
+    ? remoteGroup.members.map((member) => ({
+        userId: member.id,
+        name: member.id === userId ? 'You' : member.displayName,
+        joinedAt: member.joinedAt,
+        role: member.role as string | undefined,
+      }))
+    : members.map((member) => ({
+        userId: String(member.userId ?? member.memberId ?? ''),
+        name:
+          member.userId === userId
+            ? 'You'
+            : String(member.displayName ?? member.name ?? member.username ?? 'Member'),
+        joinedAt: member.joinedAt,
+        role: member.role,
+      }));
+  const myRole = currentMembers.find((member) => member.userId === userId)?.role;
+  const lateJoiners = useLateJoiners({
+    cloudGroupId,
+    currency,
+    expenses: ledger.expenses,
+    participants,
+    members: currentMembers,
+    meId: userId,
+    isAdmin:
+      (remoteGroup ? remoteGroup.ownerId === userId : group?.ownerId === userId) ||
+      myRole === 'owner' ||
+      myRole === 'admin',
+    isConnected,
+  });
 
   if (!userId)
     return (
@@ -111,138 +76,97 @@ export default function GroupExpensesPage() {
         </Link>
       </section>
     );
-  if (groupsLoading && !group)
-    return (
-      <div className="finance-page">
-        <p className="finance-muted" role="status">
-          Opening saved group…
-        </p>
-      </div>
-    );
-  if (!group)
-    return (
-      <div className="finance-page">
-        <Link className="finance-secondary-action" href="/groups">
-          <ArrowLeft size={15} /> Groups
-        </Link>
-        <Empty
-          title="Group unavailable offline"
-          description="This group is not saved in the current browser. Reconnect, then open the group list again."
-        />
-      </div>
-    );
 
-  const groupIds = aliases(group);
-  const expenses = transactions
-    .filter(
-      (item) =>
-        typeof item.groupId === 'string' &&
-        groupIds.includes(item.groupId) &&
-        Number(item.occurredAt ?? 0) >= startAt &&
-        Number(item.occurredAt ?? 0) < endAt,
-    )
-    .sort((left, right) => Number(left.occurredAt ?? 0) - Number(right.occurredAt ?? 0));
+  const expenses = ledger.expenses.map((expense) => {
+    const category = categories.find(
+      (record) => expense.categoryId && recordAliases(record).includes(expense.categoryId),
+    );
+    return {
+      id: localRecordId(expense),
+      title: expense.title ?? 'Group expense',
+      amountMinor: asMinor(expense.amountMinor),
+      currency,
+      occurredAt: Number(expense.occurredAt ?? 0),
+      category: category?.name,
+      icon: category?.icon,
+      color: category?.color,
+    };
+  });
+  const newHref = `/group/${encodeURIComponent(groupId)}/new`;
+
   return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link
-            className="finance-secondary-action"
-            href={`/group/${encodeURIComponent(groupId)}`}
-            aria-label="Go back"
-          >
-            <ArrowLeft size={18} />
-          </Link>
-          <h1 style={{ margin: 0 }}>Expenses</h1>
-        </div>
+    <main className={`${settleStyles.page} ${settleStyles.narrow}`}>
+      <header className={settleStyles.heading}>
         <Link
-          className="finance-secondary-action"
-          href={`/group/${encodeURIComponent(groupId)}/new`}
-          aria-label="Add group expense"
-          title="Add group expense"
+          className={settleStyles.back}
+          href={group ? `/group/${encodeURIComponent(groupId)}` : '/groups'}
+          aria-label="Go back"
         >
+          <ArrowLeft size={18} />
+        </Link>
+        <div style={{ flex: 1 }}>
+          <h1>Expenses</h1>
+          {group ? (
+            <p className={settleStyles.muted}>
+              {group.name ?? 'Group'} · {expenses.length} total
+            </p>
+          ) : null}
+        </div>
+        <Link className={settleStyles.back} href={newHref} aria-label="Add group expense">
           <Plus size={20} />
         </Link>
       </header>
-      {rangeStatus === 'loading' && (
-        <p className="finance-form-note" role="status">
-          Loading expense and repayment pages…
-        </p>
-      )}
-      {(rangeStatus === 'uncached' || rangeStatus === 'error') && (
-        <p
-          className={rangeStatus === 'error' ? 'finance-form-error' : 'finance-form-note'}
-          role={rangeStatus === 'error' ? 'alert' : 'status'}
-        >
-          {rangeError}
-        </p>
-      )}
-      {transactionsLoading ? (
-        <p className="finance-muted" role="status">
-          Opening locally saved expenses…
-        </p>
+      {lateJoiners.banners.map((joiner) => (
+        <LateJoinerBanner
+          key={joiner.userId}
+          name={joiner.name}
+          missedCount={joiner.missedCount}
+          onInclude={() => lateJoiners.open(joiner.userId)}
+          onDismiss={() => lateJoiners.dismiss(joiner.userId)}
+        />
+      ))}
+      {!group && !ledger.groupsLoading ? (
+        <IllustratedState
+          scene="group"
+          title="Group unavailable"
+          description="This group is not saved in this browser. Reconnect, then open the group list again."
+        />
+      ) : ledger.status === 'unavailable' ? (
+        <IllustratedState
+          scene="offline"
+          title="Expenses unavailable"
+          description={ledger.error || 'The group history could not be loaded completely.'}
+          action={
+            isConnected ? (
+              <Button variant="outline" onPress={ledger.retry}>
+                Retry
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : ledger.status === 'loading' ? (
+        <SettleCard>
+          <ListSkeleton rows={5} />
+        </SettleCard>
       ) : expenses.length ? (
-        <div className="finance-record-list">
-          {expenses.map((expense) => {
-            const expenseId = idOf(expense);
-            return (
-              <Link
-                key={expenseId}
-                href={`/transaction/${encodeURIComponent(expenseId)}`}
-                style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
-              >
-                <TransactionRow
-                  title={expense.title ?? 'Group expense'}
-                  category="Group expense"
-                  account={group.name ?? 'Group'}
-                  amountMinor={asMinor(expense.amountMinor)}
-                  currency={expense.currency ?? group.currency ?? 'INR'}
-                  type="expense"
-                  semanticType="split"
-                  date={formatTransactionDate(
-                    Number(expense.occurredAt ?? Date.now()),
-                    expense.hasTime,
-                  )}
-                />
-              </Link>
-            );
-          })}
-        </div>
+        <GroupExpenseTimeline
+          expenses={expenses}
+          joins={lateJoiners.joins}
+          onOpen={(expenseId) => router.push(`/transaction/${encodeURIComponent(expenseId)}`)}
+        />
       ) : (
-        <FinanceEmptyState
-          kind="transaction"
-          title="No group expenses"
+        <IllustratedState
+          scene="splitBill"
+          title="No group expenses yet"
           description="Add the first expense and choose who shared it."
           action={
-            <Link
-              className="finance-secondary-action"
-              href={`/group/${encodeURIComponent(groupId)}/new`}
-            >
-              Add expense <ArrowRight size={15} />
-            </Link>
+            <Button variant="outline" onPress={() => router.push(newHref)}>
+              Add expense
+            </Button>
           }
         />
       )}
-      {rangeStatus === 'error' && isConnected && (
-        <Button
-          variant="outline"
-          onPress={() => {
-            setRangeStatus('idle');
-            setRangeError('');
-            void fetchGroupRange(groupId, startAt, endAt).then(
-              () => setRangeStatus('loaded'),
-              (cause: unknown) => {
-                setRangeStatus('error');
-                setRangeError(
-                  cause instanceof Error ? cause.message : 'The group range could not be loaded.',
-                );
-              },
-            );
-          }}
-        >
-          Retry range
-        </Button>
-      )}
-    </div>
+      <IncludePastExpensesSheet {...lateJoiners.sheet} />
+    </main>
   );
 }
