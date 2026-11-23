@@ -1,18 +1,25 @@
 import React, { useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { ArrowLeft } from '@finapp/ui/icons/native';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { router, useLocalSearchParams } from 'expo-router';
 import { toast } from '@/lib/toast';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SettlementEditor } from '@finapp/ui/finance';
-import { Button, IconButton, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { formatMinor } from '@convex/shared/money';
+import {
+  groupErrorMessage,
+  isValidTransferSequence,
+  SettleUpHub,
+  type SettlePerson,
+  type SettleTransfer,
+} from '@finapp/ui/finance';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
 import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
+import { useUndoSettlement } from '@/lib/settlementUndo';
 
 export default function NewSettlementScreen() {
   const params = useLocalSearchParams<{
@@ -20,16 +27,15 @@ export default function NewSettlementScreen() {
     member?: string | string[];
   }>();
   const requestedGroupId = Array.isArray(params.groupId) ? params.groupId[0] : params.groupId;
+  const requestedMember = Array.isArray(params.member) ? params.member[0] : params.member;
   const [chosenGroupId, setChosenGroupId] = useState<string | undefined>(requestedGroupId);
-  const [chosenMemberId, setChosenMemberId] = useState<string | undefined>(
-    Array.isArray(params.member) ? params.member[0] : params.member,
-  );
   const [chosenAccountId, setChosenAccountId] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState<{ title: string; description: string } | null>(null);
   const savingRef = useRef(false);
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { isConnected } = useLocalSync();
+  const undo = useUndoSettlement();
   const { userId } = useGroupLedger(undefined);
   const groups = useLocalRecords<LocalRecord>(userId, 'group');
   const accounts = useLocalRecords<LocalRecord>(userId, 'account');
@@ -37,6 +43,11 @@ export default function NewSettlementScreen() {
   const groupId =
     chosenGroupId ?? (availableGroups.length === 1 ? recordId(availableGroups[0]!) : undefined);
   const { group, members, ledger, loading, error: ledgerError, retry } = useGroupLedger(groupId);
+  const cloudGroupId = String(group?.cloudId ?? group?._id ?? '');
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    isConnected && cloudGroupId ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
   const currency = typeof group?.currency === 'string' ? group.currency : '';
   const accountOptions =
     accounts.data?.filter(
@@ -46,118 +57,148 @@ export default function NewSettlementScreen() {
   const account =
     accountOptions.find((item) => recordIds(item).includes(chosenAccountId ?? '')) ??
     (accountOptions.length === 1 ? accountOptions[0] : undefined);
-  const myBalance = userId ? (ledger?.balances[userId] ?? 0n) : 0n;
-  const direction = myBalance < 0n ? 'pay' : 'receive';
-  const memberOptions =
-    ledger && userId && myBalance !== 0n
-      ? [...ledger.names].filter(
-          ([id]) =>
-            id !== userId &&
-            (myBalance < 0n ? (ledger.balances[id] ?? 0n) > 0n : (ledger.balances[id] ?? 0n) < 0n),
-        )
-      : [];
-  const selectedMemberId =
-    memberOptions.find(
-      ([id]) =>
-        id === chosenMemberId ||
-        members?.some(
-          (entry) =>
-            entry.userId === id &&
-            typeof entry.username === 'string' &&
-            entry.username.toLowerCase() === chosenMemberId?.replace(/^@/, '').toLowerCase(),
-        ),
-    )?.[0] ?? (memberOptions.length === 1 ? memberOptions[0]![0] : undefined);
-  const member = memberOptions.find(([id]) => id === selectedMemberId);
-  const memberBalance = selectedMemberId ? (ledger?.balances[selectedMemberId] ?? 0n) : 0n;
-  const maxAmountMinor =
-    member && myBalance !== 0n
-      ? direction === 'pay'
-        ? -myBalance < memberBalance
-          ? -myBalance
-          : memberBalance
-        : myBalance < -memberBalance
-          ? myBalance
-          : -memberBalance
-      : 0n;
-  const disabledReason = !userId
-    ? 'Sign in to record a settlement.'
-    : groups.error
-      ? 'Groups are unavailable on this device.'
-      : !groups.data
-        ? 'Loading groups…'
-        : !groupId
-          ? 'Choose a group first.'
-          : !group
-            ? 'This group is not available on this device.'
-            : ledgerError
-              ? 'The full group ledger is unavailable. Retry before recording a settlement.'
-              : loading || !ledger
-                ? 'Loading all-time group balances…'
-                : !memberOptions.length
-                  ? 'There is no outstanding balance to settle with a member.'
-                  : !member
-                    ? 'Choose the member involved in this payment.'
-                    : !accounts.data
-                      ? 'Loading your accounts…'
-                      : !account
-                        ? 'Choose an active account in the group currency.'
-                        : undefined;
 
-  async function save(amountMinor: bigint) {
-    if (savingRef.current) return;
+  const groupIds = group ? recordIds(group) : [];
+  const people: SettlePerson[] = [];
+  const seen = new Set<string>();
+  for (const member of remoteGroup?.members ?? []) {
+    seen.add(member.id);
+    people.push({
+      id: member.id,
+      name: member.id === userId ? 'You' : member.displayName,
+      avatarUrl: member.avatarUrl,
+      avatarId: member.avatarId,
+    });
+  }
+  for (const member of members ?? []) {
+    const memberId = String(member.userId ?? member.memberId ?? '');
     if (
-      !userId ||
-      !group ||
-      !groupId ||
-      !ledger ||
-      !member ||
-      !account ||
-      disabledReason ||
-      amountMinor <= 0n ||
-      amountMinor > maxAmountMinor ||
-      ledger.currency !== currency
-    ) {
-      setError('Select a group, member, and matching account with an outstanding balance.');
+      !memberId ||
+      seen.has(memberId) ||
+      typeof member.groupId !== 'string' ||
+      !groupIds.includes(member.groupId)
+    )
+      continue;
+    seen.add(memberId);
+    people.push({
+      id: memberId,
+      name:
+        memberId === userId
+          ? 'You'
+          : (ledger?.names.get(memberId) ??
+            String(member.displayName ?? member.name ?? member.username ?? 'Member')),
+      avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : null,
+      avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
+    });
+  }
+  for (const former of remoteGroup?.formerMembers ?? []) {
+    if (seen.has(former.id)) continue;
+    seen.add(former.id);
+    people.push({
+      id: former.id,
+      name: former.displayName,
+      avatarId: former.avatarId,
+      leftAt: former.leftAt,
+    });
+  }
+  const initialMemberId = requestedMember
+    ? (people.find(
+        (person) =>
+          person.id === requestedMember ||
+          members?.some(
+            (entry) =>
+              (entry.userId ?? entry.memberId) === person.id &&
+              typeof entry.username === 'string' &&
+              entry.username.toLowerCase() === requestedMember.replace(/^@/, '').toLowerCase(),
+          ),
+      )?.id ?? requestedMember)
+    : undefined;
+
+  const status: 'loading' | 'ready' | 'unavailable' | 'no-group' = !groupId
+    ? 'no-group'
+    : groups.error || (!group && groups.data)
+      ? 'unavailable'
+      : ledgerError
+        ? 'unavailable'
+        : loading || !ledger
+          ? 'loading'
+          : 'ready';
+  const blockedReason = !userId
+    ? 'Sign in to record a settlement.'
+    : !accounts.data
+      ? 'Loading your accounts…'
+      : !account
+        ? accountOptions.length
+          ? 'Choose the account this payment belongs to.'
+          : `Add an active ${currency} account to record settlements.`
+        : undefined;
+
+  async function record(transfers: SettleTransfer[], note?: string) {
+    if (savingRef.current) return;
+    if (!userId || !group || !groupId || !ledger || !account || blockedReason) {
+      setError(blockedReason ?? 'Choose a group, person and account first.');
+      return;
+    }
+    if (!transfers.length || !isValidTransferSequence(ledger.balances, transfers)) {
+      setError(groupErrorMessage('SETTLEMENT_EXCEEDS_BALANCE'));
       return;
     }
     savingRef.current = true;
     setSaving(true);
     setError('');
+    const savedIds: string[] = [];
     try {
-      const occurredAt = Date.now();
       const accountId = recordId(account);
-      const fromUserId = direction === 'pay' ? userId : member[0];
-      const toUserId = direction === 'pay' ? member[0] : userId;
-      const record = {
-        groupId,
-        fromUserId,
-        toUserId,
-        accountId,
-        amountMinor,
-        currency,
-        occurredAt,
-        createdAt: occurredAt,
-      };
-      await commitLocalWrite(
-        userId,
-        'settlement',
-        'settlement.create',
-        record,
-        { groupId, fromUserId, toUserId, accountId, amountMinor, currency, occurredAt },
-        {
-          dependencies: [
-            ...(!group?._id && !group?.cloudId ? [`group:${groupId}`] : []),
-            ...(!account._id && !account.cloudId ? [`account:${accountId}`] : []),
-          ],
-        },
-      );
-      toast.success('Settlement saved on this device');
+      for (const transfer of transfers) {
+        const occurredAt = Date.now();
+        const payload = {
+          groupId,
+          fromUserId: transfer.fromUserId,
+          toUserId: transfer.toUserId,
+          accountId,
+          amountMinor: transfer.amountMinor,
+          currency,
+          occurredAt,
+          ...(note ? { note } : {}),
+        };
+        savedIds.push(
+          await commitLocalWrite(
+            userId,
+            'settlement',
+            'settlement.create',
+            { ...payload, createdAt: occurredAt },
+            payload,
+            {
+              dependencies: [
+                ...(!group._id && !group.cloudId ? [`group:${groupId}`] : []),
+                ...(!account._id && !account.cloudId ? [`account:${accountId}`] : []),
+              ],
+            },
+          ),
+        );
+      }
+      const total = transfers.reduce((sum, transfer) => sum + transfer.amountMinor, 0n);
+      const name = (id: string) => people.find((person) => person.id === id)?.name ?? 'a member';
+      const description =
+        transfers.length === 1
+          ? `${transfers[0]!.fromUserId === userId ? 'You' : name(transfers[0]!.fromUserId)} paid ${
+              transfers[0]!.toUserId === userId ? 'you' : name(transfers[0]!.toUserId)
+            } ${formatMinor(total, currency)}${note ? ` · “${note}”` : ''}.`
+          : `${transfers.length} payments totalling ${formatMinor(total, currency)} were recorded.`;
+      setSuccess({ title: 'Payment recorded', description });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         () => undefined,
       );
-      router.replace({ pathname: '/group/[id]', params: { id: groupId } });
+      toast.success('Settlement recorded', {
+        description: isConnected ? description : 'Saved on this device; it syncs when online.',
+        action: { label: 'Undo', onPress: () => void undo(savedIds) },
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save settlement. Try again.');
+      setError(groupErrorMessage(cause, 'Could not save settlement. Try again.'));
+      if (savedIds.length)
+        toast.info(`${savedIds.length} of ${transfers.length} payments were saved`, {
+          action: { label: 'Undo', onPress: () => void undo(savedIds) },
+        });
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -165,127 +206,55 @@ export default function NewSettlementScreen() {
   }
 
   return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 24,
+    <SettleUpHub
+      groups={availableGroups.map((item) => ({
+        id: recordId(item),
+        name: String(item.name ?? 'Group'),
+        currency: String(item.currency ?? ''),
+        icon: typeof item.icon === 'string' ? item.icon : undefined,
+        color: typeof item.color === 'string' ? item.color : undefined,
+      }))}
+      selectedGroupId={groupId}
+      onSelectGroup={(id) => {
+        setChosenGroupId(id);
+        setChosenAccountId(undefined);
+        setError('');
       }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="heading">Settle up</Typography>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Typography variant="label">GROUP</Typography>
-        {availableGroups.length ? (
-          availableGroups.map((item) => {
-            const id = recordId(item);
-            return (
-              <Button
-                key={id}
-                variant="outline"
-                onPress={() => {
-                  setChosenGroupId(id);
-                  setChosenMemberId(undefined);
-                  setChosenAccountId(undefined);
-                  setError('');
-                }}
-                accessibilityLabel={`Select ${String(item.name ?? 'group')}`}
-                style={{
-                  justifyContent: 'flex-start',
-                  borderColor: id === groupId ? tokens.settlement : tokens.border,
-                }}
-              >
-                {id === groupId ? '✓  ' : ''}
-                {String(item.name ?? 'Group')} · {String(item.currency ?? '')}
-              </Button>
-            );
-          })
-        ) : (
-          <Typography variant="small">
-            No saved group is available. Create or join a group first.
-          </Typography>
-        )}
-      </View>
-      {!!ledgerError && (
-        <View accessibilityRole="alert" style={{ gap: 10 }}>
-          <Typography variant="small" style={{ color: tokens.destructive }}>
-            Could not load complete balances.
-          </Typography>
-          <Button variant="outline" onPress={retry}>
-            Retry balances
-          </Button>
-        </View>
-      )}
-      {memberOptions.length > 0 && (
-        <View style={{ gap: 10 }}>
-          <Typography variant="label">{direction === 'pay' ? 'YOU PAID' : 'PAID YOU'}</Typography>
-          {memberOptions.map(([id, name]) => (
-            <Button
-              key={id}
-              variant="outline"
-              onPress={() => {
-                setChosenMemberId(id);
-                setError('');
-              }}
-              accessibilityLabel={`Select ${name}`}
-              style={{
-                justifyContent: 'flex-start',
-                borderColor: id === selectedMemberId ? tokens.settlement : tokens.border,
-              }}
-            >
-              {id === selectedMemberId ? '✓  ' : ''}
-              {name}
-            </Button>
-          ))}
-        </View>
-      )}
-      {accountOptions.length > 0 && (
-        <View style={{ gap: 10 }}>
-          <Typography variant="label">LINKED ACCOUNT · {currency}</Typography>
-          {accountOptions.map((item) => {
-            const id = recordId(item);
-            return (
-              <Button
-                key={id}
-                variant="outline"
-                onPress={() => {
-                  setChosenAccountId(id);
-                  setError('');
-                }}
-                accessibilityLabel={`Select account ${displayAccountName(String(item.name ?? 'account'))}`}
-                style={{
-                  justifyContent: 'flex-start',
-                  borderColor: id === recordId(account ?? {}) ? tokens.settlement : tokens.border,
-                }}
-              >
-                {id === recordId(account ?? {}) ? '✓  ' : ''}
-                {displayAccountName(String(item.name ?? 'Account'))}
-              </Button>
-            );
-          })}
-          <Typography variant="caption">
-            For recordkeeping only. No money is moved from this account.
-          </Typography>
-        </View>
-      )}
-      <SettlementEditor
-        key={`${groupId ?? ''}:${selectedMemberId ?? ''}`}
-        memberName={member?.[1] ?? 'a group member'}
-        currency={currency || 'INR'}
-        direction={direction}
-        maxAmountMinor={maxAmountMinor}
-        disabledReason={disabledReason}
-        saving={saving}
-        error={error}
-        onSave={save}
-      />
-    </ScrollView>
+      accounts={accountOptions.map((item) => ({
+        id: recordId(item),
+        name: displayAccountName(String(item.name ?? 'Account')),
+      }))}
+      selectedAccountId={account ? recordId(account) : undefined}
+      onSelectAccount={(id) => {
+        setChosenAccountId(id);
+        setError('');
+      }}
+      status={status}
+      statusMessage={
+        status === 'unavailable'
+          ? !group
+            ? 'This group is not available on this device.'
+            : 'The full group ledger is unavailable. Retry before recording a settlement.'
+          : undefined
+      }
+      onRetry={retry}
+      meId={userId}
+      currency={currency || 'INR'}
+      balances={ledger?.balances ?? {}}
+      people={people}
+      initialMemberId={initialMemberId}
+      blockedReason={blockedReason}
+      saving={saving}
+      error={error || undefined}
+      onRecord={(transfers, note) => void record(transfers, note)}
+      success={success}
+      onDone={() =>
+        groupId
+          ? router.replace({ pathname: '/group/[id]', params: { id: groupId } })
+          : router.back()
+      }
+      onAnother={() => setSuccess(null)}
+      onBack={() => router.back()}
+    />
   );
 }
