@@ -266,6 +266,8 @@ export async function commitLocalWrite(
     baseUpdatedAt?: number;
     deviceId?: string;
     relatedRecords?: readonly { entityType: LocalEntity; record: LocalRecord }[];
+    /** Records an optimistic edit drops, e.g. split rows for people no longer on an expense. */
+    removedRecords?: readonly { entityType: LocalEntity; record: LocalRecord }[];
   } = {},
 ): Promise<string> {
   requireUser(userId);
@@ -307,6 +309,14 @@ export async function commitLocalWrite(
             return;
           }
           const now = Date.now();
+          for (const removed of options.removedRecords ?? [])
+            records.delete(
+              recordKey(
+                userId,
+                removed.entityType,
+                relatedRecordId(removed.entityType, removed.record),
+              ),
+            );
           const localRecord = {
             ...(rewriteForeignIds(record, sourceId ?? finalId, finalId) as LocalRecord),
             id: finalId,

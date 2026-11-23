@@ -433,4 +433,48 @@ describe('group ledger integrity', () => {
     expect(await as('late').query(api.groups.queries.balances, { groupId })).toBeNull();
     expect(await as('owner').query(api.groups.queries.balances, { groupId: 'bad' })).toBeNull();
   });
+
+  it('returns the audit trail of an expense to members only', async () => {
+    const { ids, as, accounts, groupId, equal, addExpense } = await setupGroup();
+    const expenseId = await addExpense('owner', 'Dinner', 900n, [ids.owner, ids.member]);
+    await as('admin').mutation(api.groups.mutations.updateExpense, {
+      transactionId: expenseId,
+      accountId: accounts.owner,
+      title: 'Team dinner',
+      amountMinor: 1200n,
+      currency: 'INR',
+      occurredAt: Date.UTC(2026, 5, 1),
+      participants: equal(1200n, [ids.owner, ids.member, ids.admin]),
+      expectedVersion: 1,
+    });
+    await as('owner').mutation(api.groups.mutations.deleteExpense, {
+      transactionId: expenseId,
+      expectedVersion: 2,
+    });
+    // Another expense's events must not leak into this history.
+    await addExpense('member', 'Taxi', 300n, [ids.owner, ids.member]);
+    const history = await as('member').query(api.groups.queries.expenseHistory, {
+      transactionId: expenseId,
+    });
+    expect(history?.map((event) => [event.kind, event.actorName, event.version])).toEqual([
+      ['expense.created', 'Owner', 1],
+      ['expense.updated', 'Admin', 2],
+      ['expense.deleted', 'Owner', 3],
+    ]);
+    expect(history?.[1]).toMatchObject({
+      summary: 'Team dinner',
+      balanceDeltas: { [ids.owner]: '350', [ids.member]: '50', [ids.admin]: '-400' },
+    });
+    expect(
+      await as('late').query(api.groups.queries.expenseHistory, { transactionId: expenseId }),
+    ).toBeNull();
+    expect(
+      await as('owner').query(api.groups.queries.expenseHistory, { transactionId: 'bad' }),
+    ).toBeNull();
+    expect(
+      await as('owner').query(api.groups.queries.expenseHistory, {
+        transactionId: String(groupId),
+      }),
+    ).toBeNull();
+  });
 });

@@ -10,6 +10,13 @@ describe('group expense editing permissions', () => {
     expect(canEditGroupExpense(expense, null)).toBe(false);
   });
 
+  it('also allows group owners and admins, but not plain members', () => {
+    expect(canEditGroupExpense(expense, 'admin-user', 'admin')).toBe(true);
+    expect(canEditGroupExpense(expense, 'owner-user', 'owner')).toBe(true);
+    expect(canEditGroupExpense(expense, 'member-user', 'member')).toBe(false);
+    expect(canEditGroupExpense({ ...expense, deletedAt: 1 }, 'admin-user', 'admin')).toBe(false);
+  });
+
   it('rejects deleted, non-posted, non-expense and personal transactions', () => {
     expect(canEditGroupExpense({ ...expense, deletedAt: 1 }, 'creator')).toBe(false);
     expect(canEditGroupExpense({ ...expense, status: 'draft' }, 'creator')).toBe(false);

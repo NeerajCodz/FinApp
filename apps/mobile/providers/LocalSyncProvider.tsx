@@ -38,6 +38,14 @@ import { putLocalNotification } from '@/local/repository';
 import { clearDeviceReminders, reconcileRecurringNotifications } from '@/local/notification-events';
 import { normalizeNotificationPreferences } from '@convex/notifications/domain';
 import { syncOutbox } from '@/local/sync/engine';
+import {
+  deleteGroupExpense,
+  removeSettlement,
+  updateGroupExpense,
+  type GroupExpenseUpdateRequest,
+  type GroupWriteResult,
+} from '@/local/groupExpenseActions';
+import { describeSyncError } from '@finapp/ui/finance/sync-errors';
 import type { OutboxEntry } from '@/local/outbox/queue';
 import {
   clearValidatedLocalUserId,
@@ -62,6 +70,12 @@ const LocalSyncContext = React.createContext<{
   setSyncWindow: (days: LocalSyncWindow) => Promise<void>;
   fetchGroupRange: FetchCloudGroupRangePage;
   fetchTransactionRange: FetchCloudRangePage;
+  /** Edits a group expense: direct when online, otherwise optimistic and queued. */
+  updateGroupExpense: (request: GroupExpenseUpdateRequest) => Promise<GroupWriteResult>;
+  /** Soft-deletes a group expense: direct when online, otherwise optimistic and queued. */
+  deleteGroupExpense: (transaction: LocalRecord) => Promise<GroupWriteResult>;
+  /** Undoes a recorded payment (record or any id); optimistic and queued, works offline. */
+  removeSettlement: (settlement: string | LocalRecord) => Promise<GroupWriteResult>;
 } | null>(null);
 
 const emptyStatus: LocalSyncStatus = {
@@ -375,6 +389,25 @@ async function sendMutation(
         accountId: mappedAccountId ?? accountId,
       } as never);
     }
+    case 'group.updateExpense':
+      return convex.mutation(api.groups.mutations.updateExpense, {
+        ...payload,
+        transactionId: await mapId('transaction', payload.transactionId),
+        accountId: await mapId('account', payload.accountId),
+        ...(typeof payload.categoryId === 'string'
+          ? { categoryId: await mapId('category', payload.categoryId) }
+          : {}),
+      } as never);
+    case 'group.deleteExpense':
+      return convex.mutation(api.groups.mutations.deleteExpense, {
+        ...payload,
+        transactionId: await mapId('transaction', payload.transactionId),
+      } as never);
+    case 'settlement.remove':
+      return convex.mutation(api.settlements.mutations.remove, {
+        ...payload,
+        settlementId: await mapId('settlement', payload.settlementId),
+      } as never);
     case 'goal.create':
       return convex.mutation(api.goals.mutations.create, {
         ...payload,
@@ -1014,7 +1047,10 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
             putLocalNotification(userId, `sync:${entry.localId}`, {
               type: 'sync',
               title: 'Sync needs attention',
-              body: 'A change could not reach your other devices. Review it in local sync.',
+              body: describeSyncError(
+                entry.lastError,
+                'A change could not reach your other devices. Review it in local sync.',
+              ),
               entityType: 'sync',
               createdAt: Date.now(),
             }),
@@ -1053,9 +1089,24 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const groupWrites = React.useMemo(() => {
+    const context = () => {
+      if (!userId) throw new Error('AUTH_REQUIRED');
+      return { convex, userId, online: validatedOnline, refresh: () => void flush() };
+    };
+    return {
+      updateGroupExpense: (request: GroupExpenseUpdateRequest) =>
+        updateGroupExpense(context(), request),
+      deleteGroupExpense: (transaction: LocalRecord) => deleteGroupExpense(context(), transaction),
+      removeSettlement: (settlement: string | LocalRecord) =>
+        removeSettlement(context(), settlement),
+    };
+  }, [convex, flush, userId, validatedOnline]);
+
   return (
     <LocalSyncContext.Provider
       value={{
+        ...groupWrites,
         userId,
         isConnected,
         isSyncing,

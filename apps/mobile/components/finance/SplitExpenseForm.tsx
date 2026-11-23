@@ -1,160 +1,91 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Crypto from 'expo-crypto';
 import { router } from 'expo-router';
-import { allocateParticipants } from '@convex/splits/domain';
-import { GroupExpenseFormScreen, type GroupExpenseMethod } from '@finapp/ui/finance';
-import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { GroupExpenseFormScreen, useExpenseComposer } from '@finapp/ui/finance';
 import { commitLocalWrite } from '@/local/commands';
-import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { parseMinor } from '@/lib/money';
 import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
+import { useExpenseLedger } from '@/hooks/useExpenseLedger';
+import { toast } from '@/lib/toast';
 
-type Member = { userId: string; name: string; avatarId?: string; avatarUrl?: string | null };
-function memberName(record: LocalRecord | undefined, fallback: string): string {
-  return String(record?.displayName ?? record?.name ?? record?.username ?? fallback);
-}
-
+/**
+ * New group expense: a stepped composer (amount → details → who paid → split). The server
+ * records the person adding an expense as its payer, so payer changes happen in edit mode.
+ */
 export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
-  const { userId } = useLocalSync();
-  const { data: groups } = useLocalRecords<LocalRecord>(userId, 'group');
-  const { data: memberships } = useLocalRecords<LocalRecord>(userId, 'groupMember');
-  const { data: accounts } = useLocalRecords<LocalRecord>(userId, 'account');
-  const { data: profiles } = useLocalRecords<LocalRecord>(userId, 'profile');
+  const { userId, isConnected } = useLocalSync();
   const [groupId, setGroupId] = useState(fixedGroupId ?? '');
-  const [accountId, setAccountId] = useState('');
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<GroupExpenseMethod>('equal');
-  const [selectedIds, setSelectedIds] = useState<string[]>(userId ? [userId] : []);
-  const initializedSelection = useRef(Boolean(userId));
-  const [basis, setBasis] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const saveLock = useRef(false);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    if (userId && !initializedSelection.current) {
-      initializedSelection.current = true;
-      setSelectedIds([userId]);
-    }
-  }, [userId]);
   useEffect(() => {
     if (fixedGroupId) setGroupId(fixedGroupId);
   }, [fixedGroupId]);
-
-  const group = groups?.find((item) => recordIds(item).includes(groupId));
+  const data = useExpenseLedger(userId, groupId || undefined);
+  const group = data.group;
   const selectedGroupId = group ? recordId(group) : '';
   const currency = typeof group?.currency === 'string' ? group.currency : '';
-  const groupIds = new Set(group ? recordIds(group) : []);
-  const members: Member[] = [];
-  if (userId)
-    members.push({
-      userId,
-      name: memberName(profiles?.[0], 'Signed-in member'),
-      avatarId: typeof profiles?.[0]?.avatarId === 'string' ? profiles[0].avatarId : undefined,
-      avatarUrl: typeof profiles?.[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null,
-    });
-  for (const item of memberships ?? []) {
-    const memberId = item.userId ?? item.memberId;
-    if (
-      typeof item.groupId !== 'string' ||
-      !groupIds.has(item.groupId) ||
-      typeof memberId !== 'string' ||
-      members.some((member) => member.userId === memberId)
-    )
-      continue;
-    members.push({
-      userId: memberId,
-      name: memberName(item, `Member ${memberId.slice(-6)}`),
-      avatarUrl: typeof item.avatarUrl === 'string' ? item.avatarUrl : null,
-      avatarId: typeof item.avatarId === 'string' ? item.avatarId : undefined,
-    });
-  }
-  const compatibleAccounts = (accounts ?? []).filter(
+  const compatibleAccounts = data.accounts.filter(
     (item) =>
       item.archivedAt === undefined && item.ownerId === userId && item.currency === currency,
   );
-  const account = compatibleAccounts.find((item) => recordIds(item).includes(accountId));
-  const payerName = memberName(profiles?.[0], 'Signed-in member');
-  const participantIds = members
-    .filter((member) => selectedIds.includes(member.userId))
-    .map((member) => member.userId);
-
-  let amountMinor: bigint | null = null;
-  let shares: { userId: string; amountMinor: bigint }[] = [];
-  let validation = '';
-  if (!userId) validation = 'Sign in before recording a split.';
-  else if (!group || !selectedGroupId) validation = 'Choose a saved group to record this split.';
-  else if (!currency) validation = 'This group has no currency.';
-  else if (!account) validation = 'Choose an account in the group currency.';
-  else if (!title.trim()) validation = 'Enter what this expense was for.';
-  else if (!amount.trim()) validation = 'Enter the total amount.';
-  else if (participantIds.length === 0 || participantIds.length !== selectedIds.length)
-    validation = 'Choose at least one current group member.';
-  else {
-    try {
-      amountMinor = parseMinor(amount, currency);
-      if (amountMinor <= 0n) throw new Error('Enter an amount greater than zero.');
-      const values =
-        method === 'equal'
-          ? undefined
-          : participantIds.map((id) => {
-              const entry = (basis[id] ?? '').trim();
-              if (!entry) throw new Error('Enter a value for every selected member.');
-              if (method === 'shares') {
-                if (!/^\d+$/.test(entry)) throw new Error('Shares must be whole numbers.');
-                return BigInt(entry);
-              }
-              const value = parseMinor(entry, method === 'percentage' ? 'USD' : currency);
-              if (value < 0n) throw new Error('Split values cannot be negative.');
-              return value;
-            });
-      shares = allocateParticipants(amountMinor, participantIds, method, values);
-    } catch (cause) {
-      validation =
-        cause instanceof Error &&
-        !['INVALID_SPLIT', 'INVALID_AMOUNT', 'INVALID_CURRENCY'].includes(cause.message)
-          ? cause.message
-          : method === 'exact'
-            ? 'Exact amounts must add up to the total.'
-            : method === 'percentage'
-              ? 'Percentages must add up to 100%.'
-              : method === 'shares'
-                ? 'Enter at least one positive whole share.'
-                : 'Enter a valid amount in the group currency.';
-    }
-  }
+  const findAccount = (id: string) =>
+    compatibleAccounts.find((item) => recordIds(item).includes(id));
+  const composer = useExpenseComposer({
+    currency,
+    currentUserId: userId,
+    memberIds: data.members.map((member) => member.userId),
+    detailsError: (values) =>
+      !group
+        ? 'Choose a group first.'
+        : !currency
+          ? 'This group has no currency.'
+          : findAccount(values.accountId)
+            ? ''
+            : 'Choose an account in the group currency.',
+  });
+  // Preselect the account when only one matches the group currency.
+  const onlyAccountId = compatibleAccounts.length === 1 ? recordId(compatibleAccounts[0]!) : '';
+  const { accountId: chosenAccountId, set: setComposerValue } = composer;
+  useEffect(() => {
+    if (!chosenAccountId && onlyAccountId) setComposerValue('accountId', onlyAccountId);
+  }, [chosenAccountId, onlyAccountId, setComposerValue]);
+  const account = findAccount(composer.accountId);
+  const category = data.categories.find((item) => recordIds(item).includes(composer.categoryId));
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const [error, setError] = useState('');
 
   function chooseGroup(id: string) {
     setGroupId(id);
-    setAccountId('');
-    setSelectedIds(userId ? [userId] : []);
-    setBasis({});
+    composer.reset({
+      accountId: '',
+      participantIds: userId ? [userId] : [],
+      payerIds: userId ? [userId] : [],
+      basis: {},
+      payerAmounts: {},
+    });
     setError('');
   }
 
   async function save() {
-    if (saveLock.current || validation || !userId || !group || !account || amountMinor === null)
+    const totalMinor = composer.draft.totalMinor;
+    if (
+      saveLock.current ||
+      composer.validation ||
+      !userId ||
+      !group ||
+      !account ||
+      totalMinor === null
+    )
       return;
     saveLock.current = true;
     setSaving(true);
     setError('');
     try {
-      const clientMutationId = Crypto.randomUUID();
       const transactionId = Crypto.randomUUID();
-      const now = Date.now();
-      const participants = shares.map((share) => ({
-        ...share,
-        method,
-        ...(method === 'equal'
-          ? {}
-          : {
-              basisValue: (method === 'shares'
-                ? BigInt(basis[share.userId]!)
-                : parseMinor(basis[share.userId]!, method === 'percentage' ? 'USD' : currency)
-              ).toString(),
-            }),
-      }));
+      const title = composer.title.trim();
+      const merchant = composer.merchant.trim() || undefined;
+      const note = composer.note.trim() || undefined;
+      const categoryId = category ? recordId(category) : undefined;
+      const participants = composer.draft.participants;
       await commitLocalWrite(
         userId,
         'transaction',
@@ -164,30 +95,41 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
           ownerId: userId,
           groupId: selectedGroupId,
           accountId: recordId(account),
-          title: title.trim(),
-          amountMinor,
+          title,
+          amountMinor: totalMinor,
           currency,
-          occurredAt: now,
-          createdAt: now,
+          occurredAt: composer.occurredAt,
+          createdAt: Date.now(),
           type: 'expense',
           status: 'posted',
+          version: 1,
+          ...(categoryId ? { categoryId } : {}),
+          ...(merchant ? { merchant } : {}),
+          ...(note ? { note } : {}),
         },
         {
           groupId: selectedGroupId,
           accountId: recordId(account),
-          title: title.trim(),
-          amountMinor,
+          title,
+          amountMinor: totalMinor,
           currency,
-          occurredAt: now,
+          occurredAt: composer.occurredAt,
           participants,
+          ...(categoryId ? { categoryId } : {}),
+          ...(merchant ? { merchant } : {}),
+          ...(note ? { note } : {}),
         },
         {
-          clientMutationId,
-          dependencies: [`group:${selectedGroupId}`, `account:${recordId(account)}`],
+          clientMutationId: Crypto.randomUUID(),
+          dependencies: [
+            `group:${selectedGroupId}`,
+            `account:${recordId(account)}`,
+            ...(category && !category.cloudId && !category._id ? [`category:${categoryId}`] : []),
+          ],
           relatedRecords: [
             {
               entityType: 'expensePayer',
-              record: { transactionId, userId, memberId: userId, amountMinor },
+              record: { transactionId, userId, memberId: userId, amountMinor: totalMinor },
             },
             ...participants.map((participant) => ({
               entityType: 'expenseParticipant' as const,
@@ -196,13 +138,16 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
                 userId: participant.userId,
                 memberId: participant.userId,
                 amountMinor: participant.amountMinor,
-                method,
+                method: participant.method,
                 basisValue: participant.basisValue,
               },
             })),
           ],
         },
       );
+      toast.success('Expense added', {
+        description: isConnected ? `${title} was split.` : 'Saved on this device. It syncs later.',
+      });
       router.replace(`/group/${selectedGroupId}` as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this split.');
@@ -215,8 +160,11 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
   return (
     <GroupExpenseFormScreen
       signedIn={Boolean(userId)}
+      loading={Boolean(userId) && data.loading}
+      dataError={data.error?.message}
+      onRetry={data.retry}
       fixedGroupId={fixedGroupId}
-      groups={(groups ?? [])
+      groups={data.groups
         .filter((item) => item.archivedAt === undefined)
         .map((item) => ({
           id: recordId(item),
@@ -232,41 +180,22 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
         id: recordId(item),
         name: displayAccountName(String(item.name ?? 'Account')),
       }))}
-      selectedAccountId={account ? recordId(account) : ''}
-      members={members}
-      payerName={payerName}
-      payerAvatarId={typeof profiles?.[0]?.avatarId === 'string' ? profiles[0].avatarId : undefined}
-      payerAvatarUrl={typeof profiles?.[0]?.avatarUrl === 'string' ? profiles[0].avatarUrl : null}
-      title={title}
-      amount={amount}
-      method={method}
-      selectedMemberIds={selectedIds}
-      basis={basis}
-      shares={shares}
-      totalMinor={amountMinor}
-      validation={validation}
+      categories={data.categories
+        .filter((item) => item.archivedAt === undefined && item.deletedAt === undefined)
+        .map((item) => ({
+          id: recordId(item),
+          name: String(item.name ?? 'Category'),
+          icon: typeof item.icon === 'string' ? item.icon : undefined,
+          color: typeof item.color === 'string' ? item.color : undefined,
+        }))}
+      members={data.members}
+      currentUserId={userId}
+      composer={composer}
+      payerEditable={false}
+      offline={!isConnected}
       error={error}
       saving={saving}
       onGroupChange={chooseGroup}
-      onAccountChange={setAccountId}
-      onTitleChange={setTitle}
-      onAmountChange={setAmount}
-      onMethodChange={(next) => {
-        setMethod(next);
-        setBasis({});
-      }}
-      onParticipantChange={(memberId, selected) =>
-        setSelectedIds((current) =>
-          selected
-            ? current.includes(memberId)
-              ? current
-              : [...current, memberId]
-            : current.filter((id) => id !== memberId),
-        )
-      }
-      onBasisChange={(memberId, value) =>
-        setBasis((current) => ({ ...current, [memberId]: value }))
-      }
       onSubmit={() => void save()}
       onBack={() => {
         const backGroup = group ? selectedGroupId : fixedGroupId;

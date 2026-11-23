@@ -23,6 +23,8 @@ export type LocalWriteOptions = {
   baseUpdatedAt?: number;
   deviceId?: string;
   relatedRecords?: readonly { entityType: LocalEntity; record: LocalRecord }[];
+  /** Split rows an optimistic edit drops (payers or participants no longer on the expense). */
+  removedRecords?: readonly { entityType: LocalEntity; record: LocalRecord }[];
 };
 
 export async function commitLocalWrite(
@@ -89,6 +91,7 @@ export async function commitLocalWrite(
         entry,
         relatedRecords,
         createNewId,
+        options.removedRecords,
       );
       return recordId;
     } catch (cause) {

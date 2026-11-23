@@ -68,7 +68,24 @@ export {
   type GroupExpenseAccountOption,
   type GroupExpenseMemberOption,
   type GroupExpenseShare,
+  type GroupExpenseCategoryOption,
 } from './GroupExpenseFormScreen';
+export {
+  GroupExpenseDetailScreen,
+  type GroupExpenseDetailScreenProps,
+  type ExpenseHistoryEvent,
+  type ExpenseHistoryState,
+  type ExpensePerson,
+  type ExpenseShareView,
+} from './GroupExpenseDetailScreen';
+export { ExpenseImpactSheet, balanceLabel, type ImpactPerson } from './ExpenseImpactSheet';
+export {
+  useExpenseComposer,
+  composerSteps,
+  type ComposerStep,
+  type ExpenseComposer,
+  type ExpenseComposerValues,
+} from '../useExpenseComposer';
 export { CategoryEmojiPicker } from './CategoryEmojiPicker';
 export { CurrencyInput } from './CurrencyInput';
 export { BudgetProgress } from './BudgetProgress';

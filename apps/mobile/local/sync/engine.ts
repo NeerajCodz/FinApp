@@ -9,6 +9,7 @@ import {
   type SyncReceipt,
 } from '../repository';
 import { updateOutboxStatus } from '../outbox/storage';
+import { outboxErrorText } from '@finapp/ui/finance/sync-errors';
 
 function isTransientSyncFailure(error: unknown): boolean {
   if (error && typeof error === 'object') {
@@ -87,7 +88,8 @@ export async function syncOutbox(
         const transient = !conflict && isTransientSyncFailure(error);
         const retryCount = current.retryCount + 1;
         const retryAfter = transient ? nextRetryDelay(retryCount) : undefined;
-        const safeError = reason.replace(/[\\r\\n]+/g, ' ').slice(0, 240);
+        // Known server codes become readable sentences instead of raw Convex errors.
+        const safeError = outboxErrorText(error);
         await updateOutboxStatus(
           userId,
           current.localId,

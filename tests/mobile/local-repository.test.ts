@@ -25,6 +25,13 @@ import { commitLocalWrite } from '../../apps/mobile/local/commands';
 import { createOutboxEntry } from '../../apps/mobile/local/outbox/queue';
 import { syncOutbox } from '../../apps/mobile/local/sync/engine';
 import { deserializeLocalValue } from '../../apps/mobile/local/serialization';
+import { projectGroupBalances } from '../../convex/splits/domain';
+import {
+  planExpenseDelete,
+  planExpenseUpdate,
+  planSettlementRemoval,
+  type QueuedWritePlan,
+} from '../../packages/ui/src/finance/groupExpenseOutbox';
 vi.mock('expo-constants', () => ({
   default: {
     appOwnership: null,
@@ -615,5 +622,112 @@ describe('local financial repository', () => {
     expect(await repo.readGroupRange(userId, 'local-group-map', 0, 30)).toMatchObject({
       transactions: [{ groupId: 'local-group-map', title: 'Dinner' }],
     });
+  });
+
+  it('queues group expense edits, deletes and payment undos with optimistic balances', async () => {
+    const userId = 'user-expense-edit';
+    const group = { _id: 'cloud-group', currency: 'USD' };
+    await repo.upsertCloudPage(userId, 'transaction', [
+      {
+        _id: 'cloud-dinner',
+        groupId: 'cloud-group',
+        accountId: 'cloud-account',
+        ownerId: userId,
+        title: 'Dinner',
+        amountMinor: 100n,
+        currency: 'USD',
+        type: 'expense',
+        status: 'posted',
+        occurredAt: 1,
+        version: 2,
+      },
+    ]);
+    await repo.upsertCloudPage(userId, 'expensePayer', [
+      { _id: 'payer-alice', transactionId: 'cloud-dinner', userId: 'alice', amountMinor: 100n },
+    ]);
+    await repo.upsertCloudPage(userId, 'expenseParticipant', [
+      { _id: 'part-alice', transactionId: 'cloud-dinner', userId: 'alice', amountMinor: 50n },
+      { _id: 'part-bob', transactionId: 'cloud-dinner', userId: 'bob', amountMinor: 50n },
+    ]);
+    await repo.upsertCloudPage(userId, 'settlement', [
+      {
+        _id: 'cloud-payment',
+        groupId: 'cloud-group',
+        fromUserId: 'bob',
+        toUserId: 'alice',
+        amountMinor: 50n,
+        currency: 'USD',
+        occurredAt: 2,
+      },
+    ]);
+    const commit = (plan: QueuedWritePlan, clientMutationId: string) =>
+      commitLocalWrite(userId, plan.entityType, plan.operation, plan.record, plan.payload, {
+        recordId: plan.recordId,
+        clientMutationId,
+        deviceId: 'device-test',
+        dependencies: plan.dependencies,
+        relatedRecords: plan.relatedRecords,
+        removedRecords: plan.removedRecords,
+      });
+    const balances = async () =>
+      projectGroupBalances(
+        group,
+        await repo.readLocal(userId, 'transaction'),
+        await repo.readLocal(userId, 'expensePayer'),
+        await repo.readLocal(userId, 'expenseParticipant'),
+        await repo.readLocal(userId, 'settlement'),
+      ).balances;
+    expect(await balances()).toEqual({ alice: 0n, bob: 0n });
+
+    const [transaction] = await repo.readLocal(userId, 'transaction');
+    await commit(
+      planExpenseUpdate({
+        transaction: transaction!,
+        payerRows: await repo.readLocal(userId, 'expensePayer'),
+        participantRows: await repo.readLocal(userId, 'expenseParticipant'),
+        title: 'Dinner',
+        amountMinor: 90n,
+        currency: 'USD',
+        occurredAt: 1,
+        participants: [
+          { userId: 'alice', amountMinor: 30n, method: 'equal' },
+          { userId: 'carol', amountMinor: 30n, method: 'equal' },
+          { userId: 'dave', amountMinor: 30n, method: 'equal' },
+        ],
+        payers: [{ userId: 'alice', amountMinor: 90n }],
+      }),
+      'edit-dinner',
+    );
+    expect(await balances()).toEqual({ alice: 10n, bob: 50n, carol: -30n, dave: -30n });
+    const participants = await repo.readLocal(userId, 'expenseParticipant');
+    expect(participants.map((row) => row.userId).sort()).toEqual(['alice', 'carol', 'dave']);
+    const edit = (await repo.listOutbox(userId)).find(
+      (entry) => entry.operation === 'group.updateExpense',
+    );
+    expect(edit?.operation).toBe('group.updateExpense');
+    expect(deserializeLocalValue<Record<string, unknown>>(edit!.payload)).toMatchObject({
+      transactionId: 'cloud-dinner',
+      expectedVersion: 2,
+    });
+
+    const [edited] = await repo.readLocal(userId, 'transaction');
+    expect(edited).toMatchObject({ version: 3 });
+    await commit(planExpenseDelete(edited!, userId, 5), 'delete-dinner');
+    expect(await balances()).toEqual({ alice: -50n, bob: 50n });
+    const [payment] = await repo.readLocal(userId, 'settlement');
+    await commit(planSettlementRemoval(payment!, userId), 'undo-payment');
+    expect(await balances()).toEqual({});
+
+    // A rejected edit is stored with a readable reason instead of the raw Convex error.
+    const results = await syncOutbox(userId, await repo.listOutbox(userId), async () => {
+      throw new Error(
+        '[CONVEX M(groups/mutations:updateExpense)] Server Error Uncaught Error: INSUFFICIENT_PERMISSION',
+      );
+    });
+    expect(results[0]?.status).toBe('failed');
+    const failed = (await repo.listOutbox(userId)).find(
+      (entry) => entry.operation === 'group.updateExpense',
+    );
+    expect(failed?.lastError).toBe('You no longer have permission to make this change.');
   });
 });

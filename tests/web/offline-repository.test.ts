@@ -4,6 +4,12 @@ import * as repository from '../../apps/web/lib/offline/repository';
 import type { OutboxEntry } from '../../apps/web/lib/offline/repository';
 import { syncOutbox } from '../../apps/web/lib/offline/sync';
 import { projectGroupBalances } from '../../convex/splits/domain';
+import {
+  planExpenseDelete,
+  planExpenseUpdate,
+  planSettlementRemoval,
+  type QueuedWritePlan,
+} from '../../packages/ui/src/finance/groupExpenseOutbox';
 
 const userA = 'user-a';
 const userB = 'user-b';
@@ -665,5 +671,117 @@ describe('browser offline repository', () => {
     expect(
       Array.from(upgraded.transaction('conflicts').objectStore('conflicts').indexNames),
     ).toEqual(['by-user']);
+  });
+
+  it('queues group expense edits, deletes and payment undos with optimistic balances', async () => {
+    const userId = 'user-expense-edit';
+    const group = { _id: 'cloud-group', currency: 'USD' };
+    await repository.upsertCloudPage(userId, 'transaction', [
+      {
+        _id: 'cloud-dinner',
+        groupId: 'cloud-group',
+        accountId: 'cloud-account',
+        ownerId: userId,
+        title: 'Dinner',
+        amountMinor: 100n,
+        currency: 'USD',
+        type: 'expense',
+        status: 'posted',
+        version: 2,
+      },
+    ]);
+    await repository.upsertCloudPage(userId, 'expensePayer', [
+      { _id: 'payer-alice', transactionId: 'cloud-dinner', userId: 'alice', amountMinor: 100n },
+    ]);
+    await repository.upsertCloudPage(userId, 'expenseParticipant', [
+      { _id: 'part-alice', transactionId: 'cloud-dinner', userId: 'alice', amountMinor: 50n },
+      { _id: 'part-bob', transactionId: 'cloud-dinner', userId: 'bob', amountMinor: 50n },
+    ]);
+    await repository.upsertCloudPage(userId, 'settlement', [
+      {
+        _id: 'cloud-payment',
+        groupId: 'cloud-group',
+        fromUserId: 'bob',
+        toUserId: 'alice',
+        amountMinor: 50n,
+        currency: 'USD',
+      },
+    ]);
+    const commit = (plan: QueuedWritePlan, clientMutationId: string) =>
+      repository.commitLocalWrite(
+        userId,
+        plan.entityType,
+        plan.operation,
+        plan.record,
+        plan.payload,
+        {
+          recordId: plan.recordId,
+          clientMutationId,
+          dependencies: plan.dependencies,
+          relatedRecords: plan.relatedRecords,
+          removedRecords: plan.removedRecords,
+        },
+      );
+    const balances = async () =>
+      projectGroupBalances(
+        group,
+        await repository.readLocal(userId, 'transaction'),
+        await repository.readLocal(userId, 'expensePayer'),
+        await repository.readLocal(userId, 'expenseParticipant'),
+        await repository.readLocal(userId, 'settlement'),
+      ).balances;
+    expect(await balances()).toEqual({ alice: 0n, bob: 0n });
+
+    const [transaction] = await repository.readLocal(userId, 'transaction');
+    await commit(
+      planExpenseUpdate({
+        transaction: transaction!,
+        payerRows: await repository.readLocal(userId, 'expensePayer'),
+        participantRows: await repository.readLocal(userId, 'expenseParticipant'),
+        title: 'Dinner',
+        amountMinor: 90n,
+        currency: 'USD',
+        occurredAt: 1,
+        participants: [
+          { userId: 'alice', amountMinor: 30n, method: 'equal' },
+          { userId: 'carol', amountMinor: 30n, method: 'equal' },
+          { userId: 'dave', amountMinor: 30n, method: 'equal' },
+        ],
+        payers: [{ userId: 'alice', amountMinor: 90n }],
+      }),
+      'edit-dinner',
+    );
+    // Bob dropped off the expense but keeps his real payment, so he is owed it back.
+    expect(await balances()).toEqual({ alice: 10n, bob: 50n, carol: -30n, dave: -30n });
+    const participants = await repository.readLocal(userId, 'expenseParticipant');
+    expect(participants.map((row) => row.userId).sort()).toEqual(['alice', 'carol', 'dave']);
+    const edit = (await repository.listOutbox(userId)).find(
+      (entry) => entry.operation === 'group.updateExpense',
+    );
+    expect(edit).toMatchObject({
+      operation: 'group.updateExpense',
+      recordId: 'cloud-dinner',
+      dependencies: [],
+      payload: { transactionId: 'cloud-dinner', accountId: 'cloud-account', expectedVersion: 2 },
+    });
+    expect((await repository.readLocal(userId, 'transaction'))[0]).toMatchObject({ version: 3 });
+
+    const [edited] = await repository.readLocal(userId, 'transaction');
+    await commit(planExpenseDelete(edited!, userId, 5), 'delete-dinner');
+    const queuedDelete = (await repository.listOutbox(userId)).find(
+      (entry) => entry.operation === 'group.deleteExpense',
+    );
+    expect(queuedDelete?.payload).toMatchObject({ expectedVersion: 3 });
+    expect(await balances()).toEqual({ alice: -50n, bob: 50n });
+
+    const [payment] = await repository.readLocal(userId, 'settlement');
+    await commit(planSettlementRemoval(payment!, userId), 'undo-payment');
+    expect(await balances()).toEqual({});
+    const operations = (await repository.listOutbox(userId)).map((entry) => entry.operation);
+    expect(operations.sort()).toEqual([
+      'group.deleteExpense',
+      'group.updateExpense',
+      'settlement.remove',
+    ]);
   });
 });
