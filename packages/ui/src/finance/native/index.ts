@@ -263,3 +263,10 @@ export {
   type NotificationListItem,
   type NotificationSection,
 } from '../notifications';
+export {
+  LineItemsEditor,
+  LineItemsReceipt,
+  type LineItemPerson,
+  type LineItemsEditorProps,
+  type LineItemsReceiptProps,
+} from './LineItems';

@@ -61,6 +61,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
       payerIds: userId ? [userId] : [],
       basis: {},
       payerAmounts: {},
+      items: composer.items.map((item) => ({ ...item, participantIds: null })),
     });
     setError('');
   }
@@ -86,6 +87,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
       const note = composer.note.trim() || undefined;
       const categoryId = category ? recordId(category) : undefined;
       const participants = composer.draft.participants;
+      const items = composer.draft.items;
       await commitLocalWrite(
         userId,
         'transaction',
@@ -106,6 +108,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
           ...(categoryId ? { categoryId } : {}),
           ...(merchant ? { merchant } : {}),
           ...(note ? { note } : {}),
+          ...(items.length ? { items } : {}),
         },
         {
           groupId: selectedGroupId,
@@ -118,6 +121,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
           ...(categoryId ? { categoryId } : {}),
           ...(merchant ? { merchant } : {}),
           ...(note ? { note } : {}),
+          ...(items.length ? { items } : {}),
         },
         {
           clientMutationId: Crypto.randomUUID(),

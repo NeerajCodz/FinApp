@@ -1,4 +1,5 @@
 import { mutation } from '../_generated/server';
+import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { DomainError } from '../shared/errors';
 import { requireUser } from '../shared/auth';
@@ -10,6 +11,26 @@ import { getMutationReceipt, recordSyncChange, storeMutationReceipt } from '../s
 import { createNotification } from '../notifications/mutations';
 import { aggregateBudgetSpending, budgetAlertThresholdCrossed } from '../budgets/domain';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
+import { lineItemValidator } from '../schema';
+import { keptLineItems, normalizeLineItems, type LineItem } from '../splits/domain';
+
+type LineItemInput = LineItem & { participantIds?: Id<'users'>[] };
+
+/**
+ * Line items for a personal transaction: validated against the total, without the
+ * group-only `participantIds`. Returns `undefined` for "no items".
+ */
+export function personalLineItems(
+  items: readonly LineItemInput[] | undefined,
+  amountMinor: bigint,
+): LineItemInput[] | undefined {
+  if (!items?.length) return undefined;
+  const normalized = normalizeLineItems(
+    items.map(({ participantIds: _participantIds, ...item }) => item),
+    amountMinor,
+  );
+  return normalized.length ? normalized : undefined;
+}
 
 export type TransactionDraft = {
   ownerId: string;
@@ -94,6 +115,7 @@ export const create = mutation({
     transferAccountId: v.optional(v.id('accounts')),
     occurredAt: v.number(),
     hasTime: v.optional(v.boolean()),
+    items: v.optional(v.array(lineItemValidator)),
     clientMutationId: v.string(),
     clientId: v.optional(v.string()),
   },
@@ -127,10 +149,12 @@ export const create = mutation({
       ? ((await ctx.db.get(args.categoryId)) ?? undefined)
       : undefined;
     const processedMutation = null;
+    const { items: rawItems, ...draftArgs } = args;
+    const items = personalLineItems(rawItems, args.amountMinor);
     const result = createTransaction(
       user._id,
       {
-        ...args,
+        ...draftArgs,
         ownerId: user._id,
         accountId: args.accountId,
         transferAccountId: args.transferAccountId,
@@ -151,6 +175,7 @@ export const create = mutation({
       accountId: args.accountId,
       transferAccountId: args.transferAccountId,
       ...(args.hasTime !== undefined ? { hasTime: args.hasTime } : {}),
+      ...(items ? { items } : {}),
     };
     const transactionId = await ctx.db.insert('transactions', record);
     const updatedAt = record.updatedAt;
@@ -266,6 +291,11 @@ export const update = mutation({
     transferAccountId: v.optional(v.id('accounts')),
     occurredAt: v.number(),
     hasTime: v.optional(v.boolean()),
+    /**
+     * Line items. Omitted: existing items are kept while they still add up to the new
+     * amount (and dropped otherwise, e.g. an older client editing the total); `[]` clears.
+     */
+    items: v.optional(v.array(lineItemValidator)),
     clientMutationId: v.string(),
   },
   handler: async (ctx, args) => {
@@ -324,8 +354,13 @@ export const update = mutation({
     if (args.type !== 'transfer' && !args.categoryId) throw new Error('INVALID_CATEGORY');
     if (!args.title.trim() || !Number.isSafeInteger(args.occurredAt) || args.occurredAt <= 0)
       throw new Error('INVALID_TRANSACTION');
+    const items =
+      args.items !== undefined
+        ? personalLineItems(args.items, args.amountMinor)
+        : keptLineItems(transaction.items, args.amountMinor);
     const updatedAt = Date.now();
     const patch = {
+      items,
       accountId: args.accountId,
       type: args.type,
       amountMinor: args.amountMinor,

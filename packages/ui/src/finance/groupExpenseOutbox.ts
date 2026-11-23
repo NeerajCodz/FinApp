@@ -4,6 +4,7 @@
  * web) apply the same plan, so offline behaviour matches across platforms.
  */
 import type { ExpenseParticipantInput, ExpenseShare } from './groupExpenseDraft';
+import type { LineItemPayload } from './lineItems';
 
 type LocalRecord = Record<string, unknown> & { id?: string; _id?: string };
 export type QueuedEntity = 'transaction' | 'settlement' | 'expensePayer' | 'expenseParticipant';
@@ -66,6 +67,8 @@ export type ExpenseUpdatePlanInput = {
   note?: string;
   participants: readonly ExpenseParticipantInput[];
   payers: readonly ExpenseShare[];
+  /** Line items; `[]` clears them, omitted keeps whatever the expense has. */
+  items?: readonly LineItemPayload[];
   now?: number;
 };
 
@@ -122,6 +125,9 @@ export function planExpenseUpdate(input: ExpenseUpdatePlanInput): QueuedWritePla
   if (!categoryId) delete record.categoryId;
   if (!merchant) delete record.merchant;
   if (!note) delete record.note;
+  const items = input.items?.map((item) => withoutUndefined({ ...item }));
+  if (items?.length) record.items = items;
+  else if (items) delete record.items;
   return {
     entityType: 'transaction',
     operation: 'group.updateExpense',
@@ -139,6 +145,7 @@ export function planExpenseUpdate(input: ExpenseUpdatePlanInput): QueuedWritePla
       note,
       participants: input.participants.map((row) => withoutUndefined({ ...row })),
       payers: input.payers.map((row) => ({ userId: row.userId, amountMinor: row.amountMinor })),
+      items,
       expectedVersion,
     }),
     dependencies: [

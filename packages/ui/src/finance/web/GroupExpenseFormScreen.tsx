@@ -14,6 +14,7 @@ import { DateTimePicker } from './DateTimePicker';
 import { EntityIcon } from './EntityIconPicker';
 import { Crumb, GroupPage, PersonAvatar, Tile } from './GroupUI';
 import f from './SplitFlow.module.css';
+import { LineItemsEditor } from './LineItems';
 
 export type { GroupExpenseMethod } from '../groupExpenseDraft';
 export type GroupExpenseGroupOption = { id: string; name: string; currency?: string };
@@ -92,6 +93,7 @@ const methods: readonly {
     icon: 'phosphor:Percent',
   },
   { value: 'shares', title: 'Shares', description: 'Units, e.g. 2 : 1', icon: 'phosphor:ChartBar' },
+  { value: 'itemized', title: 'By item', description: 'Who had what', icon: 'phosphor:Receipt' },
 ];
 
 export function allocationTone(tone: AllocationTone) {
@@ -351,9 +353,33 @@ function StepTitle({ icon, title, hint }: { icon: string; title: string; hint: s
 
 function AmountStep({ p }: { p: GroupExpenseFormScreenProps }) {
   const c = p.composer;
+  if (c.itemize)
+    return (
+      <>
+        <StepTitle
+          icon="phosphor:Receipt"
+          title="What was on the bill?"
+          hint={`The total is the sum of the items, in ${p.currency}`}
+        />
+        <Switch label="Itemize the bill" value onValueChange={c.setItemize} disabled={p.saving} />
+        <LineItemsEditor
+          rows={c.items}
+          currency={p.currency}
+          rowErrors={c.itemErrors}
+          disabled={p.saving}
+          onChange={c.setItems}
+        />
+      </>
+    );
   return (
     <>
       <StepTitle icon="phosphor:Coins" title="How much was it?" hint={`In ${p.currency}`} />
+      <Switch
+        label="Itemize the bill"
+        value={false}
+        onValueChange={c.setItemize}
+        disabled={p.saving}
+      />
       <label className={f.amountWell}>
         <input
           className={f.bigInput}
@@ -654,8 +680,26 @@ function SplitStep({
           );
         })}
       </div>
+      {c.method === 'itemized' && (
+        <div className={f.field}>
+          Who had each item?
+          <LineItemsEditor
+            rows={c.items}
+            currency={p.currency}
+            rowErrors={c.itemErrors}
+            disabled={p.saving}
+            onChange={c.setItems}
+            people={c.participantIds.map((id) => ({
+              userId: id,
+              name: memberById(id)?.name ?? 'Member',
+              avatarId: memberById(id)?.avatarId,
+              avatarUrl: memberById(id)?.avatarUrl,
+            }))}
+          />
+        </div>
+      )}
       <StatusPill label={c.draft.allocation.label} tone={allocationTone(c.draft.allocation.tone)} />
-      {c.method !== 'equal' && (
+      {c.method !== 'equal' && c.method !== 'itemized' && (
         <div className={f.rows}>
           {c.participantIds.map((id) => {
             const member = memberById(id);

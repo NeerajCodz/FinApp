@@ -8,6 +8,8 @@ import { Money } from './Money';
 import { TransactionTable, type TransactionTableItem } from './TransactionsScreen';
 import styles from './Transactions.module.css';
 import type { SemanticType, TransactionType } from '../types';
+import { LineItemsReceipt } from './LineItems';
+import type { LineItemView } from '../lineItems';
 
 export type TransactionDetailScreenProps = {
   title: string;
@@ -41,6 +43,8 @@ export type TransactionDetailScreenProps = {
   relatedTransactions?: readonly TransactionTableItem[];
   onOpenTransaction?: (id: string) => void;
   tags?: readonly string[];
+  /** Line items, shown as a receipt-style breakdown. */
+  items?: readonly LineItemView[];
 };
 
 export function TransactionDetailScreen(p: TransactionDetailScreenProps) {
@@ -167,6 +171,7 @@ export function TransactionDetailScreen(p: TransactionDetailScreenProps) {
           </dl>
         </div>
       </section>
+      {!!p.items?.length && <LineItemsReceipt items={p.items} currency={p.currency} />}
       <section className={styles.panel}>
         <div className={styles.sectionHeader}>
           <div>

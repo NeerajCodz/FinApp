@@ -17,6 +17,8 @@ import type { ShareStatus } from '../expenseImpact';
 import { EntityIcon } from './EntityIconPicker';
 import { Crumb, GroupPage, PersonAvatar } from './GroupUI';
 import f from './SplitFlow.module.css';
+import { LineItemsReceipt } from './LineItems';
+import { itemizedBreakdown, type LineItemView } from '../lineItems';
 
 export type ExpensePerson = {
   userId: string;
@@ -66,6 +68,10 @@ export type GroupExpenseDetailScreenProps = {
   onEdit: () => void;
   onDelete: () => void | Promise<void>;
   onOpenGroup?: () => void;
+  /** Line items on the expense. */
+  items?: readonly LineItemView[];
+  /** Split item by item: show who shared each item. */
+  itemized?: boolean;
 };
 
 function money(value: bigint, currency: string) {
@@ -213,6 +219,18 @@ export function GroupExpenseDetailScreen(p: GroupExpenseDetailScreenProps) {
                 </p>
               )}
             </section>
+            {!!p.items?.length && (
+              <LineItemsReceipt
+                title={p.itemized ? 'Who had what' : 'Items'}
+                currency={p.currency}
+                items={
+                  p.itemized
+                    ? itemizedBreakdown(p.items, p.shares).items
+                    : p.items.map((item) => ({ ...item, sharers: [] }))
+                }
+                people={p.itemized ? p.shares : undefined}
+              />
+            )}
 
             {p.canManage ? (
               <div className={f.actions}>

@@ -8,6 +8,8 @@ export const domainErrorCodes = [
   'INVALID_GROUP',
   'DUPLICATE_MUTATION',
   'GROUP_ARCHIVED',
+  'ITEMS_TOTAL_MISMATCH',
+  'INVALID_ITEMS',
 ] as const;
 export type DomainErrorCode = (typeof domainErrorCodes)[number];
 

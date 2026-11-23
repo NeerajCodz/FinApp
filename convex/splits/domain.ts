@@ -92,6 +92,130 @@ export function matchesAllocation(
   }
 }
 
+/** Methods stored on expense participant rows: the allocation methods plus `itemized`. */
+export type ParticipantSplitMethod = Exclude<SplitMethod, 'adjustment'> | 'itemized';
+
+/** A line item embedded on a transaction. `amountMinor` is the line total. */
+export type LineItem = {
+  id: string;
+  title: string;
+  amountMinor: bigint;
+  quantity?: number;
+  /** Who shares this item in an itemized group split; absent/empty means everyone. */
+  participantIds?: readonly string[];
+};
+
+export const MAX_LINE_ITEMS = 100;
+export const MAX_LINE_ITEM_TITLE = 80;
+const MAX_LINE_ITEM_ID = 64;
+
+function itemsError(): DomainError {
+  return new DomainError('INVALID_ITEMS');
+}
+
+/**
+ * Validates and normalizes line items against a transaction total: titles are trimmed
+ * (1-80 chars), amounts are positive, quantities are positive integers, ids are unique and
+ * the amounts add up to `totalMinor` (`ITEMS_TOTAL_MISMATCH` otherwise). An empty list
+ * returns `[]`, meaning "no items".
+ */
+export function normalizeLineItems<Item extends LineItem>(
+  items: readonly Item[],
+  totalMinor: bigint,
+): Item[] {
+  if (!items.length) return [];
+  if (items.length > MAX_LINE_ITEMS) throw itemsError();
+  const ids = new Set<string>();
+  const normalized = items.map((item) => {
+    const title = item.title.trim();
+    const id = item.id.trim();
+    if (
+      !id ||
+      id.length > MAX_LINE_ITEM_ID ||
+      ids.has(id) ||
+      !title ||
+      title.length > MAX_LINE_ITEM_TITLE ||
+      item.amountMinor <= 0n ||
+      (item.quantity !== undefined &&
+        (!Number.isSafeInteger(item.quantity) || item.quantity <= 0)) ||
+      (item.participantIds !== undefined &&
+        new Set(item.participantIds).size !== item.participantIds.length)
+    )
+      throw itemsError();
+    ids.add(id);
+    const next = { ...item, id, title };
+    if (item.quantity === undefined) delete next.quantity;
+    if (!item.participantIds?.length) delete next.participantIds;
+    return next;
+  });
+  if (normalized.reduce((total, item) => total + item.amountMinor, 0n) !== totalMinor)
+    throw new DomainError('ITEMS_TOTAL_MISMATCH');
+  return normalized;
+}
+
+/**
+ * Splits line items between participants: each item is shared equally (deterministic
+ * `allocateParticipants`) by its `participantIds`, or by everyone when that is absent or
+ * empty. A participant's amount is the sum of their item shares; rows follow
+ * `participantIds` order and add up to the items' total. Throws `INVALID_SPLIT` for an item
+ * naming someone outside `participantIds`, a non-positive amount or no participants.
+ */
+export function allocateItemized(
+  items: readonly Pick<LineItem, 'amountMinor' | 'participantIds'>[],
+  participantIds: readonly string[],
+): ParticipantAmount[] {
+  if (
+    !items.length ||
+    !participantIds.length ||
+    new Set(participantIds).size !== participantIds.length ||
+    participantIds.some((id) => !id)
+  )
+    throw new DomainError('INVALID_SPLIT');
+  const allowed = new Set(participantIds);
+  const totals = new Map<string, bigint>(participantIds.map((id) => [id, 0n]));
+  for (const item of items) {
+    const sharers = item.participantIds?.length ? item.participantIds : participantIds;
+    if (
+      item.amountMinor <= 0n ||
+      new Set(sharers).size !== sharers.length ||
+      sharers.some((id) => !allowed.has(id))
+    )
+      throw new DomainError('INVALID_SPLIT');
+    for (const share of allocateParticipants(item.amountMinor, sharers, 'equal'))
+      totals.set(share.userId, totals.get(share.userId)! + share.amountMinor);
+  }
+  return participantIds.map((userId) => ({ userId, amountMinor: totals.get(userId)! }));
+}
+
+/** True when participant rows equal the itemized allocation of `items`. */
+export function matchesItemizedAllocation(
+  totalMinor: bigint,
+  rows: readonly { userId: string; amountMinor: bigint }[],
+  items: readonly Pick<LineItem, 'amountMinor' | 'participantIds'>[],
+): boolean {
+  try {
+    if (items.reduce((total, item) => total + item.amountMinor, 0n) !== totalMinor) return false;
+    const allocation = allocateItemized(
+      items,
+      rows.map((row) => row.userId),
+    );
+    return allocation.every((item, index) => item.amountMinor === rows[index]?.amountMinor);
+  } catch {
+    return false;
+  }
+}
+
+/** Existing items survive an edit that omits `items` only while they still match the total. */
+export function keptLineItems<Item extends { amountMinor: bigint }>(
+  items: readonly Item[] | undefined,
+  amountMinor: bigint,
+): Item[] | undefined {
+  if (!items?.length) return undefined;
+  return items.reduce((total, item) => total + item.amountMinor, 0n) === amountMinor
+    ? [...items]
+    : undefined;
+}
+
 export function assertSplitVersion(expectedVersion: number, currentVersion: number): void {
   if (expectedVersion !== currentVersion) throw new DomainError('TRANSACTION_CHANGED');
 }

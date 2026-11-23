@@ -10,7 +10,15 @@ import {
   Wallet,
   Tag,
 } from 'lucide-react';
-import { Button, CustomSelect } from '@finapp/ui/web';
+import { Button, CustomSelect, Switch } from '@finapp/ui/web';
+import { LineItemsEditor } from './LineItems';
+import {
+  computeLineItems,
+  formatLineAmount,
+  lineItemsTotalInput,
+  startItemizing,
+  type LineItemDraft,
+} from '../lineItems';
 import { CurrencyInput } from './CurrencyInput';
 import { DateTimePicker } from './DateTimePicker';
 import { TransactionTable, type TransactionTableItem } from './TransactionsScreen';
@@ -63,10 +71,15 @@ export type TransactionFormScreenProps = {
   referenceId?: string;
   similarTransactions?: readonly TransactionTableItem[];
   onOpenTransaction?: (id: string) => void;
+  /** Line items (`null`: not itemized). The amount is their sum while itemized. */
+  items?: readonly LineItemDraft[] | null;
+  /** Enables the "Itemize" section. */
+  onItemsChange?: (items: LineItemDraft[] | null) => void;
 };
 
 export function TransactionFormScreen(p: TransactionFormScreenProps) {
   const account = p.accounts.find((item) => item.id === p.accountId);
+  const itemCurrency = account?.currency ?? p.currency;
   const category = p.categories.find((item) => item.id === p.categoryId);
   const destinations = p.accounts.filter(
     (item) => item.id !== p.accountId && item.currency === account?.currency,
@@ -188,11 +201,50 @@ export function TransactionFormScreen(p: TransactionFormScreenProps) {
               )}
             {field(
               'Amount',
-              <CurrencyInput
-                currency={account?.currency ?? p.currency}
-                value={p.amount}
-                onChangeText={p.onAmountChange}
-              />,
+              p.items ? (
+                <output
+                  className={styles.input}
+                  aria-label="Amount, the sum of the items"
+                  style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
+                >
+                  {formatLineAmount(
+                    computeLineItems(p.items, itemCurrency).totalMinor,
+                    itemCurrency,
+                  )}
+                </output>
+              ) : (
+                <CurrencyInput
+                  currency={itemCurrency}
+                  value={p.amount}
+                  onChangeText={p.onAmountChange}
+                />
+              ),
+            )}
+            {!!p.onItemsChange && p.type !== 'transfer' && (
+              <div className={styles.wide}>
+                <Switch
+                  label="Itemize (starters, drinks, tax…)"
+                  value={Boolean(p.items)}
+                  onValueChange={(on) => {
+                    if (on) p.onItemsChange!(startItemizing(p.amount, p.title));
+                    else {
+                      const total = computeLineItems(p.items ?? [], itemCurrency).totalMinor;
+                      if (total > 0n) p.onAmountChange(lineItemsTotalInput(total, itemCurrency));
+                      p.onItemsChange!(null);
+                    }
+                  }}
+                />
+              </div>
+            )}
+            {!!p.items && !!p.onItemsChange && p.type !== 'transfer' && (
+              <div className={styles.wide}>
+                <LineItemsEditor
+                  rows={p.items}
+                  currency={itemCurrency}
+                  disabled={p.saving}
+                  onChange={p.onItemsChange}
+                />
+              </div>
             )}
             {p.type !== 'transfer' &&
               field('Category', select('Category', p.categoryId, p.categories, p.onCategoryChange))}

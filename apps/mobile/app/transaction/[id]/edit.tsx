@@ -12,6 +12,11 @@ import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
 import type { LocalRecord } from '@/local/repository';
+import {
+  lineItemDrafts,
+  personalItemsState,
+  type LineItemDraft,
+} from '@finapp/ui/finance/line-items';
 
 type Transaction = LocalRecord & {
   title?: string;
@@ -66,6 +71,7 @@ export default function EditTransactionScreen() {
   const [destinationId, setDestinationId] = useState('');
   const [occurredAt, setOccurredAt] = useState(Date.now());
   const [hasTime, setHasTime] = useState(false);
+  const [items, setItems] = useState<LineItemDraft[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -85,6 +91,8 @@ export default function EditTransactionScreen() {
     setDestinationId(String(transaction.transferAccountId ?? ''));
     setOccurredAt(Number(transaction.occurredAt ?? Date.now()));
     setHasTime(transaction.hasTime === true);
+    const stored = lineItemDrafts(transaction.items, transaction.currency ?? 'INR');
+    setItems(stored.length ? stored : null);
   }, [transaction]);
   const findByAlias = <T extends LocalRecord>(records: T[], value?: string) =>
     records.find((item) => !!value && idsOf(item).includes(value));
@@ -106,9 +114,11 @@ export default function EditTransactionScreen() {
         ? 'Shared, split, refund, and adjustment records retain their transaction semantics and cannot be edited here.'
         : 'This transaction is unavailable.'
       : undefined;
+  const itemCurrency = String(account?.currency ?? transaction?.currency ?? 'INR');
+  const itemsState = personalItemsState(type === 'transfer' ? null : items, itemCurrency, amount);
   let amountMinor: bigint | null = null;
   try {
-    amountMinor = parseMinor(amount, String(account?.currency ?? transaction?.currency ?? 'INR'));
+    amountMinor = itemsState.error ? null : parseMinor(itemsState.amount, itemCurrency);
   } catch {
     /* Invalid amounts keep save disabled. */
   }
@@ -155,6 +165,7 @@ export default function EditTransactionScreen() {
         note: note.trim() || undefined,
         occurredAt,
         hasTime,
+        items: itemsState.items.length ? itemsState.items : undefined,
       };
       const dependencies = [
         !account.cloudId && !account._id ? `account:${accountRecordId}` : null,
@@ -183,6 +194,7 @@ export default function EditTransactionScreen() {
           note: note.trim() || undefined,
           occurredAt,
           hasTime,
+          items: itemsState.items,
         },
         {
           recordId: recordId(transaction),
@@ -272,6 +284,8 @@ export default function EditTransactionScreen() {
       }}
       onSubmit={() => void save()}
       onBack={() => router.back()}
+      items={items}
+      onItemsChange={setItems}
     />
   );
 }

@@ -1,0 +1,265 @@
+.editor {
+  display: grid;
+  gap: 10px;
+}
+
+.item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  background: var(--finapp-card);
+}
+
+.item[data-invalid] {
+  border-color: var(--finapp-warning);
+}
+
+.itemTop {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.index {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--finapp-foreground-muted);
+  background: var(--finapp-surface-subtle);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.itemFields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(56px, 0.8fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--finapp-border);
+  border-radius: 10px;
+  color: var(--finapp-foreground);
+  background: var(--finapp-input, var(--finapp-card));
+  font: inherit;
+  min-width: 0;
+}
+
+.input:focus-visible,
+.iconButton:focus-visible,
+.chip:focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 2px;
+}
+
+.amountInput {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.qtyInput {
+  text-align: center;
+}
+
+.tools {
+  display: flex;
+  gap: 2px;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--finapp-foreground-muted);
+  background: none;
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--finapp-surface-subtle);
+}
+
+.iconButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.iconButton[data-tone='destructive'] {
+  color: var(--finapp-destructive);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 12px 3px 4px;
+  border: 1.5px solid var(--finapp-border-subtle);
+  border-radius: 999px;
+  color: var(--finapp-foreground-muted);
+  background: var(--finapp-card);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip[data-everyone] {
+  padding-left: 10px;
+}
+
+.chip[aria-checked='true'] {
+  border-color: var(--finapp-split);
+  color: var(--finapp-foreground);
+  background: var(--finapp-split-soft);
+}
+
+.problem {
+  margin: 0;
+  color: var(--finapp-warning);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions > * {
+  flex: 1;
+}
+
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--finapp-border-subtle);
+}
+
+.total strong:last-child {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--finapp-border);
+  border-radius: 16px;
+  background: var(--finapp-surface-raised);
+}
+
+.receiptHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.receiptHead h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.lineCopy {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sharers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 12px;
+}
+
+.sharers span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineAmount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.receiptTotal {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px dashed var(--finapp-border);
+  font-weight: 600;
+}
+
+.receiptTotal strong:last-child {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.people {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.peopleTitle {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.person span {
+  flex: 1;
+}
+
+@media (max-width: 520px) {
+  .itemFields {
+    grid-template-columns: minmax(0, 1fr) 64px;
+  }
+
+  .tools {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}

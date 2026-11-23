@@ -10,6 +10,12 @@ import {
   type GroupExpenseMethod,
   type PayerDraft,
 } from './groupExpenseDraft';
+import {
+  computeLineItems,
+  emptyLineItem,
+  lineItemsTotalInput,
+  type LineItemDraft,
+} from './lineItems';
 
 export const composerSteps = ['amount', 'details', 'paid', 'split'] as const;
 export type ComposerStep = (typeof composerSteps)[number];
@@ -33,6 +39,9 @@ export type ExpenseComposerValues = {
   basis: Record<string, string>;
   payerIds: string[];
   payerAmounts: Record<string, string>;
+  /** Line items on: the total becomes their sum. Required by the `itemized` method. */
+  itemize: boolean;
+  items: LineItemDraft[];
 };
 
 export type ExpenseComposer = ExpenseComposerValues & {
@@ -49,6 +58,11 @@ export type ExpenseComposer = ExpenseComposerValues & {
   setBasis: (userId: string, value: string) => void;
   togglePayer: (userId: string) => void;
   setPayerAmount: (userId: string, value: string) => void;
+  /** Turns line items on (seeding a first row) or off (keeping the total). */
+  setItemize: (on: boolean) => void;
+  setItems: (items: LineItemDraft[]) => void;
+  /** Per-row problems for the item editor, in row order. */
+  itemErrors: string[];
   /** Replaces every value, e.g. once an expense being edited has loaded. */
   reset: (values: Partial<ExpenseComposerValues>) => void;
 };
@@ -67,6 +81,8 @@ export function emptyComposerValues(currentUserId?: string | null): ExpenseCompo
     basis: {},
     payerIds: currentUserId ? [currentUserId] : [],
     payerAmounts: {},
+    itemize: false,
+    items: [],
   };
 }
 
@@ -97,12 +113,15 @@ export function useExpenseComposer({
   }, [currentUserId]);
 
   const participantIds = values.participantIds.filter((id) => memberIds.includes(id));
+  const itemsDraft = values.itemize ? computeLineItems(values.items, currency) : null;
+  const amount = itemsDraft ? lineItemsTotalInput(itemsDraft.totalMinor, currency) : values.amount;
   const draft = computeExpenseDraft({
-    amount: values.amount,
+    amount,
     currency,
     method: values.method,
     participantIds,
     basis: values.basis,
+    items: values.itemize ? values.items : null,
   });
   const payerDraft = computePayerDraft({
     totalMinor: draft.totalMinor,
@@ -110,11 +129,13 @@ export function useExpenseComposer({
     payerIds: values.payerIds,
     amounts: values.payerAmounts,
   });
-  const amountError = values.amount.trim()
-    ? draft.totalMinor === null
-      ? draft.error || 'Enter a valid amount.'
-      : ''
-    : 'Enter the total amount.';
+  const amountError = itemsDraft
+    ? itemsDraft.error || (itemsDraft.totalMinor > 0n ? '' : 'Add items with amounts.')
+    : amount.trim()
+      ? draft.totalMinor === null
+        ? draft.error || 'Enter a valid amount.'
+        : ''
+      : 'Enter the total amount.';
   const stepErrors: Record<ComposerStep, string> = {
     amount: amountError,
     details: !values.title.trim()
@@ -139,12 +160,40 @@ export function useExpenseComposer({
   );
   return {
     ...values,
+    amount,
+    itemErrors: itemsDraft?.rowErrors ?? [],
     draft,
     payerDraft,
     stepErrors,
     validation,
     set,
-    setMethod: (method) => setValues((current) => ({ ...current, method, basis: {} })),
+    setMethod: (method) =>
+      setValues((current) => ({
+        ...current,
+        method,
+        basis: {},
+        ...(method === 'itemized' && !current.itemize
+          ? { itemize: true, items: current.items.length ? current.items : [emptyLineItem()] }
+          : {}),
+      })),
+    setItemize: (on) =>
+      setValues((current) => {
+        if (on)
+          return {
+            ...current,
+            itemize: true,
+            items: current.items.length ? current.items : [emptyLineItem()],
+          };
+        const total = computeLineItems(current.items, currency).totalMinor;
+        return {
+          ...current,
+          itemize: false,
+          amount: total > 0n ? lineItemsTotalInput(total, currency) : current.amount,
+          method: current.method === 'itemized' ? 'equal' : current.method,
+          basis: current.method === 'itemized' ? {} : current.basis,
+        };
+      }),
+    setItems: (items) => setValues((current) => ({ ...current, items })),
     toggleParticipant: (userId, selected) =>
       setValues((current) => ({
         ...current,

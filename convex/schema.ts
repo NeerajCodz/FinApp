@@ -8,6 +8,19 @@ const currency = v.string();
 const optionalText = v.optional(v.string());
 const optionalTime = v.optional(v.number());
 
+/**
+ * A line item (sub-record) embedded on a transaction. Amounts are line totals and add up to
+ * the transaction amount; `participantIds` lists who shares the item in an itemized group
+ * split (absent or empty: everyone on the expense).
+ */
+export const lineItemValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  amountMinor: v.int64(),
+  quantity: v.optional(v.number()),
+  participantIds: v.optional(v.array(v.id('users'))),
+});
+
 export default defineSchema({
   ...authTables,
   users: defineTable({
@@ -156,6 +169,7 @@ export default defineSchema({
     occurredAt: timestamp,
     hasTime: v.optional(v.boolean()),
     receiptId: optionalText,
+    items: v.optional(v.array(lineItemValidator)),
     status: v.union(v.literal('pending'), v.literal('posted'), v.literal('voided')),
     // Group expense revision for optimistic concurrency; absent means 1.
     version: v.optional(v.number()),

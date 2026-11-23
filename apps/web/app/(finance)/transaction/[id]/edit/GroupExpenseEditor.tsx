@@ -11,13 +11,20 @@ import {
 import { basisInputFromRow, minorToInput, toBigInt } from '@finapp/ui/finance/expense-draft';
 import { projectExpenseImpact, type ExpenseImpact } from '@finapp/ui/finance/expense-impact';
 import { describeSyncError, syncErrorCode } from '@finapp/ui/finance/sync-errors';
+import { lineItemDrafts } from '@finapp/ui/finance/line-items';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import type { LocalRecord } from '@/lib/offline/repository';
 import { canEditGroupExpense } from '@/lib/groupExpense';
 import { toast } from 'sonner';
 import { aliases, idOf, rowsForExpense, useGroupLedger, type GroupPerson } from '@/lib/groupLedger';
 
-const methods: readonly GroupExpenseMethod[] = ['equal', 'exact', 'percentage', 'shares'];
+const methods: readonly GroupExpenseMethod[] = [
+  'equal',
+  'exact',
+  'percentage',
+  'shares',
+  'itemized',
+];
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /**
@@ -96,7 +103,10 @@ export function GroupExpenseEditor({ transaction }: { transaction: LocalRecord }
       return;
     initialized.current = true;
     const stored = participantRows[0]?.method;
-    const method = methods.find((item) => item === stored) ?? 'equal';
+    const storedItems = lineItemDrafts(record.items, currency);
+    const found = methods.find((item) => item === stored) ?? 'equal';
+    // An itemized split needs its items; fall back to equal if they never synced.
+    const method = found === 'itemized' && !storedItems.length ? 'equal' : found;
     const memberOf = (row: LocalRecord) => text(row.userId) || text(row.memberId);
     reset({
       title: text(record.title),
@@ -107,6 +117,8 @@ export function GroupExpenseEditor({ transaction }: { transaction: LocalRecord }
       accountId: text(record.accountId),
       categoryId: text(record.categoryId),
       method,
+      itemize: Boolean(storedItems.length),
+      items: storedItems,
       participantIds: participantRows.map(memberOf),
       basis: Object.fromEntries(
         participantRows.map((row) => [memberOf(row), basisInputFromRow(method, row, currency)]),
@@ -181,6 +193,7 @@ export function GroupExpenseEditor({ transaction }: { transaction: LocalRecord }
         note: composer.note,
         participants: composer.draft.participants,
         payers: composer.payerDraft.payers,
+        items: composer.itemize ? composer.draft.items : [],
       });
       setReviewing(false);
       toast.success(

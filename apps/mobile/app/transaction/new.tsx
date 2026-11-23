@@ -9,6 +9,7 @@ import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
 import { displayAccountName } from '@/lib/ledger';
+import { personalItemsState, type LineItemDraft } from '@finapp/ui/finance/line-items';
 
 type ProfileRecord = LocalRecord & {
   defaultCurrency?: string;
@@ -56,6 +57,7 @@ export default function NewTransactionScreen() {
     return date.getTime();
   });
   const [hasTime, setHasTime] = useState(scalar(params.hasTime) === 'true');
+  const [items, setItems] = useState<LineItemDraft[] | null>(null);
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
   const [savingDefault, setSavingDefault] = useState(false);
@@ -101,9 +103,11 @@ export default function NewTransactionScreen() {
   useEffect(() => {
     if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));
   }, [category, categoryId, type]);
+  const itemCurrency = account?.currency ?? profile?.defaultCurrency ?? 'INR';
+  const itemsState = personalItemsState(type === 'transfer' ? null : items, itemCurrency, amount);
   let amountMinor: bigint | null = null;
   try {
-    amountMinor = parseMinor(amount, account?.currency ?? profile?.defaultCurrency ?? 'INR');
+    amountMinor = itemsState.error ? null : parseMinor(itemsState.amount, itemCurrency);
   } catch {
     /* Invalid amounts keep save disabled. */
   }
@@ -147,6 +151,7 @@ export default function NewTransactionScreen() {
         ...(note.trim() ? { note: note.trim() } : {}),
         occurredAt,
         hasTime,
+        ...(itemsState.items.length ? { items: itemsState.items } : {}),
       };
       const record: LocalRecord = { ...payload, type, status: 'posted' };
       const dependencies = [
@@ -292,6 +297,8 @@ export default function NewTransactionScreen() {
         router.push((categories.length ? '/categories' : '/categories/new') as never)
       }
       onSplitExpense={() => router.push('/split/new' as never)}
+      items={items}
+      onItemsChange={setItems}
     />
   );
 }

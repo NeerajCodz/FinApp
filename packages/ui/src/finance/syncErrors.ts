@@ -11,6 +11,8 @@ const messages = {
   OUTSTANDING_BALANCE: 'Settle the outstanding balance in this group first.',
   NOT_MEMBER: 'You are no longer a member of this group.',
   INVALID_SPLIT: 'The split no longer adds up to the total.',
+  ITEMS_TOTAL_MISMATCH: 'The line items no longer add up to the total.',
+  INVALID_ITEMS: 'One of the line items is not valid.',
   GROUP_ARCHIVED: 'This group was archived, so it can no longer change.',
   GROUP_UNAVAILABLE: 'This group is no longer available.',
   CURRENCY_MISMATCH: 'The account currency does not match the group currency.',

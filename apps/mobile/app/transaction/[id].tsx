@@ -15,6 +15,7 @@ import { Alert } from 'react-native';
 import { commitLocalWrite } from '@/local/commands';
 import { displayAccountName, ledgerTransaction, recordIds, recordIndex } from '@/lib/ledger';
 import { GroupExpenseDetail } from '@/components/finance/GroupExpenseDetail';
+import { readLineItems } from '@finapp/ui/finance/line-items';
 
 export default function TransactionDetailRoute() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -149,6 +150,7 @@ export default function TransactionDetailRoute() {
       onOpenTransaction={(value) =>
         router.push(`/transaction/${encodeURIComponent(value)}` as never)
       }
+      items={readLineItems(record?.items)}
       tags={(tagState.data ?? []).flatMap((tag) =>
         record &&
         typeof tag.transactionId === 'string' &&
