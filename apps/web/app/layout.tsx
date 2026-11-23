@@ -9,6 +9,7 @@ import './auth.css';
 import './finance.css';
 import './mcp.css';
 import { Providers } from './providers';
+import { Analytics } from '@vercel/analytics/next';
 
 const spaceGrotesk = localFont({
   src: [
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className={spaceGrotesk.variable} suppressHydrationWarning>
       <body>
         <Providers>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   );
