@@ -14,7 +14,7 @@ import { describeSyncError, syncErrorCode } from '@finapp/ui/finance/sync-errors
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import type { LocalRecord } from '@/lib/offline/repository';
 import { canEditGroupExpense } from '@/lib/groupExpense';
-import { setFlash } from '@/lib/flash';
+import { toast } from 'sonner';
 import { aliases, idOf, rowsForExpense, useGroupLedger, type GroupPerson } from '@/lib/groupLedger';
 
 const methods: readonly GroupExpenseMethod[] = ['equal', 'exact', 'percentage', 'shares'];
@@ -183,7 +183,7 @@ export function GroupExpenseEditor({ transaction }: { transaction: LocalRecord }
         payers: composer.payerDraft.payers,
       });
       setReviewing(false);
-      setFlash(
+      toast.success(
         result.queued
           ? 'Expense updated on this device. It syncs when you are back online.'
           : 'Expense updated. Everyone in the group sees the new balances.',

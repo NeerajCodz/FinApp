@@ -16,7 +16,7 @@ import { describeSyncError } from '@finapp/ui/finance/sync-errors';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import type { LocalRecord } from '@/lib/offline/repository';
 import { canEditGroupExpense } from '@/lib/groupExpense';
-import { FlashToast } from '@/lib/flash';
+import { toast } from 'sonner';
 import { aliases, idOf, rowsForExpense, useGroupLedger } from '@/lib/groupLedger';
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -34,7 +34,6 @@ export function GroupExpenseView({
   const groupId = text(transaction.groupId);
   const data = useGroupLedger(groupId);
   const [deleting, setDeleting] = React.useState(false);
-  const [notice, setNotice] = React.useState<string | null>(null);
   const currency = text(transaction.currency) || text(data.group?.currency) || 'INR';
   const cloudId = text(transaction.cloudId) || text(transaction._id);
   const history = useQuery(
@@ -83,13 +82,12 @@ export function GroupExpenseView({
     setDeleting(true);
     try {
       const result = await deleteGroupExpense(transaction);
-      setNotice(
-        result.queued
-          ? 'Expense deleted on this device. It syncs when you are back online.'
-          : 'Expense deleted. Balances were recalculated for the group.',
-      );
+      const message = result.queued
+        ? 'Expense deleted on this device. It syncs when you are back online.'
+        : 'Expense deleted. Balances were recalculated for the group.';
+      toast.success(message);
     } catch (cause) {
-      setNotice(describeSyncError(cause, 'Could not delete this expense. Please try again.'));
+      toast.error(describeSyncError(cause, 'Could not delete this expense. Please try again.'));
     } finally {
       setDeleting(false);
     }
@@ -97,7 +95,6 @@ export function GroupExpenseView({
 
   return (
     <>
-      <FlashToast message={notice} />
       <GroupExpenseDetailScreen
         title={text(transaction.title) || text(transaction.merchant) || 'Shared expense'}
         amountMinor={toBigInt(transaction.amountMinor) ?? 0n}
