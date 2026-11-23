@@ -318,6 +318,40 @@
 .inviteRow > input {
   flex: 1;
 }
+.searchResults {
+  display: grid;
+  gap: 6px;
+}
+.searchResult {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--g-border);
+  border-radius: 8px;
+  background: var(--g-raised);
+  color: var(--g-fg);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.searchResult:not(:disabled):hover {
+  border-color: var(--g-primary);
+}
+.searchResult:disabled {
+  cursor: default;
+}
+.searchResultCopy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+.searchResultCopy small {
+  color: var(--g-muted);
+}
 .chips {
   display: flex;
   flex-wrap: wrap;
