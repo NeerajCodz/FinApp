@@ -15,6 +15,7 @@ import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import styles from './CategoryAnalyticsScreen.module.css';
+import { chartPalette } from '../../tokens';
 
 export type AnalyticsCategory = {
   id: string;
@@ -61,7 +62,15 @@ export type CategoryAnalyticsScreenProps = {
 
 type Period = 'week' | 'month' | 'year';
 type Scope = 'all' | 'expense' | 'income' | 'with-limit';
-const palette = ['#ff697a', '#ffa347', '#5e9bff', '#a785ff', '#f4d34e', '#48d79b', '#57d9d0'];
+const palette = [
+  chartPalette.pink,
+  chartPalette.orange,
+  chartPalette.blue,
+  chartPalette.violet,
+  chartPalette.yellow,
+  chartPalette.volt,
+  chartPalette.cyan,
+];
 function categoryColor(index: number, primary: string) {
   const colorIndex = index % (palette.length + 1);
   return colorIndex === palette.length ? primary : palette[colorIndex]!;
@@ -433,7 +442,7 @@ export function CategoryAnalyticsScreen({
                         cy="70"
                         r="51"
                         fill="none"
-                        stroke="var(--finance-line, #262926)"
+                        stroke="var(--finance-line, var(--finapp-border))"
                         strokeWidth="15"
                       />
                       {donutRows.map((item, index) => {

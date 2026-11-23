@@ -57,7 +57,7 @@ export function InvitationInbox({
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         onPress={onClose}
-        style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#0008' }}
+        style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: tokens.overlay }}
       >
         <Pressable
           accessibilityViewIsModal
@@ -148,6 +148,7 @@ export function InvitationNotificationActions({
   invitation?: IncomingInvitation;
   onRespond: InvitationResponse;
 }) {
+  const { tokens } = useTheme();
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState('');
   const [error, setError] = React.useState('');
@@ -187,7 +188,7 @@ export function InvitationNotificationActions({
       </Button>
       {result ? <Typography accessibilityLiveRegion="polite">{result}</Typography> : null}
       {error ? (
-        <Typography accessibilityRole="alert" style={{ color: '#d44' }}>
+        <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
           {error}
         </Typography>
       ) : null}

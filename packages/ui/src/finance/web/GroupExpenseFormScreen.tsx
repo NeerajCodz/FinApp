@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { Button, CustomSelect } from '@finapp/ui/web';
+import { Button, CustomSelect, useTheme } from '@finapp/ui/web';
 import {
   UsersThree,
   SlidersHorizontal,
@@ -67,6 +67,7 @@ const methods = [
   { value: 'shares' as const, label: 'Shares', text: 'Split by shares/units', Icon: ChartBar },
 ];
 export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
+  const { tokens } = useTheme();
   if (!p.signedIn)
     return (
       <GroupPage>
@@ -309,7 +310,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                     </div>
                   )}
                   <div className={s.permission}>
-                    <Tile icon="phosphor:Image" color="#ac8bf5" />
+                    <Tile icon="phosphor:Image" color={tokens.chart.violet} />
                     <div className={s.activityCopy}>
                       <strong>Sharing a receipt?</strong>
                       <small>
@@ -350,19 +351,19 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
               title="Split with specific people"
               text="Only select the people who were part of this expense. Others won't be included."
               icon="phosphor:UsersThree"
-              color="#ac8bf5"
+              color={tokens.chart.violet}
             />
             <Tip
               title="Share a receipt"
               text="Send a bill image in group chat so everyone can review the expense."
               icon="phosphor:Receipt"
-              color="#f4cd63"
+              color={tokens.warning}
             />
             <Tip
               title="Check the split"
               text="Custom amounts must match the total. Percentages must add to 100%."
               icon="phosphor:ChartPieSlice"
-              color="#70b9f5"
+              color={tokens.chart.blue}
             />
           </section>
           <section className={s.panel}>

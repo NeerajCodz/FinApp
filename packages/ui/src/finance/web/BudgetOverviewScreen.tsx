@@ -109,7 +109,7 @@ export function BudgetOverviewScreen(p: BudgetOverviewScreenProps) {
                       ratio >= 100
                         ? 'var(--finapp-destructive)'
                         : ratio >= (r.alertThreshold ?? 80)
-                          ? '#f6c543'
+                          ? 'var(--finapp-warning)'
                           : undefined;
                   return (
                     <article key={r.id} className={s.budgetCard}>

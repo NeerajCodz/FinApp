@@ -5,10 +5,10 @@ import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { ConvexReactClient, useConvexConnectionState, useQuery } from 'convex/react';
 import { ConvexAuthProvider, useConvexAuth } from '@convex-dev/auth/react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AccessibilityInfo, Platform, Text as RNText } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { ThemeProvider, useTheme } from '@finapp/ui/native';
+import { ThemeProvider, ToastViewport, useTheme } from '@finapp/ui/native';
 import { Button, View } from '@finapp/ui/native';
 import type { AccentValue } from '@finapp/ui/tokens';
 import Storage from 'expo-sqlite/kv-store';
@@ -177,8 +177,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AppToasts() {
+  const insets = useSafeAreaInsets();
+  return <ToastViewport bottomInset={insets.bottom + 56} />;
+}
+
 function ThemedStack() {
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
   const [reduceMotion, setReduceMotion] = React.useState(false);
   React.useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -188,7 +193,7 @@ function ThemedStack() {
 
   return (
     <>
-      <StatusBar style={tokens.background === '#000000' ? 'light' : 'dark'} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -217,6 +222,7 @@ export default function RootLayout() {
             <AuthGate>
               <ThemedStack />
             </AuthGate>
+            <AppToasts />
           </AppErrorBoundary>
         </AccentSync>
       </ThemeProvider>

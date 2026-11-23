@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Avatar } from './feedback';
 import { Button } from './button';
 import { Typography } from './typography';
+import { useTheme } from './ThemeProvider';
 
 type AvatarChoice = { avatarId: string };
 
@@ -13,6 +14,7 @@ type ProfilePreviewProps = {
 };
 
 export function ProfilePreview({ displayName, username, avatarId }: ProfilePreviewProps) {
+  const { tokens } = useTheme();
   const name = displayName.trim() || 'Your name';
   const initials = name
     .split(/\s+/)
@@ -31,8 +33,8 @@ export function ProfilePreview({ displayName, username, avatarId }: ProfilePrevi
         padding: 14,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#ffffff24',
-        backgroundColor: '#ffffff08',
+        borderColor: tokens.border,
+        backgroundColor: tokens.surfaceSubtle,
       }}
     >
       <Avatar initials={initials} label={name} avatarId={avatarId} size={68} />

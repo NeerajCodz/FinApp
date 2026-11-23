@@ -1,7 +1,8 @@
 import React from 'react';
 import { Text as RNText, View } from 'react-native';
 import { createTokens, type ThemeTokens } from '@finapp/ui/tokens';
-import { useTheme } from '@finapp/ui/native';
+import { ThemeProvider, useTheme } from '@finapp/ui/native';
+import { Illustration } from '@finapp/ui/illustrations';
 
 type FallbackProps = {
   error: Error;
@@ -16,11 +17,13 @@ export function ErrorFallbackView({ error, retry, tokens }: FallbackProps) {
       style={{
         flex: 1,
         justifyContent: 'center',
+        alignItems: 'flex-start',
         gap: 12,
         padding: 24,
         backgroundColor: tokens.background,
       }}
     >
+      <Illustration scene="error" size={168} />
       <RNText
         style={{
           color: tokens.foreground,
@@ -68,7 +71,12 @@ export function ThemedErrorFallback({ error, retry }: { error: Error; retry: () 
 
 /** Last-resort fallback for errors thrown outside the theme provider. */
 export function StaticErrorFallback({ error, retry }: { error: Error; retry: () => void }) {
-  return <ErrorFallbackView error={error} retry={retry} tokens={createTokens('dark')} />;
+  // Outside the app providers: give the fallback its own theme so the illustration resolves.
+  return (
+    <ThemeProvider forcedMode="dark">
+      <ErrorFallbackView error={error} retry={retry} tokens={createTokens('dark')} />
+    </ThemeProvider>
+  );
 }
 
 type BoundaryState = { error: Error | null };

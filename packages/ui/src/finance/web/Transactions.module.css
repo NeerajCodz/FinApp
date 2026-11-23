@@ -417,8 +417,8 @@
   font-size: 13px;
 }
 .paused {
-  background: color-mix(in srgb, #e7c739 12%, transparent);
-  color: #e7c739;
+  background: color-mix(in srgb, var(--finapp-warning) 12%, transparent);
+  color: var(--finapp-warning);
 }
 .twoColumns {
   display: grid;

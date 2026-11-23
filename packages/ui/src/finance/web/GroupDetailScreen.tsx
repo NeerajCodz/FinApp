@@ -1,11 +1,12 @@
 'use client';
 import React from 'react';
-import { Button } from '@finapp/ui/web';
+import { Button, useTheme } from '@finapp/ui/web';
 import { Plus, PencilSimple, ChatCircle } from '@phosphor-icons/react';
 import { formatMinor } from '@convex/shared/money';
 import type { GroupChatScreenProps } from './GroupChatScreen';
 import { GroupPage, Crumb, Tile, Metric, PersonAvatar, s } from './GroupUI';
 import { FinanceEmptyState } from './FinanceEmptyState';
+import { chartPalette } from '../../tokens';
 export type GroupDetailMember = {
   id: string;
   name: string;
@@ -56,8 +57,15 @@ export type GroupDetailScreenProps = {
   onOpenPerson: (username: string) => void;
   onOpenActivity: (id: string) => void;
 };
-const colors = ['#68e789', '#f4cd63', '#70b9f5', '#ac8bf5', '#fa94b9'];
+const colors = [
+  chartPalette.volt,
+  chartPalette.yellow,
+  chartPalette.blue,
+  chartPalette.violet,
+  chartPalette.pink,
+];
 export function GroupDetailScreen(p: GroupDetailScreenProps) {
+  const { tokens } = useTheme();
   const ready = p.balanceStatus === 'ready' && !p.balanceError;
   const unavailable = p.balanceStatus === 'loading' ? 'Loading…' : 'Unavailable';
   const categoryTotals = new Map<string, bigint>();
@@ -119,35 +127,35 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
           value={ready && p.totalSpend ? p.totalSpend : unavailable}
           note="Complete ledger required"
           icon="phosphor:Wallet"
-          color="#65d989"
+          color={tokens.positive}
         />
         <Metric
           label="You are owed"
           value={ready && p.owed ? p.owed : unavailable}
           note="Net group balance"
           icon="phosphor:ArrowUpRight"
-          color="#65d989"
+          color={tokens.positive}
         />
         <Metric
           label="You owe"
           value={ready && p.owing ? p.owing : unavailable}
           note="Net group balance"
           icon="phosphor:ArrowUpRight"
-          color="#ed7077"
+          color={tokens.expense}
         />
         <Metric
           label="Recorded settlements"
           value={String(p.settlements.length)}
           note="Recent saved payments"
           icon="phosphor:Receipt"
-          color="#f4cd63"
+          color={tokens.warning}
         />
         <Metric
           label="Members"
           value={String(p.members.length)}
           note="Saved memberships"
           icon="phosphor:UsersThree"
-          color="#ac8bf5"
+          color={tokens.chart.violet}
         />
       </section>
       {p.balanceError && (
@@ -235,7 +243,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                           >
                             <Tile
                               icon={activity.icon ?? 'phosphor:Receipt'}
-                              color={activity.color ?? '#f4cd63'}
+                              color={activity.color ?? tokens.warning}
                             />
                             <strong>{activity.title}</strong>
                           </button>
@@ -270,7 +278,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
             <h3>Recent settlements</h3>
             {p.settlements.map((settlement) => (
               <div className={s.activity} key={settlement.id}>
-                <Tile icon="phosphor:ArrowsLeftRight" color="#65d989" />
+                <Tile icon="phosphor:ArrowsLeftRight" color={tokens.positive} />
                 <div className={s.activityCopy}>
                   <strong>{settlement.description}</strong>
                   <small>{settlement.date}</small>

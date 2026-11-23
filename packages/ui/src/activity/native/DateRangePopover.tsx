@@ -101,7 +101,7 @@ export function DateRangePopover({
               right: 0,
               bottom: 0,
               left: 0,
-              backgroundColor: '#0009',
+              backgroundColor: tokens.overlay,
             }}
           />
           <View

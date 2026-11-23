@@ -31,6 +31,12 @@
       "browser": "./src/activity/web/index.ts",
       "default": "./src/activity/web/index.ts"
     },
+    "./illustrations": {
+      "react-native": "./src/illustrations/native.tsx",
+      "browser": "./src/illustrations/web.tsx",
+      "default": "./src/illustrations/web.tsx"
+    },
+    "./illustrations/scenes": "./src/illustrations/scenes.ts",
     "./icons/native": "./src/icons/native.tsx",
     "./mcp": "./src/mcp/index.tsx",
     "./finance/money": "./src/finance/money.ts"

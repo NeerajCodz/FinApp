@@ -50,8 +50,8 @@ export const MessageScroller = React.forwardRef<HTMLDivElement, MessageScrollerP
           overflowY: 'auto',
           overscrollBehavior: 'contain',
           minHeight: 0,
-          color: 'var(--finapp-foreground, #f5f5f5)',
-          background: 'var(--finapp-surface, #151515)',
+          color: 'var(--finapp-foreground)',
+          background: 'var(--finapp-card)',
           ...props.style,
         }}
       >

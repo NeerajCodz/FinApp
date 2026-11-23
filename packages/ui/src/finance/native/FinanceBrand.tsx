@@ -20,7 +20,7 @@ export function FinanceBrand({ syncTone }: { syncTone?: FinanceSyncTone }) {
         ? tokens.destructive
         : syncTone === 'idle'
           ? tokens.foregroundSubtle
-          : '#B7FF4A';
+          : tokens.primary;
   return (
     <View
       accessible

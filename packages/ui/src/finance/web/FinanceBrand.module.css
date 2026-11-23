@@ -16,11 +16,11 @@
   height: 12px;
   flex: 0 0 12px;
   border-radius: 50%;
-  background: #b7ff4a;
-  box-shadow: 0 0 11px rgb(183 255 74 / 34%);
+  background: var(--finapp-primary);
+  box-shadow: 0 0 11px color-mix(in srgb, var(--finapp-primary) 34%, transparent);
 }
 .connected {
-  background: #b7ff4a;
+  background: var(--finapp-primary);
 }
 
 .syncing {

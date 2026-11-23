@@ -5,7 +5,14 @@ import { Text, Typography, useTheme } from '@finapp/ui/native';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatMinor } from '../money';
-export const colors = ['#3dbdeb', '#ae83f5', '#ffbe46', '#fa4960', '#85949f'];
+import { chartPalette } from '../../tokens';
+export const colors = [
+  chartPalette.blue,
+  chartPalette.violet,
+  chartPalette.yellow,
+  chartPalette.pink,
+  chartPalette.cyan,
+];
 export function Page({ children }: { children: React.ReactNode }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();

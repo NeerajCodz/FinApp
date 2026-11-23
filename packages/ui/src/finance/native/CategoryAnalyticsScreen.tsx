@@ -14,6 +14,7 @@ import { Input, Typography, useTheme } from '@finapp/ui/native';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
+import { chartPalette } from '../../tokens';
 
 export type AnalyticsCategory = {
   id: string;
@@ -59,7 +60,15 @@ export type CategoryAnalyticsScreenProps = {
 };
 type Period = 'week' | 'month' | 'year';
 type Scope = 'all' | 'expense' | 'income' | 'with-limit';
-const palette = ['#ff697a', '#ffa347', '#5e9bff', '#a785ff', '#f4d34e', '#48d79b', '#57d9d0'];
+const palette = [
+  chartPalette.pink,
+  chartPalette.orange,
+  chartPalette.blue,
+  chartPalette.violet,
+  chartPalette.yellow,
+  chartPalette.volt,
+  chartPalette.cyan,
+];
 function categoryColor(index: number, primary: string) {
   const colorIndex = index % (palette.length + 1);
   return colorIndex === palette.length ? primary : palette[colorIndex]!;
@@ -286,7 +295,7 @@ export function CategoryAnalyticsScreen({
     expense: tokens.expense,
     income: tokens.income,
     accent: tokens.primary,
-    violet: '#aa83ff',
+    violet: tokens.chart.violet,
     warning: tokens.warning,
   };
 
@@ -302,7 +311,12 @@ export function CategoryAnalyticsScreen({
           See where money goes across your categories.
         </Typography>
       </View>
-      <View style={styles.search}>
+      <View
+        style={[
+          styles.search,
+          { borderColor: tokens.border, backgroundColor: tokens.surfaceSubtle },
+        ]}
+      >
         <Search size={16} color={tokens.foregroundMuted} />
         <Input
           accessibilityLabel="Search categories"
@@ -400,7 +414,12 @@ export function CategoryAnalyticsScreen({
               tone={tone.warning}
             />
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <Section title="Expense distribution" note={periodLabel} />
             {donutRows.length ? (
               <View style={styles.donutLayout}>
@@ -473,7 +492,12 @@ export function CategoryAnalyticsScreen({
               />
             )}
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <Section title="Top categories by spend" note="Highest posted expenses" />
             {expenseRows.slice(0, 6).map((item, index) => (
               <TouchableOpacity
@@ -508,9 +532,14 @@ export function CategoryAnalyticsScreen({
               />
             )}
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <Section title="Monthly category spending" note="Last six months" />
-            <View style={styles.monthChart}>
+            <View style={[styles.monthChart, { borderBottomColor: tokens.borderSubtle }]}>
               {monthly.map((item) => (
                 <View key={item.start} style={styles.monthColumn}>
                   <View style={styles.stackedBar}>
@@ -542,7 +571,12 @@ export function CategoryAnalyticsScreen({
               ))}
             </View>
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <Section title="Category limit utilization" note="Current active category limits" />
             {usageRows.length ? (
               usageRows.map((item) => {
@@ -587,7 +621,12 @@ export function CategoryAnalyticsScreen({
               </Typography>
             )}
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <Section title="Key insights" note="From selected filters and period" />
             <Insight
               icon={<ArrowDownRight size={18} color={tokens.expense} />}
@@ -630,7 +669,12 @@ export function CategoryAnalyticsScreen({
               }
             />
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <Section title="Category performance" note={periodLabel} />
             {performanceRows.length ? (
               performanceRows.map((item) => {
@@ -643,7 +687,7 @@ export function CategoryAnalyticsScreen({
                     key={item.id}
                     accessibilityRole="button"
                     onPress={() => onOpenCategory(item.id)}
-                    style={styles.performanceRow}
+                    style={[styles.performanceRow, { borderTopColor: tokens.borderSubtle }]}
                   >
                     <CategoryIcon label={item.name} icon={item.icon} />
                     <View style={{ flex: 1, minWidth: 0 }}>
@@ -723,7 +767,7 @@ function FilterRail({
   const { tokens } = useTheme();
   return (
     <View style={styles.filterLine}>
-      <Typography variant="caption" style={styles.filterLabel}>
+      <Typography variant="caption" style={[styles.filterLabel, { color: tokens.foregroundMuted }]}>
         {label}
       </Typography>
       <ScrollView
@@ -832,7 +876,7 @@ function Insight({
         { borderColor: tokens.borderSubtle, backgroundColor: tokens.surfaceRaised },
       ]}
     >
-      <View style={styles.insightIcon}>{icon}</View>
+      <View style={[styles.insightIcon, { backgroundColor: tokens.surfaceSubtle }]}>{icon}</View>
       <View style={{ flex: 1, gap: 2 }}>
         <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
           {label}
@@ -858,9 +902,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#323632',
     borderRadius: 12,
-    backgroundColor: '#101210',
   },
   searchInput: {
     flex: 1,
@@ -870,7 +912,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   filterLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  filterLabel: { width: 62, color: '#9da19c' },
+  filterLabel: { width: 62 },
   filterRail: { flexDirection: 'row', gap: 6 },
   filterChip: {
     minHeight: 31,
@@ -900,9 +942,7 @@ const styles = StyleSheet.create({
   card: {
     padding: 13,
     borderWidth: 1,
-    borderColor: '#292d29',
     borderRadius: 14,
-    backgroundColor: '#0b0d0b',
     gap: 8,
   },
   donutLayout: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -920,7 +960,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#292d29',
   },
   monthColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 5 },
   stackedBar: {
@@ -949,7 +988,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 9,
-    backgroundColor: '#ffffff0a',
   },
   performanceRow: {
     flexDirection: 'row',
@@ -957,7 +995,6 @@ const styles = StyleSheet.create({
     gap: 9,
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#282b28',
   },
   performanceTitle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   performanceAmounts: {

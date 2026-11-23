@@ -21,7 +21,7 @@ export function EntityColorPicker({
   const [open, setOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customColor, setCustomColor] = useState(
-    /^#[\da-f]{6}$/i.test(value ?? '') ? value!.toUpperCase() : '#000000',
+    /^#[\da-f]{6}$/i.test(value ?? '') ? value!.toUpperCase() : '#000000', // theme-exempt: seed value for the user's custom colour picker (stored data)
   );
   const [customHue, setCustomHue] = useState(90);
   const triggerLabel = label ?? (value ? 'Change color' : 'Choose color');
@@ -43,7 +43,7 @@ export function EntityColorPicker({
     setCustomOpen(false);
   };
   const showCustom = () => {
-    setCustomColor(/^#[\da-f]{6}$/i.test(value ?? '') ? value!.toUpperCase() : '#000000');
+    setCustomColor(/^#[\da-f]{6}$/i.test(value ?? '') ? value!.toUpperCase() : '#000000'); // theme-exempt: seed value for the user's custom colour picker (stored data)
     setCustomOpen(true);
   };
   const popupStyle: React.CSSProperties = {

@@ -136,7 +136,7 @@ export function ContextMenu({
             border: '1px solid var(--finapp-border)',
             borderRadius: 10,
             background: 'var(--finapp-popover)',
-            boxShadow: '0 12px 32px #0006',
+            boxShadow: '0 12px 32px #0006', // theme-exempt: shadows stay black in both themes
           }}
         >
           {items.map((item, index) => (

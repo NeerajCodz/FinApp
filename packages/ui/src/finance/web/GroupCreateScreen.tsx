@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { Plus, X, UsersThree, Lightbulb, CaretRight } from '@phosphor-icons/react';
-import { Button, CustomSelect, Input } from '@finapp/ui/web';
+import { Button, CustomSelect, Input, useTheme } from '@finapp/ui/web';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIconPicker } from './EntityIconPicker';
 import {
@@ -53,6 +53,7 @@ export type GroupCreateScreenProps = {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 } & import('./GroupMetadataFields').GroupMetadataProps;
 export function GroupCreateScreen(p: GroupCreateScreenProps) {
+  const { tokens } = useTheme();
   return (
     <GroupPage>
       <Crumb onBack={p.onBack} current="New group" />
@@ -301,44 +302,44 @@ export function GroupCreateScreen(p: GroupCreateScreenProps) {
           <aside className={s.stack}>
             <section className={s.panel}>
               <h3>
-                <Lightbulb color="#f4cd63" size={22} /> Tips for a great group
+                <Lightbulb color={tokens.warning} size={22} /> Tips for a great group
               </h3>
               <div className={s.tips}>
                 <Tip
                   title="Keep it clear and specific"
                   text="Use a name and icon that everyone can recognize."
                   icon="phosphor:PencilSimple"
-                  color="#65d989"
+                  color={tokens.positive}
                 />
                 <Tip
                   title="Invite the right people"
                   text="Add the people who share expenses in this group."
                   icon="phosphor:UsersThree"
-                  color="#ac8bf5"
+                  color={tokens.chart.violet}
                 />
                 <Tip
                   title="Track all kinds of expenses"
                   text="Add shared bills and everyday expenses."
                   icon="phosphor:Receipt"
-                  color="#f4cd63"
+                  color={tokens.warning}
                 />
                 <Tip
                   title="Use flexible splits"
                   text="Split equally, by amount, percentage or shares."
                   icon="phosphor:ChartPieSlice"
-                  color="#70b9f5"
+                  color={tokens.chart.blue}
                 />
                 <Tip
                   title="Settle up easily"
                   text="View complete balances and record payments."
                   icon="phosphor:ArrowUpRight"
-                  color="#ed7077"
+                  color={tokens.expense}
                 />
                 <Tip
                   title="Chat and share"
                   text="Discuss plans and share receipt images online."
                   icon="phosphor:ChatCircleDots"
-                  color="#ac8bf5"
+                  color={tokens.chart.violet}
                 />
               </div>
             </section>

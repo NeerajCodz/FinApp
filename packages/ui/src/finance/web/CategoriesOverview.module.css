@@ -97,8 +97,8 @@
   background: color-mix(in srgb, var(--finance-positive, #58dc82) 13%, transparent);
 }
 .metric[data-tone='warning'] .metricMark {
-  color: #f3bf50;
-  background: #f3bf5019;
+  color: var(--finapp-warning);
+  background: color-mix(in srgb, var(--finapp-warning) 10%, transparent);
 }
 .metric > div {
   display: grid;

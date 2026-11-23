@@ -70,8 +70,8 @@ export function DataTable<Row>({
       style={{
         maxWidth: '100%',
         overflowX: 'auto',
-        color: 'var(--finapp-foreground, #fff)',
-        border: '1px solid var(--finapp-border-subtle, rgba(255,255,255,.08))',
+        color: 'var(--finapp-foreground)',
+        border: '1px solid var(--finapp-border-subtle)',
         borderRadius: '0.75rem',
         ...style,
       }}
@@ -84,7 +84,7 @@ export function DataTable<Row>({
           textAlign: 'left',
         }}
       >
-        <thead style={{ background: 'var(--finapp-surface-subtle, rgba(255,255,255,.04))' }}>
+        <thead style={{ background: 'var(--finapp-surface-subtle)' }}>
           <tr>
             {columns.map((column) => {
               const activeSort = sort?.key === column.key;
@@ -95,7 +95,7 @@ export function DataTable<Row>({
                   aria-sort={activeSort ? sort.direction : column.sortable ? 'none' : undefined}
                   style={{
                     padding: '0.8rem 1rem',
-                    borderBottom: '1px solid var(--finapp-border-subtle, rgba(255,255,255,.08))',
+                    borderBottom: '1px solid var(--finapp-border-subtle)',
                     fontSize: '0.8rem',
                     fontWeight: 650,
                   }}
@@ -140,8 +140,7 @@ export function DataTable<Row>({
                       key={String(column.key)}
                       style={{
                         padding: '0.8rem 1rem',
-                        borderBottom:
-                          '1px solid var(--finapp-border-subtle, rgba(255,255,255,.08))',
+                        borderBottom: '1px solid var(--finapp-border-subtle)',
                       }}
                     >
                       {column.render ? column.render(row) : String(row[column.key] ?? '')}
@@ -156,7 +155,7 @@ export function DataTable<Row>({
                 colSpan={Math.max(columns.length, 1)}
                 style={{
                   padding: '1.25rem 1rem',
-                  color: 'var(--finapp-foreground-muted, #aaa)',
+                  color: 'var(--finapp-foreground-muted)',
                   textAlign: 'center',
                 }}
               >

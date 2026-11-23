@@ -129,3 +129,13 @@ export function Tooltip({
     </span>
   );
 }
+export {
+  AvatarStack,
+  HeroCard,
+  IconTile,
+  ListSkeleton,
+  Sparkline,
+  StatTile,
+  StatusPill,
+  type VisualTone,
+} from './visual';

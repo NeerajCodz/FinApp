@@ -1,5 +1,17 @@
 import React from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
+import { motionTokens } from '../tokens';
+import { useReducedMotion } from './motion';
 import { useTheme } from './ThemeProvider';
 import { Typography } from './typography';
 import { Button } from './button';
@@ -16,18 +28,71 @@ export function Sheet({
   title?: string;
 }) {
   const { tokens } = useTheme();
+  const reduced = useReducedMotion();
+  const [mounted, setMounted] = React.useState(visible);
+  const progress = React.useRef(new Animated.Value(0)).current;
+  const drag = React.useRef(new Animated.Value(0)).current;
+  const height = React.useRef(480);
+
+  React.useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      drag.setValue(0);
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: reduced ? 0 : motionTokens.sheet,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    } else if (mounted) {
+      Animated.timing(progress, {
+        toValue: 0,
+        duration: reduced ? 0 : motionTokens.standard,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => finished && setMounted(false));
+    }
+  }, [drag, mounted, progress, reduced, visible]);
+
+  const responder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderMove: (_, gesture) => drag.setValue(Math.max(0, gesture.dy)),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > height.current * 0.28 || gesture.vy > 1.1) onClose();
+          else Animated.spring(drag, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        },
+        onPanResponderTerminate: () =>
+          Animated.spring(drag, { toValue: 0, useNativeDriver: true }).start(),
+      }),
+    [drag, onClose],
+  );
+
+  if (!mounted) return null;
+  const translateY = Animated.add(
+    progress.interpolate({ inputRange: [0, 1], outputRange: [height.current, 0] }),
+    drag,
+  );
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close sheet"
-          onPress={onClose}
-          style={[StyleSheet.absoluteFill, { backgroundColor: tokens.overlay }]}
-        />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close sheet"
+            onPress={onClose}
+            style={[StyleSheet.absoluteFill, { backgroundColor: tokens.overlay }]}
+          />
+        </Animated.View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View
+          <Animated.View
+            onLayout={(event) => {
+              height.current = event.nativeEvent.layout.height;
+            }}
             style={{
+              transform: [{ translateY }],
               backgroundColor: tokens.popover,
               borderTopLeftRadius: 28,
               borderTopRightRadius: 28,
@@ -37,27 +102,30 @@ export function Sheet({
               gap: 16,
               borderTopWidth: 1,
               borderColor: tokens.borderSubtle,
-              shadowColor: '#000000',
+              shadowColor: '#000000', // theme-exempt: shadows stay black in both themes
               shadowOffset: { width: 0, height: -8 },
               shadowOpacity: 0.55,
               shadowRadius: 40,
             }}
           >
-            <View
-              style={{
-                width: 36,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: tokens.foregroundDisabled,
-                alignSelf: 'center',
-                marginBottom: 4,
-              }}
-            />
-            <Typography variant="heading" style={{ fontSize: 22, lineHeight: 27 }}>
-              {title}
-            </Typography>
+            <View {...responder.panHandlers} style={{ gap: 16, paddingTop: 2 }}>
+              <View
+                accessibilityHint="Drag down to close"
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: tokens.foregroundDisabled,
+                  alignSelf: 'center',
+                  marginBottom: 4,
+                }}
+              />
+              <Typography variant="heading" style={{ fontSize: 22, lineHeight: 27 }}>
+                {title}
+              </Typography>
+            </View>
             {children}
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
       </View>
     </Modal>

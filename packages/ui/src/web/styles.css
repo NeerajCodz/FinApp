@@ -36,6 +36,15 @@
   --finapp-transfer: #ffd75a;
   --finapp-split: #78a1ff;
   --finapp-settlement: #ff9a51;
+  /* Tints and chart colours; the ThemeProvider overrides these from the live tokens. */
+  --finapp-primary-soft: color-mix(in srgb, var(--finapp-primary) 14%, transparent);
+  --finapp-income-soft: color-mix(in srgb, var(--finapp-income) 14%, transparent);
+  --finapp-expense-soft: color-mix(in srgb, var(--finapp-expense) 14%, transparent);
+  --finapp-positive-soft: color-mix(in srgb, var(--finapp-positive) 14%, transparent);
+  --finapp-warning-soft: color-mix(in srgb, var(--finapp-warning) 14%, transparent);
+  --finapp-split-soft: color-mix(in srgb, var(--finapp-split) 14%, transparent);
+  --finapp-settlement-soft: color-mix(in srgb, var(--finapp-settlement) 14%, transparent);
+  --finapp-destructive-soft: color-mix(in srgb, var(--finapp-destructive) 14%, transparent);
   --finapp-font-sans: 'Space Grotesk', 'Avenir Next', sans-serif;
 }
 

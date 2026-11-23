@@ -101,10 +101,10 @@
 .archived {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid #f0bf4838;
+  border: 1px solid color-mix(in srgb, var(--finapp-warning) 22%, transparent);
   border-radius: 10px;
-  color: #edca75;
-  background: #f0bf4810;
+  color: var(--finapp-warning);
+  background: color-mix(in srgb, var(--finapp-warning) 6%, transparent);
   font-size: 0.78rem;
 }
 .metrics {
@@ -307,7 +307,7 @@
   aspect-ratio: 1;
   border-radius: 50%;
   background: conic-gradient(
-    #f2b632 var(--used, 0%),
+    var(--finapp-warning) var(--used, 0%),
     color-mix(in srgb, var(--finance-line, #282b28) 76%, transparent) 0
   );
 }

@@ -25,11 +25,11 @@ const statusLabels: Record<MessageStatus, string> = {
 };
 
 const typeColors: Record<MessageType, string> = {
-  chat: 'var(--finapp-border-subtle, rgba(255,255,255,.12))',
-  system: 'var(--finapp-border, rgba(255,255,255,.2))',
-  success: 'var(--finapp-positive, #7fd45c)',
-  warning: 'var(--finapp-warning, #f2bd42)',
-  error: 'var(--finapp-destructive, #ff5c5c)',
+  chat: 'var(--finapp-border-subtle)',
+  system: 'var(--finapp-border)',
+  success: 'var(--finapp-positive)',
+  warning: 'var(--finapp-warning)',
+  error: 'var(--finapp-destructive)',
 };
 
 function timestampText(timestamp: string | Date): string {
@@ -75,10 +75,8 @@ export function Message({
         border: `1px solid ${typeColors[type]}`,
         borderRadius: 12,
         background:
-          type === 'system'
-            ? 'var(--finapp-surface-subtle, #171717)'
-            : 'var(--finapp-surface-raised, #202020)',
-        color: 'var(--finapp-foreground, #f5f5f5)',
+          type === 'system' ? 'var(--finapp-surface-subtle)' : 'var(--finapp-surface-raised)',
+        color: 'var(--finapp-foreground)',
         overflowWrap: 'anywhere',
         ...style,
       }}
@@ -88,7 +86,7 @@ export function Message({
           style={{
             fontSize: '0.75rem',
             fontWeight: 650,
-            color: 'var(--finapp-foreground-muted, #aaa)',
+            color: 'var(--finapp-foreground-muted)',
           }}
         >
           {author}
@@ -118,7 +116,7 @@ export function Message({
             justifyContent: 'flex-end',
             gap: 8,
             marginTop: 2,
-            color: 'var(--finapp-foreground-muted, #aaa)',
+            color: 'var(--finapp-foreground-muted)',
             fontSize: '0.7rem',
           }}
         >

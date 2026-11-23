@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Button } from '@finapp/ui/web';
+import { Button, useTheme } from '@finapp/ui/web';
 import { Image as ImageIcon, PaperPlaneTilt, Plus } from '@phosphor-icons/react';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { GroupPage, Crumb, Tile, PersonAvatar, s } from './GroupUI';
@@ -54,6 +54,7 @@ export type GroupChatScreenProps = {
 };
 
 export function GroupChatScreen(p: GroupChatScreenProps) {
+  const { tokens } = useTheme();
   const timelineRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (p.canSend && p.items.length && timelineRef.current) {
@@ -153,7 +154,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                         item.icon ??
                         (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')
                       }
-                      color={item.color ?? '#f4cd63'}
+                      color={item.color ?? tokens.warning}
                     />
                     <span className={s.activityCopy}>
                       <small>
@@ -171,7 +172,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                         item.icon ??
                         (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')
                       }
-                      color={item.color ?? '#f4cd63'}
+                      color={item.color ?? tokens.warning}
                     />
                     <div className={s.activityCopy}>
                       <small>

@@ -138,7 +138,7 @@ export function QuestionnaireNew({
               <span
                 id={errorId}
                 role="alert"
-                style={{ color: 'var(--finapp-danger, #ff6b6b)', fontSize: 13 }}
+                style={{ color: 'var(--finapp-destructive)', fontSize: 13 }}
               >
                 {error}
               </span>
