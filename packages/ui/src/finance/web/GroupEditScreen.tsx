@@ -5,7 +5,7 @@ import {
   INVITATION_LINK_EXPIRY_OPTIONS,
   type InvitationLinkExpiryMs,
 } from '../groupInvitationExpiry';
-import { Button, Input, Empty } from '@finapp/ui/web';
+import { Button, Input, Empty, useTheme } from '@finapp/ui/web';
 import { Plus, Crown, ArrowUp, ArrowDown, ChartBar } from '@phosphor-icons/react';
 import { EntityColorPicker } from './EntityColorPicker';
 import { FinanceEmptyState } from './FinanceEmptyState';
@@ -70,6 +70,7 @@ export type GroupEditScreenProps = {
   onShareInvitation?: () => void;
 };
 export function GroupEditScreen(p: GroupEditScreenProps) {
+  const { tokens } = useTheme();
   const [search, setSearch] = useState('');
   const members = p.members.filter((m) =>
     `${m.name} ${m.username ?? ''}`.toLowerCase().includes(search.toLowerCase()),
@@ -169,7 +170,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                     </div>
                   </div>
                   <div className={s.permission}>
-                    <Tile icon="phosphor:ChatCircle" color="#65d989" />
+                    <Tile icon="phosphor:ChatCircle" color={tokens.positive} />
                     <div className={s.activityCopy}>
                       <strong>Chat & receipt sharing</strong>
                       <small>Available online after the group syncs.</small>

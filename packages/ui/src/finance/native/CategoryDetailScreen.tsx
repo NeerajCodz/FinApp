@@ -25,6 +25,7 @@ import { CategoryEmojiPicker } from './CategoryEmojiPicker';
 import { BudgetProgress } from './BudgetProgress';
 import { TransactionRow } from './TransactionRow';
 import { formatTransactionDate } from '../datetime';
+import { withAlpha } from '../../tokens';
 
 export type CategoryDetailRecord = {
   id: string;
@@ -304,7 +305,12 @@ export function CategoryDetailScreen({
       ) : (
         <>
           {category.archivedAt !== undefined && (
-            <View style={[styles.archived, { borderColor: tokens.warning }]}>
+            <View
+              style={[
+                styles.archived,
+                { borderColor: tokens.warning, backgroundColor: withAlpha(tokens.warning, 0.07) },
+              ]}
+            >
               <Typography variant="small">
                 Archived category · past transactions remain available.
               </Typography>
@@ -344,7 +350,12 @@ export function CategoryDetailScreen({
               color={remaining !== undefined && remaining < 0n ? tokens.expense : tokens.primary}
             />
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <View style={styles.panelHeading}>
               <View style={{ flex: 1 }}>
                 <Typography variant="heading">Category analytics</Typography>
@@ -352,7 +363,7 @@ export function CategoryDetailScreen({
                   {category.name} · {periodLabel.toLowerCase()}
                 </Typography>
               </View>
-              <View style={styles.switches}>
+              <View style={[styles.switches, { backgroundColor: tokens.surfaceSubtle }]}>
                 {(['week', 'month', 'year'] as const).map((item) => (
                   <TouchableOpacity
                     key={item}
@@ -398,9 +409,24 @@ export function CategoryDetailScreen({
               ))}
             </View>
             {inPeriod.length ? (
-              <View style={styles.chart} accessibilityLabel={`${chartType} category activity`}>
-                <View style={[styles.chartGridline, { top: '0%' }]} />
-                <View style={[styles.chartGridline, { top: '50%' }]} />
+              <View
+                style={[styles.chart, { borderBottomColor: tokens.borderSubtle }]}
+                accessibilityLabel={`${chartType} category activity`}
+              >
+                <View
+                  style={[
+                    styles.chartGridline,
+                    { borderColor: tokens.borderSubtle },
+                    { top: '0%' },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.chartGridline,
+                    { borderColor: tokens.borderSubtle },
+                    { top: '50%' },
+                  ]}
+                />
                 {buckets.map((bucket) => (
                   <View key={bucket.key} style={styles.barColumn}>
                     <View style={styles.barSpace}>
@@ -444,7 +470,12 @@ export function CategoryDetailScreen({
               </Typography>
             </View>
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <View style={styles.panelHeading}>
               <View style={{ flex: 1 }}>
                 <Typography variant="heading">Limit usage</Typography>
@@ -514,28 +545,37 @@ export function CategoryDetailScreen({
             <View style={[styles.limitStats, { borderTopColor: tokens.borderSubtle }]}>
               <View style={[styles.limitStat, { borderBottomColor: tokens.borderSubtle }]}>
                 <ReceiptText size={16} color={tokens.foregroundMuted} />
-                <Typography variant="caption" style={styles.limitStatLabel}>
+                <Typography
+                  variant="caption"
+                  style={[styles.limitStatLabel, { color: tokens.foregroundMuted }]}
+                >
                   Average transaction
                 </Typography>
                 <Typography variant="caption">{formatMinor(averageExpense, currency)}</Typography>
               </View>
               <View style={[styles.limitStat, { borderBottomColor: tokens.borderSubtle }]}>
                 <CalendarDays size={16} color={tokens.foregroundMuted} />
-                <Typography variant="caption" style={styles.limitStatLabel}>
+                <Typography
+                  variant="caption"
+                  style={[styles.limitStatLabel, { color: tokens.foregroundMuted }]}
+                >
                   Total transactions
                 </Typography>
                 <Typography variant="caption">{monthlyExpenseTransactions.length}</Typography>
               </View>
               <View style={styles.limitStat}>
                 <TrendingUp size={16} color={tokens.foregroundMuted} />
-                <Typography variant="caption" style={styles.limitStatLabel}>
+                <Typography
+                  variant="caption"
+                  style={[styles.limitStatLabel, { color: tokens.foregroundMuted }]}
+                >
                   Biggest expense
                 </Typography>
                 <Typography variant="caption">{formatMinor(biggestExpense, currency)}</Typography>
               </View>
             </View>
             {category.archivedAt === undefined && (
-              <View style={styles.limitForm}>
+              <View style={[styles.limitForm, { borderTopColor: tokens.borderSubtle }]}>
                 <Label>
                   {limit === undefined ? 'Set a monthly limit' : 'Change monthly limit'} ·{' '}
                   {currency}
@@ -560,7 +600,12 @@ export function CategoryDetailScreen({
               </View>
             )}
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <View style={styles.panelHeading}>
               <View>
                 <Typography variant="heading">Category details</Typography>
@@ -614,7 +659,12 @@ export function CategoryDetailScreen({
               </Typography>
             )}
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <View style={styles.panelHeading}>
               <View>
                 <Typography variant="heading">Top merchants</Typography>
@@ -626,7 +676,10 @@ export function CategoryDetailScreen({
             </View>
             {merchants.length ? (
               merchants.map(([name, total], index) => (
-                <View key={name} style={styles.merchant}>
+                <View
+                  key={name}
+                  style={[styles.merchant, { borderBottomColor: tokens.borderSubtle }]}
+                >
                   <Typography
                     variant="caption"
                     style={{ width: 24, color: tokens.foregroundMuted }}
@@ -653,7 +706,12 @@ export function CategoryDetailScreen({
               />
             )}
           </View>
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: tokens.borderSubtle, backgroundColor: tokens.card },
+            ]}
+          >
             <View style={styles.panelHeading}>
               <View>
                 <Typography variant="heading">Recent transactions</Typography>
@@ -773,7 +831,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  archived: { padding: 10, borderWidth: 1, borderRadius: 10, backgroundColor: '#f2be4e12' },
+  archived: { padding: 10, borderWidth: 1, borderRadius: 10 },
   inlineButtons: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   metric: {
@@ -790,9 +848,7 @@ const styles = StyleSheet.create({
   card: {
     padding: 13,
     borderWidth: 1,
-    borderColor: '#292d29',
     borderRadius: 14,
-    backgroundColor: '#0b0d0b',
     gap: 7,
   },
   panelHeading: {
@@ -806,7 +862,6 @@ const styles = StyleSheet.create({
     gap: 2,
     padding: 3,
     borderRadius: 9,
-    backgroundColor: '#080a08',
   },
   switch: {
     minHeight: 29,
@@ -830,7 +885,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     gap: 3,
     borderBottomWidth: 1,
-    borderBottomColor: '#292d29',
     paddingTop: 4,
   },
   chartGridline: {
@@ -838,7 +892,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#292d29',
   },
   barColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   barSpace: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'flex-end' },
@@ -856,7 +909,6 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#292d29',
   },
   limitStats: { marginTop: 5, paddingTop: 5, borderTopWidth: StyleSheet.hairlineWidth },
   limitStat: {
@@ -866,7 +918,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  limitStatLabel: { flex: 1, color: '#a3a8a3' },
+  limitStatLabel: { flex: 1 },
   detailRow: {
     minHeight: 38,
     flexDirection: 'row',
@@ -882,6 +934,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#292d29',
   },
 });

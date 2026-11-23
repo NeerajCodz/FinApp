@@ -99,7 +99,12 @@ export function CategoriesOverview({
           </Button>
         </View>
       </View>
-      <View style={styles.search}>
+      <View
+        style={[
+          styles.search,
+          { borderColor: tokens.border, backgroundColor: tokens.surfaceSubtle },
+        ]}
+      >
         <Search size={17} color={tokens.foregroundMuted} />
         <Input
           accessibilityLabel="Search categories"
@@ -135,7 +140,9 @@ export function CategoriesOverview({
           tone="income"
         />
       </View>
-      <View style={styles.panel}>
+      <View
+        style={[styles.panel, { borderColor: tokens.borderSubtle, backgroundColor: tokens.card }]}
+      >
         <View style={styles.panelTitle}>
           <View style={{ flex: 1 }}>
             <Typography variant="heading">Your categories</Typography>
@@ -270,7 +277,9 @@ export function CategoriesOverview({
           </View>
         )}
       </View>
-      <View style={styles.note}>
+      <View
+        style={[styles.note, { borderColor: tokens.borderSubtle, backgroundColor: tokens.card }]}
+      >
         <View style={[styles.noteIcon, { backgroundColor: `${tokens.primary}18` }]}>
           <Tag size={17} color={tokens.primary} />
         </View>
@@ -353,8 +362,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderRadius: 13,
-    borderColor: '#343834',
-    backgroundColor: '#111311',
   },
   searchInput: {
     flex: 1,
@@ -386,9 +393,7 @@ const styles = StyleSheet.create({
   panel: {
     padding: 13,
     borderWidth: 1,
-    borderColor: '#292d29',
     borderRadius: 15,
-    backgroundColor: '#0b0d0b',
     gap: 10,
   },
   panelTitle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -411,9 +416,7 @@ const styles = StyleSheet.create({
     gap: 9,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#292d29',
     borderRadius: 13,
-    backgroundColor: '#0b0d0b',
   },
   noteIcon: {
     width: 34,

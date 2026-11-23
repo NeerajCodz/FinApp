@@ -37,7 +37,7 @@ export function Sheet({
               gap: 16,
               borderTopWidth: 1,
               borderColor: tokens.borderSubtle,
-              shadowColor: '#000000',
+              shadowColor: '#000000', // theme-exempt: shadows stay black in both themes
               shadowOffset: { width: 0, height: -8 },
               shadowOpacity: 0.55,
               shadowRadius: 40,

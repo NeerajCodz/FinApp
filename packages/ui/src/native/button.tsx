@@ -3,6 +3,7 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { getTouchTargetStyle } from './touch-target';
 import { useTheme } from './ThemeProvider';
 import { Text } from './typography';
+import { withAlpha } from '../tokens';
 
 type ButtonProps = Omit<React.ComponentProps<typeof TouchableOpacity>, 'children'> & {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
@@ -25,7 +26,7 @@ export function Button({
     secondary: { backgroundColor: tokens.secondary, color: tokens.secondaryForeground },
     outline: { backgroundColor: 'transparent', color: tokens.foreground },
     ghost: { backgroundColor: 'transparent', color: tokens.foregroundMuted },
-    destructive: { backgroundColor: '#FF5C5C1A', color: tokens.destructive },
+    destructive: { backgroundColor: withAlpha(tokens.destructive, 0.1), color: tokens.destructive },
   } as const;
   const disabledColors = {
     primary: {
@@ -45,7 +46,7 @@ export function Button({
       color: tokens.controlDisabledForeground,
     },
     destructive: {
-      backgroundColor: '#FF5C5C1A',
+      backgroundColor: withAlpha(tokens.destructive, 0.1),
       color: tokens.controlDisabledForeground,
     },
   } as const;

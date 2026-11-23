@@ -94,11 +94,11 @@ export function HoverCard({
             maxWidth: 'min(360px, calc(100vw - 24px))',
             marginTop: 8,
             padding: 16,
-            color: 'var(--finapp-popover-foreground, #ffffff)',
-            background: 'var(--finapp-popover, #080808)',
-            border: '1px solid var(--finapp-border, #ffffff1f)',
+            color: 'var(--finapp-popover-foreground)',
+            background: 'var(--finapp-popover)',
+            border: '1px solid var(--finapp-border)',
             borderRadius: 14,
-            boxShadow: '0 16px 48px #00000080',
+            boxShadow: '0 16px 48px #00000080', // theme-exempt: shadows stay black in both themes
           }}
         >
           <button
@@ -111,7 +111,7 @@ export function HoverCard({
               insetInlineEnd: 8,
               border: 0,
               padding: '2px 6px',
-              color: 'var(--finapp-foreground-muted, #ffffffa3)',
+              color: 'var(--finapp-foreground-muted)',
               background: 'transparent',
               font: 'inherit',
               cursor: 'pointer',

@@ -3,6 +3,8 @@ import React from 'react';
 import { Avatar, useTheme } from '@finapp/ui/web';
 import { EntityIcon } from './EntityIconPicker';
 import s from './Groups.module.css';
+import { contrastForeground, isAccentColor } from '../../tokens';
+import { entityColorSwatches } from '../color-picker-data';
 export { s };
 export function GroupPage({ children }: { children: React.ReactNode }) {
   const { tokens: t } = useTheme();
@@ -35,12 +37,16 @@ export function Tile({
   color?: string;
   large?: boolean;
 }) {
+  const { tokens } = useTheme();
+  const ink = color && isAccentColor(color) ? contrastForeground(color) : tokens.primaryForeground;
   return (
     <span
       className={`${s.tile} ${large ? s.largeTile : ''}`}
-      style={color ? ({ '--tile-color': color } as React.CSSProperties) : undefined}
+      style={
+        { ...(color ? { '--tile-color': color } : {}), '--tile-ink': ink } as React.CSSProperties
+      }
     >
-      <EntityIcon value={icon} size={large ? 62 : 27} color="#101510" />
+      <EntityIcon value={icon} size={large ? 62 : 27} color={ink} />
     </span>
   );
 }
@@ -145,25 +151,25 @@ export const groupTemplates = [
     name: 'Trip with friends',
     text: 'Travel, food and activities.',
     icon: 'phosphor:TreePalm',
-    color: '#69ed89',
+    color: entityColorSwatches[6].value,
   },
   {
     name: 'Flatmates',
     text: 'Rent, utilities and household expenses.',
     icon: 'phosphor:House',
-    color: '#ac8bf5',
+    color: entityColorSwatches[3].value,
   },
   {
     name: 'Office group',
     text: 'Team lunches and work expenses.',
     icon: 'phosphor:Briefcase',
-    color: '#f4cd63',
+    color: entityColorSwatches[4].value,
   },
   {
     name: 'Event',
     text: 'Parties and special occasions.',
     icon: 'phosphor:CalendarBlank',
-    color: '#fa94b9',
+    color: entityColorSwatches[7].value,
   },
 ];
 export function Permissions() {

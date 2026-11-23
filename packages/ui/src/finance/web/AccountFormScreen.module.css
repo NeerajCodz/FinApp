@@ -245,16 +245,16 @@
   background: color-mix(in srgb, var(--finapp-primary) 10%, transparent);
 }
 .typeInfo:nth-child(2) > span {
-  color: #71b8ff;
-  background: #71b8ff12;
+  color: var(--finapp-chart-blue);
+  background: color-mix(in srgb, var(--finapp-chart-blue) 7%, transparent);
 }
 .typeInfo:nth-child(4) > span {
   color: var(--finapp-expense);
   background: color-mix(in srgb, var(--finapp-expense) 10%, transparent);
 }
 .typeInfo:nth-child(5) > span {
-  color: #ba8aff;
-  background: #ba8aff12;
+  color: var(--finapp-chart-violet);
+  background: color-mix(in srgb, var(--finapp-chart-violet) 7%, transparent);
 }
 .typeInfo strong {
   font-size: 15px;

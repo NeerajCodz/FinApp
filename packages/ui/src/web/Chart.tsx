@@ -31,9 +31,9 @@ export function Chart({
       style={{
         margin: 0,
         padding: '1rem',
-        color: 'var(--finapp-foreground, #fff)',
-        background: 'var(--finapp-surface-subtle, rgba(255,255,255,.04))',
-        border: '1px solid var(--finapp-border-subtle, rgba(255,255,255,.08))',
+        color: 'var(--finapp-foreground)',
+        background: 'var(--finapp-surface-subtle)',
+        border: '1px solid var(--finapp-border-subtle)',
         borderRadius: '0.75rem',
         ...style,
       }}
@@ -71,7 +71,7 @@ export function Chart({
                     display: 'block',
                     height: '0.7rem',
                     overflow: 'hidden',
-                    background: 'var(--finapp-surface-raised, rgba(255,255,255,.08))',
+                    background: 'var(--finapp-surface-raised)',
                     borderRadius: 999,
                   }}
                 >
@@ -91,9 +91,7 @@ export function Chart({
           })}
         </ul>
       ) : (
-        <p style={{ margin: 0, color: 'var(--finapp-foreground-muted, #aaa)' }}>
-          No data to display.
-        </p>
+        <p style={{ margin: 0, color: 'var(--finapp-foreground-muted)' }}>No data to display.</p>
       )}
     </figure>
   );

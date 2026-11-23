@@ -302,7 +302,7 @@ function EmojiTile({
               border: `1px solid ${tokens.borderSubtle}`,
               borderRadius: 12,
               background: tokens.popover,
-              boxShadow: '0 10px 28px #0006',
+              boxShadow: '0 10px 28px #0006', // theme-exempt: shadows stay black in both themes
             }}
           >
             {emoji.toneOptions.map((tone) => (

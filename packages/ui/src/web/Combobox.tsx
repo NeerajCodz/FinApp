@@ -165,7 +165,7 @@ export function Combobox({
             border: '1px solid var(--finapp-border)',
             borderRadius: 10,
             background: 'var(--finapp-popover)',
-            boxShadow: '0 12px 28px #0005',
+            boxShadow: '0 12px 28px #0005', // theme-exempt: shadows stay black in both themes
           }}
         >
           {filtered.length ? (

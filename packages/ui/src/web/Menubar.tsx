@@ -66,9 +66,9 @@ export function Menubar({
         flexDirection: horizontal ? 'row' : 'column',
         gap: 4,
         padding: 4,
-        border: '1px solid var(--finapp-border, rgba(255,255,255,.14))',
+        border: '1px solid var(--finapp-border)',
         borderRadius: 14,
-        background: 'var(--finapp-surface-subtle, #171717)',
+        background: 'var(--finapp-surface-subtle)',
         ...style,
       }}
     >
@@ -120,9 +120,7 @@ export function Menubar({
               border: 0,
               borderRadius: 10,
               background: selected ? 'var(--finapp-primary)' : 'transparent',
-              color: selected
-                ? 'var(--finapp-primary-foreground, #101010)'
-                : 'var(--finapp-foreground, #f5f5f5)',
+              color: selected ? 'var(--finapp-primary-foreground)' : 'var(--finapp-foreground)',
               font: 'inherit',
               fontWeight: selected ? 650 : 500,
               cursor: item.disabled ? 'not-allowed' : 'pointer',

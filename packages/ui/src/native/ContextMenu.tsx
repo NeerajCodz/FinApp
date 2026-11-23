@@ -78,7 +78,7 @@ export function ContextMenu({
             borderColor: tokens.border,
             borderRadius: 14,
             backgroundColor: tokens.popover,
-            shadowColor: '#000',
+            shadowColor: '#000', // theme-exempt: shadows stay black in both themes
             shadowOpacity: 0.3,
             shadowRadius: 16,
             elevation: 8,

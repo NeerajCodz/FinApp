@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Empty, Input } from '@finapp/ui/web';
+import { Button, Empty, Input, useTheme } from '@finapp/ui/web';
 import { Plus, UsersThree, ShieldCheck } from '@phosphor-icons/react';
 import { GroupCard } from './GroupCard';
 import { GroupPage, Metric, s, Tile } from './GroupUI';
@@ -51,6 +51,7 @@ export type GroupsOverviewScreenProps = {
   showInvitations?: boolean;
 };
 export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
+  const { tokens } = useTheme();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('recent');
   const [invitationsOpen, setInvitationsOpen] = useState(!!p.showInvitations);
@@ -109,28 +110,28 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
             value={balanceValue('owed')}
             note={p.summaries.length ? 'Complete group balances' : 'Full history required'}
             icon="phosphor:ArrowDownLeft"
-            color="#65d989"
+            color={tokens.positive}
           />
           <Metric
             label="You owe"
             value={balanceValue('owing')}
             note={p.summaries.length ? 'Across loaded groups' : 'No partial balance shown'}
             icon="phosphor:ArrowUpRight"
-            color="#ed7077"
+            color={tokens.expense}
           />
           <Metric
             label="Active groups"
             value={p.loading ? '…' : String(p.groups.length)}
             note="Saved on this device"
             icon="phosphor:UsersThree"
-            color="#ac8bf5"
+            color={tokens.chart.violet}
           />
           <Metric
             label="Recorded settlements"
             value={String(p.activities.filter((a) => a.kind === 'settlement').length)}
             note="In recent activity"
             icon="phosphor:Receipt"
-            color="#f4cd63"
+            color={tokens.warning}
           />
         </section>
         {p.error && (
@@ -192,7 +193,7 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
             <section className={s.panel}>
               <h3>Settlements</h3>
               <div className={s.tip}>
-                <Tile icon="phosphor:ArrowsLeftRight" color="#ac8bf5" />
+                <Tile icon="phosphor:ArrowsLeftRight" color={tokens.chart.violet} />
                 <p className={s.muted}>
                   Open a group to see complete member balances and record a settlement.
                 </p>
@@ -209,7 +210,7 @@ export function GroupsOverviewScreen(p: GroupsOverviewScreenProps) {
                         icon={
                           a.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight'
                         }
-                        color={a.kind === 'expense' ? '#f4cd63' : '#65d989'}
+                        color={a.kind === 'expense' ? tokens.warning : tokens.positive}
                       />
                       <div className={s.activityCopy}>
                         <strong>{a.title}</strong>

@@ -48,12 +48,10 @@ export function Bubble({
         alignItems: 'stretch',
         maxWidth: 'min(82%, 36rem)',
         padding: '0.65rem 0.8rem',
-        border: '1px solid var(--finapp-border-subtle, rgba(255,255,255,.1))',
+        border: '1px solid var(--finapp-border-subtle)',
         borderRadius: sent ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
-        color: sent
-          ? 'var(--finapp-primary-foreground, #111)'
-          : 'var(--finapp-foreground, #f5f5f5)',
-        background: sent ? 'var(--finapp-primary)' : 'var(--finapp-surface-raised, #202020)',
+        color: sent ? 'var(--finapp-primary-foreground)' : 'var(--finapp-foreground)',
+        background: sent ? 'var(--finapp-primary)' : 'var(--finapp-surface-raised)',
         overflowWrap: 'anywhere',
         ...style,
       }}

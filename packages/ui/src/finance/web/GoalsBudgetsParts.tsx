@@ -6,11 +6,11 @@ import { FinanceEmptyState } from './FinanceEmptyState';
 import s from './GoalsBudgets.module.css';
 export const chartColors = [
   'var(--finapp-primary)',
-  '#33b8ee',
-  '#b18aff',
-  '#ffbd45',
+  'var(--finapp-chart-blue)',
+  'var(--finapp-chart-violet)',
+  'var(--finapp-chart-yellow)',
   'var(--finapp-destructive)',
-  '#89939d',
+  'var(--finapp-chart-cyan)',
 ];
 export function Panel({
   title,

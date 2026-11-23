@@ -133,7 +133,7 @@
   height: 48px;
   border-radius: 12px;
   background: var(--tile-color, var(--g-primary));
-  color: #101510;
+  color: var(--tile-ink, var(--finapp-primary-foreground));
 }
 .largeTile {
   width: 108px;

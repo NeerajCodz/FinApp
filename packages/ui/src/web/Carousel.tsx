@@ -53,7 +53,7 @@ export function Carousel({
       aria-roledescription="carousel"
       aria-label={label}
       className={className}
-      style={{ color: 'var(--finapp-foreground, #f5f5f5)', ...style }}
+      style={{ color: 'var(--finapp-foreground)', ...style }}
     >
       {count > 0 ? (
         <div
@@ -85,7 +85,7 @@ export function Carousel({
         <span
           aria-live="polite"
           aria-atomic="true"
-          style={{ color: 'var(--finapp-foreground-muted, #999)', fontSize: '0.8rem' }}
+          style={{ color: 'var(--finapp-foreground-muted)', fontSize: '0.8rem' }}
         >
           {count ? `${currentIndex + 1} / ${count}` : '0 / 0'}
         </span>
@@ -106,10 +106,10 @@ export function Carousel({
 const controlStyle: React.CSSProperties = {
   minHeight: 40,
   padding: '0.4rem 0.75rem',
-  border: '1px solid var(--finapp-border, rgba(255,255,255,.18))',
+  border: '1px solid var(--finapp-border)',
   borderRadius: '0.65rem',
-  color: 'var(--finapp-foreground, #f5f5f5)',
-  background: 'var(--finapp-surface-raised, #202020)',
+  color: 'var(--finapp-foreground)',
+  background: 'var(--finapp-surface-raised)',
   font: 'inherit',
   cursor: 'pointer',
 };

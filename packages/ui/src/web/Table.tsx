@@ -34,13 +34,13 @@ export function Table<Row extends Record<string, unknown>>({
       style={{
         maxWidth: '100%',
         overflowX: 'auto',
-        border: '1px solid var(--finapp-border, #333)',
+        border: '1px solid var(--finapp-border)',
         borderRadius: 12,
         ...style,
       }}
     >
       <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-        <thead style={{ background: 'var(--finapp-surface-subtle, #111)' }}>
+        <thead style={{ background: 'var(--finapp-surface-subtle)' }}>
           <tr>
             {columns.map((column) => (
               <th
@@ -48,8 +48,8 @@ export function Table<Row extends Record<string, unknown>>({
                 scope="col"
                 style={{
                   padding: '0.8rem 1rem',
-                  borderBottom: '1px solid var(--finapp-border-subtle, #333)',
-                  color: 'var(--finapp-foreground-muted, #aaa)',
+                  borderBottom: '1px solid var(--finapp-border-subtle)',
+                  color: 'var(--finapp-foreground-muted)',
                   fontSize: '0.8rem',
                   fontWeight: 650,
                 }}
@@ -66,7 +66,7 @@ export function Table<Row extends Record<string, unknown>>({
                 colSpan={Math.max(columns.length, 1)}
                 style={{
                   padding: '1.25rem 1rem',
-                  color: 'var(--finapp-foreground-muted, #aaa)',
+                  color: 'var(--finapp-foreground-muted)',
                   textAlign: 'center',
                 }}
               >
@@ -91,8 +91,8 @@ export function Table<Row extends Record<string, unknown>>({
                       key={String(column.key)}
                       style={{
                         padding: '0.8rem 1rem',
-                        borderBottom: '1px solid var(--finapp-border-subtle, #333)',
-                        color: 'var(--finapp-foreground, #fff)',
+                        borderBottom: '1px solid var(--finapp-border-subtle)',
+                        color: 'var(--finapp-foreground)',
                       }}
                     >
                       {column.render ? column.render(row) : String(value ?? '')}

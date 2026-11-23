@@ -146,12 +146,12 @@
   background: color-mix(in srgb, var(--finance-positive, #58dc82) 12%, transparent);
 }
 .metric[data-tone='violet'] .metricIcon {
-  color: #ad87ff;
-  background: #9d7bff20;
+  color: var(--finapp-chart-violet);
+  background: color-mix(in srgb, var(--finapp-chart-violet) 13%, transparent);
 }
 .metric[data-tone='warning'] .metricIcon {
-  color: #f3bf50;
-  background: #f3bf5020;
+  color: var(--finapp-warning);
+  background: color-mix(in srgb, var(--finapp-warning) 13%, transparent);
 }
 .metric > div {
   display: grid;
@@ -442,7 +442,7 @@
 }
 .usageTrack b[data-risk='true'],
 .performanceLimit i b[data-risk='true'] {
-  background: #f2be4e;
+  background: var(--finapp-warning);
 }
 .insights {
   display: grid;
@@ -478,12 +478,12 @@
   background: color-mix(in srgb, var(--finance-positive, #58dc82) 12%, transparent);
 }
 .insight[data-tone='blue'] > span {
-  color: #68a0ff;
-  background: #5b8cff20;
+  color: var(--finapp-chart-blue);
+  background: color-mix(in srgb, var(--finapp-chart-blue) 13%, transparent);
 }
 .insight[data-tone='neutral'] > span {
   color: var(--finance-muted, #9da19c);
-  background: #ffffff0d;
+  background: var(--finapp-surface-subtle);
 }
 .insight > div {
   display: grid;

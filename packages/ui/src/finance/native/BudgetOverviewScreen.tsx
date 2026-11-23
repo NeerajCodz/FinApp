@@ -133,7 +133,7 @@ export function BudgetOverviewScreen({
               const threshold = item.alertThreshold ?? 80;
               const over = ratio >= 100;
               const atRisk = !over && ratio >= threshold;
-              const tone = over ? tokens.destructive : atRisk ? '#e9aa2b' : tokens.primary;
+              const tone = over ? tokens.destructive : atRisk ? tokens.warning : tokens.primary;
               const daysLeft = Math.max(0, Math.ceil((item.endAt - Date.now()) / 86_400_000));
               const remaining = item.limitMinor - item.spentMinor;
               return (
