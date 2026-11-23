@@ -25,11 +25,20 @@ const options: { type: NotificationType; label: string; detail: string }[] = [
   { type: 'budget', label: 'Budget limits', detail: 'When spending crosses 80% or 100%.' },
   { type: 'goal', label: 'Goals', detail: 'When a savings target is reached.' },
   { type: 'recurring', label: 'Recurring reminders', detail: 'Due dates for reminder-only rules.' },
-  { type: 'group', label: 'Groups & splits', detail: 'When you join a group or share an expense.' },
+  {
+    type: 'split',
+    label: 'Shared expenses',
+    detail: 'When a group expense you share is added, edited, or removed.',
+  },
   {
     type: 'settlement',
-    label: 'Settlements',
-    detail: 'When another group member records a settlement.',
+    label: 'Settlements & reminders',
+    detail: 'Payments recorded or undone, and reminders to settle up.',
+  },
+  {
+    type: 'group',
+    label: 'Group membership',
+    detail: 'Invitations, and members joining or leaving your groups.',
   },
   {
     type: 'security',
