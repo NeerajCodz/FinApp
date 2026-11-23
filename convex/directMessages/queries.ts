@@ -69,10 +69,13 @@ export const listConversations = query({
 });
 
 export const messages = query({
-  args: { conversationId: v.id('directConversations') },
-  handler: async (ctx, { conversationId }) => {
+  // Accept raw route params; malformed ids return no messages instead of throwing.
+  args: { conversationId: v.string() },
+  handler: async (ctx, { conversationId: rawConversationId }) => {
     const actor = await getOptionalUser(ctx);
     if (!actor) return [];
+    const conversationId = ctx.db.normalizeId('directConversations', rawConversationId);
+    if (!conversationId) return [];
     const conversation = await ctx.db.get(conversationId);
     if (
       !conversation ||

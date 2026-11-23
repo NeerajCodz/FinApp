@@ -170,22 +170,25 @@ export const personTimeline = query({
 });
 
 export const detail = query({
-  args: { groupId: v.id('groups') },
+  // Route params may be malformed or local ids; resolve to empty rather than throwing.
+  args: { groupId: v.string() },
   handler: async (ctx, args) => {
+    const groupId = ctx.db.normalizeId('groups', args.groupId);
+    if (!groupId) return null;
     const user = await getOptionalUser(ctx);
     if (!user) return null;
-    const group = await ctx.db.get(args.groupId);
+    const group = await ctx.db.get(groupId);
     if (!group || group.archivedAt !== undefined) return null;
     const membership = await ctx.db
       .query('groupMembers')
       .withIndex('by_group_user', (query) =>
-        query.eq('groupId', args.groupId).eq('userId', user._id),
+        query.eq('groupId', groupId).eq('userId', user._id),
       )
       .unique();
     if (!membership) return null;
     const memberships = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .withIndex('by_group', (query) => query.eq('groupId', groupId))
       .collect();
     const members = await Promise.all(
       memberships.map(async (member) => {
@@ -203,7 +206,7 @@ export const detail = query({
     );
     const expenses = await ctx.db
       .query('transactions')
-      .withIndex('by_group_occurredAt', (query) => query.eq('groupId', args.groupId))
+      .withIndex('by_group_occurredAt', (query) => query.eq('groupId', groupId))
       .collect();
     return {
       ...group,
@@ -216,29 +219,32 @@ export const detail = query({
   },
 });
 export const chatMessages = query({
-  args: { groupId: v.id('groups') },
+  // Route params may be malformed or local ids; resolve to empty rather than throwing.
+  args: { groupId: v.string() },
   handler: async (ctx, args) => {
+    const groupId = ctx.db.normalizeId('groups', args.groupId);
+    if (!groupId) return [];
     const now = Date.now();
     const user = await getOptionalUser(ctx);
     if (!user) return [];
-    const group = await ctx.db.get(args.groupId);
+    const group = await ctx.db.get(groupId);
     if (!group || group.archivedAt !== undefined) return [];
     const membership = await ctx.db
       .query('groupMembers')
       .withIndex('by_group_user', (query) =>
-        query.eq('groupId', args.groupId).eq('userId', user._id),
+        query.eq('groupId', groupId).eq('userId', user._id),
       )
       .unique();
     if (!membership) return [];
     const currentMembers = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .withIndex('by_group', (query) => query.eq('groupId', groupId))
       .collect();
     const currentMemberIds = new Set(currentMembers.map((member) => member.userId));
     const messages = (
       await ctx.db
         .query('groupMessages')
-        .withIndex('by_group_createdAt', (query) => query.eq('groupId', args.groupId))
+        .withIndex('by_group_createdAt', (query) => query.eq('groupId', groupId))
         .order('asc')
         .collect()
     ).filter((message) => message.expiresAt === undefined || message.expiresAt > now);
