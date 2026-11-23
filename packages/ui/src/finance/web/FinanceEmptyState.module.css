@@ -14,8 +14,8 @@
 
 .illustration {
   display: block;
-  width: 156px;
-  height: 108px;
+  max-width: 100%;
+  height: auto;
   overflow: visible;
 }
 
@@ -56,10 +56,6 @@
   background: transparent;
 }
 
-.illustration[data-compact] {
-  width: 96px;
-  height: 66px;
-}
 
 .compact .copy {
   gap: 4px;

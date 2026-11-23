@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Illustration } from '@finapp/ui/illustrations';
+import type { IllustrationScene } from '@finapp/ui/illustrations/scenes';
 
 type RouteStatusProps = {
   title: string;
   description: string;
   detail?: string;
   action?: ReactNode;
+  scene?: IllustrationScene;
 };
 
 const shell: React.CSSProperties = {
@@ -21,10 +24,25 @@ const shell: React.CSSProperties = {
 };
 
 /** Themed status view shared by error, global-error and not-found routes. */
-export function RouteStatus({ title, description, detail, action }: RouteStatusProps) {
+export function RouteStatus({
+  title,
+  description,
+  detail,
+  action,
+  scene = 'error',
+}: RouteStatusProps) {
   return (
     <main role="alert" style={shell}>
-      <div style={{ display: 'grid', gap: 14, maxWidth: 420, textAlign: 'center' }}>
+      <div
+        style={{
+          display: 'grid',
+          gap: 14,
+          maxWidth: 420,
+          textAlign: 'center',
+          justifyItems: 'center',
+        }}
+      >
+        <Illustration scene={scene} size={180} />
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>{title}</h1>
         <p style={{ margin: 0, color: 'var(--finapp-muted-foreground)' }}>{description}</p>
         {detail ? (
