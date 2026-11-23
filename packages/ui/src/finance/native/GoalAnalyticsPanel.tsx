@@ -40,7 +40,7 @@ export function GoalAnalyticsPanel({
     return (
       <View style={{ gap: 18 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {onBack && (
+          {!!onBack && (
             <IconButton label="Back to goal" variant="ghost" onPress={onBack}>
               <ArrowLeft size={20} color={tokens.foreground} />
             </IconButton>
@@ -55,7 +55,7 @@ export function GoalAnalyticsPanel({
         ) : error ? (
           <View accessibilityRole="alert" style={{ gap: 10 }}>
             <Text style={{ color: tokens.destructive }}>{error}</Text>
-            {onRetry && (
+            {!!onRetry && (
               <Button variant="outline" onPress={onRetry}>
                 Retry
               </Button>
@@ -72,7 +72,7 @@ export function GoalAnalyticsPanel({
   return (
     <View style={{ gap: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {onBack && (
+        {!!onBack && (
           <IconButton label="Back to goal" variant="ghost" onPress={onBack}>
             <ArrowLeft size={20} color={tokens.foreground} />
           </IconButton>
@@ -119,7 +119,7 @@ export function GoalAnalyticsPanel({
           {percent}% complete · {formatMinor(remaining, currency)} remaining
         </Text>
       </View>
-      {insights && (
+      {!!insights && (
         <>
           <View style={{ gap: 8 }}>
             <InsightCard
@@ -315,7 +315,7 @@ function InsightCard({
     <View style={{ gap: 4, padding: 14, borderRadius: 14, backgroundColor: tokens.surfaceRaised }}>
       <Typography variant="caption">{label}</Typography>
       <Typography variant="bodyLarge">{value}</Typography>
-      {detail && <Text style={{ color: tokens.foregroundMuted }}>{detail}</Text>}
+      {!!detail && <Text style={{ color: tokens.foregroundMuted }}>{detail}</Text>}
     </View>
   );
 }

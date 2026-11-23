@@ -690,7 +690,7 @@ export default function ActivityScreen() {
       {!isConnected && ready && (
         <Typography variant="caption">Offline · showing activity saved on this device.</Typography>
       )}
-      {error && (
+      {!!error && (
         <View style={{ gap: 10 }} accessibilityRole="alert">
           <Typography variant="small">
             {ready
@@ -709,7 +709,7 @@ export default function ActivityScreen() {
           </Button>
         </View>
       )}
-      {rangeState.refreshing && <Typography variant="caption">Refreshing activity…</Typography>}
+      {!!rangeState.refreshing && <Typography variant="caption">Refreshing activity…</Typography>}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
         <Typography variant="bodyLarge">Transactions</Typography>
         <Typography variant="caption">{visible.length} records</Typography>

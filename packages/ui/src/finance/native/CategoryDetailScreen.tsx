@@ -250,7 +250,7 @@ export function CategoryDetailScreen({
         <IconButton label="Back to categories" variant="ghost" onPress={onBack}>
           <ArrowLeft size={20} color={tokens.foreground} />
         </IconButton>
-        {category && <CategoryIcon label={category.name} icon={category.icon} />}
+        {!!category && <CategoryIcon label={category.name} icon={category.icon} />}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
             CATEGORIES /

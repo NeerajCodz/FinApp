@@ -273,12 +273,12 @@ export function RecurringIndexView({
           ))}
         </View>
       )}
-      {loading && (
+      {!!loading && (
         <Card style={{ padding: 18 }} accessibilityRole="progressbar">
           <Typography variant="small">Loading your recurring schedules…</Typography>
         </Card>
       )}
-      {error && (
+      {!!error && (
         <Card style={{ padding: 18, gap: 12 }} accessibilityRole="alert">
           <Typography variant="small">Your saved schedules could not be loaded.</Typography>
           <Button variant="outline" onPress={onRetry}>
@@ -385,7 +385,7 @@ export function RecurringIndexView({
                             account.cloudId === rule.template?.accountId,
                         )?.name ?? 'Account unavailable'}
                       </Typography>
-                      {money && (
+                      {!!money && (
                         <Typography
                           variant="bodyLarge"
                           style={{ color: income ? tokens.income : tokens.expense }}
@@ -434,7 +434,7 @@ export function RecurringIndexView({
           Offline · showing saved schedules
         </Typography>
       )}
-      {adding && (
+      {!!adding && (
         <Card style={{ padding: 18, gap: 13 }}>
           <Typography variant="heading">New reminder</Typography>
           <Input
@@ -539,7 +539,7 @@ export function RecurringDetailView({
               ? 'This recurring schedule could not be loaded.'
               : 'This schedule may have been removed or is not available to your account.'}
           </Typography>
-          {error && (
+          {!!error && (
             <Button variant="outline" onPress={onRetry}>
               Retry
             </Button>

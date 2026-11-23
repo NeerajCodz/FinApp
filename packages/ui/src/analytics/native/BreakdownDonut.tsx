@@ -103,7 +103,7 @@ export function BreakdownDonut({
                   backgroundColor: colors[index % colors.length],
                 }}
               />
-              {iconForCategory && (
+              {!!iconForCategory && (
                 <CategoryIcon label={item.label} icon={iconForCategory(item.id)} />
               )}
               <Typography variant="small" numberOfLines={2} style={{ flex: 1 }}>

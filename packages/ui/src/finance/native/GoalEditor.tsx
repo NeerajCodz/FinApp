@@ -221,7 +221,7 @@ export function GoalEditor(p: GoalEditorProps) {
             {p.saving ? 'Saving…' : editing ? 'Save changes' : 'Create goal'}
           </Button>
         </View>
-        {p.onArchive && (
+        {!!p.onArchive && (
           <Button variant="outline" disabled={p.saving} onPress={p.onArchive}>
             <Text style={{ color: tokens.destructive }}>Archive goal</Text>
           </Button>

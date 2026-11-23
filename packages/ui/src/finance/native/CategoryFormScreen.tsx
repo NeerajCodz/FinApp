@@ -116,7 +116,7 @@ export function CategoryFormScreen({
           <ArrowLeft size={18} color={tokens.foreground} /> Back to categories
         </Button>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          {edit && <CategoryIcon label={name} icon={icon} />}
+          {!!edit && <CategoryIcon label={name} icon={icon} />}
           <View style={{ flex: 1, gap: 5 }}>
             <Typography variant="title" style={{ fontSize: 29 }}>
               {edit ? 'Edit Category' : 'New category'}
@@ -129,7 +129,7 @@ export function CategoryFormScreen({
           </View>
         </View>
         <View style={panel}>
-          {edit && <Typography variant="heading">Category details</Typography>}
+          {!!edit && <Typography variant="heading">Category details</Typography>}
           <View style={field}>
             <Label>Name</Label>
             <Input
@@ -176,7 +176,7 @@ export function CategoryFormScreen({
               ))}
             </View>
           </View>
-          {onLimitChange && (
+          {!!onLimitChange && (
             <View style={field}>
               <Label>Monthly limit (optional)</Label>
               <CurrencyInput currency={currency} value={limitValue} onChangeText={onLimitChange} />
@@ -199,7 +199,7 @@ export function CategoryFormScreen({
               </View>
             </>
           )}
-          {onNotesChange && (
+          {!!onNotesChange && (
             <View style={field}>
               <Label>Notes (optional)</Label>
               <Input
@@ -211,21 +211,21 @@ export function CategoryFormScreen({
                 placeholder="Add a note about this category…"
                 style={{ minHeight: 85, textAlignVertical: 'top' }}
               />
-              {edit && (
+              {!!edit && (
                 <Typography variant="caption" style={{ textAlign: 'right' }}>
                   {notes.length}/200
                 </Typography>
               )}
             </View>
           )}
-          {edit && (
+          {!!edit && (
             <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
               <CategoryEmojiPicker value={icon} onChange={onIconChange} />
               <EntityColorPicker value={color} onChange={onColorChange} />
             </View>
           )}
         </View>
-        {edit && (
+        {!!edit && (
           <>
             <View style={panel}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -273,7 +273,7 @@ export function CategoryFormScreen({
                 <Typography variant="small">No monthly limit set.</Typography>
               )}
             </View>
-            {onOpenAnalytics && (
+            {!!onOpenAnalytics && (
               <View style={panel}>
                 <Typography variant="heading">Category analytics</Typography>
                 <Typography variant="small">
@@ -286,7 +286,7 @@ export function CategoryFormScreen({
             )}
             <View style={panel}>
               <Typography variant="heading">Category settings</Typography>
-              {onDefaultChange && (
+              {!!onDefaultChange && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text>Set as default category</Text>
@@ -302,7 +302,7 @@ export function CategoryFormScreen({
                   />
                 </View>
               )}
-              {onIncludeInBudgetsChange && (
+              {!!onIncludeInBudgetsChange && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text>Include in budgets</Text>
@@ -346,7 +346,7 @@ export function CategoryFormScreen({
                   compact
                 />
               )}
-              {onViewTransactions && (
+              {!!onViewTransactions && (
                 <Button variant="ghost" onPress={onViewTransactions}>
                   View all transactions ›
                 </Button>

@@ -1108,7 +1108,7 @@ export const addExpense = mutation({
       title: args.title.trim(),
       categoryId: args.categoryId,
       merchant: args.merchant,
-      note: args.note,
+      note: args.note?.trim() || undefined,
       occurredAt: args.occurredAt,
       status: 'posted',
       createdAt: now,

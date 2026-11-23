@@ -60,7 +60,7 @@ export function HomeHeader({
           <IconButton label={syncLabel ?? 'Open sync status'} variant="ghost" onPress={onOpenSync}>
             {syncIcon ?? <ClockCounterClockwise size={19} color={tokens.foregroundMuted} />}
           </IconButton>
-          {onOpenNotifications && (
+          {!!onOpenNotifications && (
             <IconButton
               label={
                 notificationCount > 0
@@ -104,7 +104,7 @@ export function HomeHeader({
           <MagnifyingGlass size={17} color={tokens.foreground} />
         </IconButton>
       </View>
-      {searchOpen && (
+      {!!searchOpen && (
         <Input
           accessibilityLabel="Search transactions"
           placeholder="Search transactions"

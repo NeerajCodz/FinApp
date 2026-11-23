@@ -136,7 +136,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       authRoute={isAuthRoute}
     >
       {children}
-      {privateRoute && (
+      {!!privateRoute && (
         <View
           style={{
             position: 'absolute',
@@ -163,7 +163,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
           >
             {authTimedOut ? 'We couldn’t verify your account.' : 'Checking your account…'}
           </RNText>
-          {authTimedOut && (
+          {!!authTimedOut && (
             <Button variant="outline" onPress={() => router.replace('/(auth)/welcome')}>
               Go to sign in
             </Button>

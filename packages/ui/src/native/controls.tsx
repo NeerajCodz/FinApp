@@ -38,7 +38,7 @@ export function Checkbox({
           justifyContent: 'center',
         }}
       >
-        {checked && <Check size={15} strokeWidth={2.4} color={tokens.background} />}
+        {!!checked && <Check size={15} strokeWidth={2.4} color={tokens.background} />}
       </View>
       <Text>{label}</Text>
     </TouchableOpacity>

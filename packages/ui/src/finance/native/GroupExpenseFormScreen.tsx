@@ -128,7 +128,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
             <Typography variant="small">
               Sign in to create an offline-first shared expense for a saved group.
             </Typography>
-            {p.onSignIn && <Button onPress={p.onSignIn}>Sign in</Button>}
+            {!!p.onSignIn && <Button onPress={p.onSignIn}>Sign in</Button>}
           </GroupPanel>
         ) : p.loading ? (
           <Typography>Loading expense…</Typography>
@@ -143,7 +143,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
           </GroupPanel>
         ) : (
           <>
-            {p.selectedGroupId && (
+            {!!p.selectedGroupId && (
               <GroupPanel>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                   <GroupTile icon={p.groupIcon} color={p.groupColor} size={72} />
@@ -196,7 +196,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                   </Pressable>
                 ))}
                 {!p.groups.length && <Typography variant="small">No saved groups yet.</Typography>}
-                {p.onCreateGroup && (
+                {!!p.onCreateGroup && (
                   <Button variant="outline" onPress={p.onCreateGroup}>
                     Create a group
                   </Button>
@@ -216,7 +216,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                     maxLength={120}
                     editable={!p.saving}
                   />
-                  {p.onMerchantChange && (
+                  {!!p.onMerchantChange && (
                     <View>
                       <Label>Merchant / description</Label>
                       <Input
@@ -228,7 +228,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                       />
                     </View>
                   )}
-                  {p.onCategoryChange && (
+                  {!!p.onCategoryChange && (
                     <View style={{ gap: 8 }}>
                       <Label>Category</Label>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -288,7 +288,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                     onChangeText={p.onAmountChange}
                     editable={!p.saving}
                   />
-                  {p.onDateChange && (
+                  {!!p.onDateChange && (
                     <View>
                       <Label>Date *</Label>
                       <Input
@@ -349,7 +349,7 @@ export function GroupExpenseFormScreen(p: GroupExpenseFormScreenProps) {
                       No account uses {p.currency}. Add one before saving a split.
                     </Typography>
                   )}
-                  {p.onNoteChange && (
+                  {!!p.onNoteChange && (
                     <View>
                       <Label>Notes (optional)</Label>
                       <Input

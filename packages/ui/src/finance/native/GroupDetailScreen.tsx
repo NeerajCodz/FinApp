@@ -222,7 +222,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                   : 'Complete group balances are unavailable. No partial all-time value is shown.'}{' '}
                 {p.balanceError}
               </Typography>
-              {p.balanceError && (
+              {!!p.balanceError && (
                 <Button variant="outline" onPress={p.onRetry}>
                   Retry
                 </Button>
@@ -261,7 +261,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                   />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Typography variant="label">{member.name}</Typography>
-                    {member.username && (
+                    {!!member.username && (
                       <Typography variant="caption">
                         @{member.username.replace(/^@+/, '')}
                       </Typography>
@@ -376,7 +376,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 <Button variant="outline" onPress={p.onOpenBalances}>
                   View member balances
                 </Button>
-                {p.canSettle && <Button onPress={p.onSettle}>Record a settlement</Button>}
+                {!!p.canSettle && <Button onPress={p.onSettle}>Record a settlement</Button>}
               </>
             ) : (
               <Typography variant="small">
@@ -399,7 +399,7 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                     currency={settlement.currency}
                     size="body"
                   />
-                  {settlement.date && <Typography variant="caption">{settlement.date}</Typography>}
+                  {!!settlement.date && <Typography variant="caption">{settlement.date}</Typography>}
                 </View>
               ))
             ) : (

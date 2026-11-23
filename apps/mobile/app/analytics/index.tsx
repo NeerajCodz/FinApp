@@ -933,14 +933,14 @@ function AnalyticsContent() {
       {!isConnected && ready && (
         <Typography variant="caption">Offline · showing records saved on this device.</Typography>
       )}
-      {ready && (
+      {!!ready && (
         <Typography variant="caption">
           {isConnected && rangeState.covered
             ? 'Selected server date range loaded.'
             : 'Showing records saved on this device for this period.'}
         </Typography>
       )}
-      {error && (
+      {!!error && (
         <View style={{ gap: 10 }} accessibilityRole="alert">
           <Typography variant="small">
             {analytics && hasRangeData
@@ -950,7 +950,7 @@ function AnalyticsContent() {
           <Button onPress={retry}>Retry</Button>
         </View>
       )}
-      {rangeState.refreshing && <Typography variant="caption">Refreshing transactions…</Typography>}
+      {!!rangeState.refreshing && <Typography variant="caption">Refreshing transactions…</Typography>}
       {!userId || (profileState.data && !profile) ? (
         <Empty
           title="Analytics unavailable"

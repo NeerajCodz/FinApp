@@ -56,7 +56,7 @@ export default function BalancesScreen() {
         <Typography variant="heading">Loading all-time balances…</Typography>
       ) : (
         <>
-          {refreshing && <Typography variant="caption">Refreshing group records…</Typography>}
+          {!!refreshing && <Typography variant="caption">Refreshing group records…</Typography>}
           <View style={{ gap: 8 }}>
             <Typography variant="label">Your balance · {String(group?.name ?? 'Group')}</Typography>
             <Money amountMinor={balance} currency={ledger.currency} size="display" />

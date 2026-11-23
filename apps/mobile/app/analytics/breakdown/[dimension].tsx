@@ -186,7 +186,7 @@ export default function AnalyticsBreakdownScreen() {
         recover
       ) : (
         <>
-          {error && (
+          {!!error && (
             <View style={{ gap: 10 }} accessibilityRole="alert">
               <Typography variant="small">
                 {result?.item
@@ -205,7 +205,7 @@ export default function AnalyticsBreakdownScreen() {
               </Button>
             </View>
           )}
-          {rangeState.refreshing && (
+          {!!rangeState.refreshing && (
             <Typography variant="caption">Refreshing transactions…</Typography>
           )}
           {(!result || (!result.item && !rangeState.covered)) && !error ? (

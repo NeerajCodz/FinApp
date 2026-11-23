@@ -427,7 +427,7 @@ export default function OnboardingScreen() {
                 Preparing your account…
               </Typography>
             )}
-            {profileState.error && (
+            {!!profileState.error && (
               <>
                 <AuthError message={profileState.error.message} />
                 <Button variant="ghost" onPress={profileState.retry}>

@@ -76,12 +76,12 @@ export function GoalDetailScreen(p: GoalDetailScreenProps) {
               Analytics
             </Button>
           </View>
-          {p.actionError && (
+          {!!p.actionError && (
             <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
               {p.actionError}
             </Text>
           )}
-          {contribute && (
+          {!!contribute && (
             <Panel
               title="Record a contribution"
               description="This tracks progress; it does not move money between accounts."

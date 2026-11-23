@@ -79,13 +79,13 @@ export default function SyncSettingsScreen() {
               >
                 {option.label}
               </Typography>
-              {selected && <Check size={18} color={tokens.primaryForeground} />}
+              {!!selected && <Check size={18} color={tokens.primaryForeground} />}
             </Button>
           );
         })}
       </View>
       {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
-      {saving && <Typography variant="caption">Saving and scheduling backfill…</Typography>}
+      {!!saving && <Typography variant="caption">Saving and scheduling backfill…</Typography>}
     </ScrollView>
   );
 }

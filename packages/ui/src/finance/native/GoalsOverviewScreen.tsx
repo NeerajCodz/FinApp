@@ -17,7 +17,7 @@ export function GoalsOverviewScreen(p: GoalsOverviewScreenProps) {
     <Page>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="title">Goals</Typography>
-        {p.defaultCurrency && <Button onPress={p.onAdd}>＋ Add goal</Button>}
+        {!!p.defaultCurrency && <Button onPress={p.onAdd}>＋ Add goal</Button>}
       </View>
       <Text style={{ color: tokens.foregroundMuted }}>
         Track savings, targets, and progress for every goal.
@@ -67,7 +67,7 @@ export function GoalsOverviewScreen(p: GoalsOverviewScreenProps) {
             <Button variant={!active ? 'primary' : 'outline'} onPress={() => setActive(false)}>
               All goals
             </Button>
-            {p.onAnalytics && (
+            {!!p.onAnalytics && (
               <Button variant="outline" onPress={p.onAnalytics}>
                 Analytics
               </Button>

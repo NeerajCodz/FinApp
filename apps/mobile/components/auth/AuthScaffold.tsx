@@ -55,7 +55,7 @@ export function AuthScaffold({
         >
           <View style={[styles.container, { maxWidth: wide ? 1120 : 520 }]}>
             <View style={styles.header}>
-              {back && (
+              {!!back && (
                 <IconButton
                   label="Go back"
                   variant="ghost"
@@ -97,7 +97,7 @@ export function AuthScaffold({
                   >
                     {title}
                   </Typography>
-                  {description && (
+                  {!!description && (
                     <Text style={{ color: tokens.foregroundMuted, maxWidth: 420, lineHeight: 24 }}>
                       {description}
                     </Text>
@@ -105,7 +105,7 @@ export function AuthScaffold({
                 </View>
               </View>
               <View style={[styles.formColumn, { flex: wide ? 1 : undefined }]}>
-                {brand && (
+                {!!brand && (
                   <View style={{ alignItems: 'center', paddingBottom: 4 }}>
                     <Text
                       accessibilityRole="header"
@@ -121,7 +121,7 @@ export function AuthScaffold({
                     <Text style={{ color: tokens.foregroundMuted }}>Back in your corner.</Text>
                   </View>
                 )}
-                {children && (
+                {!!children && (
                   <View
                     style={[
                       styles.form,
@@ -136,7 +136,7 @@ export function AuthScaffold({
                     {children}
                   </View>
                 )}
-                {footer && <View style={styles.footer}>{footer}</View>}
+                {!!footer && <View style={styles.footer}>{footer}</View>}
               </View>
             </View>
             <Typography variant="caption" style={styles.bottomNote}>

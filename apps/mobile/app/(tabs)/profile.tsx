@@ -141,7 +141,7 @@ function ProfileActionRow({
         <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
           {label}
         </Typography>
-        {value && <Typography variant="small">{value}</Typography>}
+        {!!value && <Typography variant="small">{value}</Typography>}
       </View>
       <CaretRight size={18} color={tokens.foregroundSubtle} />
     </TouchableOpacity>

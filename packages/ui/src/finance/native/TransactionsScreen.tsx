@@ -37,7 +37,7 @@ export function TransactionCards({
           })}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {onToggleSelect && (
+            {!!onToggleSelect && (
               <Pressable
                 accessibilityRole="checkbox"
                 accessibilityLabel={`Select ${item.title}`}
@@ -157,7 +157,7 @@ export function TransactionsScreen(p: TransactionsScreenProps) {
           if (/^\d{4}-\d{2}$/.test(value)) p.onMonthChange(value);
         }}
       />
-      {filters && (
+      {!!filters && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {['all', 'expense', 'income', 'transfer', 'refund', 'adjustment'].map((type) => (
             <Button
@@ -192,13 +192,13 @@ export function TransactionsScreen(p: TransactionsScreenProps) {
           </View>
         ))}
       </View>
-      {p.error && (
+      {!!p.error && (
         <Text accessibilityRole="alert" style={{ color: tokens.expense }}>
           {p.error}
         </Text>
       )}
-      {p.rangeError && <Typography variant="caption">{p.rangeError}</Typography>}
-      {p.actionError && (
+      {!!p.rangeError && <Typography variant="caption">{p.rangeError}</Typography>}
+      {!!p.actionError && (
         <Text accessibilityRole="alert" style={{ color: tokens.expense }}>
           {p.actionError}
         </Text>

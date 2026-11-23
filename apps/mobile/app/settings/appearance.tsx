@@ -90,7 +90,7 @@ export default function AppearanceSettingsScreen() {
                   >
                     {label}
                   </Text>
-                  {selected && <Check size={18} color={tokens.primaryForeground} />}
+                  {!!selected && <Check size={18} color={tokens.primaryForeground} />}
                 </Button>
               );
             })}
@@ -135,7 +135,7 @@ export default function AppearanceSettingsScreen() {
                       {option.label}
                     </Text>
                   </View>
-                  {selected && <Check size={18} color={tokens.primaryForeground} />}
+                  {!!selected && <Check size={18} color={tokens.primaryForeground} />}
                 </Button>
               );
             })}

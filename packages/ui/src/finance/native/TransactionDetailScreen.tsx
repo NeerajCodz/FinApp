@@ -113,7 +113,7 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
         <Text accessibilityRole="alert" style={{ color: tokens.expense }}>
           Transaction data could not be opened: {error}
         </Text>
-        {onRetry && (
+        {!!onRetry && (
           <Button variant="outline" onPress={onRetry}>
             Try again
           </Button>
@@ -168,7 +168,7 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
           </View>
           <View style={{ flex: 1 }}>
             <Typography variant="heading">{title}</Typography>
-            {merchant && <Typography variant="caption">{merchant}</Typography>}
+            {!!merchant && <Typography variant="caption">{merchant}</Typography>}
           </View>
         </View>
         <Money
@@ -186,12 +186,12 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
             <ArrowRight size={17} color={tokens.foreground} /> Duplicate
           </Button>
         </View>
-        {canDelete && (
+        {!!canDelete && (
           <Button variant="destructive" disabled={deletePending} onPress={onDelete}>
             {deletePending ? 'Deleting…' : 'Delete transaction'}
           </Button>
         )}
-        {actionError && (
+        {!!actionError && (
           <Text accessibilityRole="alert" style={{ color: tokens.expense }}>
             {actionError}
           </Text>
@@ -199,9 +199,9 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
         <Typography variant="caption">{date}</Typography>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <SemanticMarker type={semanticType} />
-          {status && <Typography variant="caption">{status}</Typography>}
+          {!!status && <Typography variant="caption">{status}</Typography>}
         </View>
-        {note && (
+        {!!note && (
           <View
             style={{
               gap: 8,
@@ -237,7 +237,7 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
         />
         <Separator />
         <SettingsRow label="Account" value={account} />
-        {destination && (
+        {!!destination && (
           <>
             <Separator />
             <SettingsRow label="Destination" value={destination} />
@@ -247,13 +247,13 @@ export function TransactionDetailScreen(props: TransactionDetailScreenProps) {
         <SettingsRow label="Date & time" value={date} />
         <Separator />
         <SettingsRow label="Status" value={status ?? 'Saved'} />
-        {props.referenceId && (
+        {!!props.referenceId && (
           <>
             <Separator />
             <SettingsRow label="Reference ID" value={props.referenceId} />
           </>
         )}
-        {merchant && (
+        {!!merchant && (
           <>
             <Separator />
             <SettingsRow label="Merchant / Payee" value={merchant} />

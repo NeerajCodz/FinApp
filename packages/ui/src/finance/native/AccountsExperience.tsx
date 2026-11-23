@@ -967,7 +967,7 @@ export function AccountDetailView({
             {rangeNotice}
           </Typography>
         )}
-        {isArchived && (
+        {!!isArchived && (
           <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
             Archived accounts remain available for reference and cannot receive new transactions.
           </Typography>

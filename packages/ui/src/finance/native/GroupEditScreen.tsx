@@ -167,7 +167,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
               <Typography variant="caption">
                 Currency · {p.group.currency}. Fixed for existing split amounts.
               </Typography>
-              {p.canManage && (
+              {!!p.canManage && (
                 <Button disabled={busy || !p.name.trim()} onPress={p.onSaveDetails ?? p.onSaveName}>
                   {p.saving === 'name' || p.saving === 'details'
                     ? 'Saving…'
@@ -215,7 +215,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                 </Typography>
               )}
             </GroupPanel>
-            {p.canManage && (
+            {!!p.canManage && (
               <GroupPanel>
                 <Typography variant="caption">
                   Anyone with this link can join the group. Choose how long new links stay active.
@@ -240,7 +240,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                     </Button>
                   ))}
                 </View>
-                {p.invitationUrl && (
+                {!!p.invitationUrl && (
                   <>
                     <Label>
                       Invitation link
@@ -265,12 +265,12 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                     </View>
                   </>
                 )}
-                {p.invitationStatus && (
+                {!!p.invitationStatus && (
                   <Typography accessibilityLiveRegion="polite" variant="caption">
                     {p.invitationStatus}
                   </Typography>
                 )}
-                {p.invitationError && (
+                {!!p.invitationError && (
                   <Typography accessibilityRole="alert" style={{ color: tokens.destructive }}>
                     {p.invitationError}
                   </Typography>
@@ -305,7 +305,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                 value={search}
                 onChangeText={setSearch}
               />
-              {p.canManage && (
+              {!!p.canManage && (
                 <View style={{ gap: 8 }}>
                   <Input
                     accessibilityLabel="Add member username"
@@ -347,7 +347,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                         />
                         <View style={{ flex: 1, gap: 3 }}>
                           <Typography variant="label">{member.name}</Typography>
-                          {member.username && (
+                          {!!member.username && (
                             <Typography variant="caption">
                               @{member.username.replace(/^@+/, '')}
                             </Typography>
@@ -422,7 +422,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                   </Button>
                 ))}
               </View>
-              {p.canManage && (
+              {!!p.canManage && (
                 <Button disabled={busy || !p.cloudGroupId} onPress={p.onSaveRetention}>
                   {p.saving === 'retention' ? 'Saving…' : 'Save retention'}
                 </Button>
