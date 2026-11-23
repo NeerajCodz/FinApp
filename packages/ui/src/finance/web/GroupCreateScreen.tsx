@@ -4,8 +4,23 @@ import { Plus, X, UsersThree, Lightbulb, CaretRight } from '@phosphor-icons/reac
 import { Button, CustomSelect, Input } from '@finapp/ui/web';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIconPicker } from './EntityIconPicker';
-import { GroupPage, Crumb, Tile, Tip, Permissions, groupTemplates, s } from './GroupUI';
-export type GroupCreateSuggestion = { id: string; username?: string; displayName?: string };
+import {
+  GroupPage,
+  Crumb,
+  Tile,
+  Tip,
+  Permissions,
+  PersonAvatar,
+  groupTemplates,
+  s,
+} from './GroupUI';
+export type GroupCreateSuggestion = {
+  id: string;
+  username?: string;
+  displayName?: string;
+  avatarId?: string;
+  avatarUrl?: string | null;
+};
 export type GroupCreateScreenProps = {
   onBack: () => void;
   name: string;
@@ -174,25 +189,40 @@ export function GroupCreateScreen(p: GroupCreateScreenProps) {
                 </Button>
               </div>
               {p.query.length >= 2 && (
-                <div aria-live="polite">
-                  {p.suggestions?.length ? (
-                    p.suggestions.slice(0, 5).map((x) => (
-                      <Button
-                        key={x.id}
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onPress={() => x.username && p.onAddUsername(x.username)}
-                      >
-                        {x.displayName ?? 'Finapp user'} · @{x.username}
-                      </Button>
-                    ))
+                <div className={s.searchResults} aria-live="polite" aria-busy={!p.suggestions}>
+                  {p.suggestions === undefined ? (
+                    <p className={s.muted}>Searching profiles…</p>
+                  ) : p.suggestions.length === 0 ? (
+                    <p className={s.muted}>No matching usernames found.</p>
                   ) : (
-                    <p className={s.muted}>
-                      {p.suggestions
-                        ? 'No username matches yet.'
-                        : 'Search results load when online.'}
-                    </p>
+                    p.suggestions.map((person) => {
+                      const selected = !!person.username && p.usernames.includes(person.username);
+                      const name = person.displayName || person.username || 'Finapp user';
+                      return (
+                        <button
+                          key={person.id}
+                          type="button"
+                          className={s.searchResult}
+                          disabled={!person.username || selected}
+                          onClick={() => person.username && p.onAddUsername(person.username)}
+                          aria-label={`${selected ? 'Added' : 'Add'} ${name}${person.username ? `, @${person.username}` : ''}`}
+                        >
+                          <PersonAvatar
+                            name={name}
+                            avatarId={person.avatarId}
+                            url={person.avatarUrl}
+                            size={42}
+                          />
+                          <span className={s.searchResultCopy}>
+                            <strong>{name}</strong>
+                            <small>
+                              {person.username ? `@${person.username}` : 'Username unavailable'}
+                            </small>
+                          </span>
+                          <span>{selected ? 'Added' : 'Add +'}</span>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}
