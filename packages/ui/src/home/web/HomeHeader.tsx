@@ -37,8 +37,14 @@ export function HomeHeader({
               notificationCount > 0 ? `Notifications, ${notificationCount} unread` : 'Notifications'
             }
             onClick={onOpenNotifications}
+            style={{ position: 'relative' }}
           >
             <Bell size={18} aria-hidden="true" />
+            {notificationCount > 0 ? (
+              <span className="finance-nav-badge" aria-hidden="true">
+                {notificationCount > 99 ? '99+' : notificationCount}
+              </span>
+            ) : null}
           </button>
         )}
         <button
