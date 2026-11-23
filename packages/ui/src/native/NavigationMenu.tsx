@@ -78,7 +78,7 @@ export function NavigationMenu({
                   item.label
                 )}
               </Pressable>
-              {hasChildren && (
+              {!!hasChildren && (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${isExpanded ? 'Collapse' : 'Expand'} submenu`}

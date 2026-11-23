@@ -197,7 +197,7 @@ export function CashFlowChart({
           </View>
         </View>
       </ScrollView>
-      {selectedBucket && (
+      {!!selectedBucket && (
         <Typography variant="small" accessibilityLiveRegion="polite">
           {dateFormatter.format(selectedBucket.startAt)} · Income{' '}
           {formatMinor(selectedBucket.incomeMinor, currency)} · Expenses{' '}

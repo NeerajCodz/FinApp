@@ -10,7 +10,7 @@ import {
   Wallet,
   AlertTriangle,
 } from 'lucide-react';
-import { Empty, Input, Select, Typography, useTheme } from '@finapp/ui/web';
+import { Input, Select, Typography, useTheme } from '@finapp/ui/web';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import { FinanceEmptyState } from './FinanceEmptyState';

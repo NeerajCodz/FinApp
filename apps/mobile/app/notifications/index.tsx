@@ -144,7 +144,7 @@ export default function NotificationsScreen() {
         </IconButton>
       </View>
 
-      {entries && (
+      {!!entries && (
         <View
           style={{
             flexDirection: 'row',
@@ -171,7 +171,7 @@ export default function NotificationsScreen() {
         </View>
       )}
 
-      {entries && (
+      {!!entries && (
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Button
@@ -224,7 +224,7 @@ export default function NotificationsScreen() {
           {error}
         </Text>
       )}
-      {notifications.error && (
+      {!!notifications.error && (
         <View style={{ gap: 8 }}>
           <Text style={{ color: tokens.destructive }}>Saved activity could not be loaded.</Text>
           <Button variant="outline" onPress={notifications.retry}>
@@ -232,7 +232,7 @@ export default function NotificationsScreen() {
           </Button>
         </View>
       )}
-      {settings.error && (
+      {!!settings.error && (
         <View style={{ gap: 8 }}>
           <Text style={{ color: tokens.destructive }}>
             Notification preferences could not be loaded.

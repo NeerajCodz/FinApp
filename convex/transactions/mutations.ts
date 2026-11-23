@@ -135,7 +135,7 @@ export const create = mutation({
         accountId: args.accountId,
         transferAccountId: args.transferAccountId,
         merchant: args.merchant,
-        note: args.note,
+        note: args.note?.trim() || undefined,
       },
       { account, transferAccount, processedMutation, category },
     );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import { Wallet } from '@finapp/ui/icons/native';
-import { Button, Card, SectionHeader, Text, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Card, SectionHeader, Typography, useTheme } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
 import { CategoryIcon } from '@finapp/ui/finance';
 import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';

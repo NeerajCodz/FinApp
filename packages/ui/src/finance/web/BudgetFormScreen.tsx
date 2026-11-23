@@ -1,6 +1,6 @@
 'use client';
 import { Button, Select } from '@finapp/ui/web';
-import { Lightbulb, Target, Bell, RefreshCw, ChartNoAxesCombined } from 'lucide-react';
+import { Target, Bell, RefreshCw, ChartNoAxesCombined } from 'lucide-react';
 import { parseMinor } from '@convex/shared/money';
 import { EntityIconPicker } from './EntityIconPicker';
 import { CategoryIcon } from './CategoryIcon';
@@ -10,7 +10,7 @@ import {
   type BudgetSettings,
   type BudgetDashboardTransaction,
 } from '../budgetDashboard';
-import { Panel, Metrics, Ring, Bar } from './GoalsBudgetsParts';
+import { Panel, Metrics } from './GoalsBudgetsParts';
 import { BudgetTable } from './BudgetDashboardParts';
 import s from './GoalsBudgets.module.css';
 export type BudgetCategoryOption = { id: string; name: string; icon?: string };
@@ -50,7 +50,9 @@ export function BudgetFormScreen(p: BudgetFormScreenProps) {
   let limit = 0n;
   try {
     limit = parseMinor(p.amount || '0', p.currency);
-  } catch {}
+  } catch {
+    // Incomplete amounts preview as zero until the input parses.
+  }
   const start = new Date(`${p.startDate}T00:00:00Z`).getTime();
   const end = new Date(`${p.endDate}T00:00:00Z`).getTime();
   const m = budgetDashboard(

@@ -114,8 +114,8 @@ export default function NotificationSettingsScreen() {
           Choose what enters your inbox. Changes save on this device first and sync when connected.
         </Text>
       </View>
-      {settings.loading && <Typography variant="small">Loading preferences…</Typography>}
-      {settings.error && (
+      {!!settings.loading && <Typography variant="small">Loading preferences…</Typography>}
+      {!!settings.error && (
         <Button variant="outline" onPress={settings.retry}>
           Retry loading preferences
         </Button>
@@ -125,7 +125,7 @@ export default function NotificationSettingsScreen() {
           Connect once to load your account settings.
         </Text>
       )}
-      {preferences && (
+      {!!preferences && (
         <View>
           {options.map((option, index) => (
             <View key={option.type}>
@@ -175,7 +175,7 @@ export default function NotificationSettingsScreen() {
           </Typography>
         )}
       </View>
-      {saving && <Typography variant="small">Saving…</Typography>}
+      {!!saving && <Typography variant="small">Saving…</Typography>}
       {!!error && <Text style={{ color: tokens.destructive }}>{error}</Text>}
     </ScrollView>
   );

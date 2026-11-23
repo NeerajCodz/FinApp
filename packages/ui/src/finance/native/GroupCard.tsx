@@ -46,7 +46,7 @@ export function GroupCard({
         <GroupTile icon={icon} color={color} size={64} />
         <View style={{ flex: 1, gap: 4 }}>
           <Typography variant="heading">{name}</Typography>
-          {description && <Typography variant="caption">{description}</Typography>}
+          {!!description && <Typography variant="caption">{description}</Typography>}
           <Typography variant="caption">{meta}</Typography>
         </View>
       </TouchableOpacity>
@@ -65,7 +65,7 @@ export function GroupCard({
             )}
           </View>
         )}
-        {role && (
+        {!!role && (
           <Typography variant="caption" style={{ color: tokens.primary }}>
             {role === 'admin' || role === 'owner' ? `You are an ${role}` : 'Group member'}
           </Typography>
@@ -94,12 +94,12 @@ export function GroupCard({
           </Typography>
         </View>
         <View style={{ gap: 8 }}>
-          {onPress && (
+          {!!onPress && (
             <Button size="sm" variant="outline" onPress={onPress}>
               View group
             </Button>
           )}
-          {onOpenChat && (
+          {!!onOpenChat && (
             <Button size="sm" variant="outline" onPress={onOpenChat}>
               Open chat
             </Button>

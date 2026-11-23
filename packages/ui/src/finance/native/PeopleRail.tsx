@@ -63,7 +63,7 @@ export function PeopleRail({
               Only the selected contact’s name and phone number are used.
             </Typography>
           </View>
-          {onChoose && (
+          {!!onChoose && (
             <Button size="sm" variant="outline" disabled={loading} onPress={onChoose}>
               {loading ? 'Opening' : 'Choose'}
             </Button>

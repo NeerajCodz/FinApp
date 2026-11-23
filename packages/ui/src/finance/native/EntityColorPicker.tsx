@@ -278,7 +278,7 @@ export function EntityColorPicker({
                 >
                   <Text style={{ fontWeight: '600' }}>Custom…</Text>
                 </Pressable>
-                {value && (
+                {!!value && (
                   <Button
                     variant="ghost"
                     accessibilityLabel="Clear color"

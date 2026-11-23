@@ -3,17 +3,7 @@ import { Button } from '@finapp/ui/web';
 import { CategoryIcon } from './CategoryIcon';
 import { budgetDashboard, type BudgetDashboardTransaction } from '../budgetDashboard';
 import { formatMinor } from '../money';
-import {
-  Panel,
-  Metrics,
-  Bars,
-  Trend,
-  Ring,
-  Legend,
-  Rankings,
-  Bar,
-  chartColors,
-} from './GoalsBudgetsParts';
+import { Panel, Metrics, Bars, Trend, Ring, Legend, Rankings } from './GoalsBudgetsParts';
 import { BudgetTable } from './BudgetDashboardParts';
 import s from './GoalsBudgets.module.css';
 export type BudgetAnalyticsTransaction = BudgetDashboardTransaction;

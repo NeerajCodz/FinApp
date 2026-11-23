@@ -242,7 +242,7 @@ export function AccountFormScreen({
               </Button>
             </View>
           )}
-          {edit && (
+          {!!edit && (
             <>
               <View style={field}>
                 <Label>Account number (optional)</Label>
@@ -392,7 +392,7 @@ export function AccountFormScreen({
                   compact
                 />
               )}
-              {onViewTransactions && (
+              {!!onViewTransactions && (
                 <Button variant="outline" onPress={onViewTransactions}>
                   View all transactions
                 </Button>

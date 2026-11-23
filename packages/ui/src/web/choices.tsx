@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useId, useRef } from 'react';
-import { Label } from './fields';
 
 export function Checkbox({
   checked,

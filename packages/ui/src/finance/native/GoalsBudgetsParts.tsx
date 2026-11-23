@@ -58,7 +58,7 @@ export function Panel({
       <Typography variant="heading" style={{ fontSize: 17 }}>
         {title}
       </Typography>
-      {description && (
+      {!!description && (
         <Text style={{ fontSize: 12, lineHeight: 18, color: tokens.foregroundMuted }}>
           {description}
         </Text>
@@ -107,7 +107,7 @@ export function Metrics({
           <Typography variant="heading" style={{ fontSize: 21 }}>
             {r.value}
           </Typography>
-          {r.detail && (
+          {!!r.detail && (
             <Text style={{ fontSize: 11, color: tokens.foregroundMuted }}>{r.detail}</Text>
           )}
         </View>

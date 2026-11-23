@@ -6,14 +6,16 @@ import { getOptionalUser } from '../shared/auth';
 export const scopeState = query({
   args: {
     scopeType: v.union(v.literal('group'), v.literal('direct')),
-    scopeId: v.union(v.id('groups'), v.id('directConversations')),
+    // Accept raw route params; malformed ids resolve to an empty state instead of throwing.
+    scopeId: v.string(),
   },
-  handler: async (ctx, { scopeType, scopeId }) => {
+  handler: async (ctx, { scopeType, scopeId: rawScopeId }) => {
     const actor = await getOptionalUser(ctx);
     if (!actor) return { participants: [], typingUserIds: [] };
     let memberIds: Id<'users'>[];
+    let scopeId: Id<'groups'> | Id<'directConversations'>;
     if (scopeType === 'group') {
-      const groupId = ctx.db.normalizeId('groups', String(scopeId));
+      const groupId = ctx.db.normalizeId('groups', rawScopeId);
       if (!groupId) return { participants: [], typingUserIds: [] };
       const group = await ctx.db.get(groupId);
       if (!group || group.archivedAt !== undefined) return { participants: [], typingUserIds: [] };
@@ -24,8 +26,9 @@ export const scopeState = query({
       if (!memberships.some((item) => item.userId === actor._id))
         return { participants: [], typingUserIds: [] };
       memberIds = memberships.map((item) => item.userId);
+      scopeId = groupId;
     } else {
-      const conversationId = ctx.db.normalizeId('directConversations', String(scopeId));
+      const conversationId = ctx.db.normalizeId('directConversations', rawScopeId);
       if (!conversationId) return { participants: [], typingUserIds: [] };
       const conversation = await ctx.db.get(conversationId);
       if (
@@ -34,6 +37,7 @@ export const scopeState = query({
       )
         return { participants: [], typingUserIds: [] };
       memberIds = [conversation.userLowId, conversation.userHighId];
+      scopeId = conversationId;
     }
     const now = Date.now();
     const participants = await Promise.all(

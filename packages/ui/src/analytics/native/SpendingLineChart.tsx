@@ -141,7 +141,7 @@ export function SpendingLineChart({
           </View>
         </View>
       </ScrollView>
-      {selectedPoint && (
+      {!!selectedPoint && (
         <Typography variant="small" accessibilityLiveRegion="polite">
           {selectedPoint.detail} ·{' '}
           {selectedPoint.amount ?? dateFormatter.format(selectedPoint.value)}

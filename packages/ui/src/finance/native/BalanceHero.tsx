@@ -36,7 +36,7 @@ export function BalanceHero({
         </TouchableOpacity>
       </View>
       <Money amountMinor={amountMinor} currency={currency} size="hero" hidden={hidden} />
-      {delta && (
+      {!!delta && (
         <Typography
           variant="small"
           style={{ color: tokens.primary, fontFamily: 'SpaceGrotesk_500Medium' }}

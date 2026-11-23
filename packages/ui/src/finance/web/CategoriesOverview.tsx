@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { ArrowRight, BarChart3, Plus, Search, Tag } from 'lucide-react';
-import { Button, Empty, Input, Typography } from '@finapp/ui/web';
+import { Button, Input, Typography } from '@finapp/ui/web';
 import { formatMinor } from '../money';
 import { formatTransactionDate } from '../datetime';
 import { CategoryIcon } from './CategoryIcon';

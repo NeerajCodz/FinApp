@@ -44,7 +44,7 @@ function NavButton({ item }: { item: NavItem }) {
         gap: 4,
       }}
     >
-      {active && (
+      {!!active && (
         <View
           style={{
             position: 'absolute',

@@ -137,8 +137,8 @@ export default function EditProfileScreen() {
         </IconButton>
         <Typography variant="title">Edit profile</Typography>
       </View>
-      {loading && <Typography variant="small">Loading your profile…</Typography>}
-      {profileError && (
+      {!!loading && <Typography variant="small">Loading your profile…</Typography>}
+      {!!profileError && (
         <View style={{ gap: 8 }}>
           <Typography accessibilityRole="alert">Profile could not be loaded.</Typography>
           <Button variant="outline" onPress={retry}>
@@ -149,7 +149,7 @@ export default function EditProfileScreen() {
       {!loading && !profileError && !profile && (
         <Typography variant="small">Your profile is not available yet.</Typography>
       )}
-      {profile && (
+      {!!profile && (
         <View style={{ gap: 12 }}>
           <Typography variant="label">Display name</Typography>
           <Input
@@ -172,7 +172,7 @@ export default function EditProfileScreen() {
               Username changes require a live Convex connection.
             </Typography>
           )}
-          {invalidUsername && (
+          {!!invalidUsername && (
             <Typography style={{ color: tokens.destructive }}>
               Use 3–32 letters, numbers, or underscores.
             </Typography>

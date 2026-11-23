@@ -122,6 +122,8 @@ export {
 export { goalTargetInput } from '../goalEditor';
 export {
   buildGoalAnalyticsModel,
+  selectGoalAnalytics,
+  type GoalAnalyticsSelection,
   type GoalAnalyticsAccount,
   type GoalAnalyticsContribution,
   type GoalAnalyticsInput,

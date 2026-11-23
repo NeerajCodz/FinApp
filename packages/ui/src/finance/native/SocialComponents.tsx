@@ -30,12 +30,12 @@ export function SocialPersonRow({
         <Typography variant="label" numberOfLines={1}>
           {profile.displayName}
         </Typography>
-        {profile.username && (
+        {!!profile.username && (
           <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }} numberOfLines={1}>
             @{profile.username.replace(/^@+/, '')}
           </Text>
         )}
-        {detail && (
+        {!!detail && (
           <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }} numberOfLines={1}>
             {detail}
           </Text>

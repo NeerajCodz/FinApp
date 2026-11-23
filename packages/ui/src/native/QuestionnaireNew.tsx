@@ -124,7 +124,7 @@ export function QuestionnaireNew({
                           justifyContent: 'center',
                         }}
                       >
-                        {selected && (
+                        {!!selected && (
                           <View
                             style={{
                               width: 8,
@@ -171,7 +171,7 @@ export function QuestionnaireNew({
                 </Text>
               </Pressable>
             )}
-            {error && (
+            {!!error && (
               <Text accessibilityRole="alert" style={{ color: tokens.destructive, fontSize: 13 }}>
                 {error}
               </Text>

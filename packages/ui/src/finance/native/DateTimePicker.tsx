@@ -119,7 +119,7 @@ export function DateTimePicker({
           );
         })}
       </View>
-      {showTime && (
+      {!!showTime && (
         <View style={{ gap: 6 }}>
           <Typography variant="label">Time</Typography>
           <TextInput

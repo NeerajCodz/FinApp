@@ -98,7 +98,7 @@ export function GroupHeading({
   const { tokens } = useTheme();
   return (
     <View style={{ gap: 8 }}>
-      {onBack && (
+      {!!onBack && (
         <View style={{ alignSelf: 'flex-start' }}>
           <IconButton label="Go back" variant="ghost" onPress={onBack}>
             <ArrowLeft size={20} color={tokens.foreground} />
@@ -106,7 +106,7 @@ export function GroupHeading({
         </View>
       )}
       <Typography variant="title">{title}</Typography>
-      {subtitle && (
+      {!!subtitle && (
         <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
           {subtitle}
         </Typography>
@@ -139,7 +139,7 @@ export function GroupMetric({
       >
         {value}
       </Typography>
-      {detail && <Typography variant="caption">{detail}</Typography>}
+      {!!detail && <Typography variant="caption">{detail}</Typography>}
     </GroupPanel>
   );
 }
@@ -193,7 +193,7 @@ export type GroupMetadataFieldsProps = {
 export function GroupMetadataFields(p: GroupMetadataFieldsProps & { disabled?: boolean }) {
   return (
     <View style={{ gap: 10 }}>
-      {p.onDescriptionChange && (
+      {!!p.onDescriptionChange && (
         <View>
           <Label>Description</Label>
           <Input
@@ -210,7 +210,7 @@ export function GroupMetadataFields(p: GroupMetadataFieldsProps & { disabled?: b
           </Typography>
         </View>
       )}
-      {p.onGroupTypeChange && (
+      {!!p.onGroupTypeChange && (
         <View style={{ gap: 6 }}>
           <Label>Group type</Label>
           <Input
@@ -237,7 +237,7 @@ export function GroupMetadataFields(p: GroupMetadataFieldsProps & { disabled?: b
           </View>
         </View>
       )}
-      {p.onPurposeChange && (
+      {!!p.onPurposeChange && (
         <View>
           <Label>Purpose (optional)</Label>
           <Input
@@ -249,7 +249,7 @@ export function GroupMetadataFields(p: GroupMetadataFieldsProps & { disabled?: b
           />
         </View>
       )}
-      {p.onLocationChange && (
+      {!!p.onLocationChange && (
         <View>
           <Label>Location (optional)</Label>
           <Input
@@ -261,7 +261,7 @@ export function GroupMetadataFields(p: GroupMetadataFieldsProps & { disabled?: b
           />
         </View>
       )}
-      {p.onStartDateChange && (
+      {!!p.onStartDateChange && (
         <View>
           <Label>Start date (optional)</Label>
           <Input
@@ -275,7 +275,7 @@ export function GroupMetadataFields(p: GroupMetadataFieldsProps & { disabled?: b
           />
         </View>
       )}
-      {p.onEndDateChange && (
+      {!!p.onEndDateChange && (
         <View>
           <Label>End date (optional)</Label>
           <Input

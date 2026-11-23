@@ -58,7 +58,7 @@ export function SettingsRow({
       onPress={onPress ?? undefined}
       style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12 }}
     >
-      {leadingIcon && (
+      {!!leadingIcon && (
         <View
           style={{
             width: 40,
@@ -76,10 +76,10 @@ export function SettingsRow({
         <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
           {label}
         </Typography>
-        {value && <Typography variant="small">{value}</Typography>}
+        {!!value && <Typography variant="small">{value}</Typography>}
       </View>
       <View style={{ width: 24, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }}>
-        {onPress && <CaretRight size={18} color={tokens.foregroundSubtle} />}
+        {!!onPress && <CaretRight size={18} color={tokens.foregroundSubtle} />}
       </View>
     </TouchableOpacity>
   );

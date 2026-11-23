@@ -57,17 +57,17 @@ export function SettlementEditor({
         )}
       </View>
       <CurrencyInput currency={currency} value={amount} onChangeText={setAmount} />
-      {disabledReason && (
+      {!!disabledReason && (
         <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
           {disabledReason}
         </Typography>
       )}
-      {invalidAmount && (
+      {!!invalidAmount && (
         <Typography variant="small" style={{ color: tokens.destructive }}>
           Enter a positive amount in {currency}.
         </Typography>
       )}
-      {tooMuch && (
+      {!!tooMuch && (
         <Typography variant="small" style={{ color: tokens.destructive }}>
           Amount exceeds the outstanding balance.
         </Typography>

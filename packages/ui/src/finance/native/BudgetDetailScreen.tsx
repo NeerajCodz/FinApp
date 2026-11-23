@@ -80,7 +80,6 @@ export function BudgetDetailScreen({
     limit,
   );
   const ratio = limit > 0n ? Number((spent * 10000n) / limit) / 100 : 0;
-  const remaining = limit - spent;
   return (
     <ScrollView
       contentContainerStyle={{ padding: 22, paddingTop: 16, paddingBottom: 40, gap: 16 }}
@@ -102,7 +101,7 @@ export function BudgetDetailScreen({
             Edit
           </Button>
         </View>
-        {onAddExpense && <Button onPress={onAddExpense}>＋ Add expense</Button>}
+        {!!onAddExpense && <Button onPress={onAddExpense}>＋ Add expense</Button>}
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {[
@@ -210,8 +209,8 @@ export function BudgetDetailScreen({
       <Button variant="outline" disabled={pending} onPress={onArchive}>
         Archive budget
       </Button>
-      {actionError && <Text style={{ color: tokens.destructive }}>{actionError}</Text>}
-      {error && <Text style={{ color: tokens.destructive }}>{error}</Text>}
+      {!!actionError && <Text style={{ color: tokens.destructive }}>{actionError}</Text>}
+      {!!error && <Text style={{ color: tokens.destructive }}>{error}</Text>}
       {loading ? (
         <Text>Loading posted expenses…</Text>
       ) : transactions.length ? (

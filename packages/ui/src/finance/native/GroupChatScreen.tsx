@@ -79,7 +79,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
             paddingVertical: 4,
           }}
         >
-          {p.onBack && (
+          {!!p.onBack && (
             <Button size="sm" variant="outline" onPress={p.onBack}>
               ‹ Back
             </Button>
@@ -90,29 +90,29 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
               {p.group?.currency ? `${p.group.currency} · ` : ''}Group chat
             </Typography>
           </View>
-          {p.onOpenGroup && (
+          {!!p.onOpenGroup && (
             <Button size="sm" variant="outline" onPress={p.onOpenGroup}>
               Group
             </Button>
           )}
-          {p.onAddExpense && (
+          {!!p.onAddExpense && (
             <Button size="sm" onPress={p.onAddExpense}>
               + Expense
             </Button>
           )}
-          {p.onOpenSettings && (
+          {!!p.onOpenSettings && (
             <Button size="sm" variant="outline" onPress={p.onOpenSettings}>
               Edit
             </Button>
           )}
         </View>
       )}
-      {p.embedded && (
+      {!!p.embedded && (
         <View
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <Typography variant="heading">Recent messages</Typography>
-          {p.onBack && (
+          {!!p.onBack && (
             <Button size="sm" variant="outline" onPress={p.onBack}>
               Open chat
             </Button>
@@ -129,7 +129,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
             </View>
           </View>
           <GroupMetadataSummary group={p.group} />
-          {p.onBack && (
+          {!!p.onBack && (
             <Button size="sm" variant="outline" onPress={p.onBack}>
               Open chat
             </Button>
@@ -151,7 +151,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
           }}
           contentContainerStyle={{ padding: 4, gap: 16, flexGrow: 1 }}
         >
-          {p.loading && <Typography variant="small">Loading saved messages…</Typography>}
+          {!!p.loading && <Typography variant="small">Loading saved messages…</Typography>}
           {p.items.map((item) => (
             <View
               key={item.id}
@@ -200,7 +200,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                         {item.text}
                       </Typography>
                     )}
-                    {item.attachmentUrl && (
+                    {!!item.attachmentUrl && (
                       <Image
                         source={{ uri: item.attachmentUrl }}
                         accessibilityLabel={`Bill shared by ${item.ownMessage ? 'you' : (item.sender ?? 'a member')}`}
@@ -257,7 +257,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                         </Typography>
                       )}
                     </View>
-                    {item.onPress && <Typography>›</Typography>}
+                    {!!item.onPress && <Typography>›</Typography>}
                   </Pressable>
                 )}
               </View>

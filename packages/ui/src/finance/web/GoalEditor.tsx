@@ -73,7 +73,9 @@ export function GoalEditor(p: GoalEditorProps) {
       target = parseMinor(v.target || '0', p.currency);
       monthly = parseMinor(v.monthlyContribution || '0', p.currency);
     }
-  } catch {}
+  } catch {
+    // Incomplete amounts preview as zero until the input parses.
+  }
   const saved = p.saved ?? 0n;
   const model = buildGoalAnalyticsModel({
     contributions: history,

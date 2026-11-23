@@ -89,7 +89,7 @@ export function BarChart({
             </View>
           </TouchableOpacity>
         ))}
-        {selectedPoint && (
+        {!!selectedPoint && (
           <Typography variant="small" accessibilityLiveRegion="polite">
             {selectedPoint.detail ?? selectedPoint.label} ·{' '}
             {selectedPoint.amount ?? `${selectedPoint.value}%`}
@@ -156,7 +156,7 @@ export function BarChart({
           </View>
         </View>
       </ScrollView>
-      {selectedPoint && (
+      {!!selectedPoint && (
         <Typography variant="small" accessibilityLiveRegion="polite" style={{ marginTop: 8 }}>
           {selectedPoint.detail ?? selectedPoint.label} ·{' '}
           {selectedPoint.amount ?? `${selectedPoint.value}%`}

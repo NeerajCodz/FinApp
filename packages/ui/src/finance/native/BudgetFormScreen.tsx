@@ -67,12 +67,12 @@ export function BudgetFormScreen(props: BudgetFormScreenProps) {
       </View>
       {(props.onAnalytics || props.onArchive) && (
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          {props.onAnalytics && (
+          {!!props.onAnalytics && (
             <Button variant="outline" onPress={props.onAnalytics} style={{ flex: 1 }}>
               View analytics
             </Button>
           )}
-          {props.onArchive && (
+          {!!props.onArchive && (
             <Button
               variant="outline"
               disabled={props.pending}

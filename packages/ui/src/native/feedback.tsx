@@ -201,7 +201,7 @@ export function Empty({
       <Typography variant="heading" style={{ textAlign: 'center' }}>
         {title}
       </Typography>
-      {description && (
+      {!!description && (
         <Text
           style={{
             color: tokens.foregroundMuted,
@@ -213,7 +213,7 @@ export function Empty({
           {description}
         </Text>
       )}
-      {action && <View style={{ marginTop: 10, alignItems: 'center' }}>{action}</View>}
+      {!!action && <View style={{ marginTop: 10, alignItems: 'center' }}>{action}</View>}
     </View>
   );
 }

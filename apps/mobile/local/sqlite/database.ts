@@ -4,6 +4,7 @@ import type { AESEncryptionKey } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
+import { isExpoGo } from '../runtime';
 
 const databaseName = 'finapp.db';
 const encryptionKeyName = 'finapp.sqlite.encryption-key.v1';
@@ -23,6 +24,24 @@ function databaseSibling(path: string, suffix: string): File {
   return new File(fileUri(`${path}${suffix}`));
 }
 
+/** The on-device database exists but cannot be decrypted with the stored key. */
+export class LocalDatabaseUnreadableError extends Error {
+  constructor(cause?: unknown) {
+    super('LOCAL_DATABASE_UNREADABLE');
+    this.name = 'LocalDatabaseUnreadableError';
+    (this as { cause?: unknown }).cause = cause;
+  }
+}
+
+function canRead(db: SQLite.SQLiteDatabase): boolean {
+  try {
+    db.getFirstSync('SELECT name FROM sqlite_master LIMIT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
   const existingKey = await SecureStore.getItemAsync(encryptionKeyName);
   const key = existingKey ?? (await createEncryptionKey());
@@ -38,24 +57,30 @@ async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
     stagedFile.rename(databaseName);
   }
 
-  const db = await SQLite.openDatabaseAsync(databaseName);
+  let db = await SQLite.openDatabaseAsync(databaseName);
   const cipherVersion = db.getFirstSync<{ cipher_version: string }>('PRAGMA cipher_version');
   if (!cipherVersion?.cipher_version) throw new Error('SQLCIPHER_UNAVAILABLE');
 
   if (existingKey) {
     db.execSync(`PRAGMA key = '${key}'`);
-    db.getFirstSync('SELECT name FROM sqlite_master LIMIT 1');
-    db.getFirstSync('PRAGMA journal_mode = WAL');
-    if (backupFile.exists) backupFile.delete();
-    if (stagedFile.exists) stagedFile.delete();
-    return db;
-  }
-  if (databaseFile.exists) {
-    try {
-      db.getFirstSync('SELECT name FROM sqlite_master LIMIT 1');
-    } catch {
-      throw new Error('LOCAL_DATABASE_KEY_MISSING');
+    if (canRead(db)) {
+      db.getFirstSync('PRAGMA journal_mode = WAL');
+      if (backupFile.exists) backupFile.delete();
+      if (stagedFile.exists) stagedFile.delete();
+      return db;
     }
+    // A key without a readable encrypted file means the previous run was killed after the
+    // key was saved but before the swap: the database is still plaintext. Re-run the swap.
+    await db.closeAsync();
+    db = await SQLite.openDatabaseAsync(databaseName);
+    if (!canRead(db)) {
+      await db.closeAsync().catch(() => undefined);
+      throw new LocalDatabaseUnreadableError();
+    }
+  } else if (databaseFile.exists && !canRead(db)) {
+    // Encrypted file without its key, e.g. restored from a device backup.
+    await db.closeAsync().catch(() => undefined);
+    throw new LocalDatabaseUnreadableError();
   }
 
   db.execSync('PRAGMA wal_checkpoint(FULL)');
@@ -77,6 +102,9 @@ async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
   let sourceMoved = false;
   let migratedDb: SQLite.SQLiteDatabase | null = null;
   try {
+    // Persist the key before the encrypted file replaces the plaintext one, so an app kill
+    // mid-swap can never leave an encrypted database without its key.
+    if (!existingKey) await SecureStore.setItemAsync(encryptionKeyName, key);
     await db.closeAsync();
     databaseFile.rename(`${databaseName}.plaintext`);
     sourceMoved = true;
@@ -85,7 +113,6 @@ async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
     migratedDb.execSync(`PRAGMA key = '${key}'`);
     migratedDb.getFirstSync('SELECT name FROM sqlite_master LIMIT 1');
     migratedDb.getFirstSync('PRAGMA journal_mode = WAL');
-    await SecureStore.setItemAsync(encryptionKeyName, key);
     await backupFile.delete();
     return migratedDb;
   } catch (error) {
@@ -94,11 +121,50 @@ async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
       const originalFile = new File(fileUri(databasePath));
       if (originalFile.exists) originalFile.delete();
       backupFile.rename(databaseName);
-      if (!existingKey) await SecureStore.deleteItemAsync(encryptionKeyName);
     }
+    // The plaintext database is still the source of truth, so a key created here is unused.
+    if (!existingKey) await SecureStore.deleteItemAsync(encryptionKeyName).catch(() => undefined);
     const remainingStageFile = databaseSibling(databasePath, '.encrypted');
     if (remainingStageFile.exists) remainingStageFile.delete();
     throw error;
+  }
+}
+
+/**
+ * Moves an unreadable database (and its WAL/SHM siblings) aside and forgets its key so the
+ * next open starts fresh. Synced data is restored from the server; the quarantined file is
+ * kept for diagnostics until the next successful recovery.
+ */
+async function quarantineUnreadableDatabase(): Promise<void> {
+  const databasePath = `${String(SQLite.defaultDatabaseDirectory).replace(/\/+$/, '')}/${databaseName}`;
+  for (const suffix of ['.quarantine', '.quarantine-wal', '.quarantine-shm']) {
+    const stale = databaseSibling(databasePath, suffix);
+    if (stale.exists) stale.delete();
+  }
+  const moves: [string, string][] = [
+    ['', '.quarantine'],
+    ['-wal', '.quarantine-wal'],
+    ['-shm', '.quarantine-shm'],
+  ];
+  for (const [from, to] of moves) {
+    const file = databaseSibling(databasePath, from);
+    if (file.exists) file.rename(`${databaseName}${to}`);
+  }
+  for (const suffix of ['.encrypted', '.plaintext']) {
+    const file = databaseSibling(databasePath, suffix);
+    if (file.exists) file.delete();
+  }
+  await SecureStore.deleteItemAsync(encryptionKeyName).catch(() => undefined);
+}
+
+async function openEncryptedDatabaseWithRecovery(): Promise<SQLite.SQLiteDatabase> {
+  try {
+    return await openEncryptedDatabase();
+  } catch (error) {
+    if (!(error instanceof LocalDatabaseUnreadableError)) throw error;
+    console.warn('[local-db] Unreadable database quarantined; resyncing from server.');
+    await quarantineUnreadableDatabase();
+    return openEncryptedDatabase();
   }
 }
 
@@ -309,9 +375,10 @@ export function persistLocalDatabase(): Promise<void> {
 export async function getLocalDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (database) return database;
   initialization ??= (async () => {
-    expoGoStorage =
-      Constants.executionEnvironment === 'storeClient' && Constants.appOwnership === 'expo';
-    const opened = expoGoStorage ? await openExpoGoDatabase() : await openEncryptedDatabase();
+    expoGoStorage = isExpoGo();
+    const opened = expoGoStorage
+      ? await openExpoGoDatabase()
+      : await openEncryptedDatabaseWithRecovery();
     rawDatabase = opened;
     const ready = expoGoStorage ? trackExpoGoWrites(opened) : opened;
     database = ready;

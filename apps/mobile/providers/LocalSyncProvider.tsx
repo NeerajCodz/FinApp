@@ -1,5 +1,5 @@
 import React from 'react';
-import Constants from 'expo-constants';
+import { isExpoGo } from '@/local/runtime';
 import { AppState } from 'react-native';
 import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
@@ -522,9 +522,14 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     let active = true;
-    void readValidatedLocalUserId().then((id) => {
-      if (active) setStoredUserId(id);
-    });
+    void readValidatedLocalUserId()
+      .then((id) => {
+        if (active) setStoredUserId(id);
+      })
+      .catch((error: unknown) => {
+        // Unreadable secure storage keeps the user signed out locally instead of crashing.
+        console.warn('[local-sync] Could not read the cached identity.', error);
+      });
     return () => {
       active = false;
     };
@@ -533,13 +538,17 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!validatedOnline || !authenticatedUserId) return;
     setStoredUserId(authenticatedUserId);
-    void saveValidatedLocalUserId(authenticatedUserId);
+    saveValidatedLocalUserId(authenticatedUserId).catch((error: unknown) =>
+      console.warn('[local-sync] Could not cache the signed-in identity.', error),
+    );
   }, [authenticatedUserId, validatedOnline]);
 
   React.useEffect(() => {
     if (!isConnected || auth.isLoading || auth.isAuthenticated) return;
     setStoredUserId(null);
-    void clearValidatedLocalUserId();
+    clearValidatedLocalUserId().catch((error: unknown) =>
+      console.warn('[local-sync] Could not clear the cached identity.', error),
+    );
   }, [auth.isAuthenticated, auth.isLoading, isConnected]);
 
   React.useEffect(() => {
@@ -1016,25 +1025,28 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   }, [userId, scopedFailedEntries]);
 
   React.useEffect(() => {
-    if (Constants.executionEnvironment === 'storeClient' && Constants.appOwnership === 'expo')
-      return;
+    if (isExpoGo()) return;
     let active = true;
     let subscription: { remove: () => void } | null = null;
-    void import('expo-notifications').then((Notifications) => {
-      if (!active) return;
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowBanner: true,
-          shouldShowList: true,
-          shouldPlaySound: false,
-          shouldSetBadge: false,
-        }),
+    void import('expo-notifications')
+      .then((Notifications) => {
+        if (!active) return;
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          }),
+        });
+        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+          if (response.notification.request.content.data?.url === '/recurring')
+            router.push('/recurring');
+        });
+      })
+      .catch((error: unknown) => {
+        console.warn('[local-sync] Notifications are unavailable.', error);
       });
-      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-        if (response.notification.request.content.data?.url === '/recurring')
-          router.push('/recurring');
-      });
-    });
     return () => {
       active = false;
       subscription?.remove();

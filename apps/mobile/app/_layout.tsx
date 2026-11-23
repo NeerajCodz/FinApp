@@ -19,6 +19,7 @@ import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
 import { LocalSyncProvider, useLocalSync } from '@/providers/LocalSyncProvider';
 import { AppLockProvider } from '@/lib/security/AppLockProvider';
 import { readValidatedLocalUserId } from '@/local/identity';
+import { AppErrorBoundary, StaticErrorFallback } from '@/components/AppErrorBoundary';
 
 const configuredConvexUrl =
   Constants.expoConfig?.extra?.convexUrl ?? process.env.EXPO_PUBLIC_CONVEX_URL;
@@ -135,7 +136,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       authRoute={isAuthRoute}
     >
       {children}
-      {privateRoute && (
+      {!!privateRoute && (
         <View
           style={{
             position: 'absolute',
@@ -162,7 +163,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
           >
             {authTimedOut ? 'We couldn’t verify your account.' : 'Checking your account…'}
           </RNText>
-          {authTimedOut && (
+          {!!authTimedOut && (
             <Button variant="outline" onPress={() => router.replace('/(auth)/welcome')}>
               Go to sign in
             </Button>
@@ -207,9 +208,6 @@ function ThemedStack() {
   );
 }
 
-function AppErrorBoundary({ children }: { children: React.ReactNode }) {
-  return <React.StrictMode>{children}</React.StrictMode>;
-}
 export default function RootLayout() {
   const content = (
     <SafeAreaProvider>
@@ -233,30 +231,6 @@ export default function RootLayout() {
   );
 }
 
-export function ErrorFallback() {
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: 'center',
-        gap: 10,
-        padding: 20,
-        backgroundColor: '#000000',
-      }}
-    >
-      <RNText
-        style={{
-          color: '#FFFFFF',
-          fontFamily: 'SpaceGrotesk_600SemiBold',
-          fontSize: 24,
-          lineHeight: 29,
-        }}
-      >
-        Finapp stopped here.
-      </RNText>
-      <RNText style={{ color: '#FFFFFFA3', maxWidth: 300 }}>
-        Close and reopen the app. Your saved financial data remains intact.
-      </RNText>
-    </View>
-  );
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return <StaticErrorFallback error={error} retry={retry} />;
 }
