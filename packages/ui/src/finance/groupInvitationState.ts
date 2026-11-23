@@ -15,8 +15,8 @@ export function groupInvitationState(input: {
   connected: boolean;
   preview: unknown | null | undefined;
 }): GroupInvitationState {
-  if (input.authLoading) return 'auth-loading';
   if (!input.validToken) return 'invalid';
+  if (input.authLoading) return input.offline ? 'offline' : 'auth-loading';
   if (!input.authenticated) return 'signed-out';
   if (input.offline) return 'offline';
   if (!input.connected) return 'connecting';

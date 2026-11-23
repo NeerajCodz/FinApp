@@ -1,15 +1,18 @@
 import React from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useNetworkState } from 'expo-network';
 import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { GroupInvitationJoinScreen } from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { isGroupInvitationOffline } from '@/lib/groupInvitationNetwork';
 export default function GroupInvitationRoute() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
   const token = Array.isArray(params.token) ? (params.token[0] ?? '') : (params.token ?? '');
   const validToken = /^[0-9a-f]{64}$/.test(token);
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { isConnected } = useLocalSync();
+  const offline = isGroupInvitationOffline(useNetworkState());
   const preview = useQuery(
     api.groups.queries.previewInvitationLink,
     validToken && isAuthenticated ? { token } : 'skip',
@@ -18,7 +21,7 @@ export default function GroupInvitationRoute() {
   const [joining, setJoining] = React.useState(false);
   const [error, setError] = React.useState('');
   async function accept() {
-    if (!isConnected || !isAuthenticated || !validToken || !preview || joining) return;
+    if (offline || !isConnected || !isAuthenticated || !validToken || !preview || joining) return;
     setJoining(true);
     setError('');
     try {
@@ -40,7 +43,7 @@ export default function GroupInvitationRoute() {
       validToken={validToken}
       authLoading={authLoading}
       authenticated={isAuthenticated}
-      offline={false}
+      offline={offline}
       connected={isConnected}
       joining={joining}
       error={error}
