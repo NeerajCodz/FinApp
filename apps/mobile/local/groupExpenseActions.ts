@@ -78,9 +78,11 @@ export async function updateGroupExpense(
     const [transactionId, accountId, categoryId] = await Promise.all([
       cloudId(userId, 'transaction', request.transaction),
       cloudId(userId, 'account', request.account, String(plan.payload.accountId)),
-      request.category ? cloudId(userId, 'category', request.category) : Promise.resolve(null),
+      plan.payload.categoryId
+        ? cloudId(userId, 'category', request.category, String(plan.payload.categoryId))
+        : Promise.resolve(null),
     ]);
-    if (transactionId && accountId && (!request.category || categoryId)) {
+    if (transactionId && accountId && (!plan.payload.categoryId || categoryId)) {
       await convex.mutation(api.groups.mutations.updateExpense, {
         ...plan.payload,
         transactionId,

@@ -1,300 +1,231 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation } from 'convex/react';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
-import { allocateParticipants } from '@convex/splits/domain';
 import {
+  ExpenseImpactSheet,
   GroupExpenseFormScreen,
-  minorToDecimal,
+  useExpenseComposer,
   type GroupExpenseMethod,
 } from '@finapp/ui/finance';
-import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { basisInputFromRow, minorToInput, toBigInt } from '@finapp/ui/finance/expense-draft';
+import { projectExpenseImpact, type ExpenseImpact } from '@finapp/ui/finance/expense-impact';
+import { describeSyncError, syncErrorCode } from '@finapp/ui/finance/sync-errors';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import type { LocalRecord } from '@/local/repository';
 import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
-import { parseMinor } from '@/lib/money';
-
 import { canEditGroupExpense } from '@/lib/groupExpenseEditing';
-const cloudId = (record: LocalRecord | undefined) =>
-  typeof record?.cloudId === 'string'
-    ? record.cloudId
-    : typeof record?._id === 'string'
-      ? record._id
-      : '';
-const dateText = (value: number) => {
-  const d = new Date(value);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+import { rowsForExpense, useExpenseLedger, type GroupPerson } from '@/hooks/useExpenseLedger';
+import { toast } from '@/lib/toast';
+
+const methods: readonly GroupExpenseMethod[] = ['equal', 'exact', 'percentage', 'shares'];
+const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 export default function EditGroupExpenseScreen() {
   const params = useLocalSearchParams<{ id: string; expenseId: string }>();
-  const { userId, isConnected } = useLocalSync();
-  const transactions = useLocalRecords<LocalRecord>(userId, 'transaction');
-  const groups = useLocalRecords<LocalRecord>(userId, 'group');
-  const memberships = useLocalRecords<LocalRecord>(userId, 'groupMember');
-  const accounts = useLocalRecords<LocalRecord>(userId, 'account');
-  const categories = useLocalRecords<LocalRecord>(userId, 'category');
-  const participants = useLocalRecords<LocalRecord>(userId, 'expenseParticipant');
-  const profiles = useLocalRecords<LocalRecord>(userId, 'profile');
-  const updateExpense = useMutation(api.groups.mutations.updateExpense);
-  const record = transactions.data?.find((item) => recordIds(item).includes(params.expenseId));
-  const group = groups.data?.find((item) => recordIds(item).includes(params.id));
-  const originalParticipants = (participants.data ?? []).filter(
-    (item) =>
-      record &&
-      typeof item.transactionId === 'string' &&
-      recordIds(record).includes(item.transactionId) &&
-      item.deletedAt === undefined,
-  );
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState('');
-  const [merchant, setMerchant] = useState('');
-  const [note, setNote] = useState('');
-  const [accountId, setAccountId] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [method, setMethod] = useState<GroupExpenseMethod>('equal');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [basis, setBasis] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const initialized = useRef(false);
-  const lock = useRef(false);
-  const states = [transactions, groups, memberships, accounts, categories, participants, profiles];
-  const loading = states.some((state) => state.loading);
-  const dataError = states.find((state) => state.error)?.error;
-  const currency = String(record?.currency ?? group?.currency ?? '');
-  useEffect(() => {
-    if (initialized.current || loading || dataError || !record || !originalParticipants.length)
-      return;
-    initialized.current = true;
-    setTitle(String(record.title ?? ''));
-    setAmount(minorToDecimal(BigInt(record.amountMinor as bigint), currency));
-    setDate(dateText(Number(record.occurredAt)));
-    setMerchant(String(record.merchant ?? ''));
-    setNote(String(record.note ?? ''));
-    setAccountId(String(record.accountId ?? ''));
-    setCategoryId(String(record.categoryId ?? ''));
-    const splitMethod = originalParticipants[0]?.method;
-    const nextMethod: GroupExpenseMethod =
-      splitMethod === 'exact' || splitMethod === 'percentage' || splitMethod === 'shares'
-        ? splitMethod
-        : 'equal';
-    setMethod(nextMethod);
-    setSelectedIds(originalParticipants.map((item) => String(item.memberId ?? item.userId)));
-    setBasis(
-      Object.fromEntries(
-        originalParticipants.map((item) => {
-          const value = String(item.basisValue ?? '0');
-          return [
-            String(item.memberId ?? item.userId),
-            nextMethod === 'shares'
-              ? value
-              : minorToDecimal(BigInt(value), nextMethod === 'percentage' ? 'USD' : currency),
-          ];
-        }),
-      ),
-    );
-  }, [loading, dataError, record, participants.data, currency]);
-  const groupIds = recordIds(group ?? {});
-  const members = (memberships.data ?? [])
-    .filter(
-      (item) =>
-        item.deletedAt === undefined &&
-        typeof item.groupId === 'string' &&
-        groupIds.includes(item.groupId),
-    )
-    .map((item) => ({
-      userId: String(item.memberId ?? item.userId ?? ''),
-      name: String(item.displayName ?? item.name ?? item.username ?? 'Member'),
-      avatarId: typeof item.avatarId === 'string' ? item.avatarId : undefined,
-      avatarUrl: typeof item.avatarUrl === 'string' ? item.avatarUrl : null,
-    }))
-    .filter((item) => item.userId);
-  const compatibleAccounts = (accounts.data ?? []).filter(
+  const { userId, isConnected, updateGroupExpense } = useLocalSync();
+  const data = useExpenseLedger(userId, params.id);
+  const record = data.transactions.find((item) => recordIds(item).includes(params.expenseId));
+  const payerRows = rowsForExpense(data.payers, record);
+  const participantRows = rowsForExpense(data.participants, record);
+  const currency = text(record?.currency) || text(data.group?.currency);
+  const locked = Boolean(record && record.ownerId !== userId);
+  // Members, plus anyone already on the expense who has since left the group.
+  const people: GroupPerson[] = [...data.members];
+  for (const row of [...payerRows, ...participantRows]) {
+    const id = text(row.userId) || text(row.memberId);
+    if (id && !people.some((person) => person.userId === id))
+      people.push({ userId: id, name: 'Former member' });
+  }
+  const accounts = data.accounts.filter(
     (item) =>
       item.ownerId === userId &&
       item.currency === currency &&
       item.archivedAt === undefined &&
       item.deletedAt === undefined,
   );
-  const account = compatibleAccounts.find((item) => recordIds(item).includes(accountId));
-  const availableCategories = (categories.data ?? []).filter(
-    (item) => item.archivedAt === undefined && item.deletedAt === undefined,
+  const findAccount = (id: string) => accounts.find((item) => recordIds(item).includes(id));
+  const categories = data.categories.filter(
+    (item) =>
+      item.ownerId === userId && item.archivedAt === undefined && item.deletedAt === undefined,
   );
-  const category = availableCategories.find((item) => recordIds(item).includes(categoryId));
+  const composer = useExpenseComposer({
+    currency,
+    currentUserId: userId,
+    memberIds: people.map((person) => person.userId),
+    detailsError: (values) =>
+      locked || findAccount(values.accountId) ? '' : 'Choose an account in the group currency.',
+  });
+  const initialized = useRef(false);
+  const [reloads, setReloads] = useState(0);
+  const { reset } = composer;
+  useEffect(() => {
+    if (initialized.current || !record || !participantRows.length || !payerRows.length) return;
+    initialized.current = true;
+    const stored = participantRows[0]?.method;
+    const method = methods.find((item) => item === stored) ?? 'equal';
+    const multiple = payerRows.length > 1;
+    reset({
+      title: text(record.title),
+      amount: minorToInput(toBigInt(record.amountMinor) ?? 0n, currency),
+      occurredAt: Number(record.occurredAt) || Date.now(),
+      merchant: text(record.merchant),
+      note: text(record.note),
+      accountId: text(record.accountId),
+      categoryId: text(record.categoryId),
+      method,
+      participantIds: participantRows.map((row) => text(row.userId) || text(row.memberId)),
+      basis: Object.fromEntries(
+        participantRows.map((row) => [
+          text(row.userId) || text(row.memberId),
+          basisInputFromRow(method, row, currency),
+        ]),
+      ),
+      payerIds: payerRows.map((row) => text(row.userId) || text(row.memberId)),
+      payerAmounts: multiple
+        ? Object.fromEntries(
+            payerRows.map((row) => [
+              text(row.userId) || text(row.memberId),
+              minorToInput(toBigInt(row.amountMinor) ?? 0n, currency),
+            ]),
+          )
+        : {},
+    });
+  }, [record, participantRows, payerRows, currency, reset, reloads]);
+
+  const [impact, setImpact] = useState<ExpenseImpact | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const lock = useRef(false);
+  const role = data.roleOf(userId);
   const unavailableMessage =
-    !loading &&
-    !dataError &&
-    (!record ||
-      !group ||
-      !canEditGroupExpense(record, userId) ||
-      typeof record.groupId !== 'string' ||
-      !groupIds.includes(record.groupId))
-      ? 'This expense is unavailable or you are not its creator.'
-      : !loading && !dataError && !originalParticipants.length
-        ? 'The expense split is unavailable. Sync the group and try again.'
-        : undefined;
-  let totalMinor: bigint | null = null;
-  let shares: { userId: string; amountMinor: bigint }[] = [];
-  let validation = '';
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  const occurred = parts
-    ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
-    : null;
-  if (occurred && record) {
-    const original = new Date(Number(record.occurredAt));
-    occurred.setHours(
-      original.getHours(),
-      original.getMinutes(),
-      original.getSeconds(),
-      original.getMilliseconds(),
-    );
-  }
-  if (!isConnected) validation = 'Reconnect to edit this expense.';
-  else if (!cloudId(record)) validation = 'Sync this expense before editing it.';
-  else if (!account || !cloudId(account))
-    validation = 'Choose a synced account in the group currency.';
-  else if (categoryId && (!category || !cloudId(category)))
-    validation = 'Choose a synced category.';
-  else if (!title.trim()) validation = 'Enter what this expense was for.';
-  else if (!occurred || dateText(occurred.getTime()) !== date)
-    validation = 'Enter a valid date in YYYY-MM-DD format.';
-  else if (
-    !selectedIds.length ||
-    selectedIds.some((id) => !members.some((member) => member.userId === id))
-  )
-    validation = 'Choose at least one current group member.';
-  else {
-    try {
-      totalMinor = parseMinor(amount, currency);
-      if (totalMinor <= 0n) throw new Error('Enter an amount greater than zero.');
-      const values =
-        method === 'equal'
-          ? undefined
-          : selectedIds.map((id) => {
-              const value = (basis[id] ?? '').trim();
-              if (!value) throw new Error('Enter a value for every selected member.');
-              if (method === 'shares') {
-                if (!/^\d+$/.test(value)) throw new Error('Shares must be whole numbers.');
-                return BigInt(value);
-              }
-              return parseMinor(value, method === 'percentage' ? 'USD' : currency);
-            });
-      shares = allocateParticipants(totalMinor, selectedIds, method, values);
-    } catch (cause) {
-      validation =
-        cause instanceof Error &&
-        !['INVALID_SPLIT', 'INVALID_AMOUNT', 'INVALID_CURRENCY'].includes(cause.message)
-          ? cause.message
-          : 'Enter a valid amount and split values.';
-    }
-  }
-  async function save() {
-    if (lock.current || validation || !record || !account || totalMinor === null || !occurred)
+    data.loading || data.error
+      ? undefined
+      : !record || !data.group
+        ? 'This expense is no longer available on this device.'
+        : !canEditGroupExpense(record, userId, role)
+          ? 'Only the person who added this expense or a group admin can edit it.'
+          : !participantRows.length || !payerRows.length
+            ? 'The split for this expense has not synced yet. Open the group and try again.'
+            : undefined;
+  const account = findAccount(composer.accountId);
+  const category = categories.find((item) => recordIds(item).includes(composer.categoryId));
+
+  function review() {
+    if (composer.validation || !data.ledger || !record || composer.draft.totalMinor === null)
       return;
+    setImpact(
+      projectExpenseImpact(data.ledger, recordId(record), {
+        kind: 'update',
+        amountMinor: composer.draft.totalMinor,
+        payers: composer.payerDraft.payers,
+        participants: composer.draft.participants,
+      }),
+    );
+    setReviewing(true);
+  }
+
+  async function save() {
+    const totalMinor = composer.draft.totalMinor;
+    if (lock.current || composer.validation || !record || totalMinor === null) return;
     lock.current = true;
     setSaving(true);
     setError('');
     try {
-      await updateExpense({
-        transactionId: cloudId(record) as Id<'transactions'>,
-        accountId: cloudId(account) as Id<'accounts'>,
-        title: title.trim(),
+      const result = await updateGroupExpense({
+        transaction: record,
+        payerRows,
+        participantRows,
+        ...(locked ? {} : { account }),
+        ...(locked
+          ? { categoryId: text(record.categoryId) || undefined }
+          : category
+            ? { category }
+            : {}),
+        title: composer.title,
         amountMinor: totalMinor,
         currency,
-        occurredAt: occurred.getTime(),
-        ...(category ? { categoryId: cloudId(category) as Id<'categories'> } : {}),
-        merchant: merchant.trim() || undefined,
-        note: note.trim() || undefined,
-        participants: shares.map((share) => ({
-          userId: share.userId as Id<'users'>,
-          amountMinor: share.amountMinor,
-          method,
-          ...(method === 'equal'
-            ? {}
-            : {
-                basisValue: (method === 'shares'
-                  ? BigInt(basis[share.userId]!)
-                  : parseMinor(basis[share.userId]!, method === 'percentage' ? 'USD' : currency)
-                ).toString(),
-              }),
-        })),
+        occurredAt: composer.occurredAt,
+        merchant: composer.merchant,
+        note: composer.note,
+        participants: composer.draft.participants,
+        payers: composer.payerDraft.payers,
+      });
+      setReviewing(false);
+      toast.success('Expense updated', {
+        description: result.queued
+          ? 'Saved on this device. It syncs when you are back online.'
+          : 'Everyone in the group sees the new balances.',
       });
       router.replace(`/transaction/${encodeURIComponent(recordId(record))}` as never);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update this expense.');
+      setReviewing(false);
+      if (syncErrorCode(cause) === 'TRANSACTION_CHANGED') {
+        toast.error('Someone else changed this expense', {
+          description: 'We loaded the latest version so you can edit it again.',
+        });
+        initialized.current = false;
+        data.retry();
+        setReloads((count) => count + 1);
+      } else {
+        const message = describeSyncError(cause, 'Could not update this expense.');
+        setError(message);
+        toast.error('Expense not updated', { description: message });
+      }
     } finally {
       lock.current = false;
       setSaving(false);
     }
   }
+
   return (
-    <GroupExpenseFormScreen
-      mode="edit"
-      signedIn={Boolean(userId)}
-      loading={loading}
-      dataError={dataError?.message}
-      unavailableMessage={unavailableMessage}
-      onRetry={() => states.forEach((state) => state.retry())}
-      fixedGroupId={params.id}
-      groups={[]}
-      selectedGroupId={group ? recordId(group) : ''}
-      groupName={String(group?.name ?? 'Group')}
-      groupIcon={typeof group?.icon === 'string' ? group.icon : undefined}
-      groupColor={typeof group?.color === 'string' ? group.color : undefined}
-      currency={currency}
-      accounts={compatibleAccounts.map((item) => ({
-        id: recordId(item),
-        name: displayAccountName(String(item.name ?? 'Account')),
-      }))}
-      selectedAccountId={account ? recordId(account) : ''}
-      members={members}
-      payerName={String(profiles.data?.[0]?.displayName ?? profiles.data?.[0]?.name ?? 'You')}
-      title={title}
-      amount={amount}
-      date={date}
-      merchant={merchant}
-      note={note}
-      categories={availableCategories.map((item) => ({
-        id: recordId(item),
-        name: String(item.name ?? 'Category'),
-        icon: typeof item.icon === 'string' ? item.icon : undefined,
-        color: typeof item.color === 'string' ? item.color : undefined,
-      }))}
-      selectedCategoryId={category ? recordId(category) : ''}
-      method={method}
-      selectedMemberIds={selectedIds}
-      basis={basis}
-      shares={shares}
-      totalMinor={totalMinor}
-      validation={validation}
-      error={error}
-      saving={saving}
-      onAccountChange={setAccountId}
-      onTitleChange={setTitle}
-      onAmountChange={setAmount}
-      onDateChange={setDate}
-      onMerchantChange={setMerchant}
-      onNoteChange={setNote}
-      onCategoryChange={setCategoryId}
-      onMethodChange={(value) => {
-        setMethod(value);
-        setBasis({});
-      }}
-      onParticipantChange={(id, selected) =>
-        setSelectedIds((current) =>
-          selected
-            ? current.includes(id)
-              ? current
-              : [...current, id]
-            : current.filter((item) => item !== id),
-        )
-      }
-      onBasisChange={(id, value) => setBasis((current) => ({ ...current, [id]: value }))}
-      onSubmit={() => void save()}
-      onBack={() => router.back()}
-    />
+    <>
+      <GroupExpenseFormScreen
+        mode="edit"
+        signedIn={Boolean(userId)}
+        loading={data.loading}
+        dataError={data.error?.message}
+        unavailableMessage={unavailableMessage}
+        onRetry={data.retry}
+        fixedGroupId={params.id}
+        groups={[]}
+        selectedGroupId={data.group ? recordId(data.group) : ''}
+        groupName={text(data.group?.name) || 'Group'}
+        groupIcon={text(data.group?.icon) || undefined}
+        groupColor={text(data.group?.color) || undefined}
+        currency={currency}
+        accounts={accounts.map((item) => ({
+          id: recordId(item),
+          name: displayAccountName(String(item.name ?? 'Account')),
+        }))}
+        accountLocked={locked}
+        categories={
+          locked
+            ? undefined
+            : categories.map((item) => ({
+                id: recordId(item),
+                name: String(item.name ?? 'Category'),
+                icon: text(item.icon) || undefined,
+                color: text(item.color) || undefined,
+              }))
+        }
+        members={people}
+        currentUserId={userId}
+        composer={composer}
+        payerEditable
+        offline={!isConnected}
+        error={error}
+        saving={saving}
+        onSubmit={review}
+        onBack={() => router.back()}
+      />
+      <ExpenseImpactSheet
+        visible={reviewing}
+        onClose={() => setReviewing(false)}
+        onConfirm={() => void save()}
+        impact={impact}
+        people={people}
+        currency={currency}
+        saving={saving}
+      />
+    </>
   );
 }

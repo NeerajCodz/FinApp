@@ -14,7 +14,7 @@ import type { LocalRecord } from '@/local/repository';
 import { Alert } from 'react-native';
 import { commitLocalWrite } from '@/local/commands';
 import { displayAccountName, ledgerTransaction, recordIds, recordIndex } from '@/lib/ledger';
-import { canEditGroupExpense } from '@/lib/groupExpenseEditing';
+import { GroupExpenseDetail } from '@/components/finance/GroupExpenseDetail';
 
 export default function TransactionDetailRoute() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -57,9 +57,8 @@ export default function TransactionDetailRoute() {
     record?.groupId && transaction?.type === 'expense' ? 'split' : type;
   const editable = Boolean(
     transaction &&
-    (record?.groupId
-      ? canEditGroupExpense(record, userId)
-      : ['expense', 'income', 'transfer'].includes(String(transaction.type))),
+    !record?.groupId &&
+    ['expense', 'income', 'transfer'].includes(String(transaction.type)),
   );
   const duplicable = Boolean(
     transaction &&
@@ -128,6 +127,8 @@ export default function TransactionDetailRoute() {
       },
     ]);
   }
+  // Shared expenses get their own view: payers, shares, edit/delete and history.
+  if (record?.groupId && record.type === 'expense') return <GroupExpenseDetail record={record} />;
   return (
     <TransactionDetailScreen
       referenceId={id}

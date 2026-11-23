@@ -701,7 +701,9 @@ describe('local financial repository', () => {
     expect(await balances()).toEqual({ alice: 10n, bob: 50n, carol: -30n, dave: -30n });
     const participants = await repo.readLocal(userId, 'expenseParticipant');
     expect(participants.map((row) => row.userId).sort()).toEqual(['alice', 'carol', 'dave']);
-    const [edit] = await repo.listOutbox(userId);
+    const edit = (await repo.listOutbox(userId)).find(
+      (entry) => entry.operation === 'group.updateExpense',
+    );
     expect(edit?.operation).toBe('group.updateExpense');
     expect(deserializeLocalValue<Record<string, unknown>>(edit!.payload)).toMatchObject({
       transactionId: 'cloud-dinner',
