@@ -329,3 +329,48 @@ export function calculateBilateralBalance(
   }
   return balance;
 }
+
+export type BalanceMap = Record<string, bigint>;
+
+/** Non-zero per-member balance changes between two projections. */
+export function balanceDeltas(before: BalanceMap, after: BalanceMap): BalanceMap {
+  const deltas: BalanceMap = {};
+  for (const userId of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const delta = (after[userId] ?? 0n) - (before[userId] ?? 0n);
+    if (delta !== 0n) deltas[userId] = delta;
+  }
+  return deltas;
+}
+
+export type SettledImpact = {
+  userId: string;
+  before: bigint;
+  after: bigint;
+  /** The member had settled up and the edit now leaves them owed money back. */
+  credit: boolean;
+};
+
+/**
+ * Members whose balance an edit changes after they already recorded a settlement in the
+ * group. Settlements stay as real payments, so a lowered share becomes a credit.
+ */
+export function settledImpact(
+  before: BalanceMap,
+  after: BalanceMap,
+  settledUserIds: Iterable<string>,
+): SettledImpact[] {
+  const deltas = balanceDeltas(before, after);
+  return [...new Set(settledUserIds)]
+    .filter((userId) => deltas[userId] !== undefined)
+    .sort()
+    .map((userId) => {
+      const previous = before[userId] ?? 0n;
+      const next = after[userId] ?? 0n;
+      return { userId, before: previous, after: next, credit: next > 0n && previous <= 0n };
+    });
+}
+
+/** Serializes balances for storage, e.g. in ledger events. */
+export function serializeBalances(balances: BalanceMap): Record<string, string> {
+  return Object.fromEntries(Object.entries(balances).map(([key, value]) => [key, String(value)]));
+}

@@ -7,7 +7,20 @@ import { requireAdmin, requireMember, type Membership } from '../shared/permissi
 import { changeMemberRole, createGroup, type Group, validateBillImageMetadata } from './domain';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
-import { allocateParticipants, matchesAllocation } from '../splits/domain';
+import {
+  allocateParticipants,
+  balanceDeltas,
+  matchesAllocation,
+  settledImpact,
+} from '../splits/domain';
+import {
+  isGroupAdmin,
+  ledgerBalances,
+  loadGroupLedger,
+  recordLedgerEvent,
+  settledUsers,
+} from './ledger';
+import { formatMinor } from '../shared/money';
 import { assertCurrency } from '../shared/validators';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 
@@ -1191,6 +1204,78 @@ export const addExpense = mutation({
   },
 });
 
+const splitParticipantValidator = v.object({
+  userId: v.id('users'),
+  amountMinor: v.int64(),
+  method: v.union(
+    v.literal('equal'),
+    v.literal('exact'),
+    v.literal('percentage'),
+    v.literal('shares'),
+  ),
+  basisValue: v.optional(v.string()),
+});
+
+type SplitParticipantInput = {
+  userId: Id<'users'>;
+  amountMinor: bigint;
+  method: 'equal' | 'exact' | 'percentage' | 'shares';
+  basisValue?: string;
+};
+
+function assertParticipantSplit(
+  amountMinor: bigint,
+  participants: readonly SplitParticipantInput[],
+) {
+  const method = participants[0]?.method;
+  if (
+    !method ||
+    new Set(participants.map((item) => item.userId)).size !== participants.length ||
+    participants.some(
+      (item) =>
+        item.method !== method ||
+        item.amountMinor < 0n ||
+        (method === 'equal' ? item.basisValue !== undefined : !/^\d+$/.test(item.basisValue ?? '')),
+    ) ||
+    participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== amountMinor ||
+    !matchesAllocation(
+      amountMinor,
+      participants,
+      method,
+      method === 'equal' ? undefined : participants.map((item) => BigInt(item.basisValue!)),
+    )
+  )
+    throw new Error('INVALID_SPLIT');
+}
+
+/** Patches rows matched by user, inserts new users and deletes dropped ones. */
+async function replaceRows<
+  Row extends { userId: Id<'users'> },
+  Next extends { userId: Id<'users'> },
+>(
+  existingRows: readonly Row[],
+  nextRows: readonly Next[],
+  update: (existing: Row, next: Next) => Promise<unknown>,
+  insert: (next: Next) => Promise<unknown>,
+  remove: (row: Row) => Promise<unknown>,
+): Promise<Row[]> {
+  const remaining = new Map(existingRows.map((row) => [row.userId, row]));
+  for (const next of nextRows) {
+    const existing = remaining.get(next.userId);
+    if (existing) {
+      await update(existing, next);
+      remaining.delete(next.userId);
+    } else await insert(next);
+  }
+  for (const row of remaining.values()) await remove(row);
+  return [...remaining.values()];
+}
+
+/**
+ * Edits a group expense. The creator or a group admin may edit. Balances are recomputed and
+ * existing settlements stay as real payments, so a lowered share becomes a credit. Affected
+ * members are notified and the change is recorded in the ledger trail.
+ */
 export const updateExpense = mutation({
   args: {
     transactionId: v.id('transactions'),
@@ -1202,19 +1287,11 @@ export const updateExpense = mutation({
     categoryId: v.optional(v.id('categories')),
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
-    participants: v.array(
-      v.object({
-        userId: v.id('users'),
-        amountMinor: v.int64(),
-        method: v.union(
-          v.literal('equal'),
-          v.literal('exact'),
-          v.literal('percentage'),
-          v.literal('shares'),
-        ),
-        basisValue: v.optional(v.string()),
-      }),
-    ),
+    participants: v.array(splitParticipantValidator),
+    /** Who paid. Omitted: existing payers are scaled to the new total. */
+    payers: v.optional(v.array(v.object({ userId: v.id('users'), amountMinor: v.int64() }))),
+    /** Version the client edited; a mismatch means someone else changed the expense. */
+    expectedVersion: v.optional(v.number()),
     clientMutationId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -1234,7 +1311,6 @@ export const updateExpense = mutation({
     const transaction = await ctx.db.get(args.transactionId);
     if (
       !transaction ||
-      transaction.ownerId !== user._id ||
       !transaction.groupId ||
       transaction.type !== 'expense' ||
       transaction.deletedAt !== undefined ||
@@ -1243,9 +1319,8 @@ export const updateExpense = mutation({
       throw new Error('INSUFFICIENT_PERMISSION');
     const groupId = ctx.db.normalizeId('groups', transaction.groupId);
     if (!groupId) throw new Error('INSUFFICIENT_PERMISSION');
-    const [group, account, members, payers, previousParticipants] = await Promise.all([
+    const [group, members, payers, previousParticipants] = await Promise.all([
       ctx.db.get(groupId),
-      ctx.db.get(args.accountId),
       ctx.db
         .query('groupMembers')
         .withIndex('by_group', (q) => q.eq('groupId', groupId))
@@ -1260,50 +1335,47 @@ export const updateExpense = mutation({
         .collect(),
     ]);
     if (!group || group.archivedAt !== undefined) throw new Error('GROUP_ARCHIVED');
-    if (!members.some((member) => member.userId === user._id)) throw new Error('NOT_MEMBER');
-    if (!account || account.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
+    const editor = members.find((member) => member.userId === user._id);
+    if (!editor) throw new Error('NOT_MEMBER');
+    const isCreator = transaction.ownerId === user._id;
+    if (!isCreator && !isGroupAdmin(editor.role)) throw new Error('INSUFFICIENT_PERMISSION');
+    const currentVersion = transaction.version ?? 1;
+    if (args.expectedVersion !== undefined && args.expectedVersion !== currentVersion)
+      throw new Error('TRANSACTION_CHANGED');
+    // Only the creator can move the expense to another of their own accounts.
+    if (!isCreator && args.accountId !== transaction.accountId)
+      throw new Error('INSUFFICIENT_PERMISSION');
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.ownerId !== transaction.ownerId)
+      throw new Error('INSUFFICIENT_PERMISSION');
     const currency = args.currency.toUpperCase();
     assertCurrency(currency);
     if (
       currency !== group.currency ||
       currency !== account.currency ||
-      account.archivedAt !== undefined
+      (account.archivedAt !== undefined && args.accountId !== transaction.accountId)
     )
       throw new Error('CURRENCY_MISMATCH');
     if (args.amountMinor <= 0n || !args.title.trim()) throw new Error('INVALID_AMOUNT');
     if (!Number.isSafeInteger(args.occurredAt) || args.occurredAt <= 0)
       throw new Error('INVALID_TRANSACTION');
-    if (args.categoryId !== undefined) {
+    if (args.categoryId !== undefined && args.categoryId !== transaction.categoryId) {
       const category = await ctx.db.get(args.categoryId);
-      if (!category || category.ownerId !== user._id || category.archivedAt !== undefined)
+      if (
+        !category ||
+        category.ownerId !== transaction.ownerId ||
+        category.archivedAt !== undefined
+      )
         throw new Error('INVALID_CATEGORY');
     }
-    const method = args.participants[0]?.method;
-    if (
-      !method ||
-      new Set(args.participants.map((item) => item.userId)).size !== args.participants.length ||
-      args.participants.some(
-        (item) =>
-          item.method !== method ||
-          item.amountMinor < 0n ||
-          (method === 'equal'
-            ? item.basisValue !== undefined
-            : !/^\d+$/.test(item.basisValue ?? '')),
-      ) ||
-      args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor
-    )
-      throw new Error('INVALID_SPLIT');
-    if (
-      !matchesAllocation(
-        args.amountMinor,
-        args.participants,
-        method,
-        method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
-      )
-    )
-      throw new Error('INVALID_SPLIT');
-    const memberIds = new Set(members.map((member) => member.userId));
-    if (args.participants.some((participant) => !memberIds.has(participant.userId)))
+    assertParticipantSplit(args.amountMinor, args.participants);
+    // Current members, plus anyone already on this expense (e.g. a member who has left).
+    const allowedIds = new Set<string>([
+      ...members.map((member) => member.userId),
+      ...previousParticipants.map((participant) => participant.userId),
+      ...payers.map((payer) => payer.userId),
+    ]);
+    if (args.participants.some((participant) => !allowedIds.has(participant.userId)))
       throw new Error('NOT_MEMBER');
     if (
       !payers.length ||
@@ -1312,13 +1384,30 @@ export const updateExpense = mutation({
       payers.reduce((sum, payer) => sum + payer.amountMinor, 0n) !== transaction.amountMinor
     )
       throw new Error('INVALID_SPLIT');
-    const payerAllocation = allocateParticipants(
-      args.amountMinor,
-      payers.map((payer) => payer.userId),
-      'shares',
-      payers.map((payer) => payer.amountMinor),
-    );
+    let nextPayers: { userId: Id<'users'>; amountMinor: bigint }[];
+    if (args.payers) {
+      if (
+        !args.payers.length ||
+        new Set(args.payers.map((payer) => payer.userId)).size !== args.payers.length ||
+        args.payers.some((payer) => payer.amountMinor < 0n) ||
+        args.payers.reduce((sum, payer) => sum + payer.amountMinor, 0n) !== args.amountMinor
+      )
+        throw new Error('INVALID_SPLIT');
+      if (args.payers.some((payer) => !allowedIds.has(payer.userId))) throw new Error('NOT_MEMBER');
+      nextPayers = args.payers;
+    } else {
+      nextPayers = allocateParticipants(
+        args.amountMinor,
+        payers.map((payer) => payer.userId),
+        'shares',
+        payers.map((payer) => payer.amountMinor),
+      ).map((payer) => ({ userId: payer.userId as Id<'users'>, amountMinor: payer.amountMinor }));
+    }
+
+    const ledgerBefore = await loadGroupLedger(ctx, groupId, group.currency);
+    const balancesBefore = ledgerBalances(ledgerBefore);
     const now = Date.now();
+    const nextVersion = currentVersion + 1;
     await ctx.db.patch(args.transactionId, {
       accountId: args.accountId,
       title: args.title.trim(),
@@ -1328,32 +1417,53 @@ export const updateExpense = mutation({
       categoryId: args.categoryId,
       merchant: args.merchant?.trim() || undefined,
       note: args.note?.trim() || undefined,
+      version: nextVersion,
+      updatedBy: user._id,
       updatedAt: now,
     });
-    for (let index = 0; index < payers.length; index++) {
-      await ctx.db.patch(payers[index]!._id, { amountMinor: payerAllocation[index]!.amountMinor });
-    }
-    const remaining = new Map(
-      previousParticipants.map((participant) => [participant.userId, participant]),
-    );
-    for (const participant of args.participants) {
-      const existing = remaining.get(participant.userId);
-      if (existing) {
-        await ctx.db.patch(existing._id, {
-          amountMinor: participant.amountMinor,
-          method: participant.method,
-          basisValue: participant.basisValue,
-        });
-        remaining.delete(participant.userId);
-      } else {
-        await ctx.db.insert('expenseParticipants', {
+    const removedPayers = await replaceRows(
+      payers,
+      nextPayers,
+      (existing, next) => ctx.db.patch(existing._id, { amountMinor: next.amountMinor }),
+      (next) =>
+        ctx.db.insert('expensePayers', {
           transactionId: args.transactionId,
-          ...participant,
-        });
-      }
-    }
-    for (const participant of remaining.values()) await ctx.db.delete(participant._id);
+          userId: next.userId,
+          amountMinor: next.amountMinor,
+        }),
+      (row) => ctx.db.delete(row._id),
+    );
+    const removedParticipants = await replaceRows(
+      previousParticipants,
+      args.participants,
+      (existing, next) =>
+        ctx.db.patch(existing._id, {
+          amountMinor: next.amountMinor,
+          method: next.method,
+          basisValue: next.basisValue,
+        }),
+      (next) =>
+        ctx.db.insert('expenseParticipants', { transactionId: args.transactionId, ...next }),
+      (row) => ctx.db.delete(row._id),
+    );
     await ctx.db.patch(groupId, { updatedAt: now });
+
+    const ledgerAfter = await loadGroupLedger(ctx, groupId, group.currency);
+    const balancesAfter = ledgerBalances(ledgerAfter);
+    const deltas = balanceDeltas(balancesBefore, balancesAfter);
+    const impact = settledImpact(balancesBefore, balancesAfter, settledUsers(ledgerBefore));
+    await recordLedgerEvent(ctx, {
+      groupId,
+      actorId: user._id,
+      kind: 'expense.updated',
+      entityType: 'transaction',
+      entityId: String(args.transactionId),
+      summary: args.title.trim(),
+      balanceDeltas: deltas,
+      version: nextVersion,
+      createdAt: now,
+    });
+
     const [updated, updatedPayers, updatedParticipants] = await Promise.all([
       ctx.db.get(args.transactionId),
       ctx.db
@@ -1381,6 +1491,8 @@ export const updateExpense = mutation({
     for (const scope of scopes) {
       for (const payer of updatedPayers)
         await recordSyncChange(ctx, scope, 'expensePayers', String(payer._id), now, payer);
+      for (const payer of removedPayers)
+        await recordSyncChange(ctx, scope, 'expensePayers', String(payer._id), now, undefined, now);
       for (const participant of updatedParticipants)
         await recordSyncChange(
           ctx,
@@ -1390,7 +1502,7 @@ export const updateExpense = mutation({
           now,
           participant,
         );
-      for (const participant of remaining.values())
+      for (const participant of removedParticipants)
         await recordSyncChange(
           ctx,
           scope,
@@ -1404,6 +1516,27 @@ export const updateExpense = mutation({
         ...group,
         updatedAt: now,
       });
+    }
+    const memberIds = new Set<string>(members.map((member) => member.userId));
+    const title = args.title.trim();
+    for (const [userId, delta] of Object.entries(deltas)) {
+      if (userId === user._id || !memberIds.has(userId)) continue;
+      const settled = impact.find((item) => item.userId === userId);
+      const body = settled?.credit
+        ? `“${title}” changed after you settled up. You are now owed ${formatMinor(settled.after, currency)}.`
+        : settled
+          ? `“${title}” changed after you settled up. Your balance moved by ${formatMinor(delta, currency)}.`
+          : `“${title}” changed. Your balance moved by ${formatMinor(delta, currency)}.`;
+      await createNotification(
+        ctx,
+        userId as Id<'users'>,
+        `split-edit:${args.transactionId}:${nextVersion}`,
+        'group',
+        'transaction',
+        String(args.transactionId),
+        `Expense updated in ${group.name}`,
+        body,
+      );
     }
     return args.transactionId;
   },

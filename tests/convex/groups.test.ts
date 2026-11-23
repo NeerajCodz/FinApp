@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   allocateParticipants,
+  balanceDeltas,
   calculateNetBalances,
   createSplit,
   matchesAllocation,
+  settledImpact,
 } from '../../convex/splits/domain';
 import { createSettlement } from '../../convex/settlements/domain';
 import { changeMemberRole, renameGroup } from '../../convex/groups/domain';
@@ -114,5 +116,16 @@ describe('deterministic split allocation', () => {
         'equal',
       ),
     ).toBe(false);
+  });
+});
+
+describe('edit impact', () => {
+  it('reports per-member deltas and credits for members who already settled', () => {
+    const before = { owner: 1500n, member: 0n, other: -1500n };
+    const after = { owner: 500n, member: 1000n, other: -1500n };
+    expect(balanceDeltas(before, after)).toEqual({ owner: -1000n, member: 1000n });
+    expect(settledImpact(before, after, ['member', 'other'])).toEqual([
+      { userId: 'member', before: 0n, after: 1000n, credit: true },
+    ]);
   });
 });
