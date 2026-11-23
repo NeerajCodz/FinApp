@@ -10,10 +10,12 @@ import { createNotification } from '../notifications/mutations';
 import {
   allocateParticipants,
   balanceDeltas,
+  calculateNetBalances,
   matchesAllocation,
   settledImpact,
 } from '../splits/domain';
 import {
+  groupBalances,
   isGroupAdmin,
   ledgerBalances,
   loadGroupLedger,
@@ -1141,6 +1143,21 @@ export const addExpense = mutation({
       });
     }
     await ctx.db.patch(args.groupId, { updatedAt: now });
+    await recordLedgerEvent(ctx, {
+      groupId: args.groupId,
+      actorId: user._id,
+      kind: 'expense.created',
+      entityType: 'transaction',
+      entityId: String(transactionId),
+      summary: args.title.trim(),
+      balanceDeltas: calculateNetBalances(
+        [{ userId: user._id, amountMinor: args.amountMinor }],
+        args.participants,
+        [],
+      ),
+      version: 1,
+      createdAt: now,
+    });
     const [transaction, payers, participants, groupMembers] = await Promise.all([
       ctx.db.get(transactionId),
       ctx.db
@@ -1536,6 +1553,117 @@ export const updateExpense = mutation({
         String(args.transactionId),
         `Expense updated in ${group.name}`,
         body,
+      );
+    }
+    return args.transactionId;
+  },
+});
+
+/**
+ * Soft-deletes a group expense. The creator or a group admin may delete; split rows are kept
+ * for history and the projection ignores deleted expenses. Affected members are notified.
+ */
+export const deleteExpense = mutation({
+  args: {
+    transactionId: v.id('transactions'),
+    expectedVersion: v.optional(v.number()),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.deleteExpense',
+    );
+    if (replay.found) {
+      const previousId = ctx.db.normalizeId('transactions', String(replay.result));
+      if (!previousId) throw new Error('INVALID_MUTATION_RECEIPT');
+      return previousId;
+    }
+    const transaction = await ctx.db.get(args.transactionId);
+    if (
+      !transaction ||
+      !transaction.groupId ||
+      transaction.type !== 'expense' ||
+      transaction.deletedAt !== undefined
+    )
+      throw new Error('INSUFFICIENT_PERMISSION');
+    const groupId = ctx.db.normalizeId('groups', transaction.groupId);
+    if (!groupId) throw new Error('INSUFFICIENT_PERMISSION');
+    const [group, members] = await Promise.all([
+      ctx.db.get(groupId),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (q) => q.eq('groupId', groupId))
+        .collect(),
+    ]);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_ARCHIVED');
+    const actor = members.find((member) => member.userId === user._id);
+    if (!actor) throw new Error('NOT_MEMBER');
+    if (transaction.ownerId !== user._id && !isGroupAdmin(actor.role))
+      throw new Error('INSUFFICIENT_PERMISSION');
+    const currentVersion = transaction.version ?? 1;
+    if (args.expectedVersion !== undefined && args.expectedVersion !== currentVersion)
+      throw new Error('TRANSACTION_CHANGED');
+
+    const ledgerBefore = await loadGroupLedger(ctx, groupId, group.currency);
+    const balancesBefore = ledgerBalances(ledgerBefore);
+    const now = Date.now();
+    const nextVersion = currentVersion + 1;
+    await ctx.db.patch(args.transactionId, {
+      deletedAt: now,
+      deletedBy: user._id,
+      version: nextVersion,
+      updatedAt: now,
+    });
+    await ctx.db.patch(groupId, { updatedAt: now });
+    const balancesAfter = await groupBalances(ctx, groupId, group.currency);
+    const deltas = balanceDeltas(balancesBefore, balancesAfter);
+    await recordLedgerEvent(ctx, {
+      groupId,
+      actorId: user._id,
+      kind: 'expense.deleted',
+      entityType: 'transaction',
+      entityId: String(args.transactionId),
+      summary: transaction.title,
+      balanceDeltas: deltas,
+      version: nextVersion,
+      createdAt: now,
+    });
+    const deleted = await ctx.db.get(args.transactionId);
+    const scopes = members.map((member) => member.userId);
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.deleteExpense',
+      args.transactionId,
+      'transactions',
+      String(args.transactionId),
+      now,
+      deleted,
+      scopes,
+    );
+    for (const scope of scopes)
+      await recordSyncChange(ctx, scope, 'groups', String(groupId), now, {
+        ...group,
+        updatedAt: now,
+      });
+    const memberIds = new Set<string>(scopes);
+    for (const [userId, delta] of Object.entries(deltas)) {
+      if (userId === user._id || !memberIds.has(userId)) continue;
+      await createNotification(
+        ctx,
+        userId as Id<'users'>,
+        `split-delete:${args.transactionId}`,
+        'group',
+        'group',
+        String(groupId),
+        `Expense removed from ${group.name}`,
+        `“${transaction.title}” was deleted. Your balance moved by ${formatMinor(delta, group.currency)}.`,
       );
     }
     return args.transactionId;

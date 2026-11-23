@@ -200,4 +200,34 @@ describe('group ledger integrity', () => {
       }),
     ).rejects.toThrow('NOT_MEMBER');
   });
+
+  it('deletes an expense for the creator or an admin and drops it from balances', async () => {
+    const { t, ids, as, groupId, addExpense } = await setupGroup();
+    const expenseId = await addExpense('owner', 'Taxi', 800n, [ids.owner, ids.member]);
+    await expect(
+      as('member').mutation(api.groups.mutations.deleteExpense, { transactionId: expenseId }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+    await as('admin').mutation(api.groups.mutations.deleteExpense, {
+      transactionId: expenseId,
+      expectedVersion: 1,
+    });
+    const state = await t.run(async (ctx) => ({
+      expense: await ctx.db.get(expenseId),
+      events: await ctx.db.query('ledgerEvents').collect(),
+      notifications: await ctx.db
+        .query('notifications')
+        .withIndex('by_recipient_createdAt', (q) => q.eq('recipientId', ids.member))
+        .collect(),
+    }));
+    expect(state.expense).toMatchObject({ deletedBy: ids.admin, version: 2 });
+    expect(state.events.map((event) => event.kind)).toEqual(['expense.created', 'expense.deleted']);
+    expect(state.notifications.some((item) => item.eventKey === `split-delete:${expenseId}`)).toBe(
+      true,
+    );
+    const detail = await as('owner').query(api.groups.queries.detail, { groupId });
+    expect(detail?.expenses).toEqual([]);
+    await expect(
+      as('owner').mutation(api.groups.mutations.deleteExpense, { transactionId: expenseId }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+  });
 });
