@@ -199,6 +199,25 @@ export const detail = query({
           gender: profile?.gender,
           avatarUrl: profile ? await avatarUrlForUser(ctx, profile) : null,
           role: member.role,
+          joinedAt: member.joinedAt,
+        };
+      }),
+    );
+    // People who left keep their names in expense history.
+    const formerRows = await ctx.db
+      .query('formerGroupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', groupId))
+      .collect();
+    const formerMembers = await Promise.all(
+      formerRows.map(async (member) => {
+        const profile = await ctx.db.get(member.userId);
+        return {
+          id: member.userId,
+          displayName: profile?.displayName ?? profile?.name ?? 'Former member',
+          username: profile?.username,
+          avatarId: profile?.avatarId,
+          joinedAt: member.joinedAt,
+          leftAt: member.leftAt,
         };
       }),
     );
@@ -209,6 +228,7 @@ export const detail = query({
     return {
       ...group,
       members,
+      formerMembers,
       expenses: expenses
         .filter((expense) => expense.deletedAt === undefined && expense.status !== 'voided')
         .sort((left, right) => right.occurredAt - left.occurredAt)

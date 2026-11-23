@@ -288,4 +288,100 @@ describe('group ledger integrity', () => {
       'settlement.created',
     ]);
   });
+
+  it('leaves past expenses alone when someone joins, until an admin opts them in', async () => {
+    const { t, ids, as, groupId, addExpense } = await setupGroup();
+    const expenseId = await addExpense('owner', 'Wifi', 900n, [ids.owner, ids.member]);
+    const linkToken = await t.run(async (ctx) => {
+      const token = 'a'.repeat(64);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+      const tokenHash = Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+      ).join('');
+      await ctx.db.insert('groupInvitationLinks', {
+        groupId,
+        creatorId: ids.owner,
+        tokenHash,
+        expiresAt: Date.now() + 60_000,
+        createdAt: Date.now(),
+      });
+      return token;
+    });
+    await as('late').mutation(api.groups.mutations.joinByInvitationLink, { token: linkToken });
+    const participantsAfterJoin = await t.run((ctx) =>
+      ctx.db
+        .query('expenseParticipants')
+        .withIndex('by_transaction', (q) => q.eq('transactionId', expenseId))
+        .collect(),
+    );
+    expect(participantsAfterJoin.map((row) => row.userId)).toEqual([ids.owner, ids.member]);
+    const joinNotices = await t.run((ctx) =>
+      ctx.db
+        .query('notifications')
+        .withIndex('by_recipient_createdAt', (q) => q.eq('recipientId', ids.member))
+        .collect(),
+    );
+    expect(joinNotices.some((item) => item.title === 'Late joined Flat')).toBe(true);
+    const detail = await as('owner').query(api.groups.queries.detail, { groupId });
+    expect(detail?.members.find((member) => member.id === ids.late)?.joinedAt).toEqual(
+      expect.any(Number),
+    );
+
+    await expect(
+      as('member').mutation(api.groups.mutations.addMembersToExpenses, {
+        groupId,
+        expenseIds: [expenseId],
+        userIds: [ids.late],
+      }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+    expect(
+      await as('admin').mutation(api.groups.mutations.addMembersToExpenses, {
+        groupId,
+        expenseIds: [expenseId],
+        userIds: [ids.late],
+      }),
+    ).toBe(1);
+    const rows = await t.run((ctx) =>
+      ctx.db
+        .query('expenseParticipants')
+        .withIndex('by_transaction', (q) => q.eq('transactionId', expenseId))
+        .collect(),
+    );
+    expect(rows.map((row) => [row.userId, row.amountMinor])).toEqual([
+      [ids.owner, 300n],
+      [ids.member, 300n],
+      [ids.late, 300n],
+    ]);
+    expect(await t.run((ctx) => ctx.db.get(expenseId))).toMatchObject({ version: 2 });
+    const lateNotices = await t.run((ctx) =>
+      ctx.db
+        .query('notifications')
+        .withIndex('by_recipient_createdAt', (q) => q.eq('recipientId', ids.late))
+        .collect(),
+    );
+    expect(lateNotices.map((item) => item.title)).toContain('Added to past expenses in Flat');
+  });
+
+  it('asks for a manual edit when an exact split gains a member', async () => {
+    const { ids, as, accounts, groupId } = await setupGroup();
+    const expenseId = await as('owner').mutation(api.groups.mutations.addExpense, {
+      groupId,
+      accountId: accounts.owner,
+      title: 'Tickets',
+      amountMinor: 1000n,
+      currency: 'INR',
+      occurredAt: Date.UTC(2026, 5, 1),
+      participants: [
+        { userId: ids.owner, amountMinor: 700n, method: 'exact', basisValue: '700' },
+        { userId: ids.member, amountMinor: 300n, method: 'exact', basisValue: '300' },
+      ],
+    });
+    await expect(
+      as('owner').mutation(api.groups.mutations.addMembersToExpenses, {
+        groupId,
+        expenseIds: [expenseId],
+        userIds: [ids.admin],
+      }),
+    ).rejects.toThrow('MANUAL_SPLIT_REQUIRED');
+  });
 });

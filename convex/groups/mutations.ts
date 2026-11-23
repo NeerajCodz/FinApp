@@ -1,6 +1,6 @@
 import { internal } from '../_generated/api';
 import { internalMutation, mutation, type MutationCtx } from '../_generated/server';
-import type { Id } from '../_generated/dataModel';
+import type { Doc, Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireIdentity, requireUser } from '../shared/auth';
 import { requireAdmin, requireMember, type Membership } from '../shared/permissions';
@@ -636,6 +636,7 @@ export const respondToInvitation = mutation({
       .withIndex('by_group', (query) => query.eq('groupId', group._id))
       .collect();
     let membership = memberships.find((member) => member.userId === user._id);
+    const joinedNow = !membership;
     if (!membership) {
       const membershipId = await ctx.db.insert('groupMembers', {
         groupId: group._id,
@@ -684,6 +685,14 @@ export const respondToInvitation = mutation({
       `${user.displayName ?? user.name ?? 'A user'} accepted your invitation`,
       `Your invitation to ${group.name} was accepted.`,
     );
+    if (joinedNow)
+      await announceMemberJoined(
+        ctx,
+        group,
+        user,
+        memberships.map((member) => member.userId).filter((id) => id !== invite.inviterId),
+        now,
+      );
     await publishMutationResult(
       ctx,
       user._id,
@@ -822,6 +831,13 @@ export const joinByInvitationLink = mutation({
       await recordSyncChange(ctx, scopeUserId, 'groupMembers', String(memberId), now, membership);
       await recordSyncChange(ctx, scopeUserId, 'groups', String(group._id), now, updatedGroup);
     }
+    await announceMemberJoined(
+      ctx,
+      group,
+      user,
+      memberships.map((member) => member.userId),
+      now,
+    );
     return group._id;
   },
 });
@@ -1667,5 +1683,206 @@ export const deleteExpense = mutation({
       );
     }
     return args.transactionId;
+  },
+});
+
+/**
+ * Records a member joining: clears any former-member record, writes the audit event and tells
+ * existing members. Past expenses are untouched; admins can opt the newcomer into them with
+ * addMembersToExpenses.
+ */
+async function announceMemberJoined(
+  ctx: MutationCtx,
+  group: Doc<'groups'>,
+  user: Doc<'users'>,
+  existingMemberIds: readonly Id<'users'>[],
+  now: number,
+) {
+  const former = await ctx.db
+    .query('formerGroupMembers')
+    .withIndex('by_group_user', (q) => q.eq('groupId', group._id).eq('userId', user._id))
+    .collect();
+  for (const row of former) await ctx.db.delete(row._id);
+  const name = user.displayName ?? user.name ?? 'A new member';
+  await recordLedgerEvent(ctx, {
+    groupId: group._id,
+    actorId: user._id,
+    kind: 'member.joined',
+    entityType: 'member',
+    entityId: String(user._id),
+    summary: `${name} joined`,
+    createdAt: now,
+  });
+  for (const memberId of existingMemberIds) {
+    if (memberId === user._id) continue;
+    await createNotification(
+      ctx,
+      memberId,
+      `group:${group._id}:member-joined:${user._id}:${now}`,
+      'group',
+      'group',
+      String(group._id),
+      `${name} joined ${group.name}`,
+      'Earlier expenses stay as they were. Admins can add them to past expenses if needed.',
+    );
+  }
+}
+
+/**
+ * Adds members (typically late joiners) to existing expenses. Equal splits are recomputed
+ * across everyone; share splits give each newcomer one share. Exact and percentage splits
+ * need a manual edit, because the new amounts cannot be inferred.
+ */
+export const addMembersToExpenses = mutation({
+  args: {
+    groupId: v.id('groups'),
+    expenseIds: v.array(v.id('transactions')),
+    userIds: v.array(v.id('users')),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.addMembersToExpenses',
+    );
+    if (replay.found) return Number(replay.result);
+    if (!args.expenseIds.length || !args.userIds.length) throw new Error('INVALID_SPLIT');
+    if (args.expenseIds.length > 50 || args.userIds.length > 20) throw new Error('LIMIT_EXCEEDED');
+    const [group, members] = await Promise.all([
+      ctx.db.get(args.groupId),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
+        .collect(),
+    ]);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_ARCHIVED');
+    const actor = members.find((member) => member.userId === user._id);
+    if (!actor) throw new Error('NOT_MEMBER');
+    const memberIds = new Set<string>(members.map((member) => member.userId));
+    if (args.userIds.some((userId) => !memberIds.has(userId))) throw new Error('NOT_MEMBER');
+
+    const balancesBefore = await groupBalances(ctx, args.groupId, group.currency);
+    const now = Date.now();
+    const changedRows: Doc<'expenseParticipants'>[] = [];
+    const changedExpenses: Doc<'transactions'>[] = [];
+    const addedTo = new Map<Id<'users'>, string[]>();
+    for (const expenseId of [...new Set(args.expenseIds)]) {
+      const expense = await ctx.db.get(expenseId);
+      if (
+        !expense ||
+        expense.groupId !== String(args.groupId) ||
+        expense.type !== 'expense' ||
+        expense.status !== 'posted' ||
+        expense.deletedAt !== undefined
+      )
+        throw new Error('INSUFFICIENT_PERMISSION');
+      if (expense.ownerId !== user._id && !isGroupAdmin(actor.role))
+        throw new Error('INSUFFICIENT_PERMISSION');
+      const participants = await ctx.db
+        .query('expenseParticipants')
+        .withIndex('by_transaction', (q) => q.eq('transactionId', expenseId))
+        .collect();
+      const method = participants[0]?.method;
+      const newcomers = args.userIds.filter(
+        (userId) => !participants.some((participant) => participant.userId === userId),
+      );
+      if (!newcomers.length || !method) continue;
+      if (method !== 'equal' && method !== 'shares') throw new Error('MANUAL_SPLIT_REQUIRED');
+      const userIds = [...participants.map((participant) => participant.userId), ...newcomers];
+      const values =
+        method === 'shares'
+          ? [
+              ...participants.map((participant) => BigInt(participant.basisValue ?? '1')),
+              ...newcomers.map(() => 1n),
+            ]
+          : undefined;
+      const allocation = allocateParticipants(expense.amountMinor, userIds, method, values);
+      for (const [index, row] of allocation.entries()) {
+        const existing = participants[index];
+        if (existing) {
+          if (existing.amountMinor !== row.amountMinor)
+            await ctx.db.patch(existing._id, { amountMinor: row.amountMinor });
+        } else {
+          const newcomer = row.userId as Id<'users'>;
+          await ctx.db.insert('expenseParticipants', {
+            transactionId: expenseId,
+            userId: newcomer,
+            amountMinor: row.amountMinor,
+            method,
+            ...(method === 'shares' ? { basisValue: '1' } : {}),
+          });
+          addedTo.set(newcomer, [...(addedTo.get(newcomer) ?? []), expense.title]);
+        }
+      }
+      const version = (expense.version ?? 1) + 1;
+      await ctx.db.patch(expenseId, { version, updatedBy: user._id, updatedAt: now });
+      changedExpenses.push((await ctx.db.get(expenseId))!);
+      changedRows.push(
+        ...(await ctx.db
+          .query('expenseParticipants')
+          .withIndex('by_transaction', (q) => q.eq('transactionId', expenseId))
+          .collect()),
+      );
+    }
+    if (!changedExpenses.length) return 0;
+
+    await ctx.db.patch(args.groupId, { updatedAt: now });
+    const balancesAfter = await groupBalances(ctx, args.groupId, group.currency);
+    const deltas = balanceDeltas(balancesBefore, balancesAfter);
+    for (const expense of changedExpenses)
+      await recordLedgerEvent(ctx, {
+        groupId: args.groupId,
+        actorId: user._id,
+        kind: 'expense.membersAdded',
+        entityType: 'transaction',
+        entityId: String(expense._id),
+        summary: expense.title,
+        version: expense.version,
+        createdAt: now,
+      });
+    const scopes = members.map((member) => member.userId);
+    for (const scope of scopes) {
+      for (const expense of changedExpenses)
+        await recordSyncChange(ctx, scope, 'transactions', String(expense._id), now, expense);
+      for (const row of changedRows)
+        await recordSyncChange(ctx, scope, 'expenseParticipants', String(row._id), now, row);
+      await recordSyncChange(ctx, scope, 'groups', String(args.groupId), now, {
+        ...group,
+        updatedAt: now,
+      });
+    }
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'group.addMembersToExpenses',
+      changedExpenses.length,
+      'groups',
+      String(args.groupId),
+      now,
+      { ...group, updatedAt: now },
+      scopes,
+    );
+    for (const [userId, delta] of Object.entries(deltas)) {
+      if (userId === user._id || !memberIds.has(userId)) continue;
+      const titles = addedTo.get(userId as Id<'users'>);
+      await createNotification(
+        ctx,
+        userId as Id<'users'>,
+        `split-members:${args.groupId}:${now}`,
+        'group',
+        'group',
+        String(args.groupId),
+        titles ? `Added to past expenses in ${group.name}` : `Shares updated in ${group.name}`,
+        titles
+          ? `You now share ${titles.length === 1 ? `“${titles[0]}”` : `${titles.length} earlier expenses`}. Your balance moved by ${formatMinor(delta, group.currency)}.`
+          : `A member was added to earlier expenses. Your balance moved by ${formatMinor(delta, group.currency)}.`,
+      );
+    }
+    return changedExpenses.length;
   },
 });
