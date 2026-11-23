@@ -28,5 +28,6 @@ describe('theme guard', () => {
       offenders,
       'Use theme tokens, or mark a deliberate literal with // theme-exempt',
     ).toEqual([]);
-  });
+    // Scans every UI source file; allow for slow disks in the full parallel suite.
+  }, 30_000);
 });

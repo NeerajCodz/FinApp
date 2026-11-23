@@ -1,12 +1,35 @@
 'use client';
 import React from 'react';
-import { Button, useTheme } from '@finapp/ui/web';
-import { Plus, PencilSimple, ChatCircle } from '@phosphor-icons/react';
+import { Button, ListSkeleton, StatTile } from '@finapp/ui/web';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ChartBar,
+  ChatCircle,
+  Gear,
+  Plus,
+  Wallet,
+} from '@phosphor-icons/react';
 import { formatMinor } from '@convex/shared/money';
+import { simplifyDebts } from '@convex/splits/domain';
 import type { GroupChatScreenProps } from './GroupChatScreen';
-import { GroupPage, Crumb, Tile, Metric, PersonAvatar, s } from './GroupUI';
-import { FinanceEmptyState } from './FinanceEmptyState';
+import { GroupPage, Crumb, Tile, PersonAvatar, s } from './GroupUI';
 import { chartPalette } from '../../tokens';
+import type { BalanceMap, TimelineJoin } from '../groupSettle';
+import {
+  GroupExpenseTimeline,
+  IllustratedState,
+  LateJoinerBanner,
+  MemberBalanceBars,
+  NetPositionHero,
+  SectionTitle,
+  SettleCard,
+  SettlementHistoryRow,
+  SuggestedTransfers,
+  settleStyles,
+  type SettlePerson,
+} from './GroupSettleParts';
+
 export type GroupDetailMember = {
   id: string;
   name: string;
@@ -14,6 +37,13 @@ export type GroupDetailMember = {
   avatarId?: string;
   avatarUrl?: string | null;
   role?: string;
+  joinedAt?: number;
+};
+export type GroupDetailFormerMember = {
+  id: string;
+  name: string;
+  avatarId?: string;
+  leftAt: number;
 };
 export type GroupDetailActivity = {
   id: string;
@@ -21,6 +51,7 @@ export type GroupDetailActivity = {
   amountMinor: bigint;
   currency: string;
   date: string;
+  occurredAt?: number;
   category?: string;
   account?: string;
   icon?: string;
@@ -29,33 +60,46 @@ export type GroupDetailActivity = {
 export type GroupDetailSettlement = {
   id: string;
   description: string;
-  amount: string;
+  amountMinor: bigint;
+  currency: string;
   date?: string;
+  note?: string;
 };
 export type GroupDetailScreenProps = {
   group: { name: string; currency: string; icon?: string; color?: string };
   canSettle: boolean;
   balanceStatus: 'loading' | 'unavailable' | 'ready';
-  balance: string;
+  balanceMinor: bigint;
   balanceMeaning: string;
   balanceError?: string;
+  /** Every member's net balance (positive: owed to them). */
+  balances?: BalanceMap;
+  meId?: string | null;
   members: readonly GroupDetailMember[];
+  formerMembers?: readonly GroupDetailFormerMember[];
+  joins?: readonly TimelineJoin[];
+  lateJoiners?: readonly { userId: string; name: string; missedCount: number }[];
+  onIncludeLateJoiner?: (userId: string) => void;
+  onDismissLateJoiner?: (userId: string) => void;
   activities: readonly GroupDetailActivity[];
+  activitiesLoading?: boolean;
   settlements: readonly GroupDetailSettlement[];
   chat: GroupChatScreenProps;
   totalSpend?: string;
   owed?: string;
   owing?: string;
-  memberBalances?: readonly { id: string; name: string; amount: string; meaning: string }[];
   onBack: () => void;
   onOpenChat: () => void;
   onOpenAnalytics: () => void;
   onOpenSettings: () => void;
   onOpenBalances: () => void;
+  onOpenExpenses?: () => void;
   onSettle: () => void;
+  onSettleWith?: (memberId: string) => void;
   onAddExpense: () => void;
   onOpenPerson: (username: string) => void;
   onOpenActivity: (id: string) => void;
+  onRetry?: () => void;
 };
 const colors = [
   chartPalette.volt,
@@ -65,18 +109,27 @@ const colors = [
   chartPalette.pink,
 ];
 export function GroupDetailScreen(p: GroupDetailScreenProps) {
-  const { tokens } = useTheme();
   const ready = p.balanceStatus === 'ready' && !p.balanceError;
-  const unavailable = p.balanceStatus === 'loading' ? 'Loading…' : 'Unavailable';
+  const pending = p.balanceStatus === 'loading' ? 'Loading…' : '—';
+  const currency = p.group.currency;
+  const people: SettlePerson[] = [
+    ...p.members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      avatarUrl: member.avatarUrl,
+      avatarId: member.avatarId,
+    })),
+    ...(p.formerMembers ?? []).filter(
+      (former) => !p.members.some((member) => member.id === former.id),
+    ),
+  ];
+  const transfers = p.balances ? simplifyDebts(p.balances) : [];
+  const allSettled =
+    ready && !!p.balances && Object.values(p.balances).every((value) => value === 0n);
   const categoryTotals = new Map<string, bigint>();
-  const currencyTotals = new Map<string, bigint>();
   for (const activity of p.activities) {
     const category = activity.category ?? 'Shared expenses';
     categoryTotals.set(category, (categoryTotals.get(category) ?? 0n) + activity.amountMinor);
-    currencyTotals.set(
-      activity.currency,
-      (currencyTotals.get(activity.currency) ?? 0n) + activity.amountMinor,
-    );
   }
   const categories = [...categoryTotals.entries()];
   const shownTotal = categories.reduce((sum, [, amount]) => sum + amount, 0n);
@@ -86,186 +139,125 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
     angle += shownTotal > 0n ? Number((amount * 10000n) / shownTotal) / 100 : 0;
     return `${colors[index % colors.length]} ${start}% ${angle}%`;
   });
+  const messages = p.chat.items.filter((item) => item.kind === 'message').slice(-4);
   return (
     <GroupPage>
       <Crumb onBack={p.onBack} current={p.group.name} />
-      <header className={s.hero}>
-        <Tile large icon={p.group.icon} color={p.group.color} />
-        <div className={s.heroCopy}>
+      <header className={settleStyles.heading}>
+        <Tile icon={p.group.icon} color={p.group.color} />
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h1>{p.group.name}</h1>
-          <p className={s.subtitle}>Shared expenses with your group</p>
-          <p className={s.muted}>
-            {p.group.currency} · {p.members.length} members
+          <p className={settleStyles.muted}>
+            {p.members.length} member{p.members.length === 1 ? '' : 's'} · {currency}
           </p>
         </div>
-        <span className={s.avatars}>
-          {p.members.slice(0, 6).map((member) => (
-            <PersonAvatar
-              key={member.id}
-              name={member.name}
-              url={member.avatarUrl}
-              avatarId={member.avatarId}
-              size={38}
-            />
-          ))}
-        </span>
-        <div className={s.actions}>
-          <Button variant="outline" onPress={p.onOpenSettings}>
-            <PencilSimple size={17} /> Edit group
+        <div className={settleStyles.actions}>
+          <Button variant="outline" size="sm" onPress={p.onOpenChat}>
+            <ChatCircle size={16} /> Chat
           </Button>
-          <Button variant="outline" onPress={p.onOpenChat}>
-            <ChatCircle size={17} /> Open chat
-          </Button>
-          <Button onPress={p.onAddExpense}>
-            <Plus size={17} /> Add expense
+          <Button variant="outline" size="sm" onPress={p.onOpenSettings}>
+            <Gear size={16} /> Settings
           </Button>
         </div>
       </header>
-      <section className={`${s.metrics} ${s.five}`}>
-        <Metric
-          label="Total group spend"
-          value={ready && p.totalSpend ? p.totalSpend : unavailable}
-          note="Complete ledger required"
-          icon="phosphor:Wallet"
-          color={tokens.positive}
-        />
-        <Metric
-          label="You are owed"
-          value={ready && p.owed ? p.owed : unavailable}
-          note="Net group balance"
-          icon="phosphor:ArrowUpRight"
-          color={tokens.positive}
-        />
-        <Metric
-          label="You owe"
-          value={ready && p.owing ? p.owing : unavailable}
-          note="Net group balance"
-          icon="phosphor:ArrowUpRight"
-          color={tokens.expense}
-        />
-        <Metric
-          label="Recorded settlements"
-          value={String(p.settlements.length)}
-          note="Recent saved payments"
-          icon="phosphor:Receipt"
-          color={tokens.warning}
-        />
-        <Metric
-          label="Members"
-          value={String(p.members.length)}
-          note="Saved memberships"
-          icon="phosphor:UsersThree"
-          color={tokens.chart.violet}
-        />
-      </section>
-      {p.balanceError && (
-        <p className={s.error} role="alert">
-          Complete balances are unavailable. No partial value is shown. {p.balanceError}
-        </p>
-      )}
-      <div className={s.columns}>
-        <div className={s.stack}>
-          <section className={s.panel}>
-            <div className={s.panelHead}>
-              <h3>Members ({p.members.length})</h3>
-              <Button variant="ghost" size="sm" onPress={p.onOpenSettings}>
-                Manage members →
+      <div className={settleStyles.grid}>
+        <div className={settleStyles.stack}>
+          {ready ? (
+            <NetPositionHero
+              balanceMinor={p.balanceMinor}
+              currency={currency}
+              title={p.balanceMeaning}
+              people={p.members}
+            >
+              {p.canSettle ? <Button onPress={p.onSettle}>Settle up</Button> : null}
+              <Button variant={p.canSettle ? 'outline' : 'primary'} onPress={p.onAddExpense}>
+                <Plus size={16} /> Add expense
               </Button>
-            </div>
-            <div className={s.members}>
-              {p.members.map((member) => (
-                <div key={member.id} className={s.member}>
-                  <PersonAvatar
-                    name={member.name}
-                    url={member.avatarUrl}
-                    avatarId={member.avatarId}
-                    size={42}
-                  />
-                  <div className={s.memberCopy}>
-                    {member.username ? (
-                      <button
-                        className={s.chip}
-                        type="button"
-                        onClick={() => p.onOpenPerson(member.username!)}
-                      >
-                        {member.name}
-                      </button>
-                    ) : (
-                      <strong>{member.name}</strong>
-                    )}
-                    <span
-                      className={`${s.badge} ${member.role === 'admin' || member.role === 'owner' ? s.admin : ''}`}
-                    >
-                      {member.role ?? 'Member'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {!p.members.length && <p className={s.muted}>Membership is not cached yet.</p>}
-          </section>
-          <section className={s.panel}>
-            <div className={s.panelHead}>
-              <h3>Recent group expenses</h3>
-              <Button variant="ghost" size="sm" onPress={p.onOpenAnalytics}>
-                Group analytics →
-              </Button>
-            </div>
-            {p.activities.length ? (
-              <div className={s.tableWrap}>
-                <table className={s.table}>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Description</th>
-                      <th>Category</th>
-                      <th>Account</th>
-                      <th>Date</th>
-                      <th>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {p.activities.map((activity, index) => (
-                      <tr
-                        key={activity.id}
-                        className={s.clickRow}
-                        onClick={() => p.onOpenActivity(activity.id)}
-                      >
-                        <td>{index + 1}</td>
-                        <td>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              p.onOpenActivity(activity.id);
-                            }}
-                            className={s.member}
-                          >
-                            <Tile
-                              icon={activity.icon ?? 'phosphor:Receipt'}
-                              color={activity.color ?? tokens.warning}
-                            />
-                            <strong>{activity.title}</strong>
-                          </button>
-                        </td>
-                        <td>
-                          <span className={s.badge}>{activity.category ?? 'Shared expense'}</span>
-                        </td>
-                        <td>{activity.account ?? 'Not available'}</td>
-                        <td>{activity.date}</td>
-                        <td>
-                          <strong>{formatMinor(activity.amountMinor, activity.currency)}</strong>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            </NetPositionHero>
+          ) : (
+            <SettleCard>
+              {p.balanceStatus === 'loading' ? (
+                <ListSkeleton rows={2} avatar={false} />
+              ) : (
+                <IllustratedState
+                  scene="offline"
+                  title="Balances unavailable"
+                  description={`Complete group balances could not be loaded, so no partial value is shown.${p.balanceError ? ` ${p.balanceError}` : ''}`}
+                  action={
+                    p.onRetry ? (
+                      <Button variant="outline" onPress={p.onRetry}>
+                        Retry
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              )}
+              <div className={settleStyles.actions}>
+                <Button variant="outline" onPress={p.onAddExpense}>
+                  <Plus size={16} /> Add expense
+                </Button>
               </div>
+            </SettleCard>
+          )}
+          <section className={settleStyles.stats}>
+            <StatTile
+              label="Total spend"
+              value={ready ? (p.totalSpend ?? '—') : pending}
+              icon={<Wallet size={16} />}
+              tone="accent"
+            />
+            <StatTile
+              label="You owe"
+              value={ready ? (p.owing ?? '—') : pending}
+              icon={<ArrowUpRight size={16} />}
+              tone="expense"
+            />
+            <StatTile
+              label="Owed to you"
+              value={ready ? (p.owed ?? '—') : pending}
+              icon={<ArrowDownLeft size={16} />}
+              tone="income"
+            />
+          </section>
+          {p.lateJoiners?.map((joiner) => (
+            <LateJoinerBanner
+              key={joiner.userId}
+              name={joiner.name}
+              missedCount={joiner.missedCount}
+              onInclude={() => p.onIncludeLateJoiner?.(joiner.userId)}
+              onDismiss={
+                p.onDismissLateJoiner ? () => p.onDismissLateJoiner?.(joiner.userId) : undefined
+              }
+            />
+          ))}
+          <SettleCard>
+            <SectionTitle
+              title="Recent expenses"
+              action={
+                p.onOpenExpenses ? (
+                  <Button size="sm" variant="ghost" onPress={p.onOpenExpenses}>
+                    See all →
+                  </Button>
+                ) : undefined
+              }
+            />
+            {p.activitiesLoading ? (
+              <ListSkeleton rows={4} />
+            ) : p.activities.length ? (
+              <GroupExpenseTimeline
+                expenses={p.activities.map((activity) => ({
+                  ...activity,
+                  occurredAt: activity.occurredAt ?? 0,
+                  detail: [activity.category, activity.account].filter(Boolean).join(' · '),
+                }))}
+                joins={p.joins}
+                onOpen={p.onOpenActivity}
+              />
             ) : (
-              <FinanceEmptyState
-                kind="group"
-                title="No shared expenses"
-                description="Add an expense to start your group history."
+              <IllustratedState
+                scene="splitBill"
+                title="Your group history starts with an expense"
+                description="Add a shared expense and choose who was part of it."
                 action={
                   <Button variant="outline" onPress={p.onAddExpense}>
                     Add expense
@@ -273,85 +265,101 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                 }
               />
             )}
-          </section>
-          <section className={s.panel}>
-            <h3>Recent settlements</h3>
-            {p.settlements.map((settlement) => (
-              <div className={s.activity} key={settlement.id}>
-                <Tile icon="phosphor:ArrowsLeftRight" color={tokens.positive} />
-                <div className={s.activityCopy}>
-                  <strong>{settlement.description}</strong>
-                  <small>{settlement.date}</small>
-                </div>
-                <strong>{settlement.amount}</strong>
-              </div>
-            ))}
-            {!p.settlements.length && (
-              <FinanceEmptyState
-                kind="group"
-                compact
-                title="No recorded settlements"
+          </SettleCard>
+        </div>
+        <aside className={settleStyles.stack}>
+          <SettleCard>
+            <SectionTitle
+              level={3}
+              title="Balances"
+              action={
+                <Button size="sm" variant="ghost" onPress={p.onOpenBalances}>
+                  View all →
+                </Button>
+              }
+            />
+            {!ready ? (
+              <ListSkeleton rows={3} />
+            ) : allSettled ? (
+              <IllustratedState
+                scene="allSettled"
+                title="Everyone is settled up"
+                description="New shared expenses will show up here."
+              />
+            ) : p.balances ? (
+              <>
+                <MemberBalanceBars
+                  balances={p.balances}
+                  currency={currency}
+                  people={people}
+                  meId={p.meId}
+                  onPressMember={p.onSettleWith}
+                />
+                {transfers.length > 0 && (
+                  <>
+                    <strong style={{ fontSize: 13 }}>Suggested transfers</strong>
+                    <SuggestedTransfers
+                      transfers={transfers}
+                      currency={currency}
+                      people={people}
+                      meId={p.meId}
+                      limit={3}
+                      onSettle={
+                        p.onSettleWith
+                          ? (transfer) =>
+                              p.onSettleWith?.(
+                                transfer.fromUserId === p.meId
+                                  ? transfer.toUserId
+                                  : transfer.fromUserId,
+                              )
+                          : undefined
+                      }
+                    />
+                  </>
+                )}
+              </>
+            ) : null}
+          </SettleCard>
+          <SettleCard>
+            <SectionTitle level={3} title="Recent settlements" />
+            {p.settlements.length ? (
+              p.settlements.map((settlement) => (
+                <SettlementHistoryRow
+                  key={settlement.id}
+                  description={settlement.description}
+                  amountMinor={settlement.amountMinor}
+                  currency={settlement.currency}
+                  date={settlement.date}
+                  note={settlement.note}
+                />
+              ))
+            ) : (
+              <IllustratedState
+                scene="history"
+                title="No payments yet"
                 description="Payments between group members will appear here."
               />
             )}
-          </section>
-        </div>
-        <aside className={s.stack}>
-          <section className={s.panel}>
-            <div className={s.panelHead}>
-              <h3>Balances &amp; settlements</h3>
-              <Button size="sm" variant="ghost" onPress={p.onOpenBalances}>
-                View all →
-              </Button>
-            </div>
-            {ready ? (
-              <>
-                <div className={s.summaryAmount}>
-                  <span>{p.balanceMeaning}</span>
-                  <strong>{p.balance}</strong>
-                </div>
-                {p.memberBalances?.map((member) => (
-                  <div key={member.id} className={s.activity}>
-                    <PersonAvatar
-                      name={member.name}
-                      url={p.members.find((person) => person.id === member.id)?.avatarUrl}
-                      avatarId={p.members.find((person) => person.id === member.id)?.avatarId}
-                      size={30}
-                    />
-                    <div className={s.activityCopy}>
-                      <strong>{member.name}</strong>
-                      <small>{member.meaning}</small>
-                    </div>
-                    <strong>{member.amount}</strong>
-                  </div>
-                ))}
-                {p.canSettle && (
-                  <Button size="sm" onPress={p.onSettle}>
-                    Record a settlement
+          </SettleCard>
+          {shownTotal > 0n && (
+            <SettleCard>
+              <SectionTitle
+                level={3}
+                title="Where it goes"
+                caption="By category · recent expenses"
+                action={
+                  <Button size="sm" variant="ghost" onPress={p.onOpenAnalytics}>
+                    <ChartBar size={16} />
                   </Button>
-                )}
-              </>
-            ) : (
-              <p className={s.muted}>
-                {p.balanceStatus === 'loading'
-                  ? 'Loading all-time balances…'
-                  : 'Complete balances are unavailable. No partial value is shown.'}
-              </p>
-            )}
-          </section>
-          <section className={s.panel}>
-            <div className={s.panelHead}>
-              <h3>Split insights</h3>
-              <span className={s.badge}>Loaded expenses</span>
-            </div>
-            {shownTotal > 0n ? (
+                }
+              />
               <div className={s.donutLayout}>
                 <div
                   className={s.donut}
                   style={{ background: `conic-gradient(${stops.join(',')})` }}
                 >
                   <span>
-                    {formatMinor(shownTotal, p.group.currency)}
+                    {formatMinor(shownTotal, currency)}
                     <br />
                     <small className={s.muted}>Shown spend</small>
                   </span>
@@ -364,76 +372,87 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                         style={{ background: colors[index % colors.length] }}
                       />
                       <span>{name}</span>
-                      <strong>{formatMinor(amount, p.group.currency)}</strong>
+                      <strong>{formatMinor(amount, currency)}</strong>
                     </div>
                   ))}
                 </div>
               </div>
-            ) : (
-              <FinanceEmptyState
-                kind="analytics"
-                compact
-                title="No group spending to break down"
-                description="Add shared expenses to see how the group's spending is distributed."
-              />
-            )}
-            <p className={s.muted}>
-              This chart describes the expenses shown, not a partial all-time total.
-            </p>
-          </section>
-          <section className={s.panel}>
-            <div className={s.panelHead}>
-              <h3>Recent messages</h3>
-              <Button variant="ghost" size="sm" onPress={p.onOpenChat}>
-                View all →
-              </Button>
-            </div>
-            {p.chat.items
-              .filter((item) => item.kind === 'message')
-              .slice(-4)
-              .map((item) => (
-                <div className={s.activity} key={item.id}>
-                  <PersonAvatar
-                    name={item.ownMessage ? 'You' : (item.sender ?? 'Member')}
-                    url={item.senderAvatarUrl}
-                    avatarId={item.senderAvatarId}
-                    size={28}
-                  />
-                  <div className={s.activityCopy}>
-                    <strong>{item.sender ?? 'You'}</strong>
-                    <small>
-                      {item.text ??
-                        (item.attachmentUrl
-                          ? 'Shared a bill image'
-                          : 'Bill image no longer available')}
-                    </small>
-                  </div>
-                  <small className={s.muted}>{item.date}</small>
+            </SettleCard>
+          )}
+          <SettleCard>
+            <SectionTitle
+              level={3}
+              title="Recent messages"
+              action={
+                <Button variant="ghost" size="sm" onPress={p.onOpenChat}>
+                  Open chat →
+                </Button>
+              }
+            />
+            {messages.map((item) => (
+              <div className={s.activity} key={item.id}>
+                <PersonAvatar
+                  name={item.ownMessage ? 'You' : (item.sender ?? 'Member')}
+                  url={item.senderAvatarUrl}
+                  avatarId={item.senderAvatarId}
+                  size={28}
+                />
+                <div className={s.activityCopy}>
+                  <strong>{item.sender ?? 'You'}</strong>
+                  <small>
+                    {item.text ??
+                      (item.attachmentUrl
+                        ? 'Shared a bill image'
+                        : 'Bill image no longer available')}
+                  </small>
                 </div>
-              ))}
-            {!p.chat.items.some((item) => item.kind === 'message') &&
+                <small className={s.muted}>{item.date}</small>
+              </div>
+            ))}
+            {!messages.length &&
               (p.chat.loading ? (
-                <p className={s.muted} role="status">
-                  Loading saved messages…
-                </p>
+                <ListSkeleton rows={2} />
               ) : p.chat.error ? (
-                <p className={s.muted} role="alert">
+                <p className={settleStyles.muted} role="alert">
                   {p.chat.error}
                 </p>
-              ) : p.chat.canSend ? (
-                <FinanceEmptyState
-                  kind="activity"
-                  compact
-                  title="No messages yet"
-                  description="Start the conversation with your group."
-                />
               ) : (
-                <p className={s.muted}>Connect and sync the group to load messages.</p>
+                <IllustratedState
+                  scene={p.chat.canSend ? 'group' : 'offline'}
+                  title={p.chat.canSend ? 'No messages yet' : 'Chat is offline'}
+                  description={
+                    p.chat.canSend
+                      ? 'Start the conversation with your group.'
+                      : 'Connect and sync the group to load messages.'
+                  }
+                />
               ))}
-            <Button size="sm" variant="outline" onPress={p.onOpenChat}>
-              Open group chat
-            </Button>
-          </section>
+          </SettleCard>
+          {p.members.some((member) => member.username) && (
+            <SettleCard>
+              <SectionTitle level={3} title="People" />
+              <div className={settleStyles.chips}>
+                {p.members
+                  .filter((member) => member.username)
+                  .map((member) => (
+                    <button
+                      key={member.id}
+                      type="button"
+                      className={settleStyles.chip}
+                      onClick={() => p.onOpenPerson(member.username!)}
+                    >
+                      <PersonAvatar
+                        name={member.name}
+                        url={member.avatarUrl}
+                        avatarId={member.avatarId}
+                        size={26}
+                      />
+                      {member.name}
+                    </button>
+                  ))}
+              </div>
+            </SettleCard>
+          )}
         </aside>
       </div>
     </GroupPage>

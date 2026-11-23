@@ -3,56 +3,43 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { projectGroupBalances } from '@convex/splits/domain';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button, Card, RadioGroup } from '@finapp/ui/web';
-import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
+import { useQuery } from 'convex/react';
+import { toast } from 'sonner';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { formatMinor } from '@convex/shared/money';
+import { ArrowRight } from 'lucide-react';
+import { ListSkeleton } from '@finapp/ui/web';
+import {
+  groupErrorMessage,
+  isValidTransferSequence,
+  SettleUpHub,
+  type SettlePerson,
+  type SettleTransfer,
+} from '@finapp/ui/finance';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { FinanceEmptyState, SettlementEditor } from '@finapp/ui/finance';
+import {
+  localRecordId,
+  recordAliases,
+  useGroupLedger,
+  type LedgerGroup,
+} from '@/lib/groups/useGroupLedger';
+import { useUndoSettlement } from '@/lib/groups/settlementUndo';
 
-type Group = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
-type Member = LocalRecord & {
-  groupId?: string;
-  userId?: string;
-  memberId?: string;
-  username?: string;
-  displayName?: string;
-  name?: string;
-};
 type Account = LocalRecord & {
   name?: string;
   currency?: string;
   ownerId?: string;
   archivedAt?: number;
 };
-type LedgerEntry = LocalRecord & {
-  groupId?: string;
-  transactionId?: string;
-  userId?: string;
-  memberId?: string;
-  fromUserId?: string;
-  toUserId?: string;
-  type?: string;
-  status?: string;
-  amountMinor?: bigint | number | string;
-  currency?: string;
-  deletedAt?: number;
-};
-const aliases = (record: LocalRecord) =>
-  [record.id, record._id, record.cloudId].filter(
-    (value): value is string => typeof value === 'string',
-  );
-const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
 export default function NewSettlementPage() {
   return (
     <React.Suspense
       fallback={
         <div className="finance-page">
-          <p className="finance-muted" role="status">
-            Opening settlement form…
-          </p>
+          <ListSkeleton rows={3} />
         </div>
       }
     >
@@ -65,229 +52,162 @@ function NewSettlementForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedGroupId = searchParams.get('groupId') ?? '';
-  const requestedMemberId = searchParams.get('member') ?? '';
-  const { userId, isConnected, fetchGroupRange } = useBrowserSync();
-  const { records: groups, loading: groupsLoading } = useLocalRecords<Group>('group');
-  const { records: accounts, loading: accountsLoading } = useLocalRecords<Account>('account');
-  const { records: memberships } = useLocalRecords<Member>('groupMember');
-  const { records: transactions } = useLocalRecords<LedgerEntry>('transaction');
-  const { records: payers } = useLocalRecords<LedgerEntry>('expensePayer');
-  const { records: participants } = useLocalRecords<LedgerEntry>('expenseParticipant');
-  const { records: settlements } = useLocalRecords<LedgerEntry>('settlement');
-  const { records: profiles } = useLocalRecords<LocalRecord>('profile');
-  const [groupId, setGroupId] = React.useState('');
-  const [memberId, setMemberId] = React.useState('');
+  const requestedMember = searchParams.get('member') ?? '';
+  const [chosenGroupId, setChosenGroupId] = React.useState(requestedGroupId);
   const [accountId, setAccountId] = React.useState('');
-  const [rangeStatus, setRangeStatus] = React.useState<'loading' | 'loaded' | 'uncached' | 'error'>(
-    'loading',
-  );
-  const [rangeError, setRangeError] = React.useState('');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const [success, setSuccess] = React.useState<{ title: string; description: string } | null>(null);
   const saveLock = React.useRef(false);
-  React.useEffect(() => {
-    if (!userId) return;
-    setGroupId(requestedGroupId);
-    setMemberId(requestedMemberId);
-    setAccountId('');
-  }, [requestedGroupId, requestedMemberId, userId]);
-  const activeGroups = groups.filter((item) => item.archivedAt === undefined);
-  React.useEffect(() => {
-    if (!groupId && activeGroups.length === 1) setGroupId(idOf(activeGroups[0]!));
-  }, [activeGroups, groupId]);
-  const group = activeGroups.find((item) => aliases(item).includes(groupId));
-  const currentGroupId = group ? idOf(group) : groupId;
+  React.useEffect(() => setChosenGroupId(requestedGroupId), [requestedGroupId]);
+  const { records: allGroups, loading: groupsLoading } = useLocalRecords<LedgerGroup>('group');
+  const activeGroups = allGroups.filter((item) => item.archivedAt === undefined);
+  const routeGroupId =
+    chosenGroupId || (activeGroups.length === 1 ? localRecordId(activeGroups[0]!) : '');
+  const ledger = useGroupLedger(routeGroupId || undefined);
+  const { userId, isConnected, group, groupId, cloudGroupId, members, balances } = ledger;
+  const undo = useUndoSettlement();
+  const { records: accounts, loading: accountsLoading } = useLocalRecords<Account>('account');
+  const remoteGroup = useQuery(
+    api.groups.queries.detail,
+    isConnected && cloudGroupId ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  );
   const currency = group?.currency ?? '';
-  const groupReady = Boolean(group);
-  const groupIdentity = group?.cloudId ?? group?._id;
-  React.useEffect(() => {
-    if (!userId || !group) return;
-    if (!isConnected) {
-      setRangeStatus('uncached');
-      setRangeError(
-        'Offline. Saved balances remain available, but this all-time range may be incomplete.',
-      );
-      return;
-    }
-    let active = true;
-    setRangeStatus('loading');
-    setRangeError('');
-    void fetchGroupRange(currentGroupId, 0, Date.now() + 1).then(
-      () => {
-        if (active) setRangeStatus('loaded');
-      },
-      (cause: unknown) => {
-        if (active) {
-          setRangeStatus('error');
-          setRangeError(
-            cause instanceof Error ? cause.message : 'All-time balances could not be loaded.',
-          );
-        }
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [currentGroupId, fetchGroupRange, groupReady, groupIdentity, isConnected, userId]);
-
-  const groupIds = group ? aliases(group) : [];
-  const groupMembers = memberships.filter(
-    (item) => typeof item.groupId === 'string' && groupIds.includes(item.groupId),
-  );
-  const memberChoices: Array<{ id: string; name: string; username?: string }> = [];
-  if (userId)
-    memberChoices.push({
-      id: userId,
-      name: String(profiles[0]?.displayName ?? profiles[0]?.name ?? 'You'),
-    });
-  const seen = new Set(memberChoices.map((item) => item.id));
-  for (const item of groupMembers) {
-    const id = item.userId ?? item.memberId;
-    if (typeof id !== 'string' || seen.has(id)) continue;
-    seen.add(id);
-    memberChoices.push({
-      id,
-      name: String(
-        item.displayName ??
-          item.name ??
-          (item.username ? `@${item.username}` : `Member ${id.slice(-6)}`),
-      ),
-      username: item.username,
-    });
-  }
-  let balances: Record<string, bigint> = {};
-  let ledgerError = '';
-  if (group) {
-    try {
-      balances = projectGroupBalances(
-        group,
-        transactions,
-        payers,
-        participants,
-        settlements,
-      ).balances;
-    } catch (cause) {
-      ledgerError = cause instanceof Error ? cause.message : 'Incomplete group ledger.';
-    }
-  }
-  const myBalance = userId ? (balances[userId] ?? 0n) : 0n;
-  const direction: 'pay' | 'receive' = myBalance < 0n ? 'pay' : 'receive';
-  const availableMembers = memberChoices.filter(
-    (member) =>
-      member.id !== userId &&
-      (myBalance < 0n
-        ? (balances[member.id] ?? 0n) > 0n
-        : myBalance > 0n
-          ? (balances[member.id] ?? 0n) < 0n
-          : false),
-  );
-  const chosenMember =
-    availableMembers.find(
-      (member) =>
-        member.id === memberId ||
-        member.username?.toLowerCase() === memberId.replace(/^@+/, '').toLowerCase(),
-    ) ?? (availableMembers.length === 1 ? availableMembers[0] : undefined);
-  const counterpartBalance = chosenMember ? (balances[chosenMember.id] ?? 0n) : 0n;
-  const maximum = chosenMember
-    ? direction === 'pay'
-      ? -myBalance < counterpartBalance
-        ? -myBalance
-        : counterpartBalance
-      : myBalance < -counterpartBalance
-        ? myBalance
-        : -counterpartBalance
-    : 0n;
   const accountOptions = accounts.filter(
     (item) =>
       item.archivedAt === undefined && item.ownerId === userId && item.currency === currency,
   );
   const chosenAccount =
-    accountOptions.find((item) => aliases(item).includes(accountId)) ??
+    accountOptions.find((item) => recordAliases(item).includes(accountId)) ??
     (accountOptions.length === 1 ? accountOptions[0] : undefined);
-  const unavailable = !group
-    ? groupsLoading
-      ? 'Loading groups…'
-      : groupId
-        ? 'This group is not available on this device.'
-        : 'Choose a group first.'
-    : rangeStatus === 'error'
-      ? 'The full group ledger is unavailable. Retry before recording a settlement.'
-      : rangeStatus === 'loading'
-        ? 'Loading all-time group balances…'
-        : rangeStatus === 'uncached'
-          ? 'The all-time range is uncached. Reconnect before recording a settlement.'
-          : ledgerError
-            ? 'Complete group allocations are required to confirm the debt.'
-            : !availableMembers.length
-              ? 'There is no outstanding balance to settle with a member.'
-              : !chosenMember
-                ? 'Choose the member involved in this payment.'
-                : accountsLoading
-                  ? 'Loading your accounts…'
-                  : !chosenAccount
-                    ? 'Choose an active account in the group currency.'
-                    : undefined;
 
-  async function saveSettlement(amountMinor: bigint) {
-    if (
-      !userId ||
-      !group ||
-      !currentGroupId ||
-      !chosenMember ||
-      !chosenAccount ||
-      amountMinor <= 0n ||
-      unavailable ||
-      saveLock.current
-    )
+  const people: SettlePerson[] = [];
+  const seen = new Set<string>();
+  for (const member of remoteGroup?.members ?? []) {
+    seen.add(member.id);
+    people.push({
+      id: member.id,
+      name: member.id === userId ? 'You' : member.displayName,
+      avatarUrl: member.avatarUrl,
+      avatarId: member.avatarId,
+    });
+  }
+  for (const member of members) {
+    const memberId = String(member.userId ?? member.memberId ?? '');
+    if (!memberId || seen.has(memberId)) continue;
+    seen.add(memberId);
+    people.push({
+      id: memberId,
+      name:
+        memberId === userId
+          ? 'You'
+          : String(
+              member.displayName ??
+                member.name ??
+                (member.username ? `@${member.username}` : `Member ${memberId.slice(-6)}`),
+            ),
+      avatarUrl: member.avatarUrl ?? null,
+      avatarId: member.avatarId,
+    });
+  }
+  for (const former of remoteGroup?.formerMembers ?? []) {
+    if (seen.has(former.id)) continue;
+    seen.add(former.id);
+    people.push({
+      id: former.id,
+      name: former.displayName,
+      avatarId: former.avatarId,
+      leftAt: former.leftAt,
+    });
+  }
+  const initialMemberId = requestedMember
+    ? (members.find(
+        (member) =>
+          member.userId === requestedMember ||
+          member.username?.toLowerCase() === requestedMember.replace(/^@+/, '').toLowerCase(),
+      )?.userId ?? requestedMember)
+    : undefined;
+
+  const status: 'loading' | 'ready' | 'unavailable' | 'no-group' = !routeGroupId
+    ? 'no-group'
+    : !group
+      ? groupsLoading
+        ? 'loading'
+        : 'unavailable'
+      : ledger.status;
+  const blockedReason = accountsLoading
+    ? 'Loading your accounts…'
+    : !chosenAccount
+      ? accountOptions.length
+        ? 'Choose the account this payment belongs to.'
+        : `Add an active ${currency} account to record settlements.`
+      : undefined;
+
+  async function record(transfers: SettleTransfer[], note?: string) {
+    if (saveLock.current) return;
+    if (!userId || !group || !groupId || !balances || !chosenAccount || blockedReason) {
+      setError(blockedReason ?? 'Choose a group, person and account first.');
       return;
-    if (amountMinor > maximum) {
-      setError(
-        'The selected amount now exceeds the bilateral balance. Refresh balances before saving.',
-      );
+    }
+    if (!transfers.length || !isValidTransferSequence(balances, transfers)) {
+      setError(groupErrorMessage('SETTLEMENT_EXCEEDS_BALANCE'));
       return;
     }
     saveLock.current = true;
     setSaving(true);
     setError('');
+    const savedIds: string[] = [];
     try {
-      const accountRecordId = idOf(chosenAccount);
-      const fromUserId = direction === 'pay' ? userId : chosenMember.id;
-      const toUserId = direction === 'pay' ? chosenMember.id : userId;
-      const occurredAt = Date.now();
-      const record = {
-        groupId: currentGroupId,
-        fromUserId,
-        toUserId,
-        accountId: accountRecordId,
-        amountMinor,
-        currency,
-        occurredAt,
-        createdAt: occurredAt,
-      };
-      await commitLocalWrite(
-        userId,
-        'settlement',
-        'settlement.create',
-        record,
-        {
-          groupId: currentGroupId,
-          fromUserId,
-          toUserId,
+      const accountRecordId = localRecordId(chosenAccount);
+      for (const transfer of transfers) {
+        const occurredAt = Date.now();
+        const payload = {
+          groupId,
+          fromUserId: transfer.fromUserId,
+          toUserId: transfer.toUserId,
           accountId: accountRecordId,
-          amountMinor,
+          amountMinor: transfer.amountMinor,
           currency,
           occurredAt,
-        },
-        {
-          dependencies: [
-            ...(!group.cloudId && !group._id ? [`group:${currentGroupId}`] : []),
-            ...(!chosenAccount.cloudId && !chosenAccount._id ? [`account:${accountRecordId}`] : []),
-          ],
-        },
-      );
-      router.replace(`/group/${encodeURIComponent(currentGroupId)}`);
+          ...(note ? { note } : {}),
+        };
+        savedIds.push(
+          await commitLocalWrite(
+            userId,
+            'settlement',
+            'settlement.create',
+            { ...payload, createdAt: occurredAt },
+            payload,
+            {
+              dependencies: [
+                ...(!group.cloudId && !group._id ? [`group:${groupId}`] : []),
+                ...(!chosenAccount.cloudId && !chosenAccount._id
+                  ? [`account:${accountRecordId}`]
+                  : []),
+              ],
+            },
+          ),
+        );
+      }
+      const total = transfers.reduce((sum, transfer) => sum + transfer.amountMinor, 0n);
+      const name = (id: string) => people.find((person) => person.id === id)?.name ?? 'a member';
+      const description =
+        transfers.length === 1
+          ? `${transfers[0]!.fromUserId === userId ? 'You' : name(transfers[0]!.fromUserId)} paid ${
+              transfers[0]!.toUserId === userId ? 'you' : name(transfers[0]!.toUserId)
+            } ${formatMinor(total, currency)}${note ? ` · “${note}”` : ''}.`
+          : `${transfers.length} payments totalling ${formatMinor(total, currency)} were recorded.`;
+      setSuccess({ title: 'Payment recorded', description });
+      toast.success('Settlement recorded', {
+        description: isConnected ? description : 'Saved in this browser; it syncs when online.',
+        action: { label: 'Undo', onClick: () => void undo(savedIds) },
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save settlement.');
+      setError(groupErrorMessage(cause, 'Could not save settlement.'));
+      if (savedIds.length)
+        toast.info(`${savedIds.length} of ${transfers.length} payments were saved`, {
+          action: { label: 'Undo', onClick: () => void undo(savedIds) },
+        });
     } finally {
       saveLock.current = false;
       setSaving(false);
@@ -306,122 +226,53 @@ function NewSettlementForm() {
       </section>
     );
   return (
-    <div className="finance-page">
-      <header className="finance-page-heading">
-        <Link
-          className="finance-secondary-action"
-          href={group ? `/group/${encodeURIComponent(currentGroupId)}/balances` : '/groups'}
-          aria-label="Go back"
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <h1 style={{ margin: 0 }}>Settle up</h1>
-      </header>
-      {rangeStatus === 'loading' && group && (
-        <p className="finance-form-note" role="status">
-          Loading all-time group expenses and repayments…
-        </p>
-      )}
-      {(rangeStatus === 'uncached' || rangeStatus === 'error') && (
-        <p
-          className={rangeStatus === 'error' ? 'finance-form-error' : 'finance-form-note'}
-          role={rangeStatus === 'error' ? 'alert' : 'status'}
-        >
-          {rangeError}
-        </p>
-      )}
-      {rangeStatus === 'error' && group && isConnected && (
-        <Button
-          variant="outline"
-          onPress={() => {
-            setRangeStatus('loading');
-            setRangeError('');
-            void fetchGroupRange(currentGroupId, 0, Date.now() + 1).then(
-              () => setRangeStatus('loaded'),
-              (cause: unknown) => {
-                setRangeStatus('error');
-                setRangeError(
-                  cause instanceof Error ? cause.message : 'All-time balances could not be loaded.',
-                );
-              },
-            );
-          }}
-        >
-          Retry all-time range
-        </Button>
-      )}
-      <div className="finance-accounts-layout" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
-        <Card className="finance-form-panel">
-          <div className="finance-form">
-            <RadioGroup
-              label="GROUP"
-              options={activeGroups.map((item) => ({
-                value: idOf(item),
-                label: `${item.name ?? 'Group'} · ${item.currency ?? 'INR'}`,
-              }))}
-              value={group ? idOf(group) : ''}
-              onChange={(value) => {
-                setGroupId(value);
-                setMemberId('');
-                setAccountId('');
-              }}
-            />
-            {!activeGroups.length && (
-              <FinanceEmptyState
-                kind="group"
-                title="No saved group is available."
-                description="Create or join a group before recording a settlement."
-                compact
-                action={
-                  <Button variant="outline" onPress={() => router.push('/groups')}>
-                    Browse groups
-                  </Button>
-                }
-              />
-            )}
-            {availableMembers.length > 0 && (
-              <RadioGroup
-                label={direction === 'pay' ? 'YOU PAID' : 'PAID YOU'}
-                options={availableMembers.map((member) => ({
-                  value: member.id,
-                  label: member.name,
-                }))}
-                value={chosenMember?.id}
-                onChange={(value) => {
-                  setMemberId(value);
-                }}
-              />
-            )}
-            {accountOptions.length > 0 && (
-              <>
-                <RadioGroup
-                  label={`LINKED ACCOUNT · ${currency}`}
-                  options={accountOptions.map((item) => ({
-                    value: idOf(item),
-                    label: String(item.name ?? 'Account'),
-                  }))}
-                  value={chosenAccount ? idOf(chosenAccount) : ''}
-                  onChange={setAccountId}
-                />
-                <p className="finance-form-note">
-                  For recordkeeping only. No money is moved from this account.
-                </p>
-              </>
-            )}
-            <SettlementEditor
-              key={`${currentGroupId}:${chosenMember?.id ?? ''}`}
-              memberName={chosenMember?.name ?? 'a group member'}
-              currency={currency || 'INR'}
-              direction={direction}
-              maxAmountMinor={maximum}
-              disabledReason={unavailable}
-              saving={saving}
-              error={error}
-              onSave={(amountMinor) => void saveSettlement(amountMinor)}
-            />
-          </div>
-        </Card>
-      </div>
-    </div>
+    <SettleUpHub
+      groups={activeGroups.map((item) => ({
+        id: localRecordId(item),
+        name: item.name ?? 'Group',
+        currency: item.currency ?? '',
+        icon: item.icon,
+        color: item.color,
+      }))}
+      selectedGroupId={group ? groupId : undefined}
+      onSelectGroup={(id) => {
+        setChosenGroupId(id);
+        setAccountId('');
+        setError('');
+      }}
+      accounts={accountOptions.map((item) => ({
+        id: localRecordId(item),
+        name: String(item.name ?? 'Account'),
+      }))}
+      selectedAccountId={chosenAccount ? localRecordId(chosenAccount) : undefined}
+      onSelectAccount={(id) => {
+        setAccountId(id);
+        setError('');
+      }}
+      status={status}
+      statusMessage={
+        status === 'unavailable'
+          ? !group
+            ? 'This group is not available in this browser.'
+            : groupErrorMessage(ledger.error, 'The full group ledger is unavailable.')
+          : undefined
+      }
+      onRetry={ledger.retry}
+      meId={userId}
+      currency={currency || 'INR'}
+      balances={balances ?? {}}
+      people={people}
+      initialMemberId={initialMemberId}
+      blockedReason={blockedReason}
+      saving={saving}
+      error={error || undefined}
+      onRecord={(transfers, note) => void record(transfers, note)}
+      success={success}
+      onDone={() => router.replace(group ? `/group/${encodeURIComponent(groupId)}` : '/groups')}
+      onAnother={() => setSuccess(null)}
+      onBack={() =>
+        router.push(group ? `/group/${encodeURIComponent(groupId)}/balances` : '/groups')
+      }
+    />
   );
 }

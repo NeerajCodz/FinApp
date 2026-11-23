@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
-import { View } from 'react-native';
-import { Button, Text, Typography, useTheme } from '@finapp/ui/native';
-import { Check } from '@finapp/ui/icons/native';
+import { Pressable, View } from 'react-native';
+import { Button, IconTile, Text, Textarea, Typography, useTheme } from '@finapp/ui/native';
+import { Check, NotePencil, TriangleAlert } from '@finapp/ui/icons/native';
+import { space, withAlpha } from '../../tokens';
 import { formatMinor, parseMinor } from '../money';
+import { SETTLEMENT_NOTE_MAX } from '../groupSettle';
 import { CurrencyInput } from './CurrencyInput';
-import { SemanticMarker } from './SemanticMarker';
 
+/**
+ * Partial or full payment with one member. Amounts above what is still open between the two
+ * members are blocked inline with the same rule the server applies (SETTLEMENT_EXCEEDS_BALANCE).
+ */
 export function SettlementEditor({
   memberName,
   currency,
   direction,
   maxAmountMinor,
+  suggestedMinor,
   disabledReason,
   saving = false,
   error,
@@ -20,12 +26,16 @@ export function SettlementEditor({
   currency: string;
   direction: 'pay' | 'receive';
   maxAmountMinor: bigint;
+  /** Amount from the suggested plan, offered as a quick fill. */
+  suggestedMinor?: bigint;
   disabledReason?: string;
   saving?: boolean;
   error?: string;
-  onSave: (amountMinor: bigint) => void;
+  onSave: (amountMinor: bigint, note?: string) => void;
 }) {
   const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
   const { tokens } = useTheme();
   let amountMinor: bigint | null = null;
   try {
@@ -35,54 +45,127 @@ export function SettlementEditor({
   }
   const invalidAmount = amount.length > 0 && (amountMinor === null || amountMinor <= 0n);
   const tooMuch = amountMinor !== null && amountMinor > maxAmountMinor;
+  const noteTooLong = note.trim().length > SETTLEMENT_NOTE_MAX;
   const disabled =
-    saving || !!disabledReason || amountMinor === null || amountMinor <= 0n || tooMuch;
+    saving ||
+    !!disabledReason ||
+    amountMinor === null ||
+    amountMinor <= 0n ||
+    tooMuch ||
+    noteTooLong;
+  const fill = (value: bigint) => setAmount(formatMinor(value, currency).replace(/[^\d.]/g, ''));
+  const quickFills = [
+    { label: 'Full balance', value: maxAmountMinor },
+    ...(suggestedMinor && suggestedMinor > 0n && suggestedMinor !== maxAmountMinor
+      ? [{ label: 'Suggested', value: suggestedMinor }]
+      : []),
+    ...(maxAmountMinor > 1n ? [{ label: 'Half', value: maxAmountMinor / 2n }] : []),
+  ];
+  const tone = direction === 'pay' ? tokens.expense : tokens.income;
   return (
-    <View style={{ gap: 24 }}>
-      <View style={{ gap: 14 }}>
-        <SemanticMarker type="settlement" />
-        <Typography variant="title">Record a settlement</Typography>
-        <Typography variant="small">
-          {maxAmountMinor > 0n
-            ? direction === 'pay'
-              ? `You paid ${memberName}. `
-              : `${memberName} paid you. `
-            : 'Choose a group and member with an outstanding balance. '}
-          This records a payment already made; it does not send money.
+    <View style={{ gap: space.lg }}>
+      <View style={{ gap: space.xs }}>
+        <Typography variant="heading">
+          {direction === 'pay' ? `You paid ${memberName}` : `${memberName} paid you`}
         </Typography>
-        {maxAmountMinor > 0n && (
-          <Typography variant="caption">
-            Outstanding up to {formatMinor(maxAmountMinor, currency)}
-          </Typography>
-        )}
+        <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+          {maxAmountMinor > 0n
+            ? `Up to ${formatMinor(maxAmountMinor, currency)} is open between you. Record part of it or all of it.`
+            : 'Choose someone with an open balance.'}{' '}
+          This records a payment already made; it does not move money.
+        </Typography>
       </View>
       <CurrencyInput currency={currency} value={amount} onChangeText={setAmount} />
-      {!!disabledReason && (
-        <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-          {disabledReason}
-        </Typography>
+      {maxAmountMinor > 0n && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          {quickFills.map((option) => (
+            <Pressable
+              key={option.label}
+              accessibilityRole="button"
+              accessibilityLabel={`${option.label}: ${formatMinor(option.value, currency)}`}
+              onPress={() => fill(option.value)}
+              style={({ pressed }) => ({
+                paddingHorizontal: space.md,
+                paddingVertical: space.sm,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: withAlpha(tone, 0.4),
+                backgroundColor: withAlpha(tone, pressed ? 0.2 : 0.08),
+              })}
+            >
+              <Text style={{ color: tone, fontSize: 13, fontFamily: 'SpaceGrotesk_600SemiBold' }}>
+                {option.label} · {formatMinor(option.value, currency)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       )}
-      {!!invalidAmount && (
-        <Typography variant="small" style={{ color: tokens.destructive }}>
-          Enter a positive amount in {currency}.
-        </Typography>
+      {noteOpen ? (
+        <View style={{ gap: space.xs }}>
+          <Textarea
+            accessibilityLabel="Settlement note"
+            placeholder="Add a note, e.g. “Paid via UPI”"
+            value={note}
+            onChangeText={setNote}
+            maxLength={SETTLEMENT_NOTE_MAX + 20}
+            style={{ minHeight: 72 }}
+          />
+          <Typography
+            variant="caption"
+            style={{
+              alignSelf: 'flex-end',
+              color: noteTooLong ? tokens.destructive : tokens.foregroundMuted,
+            }}
+          >
+            {note.trim().length}/{SETTLEMENT_NOTE_MAX}
+          </Typography>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setNoteOpen(true)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}
+        >
+          <IconTile tone="neutral" size={32}>
+            <NotePencil size={16} color={tokens.foregroundMuted} />
+          </IconTile>
+          <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+            Add a note (optional)
+          </Typography>
+        </Pressable>
       )}
-      {!!tooMuch && (
-        <Typography variant="small" style={{ color: tokens.destructive }}>
-          Amount exceeds the outstanding balance.
-        </Typography>
-      )}
-      {!!error && (
-        <View accessibilityRole="alert">
-          <Typography variant="small" style={{ color: tokens.destructive }}>
-            {error}
+      {(!!disabledReason || invalidAmount || tooMuch || !!error) && (
+        <View
+          accessibilityRole={tooMuch || error ? 'alert' : undefined}
+          style={{
+            flexDirection: 'row',
+            gap: space.sm,
+            alignItems: 'flex-start',
+            padding: space.md,
+            borderRadius: 14,
+            backgroundColor: withAlpha(
+              tooMuch || error || invalidAmount ? tokens.destructive : tokens.warning,
+              0.1,
+            ),
+          }}
+        >
+          <TriangleAlert
+            size={16}
+            color={tooMuch || error || invalidAmount ? tokens.destructive : tokens.warning}
+          />
+          <Typography variant="small" style={{ flex: 1 }}>
+            {tooMuch
+              ? `That is more than the ${formatMinor(maxAmountMinor, currency)} still open with ${memberName}. Lower the amount; balances may have changed.`
+              : invalidAmount
+                ? `Enter a positive amount in ${currency}.`
+                : (error ?? disabledReason)}
           </Typography>
         </View>
       )}
       <Button
         size="lg"
         disabled={disabled}
-        onPress={() => amountMinor !== null && onSave(amountMinor)}
+        onPress={() => amountMinor !== null && onSave(amountMinor, note.trim() || undefined)}
         accessibilityLabel={saving ? 'Saving settlement' : 'Record settlement'}
         style={!disabled ? { backgroundColor: tokens.settlement } : undefined}
       >
@@ -95,7 +178,11 @@ export function SettlementEditor({
             fontSize: 15,
           }}
         >
-          {saving ? 'Saving…' : 'Record settlement'}
+          {saving
+            ? 'Saving…'
+            : amountMinor && amountMinor > 0n && !tooMuch
+              ? `Record ${formatMinor(amountMinor, currency)}`
+              : 'Record settlement'}
         </Text>
       </Button>
     </View>

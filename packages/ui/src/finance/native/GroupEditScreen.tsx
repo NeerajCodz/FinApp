@@ -5,8 +5,21 @@ import {
   INVITATION_LINK_EXPIRY_OPTIONS,
   type InvitationLinkExpiryMs,
 } from '../groupInvitationExpiry';
-import { Button, Empty, Input, Label, Typography, useTheme } from '@finapp/ui/native';
+import {
+  AlertDialog,
+  Button,
+  Empty,
+  Input,
+  Label,
+  StatusPill,
+  Typography,
+  useTheme,
+} from '@finapp/ui/native';
+import { formatMinor } from '../money';
+import { shortDate, type BalanceMap, type OutstandingBalance } from '../groupSettle';
+import { OutstandingBalanceDialog } from './GroupSettleParts';
 import { FinanceEmptyState } from './FinanceEmptyState';
+import { withAlpha } from '../../tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIconPicker } from './EntityIconPicker';
@@ -80,13 +93,34 @@ export type GroupEditScreenProps = GroupMetadataFieldsProps & {
   onCreateInvitation?: () => void;
   onRevokeInvitation?: () => void;
   onShareInvitation?: () => void;
+  /** Local all-time balances, shown beside members and used to guard leave/remove. */
+  balances?: BalanceMap | null;
+  balanceCurrency?: string;
+  formerMembers?: readonly {
+    id: string;
+    name: string;
+    avatarId?: string;
+    leftAt: number;
+  }[];
+  meId?: string | null;
+  /** Non-owners may leave the group. */
+  canLeave?: boolean;
+  onLeave?: () => void;
+  /** Open balance blocking a leave/remove; renders the "Settle first" dialog. */
+  balanceGuard?: { memberName: string; self: boolean; balance: OutstandingBalance } | null;
+  onSettleFirst?: () => void;
+  onDismissBalanceGuard?: () => void;
 };
 
 export function GroupEditScreen(p: GroupEditScreenProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState<GroupEditMember | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const busy = Boolean(p.saving);
+  const balanceOf = (member: GroupEditMember) =>
+    p.balances?.[String(member.userId ?? member.memberId ?? member.id)];
   const retentionOptions = [
     { value: null, label: 'Never' },
     { value: 86_400_000, label: '1 day' },
@@ -365,6 +399,18 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                           {owner ? 'Owner' : member.role === 'admin' ? 'Admin' : 'Member'}
                         </Typography>
                       </View>
+                      {(() => {
+                        const balance = balanceOf(member);
+                        if (balance === undefined || !p.balanceCurrency) return null;
+                        return balance === 0n ? (
+                          <StatusPill tone="settlement" label="Settled up" />
+                        ) : (
+                          <StatusPill
+                            tone={balance > 0n ? 'income' : 'expense'}
+                            label={`${balance > 0n ? 'Gets back' : 'Owes'} ${formatMinor(balance < 0n ? -balance : balance, p.balanceCurrency)}`}
+                          />
+                        );
+                      })()}
                       {p.canManage && !owner && (
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                           <Button
@@ -379,7 +425,11 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                             size="sm"
                             variant="outline"
                             disabled={busy}
-                            onPress={() => p.onRemoveMember(member)}
+                            onPress={() =>
+                              balanceOf(member)
+                                ? p.onRemoveMember(member)
+                                : setConfirmRemove(member)
+                            }
                           >
                             Remove
                           </Button>
@@ -399,6 +449,23 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                 <Typography variant="small">
                   Membership is not cached yet. Details appear after sync completes.
                 </Typography>
+              )}
+              {!!p.formerMembers?.length && (
+                <View style={{ gap: 8, paddingTop: 4 }}>
+                  <Typography variant="label">Former members</Typography>
+                  {p.formerMembers.map((former) => (
+                    <View
+                      key={former.id}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, opacity: 0.8 }}
+                    >
+                      <GroupAvatar name={former.name} avatarId={former.avatarId} size={30} />
+                      <Typography variant="small" style={{ flex: 1 }}>
+                        {former.name}
+                      </Typography>
+                      <StatusPill tone="neutral" label={`Left ${shortDate(former.leftAt)}`} />
+                    </View>
+                  ))}
+                </View>
               )}
             </GroupPanel>
             <GroupPanel>
@@ -458,9 +525,60 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                 Return to group
               </Button>
             </GroupPanel>
+            {!!p.canLeave && !!p.onLeave && (
+              <GroupPanel
+                style={{
+                  borderColor: withAlpha(tokens.destructive, 0.3),
+                  backgroundColor: withAlpha(tokens.destructive, 0.05),
+                }}
+              >
+                <Typography variant="heading">Leave group</Typography>
+                <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
+                  You can leave once your balance in this group is zero. Your past expenses stay in
+                  the history.
+                </Typography>
+                <Button
+                  variant="destructive"
+                  disabled={busy}
+                  onPress={() =>
+                    p.meId && p.balances?.[p.meId] ? p.onLeave?.() : setConfirmLeave(true)
+                  }
+                >
+                  {p.saving === 'leave' ? 'Leaving…' : 'Leave group'}
+                </Button>
+              </GroupPanel>
+            )}
           </>
         )}
       </ScrollView>
+      <AlertDialog
+        visible={!!confirmRemove}
+        onClose={() => setConfirmRemove(null)}
+        title={`Remove ${confirmRemove?.name ?? 'member'}?`}
+        description="They lose access to the group. Their past expenses and payments stay in the history."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          if (confirmRemove) p.onRemoveMember(confirmRemove);
+        }}
+      />
+      <AlertDialog
+        visible={confirmLeave}
+        onClose={() => setConfirmLeave(false)}
+        title="Leave this group?"
+        description="You will lose access to its expenses and chat. An admin can invite you again."
+        confirmLabel="Leave"
+        destructive
+        onConfirm={() => p.onLeave?.()}
+      />
+      <OutstandingBalanceDialog
+        visible={!!p.balanceGuard}
+        memberName={p.balanceGuard?.memberName ?? ''}
+        self={p.balanceGuard?.self ?? false}
+        balance={p.balanceGuard?.balance ?? null}
+        onClose={() => p.onDismissBalanceGuard?.()}
+        onSettleFirst={() => p.onSettleFirst?.()}
+      />
     </KeyboardAvoidingView>
   );
 }

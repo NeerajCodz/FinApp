@@ -11,10 +11,17 @@ import { commitLocalWrite } from '@/local/commands';
 import { recordId, recordIds } from '@/lib/ledger';
 import {
   GroupEditScreen,
+  groupErrorMessage,
   INVITATION_LINK_DEFAULT_EXPIRY_MS,
+  outstandingBalance,
+  outstandingBalanceFromError,
+  settleFirstCounterpart,
   type InvitationLinkExpiryMs,
+  type OutstandingBalance,
 } from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { useGroupLedger } from '@/hooks/useGroupLedger';
+import { toast } from '@/lib/toast';
 
 export default function GroupSettingsScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -70,6 +77,31 @@ export default function GroupSettingsScreen() {
   const updateMemberRole = useMutation(api.groups.mutations.setMemberRole);
   const addGroupMember = useMutation(api.groups.mutations.addMember);
   const removeGroupMember = useMutation(api.groups.mutations.removeMember);
+  const leaveGroupMutation = useMutation(api.groups.mutations.leaveGroup);
+  const { ledger } = useGroupLedger(id);
+  const [balanceGuard, setBalanceGuard] = useState<{
+    memberId: string;
+    memberName: string;
+    self: boolean;
+    balance: OutstandingBalance;
+  } | null>(null);
+  const groupCurrency = String(group?.currency ?? ledger?.currency ?? '');
+  const memberDisplayName = (member: LocalRecord) =>
+    String(member.displayName ?? member.name ?? member.username ?? 'Member');
+  /** Shows the "Settle first" dialog; returns true when an open balance blocks the action. */
+  function guardBalance(memberId: string, memberName: string, self: boolean, error?: unknown) {
+    const balance =
+      (error === undefined ? null : outstandingBalanceFromError(error)) ??
+      (error === undefined ? outstandingBalance(ledger?.balances, memberId, groupCurrency) : null);
+    if (!balance) return false;
+    setBalanceGuard({
+      memberId,
+      memberName,
+      self,
+      balance: { ...balance, currency: balance.currency || groupCurrency },
+    });
+    return true;
+  }
   const retry = () => {
     groupState.retry();
     memberState.retry();
@@ -225,6 +257,7 @@ export default function GroupSettingsScreen() {
     if (!canManage || !cloudGroupId || pending) return;
     const memberUserId = typeof member.userId === 'string' ? member.userId : '';
     if (!memberUserId) return;
+    if (guardBalance(memberUserId, memberDisplayName(member), false)) return;
     const memberRecordId = recordId(member);
     setPending(memberRecordId);
     setActionError('');
@@ -233,8 +266,31 @@ export default function GroupSettingsScreen() {
         groupId: cloudGroupId as Id<'groups'>,
         memberUserId: memberUserId as Id<'users'>,
       });
+      toast.success(`${memberDisplayName(member)} was removed`);
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : 'Could not remove this member.');
+      if (!guardBalance(memberUserId, memberDisplayName(member), false, cause))
+        setActionError(groupErrorMessage(cause, 'Could not remove this member.'));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function leaveGroup() {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to leave the group.');
+      return;
+    }
+    if (!userId || !cloudGroupId || pending) return;
+    if (guardBalance(userId, 'You', true)) return;
+    setPending('leave');
+    setActionError('');
+    try {
+      await leaveGroupMutation({ groupId: cloudGroupId as Id<'groups'> });
+      toast.success(`You left ${String(group?.name ?? 'the group')}`);
+      router.replace('/groups' as never);
+    } catch (cause) {
+      if (!guardBalance(userId, 'You', true, cause))
+        setActionError(groupErrorMessage(cause, 'Could not leave the group.'));
     } finally {
       setPending(null);
     }
@@ -366,7 +422,36 @@ export default function GroupSettingsScreen() {
       onMemberInputChange={setMemberInput}
       onAddMember={() => void addMember()}
       onChangeRole={(member, makeAdmin) => void toggleAdmin(member as LocalRecord, makeAdmin)}
-      onRemoveMember={(member) => void removeMember(member as LocalRecord)}
+      onRemoveMember={(member) =>
+        void removeMember(
+          (members.find((record) => recordId(record) === member.id) ?? member) as LocalRecord,
+        )
+      }
+      meId={userId}
+      balances={ledger?.balances}
+      balanceCurrency={groupCurrency}
+      formerMembers={remoteGroup?.formerMembers.map((former) => ({
+        id: former.id,
+        name: former.displayName,
+        avatarId: former.avatarId,
+        leftAt: former.leftAt,
+      }))}
+      canLeave={Boolean(remoteGroup && userId && remoteGroup.ownerId !== userId && cloudGroupId)}
+      onLeave={() => void leaveGroup()}
+      balanceGuard={balanceGuard}
+      onDismissBalanceGuard={() => setBalanceGuard(null)}
+      onSettleFirst={() => {
+        const guard = balanceGuard;
+        setBalanceGuard(null);
+        if (!guard) return;
+        const counterpart = guard.self
+          ? settleFirstCounterpart(ledger?.balances, guard.memberId)
+          : guard.memberId;
+        router.push({
+          pathname: '/settle/new',
+          params: { groupId: id ?? '', ...(counterpart ? { member: counterpart } : {}) },
+        });
+      }}
       onRetry={retry}
       onBack={() => router.back()}
       onOpenAnalytics={() =>

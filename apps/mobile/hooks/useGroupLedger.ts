@@ -64,6 +64,7 @@ export function useGroupLedger(id: string | undefined) {
   return {
     group,
     members: members.data,
+    participants: participants.data,
     ledger: projected?.value,
     error,
     loading:
