@@ -1,15 +1,23 @@
-import React, { useState } from 'react';
-import { Check } from 'lucide-react';
-import { Button, Text, Typography, useTheme } from '@finapp/ui/web';
-import { formatMinor, parseMinor } from '../money';
-import { CurrencyInput } from './CurrencyInput';
-import { SemanticMarker } from './SemanticMarker';
+'use client';
 
+import React, { useState } from 'react';
+import { Check, NotebookPen, TriangleAlert } from 'lucide-react';
+import { Button, IconTile, Textarea } from '@finapp/ui/web';
+import { formatMinor, parseMinor } from '../money';
+import { SETTLEMENT_NOTE_MAX } from '../groupSettle';
+import { CurrencyInput } from './CurrencyInput';
+import styles from './GroupSettle.module.css';
+
+/**
+ * Partial or full payment with one member. Amounts above what is still open between the two
+ * members are blocked inline with the same rule the server applies (SETTLEMENT_EXCEEDS_BALANCE).
+ */
 export function SettlementEditor({
   memberName,
   currency,
   direction,
   maxAmountMinor,
+  suggestedMinor,
   disabledReason,
   saving = false,
   error,
@@ -19,13 +27,15 @@ export function SettlementEditor({
   currency: string;
   direction: 'pay' | 'receive';
   maxAmountMinor: bigint;
+  suggestedMinor?: bigint;
   disabledReason?: string;
   saving?: boolean;
   error?: string;
-  onSave: (amountMinor: bigint) => void;
+  onSave: (amountMinor: bigint, note?: string) => void;
 }) {
   const [amount, setAmount] = useState('');
-  const { tokens } = useTheme();
+  const [note, setNote] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
   let amountMinor: bigint | null = null;
   try {
     amountMinor = parseMinor(amount, currency);
@@ -34,70 +44,115 @@ export function SettlementEditor({
   }
   const invalidAmount = amount.length > 0 && (amountMinor === null || amountMinor <= 0n);
   const tooMuch = amountMinor !== null && amountMinor > maxAmountMinor;
+  const noteTooLong = note.trim().length > SETTLEMENT_NOTE_MAX;
   const disabled =
-    saving || !!disabledReason || amountMinor === null || amountMinor <= 0n || tooMuch;
+    saving ||
+    !!disabledReason ||
+    amountMinor === null ||
+    amountMinor <= 0n ||
+    tooMuch ||
+    noteTooLong;
+  const fill = (value: bigint) => setAmount(formatMinor(value, currency).replace(/[^\d.]/g, ''));
+  const quickFills = [
+    { label: 'Full balance', value: maxAmountMinor },
+    ...(suggestedMinor && suggestedMinor > 0n && suggestedMinor !== maxAmountMinor
+      ? [{ label: 'Suggested', value: suggestedMinor }]
+      : []),
+    ...(maxAmountMinor > 1n ? [{ label: 'Half', value: maxAmountMinor / 2n }] : []),
+  ];
+  const tone = direction === 'pay' ? 'var(--finapp-expense)' : 'var(--finapp-income)';
+  const problem = tooMuch
+    ? `That is more than the ${formatMinor(maxAmountMinor, currency)} still open with ${memberName}. Lower the amount; balances may have changed.`
+    : invalidAmount
+      ? `Enter a positive amount in ${currency}.`
+      : (error ?? disabledReason);
   return (
-    <div style={{ display: 'grid', gap: 24 }}>
-      <div style={{ display: 'grid', gap: 14 }}>
-        <SemanticMarker type="settlement" />
-        <Typography variant="title">Record a settlement</Typography>
-        <Typography variant="small">
+    <form
+      style={{ display: 'grid', gap: 16 }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!disabled && amountMinor !== null) onSave(amountMinor, note.trim() || undefined);
+      }}
+    >
+      <div style={{ display: 'grid', gap: 4 }}>
+        <h3 style={{ margin: 0 }}>
+          {direction === 'pay' ? `You paid ${memberName}` : `${memberName} paid you`}
+        </h3>
+        <p className={styles.muted}>
           {maxAmountMinor > 0n
-            ? direction === 'pay'
-              ? `You paid ${memberName}. `
-              : `${memberName} paid you. `
-            : 'Choose a group and member with an outstanding balance. '}
-          This records a payment already made; it does not send money.
-        </Typography>
-        {maxAmountMinor > 0n && (
-          <Typography variant="caption">
-            Outstanding up to {formatMinor(maxAmountMinor, currency)}
-          </Typography>
-        )}
+            ? `Up to ${formatMinor(maxAmountMinor, currency)} is open between you. Record part of it or all of it.`
+            : 'Choose someone with an open balance.'}{' '}
+          This records a payment already made; it does not move money.
+        </p>
       </div>
       <CurrencyInput currency={currency} value={amount} onChangeText={setAmount} />
-      {disabledReason && (
-        <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-          {disabledReason}
-        </Typography>
-      )}
-      {invalidAmount && (
-        <Typography variant="small" style={{ color: tokens.destructive }}>
-          Enter a positive amount in {currency}.
-        </Typography>
-      )}
-      {tooMuch && (
-        <Typography variant="small" style={{ color: tokens.destructive }}>
-          Amount exceeds the outstanding balance.
-        </Typography>
-      )}
-      {!!error && (
-        <div role="alert">
-          <Typography variant="small" style={{ color: tokens.destructive }}>
-            {error}
-          </Typography>
+      {maxAmountMinor > 0n && (
+        <div className={styles.chips} style={{ '--tone': tone } as React.CSSProperties}>
+          {quickFills.map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              className={styles.quick}
+              onClick={() => fill(option.value)}
+            >
+              {option.label} · {formatMinor(option.value, currency)}
+            </button>
+          ))}
         </div>
       )}
+      {noteOpen ? (
+        <div style={{ display: 'grid', gap: 4 }}>
+          <Textarea
+            aria-label="Settlement note"
+            placeholder="Add a note, e.g. “Paid via UPI”"
+            value={note}
+            onChangeText={setNote}
+            maxLength={SETTLEMENT_NOTE_MAX + 20}
+            rows={3}
+          />
+          <span className={styles.counter} data-over={noteTooLong || undefined}>
+            {note.trim().length}/{SETTLEMENT_NOTE_MAX}
+          </span>
+        </div>
+      ) : (
+        <button type="button" className={styles.noteToggle} onClick={() => setNoteOpen(true)}>
+          <IconTile tone="neutral" size={32}>
+            <NotebookPen size={16} />
+          </IconTile>
+          Add a note (optional)
+        </button>
+      )}
+      {problem && (
+        <p
+          className={styles.notice}
+          data-tone={tooMuch || invalidAmount || error ? 'error' : undefined}
+          role={tooMuch || error ? 'alert' : 'status'}
+        >
+          <TriangleAlert size={16} />
+          <span>{problem}</span>
+        </p>
+      )}
       <Button
+        type="submit"
         size="lg"
         disabled={disabled}
-        onPress={() => amountMinor !== null && onSave(amountMinor)}
         accessibilityLabel={saving ? 'Saving settlement' : 'Record settlement'}
-        style={!disabled ? { backgroundColor: tokens.settlement } : undefined}
+        style={
+          !disabled
+            ? {
+                background: 'var(--finapp-settlement)',
+                color: 'var(--finapp-background)',
+              }
+            : undefined
+        }
       >
-        <Check size={18} color={disabled ? tokens.controlDisabledForeground : tokens.background} />
-        <Text
-          style={{
-            marginLeft: 8,
-            color: disabled ? tokens.controlDisabledForeground : tokens.background,
-            fontFamily: 'var(--font-space-grotesk, sans-serif)',
-            fontSize: 15,
-            fontWeight: 600,
-          }}
-        >
-          {saving ? 'Saving…' : 'Record settlement'}
-        </Text>
+        <Check size={18} />{' '}
+        {saving
+          ? 'Saving…'
+          : amountMinor && amountMinor > 0n && !tooMuch
+            ? `Record ${formatMinor(amountMinor, currency)}`
+            : 'Record settlement'}
       </Button>
-    </div>
+    </form>
   );
 }

@@ -421,3 +421,53 @@ export function previewInclusion(
     participantCount: userIds.length,
   };
 }
+
+export type IncludableExpense = {
+  id: string;
+  /** Server id used by addMembersToExpenses; missing until the expense has synced. */
+  cloudId?: string;
+  title: string;
+  amountMinor: bigint;
+  currency: string;
+  occurredAt: number;
+  preview: InclusionPreview;
+  /** False when you may not edit this expense (not admin, not its creator, or not synced). */
+  editable: boolean;
+};
+
+export type PastExpenseCandidate = {
+  id: string;
+  cloudId?: string;
+  title: string;
+  amountMinor: bigint;
+  occurredAt: number;
+  ownerId?: string;
+  participants: readonly InclusionParticipant[];
+};
+
+/**
+ * Past expenses a late joiner missed, with a share preview and whether the current user may
+ * add them (admins any expense, others only expenses they created).
+ */
+export function includablePastExpenses(
+  joiner: Pick<LateJoiner, 'userId' | 'missedExpenseIds'>,
+  expenses: readonly PastExpenseCandidate[],
+  options: { meId: string; isAdmin: boolean; currency: string },
+): IncludableExpense[] {
+  return joiner.missedExpenseIds.flatMap((expenseId) => {
+    const expense = expenses.find((candidate) => candidate.id === expenseId);
+    if (!expense) return [];
+    return [
+      {
+        id: expense.id,
+        cloudId: expense.cloudId,
+        title: expense.title,
+        amountMinor: expense.amountMinor,
+        currency: options.currency,
+        occurredAt: expense.occurredAt,
+        preview: previewInclusion(expense.amountMinor, expense.participants, [joiner.userId]),
+        editable: Boolean(expense.cloudId) && (options.isAdmin || expense.ownerId === options.meId),
+      },
+    ];
+  });
+}

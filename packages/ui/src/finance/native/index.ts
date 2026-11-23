@@ -192,6 +192,7 @@ export {
   buildExpenseTimeline,
   dayLabel,
   findLateJoiners,
+  includablePastExpenses,
   groupErrorMessage,
   isValidTransferSequence,
   localDayKey,
@@ -205,6 +206,7 @@ export {
   transferWith,
   type BalanceMap,
   type InclusionParticipant,
+  type PastExpenseCandidate,
   type InclusionPreview,
   type LateJoiner,
   type OutstandingBalance,
@@ -215,3 +217,22 @@ export {
   type TimelineJoin,
   type TimelineRow,
 } from '../groupSettle';
+export { SettleUpHub, type SettleUpHubProps } from './SettleUpHub';
+export {
+  GroupExpenseTimeline,
+  IllustratedState,
+  IncludePastExpensesSheet,
+  JoinedMarker,
+  LateJoinerBanner,
+  MemberBalanceBars,
+  NetPositionHero,
+  OutstandingBalanceDialog,
+  SectionTitle,
+  SettleCard,
+  SettlementHistoryRow,
+  SettleSuccess,
+  SuggestedTransfers,
+  type IncludableExpense,
+  type SettlePerson,
+  type TimelineExpense,
+} from './GroupSettleParts';

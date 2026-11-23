@@ -6,6 +6,7 @@ import {
   buildExpenseTimeline,
   findLateJoiners,
   groupErrorMessage,
+  includablePastExpenses,
   isValidTransferSequence,
   outstandingBalance,
   outstandingBalanceFromError,
@@ -186,5 +187,52 @@ describe('late joiners', () => {
     expect(
       previewInclusion(100n, [{ userId: 'a', amountMinor: 100n, method: 'equal' }], ['a']),
     ).toEqual({ eligible: false, reason: 'included' });
+  });
+
+  it('only lets members change synced expenses they may edit', () => {
+    const participants = [{ userId: 'me', amountMinor: 200n, method: 'equal' }];
+    const rows = includablePastExpenses(
+      { userId: 'new', missedExpenseIds: ['a', 'b', 'c'] },
+      [
+        {
+          id: 'a',
+          cloudId: 'cloud-a',
+          title: 'Mine',
+          amountMinor: 200n,
+          occurredAt: 1,
+          ownerId: 'me',
+          participants,
+        },
+        {
+          id: 'b',
+          cloudId: 'cloud-b',
+          title: 'Theirs',
+          amountMinor: 200n,
+          occurredAt: 2,
+          ownerId: 'other',
+          participants,
+        },
+        {
+          id: 'c',
+          title: 'Unsynced',
+          amountMinor: 200n,
+          occurredAt: 3,
+          ownerId: 'me',
+          participants,
+        },
+      ],
+      { meId: 'me', isAdmin: false, currency: 'INR' },
+    );
+    expect(rows.map((row) => [row.id, row.editable])).toEqual([
+      ['a', true],
+      ['b', false],
+      ['c', false],
+    ]);
+    expect(rows[0]?.preview).toEqual({
+      eligible: true,
+      beforeMinor: 200n,
+      afterMinor: 100n,
+      participantCount: 2,
+    });
   });
 });

@@ -1,0 +1,589 @@
+.page {
+  display: grid;
+  gap: 24px;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  color: var(--finapp-foreground);
+}
+
+.narrow {
+  width: min(100%, 760px);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.heading h1 {
+  margin: 0;
+  font-size: var(--finapp-type-title-size, 28px);
+  letter-spacing: var(--finapp-type-title-tracking, -0.5px);
+}
+
+.back {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 12px;
+  color: var(--finapp-foreground);
+  background: var(--finapp-card);
+  cursor: pointer;
+}
+
+.back:hover {
+  background: var(--finapp-surface-raised);
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 960px) {
+  .grid {
+    grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+    align-items: start;
+  }
+}
+
+.stack {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 18px;
+  background: var(--finapp-card);
+}
+
+.card[data-tone='income'] {
+  border-color: color-mix(in srgb, var(--finapp-income) 30%, transparent);
+  background: color-mix(in srgb, var(--finapp-income) 6%, var(--finapp-card));
+}
+
+.card[data-tone='expense'] {
+  border-color: color-mix(in srgb, var(--finapp-expense) 30%, transparent);
+  background: color-mix(in srgb, var(--finapp-expense) 6%, var(--finapp-card));
+}
+
+.card[data-tone='settlement'] {
+  border-color: color-mix(in srgb, var(--finapp-settlement) 30%, transparent);
+  background: color-mix(in srgb, var(--finapp-settlement) 6%, var(--finapp-card));
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sectionTitle > div {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sectionTitle h2,
+.sectionTitle h3 {
+  margin: 0;
+  font-size: var(--finapp-type-heading-size, 20px);
+}
+
+.muted {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 13px;
+}
+
+.heroRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.heroCopy {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  min-width: 200px;
+}
+
+.heroAmount {
+  font-size: clamp(30px, 6vw, 44px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+
+.heroAmount[data-tone='income'] {
+  color: var(--finapp-income);
+}
+
+.heroAmount[data-tone='expense'] {
+  color: var(--finapp-expense);
+}
+
+.heroAmount[data-tone='settlement'] {
+  color: var(--finapp-settlement);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.bars {
+  display: grid;
+  gap: 14px;
+}
+
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  text-align: left;
+  font: inherit;
+}
+
+button.barRow {
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+button.barRow:hover {
+  background: var(--finapp-surface-subtle);
+}
+
+.barBody {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.barHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.barHead strong {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.amount[data-tone='income'] {
+  color: var(--finapp-income);
+}
+
+.amount[data-tone='expense'] {
+  color: var(--finapp-expense);
+}
+
+.amount[data-tone='settlement'] {
+  color: var(--finapp-settlement);
+}
+
+.track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--finapp-surface-raised);
+}
+
+.fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.fill[data-tone='income'] {
+  background: var(--finapp-income);
+}
+
+.fill[data-tone='expense'] {
+  background: var(--finapp-expense);
+}
+
+.transfer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  background: var(--finapp-surface-subtle);
+}
+
+.transfer[data-mine] {
+  border-color: color-mix(in srgb, var(--finapp-settlement) 30%, transparent);
+  background: color-mix(in srgb, var(--finapp-settlement) 8%, transparent);
+}
+
+.transferCopy {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.transferCopy span {
+  overflow: hidden;
+  color: var(--finapp-foreground-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrow {
+  flex: none;
+  color: var(--finapp-foreground-muted);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  color: inherit;
+  background: var(--finapp-card);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.choice:hover {
+  background: var(--finapp-surface-subtle);
+}
+
+.choice[data-active][data-tone='expense'] {
+  border-color: var(--finapp-expense);
+  background: color-mix(in srgb, var(--finapp-expense) 10%, transparent);
+}
+
+.choice[data-active][data-tone='income'] {
+  border-color: var(--finapp-income);
+  background: color-mix(in srgb, var(--finapp-income) 10%, transparent);
+}
+
+.choice[data-active][data-tone='split'] {
+  border-color: var(--finapp-split);
+  background: color-mix(in srgb, var(--finapp-split) 8%, transparent);
+}
+
+.choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.choiceCopy {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.choiceCopy small {
+  color: var(--finapp-foreground-muted);
+}
+
+.choiceCopy small[data-warn] {
+  color: var(--finapp-warning);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 999px;
+  color: inherit;
+  background: var(--finapp-card);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+}
+
+.chip[data-active] {
+  border-color: var(--finapp-settlement);
+  background: color-mix(in srgb, var(--finapp-settlement) 10%, transparent);
+}
+
+.chip[data-account][data-active] {
+  border-color: var(--finapp-primary);
+  background: var(--finapp-primary-soft);
+}
+
+.quick {
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--tone) 40%, transparent);
+  border-radius: 999px;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 8%, transparent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quick:hover {
+  background: color-mix(in srgb, var(--tone) 18%, transparent);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--finapp-warning) 10%, transparent);
+  font-size: 14px;
+}
+
+.notice[data-tone='error'] {
+  background: color-mix(in srgb, var(--finapp-destructive) 10%, transparent);
+}
+
+.notice svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--finapp-warning);
+}
+
+.notice[data-tone='error'] svg {
+  color: var(--finapp-destructive);
+}
+
+.noteToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  color: var(--finapp-foreground-muted);
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+}
+
+.counter {
+  justify-self: end;
+  color: var(--finapp-foreground-muted);
+  font-size: 12px;
+}
+
+.counter[data-over] {
+  color: var(--finapp-destructive);
+}
+
+.state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  text-align: center;
+}
+
+.state h2,
+.state h3 {
+  margin: 0;
+  font-size: var(--finapp-type-heading-size, 20px);
+}
+
+.state p {
+  max-width: 380px;
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+}
+
+.stateActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.day {
+  margin: 8px 0 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.expense {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  color: inherit;
+  background: var(--finapp-card);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  animation: rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.expense:hover {
+  background: var(--finapp-surface-subtle);
+}
+
+.joined {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.joined::before,
+.joined::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--finapp-split) 35%, transparent);
+}
+
+.joined span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--finapp-split);
+  background: color-mix(in srgb, var(--finapp-split) 12%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--finapp-split) 35%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--finapp-split) 8%, transparent);
+}
+
+.bannerCopy {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.history {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sheetList {
+  display: grid;
+  gap: 10px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+
+.dialogBody {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dialogBody p {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+}
+
+.danger {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--finapp-destructive) 30%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--finapp-destructive) 5%, var(--finapp-card));
+}
+
+.former {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.8;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expense {
+    animation: none;
+  }
+
+  .fill {
+    transition: none;
+  }
+}
