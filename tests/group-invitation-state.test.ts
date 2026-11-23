@@ -25,7 +25,12 @@ describe('group invitation state on web and mobile', () => {
 
   it('offers sign-in for a valid link even before the service connects', () => {
     expect(
-      groupInvitationState({ ...ready, authenticated: false, connected: false, preview: undefined }),
+      groupInvitationState({
+        ...ready,
+        authenticated: false,
+        connected: false,
+        preview: undefined,
+      }),
     ).toBe('signed-out');
   });
 
