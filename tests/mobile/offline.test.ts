@@ -17,6 +17,14 @@ describe('offline financial safety', () => {
     const payload = deserializeLocalValue<{ amountMinor: bigint; title: string }>(entry.payload);
     expect(payload).toEqual({ amountMinor, title: '100n' });
   });
+  it('round trips line item amounts nested in queued payloads', () => {
+    const items = [
+      { id: 'a', title: 'Starters', amountMinor: 20000n, participantIds: ['u1'] },
+      { id: 'b', title: '5n', amountMinor: 30000n, quantity: 2 },
+    ];
+    const entry = createOutboxEntry('group.updateExpense', { amountMinor: 50000n, items }, 'm-2');
+    expect(deserializeLocalValue<{ items: typeof items }>(entry.payload).items).toEqual(items);
+  });
   it('uses the bounded retry schedule after transient cloud failures', () => {
     expect([1, 2, 3, 4, 5, 6, 7].map(nextRetryDelay)).toEqual([
       1_000, 2_000, 4_000, 8_000, 15_000, 30_000, 30_000,

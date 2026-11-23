@@ -5,8 +5,17 @@
  */
 import { formatMinor, parseMinor } from '@convex/shared/money';
 import { allocateParticipants } from '@convex/splits/domain';
+import {
+  computeItemizedSplit,
+  computeLineItems,
+  type LineItemDraft,
+  type LineItemPayload,
+} from './lineItems';
 
-export type GroupExpenseMethod = 'equal' | 'exact' | 'percentage' | 'shares';
+/** `itemized`: each line item is shared equally by the people ticked on it. */
+export type GroupExpenseMethod = 'equal' | 'exact' | 'percentage' | 'shares' | 'itemized';
+/** Methods that take a per-person value (stored as basisValue). */
+export type BasisMethod = Exclude<GroupExpenseMethod, 'equal' | 'itemized'>;
 export type ExpenseShare = { userId: string; amountMinor: bigint };
 export type ExpenseParticipantInput = ExpenseShare & {
   method: GroupExpenseMethod;
@@ -86,7 +95,7 @@ function tryParseShares(value: string | undefined): bigint | null {
 
 /** Parses one member's split value into the unit stored as basisValue for that method. */
 export function parseBasisValue(
-  method: Exclude<GroupExpenseMethod, 'equal'>,
+  method: BasisMethod,
   value: string | undefined,
   currency: string,
 ): bigint | null {
@@ -102,7 +111,7 @@ export function basisInputFromRow(
   row: Readonly<Record<string, unknown>>,
   currency: string,
 ): string {
-  if (method === 'equal') return '';
+  if (method === 'equal' || method === 'itemized') return '';
   const raw =
     typeof row.basisValue === 'string' && /^\d+$/.test(row.basisValue)
       ? BigInt(row.basisValue)
@@ -128,6 +137,11 @@ export type ExpenseDraftInput = {
   method: GroupExpenseMethod;
   participantIds: readonly string[];
   basis: Readonly<Record<string, string>>;
+  /**
+   * Line items. Required for the `itemized` method (the total is then their sum); with other
+   * methods they are saved as a plain breakdown and must add up to the amount.
+   */
+  items?: readonly LineItemDraft[] | null;
 };
 
 export type ExpenseDraft = {
@@ -142,6 +156,8 @@ export type ExpenseDraft = {
   allocation: AllocationStatus;
   /** Human-readable reason the split cannot be saved yet, or '' when it is valid. */
   error: string;
+  /** Line items to save with the expense (empty when not itemized). */
+  items: LineItemPayload[];
 };
 
 function sum(values: readonly (bigint | null)[]): bigint {
@@ -153,7 +169,62 @@ function sum(values: readonly (bigint | null)[]): bigint {
  * amount still to assign and, once everything adds up, the exact participant rows to save.
  */
 export function computeExpenseDraft(input: ExpenseDraftInput): ExpenseDraft {
-  const { currency, method, participantIds, basis } = input;
+  if (input.method === 'itemized' || input.items) return computeWithItems(input);
+  return { ...computeBasisDraft(input), items: [] };
+}
+
+function computeWithItems(input: ExpenseDraftInput): ExpenseDraft {
+  const { currency, participantIds } = input;
+  const rows = input.items ?? [];
+  const parsed = computeLineItems(rows, currency);
+  const totalMinor = parsed.totalMinor > 0n ? parsed.totalMinor : null;
+  if (input.method !== 'itemized') {
+    // Items as a breakdown: the split itself uses the chosen method on the items' total.
+    const amount = totalMinor === null ? '' : formatPlain(totalMinor, currency);
+    const draft = computeBasisDraft({ ...input, amount });
+    const error = !rows.length || parsed.error ? parsed.error : draft.error;
+    return {
+      ...draft,
+      ...(error ? { shares: [], participants: [] } : {}),
+      error,
+      items: error ? [] : parsed.items.map(({ participantIds: _ids, ...item }) => item),
+    };
+  }
+  const split = computeItemizedSplit(rows, participantIds, currency);
+  const allocation: AllocationStatus = !participantIds.length
+    ? { tone: 'warning', label: 'Pick who shared this', remaining: null }
+    : split.error
+      ? { tone: 'warning', label: split.error, remaining: null }
+      : {
+          tone: 'positive',
+          label: `${rows.length} ${rows.length === 1 ? 'item' : 'items'} split between ${participantIds.length} ${participantIds.length === 1 ? 'person' : 'people'}`,
+          remaining: null,
+        };
+  const error = totalMinor === null && !parsed.error ? 'Add items with amounts.' : split.error;
+  return {
+    totalMinor,
+    shares: error
+      ? []
+      : split.participants.map(({ userId, amountMinor }) => ({ userId, amountMinor })),
+    participants: error ? [] : split.participants,
+    preview: split.preview,
+    allocation,
+    error,
+    items: error ? [] : split.items,
+  };
+}
+
+function formatPlain(amount: bigint, currency: string): string {
+  try {
+    return minorToInput(amount, currency);
+  } catch {
+    return amount.toString();
+  }
+}
+
+function computeBasisDraft(input: ExpenseDraftInput): Omit<ExpenseDraft, 'items'> {
+  const { currency, participantIds, basis } = input;
+  const method = input.method as Exclude<GroupExpenseMethod, 'itemized'>;
   let totalMinor: bigint | null = null;
   let amountError = '';
   if (!input.amount.trim()) amountError = 'Enter the total amount.';
