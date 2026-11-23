@@ -1,7 +1,14 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { createTokens, type AccentValue, type ThemeMode, type ThemeTokens } from '../tokens';
+import {
+  createTokens,
+  typeScale,
+  withAlpha,
+  type AccentValue,
+  type ThemeMode,
+  type ThemeTokens,
+} from '../tokens';
 
 type Appearance = ThemeMode | 'system';
 type ThemeContextValue = {
@@ -65,6 +72,32 @@ function tokenVariables(tokens: ThemeTokens): React.CSSProperties {
     '--finapp-split': tokens.split,
     '--finapp-settlement': tokens.settlement,
     '--finapp-font-sans': "var(--font-space-grotesk, 'Space Grotesk', 'Avenir Next', sans-serif)",
+    // Tinted surfaces for icon tiles, pills and illustration fills.
+    ...Object.fromEntries(
+      (
+        [
+          'primary',
+          'income',
+          'expense',
+          'positive',
+          'warning',
+          'split',
+          'settlement',
+          'destructive',
+        ] as const
+      ).map((name) => [`--finapp-${name}-soft`, withAlpha(tokens[name], 0.14)]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(tokens.chart).map(([name, color]) => [`--finapp-chart-${name}`, color]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(typeScale).flatMap(([variant, type]) => [
+        [`--finapp-type-${variant}-size`, `${type.fontSize}px`],
+        [`--finapp-type-${variant}-line`, `${type.lineHeight}px`],
+        [`--finapp-type-${variant}-weight`, type.fontWeight],
+        [`--finapp-type-${variant}-tracking`, `${type.letterSpacing ?? 0}px`],
+      ]),
+    ),
   } as React.CSSProperties;
 }
 

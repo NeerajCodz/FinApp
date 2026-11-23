@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text as RNText, View } from 'react-native';
 import { useTheme } from './ThemeProvider';
+import { typeScale, withAlpha, type TypeVariant } from '../tokens';
 
 export function Text({ children, style, ...props }: React.ComponentProps<typeof RNText>) {
   const { tokens } = useTheme();
@@ -27,62 +28,16 @@ export const Typography = ({
   children,
   variant = 'body',
   ...props
-}: React.ComponentProps<typeof RNText> & {
-  variant?:
-    'hero' | 'display' | 'title' | 'heading' | 'bodyLarge' | 'body' | 'small' | 'caption' | 'label';
-}) => {
+}: React.ComponentProps<typeof RNText> & { variant?: TypeVariant }) => {
   const { tokens } = useTheme();
+  const { fontWeight: _weight, tone, ...type } = typeScale[variant];
   return (
     <Text
       style={[
-        variant === 'hero' && {
-          fontFamily: 'SpaceGrotesk_600SemiBold',
-          fontSize: 48,
-          lineHeight: 52,
-          letterSpacing: -2,
-          fontVariant: ['tabular-nums'],
-        },
-        variant === 'display' && {
-          fontFamily: 'SpaceGrotesk_600SemiBold',
-          fontSize: 36,
-          lineHeight: 40,
-          letterSpacing: -1.3,
-        },
-        variant === 'title' && {
-          fontFamily: 'SpaceGrotesk_600SemiBold',
-          fontSize: 30,
-          lineHeight: 34,
-          letterSpacing: -0.9,
-        },
-        variant === 'heading' && {
-          fontFamily: 'SpaceGrotesk_600SemiBold',
-          fontSize: 20,
-          lineHeight: 25,
-          letterSpacing: -0.3,
-        },
-        variant === 'bodyLarge' && {
-          fontFamily: 'SpaceGrotesk_500Medium',
-          fontSize: 17,
-          lineHeight: 24,
-        },
-        variant === 'small' && {
-          fontSize: 13,
-          lineHeight: 18,
-          color: tokens.foregroundMuted,
-        },
-        variant === 'caption' && {
-          fontFamily: 'SpaceGrotesk_500Medium',
-          fontSize: 11,
-          lineHeight: 15,
-          letterSpacing: 0.2,
-          color: tokens.foregroundSubtle,
-        },
-        variant === 'label' && {
-          fontFamily: 'SpaceGrotesk_500Medium',
-          fontSize: 13,
-          lineHeight: 18,
-          color: tokens.foregroundMuted,
-        },
+        type,
+        variant === 'hero' && { fontVariant: ['tabular-nums'] },
+        tone === 'muted' && { color: tokens.foregroundMuted },
+        tone === 'subtle' && { color: tokens.foregroundSubtle },
         props.style,
       ]}
       {...props}
@@ -108,8 +63,8 @@ export function Badge({
   const { tokens } = useTheme();
   const palette = {
     default: { backgroundColor: tokens.primary, color: tokens.primaryForeground },
-    success: { backgroundColor: `${tokens.positive}1A`, color: tokens.positive },
-    danger: { backgroundColor: '#FF5C5C1A', color: tokens.destructive },
+    success: { backgroundColor: withAlpha(tokens.positive, 0.1), color: tokens.positive },
+    danger: { backgroundColor: withAlpha(tokens.destructive, 0.1), color: tokens.destructive },
     neutral: { backgroundColor: tokens.surfaceRaised, color: tokens.foregroundMuted },
   } as const;
   return (

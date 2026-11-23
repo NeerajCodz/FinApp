@@ -195,3 +195,110 @@ export function createTokens(mode: ThemeMode = 'dark', accentValue: string = 'vo
 
 export const lightTokens = createTokens('light');
 export const darkTokens = createTokens('dark');
+
+export type TypeVariant =
+  | 'hero'
+  | 'display'
+  | 'title'
+  | 'heading'
+  | 'bodyLarge'
+  | 'body'
+  | 'small'
+  | 'caption'
+  | 'label'
+  | 'overline';
+
+export type TypeStyle = {
+  fontFamily: string;
+  fontWeight: '400' | '500' | '600' | '700';
+  fontSize: number;
+  lineHeight: number;
+  letterSpacing?: number;
+  textTransform?: 'uppercase';
+  tone?: 'muted' | 'subtle';
+};
+
+/** Shared type scale; native maps it to Text styles, web exposes it as CSS variables. */
+export const typeScale: Record<TypeVariant, TypeStyle> = {
+  hero: {
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontWeight: '600',
+    fontSize: 48,
+    lineHeight: 52,
+    letterSpacing: -2,
+  },
+  display: {
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontWeight: '600',
+    fontSize: 36,
+    lineHeight: 40,
+    letterSpacing: -1.3,
+  },
+  title: {
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontWeight: '600',
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -0.9,
+  },
+  heading: {
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontWeight: '600',
+    fontSize: 20,
+    lineHeight: 25,
+    letterSpacing: -0.3,
+  },
+  bodyLarge: {
+    fontFamily: 'SpaceGrotesk_500Medium',
+    fontWeight: '500',
+    fontSize: 17,
+    lineHeight: 24,
+  },
+  body: { fontFamily: 'SpaceGrotesk_400Regular', fontWeight: '400', fontSize: 15, lineHeight: 22 },
+  small: {
+    fontFamily: 'SpaceGrotesk_400Regular',
+    fontWeight: '400',
+    fontSize: 13,
+    lineHeight: 18,
+    tone: 'muted',
+  },
+  caption: {
+    fontFamily: 'SpaceGrotesk_500Medium',
+    fontWeight: '500',
+    fontSize: 11,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    tone: 'subtle',
+  },
+  label: {
+    fontFamily: 'SpaceGrotesk_500Medium',
+    fontWeight: '500',
+    fontSize: 13,
+    lineHeight: 18,
+    tone: 'muted',
+  },
+  overline: {
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    tone: 'subtle',
+  },
+};
+
+/** Spacing steps (4pt grid) for gaps and padding. */
+export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as const;
+
+/**
+ * Applies an alpha (0–1) to a #RRGGBB or #RRGGBBAA token colour, for tinted surfaces such as
+ * icon tiles and status pills. Non-hex input is returned unchanged.
+ */
+export function withAlpha(color: string, alpha: number): string {
+  const match = /^#([\da-f]{6})([\da-f]{2})?$/i.exec(color);
+  if (!match) return color;
+  const base = match[2] ? Number.parseInt(match[2], 16) / 255 : 1;
+  const value = Math.round(Math.min(1, Math.max(0, alpha * base)) * 255);
+  return `#${match[1]!.toUpperCase()}${value.toString(16).padStart(2, '0').toUpperCase()}`;
+}

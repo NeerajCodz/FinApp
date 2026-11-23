@@ -178,7 +178,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function ThemedStack() {
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
   const [reduceMotion, setReduceMotion] = React.useState(false);
   React.useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -188,7 +188,7 @@ function ThemedStack() {
 
   return (
     <>
-      <StatusBar style={tokens.background === '#000000' ? 'light' : 'dark'} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerShown: false,
