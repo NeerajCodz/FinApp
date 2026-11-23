@@ -10,32 +10,36 @@ export const scopeState = query({
     scopeId: v.string(),
   },
   handler: async (ctx, { scopeType, scopeId: rawScopeId }) => {
+    const empty = {
+      participants: [],
+      typingUserIds: [],
+      typing: [] as { userId: Id<'users'>; updatedAt: number; typingUntil: number }[],
+    };
     const actor = await getOptionalUser(ctx);
-    if (!actor) return { participants: [], typingUserIds: [] };
+    if (!actor) return empty;
     let memberIds: Id<'users'>[];
     let scopeId: Id<'groups'> | Id<'directConversations'>;
     if (scopeType === 'group') {
       const groupId = ctx.db.normalizeId('groups', rawScopeId);
-      if (!groupId) return { participants: [], typingUserIds: [] };
+      if (!groupId) return empty;
       const group = await ctx.db.get(groupId);
-      if (!group || group.archivedAt !== undefined) return { participants: [], typingUserIds: [] };
+      if (!group || group.archivedAt !== undefined) return empty;
       const memberships = await ctx.db
         .query('groupMembers')
         .withIndex('by_group', (q) => q.eq('groupId', groupId))
         .collect();
-      if (!memberships.some((item) => item.userId === actor._id))
-        return { participants: [], typingUserIds: [] };
+      if (!memberships.some((item) => item.userId === actor._id)) return empty;
       memberIds = memberships.map((item) => item.userId);
       scopeId = groupId;
     } else {
       const conversationId = ctx.db.normalizeId('directConversations', rawScopeId);
-      if (!conversationId) return { participants: [], typingUserIds: [] };
+      if (!conversationId) return empty;
       const conversation = await ctx.db.get(conversationId);
       if (
         !conversation ||
         (conversation.userLowId !== actor._id && conversation.userHighId !== actor._id)
       )
-        return { participants: [], typingUserIds: [] };
+        return empty;
       memberIds = [conversation.userLowId, conversation.userHighId];
       scopeId = conversationId;
     }
@@ -69,23 +73,32 @@ export const scopeState = query({
       .query('typingIndicators')
       .withIndex('by_scope', (q) => q.eq('scopeType', scopeType).eq('scopeId', scopeId))
       .collect();
-    const typingUserIds = await Promise.all(
-      indicators
-        .filter(
-          (item) =>
-            item.userId !== actor._id && item.typingUntil > now && memberIds.includes(item.userId),
-        )
-        .map(async (item) => {
-          const settings = await ctx.db
-            .query('userSettings')
-            .withIndex('by_user', (q) => q.eq('userId', item.userId))
-            .unique();
-          return (settings?.showActive ?? true) ? item.userId : null;
-        }),
-    );
+    const typing = (
+      await Promise.all(
+        indicators
+          .filter(
+            (item) =>
+              item.userId !== actor._id &&
+              item.typingUntil > now &&
+              memberIds.includes(item.userId),
+          )
+          .map(async (item) => {
+            const settings = await ctx.db
+              .query('userSettings')
+              .withIndex('by_user', (q) => q.eq('userId', item.userId))
+              .unique();
+            return (settings?.showActive ?? true)
+              ? { userId: item.userId, updatedAt: item.updatedAt, typingUntil: item.typingUntil }
+              : null;
+          }),
+      )
+    ).filter((item) => item !== null);
+    // Query results are cached until data changes, so clients also expire `typing` entries
+    // locally (see the window in typingUntil - updatedAt).
     return {
       participants: participants.filter((item) => item !== null),
-      typingUserIds: typingUserIds.filter((id) => id !== null),
+      typingUserIds: typing.map((item) => item.userId),
+      typing,
     };
   },
 });

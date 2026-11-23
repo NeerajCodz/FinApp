@@ -4,6 +4,7 @@ import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
 import { validateBillImageMetadata } from '../groups/domain';
+import { advanceReadPointer, CHAT_PIN_LIMIT, chatReactionEmoji, clearTyping } from '../shared/chat';
 
 async function getConversationForParticipant(
   ctx: MutationCtx,
@@ -14,6 +15,18 @@ async function getConversationForParticipant(
   if (!conversation || (conversation.userLowId !== userId && conversation.userHighId !== userId))
     throw new Error('CONVERSATION_UNAVAILABLE');
   return conversation;
+}
+
+/** Sending ends typing and implies the sender has read everything before their message. */
+async function afterSend(
+  ctx: MutationCtx,
+  conversationId: Id<'directConversations'>,
+  userId: Id<'users'>,
+  createdAt: number,
+) {
+  const scope = { type: 'direct' as const, id: conversationId };
+  await clearTyping(ctx, scope, userId);
+  await advanceReadPointer(ctx, scope, userId, createdAt);
 }
 
 export const startConversation = mutation({
@@ -80,6 +93,7 @@ export const sendText = mutation({
       createdAt,
     });
     await ctx.db.patch(conversation._id, { updatedAt: createdAt });
+    await afterSend(ctx, conversationId, actor._id, createdAt);
     return messageId;
   },
 });
@@ -135,13 +149,14 @@ export const sendImage = mutation({
     });
     await ctx.db.patch(upload._id, { usedAt: createdAt });
     await ctx.db.patch(conversation._id, { updatedAt: createdAt });
+    await afterSend(ctx, conversationId, actor._id, createdAt);
     return messageId;
   },
 });
 export const toggleReaction = mutation({
   args: {
     messageId: v.id('directMessages'),
-    emoji: v.union(v.literal('❤️'), v.literal('👍'), v.literal('😂'), v.literal('😮')),
+    emoji: chatReactionEmoji,
   },
   handler: async (ctx, { messageId, emoji }) => {
     const actor = await requireUser(ctx);
@@ -169,5 +184,32 @@ export const toggleReaction = mutation({
       });
     }
     return { active: true as const, emoji };
+  },
+});
+
+/** Either participant may pin or unpin any message in their conversation. */
+export const setPinned = mutation({
+  args: { messageId: v.id('directMessages'), pinned: v.boolean() },
+  handler: async (ctx, { messageId, pinned }) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const message = await ctx.db.get(messageId);
+    if (!message) throw new Error('MESSAGE_UNAVAILABLE');
+    await getConversationForParticipant(ctx, message.conversationId, actor._id);
+    if (!pinned) {
+      if (message.pinnedAt !== undefined)
+        await ctx.db.patch(messageId, { pinnedAt: undefined, pinnedBy: undefined });
+      return { pinned: false as const };
+    }
+    if (message.pinnedAt !== undefined) return { pinned: true as const };
+    const pins = await ctx.db
+      .query('directMessages')
+      .withIndex('by_conversation_pinnedAt', (q) =>
+        q.eq('conversationId', message.conversationId).gt('pinnedAt', 0),
+      )
+      .take(CHAT_PIN_LIMIT);
+    if (pins.length >= CHAT_PIN_LIMIT) throw new Error('PIN_LIMIT_REACHED');
+    await ctx.db.patch(messageId, { pinnedAt: Date.now(), pinnedBy: actor._id });
+    return { pinned: true as const };
   },
 });
