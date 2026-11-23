@@ -211,3 +211,126 @@ export type GoalAnalyticsPanelProps = {
   onBack?: () => void;
   onRetry?: () => void;
 };
+
+/** Loosely-typed synced records, as stored by the mobile and web offline repositories. */
+type SyncedRecord = { id?: unknown; _id?: unknown; cloudId?: unknown; [key: string]: unknown };
+
+export type GoalAnalyticsSelection = {
+  name: string;
+  icon?: string;
+  color?: string;
+  currency: string;
+  available: boolean;
+  /** Number of goals that contributed to the view (1 for a single goal). */
+  goalCount: number;
+  history: GoalAnalyticsContribution[];
+  insights: GoalAnalyticsModel;
+};
+
+const toMinor = (value: unknown): bigint => {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value);
+  return 0n;
+};
+
+const recordAliases = (record: SyncedRecord) =>
+  [record.id, record._id, record.cloudId].filter(
+    (value): value is string => typeof value === 'string',
+  );
+
+const primaryId = (record: SyncedRecord) => String(record.id ?? record._id ?? '');
+
+/**
+ * Builds analytics for one goal (`goalId`) or, when omitted, for every active goal
+ * in the most common currency so totals are never summed across currencies.
+ */
+export function selectGoalAnalytics({
+  goals,
+  contributions,
+  accounts,
+  goalId,
+  now,
+  fallbackCurrency = 'INR',
+}: {
+  goals: readonly SyncedRecord[];
+  contributions: readonly SyncedRecord[];
+  accounts: readonly SyncedRecord[];
+  goalId?: string;
+  now: number;
+  fallbackCurrency?: string;
+}): GoalAnalyticsSelection {
+  const active = goals.filter((goal) => goal.archivedAt === undefined);
+  let selected: SyncedRecord[];
+  let currency: string;
+  if (goalId) {
+    const goal = goals.find((item) => recordAliases(item).includes(goalId));
+    selected = goal && goal.archivedAt === undefined ? [goal] : [];
+    currency = typeof goal?.currency === 'string' ? goal.currency : fallbackCurrency;
+  } else {
+    const counts = new Map<string, number>();
+    for (const goal of active) {
+      const code = typeof goal.currency === 'string' ? goal.currency : fallbackCurrency;
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+    }
+    currency =
+      [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? fallbackCurrency;
+    selected = active.filter(
+      (goal) => (typeof goal.currency === 'string' ? goal.currency : fallbackCurrency) === currency,
+    );
+  }
+  const goalAliasSet = new Set(selected.flatMap(recordAliases));
+  if (goalId && selected.length === 0) goalAliasSet.add(goalId);
+  const accountIds = new Map(
+    accounts.flatMap((account) =>
+      recordAliases(account).map((alias) => [alias, primaryId(account)] as const),
+    ),
+  );
+  const history: GoalAnalyticsContribution[] = contributions
+    .filter((entry) => typeof entry.goalId === 'string' && goalAliasSet.has(entry.goalId))
+    .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
+    .map((entry) => ({
+      id: primaryId(entry),
+      occurredAt: Number(entry.occurredAt ?? 0),
+      amount: toMinor(entry.amountMinor),
+      accountId: typeof entry.accountId === 'string' ? accountIds.get(entry.accountId) : undefined,
+    }));
+  const single = goalId ? selected[0] : undefined;
+  const targetDates = selected
+    .map((goal) => goal.targetDate)
+    .filter((value): value is number => typeof value === 'number');
+  const createdDates = selected
+    .map((goal) => goal.createdAt)
+    .filter((value): value is number => typeof value === 'number');
+  const insights = buildGoalAnalyticsModel({
+    contributions: history,
+    accounts: accounts
+      .filter((account) => account.archivedAt === undefined)
+      .map((account) => ({
+        id: primaryId(account),
+        name: typeof account.name === 'string' ? account.name : 'Account',
+        color: typeof account.color === 'string' ? account.color : undefined,
+        icon: typeof account.icon === 'string' ? account.icon : undefined,
+      })),
+    target: selected.reduce((sum, goal) => sum + toMinor(goal.targetAmountMinor), 0n),
+    targetDate: targetDates.length ? Math.max(...targetDates) : undefined,
+    createdAt: createdDates.length ? Math.min(...createdDates) : undefined,
+    now,
+  });
+  return {
+    name: goalId
+      ? typeof single?.name === 'string'
+        ? single.name
+        : 'Savings goal'
+      : selected.length === 1 && typeof selected[0]?.name === 'string'
+        ? selected[0].name
+        : 'All savings goals',
+    icon: typeof single?.icon === 'string' ? single.icon : undefined,
+    color: typeof single?.color === 'string' ? single.color : undefined,
+    currency,
+    available: selected.length > 0,
+    goalCount: selected.length,
+    history,
+    insights,
+  };
+}
