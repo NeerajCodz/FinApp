@@ -19,7 +19,13 @@ type ContactPicker = {
     options?: { multiple?: boolean },
   ) => Promise<Array<{ name?: string[]; tel?: string[] }>>;
 };
-type SearchResult = { id: string; username?: string; displayName?: string; avatarId?: string; avatarUrl?: string };
+type SearchResult = {
+  id: string;
+  username?: string;
+  displayName?: string;
+  avatarId?: string;
+  avatarUrl?: string;
+};
 const normalizeUsername = (value: string) => value.trim().replace(/^@+/, '').toLowerCase();
 const normalizePhone = (value: string) => value.replace(/[\s().-]/g, '');
 

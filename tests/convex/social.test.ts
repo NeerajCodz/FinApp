@@ -227,7 +227,9 @@ describe('social discovery and relationship summaries', () => {
       return viewer;
     });
     const viewer = t.withIdentity({ subject: `${viewerId}|session` });
-    const results = await viewer.query(api.users.queries.searchGroupProfiles, { query: ' @MATCH_' });
+    const results = await viewer.query(api.users.queries.searchGroupProfiles, {
+      query: ' @MATCH_',
+    });
 
     expect(results).toHaveLength(20);
     expect(results.map((person) => person.username)).toEqual(

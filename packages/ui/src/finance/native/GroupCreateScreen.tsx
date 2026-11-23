@@ -199,7 +199,12 @@ export function GroupCreateScreen(p: GroupCreateScreenProps) {
                         backgroundColor: tokens.surfaceRaised,
                       }}
                     >
-                      <GroupAvatar name={name} avatarId={person.avatarId} avatarUrl={person.avatarUrl} size={42} />
+                      <GroupAvatar
+                        name={name}
+                        avatarId={person.avatarId}
+                        avatarUrl={person.avatarUrl}
+                        size={42}
+                      />
                       <View style={{ flex: 1 }}>
                         <Typography variant="label">{name}</Typography>
                         <Typography variant="caption">
