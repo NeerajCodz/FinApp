@@ -29,9 +29,11 @@ export function createSplit(
     sum(participants) !== totalMinor
   )
     throw new DomainError('INVALID_SPLIT');
-  const users = new Set([...payers, ...participants].map((item) => item.userId));
-  if (users.size !== payers.length + participants.length && [...users].some((userId) => !userId))
-    throw new DomainError('INVALID_SPLIT');
+  // A user may both pay and participate, but must not appear twice on either side.
+  const unique = (items: readonly ParticipantAmount[]) =>
+    items.every((item) => item.userId) &&
+    new Set(items.map((item) => item.userId)).size === items.length;
+  if (!unique(payers) || !unique(participants)) throw new DomainError('INVALID_SPLIT');
   return { payers: [...payers], participants: [...participants], totalMinor, version };
 }
 
@@ -204,6 +206,13 @@ function minorAmount(value: unknown): bigint {
   return 0n;
 }
 
+/**
+ * Net amount `personId` owes `currentUserId` across shared groups (negative: you owe them).
+ *
+ * Within an expense, each participant owes every payer in proportion to what that payer
+ * covered, so multi-payer expenses are not double counted. When `currency` is given, only
+ * groups and records in that currency are included, so amounts are never mixed.
+ */
 export function calculateBilateralBalance(
   currentUserId: string,
   personId: string,
@@ -212,16 +221,23 @@ export function calculateBilateralBalance(
   payerRecords: readonly GroupLedgerRecord[],
   participantRecords: readonly GroupLedgerRecord[],
   settlementRecords: readonly GroupLedgerRecord[],
+  currency?: string,
 ): bigint {
-  const groupIds = new Set(groups.flatMap((group) => [...groupRecordIds(group)]));
+  const inCurrency = (record: GroupLedgerRecord) =>
+    currency === undefined || record.currency === undefined || record.currency === currency;
+  const groupIds = new Set(
+    groups.filter(inCurrency).flatMap((group) => [...groupRecordIds(group)]),
+  );
   let balance = 0n;
   const expenses = transactions.filter(
     (transaction) =>
       belongsToGroup(transaction, 'groupId', groupIds) &&
       transaction.type === 'expense' &&
       transaction.status === 'posted' &&
-      transaction.deletedAt === undefined,
+      transaction.deletedAt === undefined &&
+      inCurrency(transaction),
   );
+  const userOf = (row: Record<string, unknown>) => String(row.userId ?? row.memberId ?? '');
   for (const expense of expenses) {
     const transactionIds = groupRecordIds(expense);
     const payerRows = payerRecords.filter((record) =>
@@ -230,7 +246,7 @@ export function calculateBilateralBalance(
     const participantRows = participantRecords.filter((record) =>
       belongsToGroup(record, 'transactionId', transactionIds),
     );
-    const payers = payerRows.length
+    const payers: Record<string, unknown>[] = payerRows.length
       ? payerRows
       : expense.payerUserId
         ? [
@@ -240,21 +256,27 @@ export function calculateBilateralBalance(
             },
           ]
         : [];
-    const participants = participantRows.length
+    const participants: Record<string, unknown>[] = participantRows.length
       ? participantRows
       : recordList(expense.participants);
-    for (const payer of payers) {
-      const payerId = String(payer.userId ?? payer.memberId ?? '');
-      for (const participant of participants) {
-        const participantId = String(participant.userId ?? participant.memberId ?? '');
-        const amount = minorAmount(participant.amountMinor);
-        if (payerId === currentUserId && participantId === personId) balance += amount;
-        else if (payerId === personId && participantId === currentUserId) balance -= amount;
-      }
-    }
+    const amountFor = (rows: Record<string, unknown>[], userId: string) =>
+      rows
+        .filter((row) => userOf(row) === userId)
+        .reduce((total, row) => total + minorAmount(row.amountMinor), 0n);
+    const totalPaid = payers.reduce((total, row) => total + minorAmount(row.amountMinor), 0n);
+    if (totalPaid <= 0n) continue;
+    // person's share funded by me, minus my share funded by person.
+    const numerator =
+      amountFor(participants, personId) * amountFor(payers, currentUserId) -
+      amountFor(participants, currentUserId) * amountFor(payers, personId);
+    balance += numerator / totalPaid;
   }
   for (const settlement of settlementRecords) {
-    if (!belongsToGroup(settlement, 'groupId', groupIds) || settlement.deletedAt !== undefined)
+    if (
+      !belongsToGroup(settlement, 'groupId', groupIds) ||
+      settlement.deletedAt !== undefined ||
+      !inCurrency(settlement)
+    )
       continue;
     if (settlement.fromUserId === currentUserId && settlement.toUserId === personId)
       balance += minorAmount(settlement.amountMinor);

@@ -212,6 +212,7 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
           payers,
           participants,
           settlements,
+          String(sharedGroups[0]?.currency ?? 'INR'),
         )
       : 0n;
   const balanceAvailable =

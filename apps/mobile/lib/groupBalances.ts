@@ -1,11 +1,11 @@
-import { calculateNetBalances } from '../../../convex/splits/domain';
+import { projectGroupBalances as projectLedger } from '@convex/splits/domain';
 import type { LocalRecord } from '@/local/repository';
 import { recordIds } from './ledger';
 
-function belongsTo(record: LocalRecord, field: string, ids: Set<string>) {
-  return typeof record[field] === 'string' && ids.has(record[field] as string);
-}
-
+/**
+ * Mobile view of the shared strict group projection: adds display names and a zero balance
+ * for every member so settled members still appear.
+ */
 export function projectGroupBalances(
   group: LocalRecord,
   members: readonly LocalRecord[],
@@ -14,73 +14,17 @@ export function projectGroupBalances(
   participantRecords: readonly LocalRecord[],
   settlementRecords: readonly LocalRecord[],
 ) {
-  const groupIds = new Set(recordIds(group));
-  const currency = group.currency;
-  if (!groupIds.size || typeof currency !== 'string') throw new Error('GROUP_UNAVAILABLE');
-  const eligible = transactions.filter(
-    (record) =>
-      belongsTo(record, 'groupId', groupIds) &&
-      record.type === 'expense' &&
-      record.status === 'posted' &&
-      record.deletedAt === undefined &&
-      record.currency === currency,
+  const { currency, balances, expenses } = projectLedger(
+    group,
+    transactions,
+    payerRecords,
+    participantRecords,
+    settlementRecords,
   );
-  const payers: { userId: string; amountMinor: bigint }[] = [];
-  const participants: { userId: string; amountMinor: bigint }[] = [];
-  for (const transaction of eligible) {
-    const ids = new Set(recordIds(transaction));
-    const transactionPayers = payerRecords.filter((item) => belongsTo(item, 'transactionId', ids));
-    const transactionParticipants = participantRecords.filter((item) =>
-      belongsTo(item, 'transactionId', ids),
-    );
-    const project = (records: readonly LocalRecord[]) =>
-      records.map((record) => ({
-        userId: String(record.userId ?? record.memberId ?? ''),
-        amountMinor: record.amountMinor as bigint,
-      }));
-    const paid = project(transactionPayers);
-    const shared = project(transactionParticipants);
-    const expected = transaction.amountMinor;
-    if (
-      typeof expected !== 'bigint' ||
-      !paid.length ||
-      !shared.length ||
-      [...paid, ...shared].some(
-        (item) => !item.userId || typeof item.amountMinor !== 'bigint' || item.amountMinor < 0n,
-      ) ||
-      paid.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected ||
-      shared.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected
-    )
-      throw new Error('INCOMPLETE_GROUP_SPLITS');
-    payers.push(...paid);
-    participants.push(...shared);
-  }
-  const settlements = settlementRecords
-    .filter(
-      (record) =>
-        belongsTo(record, 'groupId', groupIds) &&
-        record.currency === currency &&
-        record.deletedAt === undefined,
-    )
-    .map((record) => ({
-      fromUserId: String(record.fromUserId ?? ''),
-      toUserId: String(record.toUserId ?? ''),
-      amountMinor: record.amountMinor as bigint,
-    }));
-  if (
-    settlements.some(
-      (item) =>
-        !item.fromUserId ||
-        !item.toUserId ||
-        typeof item.amountMinor !== 'bigint' ||
-        item.amountMinor < 0n,
-    )
-  )
-    throw new Error('INCOMPLETE_GROUP_SETTLEMENTS');
-  const balances = calculateNetBalances(payers, participants, settlements);
+  const groupIds = new Set(recordIds(group));
   const names = new Map<string, string>();
   for (const member of members) {
-    if (!belongsTo(member, 'groupId', groupIds)) continue;
+    if (typeof member.groupId !== 'string' || !groupIds.has(member.groupId)) continue;
     const memberId = member.userId ?? member.memberId;
     if (typeof memberId !== 'string') continue;
     names.set(
@@ -93,5 +37,5 @@ export function projectGroupBalances(
     );
     balances[memberId] ??= 0n;
   }
-  return { currency, balances, names, expenses: eligible };
+  return { currency: currency as string, balances, names, expenses };
 }
