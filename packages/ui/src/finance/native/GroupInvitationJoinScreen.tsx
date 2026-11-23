@@ -32,7 +32,9 @@ export function GroupInvitationJoinScreen(p: GroupInvitationJoinScreenProps) {
           </Typography>
         ) : state === 'signed-out' ? (
           <>
-            <Typography>Sign in or create an account to view and accept this invitation.</Typography>
+            <Typography>
+              Sign in or create an account to view and accept this invitation.
+            </Typography>
             <Button onPress={p.onSignIn}>Sign in to continue</Button>
           </>
         ) : state === 'offline' || state === 'connecting' ? (

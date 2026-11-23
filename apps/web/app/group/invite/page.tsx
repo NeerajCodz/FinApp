@@ -64,7 +64,9 @@ function GroupInvitationContent() {
       onSignIn={() => {
         if (validToken) {
           if (!rememberPendingGroupInvitation(token)) {
-            setError('Your browser could not save this invitation for sign-in. Allow session storage and try again.');
+            setError(
+              'Your browser could not save this invitation for sign-in. Allow session storage and try again.',
+            );
             return;
           }
           router.push('/sign-in');
