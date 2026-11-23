@@ -38,6 +38,7 @@ import type * as mcpOAuth from "../mcpOAuth.js";
 import type * as goals_domain from "../goals/domain.js";
 import type * as goals_mutations from "../goals/mutations.js";
 import type * as groups_domain from "../groups/domain.js";
+import type * as groups_ledger from "../groups/ledger.js";
 import type * as groups_mutations from "../groups/mutations.js";
 import type * as groups_queries from "../groups/queries.js";
 import type * as http from "../http.js";
@@ -114,6 +115,7 @@ declare const fullApi: ApiFromModules<{
   "goals/domain": typeof goals_domain;
   "goals/mutations": typeof goals_mutations;
   "groups/domain": typeof groups_domain;
+  "groups/ledger": typeof groups_ledger;
   "groups/mutations": typeof groups_mutations;
   "groups/queries": typeof groups_queries;
   http: typeof http;

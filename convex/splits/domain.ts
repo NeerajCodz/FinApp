@@ -29,21 +29,67 @@ export function createSplit(
     sum(participants) !== totalMinor
   )
     throw new DomainError('INVALID_SPLIT');
-  const users = new Set([...payers, ...participants].map((item) => item.userId));
-  if (users.size !== payers.length + participants.length && [...users].some((userId) => !userId))
-    throw new DomainError('INVALID_SPLIT');
+  // A user may both pay and participate, but must not appear twice on either side.
+  const unique = (items: readonly ParticipantAmount[]) =>
+    items.every((item) => item.userId) &&
+    new Set(items.map((item) => item.userId)).size === items.length;
+  if (!unique(payers) || !unique(participants)) throw new DomainError('INVALID_SPLIT');
   return { payers: [...payers], participants: [...participants], totalMinor, version };
 }
 
+/**
+ * Allocates a total across participants. Leftover minor units are assigned in a stable
+ * user-id order, so the result never depends on the order people were selected in.
+ * The returned rows follow the input order.
+ */
 export function allocateParticipants(
   totalMinor: bigint,
   userIds: readonly string[],
   method: SplitMethod,
   values?: readonly (bigint | number)[],
 ): ParticipantAmount[] {
-  return Object.entries(allocateSplit(totalMinor, userIds, { method, values })).map(
-    ([userId, amountMinor]) => ({ userId, amountMinor }),
+  const order = userIds
+    .map((_, index) => index)
+    .sort((left, right) => (userIds[left]! < userIds[right]! ? -1 : 1));
+  const allocated = allocateSplit(
+    totalMinor,
+    order.map((index) => userIds[index]!),
+    { method, values: values ? order.map((index) => values[index]!) : undefined },
   );
+  return userIds.map((userId) => ({ userId, amountMinor: allocated[userId]! }));
+}
+
+function allocateInSelectionOrder(
+  totalMinor: bigint,
+  userIds: readonly string[],
+  method: SplitMethod,
+  values?: readonly (bigint | number)[],
+): ParticipantAmount[] {
+  const allocated = allocateSplit(totalMinor, userIds, { method, values });
+  return userIds.map((userId) => ({ userId, amountMinor: allocated[userId]! }));
+}
+
+/**
+ * Validates client-computed participant amounts. Accepts the deterministic allocation and
+ * the legacy selection-order one, so mutations queued offline by older clients still apply.
+ */
+export function matchesAllocation(
+  totalMinor: bigint,
+  rows: readonly { userId: string; amountMinor: bigint }[],
+  method: SplitMethod,
+  values?: readonly (bigint | number)[],
+): boolean {
+  const userIds = rows.map((row) => row.userId);
+  const same = (allocation: ParticipantAmount[]) =>
+    allocation.every((item, index) => item.amountMinor === rows[index]?.amountMinor);
+  try {
+    return (
+      same(allocateParticipants(totalMinor, userIds, method, values)) ||
+      same(allocateInSelectionOrder(totalMinor, userIds, method, values))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function assertSplitVersion(expectedVersion: number, currentVersion: number): void {
@@ -204,6 +250,13 @@ function minorAmount(value: unknown): bigint {
   return 0n;
 }
 
+/**
+ * Net amount `personId` owes `currentUserId` across shared groups (negative: you owe them).
+ *
+ * Within an expense, each participant owes every payer in proportion to what that payer
+ * covered, so multi-payer expenses are not double counted. When `currency` is given, only
+ * groups and records in that currency are included, so amounts are never mixed.
+ */
 export function calculateBilateralBalance(
   currentUserId: string,
   personId: string,
@@ -212,16 +265,23 @@ export function calculateBilateralBalance(
   payerRecords: readonly GroupLedgerRecord[],
   participantRecords: readonly GroupLedgerRecord[],
   settlementRecords: readonly GroupLedgerRecord[],
+  currency?: string,
 ): bigint {
-  const groupIds = new Set(groups.flatMap((group) => [...groupRecordIds(group)]));
+  const inCurrency = (record: GroupLedgerRecord) =>
+    currency === undefined || record.currency === undefined || record.currency === currency;
+  const groupIds = new Set(
+    groups.filter(inCurrency).flatMap((group) => [...groupRecordIds(group)]),
+  );
   let balance = 0n;
   const expenses = transactions.filter(
     (transaction) =>
       belongsToGroup(transaction, 'groupId', groupIds) &&
       transaction.type === 'expense' &&
       transaction.status === 'posted' &&
-      transaction.deletedAt === undefined,
+      transaction.deletedAt === undefined &&
+      inCurrency(transaction),
   );
+  const userOf = (row: Record<string, unknown>) => String(row.userId ?? row.memberId ?? '');
   for (const expense of expenses) {
     const transactionIds = groupRecordIds(expense);
     const payerRows = payerRecords.filter((record) =>
@@ -230,7 +290,7 @@ export function calculateBilateralBalance(
     const participantRows = participantRecords.filter((record) =>
       belongsToGroup(record, 'transactionId', transactionIds),
     );
-    const payers = payerRows.length
+    const payers: Record<string, unknown>[] = payerRows.length
       ? payerRows
       : expense.payerUserId
         ? [
@@ -240,21 +300,27 @@ export function calculateBilateralBalance(
             },
           ]
         : [];
-    const participants = participantRows.length
+    const participants: Record<string, unknown>[] = participantRows.length
       ? participantRows
       : recordList(expense.participants);
-    for (const payer of payers) {
-      const payerId = String(payer.userId ?? payer.memberId ?? '');
-      for (const participant of participants) {
-        const participantId = String(participant.userId ?? participant.memberId ?? '');
-        const amount = minorAmount(participant.amountMinor);
-        if (payerId === currentUserId && participantId === personId) balance += amount;
-        else if (payerId === personId && participantId === currentUserId) balance -= amount;
-      }
-    }
+    const amountFor = (rows: Record<string, unknown>[], userId: string) =>
+      rows
+        .filter((row) => userOf(row) === userId)
+        .reduce((total, row) => total + minorAmount(row.amountMinor), 0n);
+    const totalPaid = payers.reduce((total, row) => total + minorAmount(row.amountMinor), 0n);
+    if (totalPaid <= 0n) continue;
+    // person's share funded by me, minus my share funded by person.
+    const numerator =
+      amountFor(participants, personId) * amountFor(payers, currentUserId) -
+      amountFor(participants, currentUserId) * amountFor(payers, personId);
+    balance += numerator / totalPaid;
   }
   for (const settlement of settlementRecords) {
-    if (!belongsToGroup(settlement, 'groupId', groupIds) || settlement.deletedAt !== undefined)
+    if (
+      !belongsToGroup(settlement, 'groupId', groupIds) ||
+      settlement.deletedAt !== undefined ||
+      !inCurrency(settlement)
+    )
       continue;
     if (settlement.fromUserId === currentUserId && settlement.toUserId === personId)
       balance += minorAmount(settlement.amountMinor);
@@ -262,4 +328,82 @@ export function calculateBilateralBalance(
       balance -= minorAmount(settlement.amountMinor);
   }
   return balance;
+}
+
+export type BalanceMap = Record<string, bigint>;
+
+/** Non-zero per-member balance changes between two projections. */
+export function balanceDeltas(before: BalanceMap, after: BalanceMap): BalanceMap {
+  const deltas: BalanceMap = {};
+  for (const userId of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const delta = (after[userId] ?? 0n) - (before[userId] ?? 0n);
+    if (delta !== 0n) deltas[userId] = delta;
+  }
+  return deltas;
+}
+
+export type SettledImpact = {
+  userId: string;
+  before: bigint;
+  after: bigint;
+  /** The member had settled up and the edit now leaves them owed money back. */
+  credit: boolean;
+};
+
+/**
+ * Members whose balance an edit changes after they already recorded a settlement in the
+ * group. Settlements stay as real payments, so a lowered share becomes a credit.
+ */
+export function settledImpact(
+  before: BalanceMap,
+  after: BalanceMap,
+  settledUserIds: Iterable<string>,
+): SettledImpact[] {
+  const deltas = balanceDeltas(before, after);
+  return [...new Set(settledUserIds)]
+    .filter((userId) => deltas[userId] !== undefined)
+    .sort()
+    .map((userId) => {
+      const previous = before[userId] ?? 0n;
+      const next = after[userId] ?? 0n;
+      return { userId, before: previous, after: next, credit: next > 0n && previous <= 0n };
+    });
+}
+
+/** Serializes balances for storage, e.g. in ledger events. */
+export function serializeBalances(balances: BalanceMap): Record<string, string> {
+  return Object.fromEntries(Object.entries(balances).map(([key, value]) => [key, String(value)]));
+}
+
+export type SuggestedTransfer = { fromUserId: string; toUserId: string; amountMinor: bigint };
+
+/**
+ * Greedy minimum-transfer plan that clears every balance: the largest debtor pays the largest
+ * creditor until one side reaches zero. Produces at most n-1 transfers; ties are broken by
+ * user id so the plan is stable.
+ */
+export function simplifyDebts(balances: BalanceMap): SuggestedTransfer[] {
+  const byAmount = (left: [string, bigint], right: [string, bigint]) =>
+    right[1] === left[1] ? (left[0] < right[0] ? -1 : 1) : right[1] > left[1] ? 1 : -1;
+  const creditors = Object.entries(balances)
+    .filter(([, amount]) => amount > 0n)
+    .sort(byAmount);
+  const debtors = Object.entries(balances)
+    .filter(([, amount]) => amount < 0n)
+    .map(([userId, amount]): [string, bigint] => [userId, -amount])
+    .sort(byAmount);
+  const transfers: SuggestedTransfer[] = [];
+  let creditorIndex = 0;
+  let debtorIndex = 0;
+  while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
+    const creditor = creditors[creditorIndex]!;
+    const debtor = debtors[debtorIndex]!;
+    const amountMinor = creditor[1] < debtor[1] ? creditor[1] : debtor[1];
+    transfers.push({ fromUserId: debtor[0], toUserId: creditor[0], amountMinor });
+    creditor[1] -= amountMinor;
+    debtor[1] -= amountMinor;
+    if (creditor[1] === 0n) creditorIndex += 1;
+    if (debtor[1] === 0n) debtorIndex += 1;
+  }
+  return transfers;
 }

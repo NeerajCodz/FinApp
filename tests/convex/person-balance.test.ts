@@ -84,3 +84,58 @@ describe('shared Person balance', () => {
     expect(balance).toBe(-60n);
   });
 });
+
+describe('shared Person balance with multiple payers and currencies', () => {
+  const expense = (id: string, amountMinor: bigint, currency = 'INR') => ({
+    id,
+    groupId: currency === 'INR' ? 'inr-group' : 'usd-group',
+    type: 'expense',
+    status: 'posted',
+    amountMinor,
+    currency,
+  });
+
+  it('splits each share across payers in proportion to what they paid', () => {
+    // 300 paid by alice 200 / carol 100; bob owes 150 -> 100 to alice, 50 to carol.
+    const balance = calculateBilateralBalance(
+      'alice',
+      'bob',
+      [{ id: 'inr-group', currency: 'INR' }],
+      [expense('e1', 300n)],
+      [
+        { transactionId: 'e1', userId: 'alice', amountMinor: 200n },
+        { transactionId: 'e1', userId: 'carol', amountMinor: 100n },
+      ],
+      [
+        { transactionId: 'e1', userId: 'bob', amountMinor: 150n },
+        { transactionId: 'e1', userId: 'alice', amountMinor: 150n },
+      ],
+      [],
+      'INR',
+    );
+    expect(balance).toBe(100n);
+  });
+
+  it('never mixes currencies when one is requested', () => {
+    const args = [
+      'alice',
+      'bob',
+      [
+        { id: 'inr-group', currency: 'INR' },
+        { id: 'usd-group', currency: 'USD' },
+      ],
+      [expense('inr', 100n), expense('usd', 1000n, 'USD')],
+      [
+        { transactionId: 'inr', userId: 'alice', amountMinor: 100n },
+        { transactionId: 'usd', userId: 'alice', amountMinor: 1000n },
+      ],
+      [
+        { transactionId: 'inr', userId: 'bob', amountMinor: 100n },
+        { transactionId: 'usd', userId: 'bob', amountMinor: 1000n },
+      ],
+      [],
+    ] as const;
+    expect(calculateBilateralBalance(...args, 'INR')).toBe(100n);
+    expect(calculateBilateralBalance(...args, 'USD')).toBe(1000n);
+  });
+});

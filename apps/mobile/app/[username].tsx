@@ -188,6 +188,7 @@ export default function PublicProfileScreen() {
         ledger[1].data ?? [],
         ledger[2].data ?? [],
         ledger[3].data ?? [],
+        String(sharedGroups[0]?.currency ?? 'INR'),
       )
     : 0n;
   return (

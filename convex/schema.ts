@@ -157,6 +157,10 @@ export default defineSchema({
     hasTime: v.optional(v.boolean()),
     receiptId: optionalText,
     status: v.union(v.literal('pending'), v.literal('posted'), v.literal('voided')),
+    // Group expense revision for optimistic concurrency; absent means 1.
+    version: v.optional(v.number()),
+    updatedBy: v.optional(v.id('users')),
+    deletedBy: v.optional(v.id('users')),
     createdAt: timestamp,
     updatedAt: timestamp,
     deletedAt: optionalTime,
@@ -244,6 +248,42 @@ export default defineSchema({
     .index('by_group', ['groupId'])
     .index('by_user', ['userId'])
     .index('by_group_user', ['groupId', 'userId']),
+  // Members who left or were removed; keeps names and join history for the ledger.
+  formerGroupMembers: defineTable({
+    groupId: v.id('groups'),
+    userId: v.id('users'),
+    role,
+    joinedAt: timestamp,
+    leftAt: timestamp,
+    removedBy: v.optional(v.id('users')),
+  })
+    .index('by_group', ['groupId'])
+    .index('by_group_user', ['groupId', 'userId']),
+  // Append-only audit trail of money-moving group events.
+  ledgerEvents: defineTable({
+    groupId: v.id('groups'),
+    actorId: v.id('users'),
+    kind: v.union(
+      v.literal('expense.created'),
+      v.literal('expense.updated'),
+      v.literal('expense.deleted'),
+      v.literal('expense.membersAdded'),
+      v.literal('settlement.created'),
+      v.literal('settlement.deleted'),
+      v.literal('member.joined'),
+      v.literal('member.left'),
+      v.literal('member.removed'),
+    ),
+    entityType: v.union(v.literal('transaction'), v.literal('settlement'), v.literal('member')),
+    entityId: v.string(),
+    summary: v.string(),
+    // Per-member balance change in minor units, as decimal strings keyed by user id.
+    balanceDeltas: v.optional(v.record(v.string(), v.string())),
+    version: v.optional(v.number()),
+    createdAt: timestamp,
+  })
+    .index('by_group_createdAt', ['groupId', 'createdAt'])
+    .index('by_entity', ['entityType', 'entityId']),
   groupInvites: defineTable({
     groupId: v.id('groups'),
     inviterId: v.id('users'),
@@ -395,7 +435,11 @@ export default defineSchema({
     currency,
     accountId: v.id('accounts'),
     occurredAt: timestamp,
+    note: optionalText,
+    createdBy: v.optional(v.id('users')),
     createdAt: timestamp,
+    deletedAt: optionalTime,
+    deletedBy: v.optional(v.id('users')),
   })
     .index('by_group', ['groupId'])
     .index('by_from_user', ['fromUserId'])
