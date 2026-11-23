@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
-import { ChevronRight, MessageCircle, Search, UserPlus, Users } from 'lucide-react-native';
+import { Bell, ChevronRight, MessageCircle, Search, UserPlus, Users } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -14,6 +14,7 @@ import type { LocalRecord } from '@/local/repository';
 import { toast } from '@/lib/toast';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
+import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useGroupRecords, type GroupMemberSummary } from '@/hooks/useGroupRecords';
 import type { GroupRecord } from '@/lib/groupRecords';
 import { RequestsSheet } from './RequestsSheet';
@@ -219,6 +220,7 @@ export default function NetworkHomeScreen() {
 
   const activePeopleLoading = Boolean(userId && isConnected && suggestions === undefined);
   const requestBadge = incomingCount > 0 ? incomingCount : undefined;
+  const unreadNotifications = useUnreadNotificationCount(userId);
   const homeGroupCardWidth = Math.floor(Math.max(64, (viewportWidth - 36 - 27) / 4));
 
   return (
@@ -254,6 +256,48 @@ export default function NetworkHomeScreen() {
               Connect, split expenses, and manage your circles.
             </Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              unreadNotifications > 0
+                ? `Notifications, ${unreadNotifications} unread`
+                : 'Notifications'
+            }
+            onPress={() => router.push('/notifications' as never)}
+            style={{
+              position: 'relative',
+              width: 43,
+              height: 43,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: tokens.borderSubtle,
+              borderRadius: 13,
+              backgroundColor: tokens.surfaceSubtle,
+            }}
+          >
+            <Bell size={18} color={unreadNotifications > 0 ? tokens.primary : tokens.foreground} />
+            {unreadNotifications > 0 ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  right: -7,
+                  top: -7,
+                  minWidth: 19,
+                  height: 19,
+                  paddingHorizontal: 4,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: tokens.primary,
+                }}
+              >
+                <Text style={{ color: tokens.primaryForeground, fontSize: 10, fontWeight: '700' }}>
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={requestBadge ? `Requests, ${requestBadge} pending` : 'Requests'}

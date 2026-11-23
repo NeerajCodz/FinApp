@@ -4,6 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { useConvex } from 'convex/react';
+import { unregisterPush } from '@/lib/push';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import { type LocalRecord } from '@/local/repository';
@@ -150,6 +152,7 @@ function ProfileActionRow({
 
 export default function ProfileScreen() {
   const { signOut } = useAuthActions();
+  const convex = useConvex();
   const { userId } = useLocalSync();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
   const settingsState = useLocalRecords<LocalRecord>(userId, 'settings');
@@ -172,6 +175,8 @@ export default function ProfileScreen() {
   }
 
   async function leave() {
+    // Stop pushes to this device while the session can still authorise the call.
+    await unregisterPush(convex).catch(() => undefined);
     await clearValidatedLocalUserId();
     await signOut();
     router.replace('/(auth)/sign-in');

@@ -6,7 +6,7 @@ import { createOutboxEntry } from './outbox/queue';
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DEVICE_ID_KEY = 'finapp.local.device-id.v1';
 
-async function getDeviceId(): Promise<string> {
+export async function getDeviceId(): Promise<string> {
   const existing = await SecureStore.getItemAsync(DEVICE_ID_KEY);
   if (existing) return existing;
   const id = Crypto.randomUUID();

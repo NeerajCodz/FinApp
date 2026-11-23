@@ -730,6 +730,7 @@ export function createMcpServer(
         goal: z.boolean(),
         recurring: z.boolean(),
         group: z.boolean(),
+        split: z.boolean().optional(),
         settlement: z.boolean(),
         security: z.boolean(),
         sync: z.boolean(),
@@ -744,6 +745,7 @@ export function createMcpServer(
           goal: boolean;
           recurring: boolean;
           group: boolean;
+          split?: boolean;
           settlement: boolean;
           security: boolean;
           sync: boolean;

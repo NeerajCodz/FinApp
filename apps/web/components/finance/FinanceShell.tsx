@@ -28,6 +28,8 @@ import { FinanceBrand, FinanceWorkspace, MobileFinanceNav } from '@finapp/ui/fin
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
+import { useUnreadNotificationCount } from '@/lib/notifications';
+import { NotificationToasts } from './NotificationToasts';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -105,6 +107,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   const { userId, identityReady } = useBrowserSync();
   const { records: profiles } = useLocalRecords<SidebarProfile>('profile');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const unreadNotifications = useUnreadNotificationCount();
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
   useEffect(() => {
@@ -145,12 +148,25 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         }
         navigation={
           <>
-            {navigation.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined}>
-                <Icon size={22} aria-hidden="true" />
-                <span>{label}</span>
-              </Link>
-            ))}
+            {navigation.map(({ href, label, icon: Icon }) => {
+              const badge = href === '/notifications' ? unreadNotifications : 0;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isActive(href) ? 'page' : undefined}
+                  aria-label={badge > 0 ? `${label}, ${badge} unread` : undefined}
+                >
+                  <Icon size={22} aria-hidden="true" />
+                  <span>{label}</span>
+                  {badge > 0 ? (
+                    <span className="finance-nav-badge" aria-hidden="true">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
             <Link
               href={profileHref}
               className="finance-sidebar-profile"
@@ -226,6 +242,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       <Sheet visible={quickAddOpen} onClose={closeQuickAdd} title="Add">
         <QuickAddActions onClose={closeQuickAdd} />
       </Sheet>
+      <NotificationToasts />
     </QuickAddContext.Provider>
   );
 }

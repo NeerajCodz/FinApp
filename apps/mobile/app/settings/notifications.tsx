@@ -2,6 +2,8 @@ import React from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 import { ArrowLeft, Bell } from '@finapp/ui/icons/native';
 import { router } from 'expo-router';
+import { useConvex } from 'convex/react';
+import { registerForPush } from '@/lib/push';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Separator, Switch, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
@@ -25,11 +27,20 @@ const options: { type: NotificationType; label: string; detail: string }[] = [
   { type: 'budget', label: 'Budget limits', detail: 'When spending crosses 80% or 100%.' },
   { type: 'goal', label: 'Goals', detail: 'When a savings target is reached.' },
   { type: 'recurring', label: 'Recurring reminders', detail: 'Due dates for reminder-only rules.' },
-  { type: 'group', label: 'Groups & splits', detail: 'When you join a group or share an expense.' },
+  {
+    type: 'split',
+    label: 'Shared expenses',
+    detail: 'When a group expense you share is added, edited, or removed.',
+  },
   {
     type: 'settlement',
-    label: 'Settlements',
-    detail: 'When another group member records a settlement.',
+    label: 'Settlements & reminders',
+    detail: 'Payments recorded or undone, and reminders to settle up.',
+  },
+  {
+    type: 'group',
+    label: 'Group membership',
+    detail: 'Invitations, and members joining or leaving your groups.',
   },
   {
     type: 'security',
@@ -47,6 +58,7 @@ export default function NotificationSettingsScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { userId, isConnected } = useLocalSync();
+  const convex = useConvex();
   const settings = useLocalRecords<LocalRecord>(userId, 'settings');
   const [preferences, setPreferences] = React.useState<NotificationPreferences | null>(null);
   const [permission, setPermission] = React.useState<'granted' | 'denied' | 'undetermined' | null>(
@@ -86,7 +98,10 @@ export default function NotificationSettingsScreen() {
     try {
       const granted = await requestNotificationPermission();
       setPermission(granted ? 'granted' : 'denied');
-      if (granted && userId) await reconcileRecurringNotifications(userId);
+      if (granted && userId) {
+        await reconcileRecurringNotifications(userId);
+        if (isConnected) await registerForPush(convex);
+      }
     } catch {
       setError('Could not request notification permission.');
     }
