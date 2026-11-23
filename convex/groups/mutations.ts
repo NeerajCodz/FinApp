@@ -7,7 +7,7 @@ import { requireAdmin, requireMember, type Membership } from '../shared/permissi
 import { changeMemberRole, createGroup, type Group, validateBillImageMetadata } from './domain';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
-import { allocateParticipants } from '../splits/domain';
+import { allocateParticipants, matchesAllocation } from '../splits/domain';
 import { assertCurrency } from '../shared/validators';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 
@@ -1077,14 +1077,13 @@ export const addExpense = mutation({
       args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor
     )
       throw new Error('INVALID_SPLIT');
-    const allocation = allocateParticipants(
-      args.amountMinor,
-      args.participants.map((item) => item.userId),
-      method,
-      method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
-    );
     if (
-      allocation.some((item, index) => item.amountMinor !== args.participants[index]?.amountMinor)
+      !matchesAllocation(
+        args.amountMinor,
+        args.participants,
+        method,
+        method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
+      )
     )
       throw new Error('INVALID_SPLIT');
     for (const participant of args.participants) {
@@ -1294,14 +1293,13 @@ export const updateExpense = mutation({
       args.participants.reduce((sum, item) => sum + item.amountMinor, 0n) !== args.amountMinor
     )
       throw new Error('INVALID_SPLIT');
-    const allocation = allocateParticipants(
-      args.amountMinor,
-      args.participants.map((item) => item.userId),
-      method,
-      method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
-    );
     if (
-      allocation.some((item, index) => item.amountMinor !== args.participants[index]?.amountMinor)
+      !matchesAllocation(
+        args.amountMinor,
+        args.participants,
+        method,
+        method === 'equal' ? undefined : args.participants.map((item) => BigInt(item.basisValue!)),
+      )
     )
       throw new Error('INVALID_SPLIT');
     const memberIds = new Set(members.map((member) => member.userId));

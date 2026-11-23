@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { calculateNetBalances, createSplit } from '../../convex/splits/domain';
+import {
+  allocateParticipants,
+  calculateNetBalances,
+  createSplit,
+  matchesAllocation,
+} from '../../convex/splits/domain';
 import { createSettlement } from '../../convex/settlements/domain';
 import { changeMemberRole, renameGroup } from '../../convex/groups/domain';
 
@@ -67,5 +72,47 @@ describe('group settings permissions', () => {
     expect(() => changeMemberRole('owner', group, members, 'member', 'owner')).toThrow(
       'INSUFFICIENT_PERMISSION',
     );
+  });
+});
+
+describe('deterministic split allocation', () => {
+  it('assigns leftover units by user id, not selection order', () => {
+    const forward = allocateParticipants(100n, ['u-b', 'u-a', 'u-c'], 'equal');
+    const reversed = allocateParticipants(100n, ['u-c', 'u-a', 'u-b'], 'equal');
+    const byUser = (rows: { userId: string; amountMinor: bigint }[]) =>
+      Object.fromEntries(rows.map((row) => [row.userId, row.amountMinor]));
+    expect(byUser(forward)).toEqual({ 'u-a': 34n, 'u-b': 33n, 'u-c': 33n });
+    expect(byUser(reversed)).toEqual(byUser(forward));
+    expect(forward.map((row) => row.userId)).toEqual(['u-b', 'u-a', 'u-c']);
+  });
+
+  it('keeps proportional ties stable regardless of order', () => {
+    const left = allocateParticipants(10n, ['z', 'a', 'm'], 'shares', [1n, 1n, 1n]);
+    const right = allocateParticipants(10n, ['a', 'm', 'z'], 'shares', [1n, 1n, 1n]);
+    expect(left.find((row) => row.userId === 'a')?.amountMinor).toBe(4n);
+    expect(right.find((row) => row.userId === 'a')?.amountMinor).toBe(4n);
+  });
+
+  it('accepts both deterministic and legacy selection-order allocations', () => {
+    const legacy = [
+      { userId: 'u-b', amountMinor: 34n },
+      { userId: 'u-a', amountMinor: 33n },
+      { userId: 'u-c', amountMinor: 33n },
+    ];
+    expect(matchesAllocation(100n, legacy, 'equal')).toBe(true);
+    expect(
+      matchesAllocation(100n, allocateParticipants(100n, ['u-b', 'u-a', 'u-c'], 'equal'), 'equal'),
+    ).toBe(true);
+    expect(
+      matchesAllocation(
+        100n,
+        [
+          { userId: 'u-b', amountMinor: 50n },
+          { userId: 'u-a', amountMinor: 25n },
+          { userId: 'u-c', amountMinor: 25n },
+        ],
+        'equal',
+      ),
+    ).toBe(false);
   });
 });

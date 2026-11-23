@@ -37,15 +37,59 @@ export function createSplit(
   return { payers: [...payers], participants: [...participants], totalMinor, version };
 }
 
+/**
+ * Allocates a total across participants. Leftover minor units are assigned in a stable
+ * user-id order, so the result never depends on the order people were selected in.
+ * The returned rows follow the input order.
+ */
 export function allocateParticipants(
   totalMinor: bigint,
   userIds: readonly string[],
   method: SplitMethod,
   values?: readonly (bigint | number)[],
 ): ParticipantAmount[] {
-  return Object.entries(allocateSplit(totalMinor, userIds, { method, values })).map(
-    ([userId, amountMinor]) => ({ userId, amountMinor }),
+  const order = userIds
+    .map((_, index) => index)
+    .sort((left, right) => (userIds[left]! < userIds[right]! ? -1 : 1));
+  const allocated = allocateSplit(
+    totalMinor,
+    order.map((index) => userIds[index]!),
+    { method, values: values ? order.map((index) => values[index]!) : undefined },
   );
+  return userIds.map((userId) => ({ userId, amountMinor: allocated[userId]! }));
+}
+
+function allocateInSelectionOrder(
+  totalMinor: bigint,
+  userIds: readonly string[],
+  method: SplitMethod,
+  values?: readonly (bigint | number)[],
+): ParticipantAmount[] {
+  const allocated = allocateSplit(totalMinor, userIds, { method, values });
+  return userIds.map((userId) => ({ userId, amountMinor: allocated[userId]! }));
+}
+
+/**
+ * Validates client-computed participant amounts. Accepts the deterministic allocation and
+ * the legacy selection-order one, so mutations queued offline by older clients still apply.
+ */
+export function matchesAllocation(
+  totalMinor: bigint,
+  rows: readonly { userId: string; amountMinor: bigint }[],
+  method: SplitMethod,
+  values?: readonly (bigint | number)[],
+): boolean {
+  const userIds = rows.map((row) => row.userId);
+  const same = (allocation: ParticipantAmount[]) =>
+    allocation.every((item, index) => item.amountMinor === rows[index]?.amountMinor);
+  try {
+    return (
+      same(allocateParticipants(totalMinor, userIds, method, values)) ||
+      same(allocateInSelectionOrder(totalMinor, userIds, method, values))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function assertSplitVersion(expectedVersion: number, currentVersion: number): void {
