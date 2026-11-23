@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { calculateNetBalances } from '@convex/splits/domain';
+import { projectGroupBalances } from '@convex/splits/domain';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button, Card, RadioGroup } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -38,18 +38,7 @@ type LedgerEntry = LocalRecord & {
   amountMinor?: bigint | number | string;
   currency?: string;
   deletedAt?: number;
-  participants?: Array<{ userId: string; amountMinor: bigint | number | string }>;
-  payerUserId?: string;
-  payerAmountMinor?: bigint | number | string;
 };
-const asMinor = (value: unknown) =>
-  typeof value === 'bigint'
-    ? value
-    : typeof value === 'number' && Number.isFinite(value)
-      ? BigInt(Math.trunc(value))
-      : typeof value === 'string' && /^-?\d+$/.test(value)
-        ? BigInt(value)
-        : 0n;
 const aliases = (record: LocalRecord) =>
   [record.id, record._id, record.cloudId].filter(
     (value): value is string => typeof value === 'string',
@@ -110,6 +99,7 @@ function NewSettlementForm() {
   const currentGroupId = group ? idOf(group) : groupId;
   const currency = group?.currency ?? '';
   const groupReady = Boolean(group);
+  const groupIdentity = group?.cloudId ?? group?._id;
   React.useEffect(() => {
     if (!userId || !group) return;
     if (!isConnected) {
@@ -138,7 +128,7 @@ function NewSettlementForm() {
     return () => {
       active = false;
     };
-  }, [currentGroupId, fetchGroupRange, groupReady, isConnected, userId]);
+  }, [currentGroupId, fetchGroupRange, groupReady, groupIdentity, isConnected, userId]);
 
   const groupIds = group ? aliases(group) : [];
   const groupMembers = memberships.filter(
@@ -165,84 +155,17 @@ function NewSettlementForm() {
       username: item.username,
     });
   }
-  const eligibleExpenses = transactions.filter(
-    (item) =>
-      typeof item.groupId === 'string' &&
-      groupIds.includes(item.groupId) &&
-      item.type === 'expense' &&
-      item.status === 'posted' &&
-      item.deletedAt === undefined &&
-      item.currency === currency,
-  );
-  const eligibleIds = new Set(eligibleExpenses.flatMap(aliases));
-  const payerRows = payers.filter(
-    (item) => typeof item.transactionId === 'string' && eligibleIds.has(item.transactionId),
-  );
-  const participantRows = participants.filter(
-    (item) => typeof item.transactionId === 'string' && eligibleIds.has(item.transactionId),
-  );
-  let incompleteAllocation = false;
-  const payerAmounts: Array<{ userId: string; amountMinor: bigint }> = [];
-  const participantAmounts: Array<{ userId: string; amountMinor: bigint }> = [];
-  for (const expense of eligibleExpenses) {
-    const expenseIds = aliases(expense);
-    const relatedPayers = payerRows.filter(
-      (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-    );
-    const relatedParticipants = participantRows.filter(
-      (item) => typeof item.transactionId === 'string' && expenseIds.includes(item.transactionId),
-    );
-    const expensePayers = relatedPayers.length
-      ? relatedPayers.map((item) => ({
-          userId: String(item.userId ?? item.memberId ?? ''),
-          amountMinor: asMinor(item.amountMinor),
-        }))
-      : expense.payerUserId
-        ? [
-            {
-              userId: expense.payerUserId,
-              amountMinor: asMinor(expense.payerAmountMinor ?? expense.amountMinor),
-            },
-          ]
-        : [];
-    const expenseParticipants = relatedParticipants.length
-      ? relatedParticipants.map((item) => ({
-          userId: String(item.userId ?? item.memberId ?? ''),
-          amountMinor: asMinor(item.amountMinor),
-        }))
-      : (expense.participants ?? []).map((item) => ({
-          userId: item.userId,
-          amountMinor: asMinor(item.amountMinor),
-        }));
-    const expected = asMinor(expense.amountMinor);
-    if (
-      !expensePayers.length ||
-      !expenseParticipants.length ||
-      expensePayers.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected ||
-      expenseParticipants.reduce((sum, item) => sum + item.amountMinor, 0n) !== expected
-    )
-      incompleteAllocation = true;
-    payerAmounts.push(...expensePayers);
-    participantAmounts.push(...expenseParticipants);
-  }
-  const settlementRows = settlements
-    .filter(
-      (item) =>
-        typeof item.groupId === 'string' &&
-        groupIds.includes(item.groupId) &&
-        item.currency === currency &&
-        item.deletedAt === undefined,
-    )
-    .map((item) => ({
-      fromUserId: String(item.fromUserId ?? ''),
-      toUserId: String(item.toUserId ?? ''),
-      amountMinor: asMinor(item.amountMinor),
-    }));
   let balances: Record<string, bigint> = {};
-  let ledgerError = incompleteAllocation ? 'INCOMPLETE_GROUP_SPLITS' : '';
-  if (!incompleteAllocation) {
+  let ledgerError = '';
+  if (group) {
     try {
-      balances = calculateNetBalances(payerAmounts, participantAmounts, settlementRows);
+      balances = projectGroupBalances(
+        group,
+        transactions,
+        payers,
+        participants,
+        settlements,
+      ).balances;
     } catch (cause) {
       ledgerError = cause instanceof Error ? cause.message : 'Incomplete group ledger.';
     }

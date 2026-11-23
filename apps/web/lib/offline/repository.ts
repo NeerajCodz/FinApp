@@ -142,6 +142,30 @@ function relatedRecordId(entityType: LocalEntity, record: LocalRecord): string {
     return fields.map((field) => String(record[field])).join(':');
   throw new Error('LOCAL_RECORD_ID_REQUIRED');
 }
+function removeOptimisticSplit(
+  rows: IDBObjectStore,
+  mappings: IDBObjectStore,
+  userId: string,
+  entityType: LocalEntity,
+  record: LocalRecord,
+): void {
+  if (entityType !== 'expensePayer' && entityType !== 'expenseParticipant') return;
+  if (typeof record.transactionId !== 'string' || typeof record.userId !== 'string') return;
+  const transactionId = record.transactionId;
+  const memberId = record.userId;
+  const mapping = mappings
+    .index('by-user-entity-cloud')
+    .get([userId, 'transaction', transactionId]);
+  mapping.onsuccess = () => {
+    const localTransactionId = (mapping.result as MappingRow | undefined)?.localId ?? transactionId;
+    const key = recordKey(userId, entityType, `${localTransactionId}:${memberId}`);
+    const optimistic = rows.get(key);
+    optimistic.onsuccess = () => {
+      const row = optimistic.result as RecordRow | undefined;
+      if (row && !row.cloudId) rows.delete(key);
+    };
+  };
+}
 
 let crossTabChannel: BroadcastChannel | undefined;
 
@@ -386,6 +410,14 @@ export async function upsertCloudPage(
         (typeof raw.clientId === 'string' && raw.clientId ? raw.clientId : cloudId);
       const key = recordKey(userId, entityType, localId);
       const record = { ...raw, id: localId, _id: cloudId, cloudId };
+      mappings.put({
+        key: mappingKey(userId, entityType, localId),
+        userId,
+        entityType,
+        localId,
+        cloudId,
+      } satisfies MappingRow);
+      removeOptimisticSplit(rows, mappings, userId, entityType, raw);
       const existingRequest = rows.get(key);
       existingRequest.onsuccess = () => {
         const existing = existingRequest.result as RecordRow | undefined;
@@ -678,6 +710,14 @@ export async function applyCloudChanges(
           return;
         }
         if (!change.document) return;
+        mappings.put({
+          key: mappingKey(userId, change.entityType, localId),
+          userId,
+          entityType: change.entityType,
+          localId,
+          cloudId: change.documentId,
+        } satisfies MappingRow);
+        removeOptimisticSplit(records, mappings, userId, change.entityType, change.document);
         const cloudRecord = {
           ...change.document,
           id: localId,
