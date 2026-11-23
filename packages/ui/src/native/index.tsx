@@ -134,3 +134,4 @@ export {
   type ToastInput,
   type ToastTone,
 } from './toast';
+export { FadeIn, PressableScale, useReducedMotion } from './motion';
