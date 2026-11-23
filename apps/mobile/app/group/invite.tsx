@@ -1,27 +1,27 @@
 import React from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
+import { useNetworkState } from 'expo-network';
+import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { GroupInvitationJoinScreen } from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { isGroupInvitationOffline } from '@/lib/groupInvitationNetwork';
 export default function GroupInvitationRoute() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
   const token = Array.isArray(params.token) ? (params.token[0] ?? '') : (params.token ?? '');
   const validToken = /^[0-9a-f]{64}$/.test(token);
-  const { userId, isConnected } = useLocalSync();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
+  const { isConnected } = useLocalSync();
+  const offline = isGroupInvitationOffline(useNetworkState());
   const preview = useQuery(
     api.groups.queries.previewInvitationLink,
-    validToken && isConnected ? { token } : 'skip',
+    validToken && isAuthenticated ? { token } : 'skip',
   );
   const join = useMutation(api.groups.mutations.joinByInvitationLink);
   const [joining, setJoining] = React.useState(false);
   const [error, setError] = React.useState('');
   async function accept() {
-    if (!isConnected) {
-      setError('You are offline. Reconnect to verify and accept this invitation.');
-      return;
-    }
-    if (!userId || !validToken || !preview || joining) return;
+    if (offline || !isConnected || !isAuthenticated || !validToken || !preview || joining) return;
     setJoining(true);
     setError('');
     try {
@@ -37,17 +37,16 @@ export default function GroupInvitationRoute() {
       setJoining(false);
     }
   }
-  const busy = Boolean(validToken && isConnected) && preview === undefined;
   return (
     <GroupInvitationJoinScreen
-      preview={validToken ? (preview ?? null) : null}
-      loading={busy}
-      authRequired={!userId}
+      preview={preview}
+      validToken={validToken}
+      authLoading={authLoading}
+      authenticated={isAuthenticated}
+      offline={offline}
+      connected={isConnected}
       joining={joining}
-      error={
-        error ||
-        (!isConnected ? 'You are offline. Reconnect to verify and accept this invitation.' : '')
-      }
+      error={error}
       onJoin={() => void accept()}
       onSignIn={() => {
         if (validToken)
