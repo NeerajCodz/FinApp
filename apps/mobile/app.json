@@ -25,6 +25,7 @@
     },
     "android": {
       "package": "com.neerajcodz.finapp",
+      "allowBackup": false,
       "versionCode": 9,
       "intentFilters": [
         {
