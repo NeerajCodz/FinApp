@@ -13,6 +13,7 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { GroupExpenseView } from './GroupExpenseView';
+import { readLineItems } from '@finapp/ui/finance/line-items';
 import {
   aliasesOf,
   asMinor,
@@ -190,6 +191,7 @@ export default function PersonalTransactionDetailPage() {
         profile?.timezone,
       )}
       onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      items={readLineItems(transaction?.items)}
       tags={tagState.records.flatMap((tag) => {
         if (
           !transaction ||

@@ -6,6 +6,7 @@ import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { formatMinor } from '@convex/shared/money';
 import { GroupExpenseDetailScreen, formatTransactionDate } from '@finapp/ui/finance';
+import { readLineItems } from '@finapp/ui/finance/line-items';
 import { toBigInt } from '@finapp/ui/finance/expense-draft';
 import {
   currentGroupBalances,
@@ -151,6 +152,8 @@ export function GroupExpenseView({
         }
         onEdit={() => router.push(`/transaction/${encodeURIComponent(idOf(transaction))}/edit`)}
         onDelete={remove}
+        items={readLineItems(transaction.items)}
+        itemized={participantRows[0]?.method === 'itemized'}
         onOpenGroup={
           groupId ? () => router.push(`/group/${encodeURIComponent(groupId)}`) : undefined
         }

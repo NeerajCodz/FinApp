@@ -4,6 +4,11 @@ import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { parseMinor } from '@convex/shared/money';
 import {
+  lineItemDrafts,
+  personalItemsState,
+  type LineItemDraft,
+} from '@finapp/ui/finance/line-items';
+import {
   TransactionFormScreen,
   transactionViews,
   type TransactionFormType,
@@ -71,6 +76,7 @@ export default function EditTransactionPage() {
   const [destinationId, setDestinationId] = React.useState('');
   const [occurredAt, setOccurredAt] = React.useState(Date.now());
   const [hasTime, setHasTime] = React.useState(false);
+  const [items, setItems] = React.useState<LineItemDraft[] | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   React.useEffect(() => {
@@ -90,6 +96,8 @@ export default function EditTransactionPage() {
     setDestinationId(String(transaction.transferAccountId ?? ''));
     setOccurredAt(Number(transaction.occurredAt ?? Date.now()));
     setHasTime(transaction.hasTime === true);
+    const stored = lineItemDrafts(transaction.items, transaction.currency ?? 'INR');
+    setItems(stored.length ? stored : null);
   }, [transaction]);
   const loading =
     transactionState.loading ||
@@ -112,6 +120,11 @@ export default function EditTransactionPage() {
   const selectedAccount = accounts.find((item) => matchesId(item, accountId));
   const selectedCategory = categories.find((item) => matchesId(item, categoryId));
   const selectedDestination = accounts.find((item) => matchesId(item, destinationId));
+  const itemsState = personalItemsState(
+    type === 'transfer' ? null : items,
+    selectedAccount?.currency ?? transaction?.currency ?? 'INR',
+    amount,
+  );
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,7 +149,8 @@ export default function EditTransactionPage() {
     setSaving(true);
     setError('');
     try {
-      const amountMinor = parseMinor(amount, selectedAccount.currency ?? 'INR');
+      if (itemsState.error) throw new Error(itemsState.error);
+      const amountMinor = parseMinor(itemsState.amount, selectedAccount.currency ?? 'INR');
       if (amountMinor <= 0n || amountMinor > maxInt64)
         throw new Error('Enter a positive valid amount.');
       if (!Number.isFinite(occurredAt)) throw new Error('Choose a valid transaction date.');
@@ -159,6 +173,7 @@ export default function EditTransactionPage() {
         note: note.trim() || undefined,
         occurredAt,
         hasTime,
+        items: itemsState.items.length ? itemsState.items : undefined,
       };
       const dependencies = [
         localDependency('account', selectedAccount),
@@ -183,6 +198,7 @@ export default function EditTransactionPage() {
           ...(note.trim() ? { note: note.trim() } : {}),
           occurredAt,
           hasTime,
+          items: itemsState.items,
         },
         {
           recordId: idOf(transaction),
@@ -260,9 +276,10 @@ export default function EditTransactionPage() {
             selectedDestination.currency !== selectedAccount.currency)) ||
         (() => {
           try {
-            const value = selectedAccount
-              ? parseMinor(amount, selectedAccount.currency ?? 'INR')
-              : 0n;
+            const value =
+              selectedAccount && !itemsState.error
+                ? parseMinor(itemsState.amount, selectedAccount.currency ?? 'INR')
+                : 0n;
             return value <= 0n || value > maxInt64;
           } catch {
             return true;
@@ -299,6 +316,8 @@ export default function EditTransactionPage() {
       }}
       onSubmit={save}
       onBack={() => router.push(`/transaction/${encodeURIComponent(routeId)}`)}
+      items={items}
+      onItemsChange={setItems}
     />
   );
 }

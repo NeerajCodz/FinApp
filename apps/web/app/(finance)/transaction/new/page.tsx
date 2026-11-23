@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { TransactionFormScreen, type TransactionFormType } from '@finapp/ui/finance';
 import { parseMinor } from '@convex/shared/money';
+import { personalItemsState, type LineItemDraft } from '@finapp/ui/finance/line-items';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -41,6 +42,7 @@ export default function NewPersonalTransactionPage() {
     return now.getTime();
   });
   const [hasTime, setHasTime] = React.useState(false);
+  const [items, setItems] = React.useState<LineItemDraft[] | null>(null);
   const [savingDefault, setSavingDefault] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -67,6 +69,11 @@ export default function NewPersonalTransactionPage() {
         : (accounts.find((item) => item.currency === profile?.defaultCurrency) ?? accounts[0])
       : undefined);
   const destination = accounts.find((item) => matchesId(item, destinationId));
+  const itemsState = personalItemsState(
+    type === 'transfer' ? null : items,
+    source?.currency ?? profile?.defaultCurrency ?? 'INR',
+    amount,
+  );
   const category = categories.find((item) => matchesId(item, categoryId));
   const defaultCategoryField =
     type === 'income' ? 'defaultIncomeCategoryId' : 'defaultExpenseCategoryId';
@@ -197,7 +204,8 @@ export default function NewPersonalTransactionPage() {
     setSaving(true);
     setError(null);
     try {
-      const amountMinor = parseMinor(amount, source.currency ?? 'INR');
+      if (itemsState.error) throw new Error(itemsState.error);
+      const amountMinor = parseMinor(itemsState.amount, source.currency ?? 'INR');
       if (amountMinor <= 0n || amountMinor > maxInt64)
         throw new Error('Enter a positive valid amount.');
       const trimmedNote = note.trim();
@@ -219,6 +227,7 @@ export default function NewPersonalTransactionPage() {
         ...(trimmedNote ? { note: trimmedNote } : {}),
         occurredAt,
         hasTime,
+        ...(itemsState.items.length ? { items: itemsState.items } : {}),
         status: 'posted',
         createdAt: Date.now(),
       };
@@ -235,6 +244,7 @@ export default function NewPersonalTransactionPage() {
         ...(trimmedNote ? { note: trimmedNote } : {}),
         hasTime,
         occurredAt,
+        ...(itemsState.items.length ? { items: itemsState.items } : {}),
       };
       const dependencies = [
         localDependency('account', source),
@@ -261,7 +271,8 @@ export default function NewPersonalTransactionPage() {
 
   let amountValid: boolean;
   try {
-    const amountMinor = source ? parseMinor(amount, source.currency ?? 'INR') : 0n;
+    const amountMinor =
+      source && !itemsState.error ? parseMinor(itemsState.amount, source.currency ?? 'INR') : 0n;
     amountValid = amountMinor > 0n && amountMinor <= maxInt64;
   } catch {
     amountValid = false;
@@ -341,6 +352,8 @@ export default function NewPersonalTransactionPage() {
       onAddAccount={() => router.push('/accounts/new')}
       onManageCategories={() => router.push(categories.length ? '/categories' : '/categories/new')}
       onSplitExpense={() => router.push('/split/new')}
+      items={items}
+      onItemsChange={setItems}
     />
   );
 }

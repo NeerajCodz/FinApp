@@ -63,6 +63,7 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       payerIds: userId ? [userId] : [],
       basis: {},
       payerAmounts: {},
+      items: composer.items.map((item) => ({ ...item, participantIds: null })),
     });
     setError('');
   }
@@ -83,10 +84,12 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       const note = composer.note.trim() || undefined;
       const categoryId = category ? idOf(category) : undefined;
       const participants = composer.draft.participants;
+      const items = composer.draft.items;
       const optional = {
         ...(categoryId ? { categoryId } : {}),
         ...(merchant ? { merchant } : {}),
         ...(note ? { note } : {}),
+        ...(items.length ? { items } : {}),
       };
       await commitLocalWrite(
         userId,
