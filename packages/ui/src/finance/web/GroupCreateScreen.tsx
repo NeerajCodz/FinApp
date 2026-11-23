@@ -4,7 +4,16 @@ import { Plus, X, UsersThree, Lightbulb, CaretRight } from '@phosphor-icons/reac
 import { Button, CustomSelect, Input } from '@finapp/ui/web';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIconPicker } from './EntityIconPicker';
-import { GroupPage, Crumb, Tile, Tip, Permissions, PersonAvatar, groupTemplates, s } from './GroupUI';
+import {
+  GroupPage,
+  Crumb,
+  Tile,
+  Tip,
+  Permissions,
+  PersonAvatar,
+  groupTemplates,
+  s,
+} from './GroupUI';
 export type GroupCreateSuggestion = {
   id: string;
   username?: string;
