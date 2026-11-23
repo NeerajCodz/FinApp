@@ -253,3 +253,13 @@ export {
   type SettlePerson,
   type TimelineExpense,
 } from './GroupSettleParts';
+export { NotificationsScreen, type NotificationsScreenProps } from './NotificationsScreen';
+export {
+  notificationIconKind,
+  notificationSections,
+  notificationTime,
+  notificationTone,
+  unreadCount,
+  type NotificationListItem,
+  type NotificationSection,
+} from '../notifications';
