@@ -384,4 +384,38 @@ describe('group ledger integrity', () => {
       }),
     ).rejects.toThrow('MANUAL_SPLIT_REQUIRED');
   });
+
+  it('blocks leaving or removal until the balance is settled, then keeps history', async () => {
+    const { t, ids, as, accounts, groupId, addExpense } = await setupGroup();
+    await addExpense('owner', 'Snacks', 600n, [ids.owner, ids.member]);
+    await expect(
+      as('admin').mutation(api.groups.mutations.removeMember, {
+        groupId,
+        memberUserId: ids.member,
+      }),
+    ).rejects.toThrow('OUTSTANDING_BALANCE');
+    await expect(
+      as('member').mutation(api.groups.mutations.leaveGroup, { groupId }),
+    ).rejects.toThrow('OUTSTANDING_BALANCE');
+    await expect(
+      as('owner').mutation(api.groups.mutations.leaveGroup, { groupId }),
+    ).rejects.toThrow('OWNER_CANNOT_LEAVE');
+    await as('member').mutation(api.settlements.mutations.create, {
+      groupId,
+      fromUserId: ids.member,
+      toUserId: ids.owner,
+      accountId: accounts.member,
+      amountMinor: 300n,
+      currency: 'INR',
+      occurredAt: Date.UTC(2026, 5, 2),
+      clientMutationId: 'clear-before-leave',
+    });
+    await as('member').mutation(api.groups.mutations.leaveGroup, { groupId });
+    const detail = await as('owner').query(api.groups.queries.detail, { groupId });
+    expect(detail?.members.map((member) => member.id)).not.toContain(ids.member);
+    expect(detail?.formerMembers).toMatchObject([{ id: ids.member, displayName: 'Member' }]);
+    expect(await as('member').query(api.groups.queries.detail, { groupId })).toBeNull();
+    const events = await t.run((ctx) => ctx.db.query('ledgerEvents').collect());
+    expect(events.at(-1)).toMatchObject({ kind: 'member.left', entityId: String(ids.member) });
+  });
 });

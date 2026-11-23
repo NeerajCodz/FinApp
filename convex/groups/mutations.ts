@@ -1,9 +1,9 @@
 import { internal } from '../_generated/api';
 import { internalMutation, mutation, type MutationCtx } from '../_generated/server';
 import type { Doc, Id } from '../_generated/dataModel';
-import { v } from 'convex/values';
+import { ConvexError, v } from 'convex/values';
 import { requireIdentity, requireUser } from '../shared/auth';
-import { requireAdmin, requireMember, type Membership } from '../shared/permissions';
+import { requireAdmin, type Membership } from '../shared/permissions';
 import { changeMemberRole, createGroup, type Group, validateBillImageMetadata } from './domain';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
@@ -135,11 +135,6 @@ export function inviteGroupMember(
   requireAdmin(actorId, group.ownerId, members);
   if (!email.includes('@')) throw new Error('INVALID_EMAIL');
   return { groupId: group.id, email: email.trim().toLowerCase() };
-}
-
-export function leaveGroup(actorId: string, members: readonly Membership[]): Membership[] {
-  requireMember(actorId, members);
-  return members.filter((member) => member.userId !== actorId);
 }
 
 export { changeMemberRole };
@@ -842,6 +837,91 @@ export const joinByInvitationLink = mutation({
   },
 });
 
+/**
+ * Moves a member out of a group. Refuses while they have an unsettled balance, so a debt can
+ * never be orphaned. History keeps their name through formerGroupMembers.
+ */
+async function departMember(
+  ctx: MutationCtx,
+  group: Doc<'groups'>,
+  memberships: Doc<'groupMembers'>[],
+  target: Doc<'groupMembers'>,
+  actor: Doc<'users'>,
+  kind: 'member.left' | 'member.removed',
+): Promise<void> {
+  const balance = (await groupBalances(ctx, group._id, group.currency))[target.userId] ?? 0n;
+  if (balance !== 0n)
+    throw new ConvexError({
+      code: 'OUTSTANDING_BALANCE',
+      balanceMinor: String(balance),
+      currency: group.currency,
+    });
+  const now = Date.now();
+  await ctx.db.delete(target._id);
+  await ctx.db.insert('formerGroupMembers', {
+    groupId: group._id,
+    userId: target.userId,
+    role: target.role,
+    joinedAt: target.joinedAt,
+    leftAt: now,
+    ...(kind === 'member.removed' ? { removedBy: actor._id } : {}),
+  });
+  await ctx.db.patch(group._id, { updatedAt: now });
+  const targetUser = await ctx.db.get(target.userId);
+  const name = targetUser?.displayName ?? targetUser?.name ?? 'A member';
+  await recordLedgerEvent(ctx, {
+    groupId: group._id,
+    actorId: actor._id,
+    kind,
+    entityType: 'member',
+    entityId: String(target.userId),
+    summary: kind === 'member.left' ? `${name} left` : `${name} was removed`,
+    createdAt: now,
+  });
+  const updatedGroup = await ctx.db.get(group._id);
+  const scopes = [...new Set(memberships.map((member) => member.userId))];
+  for (const scopeUserId of scopes) {
+    await recordSyncChange(
+      ctx,
+      scopeUserId,
+      'groupMembers',
+      String(target._id),
+      now,
+      undefined,
+      now,
+    );
+    if (scopeUserId === target.userId)
+      await recordSyncChange(ctx, scopeUserId, 'groups', String(group._id), now, undefined, now);
+    else await recordSyncChange(ctx, scopeUserId, 'groups', String(group._id), now, updatedGroup);
+  }
+  if (kind === 'member.removed')
+    await createNotification(
+      ctx,
+      target.userId,
+      `group:${group._id}:removed:${now}`,
+      'group',
+      'group',
+      String(group._id),
+      `Removed from ${group.name}`,
+      'Your balance in this group was settled, so nothing is left to pay.',
+    );
+  for (const member of memberships) {
+    if (member.userId === target.userId || member.userId === actor._id) continue;
+    await createNotification(
+      ctx,
+      member.userId,
+      `group:${group._id}:${kind}:${target.userId}:${now}`,
+      'group',
+      'group',
+      String(group._id),
+      kind === 'member.left'
+        ? `${name} left ${group.name}`
+        : `${name} was removed from ${group.name}`,
+      'Their past expenses stay in the group history.',
+    );
+  }
+}
+
 export const removeMember = mutation({
   args: { groupId: v.id('groups'), memberUserId: v.id('users') },
   handler: async (ctx, args) => {
@@ -861,34 +941,27 @@ export const removeMember = mutation({
     if (args.memberUserId === group.ownerId) throw new Error('CANNOT_REMOVE_OWNER');
     const target = memberships.find((member) => member.userId === args.memberUserId);
     if (!target) throw new Error('NOT_MEMBER');
-    const now = Date.now();
-    await ctx.db.delete(target._id);
-    await ctx.db.patch(args.groupId, { updatedAt: now });
-    const updatedGroup = await ctx.db.get(args.groupId);
-    const scopes = [...new Set(memberships.map((member) => member.userId))];
-    for (const scopeUserId of scopes) {
-      await recordSyncChange(
-        ctx,
-        scopeUserId,
-        'groupMembers',
-        String(target._id),
-        now,
-        undefined,
-        now,
-      );
-      if (scopeUserId === target.userId)
-        await recordSyncChange(
-          ctx,
-          scopeUserId,
-          'groups',
-          String(args.groupId),
-          now,
-          undefined,
-          now,
-        );
-      else
-        await recordSyncChange(ctx, scopeUserId, 'groups', String(args.groupId), now, updatedGroup);
-    }
+    await departMember(ctx, group, memberships, target, actor, 'member.removed');
+    return target._id;
+  },
+});
+
+/** Lets a member leave once their balance is settled. The owner must hand over the group first. */
+export const leaveGroup = mutation({
+  args: { groupId: v.id('groups') },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    if (group.ownerId === actor._id) throw new Error('OWNER_CANNOT_LEAVE');
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .collect();
+    const target = memberships.find((member) => member.userId === actor._id);
+    if (!target) throw new Error('NOT_MEMBER');
+    await departMember(ctx, group, memberships, target, actor, 'member.left');
     return target._id;
   },
 });
