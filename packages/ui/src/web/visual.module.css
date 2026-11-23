@@ -1,0 +1,147 @@
+.iconTile {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  color: var(--tone);
+  background: var(--tone-soft);
+}
+
+.iconTile[data-solid] {
+  color: var(--finapp-primary-foreground);
+  background: var(--tone);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--tone);
+  background: var(--tone-soft);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.pillDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.stat {
+  display: grid;
+  gap: 12px;
+  min-width: 150px;
+  padding: 16px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 18px;
+  background: var(--finapp-card);
+}
+
+.statHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statLabel {
+  overflow: hidden;
+  color: var(--finapp-foreground-muted);
+  font-size: var(--finapp-type-label-size, 13px);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statBody {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.statValue {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+}
+
+.statValue strong {
+  font-size: var(--finapp-type-heading-size, 20px);
+  font-weight: 600;
+  letter-spacing: var(--finapp-type-heading-tracking, -0.3px);
+}
+
+.statValue small {
+  color: var(--finapp-foreground-muted);
+  font-size: 12px;
+}
+
+.statValue small[data-trend='good'] {
+  color: var(--finapp-positive);
+}
+
+.statValue small[data-trend='bad'] {
+  color: var(--finapp-expense);
+}
+
+.stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.stackItem,
+.stackMore {
+  border: 2px solid var(--finapp-background);
+  border-radius: 50%;
+}
+
+.stackItem + .stackItem,
+.stackItem + .stackMore {
+  margin-left: var(--overlap);
+}
+
+.stackMore {
+  display: inline-grid;
+  place-items: center;
+  color: var(--finapp-foreground-muted);
+  background: var(--finapp-surface-raised);
+  font-size: 11px;
+}
+
+.hero {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--tone) 28%, transparent);
+  border-radius: 28px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--tone) 24%, transparent),
+      color-mix(in srgb, var(--tone) 4%, transparent) 70%
+    ),
+    var(--finapp-card);
+}
+
+.skeletonList {
+  display: grid;
+  gap: 16px;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.skeletonLines {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+}
