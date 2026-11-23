@@ -4,9 +4,19 @@ import { useState } from 'react';
 import { useConvexAuth } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { McpDashboard } from '@finapp/ui/mcp';
+import { McpDashboard, type McpCatalogEntry, type McpWidgetPreview } from '@finapp/ui/mcp';
+import { useTheme } from '@finapp/ui/web';
 
-export function McpDashboardClient({ endpoint }: { endpoint: string }) {
+export function McpDashboardClient({
+  endpoint,
+  catalog,
+  widgetPreviews,
+}: {
+  endpoint: string;
+  catalog: McpCatalogEntry[];
+  widgetPreviews: McpWidgetPreview[];
+}) {
+  const { isDark } = useTheme();
   const { isLoading, isAuthenticated } = useConvexAuth();
   const profile = useQuery(api.mcpOAuth.currentUser, isAuthenticated ? {} : 'skip');
   const grants = useQuery(api.mcpOAuth.listGrants, isAuthenticated ? { limit: 50 } : 'skip');
@@ -57,6 +67,10 @@ export function McpDashboardClient({ endpoint }: { endpoint: string }) {
       displayName={profile?.displayName}
       endpoint={endpoint}
       connectHref="/mcp/login?next=%2Fmcp%2Fdashboard"
+      statusUrl="/mcp/status"
+      catalog={catalog}
+      widgetPreviews={widgetPreviews}
+      theme={isDark ? 'dark' : 'light'}
       connections={
         grants?.map((grant) => ({
           id: String(grant.id),

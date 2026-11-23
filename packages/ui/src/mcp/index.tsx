@@ -1,23 +1,29 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   Check,
-  Copy,
   Fingerprint,
   PlugsConnected,
-  MagnifyingGlass,
-  Wallet,
-  Target,
-  Users,
-  CirclesThree,
-  SlidersHorizontal,
   ClockCounterClockwise,
-  CaretRight,
 } from '@phosphor-icons/react';
+import { ListSkeleton } from '../web/visual';
+import { Illustration } from '../illustrations/web';
+import {
+  ConnectGuide,
+  CopyButton,
+  ServerStatusCard,
+  ToolCatalog,
+  WidgetGallery,
+  scopeNames,
+  type McpCatalogEntry,
+  type McpWidgetPreview,
+} from './sections';
+
+export type { McpCatalogEntry, McpWidgetPreview, McpServerStatus } from './sections';
 
 export type McpConnection = {
   id: string;
@@ -42,6 +48,11 @@ export type McpDashboardProps = {
   displayName?: string;
   endpoint: string;
   connectHref: string;
+  /** Public status endpoint polled by the live server check. */
+  statusUrl: string;
+  catalog: McpCatalogEntry[];
+  widgetPreviews: McpWidgetPreview[];
+  theme?: 'light' | 'dark';
   connections?: McpConnection[];
   onRevoke?: (grantId: string) => Promise<boolean>;
   revokingGrantId?: string | null;
@@ -58,139 +69,14 @@ export type McpDashboardProps = {
   onActivityWindowChange: (window: McpActivityWindow) => void;
 };
 
-const domains = [
-  {
-    id: 'finance',
-    title: 'Everyday finance',
-    icon: Wallet,
-    parent: 'finapp.finance.parent',
-    description: 'Find the right transactions without handing over your entire history.',
-    features: ['Transactions', 'Accounts', 'Categories', 'Analytics'],
-    filters: ['Date range', 'Account', 'Category', 'Type', 'Search'],
-    prompt:
-      'Show my expenses from the last 30 days. Start with finapp.finance.parent, then retrieve at most 25 transactions using an explicit date range. Ask before making changes.',
-  },
-  {
-    id: 'planning',
-    title: 'Budgets & goals',
-    icon: Target,
-    parent: 'finapp.finance.parent',
-    description:
-      'Bring budgets, savings goals, contributions, and recurring plans into the conversation.',
-    features: ['Budgets', 'Goals', 'Contributions', 'Recurring rules'],
-    filters: ['Date range', 'Limit', 'Cursor'],
-    prompt:
-      'Inspect finapp.finance.parent, then list up to 25 of my goals and budgets. Explain what you find without changing any records.',
-  },
-  {
-    id: 'social',
-    title: 'People & messages',
-    icon: Users,
-    parent: 'finapp.social.parent',
-    description: 'Find friends, manage requests, and read the conversation you actually need.',
-    features: ['Friends', 'Requests', 'People search', 'Direct messages'],
-    filters: ['Direction', 'Conversation', 'Date range', 'Limit', 'Cursor'],
-    prompt:
-      'Inspect finapp.social.parent, then list up to 25 incoming friend requests. Do not accept or send requests without asking me.',
-  },
-  {
-    id: 'groups',
-    title: 'Shared money',
-    icon: CirclesThree,
-    parent: 'finapp.groups.parent',
-    description: 'Keep shared expenses and conversations scoped to a group you belong to.',
-    features: ['Groups', 'Members', 'Expenses', 'Settlements', 'Group chat'],
-    filters: ['Group', 'Date range', 'Limit', 'Cursor'],
-    prompt:
-      'Start with finapp.groups.parent and list up to 25 of my groups. Ask which group to inspect before retrieving its expenses or messages.',
-  },
-  {
-    id: 'personal',
-    title: 'Your preferences',
-    icon: SlidersHorizontal,
-    parent: 'finapp.personal.parent',
-    description: 'Review your profile, notifications, and privacy preferences on your terms.',
-    features: ['Profile', 'Notifications', 'Privacy', 'Default account'],
-    filters: ['Date range', 'Limit', 'Cursor'],
-    prompt:
-      'Inspect finapp.personal.parent, then show my current privacy settings. Explain the options and ask before changing anything.',
-  },
-] as const;
-const clients = {
-  chatgpt: {
-    name: 'ChatGPT',
-    path: 'Open Settings → Apps, then create a custom MCP connection. Availability depends on your plan and workspace.',
-    link: 'https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt',
-  },
-  claude: {
-    name: 'Claude',
-    path: 'Open Settings → Connectors and add a custom remote connector. Use the URL below as the server address.',
-    link: 'https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp',
-  },
-  other: {
-    name: 'Other MCP client',
-    path: 'Add a remote Streamable HTTP server in your client. It must support OAuth authorization-code flow with PKCE.',
-    link: 'https://modelcontextprotocol.io/docs/develop/connect-remote-servers',
-  },
-};
-const scopeNames: Record<string, string> = {
-  'finapp:read': 'Read data',
-  'finapp:write:finance': 'Finance writes',
-  'finapp:write:social': 'Social writes',
-  'finapp:write:groups': 'Group writes',
-  'finapp:write:personal': 'Settings writes',
-};
 const tabs = [
   { id: 'connect', label: 'Connect' },
-  { id: 'explore', label: 'Explore tools' },
+  { id: 'explore', label: 'Tools' },
+  { id: 'widgets', label: 'In-chat widgets' },
   { id: 'connections', label: 'Permissions' },
   { id: 'activity', label: 'Activity' },
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
-
-function CopyButton({
-  value,
-  label = 'Copy',
-  primary = false,
-}: {
-  value: string;
-  label?: string;
-  primary?: boolean;
-}) {
-  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setState('copied');
-    } catch {
-      setState('failed');
-    }
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setState('idle'), 3000);
-  }
-  return (
-    <span className="mcp-copy-wrap">
-      <button
-        type="button"
-        className={primary ? 'mcp-button is-primary' : 'mcp-button'}
-        onClick={() => void copy()}
-        aria-label={label}
-      >
-        {state === 'copied' ? <Check /> : <Copy />}
-        <span>{state === 'copied' ? 'Copied' : label}</span>
-      </button>
-      <span className={state === 'copied' ? 'mcp-sr-only' : 'mcp-copy-feedback'} role="status">
-        {state === 'copied'
-          ? `${label} copied to clipboard.`
-          : state === 'failed'
-            ? 'Copy unavailable. Select and copy the text manually.'
-            : ''}
-      </span>
-    </span>
-  );
-}
 
 export function McpDashboard({
   signedIn,
@@ -198,6 +84,10 @@ export function McpDashboard({
   displayName,
   endpoint,
   connectHref,
+  statusUrl,
+  catalog,
+  widgetPreviews,
+  theme = 'dark',
   connections = [],
   onRevoke,
   revokingGrantId,
@@ -214,18 +104,11 @@ export function McpDashboard({
   onActivityWindowChange,
 }: McpDashboardProps) {
   const [tab, setTab] = useState<Tab>('connect');
-  const [client, setClient] = useState<keyof typeof clients>('chatgpt');
-  const [domainId, setDomainId] = useState<(typeof domains)[number]['id']>('finance');
-  const [search, setSearch] = useState('');
   const [pendingRevocation, setPendingRevocation] = useState<string | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [showRevoked, setShowRevoked] = useState(false);
   const activeConnections = connections.filter((connection) => connection.revokedAt === undefined);
   const visibleConnections = showRevoked ? connections : activeConnections;
-  const domain = domains.find((item) => item.id === domainId)!;
-  const filteredDomains = domains.filter((item) =>
-    `${item.title} ${item.features.join(' ')}`.toLowerCase().includes(search.toLowerCase().trim()),
-  );
   function selectTab(next: Tab) {
     setTab(next);
     document.getElementById(`mcp-tab-${next}`)?.focus();
@@ -335,82 +218,9 @@ export function McpDashboard({
         >
           {tab === 'connect' && (
             <div className="mcp-connect-layout">
-              <section className="mcp-setup">
-                <div className="mcp-section-heading">
-                  <div>
-                    <p className="mcp-eyebrow">GET CONNECTED</p>
-                    <h2>
-                      Your next conversation
-                      <br />
-                      starts here.
-                    </h2>
-                  </div>
-                  <span className="mcp-protocol">Streamable HTTP</span>
-                </div>
-                <fieldset className="mcp-client-picker">
-                  <legend>Choose your AI client</legend>
-                  {Object.entries(clients).map(([key, item]) => (
-                    <label key={key} className={client === key ? 'is-selected' : ''}>
-                      <input
-                        type="radio"
-                        name="mcp-client"
-                        value={key}
-                        checked={client === key}
-                        onChange={() => setClient(key as keyof typeof clients)}
-                      />
-                      <span className="mcp-client-monogram" aria-hidden="true">
-                        {key === 'chatgpt' ? 'G' : key === 'claude' ? 'C' : '+'}
-                      </span>
-                      <strong>{item.name}</strong>
-                      <span className="mcp-radio-dot" />
-                    </label>
-                  ))}
-                </fieldset>
-                <ol className="mcp-setup-steps">
-                  <li>
-                    <span className="mcp-step-number">1</span>
-                    <div>
-                      <h3>Add Finapp to {clients[client].name}</h3>
-                      <p>{clients[client].path}</p>
-                      <a
-                        href={clients[client].link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mcp-inline-link"
-                      >
-                        View setup guide <ArrowUpRight />
-                      </a>
-                    </div>
-                  </li>
-                  <li>
-                    <span className="mcp-step-number">2</span>
-                    <div>
-                      <h3>Paste your server address</h3>
-                      <p>Use this URL—not your password or a private API key.</p>
-                      <div className="mcp-endpoint-control">
-                        <code tabIndex={0}>{endpoint}</code>
-                        <CopyButton value={endpoint} label="Copy URL" primary />
-                      </div>
-                    </div>
-                  </li>
-                  <li>
-                    <span className="mcp-step-number">3</span>
-                    <div>
-                      <h3>Sign in. Review. Approve.</h3>
-                      <p>
-                        Your client opens Finapp so you can review permissions. Write access is
-                        always a separate choice.
-                      </p>
-                      {!signedIn && (
-                        <a className="mcp-inline-link" href={connectHref}>
-                          Sign in to Finapp <ArrowRight />
-                        </a>
-                      )}
-                    </div>
-                  </li>
-                </ol>
-              </section>
+              <ConnectGuide endpoint={endpoint} signedIn={signedIn} connectHref={connectHref} />
               <aside className="mcp-connect-aside">
+                <ServerStatusCard statusUrl={statusUrl} endpoint={endpoint} />
                 <div className="mcp-trust-panel">
                   <Fingerprint weight="light" />
                   <h3>
@@ -443,132 +253,27 @@ export function McpDashboard({
                 </div>
                 <div className="mcp-first-prompt">
                   <span className="mcp-eyebrow">TRY A FIRST PROMPT</span>
-                  <p>“Show my expenses for the last 30 days. Ask before changing anything.”</p>
+                  <p>“Show my FinApp overview, then who owes me in my groups.”</p>
+                  <CopyButton
+                    value="Show my FinApp overview, then who owes me in my groups. Ask before changing anything."
+                    label="Copy prompt"
+                  />
                   <button
                     className="mcp-inline-link"
                     type="button"
-                    onClick={() => selectTab('explore')}
+                    onClick={() => selectTab('widgets')}
                   >
-                    Explore what’s possible <ArrowRight />
+                    See the in-chat widgets <ArrowRight />
                   </button>
                 </div>
               </aside>
             </div>
           )}
-          {tab === 'explore' && (
-            <section className="mcp-explorer">
-              <div className="mcp-section-heading">
-                <div>
-                  <p className="mcp-eyebrow">A SMALLER, SMARTER REQUEST</p>
-                  <h2>
-                    The right context.
-                    <br />
-                    Not your entire history.
-                  </h2>
-                </div>
-                <p>
-                  Parent tools help your AI choose a domain before retrieving a specific, filtered
-                  page.
-                </p>
-              </div>
-              <label className="mcp-search">
-                <MagnifyingGlass />
-                <span className="mcp-sr-only">Search domains and features</span>
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setSearch(value);
-                    const match = domains.find((item) =>
-                      `${item.title} ${item.features.join(' ')}`
-                        .toLowerCase()
-                        .includes(value.toLowerCase().trim()),
-                    );
-                    if (match) setDomainId(match.id);
-                  }}
-                  placeholder="Find transactions, goals, messages…"
-                />
-              </label>
-              <div className="mcp-explorer-layout">
-                <div className="mcp-domain-list" aria-label="Feature domains">
-                  {filteredDomains.length ? (
-                    filteredDomains.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          type="button"
-                          key={item.id}
-                          className={domainId === item.id ? 'is-selected' : ''}
-                          aria-pressed={domainId === item.id}
-                          onClick={() => setDomainId(item.id)}
-                        >
-                          <Icon weight="light" />
-                          <span>
-                            <strong>{item.title}</strong>
-                            <small>{item.features.slice(0, 3).join(' · ')}</small>
-                          </span>
-                          <CaretRight />
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <p className="mcp-no-results" role="status">
-                      No matching domains.
-                      <button
-                        className="mcp-inline-link"
-                        onClick={() => setSearch('')}
-                        type="button"
-                      >
-                        Clear search
-                      </button>
-                    </p>
-                  )}
-                </div>
-                <article className="mcp-domain-detail" hidden={filteredDomains.length === 0}>
-                  <div className="mcp-domain-detail-header">
-                    <domain.icon weight="light" />
-                    <span>DOMAIN PARENT</span>
-                  </div>
-                  <h3>{domain.title}</h3>
-                  <p>{domain.description}</p>
-                  <div className="mcp-parent-code">
-                    <code>{domain.parent}</code>
-                    <CopyButton key={domain.id} value={domain.parent} label="Copy parent" />
-                  </div>
-                  <h4>What you can work with</h4>
-                  <div className="mcp-feature-list">
-                    {domain.features.map((feature) => (
-                      <span key={feature}>{feature}</span>
-                    ))}
-                  </div>
-                  <h4>Retrieve only what you need</h4>
-                  <p className="mcp-filter-copy">
-                    Available filters depend on the child tool. Pages return at most 100 records;
-                    time-windowed reads cap at 366 days.
-                  </p>
-                  <div className="mcp-filter-chips">
-                    {domain.filters.map((filter) => (
-                      <span key={filter}>
-                        <SlidersHorizontal />
-                        {filter}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mcp-prompt">
-                    <span className="mcp-eyebrow">READY FOR YOUR NEXT CONVERSATION</span>
-                    <p>{domain.prompt}</p>
-                    <CopyButton key={domain.id} value={domain.prompt} label="Copy prompt" />
-                  </div>
-                </article>
-              </div>
-            </section>
-          )}
+          {tab === 'explore' && <ToolCatalog catalog={catalog} />}
+          {tab === 'widgets' && <WidgetGallery previews={widgetPreviews} theme={theme} />}
           {(tab === 'connections' || tab === 'activity') && !signedIn && (
             <div className="mcp-gated">
-              <div className="mcp-empty-symbol">
-                <Fingerprint weight="light" />
-              </div>
+              <Illustration scene={tab === 'activity' ? 'history' : 'welcome'} size={176} />
               <p className="mcp-eyebrow">PRIVATE TO YOUR ACCOUNT</p>
               <h2>
                 {accountLoading
@@ -776,9 +481,7 @@ export function McpDashboard({
               {activityLoading ? (
                 <div className="mcp-activity-skeleton" role="status">
                   <span className="mcp-sr-only">Loading tool activity</span>
-                  <i />
-                  <i />
-                  <i />
+                  <ListSkeleton rows={3} />
                 </div>
               ) : activity.length === 0 ? (
                 <div className="mcp-empty-state">

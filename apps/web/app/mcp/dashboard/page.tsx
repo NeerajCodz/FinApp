@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
+import { widgetPreviews } from '@/lib/mcp/previews';
+import { toolCatalog } from '@/lib/mcp/server';
 import { McpDashboardClient } from './client';
 
 export const metadata: Metadata = {
-  title: 'AI integrations — Finapp',
-  description: 'Connect an AI client, explore Finapp tools, and manage its permissions.',
+  title: 'FinApp for ChatGPT & Claude',
+  description:
+    'Connect FinApp to ChatGPT, Claude or any MCP client: tools, in-chat widgets, permissions and activity.',
 };
 
 export default async function McpDashboardPage() {
@@ -19,5 +22,11 @@ export default async function McpDashboardPage() {
   const issuer = process.env.MCP_ISSUER_URL?.trim() || `${protocol}://${host}`;
   const endpoint = process.env.MCP_RESOURCE_URL?.trim() || new URL('/mcp', issuer).toString();
 
-  return <McpDashboardClient endpoint={endpoint} />;
+  return (
+    <McpDashboardClient
+      endpoint={endpoint}
+      catalog={toolCatalog()}
+      widgetPreviews={widgetPreviews()}
+    />
+  );
 }

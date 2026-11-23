@@ -1339,3 +1339,225 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Live server status ---------- */
+.mcp-status-card {
+  display: grid;
+  gap: 14px;
+}
+.mcp-status-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mcp-status-head h3 {
+  margin: 4px 0 0;
+  color: var(--finapp-foreground);
+  font-weight: 500;
+}
+.mcp-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mcp-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--finapp-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--finapp-foreground);
+  cursor: pointer;
+}
+.mcp-icon-button:hover {
+  border-color: var(--finapp-primary);
+}
+.mcp-icon-button:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+.mcp-icon-button:focus-visible {
+  outline: 2px solid var(--finapp-primary);
+  outline-offset: 2px;
+}
+.mcp-status-endpoint {
+  overflow-wrap: anywhere;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.75rem;
+}
+.mcp-status-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.mcp-status-foot {
+  margin: 0;
+  color: var(--finapp-foreground-subtle);
+  font-size: 0.7rem;
+}
+
+/* ---------- Client guides ---------- */
+.mcp-step-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.mcp-step-copy q {
+  color: var(--finapp-foreground);
+  font-size: 0.8rem;
+}
+.mcp-guide-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 8px;
+}
+
+/* ---------- Tool catalog ---------- */
+.mcp-catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+.mcp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--finapp-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.mcp-chip span {
+  color: var(--finapp-foreground-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.mcp-chip[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+}
+.mcp-chip[aria-pressed='true'] span {
+  color: inherit;
+}
+.mcp-chip:focus-visible {
+  outline: 2px solid var(--finapp-primary);
+  outline-offset: 2px;
+}
+.mcp-chip-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--finapp-border);
+}
+.mcp-tool-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mcp-tool-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--finapp-border);
+  border-radius: 14px;
+  background: var(--finapp-surface-subtle);
+}
+.mcp-tool-body {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+.mcp-tool-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.mcp-tool-title strong {
+  color: var(--finapp-foreground);
+  font-weight: 500;
+}
+.mcp-tool-body p {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.mcp-tool-body code {
+  overflow-wrap: anywhere;
+  color: var(--finapp-foreground-subtle);
+  font-size: 0.72rem;
+}
+
+/* ---------- Widget previews ---------- */
+.mcp-widget-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 32px;
+}
+.mcp-widget-layout .mcp-domain-list > button {
+  min-height: 64px;
+}
+.mcp-widget-detail {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.mcp-widget-detail > p {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+}
+.mcp-widget-frame {
+  position: relative;
+  overflow: hidden;
+  max-width: 560px;
+  border: 1px solid var(--finapp-border);
+  border-radius: 18px;
+  background: var(--finapp-background);
+}
+.mcp-widget-frame iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+.mcp-widget-loading {
+  position: absolute;
+  inset: 0;
+  padding: 16px;
+  background: var(--finapp-background);
+}
+
+@media (max-width: 800px) {
+  .mcp-widget-layout {
+    grid-template-columns: 1fr;
+  }
+  .mcp-widget-layout .mcp-domain-list {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  .mcp-widget-layout .mcp-domain-list > button {
+    flex: none;
+    width: auto;
+  }
+  .mcp-tool-row {
+    flex-wrap: wrap;
+  }
+  .mcp-status-stats {
+    grid-template-columns: 1fr;
+  }
+}
