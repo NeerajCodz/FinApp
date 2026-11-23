@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { nextOccurrence, type Recurrence } from '@convex/recurring/domain';
 import {
@@ -13,11 +12,9 @@ import {
   readLocal,
   type LocalRecord,
 } from './repository';
-const isExpoGo =
-  Constants.executionEnvironment === 'storeClient' && Constants.appOwnership === 'expo';
-
+import { isExpoGo } from './runtime';
 async function loadNotifications() {
-  return isExpoGo ? null : import('expo-notifications');
+  return isExpoGo() ? null : import('expo-notifications');
 }
 
 export type NotificationRecord = LocalRecord & {
