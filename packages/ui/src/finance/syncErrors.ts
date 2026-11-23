@@ -20,7 +20,10 @@ const messages = {
 
 export type KnownSyncErrorCode = keyof typeof messages;
 
-/** Finds a known error code anywhere in an error or message. */
+/**
+ * Finds a known error code anywhere in an error or message. Already-readable messages (as
+ * stored on outbox entries) map back to their code too.
+ */
 export function syncErrorCode(error: unknown): KnownSyncErrorCode | null {
   const text =
     error instanceof Error
@@ -29,7 +32,7 @@ export function syncErrorCode(error: unknown): KnownSyncErrorCode | null {
         ? error
         : String(error ?? '');
   for (const code of Object.keys(messages) as KnownSyncErrorCode[])
-    if (new RegExp(`\\b${code}\\b`).test(text)) return code;
+    if (new RegExp(`\\b${code}\\b`).test(text) || text === messages[code]) return code;
   return null;
 }
 

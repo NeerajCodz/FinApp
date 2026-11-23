@@ -399,6 +399,32 @@ function assertRange(startAt: number, endAt: number): void {
     throw new Error('INVALID_DATE_RANGE');
 }
 
+/**
+ * Removes a split row (payer or participant) that an optimistic edit dropped. Rows are keyed by
+ * transaction and member, so the stored transaction id is mapped to its local id first.
+ */
+function removeSplitRow(
+  db: SQLiteDatabase,
+  userId: string,
+  type: LocalEntity,
+  record: LocalRecord,
+): void {
+  if (type !== 'expensePayer' && type !== 'expenseParticipant')
+    throw new Error('UNSUPPORTED_LOCAL_ENTITY');
+  const mapped = mapCloudForeignIds(db, userId, record) as LocalRecord;
+  const memberId = record.memberId ?? record.userId;
+  if (typeof memberId !== 'string') return;
+  const table = type === 'expensePayer' ? 'expensePayers' : 'expenseParticipants';
+  for (const transactionId of new Set([record.transactionId, mapped.transactionId]))
+    if (typeof transactionId === 'string')
+      db.runSync(
+        `DELETE FROM ${table} WHERE userId = ? AND transactionId = ? AND memberId = ?`,
+        userId,
+        transactionId,
+        memberId,
+      );
+}
+
 export async function applyLocalMutationAndEnqueue(
   userId: string,
   type: LocalEntity,
@@ -406,6 +432,7 @@ export async function applyLocalMutationAndEnqueue(
   entry: OutboxEntry,
   relatedRecords: readonly { entityType: LocalEntity; record: LocalRecord }[] = [],
   rejectExistingRecordId = false,
+  removedRecords: readonly { entityType: LocalEntity; record: LocalRecord }[] = [],
 ): Promise<void> {
   requireUser(userId);
   if (!entry.clientMutationId) throw new Error('CLIENT_MUTATION_ID_REQUIRED');
@@ -449,6 +476,8 @@ export async function applyLocalMutationAndEnqueue(
         throw new Error('LOCAL_RECORD_ID_COLLISION');
       }
     }
+    for (const removed of removedRecords)
+      removeSplitRow(db, userId, removed.entityType, removed.record);
     for (const related of relatedRecords) putRecord(db, userId, related.entityType, related.record);
     putRecord(db, userId, type, record);
     db.runSync(

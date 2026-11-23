@@ -39,6 +39,13 @@ import {
   recordGroupRangeCoverage,
 } from './repository';
 import { syncOutbox } from './sync';
+import {
+  deleteGroupExpense,
+  removeSettlement,
+  updateGroupExpense,
+  type GroupExpenseUpdateRequest,
+  type GroupWriteResult,
+} from './groupExpenseActions';
 
 type ChangesPage = FunctionReturnType<typeof api.sync.queries.changes>;
 type SectionBootstrapPage = FunctionReturnType<typeof api.sync.queries.bootstrapSection>;
@@ -110,6 +117,12 @@ type BrowserSyncContextValue = {
   fetchTransactionRange: (startAt: number, endAt: number) => Promise<void>;
   fetchGroupRange: (groupId: string, startAt: number, endAt: number) => Promise<void>;
   read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) => Promise<T[]>;
+  /** Edits a group expense: direct when online, otherwise optimistic and queued. */
+  updateGroupExpense: (request: GroupExpenseUpdateRequest) => Promise<GroupWriteResult>;
+  /** Soft-deletes a group expense: direct when online, otherwise optimistic and queued. */
+  deleteGroupExpense: (transaction: LocalRecord) => Promise<GroupWriteResult>;
+  /** Undoes a recorded payment (record or any id); optimistic and queued, works offline. */
+  removeSettlement: (settlement: string | LocalRecord) => Promise<GroupWriteResult>;
 };
 const BrowserSyncContext = React.createContext<BrowserSyncContextValue | null>(null);
 
@@ -335,6 +348,28 @@ async function sendMutation(
         ...payload,
         groupId: await mapId('group', payload.groupId),
         accountId: await mapId('account', payload.accountId),
+      } as never);
+      return;
+    case 'group.updateExpense':
+      await convex.mutation(api.groups.mutations.updateExpense, {
+        ...payload,
+        transactionId: await mapId('transaction', payload.transactionId),
+        accountId: await mapId('account', payload.accountId),
+        ...(typeof payload.categoryId === 'string'
+          ? { categoryId: await mapId('category', payload.categoryId) }
+          : {}),
+      } as never);
+      return;
+    case 'group.deleteExpense':
+      await convex.mutation(api.groups.mutations.deleteExpense, {
+        ...payload,
+        transactionId: await mapId('transaction', payload.transactionId),
+      } as never);
+      return;
+    case 'settlement.remove':
+      await convex.mutation(api.settlements.mutations.remove, {
+        ...payload,
+        settlementId: await mapId('settlement', payload.settlementId),
       } as never);
       return;
     case 'goal.create':
@@ -932,8 +967,28 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     [flush, userId, validatedOnline],
   );
 
+  const groupWrites = React.useMemo(() => {
+    const context = () => {
+      if (!userId) throw new Error('AUTH_REQUIRED');
+      return {
+        convex,
+        userId,
+        online: validatedOnline,
+        refresh: () => void flush(),
+      };
+    };
+    return {
+      updateGroupExpense: (request: GroupExpenseUpdateRequest) =>
+        updateGroupExpense(context(), request),
+      deleteGroupExpense: (transaction: LocalRecord) => deleteGroupExpense(context(), transaction),
+      removeSettlement: (settlement: string | LocalRecord) =>
+        removeSettlement(context(), settlement),
+    };
+  }, [convex, flush, userId, validatedOnline]);
+
   const value = React.useMemo<BrowserSyncContextValue>(
     () => ({
+      ...groupWrites,
       userId,
       identityReady,
       isConnected,
@@ -953,6 +1008,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
         userId ? readLocal<T>(userId, entityType) : Promise.resolve([]),
     }),
     [
+      groupWrites,
       identityReady,
       fetchGroupRange,
       fetchTransactionRange,

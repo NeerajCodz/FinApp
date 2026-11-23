@@ -9,6 +9,7 @@ import {
   type OutboxEntry,
   type SyncReceipt,
 } from './repository';
+import { outboxErrorText } from '@finapp/ui/finance/sync-errors';
 
 export type SyncResult = {
   localId: string;
@@ -86,7 +87,8 @@ export async function syncOutbox(
         const retryCount = current.retryCount + 1;
         const retryAfter =
           !isConflict && isTransientFailure(error) ? nextRetryDelay(retryCount) : undefined;
-        const safeError = reason.replace(/[\r\n]+/g, ' ').slice(0, 240);
+        // Known server codes become readable sentences instead of raw Convex errors.
+        const safeError = outboxErrorText(error);
         await updateOutboxStatus(
           userId,
           current.localId,
