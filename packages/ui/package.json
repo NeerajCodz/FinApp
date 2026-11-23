@@ -31,6 +31,12 @@
       "browser": "./src/activity/web/index.ts",
       "default": "./src/activity/web/index.ts"
     },
+    "./chat": {
+      "react-native": "./src/chat/native/index.ts",
+      "browser": "./src/chat/web/index.ts",
+      "default": "./src/chat/web/index.ts"
+    },
+    "./chat/model": "./src/chat/model.ts",
     "./illustrations": {
       "react-native": "./src/illustrations/native.tsx",
       "browser": "./src/illustrations/web.tsx",
