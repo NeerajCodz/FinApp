@@ -230,4 +230,62 @@ describe('group ledger integrity', () => {
       as('owner').mutation(api.groups.mutations.deleteExpense, { transactionId: expenseId }),
     ).rejects.toThrow('INSUFFICIENT_PERMISSION');
   });
+
+  it('undoes a settlement, reopening the debt, and keeps the note', async () => {
+    const { t, ids, as, accounts, groupId, addExpense } = await setupGroup();
+    await addExpense('owner', 'Power bill', 2000n, [ids.owner, ids.member]);
+    const settle = {
+      groupId,
+      fromUserId: ids.member,
+      toUserId: ids.owner,
+      accountId: accounts.member,
+      amountMinor: 1000n,
+      currency: 'INR',
+      occurredAt: Date.UTC(2026, 5, 2),
+      note: '  UPI ref 42  ',
+    };
+    const settlementId = await as('member').mutation(api.settlements.mutations.create, {
+      ...settle,
+      clientMutationId: 'pay-1',
+    });
+    expect(await t.run((ctx) => ctx.db.get(settlementId))).toMatchObject({
+      note: 'UPI ref 42',
+      createdBy: ids.member,
+    });
+    await expect(
+      as('admin').mutation(api.settlements.mutations.create, {
+        ...settle,
+        accountId: accounts.admin,
+        clientMutationId: 'pay-2',
+      }),
+    ).rejects.toThrow();
+    await expect(
+      as('member').mutation(api.settlements.mutations.create, {
+        ...settle,
+        clientMutationId: 'pay-3',
+      }),
+    ).rejects.toThrow('SETTLEMENT_EXCEEDS_BALANCE');
+    await as('admin').mutation(api.settlements.mutations.remove, { settlementId });
+    expect(await t.run((ctx) => ctx.db.get(settlementId))).toMatchObject({
+      deletedBy: ids.admin,
+      deletedAt: expect.any(Number),
+    });
+    // The debt is open again, so the same payment can be recorded once more.
+    await as('member').mutation(api.settlements.mutations.create, {
+      ...settle,
+      clientMutationId: 'pay-4',
+    });
+    await expect(
+      as('member').mutation(api.settlements.mutations.remove, { settlementId }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+    const kinds = (await t.run((ctx) => ctx.db.query('ledgerEvents').collect())).map(
+      (event) => event.kind,
+    );
+    expect(kinds).toEqual([
+      'expense.created',
+      'settlement.created',
+      'settlement.deleted',
+      'settlement.created',
+    ]);
+  });
 });

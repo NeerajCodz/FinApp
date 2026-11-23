@@ -567,15 +567,18 @@ export const listGroupSettlements = query({
       .order('desc')
       .paginate(args.paginationOpts);
     return {
-      items: page.page.map((settlement) => ({
-        id: settlement._id,
-        fromUserId: settlement.fromUserId,
-        toUserId: settlement.toUserId,
-        amountMinor: settlement.amountMinor,
-        currency: settlement.currency,
-        occurredAt: settlement.occurredAt,
-        accountId: settlement.accountId,
-      })),
+      // Undone payments stay in the table for history but are not part of the ledger.
+      items: page.page
+        .filter((settlement) => settlement.deletedAt === undefined)
+        .map((settlement) => ({
+          id: settlement._id,
+          fromUserId: settlement.fromUserId,
+          toUserId: settlement.toUserId,
+          amountMinor: settlement.amountMinor,
+          currency: settlement.currency,
+          occurredAt: settlement.occurredAt,
+          accountId: settlement.accountId,
+        })),
       nextCursor: page.isDone ? null : page.continueCursor,
       isDone: page.isDone,
     };
