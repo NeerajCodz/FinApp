@@ -418,4 +418,19 @@ describe('group ledger integrity', () => {
     const events = await t.run((ctx) => ctx.db.query('ledgerEvents').collect());
     expect(events.at(-1)).toMatchObject({ kind: 'member.left', entityId: String(ids.member) });
   });
+
+  it('reports balances with a suggested plan to settle everyone', async () => {
+    const { ids, as, groupId, addExpense } = await setupGroup();
+    await addExpense('owner', 'Cab', 900n, [ids.owner, ids.admin, ids.member]);
+    const view = await as('member').query(api.groups.queries.balances, { groupId });
+    expect(view).toMatchObject({ currency: 'INR', status: 'ready' });
+    expect(view?.members.map((row) => [row.userId, row.amountMinor])).toEqual([
+      [ids.owner, 600n],
+      [ids.admin, -300n],
+      [ids.member, -300n],
+    ]);
+    expect(view?.transfers).toHaveLength(2);
+    expect(await as('late').query(api.groups.queries.balances, { groupId })).toBeNull();
+    expect(await as('owner').query(api.groups.queries.balances, { groupId: 'bad' })).toBeNull();
+  });
 });

@@ -3,6 +3,8 @@ import { v } from 'convex/values';
 import { getOptionalUser } from '../shared/auth';
 import { normalizeUsername } from '../users/domain';
 import { avatarUrlForUser } from '../avatars/helpers';
+import { groupBalances } from './ledger';
+import { simplifyDebts } from '../splits/domain';
 
 async function hashInvitationToken(token: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
@@ -293,5 +295,65 @@ export const chatMessages = query({
         };
       }),
     );
+  },
+});
+
+/**
+ * Live group balances with a suggested minimal set of transfers to settle everyone. Positive
+ * amounts are owed to that member. Returns null for non-members or malformed ids.
+ */
+export const balances = query({
+  args: { groupId: v.string() },
+  handler: async (ctx, args) => {
+    const groupId = ctx.db.normalizeId('groups', args.groupId);
+    if (!groupId) return null;
+    const user = await getOptionalUser(ctx);
+    if (!user) return null;
+    const group = await ctx.db.get(groupId);
+    if (!group || group.archivedAt !== undefined) return null;
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', groupId))
+      .collect();
+    if (!memberships.some((member) => member.userId === user._id)) return null;
+    let projected: Record<string, bigint>;
+    try {
+      projected = await groupBalances(ctx, groupId, group.currency);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'INCOMPLETE_GROUP_SPLITS')
+        return {
+          currency: group.currency,
+          status: 'incomplete' as const,
+          members: [],
+          transfers: [],
+        };
+      throw error;
+    }
+    for (const member of memberships) projected[member.userId] ??= 0n;
+    const members = await Promise.all(
+      Object.entries(projected).map(async ([userId, amountMinor]) => {
+        const id = ctx.db.normalizeId('users', userId);
+        const profile = id ? await ctx.db.get(id) : null;
+        return {
+          userId,
+          displayName: profile?.displayName ?? profile?.name ?? 'Former member',
+          current: memberships.some((member) => member.userId === userId),
+          amountMinor,
+        };
+      }),
+    );
+    members.sort((left, right) =>
+      right.amountMinor === left.amountMinor
+        ? left.displayName.localeCompare(right.displayName)
+        : right.amountMinor > left.amountMinor
+          ? 1
+          : -1,
+    );
+    return {
+      currency: group.currency,
+      status: 'ready' as const,
+      members,
+      transfers: simplifyDebts(projected),
+    };
   },
 });

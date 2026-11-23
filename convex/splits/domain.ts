@@ -374,3 +374,36 @@ export function settledImpact(
 export function serializeBalances(balances: BalanceMap): Record<string, string> {
   return Object.fromEntries(Object.entries(balances).map(([key, value]) => [key, String(value)]));
 }
+
+export type SuggestedTransfer = { fromUserId: string; toUserId: string; amountMinor: bigint };
+
+/**
+ * Greedy minimum-transfer plan that clears every balance: the largest debtor pays the largest
+ * creditor until one side reaches zero. Produces at most n-1 transfers; ties are broken by
+ * user id so the plan is stable.
+ */
+export function simplifyDebts(balances: BalanceMap): SuggestedTransfer[] {
+  const byAmount = (left: [string, bigint], right: [string, bigint]) =>
+    right[1] === left[1] ? (left[0] < right[0] ? -1 : 1) : right[1] > left[1] ? 1 : -1;
+  const creditors = Object.entries(balances)
+    .filter(([, amount]) => amount > 0n)
+    .sort(byAmount);
+  const debtors = Object.entries(balances)
+    .filter(([, amount]) => amount < 0n)
+    .map(([userId, amount]): [string, bigint] => [userId, -amount])
+    .sort(byAmount);
+  const transfers: SuggestedTransfer[] = [];
+  let creditorIndex = 0;
+  let debtorIndex = 0;
+  while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
+    const creditor = creditors[creditorIndex]!;
+    const debtor = debtors[debtorIndex]!;
+    const amountMinor = creditor[1] < debtor[1] ? creditor[1] : debtor[1];
+    transfers.push({ fromUserId: debtor[0], toUserId: creditor[0], amountMinor });
+    creditor[1] -= amountMinor;
+    debtor[1] -= amountMinor;
+    if (creditor[1] === 0n) creditorIndex += 1;
+    if (debtor[1] === 0n) debtorIndex += 1;
+  }
+  return transfers;
+}

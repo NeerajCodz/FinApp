@@ -6,6 +6,7 @@ import {
   createSplit,
   matchesAllocation,
   settledImpact,
+  simplifyDebts,
 } from '../../convex/splits/domain';
 import { createSettlement } from '../../convex/settlements/domain';
 import { changeMemberRole, renameGroup } from '../../convex/groups/domain';
@@ -127,5 +128,31 @@ describe('edit impact', () => {
     expect(settledImpact(before, after, ['member', 'other'])).toEqual([
       { userId: 'member', before: 0n, after: 1000n, credit: true },
     ]);
+  });
+});
+
+describe('simplifyDebts', () => {
+  it('clears every balance with the fewest greedy transfers', () => {
+    const balances = { a: 600n, b: -200n, c: -300n, d: -100n };
+    const transfers = simplifyDebts(balances);
+    expect(transfers).toEqual([
+      { fromUserId: 'c', toUserId: 'a', amountMinor: 300n },
+      { fromUserId: 'b', toUserId: 'a', amountMinor: 200n },
+      { fromUserId: 'd', toUserId: 'a', amountMinor: 100n },
+    ]);
+    const settled = { ...balances } as Record<string, bigint>;
+    for (const transfer of transfers) {
+      settled[transfer.fromUserId]! += transfer.amountMinor;
+      settled[transfer.toUserId]! -= transfer.amountMinor;
+    }
+    expect(Object.values(settled).every((amount) => amount === 0n)).toBe(true);
+  });
+
+  it('chains through several creditors and returns nothing when settled', () => {
+    expect(simplifyDebts({ a: 500n, b: 300n, c: -800n })).toEqual([
+      { fromUserId: 'c', toUserId: 'a', amountMinor: 500n },
+      { fromUserId: 'c', toUserId: 'b', amountMinor: 300n },
+    ]);
+    expect(simplifyDebts({ a: 0n, b: 0n })).toEqual([]);
   });
 });
