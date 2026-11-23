@@ -45,6 +45,7 @@ import type * as mcpOAuth from "../mcpOAuth.js";
 import type * as migrations from "../migrations.js";
 import type * as notifications_domain from "../notifications/domain.js";
 import type * as notifications_mutations from "../notifications/mutations.js";
+import type * as notifications_push from "../notifications/push.js";
 import type * as presence_mutations from "../presence/mutations.js";
 import type * as presence_queries from "../presence/queries.js";
 import type * as recurring_domain from "../recurring/domain.js";
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   "notifications/domain": typeof notifications_domain;
   "notifications/mutations": typeof notifications_mutations;
+  "notifications/push": typeof notifications_push;
   "presence/mutations": typeof presence_mutations;
   "presence/queries": typeof presence_queries;
   "recurring/domain": typeof recurring_domain;

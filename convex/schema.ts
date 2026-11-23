@@ -591,7 +591,9 @@ export default defineSchema({
     deviceId: v.string(),
     lastSeenAt: timestamp,
     disabledAt: optionalTime,
-  }).index('by_user', ['userId']),
+  })
+    .index('by_user', ['userId'])
+    .index('by_token', ['token']),
   avatars: defineTable({
     avatarId: v.string(),
     gender: v.union(v.literal('neutral'), v.literal('male'), v.literal('female')),
