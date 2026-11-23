@@ -12,7 +12,7 @@ import {
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
-import { canEditGroupExpense } from '@/lib/groupExpense';
+import { GroupExpenseView } from './GroupExpenseView';
 import {
   aliasesOf,
   asMinor,
@@ -96,9 +96,8 @@ export default function PersonalTransactionDetailPage() {
   const canEdit = Boolean(
     transaction &&
     transaction.deletedAt === undefined &&
-    (transaction.groupId
-      ? canEditGroupExpense(transaction, userId)
-      : ['expense', 'income', 'transfer'].includes(String(transaction.type))),
+    !transaction.groupId &&
+    ['expense', 'income', 'transfer'].includes(String(transaction.type)),
   );
   const canDuplicate = Boolean(
     transaction &&
@@ -168,6 +167,9 @@ export default function PersonalTransactionDetailPage() {
         Sign in to review a transaction from your personal finance data.
       </SignInGate>
     );
+  // Shared expenses get their own view: payers, shares, edit/delete and history.
+  if (transaction?.groupId && transaction.type === 'expense')
+    return <GroupExpenseView transaction={transaction} timeZone={profile?.timezone} />;
   return (
     <TransactionDetailScreen
       referenceId={routeId}

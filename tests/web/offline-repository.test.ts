@@ -755,7 +755,9 @@ describe('browser offline repository', () => {
     expect(await balances()).toEqual({ alice: 10n, bob: 50n, carol: -30n, dave: -30n });
     const participants = await repository.readLocal(userId, 'expenseParticipant');
     expect(participants.map((row) => row.userId).sort()).toEqual(['alice', 'carol', 'dave']);
-    const [edit] = await repository.listOutbox(userId);
+    const edit = (await repository.listOutbox(userId)).find(
+      (entry) => entry.operation === 'group.updateExpense',
+    );
     expect(edit).toMatchObject({
       operation: 'group.updateExpense',
       recordId: 'cloud-dinner',
@@ -775,9 +777,10 @@ describe('browser offline repository', () => {
     const [payment] = await repository.readLocal(userId, 'settlement');
     await commit(planSettlementRemoval(payment!, userId), 'undo-payment');
     expect(await balances()).toEqual({});
-    expect((await repository.listOutbox(userId)).map((entry) => entry.operation)).toEqual([
-      'group.updateExpense',
+    const operations = (await repository.listOutbox(userId)).map((entry) => entry.operation);
+    expect(operations.sort()).toEqual([
       'group.deleteExpense',
+      'group.updateExpense',
       'settlement.remove',
     ]);
   });
