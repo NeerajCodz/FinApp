@@ -43,6 +43,8 @@ type Transaction = LocalRecord & {
   categoryId?: string;
   groupId?: string;
   amountMinor?: bigint | number | string;
+  /** Group expense with other payers: the part charged to this account. */
+  accountAmountMinor?: bigint | number | string;
   currency?: string;
   title?: string;
   type?: string;
@@ -119,7 +121,9 @@ export default function PersonalAccountDetailPage() {
           ? -amountMinor
           : amountMinor
         : item.type === 'expense'
-          ? -amountMinor
+          ? -(item.accountAmountMinor === undefined
+              ? amountMinor
+              : asMinor(item.accountAmountMinor))
           : amountMinor,
     };
   });
@@ -135,7 +139,7 @@ export default function PersonalAccountDetailPage() {
         ? -amountMinor
         : amountMinor
       : item.type === 'expense'
-        ? -amountMinor
+        ? -(item.accountAmountMinor === undefined ? amountMinor : asMinor(item.accountAmountMinor))
         : amountMinor;
     const rowType: TransactionType = isTransfer
       ? isOutgoing

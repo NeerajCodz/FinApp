@@ -274,7 +274,12 @@ export function SuggestedTransfers({
   /** Sends a payment reminder for transfers someone owes you. */
   onRemind?: (transfer: SettleTransfer) => void;
 }) {
-  const shown = limit ? transfers.slice(0, limit) : transfers;
+  // Your own transfers (to settle or to remind) come first, so a limit never hides them.
+  const ordered = [
+    ...transfers.filter((t) => t.fromUserId === meId || t.toUserId === meId),
+    ...transfers.filter((t) => t.fromUserId !== meId && t.toUserId !== meId),
+  ];
+  const shown = limit ? ordered.slice(0, limit) : ordered;
   return (
     <div className={styles.timeline}>
       {shown.map((transfer) => {

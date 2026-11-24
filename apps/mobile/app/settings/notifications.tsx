@@ -71,6 +71,25 @@ export default function NotificationSettingsScreen() {
     if (settings.data?.[0])
       setPreferences(normalizeNotificationPreferences(settings.data[0].notificationPreferences));
   }, [settings.data]);
+  // OS permission is not the same as this device being registered for server pushes.
+  const [registration, setRegistration] = React.useState<
+    'checking' | 'registered' | 'failed' | 'offline'
+  >('checking');
+  const register = React.useCallback(async () => {
+    if (!isConnected) {
+      setRegistration('offline');
+      return;
+    }
+    setRegistration('checking');
+    try {
+      setRegistration((await registerForPush(convex)) === 'registered' ? 'registered' : 'failed');
+    } catch {
+      setRegistration('failed');
+    }
+  }, [convex, isConnected]);
+  React.useEffect(() => {
+    if (permission === 'granted') void register();
+  }, [permission, register]);
   React.useEffect(() => {
     void permissionStatus()
       .then(setPermission)
@@ -100,7 +119,7 @@ export default function NotificationSettingsScreen() {
       setPermission(granted ? 'granted' : 'denied');
       if (granted && userId) {
         await reconcileRecurringNotifications(userId);
-        if (isConnected) await registerForPush(convex);
+        await register();
       }
     } catch {
       setError('Could not request notification permission.');
@@ -172,7 +191,22 @@ export default function NotificationSettingsScreen() {
           <Typography variant="small">Checking device permission…</Typography>
         )}
         {permission === 'granted' && (
-          <Typography variant="small">Push notifications are on for this device.</Typography>
+          <View style={{ gap: 8 }}>
+            <Typography variant="small">
+              {registration === 'registered'
+                ? 'Push notifications are on for this device.'
+                : registration === 'checking'
+                  ? 'Notifications allowed. Registering this device…'
+                  : registration === 'offline'
+                    ? 'Notifications allowed. This device registers for pushes once you are online.'
+                    : 'Notifications allowed, but this device could not be registered for pushes.'}
+            </Typography>
+            {registration === 'failed' && (
+              <Button variant="outline" onPress={() => void register()}>
+                Try again
+              </Button>
+            )}
+          </View>
         )}
         {permission === 'undetermined' && (
           <Button variant="outline" onPress={() => void enableDeviceDelivery()}>

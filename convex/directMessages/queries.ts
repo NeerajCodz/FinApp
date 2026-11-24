@@ -94,62 +94,70 @@ export const listConversations = query({
         .collect(),
     ]);
     const rows = [...low, ...high];
-    // Exact counts only for the most recent unread threads; older ones stop at a small cap so
-    // the inbox's reads stay bounded however many unread conversations there are.
-    let exactBudget = INBOX_EXACT_UNREAD_ROWS;
+    // Exact counts only for the newest unread threads; older ones stop at a small cap so the
+    // inbox's reads stay bounded. Slots are assigned in updatedAt order (not completion order).
+    const sorted = rows.sort((a, b) => b.updatedAt - a.updatedAt);
+    const heads = await Promise.all(
+      sorted.map(async (row) => {
+        const userId = peerOf(row, actor._id);
+        const scope = { type: 'direct' as const, id: row._id };
+        const [latest, pointers] = await Promise.all([
+          ctx.db
+            .query('directMessages')
+            .withIndex('by_conversation_createdAt', (q) => q.eq('conversationId', row._id))
+            .order('desc')
+            .first(),
+          loadReadPointers(ctx, scope, [actor._id, userId]),
+        ]);
+        const myLastReadAt = pointers.get(actor._id) ?? 0;
+        const hasUnread =
+          !!latest && latest.senderId !== actor._id && latest.createdAt > myLastReadAt;
+        return { row, userId, scope, latest, pointers, myLastReadAt, hasUnread };
+      }),
+    );
+    const exactRows = new Set(
+      heads
+        .filter((head) => head.hasUnread)
+        .slice(0, INBOX_EXACT_UNREAD_ROWS)
+        .map((head) => String(head.row._id)),
+    );
     return Promise.all(
-      rows
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .map(async (row) => {
-          const userId = peerOf(row, actor._id);
-          const scope = { type: 'direct' as const, id: row._id };
-          const [user, latestMessages, pointers] = await Promise.all([
-            ctx.db.get(userId),
-            ctx.db
-              .query('directMessages')
-              .withIndex('by_conversation_createdAt', (q) => q.eq('conversationId', row._id))
-              .order('desc')
-              .take(1),
-            loadReadPointers(ctx, scope, [actor._id, userId]),
-          ]);
-          const latest = latestMessages[0];
-          const myLastReadAt = pointers.get(actor._id) ?? 0;
-          const peerLastReadAt = pointers.get(userId) ?? 0;
-          const hasUnread =
-            !!latest && latest.senderId !== actor._id && latest.createdAt > myLastReadAt;
-          const cap = hasUnread && exactBudget-- > 0 ? CHAT_UNREAD_CAP : INBOX_UNREAD_SOFT_CAP;
-          const unreadCount = hasUnread
-            ? await countUnread(ctx, scope, actor._id, myLastReadAt, undefined, cap)
-            : 0;
-          return {
-            id: row._id,
-            userId,
-            updatedAt: row.updatedAt,
-            ...(user && user.deletedAt === undefined
-              ? {
-                  ...(user.username === undefined ? {} : { username: user.username }),
-                  displayName: user.displayName ?? user.name ?? 'Finapp user',
-                  ...(user.avatarId === undefined ? {} : { avatarId: user.avatarId }),
-                  avatarUrl: await avatarUrlForUser(ctx, user),
-                }
-              : {}),
-            unreadCount,
-            /** The count stopped at its cap: show it as "N+". */
-            unreadCapped: hasUnread && unreadCount >= cap,
-            lastMessage: latest
-              ? {
-                  kind: latest.kind,
-                  ...(latest.kind === 'text' ? { text: latest.text ?? '' } : { text: 'Photo' }),
-                  createdAt: latest.createdAt,
-                  mine: latest.senderId === actor._id,
-                  seen:
-                    latest.senderId === actor._id
-                      ? peerLastReadAt >= latest.createdAt
-                      : myLastReadAt >= latest.createdAt,
-                }
-              : null,
-          };
-        }),
+      heads.map(async ({ row, userId, scope, latest, pointers, myLastReadAt, hasUnread }) => {
+        const user = await ctx.db.get(userId);
+        const peerLastReadAt = pointers.get(userId) ?? 0;
+        const cap = exactRows.has(String(row._id)) ? CHAT_UNREAD_CAP : INBOX_UNREAD_SOFT_CAP;
+        const unreadCount = hasUnread
+          ? await countUnread(ctx, scope, actor._id, myLastReadAt, undefined, cap)
+          : 0;
+        return {
+          id: row._id,
+          userId,
+          updatedAt: row.updatedAt,
+          ...(user && user.deletedAt === undefined
+            ? {
+                ...(user.username === undefined ? {} : { username: user.username }),
+                displayName: user.displayName ?? user.name ?? 'Finapp user',
+                ...(user.avatarId === undefined ? {} : { avatarId: user.avatarId }),
+                avatarUrl: await avatarUrlForUser(ctx, user),
+              }
+            : {}),
+          unreadCount,
+          /** The count stopped at its cap: show it as "N+". */
+          unreadCapped: hasUnread && unreadCount >= cap,
+          lastMessage: latest
+            ? {
+                kind: latest.kind,
+                ...(latest.kind === 'text' ? { text: latest.text ?? '' } : { text: 'Photo' }),
+                createdAt: latest.createdAt,
+                mine: latest.senderId === actor._id,
+                seen:
+                  latest.senderId === actor._id
+                    ? peerLastReadAt >= latest.createdAt
+                    : myLastReadAt >= latest.createdAt,
+              }
+            : null,
+        };
+      }),
     );
   },
 });

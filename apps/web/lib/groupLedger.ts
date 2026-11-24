@@ -59,6 +59,8 @@ export function useGroupLedger(groupId: string | undefined) {
     group ? idOf(group) : '',
     isConnected,
     fetchGroupRange,
+    // A group created in this browser has no server history to wait for.
+    !!group && !group._id && !group.cloudId,
   );
   const members: GroupPerson[] = [];
   for (const item of memberships.records) {
@@ -131,9 +133,11 @@ function useAllTimeCoverage(
   groupId: string,
   isConnected: boolean,
   fetchGroupRange: (groupId: string, startAt: number, endAt: number) => Promise<unknown>,
+  localOnly = false,
 ) {
   const [attempt, setAttempt] = React.useState(0);
-  const endAt = React.useMemo(() => Date.now() + 1, []);
+  // Expenses may be dated in the future, so "all time" has no end.
+  const endAt = Date.UTC(9999, 0, 1);
   const scope = `${userId ?? ''}:${groupId}:${isConnected}:${attempt}`;
   const [result, setResult] = React.useState<{
     scope: string;
@@ -142,6 +146,10 @@ function useAllTimeCoverage(
   } | null>(null);
   React.useEffect(() => {
     if (!userId || !groupId) return;
+    if (localOnly) {
+      setResult({ scope, state: 'loaded' });
+      return;
+    }
     let active = true;
     const done = (state: 'loaded' | 'uncached' | 'error', error?: string) => {
       if (active) setResult({ scope, state, error });
@@ -167,7 +175,7 @@ function useAllTimeCoverage(
     return () => {
       active = false;
     };
-  }, [endAt, fetchGroupRange, groupId, isConnected, scope, userId]);
+  }, [endAt, fetchGroupRange, groupId, isConnected, localOnly, scope, userId]);
   const current = result?.scope === scope ? result : null;
   return {
     state: current?.state ?? ('loading' as const),

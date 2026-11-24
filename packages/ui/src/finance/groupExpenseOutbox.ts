@@ -122,6 +122,12 @@ export function planExpenseUpdate(input: ExpenseUpdatePlanInput): QueuedWritePla
     version: expectedVersion + 1,
     updatedAt: now,
   });
+  // Mirror the server: the owner's account is charged only for the owner's part.
+  const ownerPaid = input.payers
+    .filter((row) => row.userId === String(input.transaction.ownerId ?? ''))
+    .reduce((sum, row) => sum + row.amountMinor, 0n);
+  if (ownerPaid === input.amountMinor) delete record.accountAmountMinor;
+  else record.accountAmountMinor = ownerPaid;
   if (!categoryId) delete record.categoryId;
   if (!merchant) delete record.merchant;
   if (!note) delete record.note;

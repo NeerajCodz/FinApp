@@ -436,12 +436,16 @@ export function calculateBilateralBalance(
       amountFor(payers, userId),
     ]);
     if (paidBy.reduce((total, [, paid]) => total + paid, 0n) <= 0n) continue;
-    // Each share is split across the payers in proportion to what they paid, remainders
-    // included, so no minor unit disappears: person's share funded by me, minus my share
-    // funded by person.
+    const owedBy = [...new Set(participants.map(userOf))].map((userId): [string, bigint] => [
+      userId,
+      amountFor(participants, userId),
+    ]);
+    // One payment matrix for the whole expense: every share and every payment is preserved,
+    // so no pair is credited a remainder that another pair also took.
+    const matrix = paymentMatrix(owedBy, paidBy);
     balance +=
-      (allocateProportionally(amountFor(participants, personId), paidBy).get(currentUserId) ?? 0n) -
-      (allocateProportionally(amountFor(participants, currentUserId), paidBy).get(personId) ?? 0n);
+      (matrix.get(personId)?.get(currentUserId) ?? 0n) -
+      (matrix.get(currentUserId)?.get(personId) ?? 0n);
   }
   for (const settlement of settlementRecords) {
     if (
@@ -525,6 +529,66 @@ export function bilateralBalancesByCurrency(
       ),
     }))
     .sort((left, right) => Number(right.balanceMinor !== 0n) - Number(left.balanceMinor !== 0n));
+}
+
+/**
+ * Who funded whose share in one expense: `matrix.get(participant).get(payer)`. Each row sums
+ * to the participant's share and each column to what the payer paid (when shares and payments
+ * have the same total). Built from proportional floors, then remainders by largest fraction
+ * (ties by id) wherever both the row and the column still need units.
+ */
+export function paymentMatrix(
+  shares: readonly (readonly [string, bigint])[],
+  payments: readonly (readonly [string, bigint])[],
+): Map<string, Map<string, bigint>> {
+  const payers = payments.filter(([, paid]) => paid > 0n);
+  const totalPaid = payers.reduce((sum, [, paid]) => sum + paid, 0n);
+  const matrix = new Map<string, Map<string, bigint>>();
+  if (totalPaid <= 0n) return matrix;
+  const rowNeed = new Map<string, bigint>();
+  const colNeed = new Map(payers.map(([id, paid]) => [id, paid] as [string, bigint]));
+  const cells: { participant: string; payer: string; rest: bigint }[] = [];
+  for (const [participant, share] of shares) {
+    if (share <= 0n) continue;
+    const row = new Map<string, bigint>();
+    let used = 0n;
+    for (const [payer, paid] of payers) {
+      const floor = (share * paid) / totalPaid;
+      row.set(payer, floor);
+      used += floor;
+      colNeed.set(payer, colNeed.get(payer)! - floor);
+      cells.push({ participant, payer, rest: (share * paid) % totalPaid });
+    }
+    matrix.set(participant, row);
+    rowNeed.set(participant, share - used);
+  }
+  const give = (participant: string, payer: string) => {
+    const row = matrix.get(participant)!;
+    row.set(payer, row.get(payer)! + 1n);
+    rowNeed.set(participant, rowNeed.get(participant)! - 1n);
+    colNeed.set(payer, colNeed.get(payer)! - 1n);
+  };
+  cells.sort((a, b) =>
+    a.rest === b.rest
+      ? a.participant === b.participant
+        ? a.payer < b.payer
+          ? -1
+          : 1
+        : a.participant < b.participant
+          ? -1
+          : 1
+      : a.rest > b.rest
+        ? -1
+        : 1,
+  );
+  for (const cell of cells)
+    if (rowNeed.get(cell.participant)! > 0n && colNeed.get(cell.payer)! > 0n)
+      give(cell.participant, cell.payer);
+  // Anything left (only possible when shares and payments differ) goes to any open column.
+  for (const [participant] of matrix)
+    for (const [payer] of payers)
+      while (rowNeed.get(participant)! > 0n && colNeed.get(payer)! > 0n) give(participant, payer);
+  return matrix;
 }
 
 export type BalanceMap = Record<string, bigint>;

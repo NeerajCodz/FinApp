@@ -778,7 +778,9 @@ export default function GroupHomePage() {
     items: groupChatItems,
     loading:
       canUseGroupChat &&
-      (standaloneChat ? chatHistory.status === 'LoadingFirstPage' : chatMessages === undefined),
+      (standaloneChat
+        ? chatHistory.status === 'LoadingFirstPage' || loadingUnread
+        : chatMessages === undefined),
     canLoadOlder: chatHistory.status === 'CanLoadMore',
     loadingOlder: chatHistory.status === 'LoadingMore',
     onLoadOlder: () => chatHistory.loadMore(CHAT_PAGE_SIZE),

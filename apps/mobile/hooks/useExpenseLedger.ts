@@ -19,6 +19,9 @@ const text = (value: unknown) => (typeof value === 'string' && value ? value : u
  * Everything the expense composer, detail and impact preview need for one group, read from
  * the local (offline-first) database.
  */
+/** Upper bound for "all-time" group ranges (future-dated expenses included). */
+const ALL_TIME_END = Date.UTC(9999, 0, 1);
+
 export function useExpenseLedger(userId: string | null, groupId: string | undefined) {
   const groups = useLocalRecords<LocalRecord>(userId, 'group');
   const memberships = useLocalRecords<LocalRecord>(userId, 'groupMember');
@@ -46,8 +49,11 @@ export function useExpenseLedger(userId: string | null, groupId: string | undefi
   const groupIds = group ? recordIds(group) : [];
   // The whole group history (not just the device sync window), so balances are complete.
   const { fetchGroupRange } = useLocalSync();
-  const endAt = useMemo(() => Date.now() + 1, []);
+  // Expenses may be dated in the future, so "all time" has no end.
+  const endAt = ALL_TIME_END;
   const cloudIdentity = group?.cloudId ?? group?._id;
+  // A group created on this device has no server history to wait for.
+  const localOnly = !!group && !cloudIdentity;
   const fetchPage = useMemo(
     () => (cloudIdentity ? fetchGroupRange : undefined),
     [cloudIdentity, fetchGroupRange],
@@ -95,17 +101,27 @@ export function useExpenseLedger(userId: string | null, groupId: string | undefi
   // Balances need the group's all-time history: until that range is covered (downloading, or
   // offline without it cached) there is no ledger rather than a wrong one from a partial window.
   const ledger: ExpenseLedger | null =
-    group && range.covered && range.transactions && range.settlements
+    group && localOnly
       ? {
           group,
-          transactions: range.transactions,
+          transactions: transactions.data ?? [],
           payers: payers.data ?? [],
           participants: participants.data ?? [],
-          settlements: range.settlements,
+          settlements: settlements.data ?? [],
         }
-      : null;
+      : group && range.covered && range.transactions && range.settlements
+        ? {
+            group,
+            transactions: range.transactions,
+            payers: payers.data ?? [],
+            participants: participants.data ?? [],
+            settlements: range.settlements,
+          }
+        : null;
   return {
-    loading: states.some((state) => state.loading) || (!!group && !range.covered && !range.error),
+    loading:
+      states.some((state) => state.loading) ||
+      (!!group && !localOnly && !range.covered && !range.error),
     error: states.find((state) => state.error)?.error ?? range.error ?? undefined,
     refreshing: range.refreshing,
     retry: () => {

@@ -112,7 +112,9 @@ export default function AccountDetailScreen() {
             ? -transaction.amountMinor
             : transaction.amountMinor
           : transaction.type === 'expense'
-            ? -transaction.amountMinor
+            ? -BigInt(
+                (transaction.accountAmountMinor as bigint | undefined) ?? transaction.amountMinor,
+              )
             : transaction.amountMinor,
     };
   });
@@ -149,7 +151,7 @@ export default function AccountDetailScreen() {
         ? -transaction.amountMinor
         : transaction.amountMinor
       : transaction.type === 'expense'
-        ? -transaction.amountMinor
+        ? -BigInt((transaction.accountAmountMinor as bigint | undefined) ?? transaction.amountMinor)
         : transaction.amountMinor;
     const type: TransactionType = isTransfer
       ? isOutgoing
