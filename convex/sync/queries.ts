@@ -91,7 +91,10 @@ export const bootstrapSection = query({
           const outgoing = transaction.type === 'expense' || transaction.type === 'transfer';
           balances.set(
             transaction.accountId,
-            source + (outgoing ? -transaction.amountMinor : transaction.amountMinor),
+            source +
+              (outgoing
+                ? -(transaction.accountAmountMinor ?? transaction.amountMinor)
+                : transaction.amountMinor),
           );
         }
         if (transaction.type === 'transfer' && transaction.transferAccountId) {

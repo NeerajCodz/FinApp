@@ -324,7 +324,9 @@ export default function PersonalAccountDetailPage() {
     const amount = asMinor(transaction.amountMinor);
     const source = accountAliases.has(String(transaction.accountId ?? ''))
       ? transaction.type === 'expense' || transaction.type === 'transfer'
-        ? -amount
+        ? -(transaction.accountAmountMinor === undefined
+            ? amount
+            : asMinor(transaction.accountAmountMinor))
         : amount
       : 0n;
     const destination =

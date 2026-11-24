@@ -167,6 +167,8 @@ export default defineSchema({
       v.literal('adjustment'),
     ),
     amountMinor: v.int64(),
+    /** Group expense with other payers: the part charged to the owner's account. */
+    accountAmountMinor: v.optional(v.int64()),
     currency,
     categoryId: optionalText,
     title: v.string(),

@@ -519,6 +519,68 @@ export const setMemberRole = mutation({
     return target._id;
   },
 });
+/**
+ * Hands the group to another current member in one step: they become the owner and the
+ * previous owner stays on as an admin (and may then leave).
+ */
+export const transferOwnership = mutation({
+  args: {
+    groupId: v.id('groups'),
+    newOwnerId: v.id('users'),
+    clientMutationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'group.transferOwnership',
+    );
+    if (replay.found) return args.groupId;
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    if (group.ownerId !== actor._id) throw new Error('INSUFFICIENT_PERMISSION');
+    if (args.newOwnerId === actor._id) throw new Error('INVALID_OWNER');
+    const memberships = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group', (query) => query.eq('groupId', args.groupId))
+      .collect();
+    const next = memberships.find((member) => member.userId === args.newOwnerId);
+    const previous = memberships.find((member) => member.userId === actor._id);
+    if (!next) throw new Error('NOT_MEMBER');
+    const updatedAt = Date.now();
+    const scopes = memberships.map((member) => member.userId);
+    await ctx.db.patch(args.groupId, { ownerId: args.newOwnerId, updatedAt });
+    await ctx.db.patch(next._id, { role: 'owner' });
+    for (const member of [next, previous]) {
+      if (!member) continue;
+      const role = member === next ? ('owner' as const) : ('admin' as const);
+      if (member === previous) await ctx.db.patch(member._id, { role });
+      for (const scopeUserId of scopes)
+        await recordSyncChange(ctx, scopeUserId, 'groupMembers', String(member._id), updatedAt, {
+          ...member,
+          role,
+        });
+    }
+    const updatedGroup = await ctx.db.get(args.groupId);
+    await publishMutationResult(
+      ctx,
+      actor._id,
+      args.clientMutationId,
+      'group.transferOwnership',
+      args.groupId,
+      'groups',
+      String(args.groupId),
+      updatedAt,
+      updatedGroup,
+      scopes,
+    );
+    return args.groupId;
+  },
+});
+
 export const addMember = mutation({
   args: { groupId: v.id('groups'), username: v.string() },
   handler: async (ctx, args) => {
@@ -1644,10 +1706,16 @@ export const updateExpense = mutation({
     const balancesBefore = ledgerBalances(ledgerBefore);
     const now = Date.now();
     const nextVersion = currentVersion + 1;
+    // The owner's account is charged only for what the owner paid; other payers' parts are
+    // theirs. Stored only when it differs from the full amount.
+    const ownerPaid = nextPayers
+      .filter((payer) => payer.userId === transaction.ownerId)
+      .reduce((sum, payer) => sum + payer.amountMinor, 0n);
     await ctx.db.patch(args.transactionId, {
       accountId: args.accountId,
       title: args.title.trim(),
       amountMinor: args.amountMinor,
+      accountAmountMinor: ownerPaid === args.amountMinor ? undefined : ownerPaid,
       currency,
       occurredAt: args.occurredAt,
       categoryId: args.categoryId,
@@ -1754,7 +1822,8 @@ export const updateExpense = mutation({
         updatedAt: now,
       });
     }
-    const memberIds = new Set<string>(members.map((member) => member.userId));
+    // Former members who are still in the split can have their balance reopened: tell them.
+    const memberIds = await notifiableIds(ctx, groupId, scopes);
     const title = args.title.trim();
     for (const [userId, delta] of Object.entries(deltas)) {
       if (userId === user._id || !memberIds.has(userId)) continue;
@@ -1778,6 +1847,19 @@ export const updateExpense = mutation({
     return args.transactionId;
   },
 });
+
+/** Current members plus members who left the group: everyone whose balance it can change. */
+async function notifiableIds(
+  ctx: MutationCtx,
+  groupId: Id<'groups'>,
+  currentMemberIds: readonly Id<'users'>[],
+): Promise<Set<string>> {
+  const former = await ctx.db
+    .query('formerGroupMembers')
+    .withIndex('by_group', (query) => query.eq('groupId', groupId))
+    .collect();
+  return new Set<string>([...currentMemberIds, ...former.map((member) => member.userId)]);
+}
 
 /**
  * Soft-deletes a group expense. The creator or a group admin may delete; split rows are kept
@@ -1872,7 +1954,7 @@ export const deleteExpense = mutation({
         ...group,
         updatedAt: now,
       });
-    const memberIds = new Set<string>(scopes);
+    const memberIds = await notifiableIds(ctx, groupId, scopes);
     for (const [userId, delta] of Object.entries(deltas)) {
       if (userId === user._id || !memberIds.has(userId)) continue;
       await createNotification(

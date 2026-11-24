@@ -51,6 +51,17 @@ const aliases = (record: LocalRecord) =>
   );
 const localId = (record: LocalRecord) => String(record.id ?? record._id ?? '');
 
+/** You can record a payment with a member only if one of you owes and the other is owed. */
+function canSettleWith(
+  balances: Record<string, bigint> | null | undefined,
+  meId: string | null | undefined,
+  memberId: string,
+) {
+  const mine = (meId && balances?.[meId]) || 0n;
+  const theirs = balances?.[memberId] ?? 0n;
+  return (mine > 0n && theirs < 0n) || (mine < 0n && theirs > 0n);
+}
+
 export default function GroupSettingsPage() {
   const router = useRouter();
   const { id: routeId } = useParams<{ id: string }>();
@@ -159,6 +170,7 @@ export default function GroupSettingsPage() {
   }
   const updateGroupSettings = useMutation(api.groups.mutations.updateSettings);
   const updateMemberRole = useMutation(api.groups.mutations.setMemberRole);
+  const transferOwnership = useMutation(api.groups.mutations.transferOwnership);
   const addGroupMember = useMutation(api.groups.mutations.addMember);
   const removeGroupMember = useMutation(api.groups.mutations.removeMember);
   const leaveGroupMutation = useMutation(api.groups.mutations.leaveGroup);
@@ -272,6 +284,33 @@ export default function GroupSettingsPage() {
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update this group.');
+    } finally {
+      actionLock.current = false;
+      setSaving('');
+    }
+  }
+
+  async function makeOwner(member: Member) {
+    if (!isConnected) {
+      setError('You are offline. Reconnect to hand over the group.');
+      return;
+    }
+    if (!cloudGroupId || actionLock.current) return;
+    const memberUserId = String(member.userId ?? member.memberId ?? '');
+    const memberId = localId(member);
+    if (!memberUserId || !memberId) return;
+    const name = String(member.displayName ?? member.name ?? 'this member');
+    if (!window.confirm(`Make ${name} the owner? You will stay in the group as an admin.`)) return;
+    actionLock.current = true;
+    setSaving(memberId);
+    setError('');
+    try {
+      await transferOwnership({
+        groupId: cloudGroupId as Id<'groups'>,
+        newOwnerId: memberUserId as Id<'users'>,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not hand over the group.');
     } finally {
       actionLock.current = false;
       setSaving('');
@@ -511,6 +550,7 @@ export default function GroupSettingsPage() {
       onMemberInputChange={setMemberInput}
       onAddMember={addMember}
       onChangeRole={(member, role) => void changeRole(member as Member, role)}
+      onMakeOwner={(member) => void makeOwner(member as Member)}
       onRemoveMember={(member) =>
         void removeMember(
           (memberRows.find((record) => localId(record) === member.id) ?? member) as Member,
@@ -529,17 +569,22 @@ export default function GroupSettingsPage() {
       onLeave={() => void leaveGroup()}
       balanceGuard={balanceGuard}
       onDismissBalanceGuard={() => setBalanceGuard(null)}
-      onSettleFirst={() => {
-        const guard = balanceGuard;
-        setBalanceGuard(null);
-        if (!guard) return;
-        const counterpart = guard.self
-          ? settleFirstCounterpart(ledger.balances, guard.memberId)
-          : guard.memberId;
-        router.push(
-          `/settle/new?groupId=${encodeURIComponent(currentGroupId)}${counterpart ? `&member=${encodeURIComponent(counterpart)}` : ''}`,
-        );
-      }}
+      onSettleFirst={
+        balanceGuard &&
+        (balanceGuard.self || canSettleWith(ledger.balances, userId, balanceGuard.memberId))
+          ? () => {
+              const guard = balanceGuard;
+              setBalanceGuard(null);
+              if (!guard) return;
+              const counterpart = guard.self
+                ? settleFirstCounterpart(ledger.balances, guard.memberId)
+                : guard.memberId;
+              router.push(
+                `/settle/new?groupId=${encodeURIComponent(currentGroupId)}${counterpart ? `&member=${encodeURIComponent(counterpart)}` : ''}`,
+              );
+            }
+          : undefined
+      }
       onBack={() => router.push(`/group/${encodeURIComponent(currentGroupId)}`)}
       onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(currentGroupId)}/analytics`)}
       invitationUrl={canManage ? invitationUrl : undefined}

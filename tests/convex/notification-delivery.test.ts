@@ -377,6 +377,59 @@ describe('payment reminders', () => {
     return { ...context, groupId };
   }
 
+  it('hands ownership to a member, keeping the old owner as admin', async () => {
+    const { t, ids, as, groupId } = await groupWithDebt();
+    await expect(
+      as('member').mutation(api.groups.mutations.transferOwnership, {
+        groupId,
+        newOwnerId: ids.member,
+      }),
+    ).rejects.toThrow('INSUFFICIENT_PERMISSION');
+    await as('owner').mutation(api.groups.mutations.transferOwnership, {
+      groupId,
+      newOwnerId: ids.member,
+    });
+    const roles = await t.run(async (ctx) => ({
+      ownerId: (await ctx.db.get(groupId))!.ownerId,
+      members: await ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (q) => q.eq('groupId', groupId))
+        .collect(),
+    }));
+    expect(roles.ownerId).toBe(ids.member);
+    expect(roles.members.find((m) => m.userId === ids.member)?.role).toBe('owner');
+    expect(roles.members.find((m) => m.userId === ids.owner)?.role).toBe('admin');
+  });
+
+  it('charges the owner account only for what the owner paid', async () => {
+    const { t, ids, as, groupId } = await groupWithDebt();
+    const expense = await t.run(async (ctx) =>
+      (await ctx.db.query('transactions').collect()).find((row) => row.groupId === groupId),
+    );
+    const before = (await as('owner').query(api.accounts.queries.list, {}))[0]!.balanceMinor;
+    const [low, high] = [ids.owner, ids.member].sort();
+    await as('owner').mutation(api.groups.mutations.updateExpense, {
+      transactionId: expense!._id,
+      accountId: expense!.accountId,
+      title: 'Dinner',
+      amountMinor: 3000n,
+      currency: 'INR',
+      occurredAt: expense!.occurredAt,
+      participants: [
+        { userId: low!, amountMinor: 1500n, method: 'equal' },
+        { userId: high!, amountMinor: 1500n, method: 'equal' },
+      ],
+      payers: [
+        { userId: ids.owner, amountMinor: 1000n },
+        { userId: ids.member, amountMinor: 2000n },
+      ],
+      expectedVersion: expense!.version ?? 1,
+    });
+    const after = (await as('owner').query(api.accounts.queries.list, {}))[0]!.balanceMinor;
+    // The account was charged 3000 before; now only the owner's 1000.
+    expect(after - before).toBe(2000n);
+  });
+
   it('lets a creditor remind a debtor once per day', async () => {
     const { t, ids, as, groupId } = await groupWithDebt();
     vi.useFakeTimers();

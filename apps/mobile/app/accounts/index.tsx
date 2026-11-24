@@ -67,7 +67,9 @@ export default function AccountsScreen() {
           return delta;
         const sourceDelta = ids.has(transaction.accountId)
           ? transaction.type === 'expense' || transaction.type === 'transfer'
-            ? -transaction.amountMinor
+            ? -BigInt(
+                (transaction.accountAmountMinor as bigint | undefined) ?? transaction.amountMinor,
+              )
             : transaction.amountMinor
           : 0n;
         const destinationDelta =

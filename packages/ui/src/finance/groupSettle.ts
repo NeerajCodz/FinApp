@@ -225,10 +225,10 @@ const errorCopy: Record<string, string> = {
   GROUP_UNAVAILABLE: 'This group is archived or no longer available.',
   MANUAL_SPLIT_REQUIRED:
     'Some expenses use exact or percentage splits. Edit those expenses manually.',
-  OWNER_CANNOT_LEAVE: 'The owner cannot leave. Transfer ownership or archive the group instead.',
+  OWNER_CANNOT_LEAVE:
+    'The owner cannot leave. Make another member the owner in group settings, or archive the group.',
   OFFLINE: 'You are offline. Reconnect and try again.',
-  SETTLEMENT_NOT_SYNCED:
-    'This payment has not synced yet. Try again in a moment, or undo it from the group history.',
+  SETTLEMENT_NOT_SYNCED: 'This payment has not synced yet. Try again in a moment.',
   LIMIT_EXCEEDED: 'Choose up to 50 expenses at a time.',
 };
 

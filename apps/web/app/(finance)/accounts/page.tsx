@@ -69,7 +69,9 @@ export default function AccountsPage() {
         const amount = asMinor(transaction.amountMinor);
         const source = ids.has(String(transaction.accountId ?? ''))
           ? transaction.type === 'expense' || transaction.type === 'transfer'
-            ? -amount
+            ? -(transaction.accountAmountMinor === undefined
+                ? amount
+                : asMinor(transaction.accountAmountMinor))
             : amount
           : 0n;
         const destination =

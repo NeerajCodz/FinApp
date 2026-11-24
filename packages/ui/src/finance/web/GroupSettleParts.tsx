@@ -546,7 +546,8 @@ export function OutstandingBalanceDialog({
   self: boolean;
   balance: OutstandingBalance | null;
   onClose: () => void;
-  onSettleFirst: () => void;
+  /** Omitted when you can't record that settlement yourself (it isn't with you). */
+  onSettleFirst?: () => void;
 }) {
   const amount = balance
     ? formatMinor(
@@ -560,9 +561,9 @@ export function OutstandingBalanceDialog({
       visible={visible}
       onClose={onClose}
       title={self ? 'Settle up before leaving' : `${memberName} has an open balance`}
-      confirmLabel="Settle first"
+      confirmLabel={onSettleFirst ? 'Settle first' : 'Got it'}
       cancelLabel="Not now"
-      onConfirm={onSettleFirst}
+      onConfirm={onSettleFirst ?? onClose}
     >
       <div className={styles.dialogBody}>
         <Illustration scene={owes ? 'youOwe' : 'owedToYou'} size={150} />
@@ -574,7 +575,10 @@ export function OutstandingBalanceDialog({
             : owes
               ? `${memberName} still owes ${amount}.`
               : `${memberName} is still owed ${amount}.`}{' '}
-          Members can only leave once their balance is zero, so nobody loses track of money.
+          Members can only leave once their balance is zero, so nobody loses track of money.{' '}
+          {!self && !onSettleFirst
+            ? `${memberName} needs to settle with the members involved before they can be removed.`
+            : null}
         </p>
       </div>
     </AlertDialog>
