@@ -109,6 +109,8 @@ export async function countUnread(
   userId: Id<'users'>,
   lastReadAt: number,
   now = Date.now(),
+  /** Stop counting at this many (reads at most twice as many messages). */
+  cap = CHAT_UNREAD_CAP,
 ): Promise<number> {
   const rows: Array<Doc<'groupMessages'> | Doc<'directMessages'>> =
     scope.type === 'group'
@@ -118,16 +120,16 @@ export async function countUnread(
             q.eq('groupId', scope.id).gt('createdAt', lastReadAt),
           )
           .order('desc')
-          .take(CHAT_UNREAD_CAP * 2)
+          .take(cap * 2)
       : await ctx.db
           .query('directMessages')
           .withIndex('by_conversation_createdAt', (q) =>
             q.eq('conversationId', scope.id).gt('createdAt', lastReadAt),
           )
           .order('desc')
-          .take(CHAT_UNREAD_CAP * 2);
+          .take(cap * 2);
   return Math.min(
-    CHAT_UNREAD_CAP,
+    cap,
     rows.filter(
       (row) =>
         row.senderId !== userId &&

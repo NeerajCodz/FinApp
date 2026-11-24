@@ -11,6 +11,7 @@ import {
   ChatThread,
   firstUnreadMessageId,
   useLiveTypists,
+  useLoadUnreadHistory,
   useOptimisticMessages,
   useReadMarker,
   useTypingSender,
@@ -125,7 +126,15 @@ export default function DirectConversationScreen() {
   );
   // Freeze the unread marker at open so it does not vanish as soon as the pointer advances.
   const [firstUnreadId, setFirstUnreadId] = useState<string | undefined | null>(null);
-  if (firstUnreadId === null && meta && history.status !== 'LoadingFirstPage')
+  const loadingUnread = useLoadUnreadHistory({
+    active: firstUnreadId === null,
+    createdAtOldestFirst: serverMessages.map((message) => message.createdAt),
+    lastReadAt: meta?.myLastReadAt,
+    unreadCount: meta?.unreadCount,
+    status: history.status,
+    loadMore: () => history.loadMore(PAGE_SIZE),
+  });
+  if (firstUnreadId === null && meta && history.status !== 'LoadingFirstPage' && !loadingUnread)
     setFirstUnreadId(firstUnreadMessageId(serverMessages, meta.myLastReadAt) ?? undefined);
 
   function submitText() {
@@ -155,12 +164,13 @@ export default function DirectConversationScreen() {
       }
       setUploading(true);
       const image = await (await fetch(asset.uri)).blob();
-      setUploading(false);
       if (!image.size || image.size > 5 * 1024 * 1024) {
+        setUploading(false);
         toast.error('Choose an image up to 5 MB.');
         return;
       }
-      optimistic.send({ kind: 'image', imageUrl: asset.uri, senderName: 'You' }, async () => {
+      // Stay busy until the upload and message have settled, so one tap is one upload.
+      await optimistic.send({ kind: 'image', imageUrl: asset.uri, senderName: 'You' }, async () => {
         const { uploadUrl, ticket } = await createUpload({ conversationId });
         const response = await fetch(uploadUrl, {
           method: 'POST',
@@ -171,6 +181,7 @@ export default function DirectConversationScreen() {
         const { storageId } = (await response.json()) as { storageId: Id<'_storage'> };
         await sendImage({ conversationId, storageId, ticket });
       });
+      setUploading(false);
     } catch (error) {
       setUploading(false);
       toast.error(error instanceof Error ? error.message : 'Image could not be sent');

@@ -184,6 +184,7 @@ export function MemberBalanceBars({
   onPressMember?: (memberId: string) => void;
 }) {
   const ratios = balanceBarRatios(balances);
+  const myBalance = (meId ? balances[meId] : undefined) ?? 0n;
   const entries = Object.entries(balances).sort(([, left], [, right]) =>
     left === right ? 0 : left > right ? -1 : 1,
   );
@@ -192,7 +193,11 @@ export function MemberBalanceBars({
       {entries.map(([memberId, amount]) => {
         const person = personOf(people, memberId);
         const tone = amount > 0n ? 'income' : amount < 0n ? 'expense' : undefined;
-        const pressable = !!onPressMember && amount !== 0n && memberId !== meId;
+        // Only members you can actually settle with: one owes and the other is owed.
+        const pressable =
+          !!onPressMember &&
+          memberId !== meId &&
+          ((amount < 0n && myBalance > 0n) || (amount > 0n && myBalance < 0n));
         const body = (
           <>
             <PersonAvatar
@@ -257,6 +262,7 @@ export function SuggestedTransfers({
   busy,
   limit,
   onSettle,
+  onRemind,
 }: {
   transfers: readonly SettleTransfer[];
   currency: string;
@@ -265,6 +271,8 @@ export function SuggestedTransfers({
   busy?: boolean;
   limit?: number;
   onSettle?: (transfer: SettleTransfer) => void;
+  /** Sends a payment reminder for transfers someone owes you. */
+  onRemind?: (transfer: SettleTransfer) => void;
 }) {
   const shown = limit ? transfers.slice(0, limit) : transfers;
   return (
@@ -296,6 +304,16 @@ export function SuggestedTransfers({
                 {formatMinor(transfer.amountMinor, currency)}
               </strong>
             </span>
+            {transfer.toUserId === meId && onRemind ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onPress={() => onRemind(transfer)}
+              >
+                Remind
+              </Button>
+            ) : null}
             {mine && onSettle ? (
               <Button size="sm" disabled={busy} onPress={() => onSettle(transfer)}>
                 Settle

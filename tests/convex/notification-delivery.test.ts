@@ -3,7 +3,7 @@ import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import schema from '../../convex/schema';
-import { createNotification } from '../../convex/notifications/mutations';
+import { createNotification, MARK_ALL_READ_LIMIT } from '../../convex/notifications/mutations';
 import { MAX_PUSH_DEVICES } from '../../convex/notifications/push';
 import { defaultNotificationPreferences } from '../../convex/notifications/domain';
 
@@ -109,6 +109,37 @@ describe('mark all read', () => {
     expect(await t.run((ctx) => ctx.db.query('syncChanges').collect())).toHaveLength(
       changes.length,
     );
+    // The receipt carries an entity and a revision, so client outboxes can settle it.
+    const receipt = await as('owner').query(api.sync.queries.mutationReceipt, {
+      clientMutationId: 'read-all',
+    });
+    expect(receipt?.serverId).toBe(String(ids.owner));
+    expect(receipt?.revision).toBeTruthy();
+  });
+
+  it('finishes more than one batch in the background', async () => {
+    vi.useFakeTimers();
+    const { t, ids, as } = await setup();
+    await t.run(async (ctx) => {
+      for (let index = 0; index < MARK_ALL_READ_LIMIT + 3; index++)
+        await createNotification(
+          ctx,
+          ids.owner,
+          `bulk:${index}`,
+          'budget',
+          'budget',
+          `${index}`,
+          't',
+          'b',
+        );
+    });
+    const result = await as('owner').mutation(api.notifications.mutations.markAllRead, {
+      clientMutationId: 'bulk-read',
+    });
+    expect(result).toEqual({ count: MARK_ALL_READ_LIMIT, more: true });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const after = await notificationsOf(t, ids.owner);
+    expect(after.filter((item) => item.readAt === undefined)).toHaveLength(0);
   });
 
   it('leaves newer notifications and other users untouched', async () => {
@@ -428,6 +459,28 @@ describe('payment reminders', () => {
     const after = (await as('owner').query(api.accounts.queries.list, {}))[0]!.balanceMinor;
     // The account was charged 3000 before; now only the owner's 1000.
     expect(after - before).toBe(2000n);
+  });
+
+  it('tells the creditor when the debtor muted reminders', async () => {
+    const { t, ids, as, groupId } = await groupWithDebt();
+    await t.run(async (ctx) => {
+      const settings = await ctx.db
+        .query('userSettings')
+        .withIndex('by_user', (q) => q.eq('userId', ids.member))
+        .unique();
+      await ctx.db.patch(settings!._id, {
+        notificationPreferences: { ...defaultNotificationPreferences, settlement: false },
+      });
+    });
+    expect(
+      await as('owner').mutation(api.notifications.mutations.nudge, {
+        groupId,
+        userId: ids.member,
+      }),
+    ).toMatchObject({ status: 'muted' });
+    expect(
+      (await notificationsOf(t, ids.member)).filter((item) => item.eventKey?.startsWith('nudge:')),
+    ).toHaveLength(0);
   });
 
   it('lets a creditor remind a debtor once per day', async () => {

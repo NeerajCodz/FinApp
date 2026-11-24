@@ -180,6 +180,7 @@ export function MemberBalanceBars({
 }) {
   const { tokens } = useTheme();
   const ratios = balanceBarRatios(balances);
+  const myBalance = (meId ? balances[meId] : undefined) ?? 0n;
   const entries = Object.entries(balances).sort(([, left], [, right]) =>
     left === right ? 0 : left > right ? -1 : 1,
   );
@@ -190,7 +191,11 @@ export function MemberBalanceBars({
         const color = amount > 0n ? tokens.income : amount < 0n ? tokens.expense : tokens.border;
         const label =
           amount > 0n ? 'gets back' : amount < 0n ? 'owes' : person.leftAt ? 'left' : 'settled';
-        const pressable = !!onPressMember && amount !== 0n && memberId !== meId;
+        // Only members you can actually settle with: one owes and the other is owed.
+        const pressable =
+          !!onPressMember &&
+          memberId !== meId &&
+          ((amount < 0n && myBalance > 0n) || (amount > 0n && myBalance < 0n));
         const body = (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <GroupAvatar
@@ -269,6 +274,7 @@ export function SuggestedTransfers({
   busy,
   limit,
   onSettle,
+  onRemind,
 }: {
   transfers: readonly SettleTransfer[];
   currency: string;
@@ -278,6 +284,8 @@ export function SuggestedTransfers({
   limit?: number;
   /** Called for transfers you take part in. */
   onSettle?: (transfer: SettleTransfer) => void;
+  /** Sends a payment reminder for transfers someone owes you. */
+  onRemind?: (transfer: SettleTransfer) => void;
 }) {
   const { tokens } = useTheme();
   const shown = limit ? transfers.slice(0, limit) : transfers;
@@ -331,6 +339,16 @@ export function SuggestedTransfers({
                   {formatMinor(transfer.amountMinor, currency)}
                 </Text>
               </View>
+              {transfer.toUserId === meId && onRemind ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onPress={() => onRemind(transfer)}
+                >
+                  Remind
+                </Button>
+              ) : null}
               {mine && onSettle ? (
                 <Button size="sm" disabled={busy} onPress={() => onSettle(transfer)}>
                   Settle

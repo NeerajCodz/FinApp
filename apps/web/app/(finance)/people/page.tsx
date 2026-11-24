@@ -26,6 +26,7 @@ type Conversation = Profile & {
   id: Id<'directConversations'>;
   updatedAt: number;
   unreadCount?: number;
+  unreadCapped?: boolean;
   lastMessage: null | {
     kind: 'text' | 'image';
     text: string;
@@ -524,7 +525,7 @@ export default function PeoplePage() {
                           href={`/messages/${encodeURIComponent(String(conversation.id))}`}
                         >
                           {conversation.unreadCount
-                            ? `${conversation.unreadCount >= 99 ? '99+' : conversation.unreadCount} new`
+                            ? `${conversation.unreadCount}${conversation.unreadCapped || conversation.unreadCount >= 99 ? '+' : ''} new`
                             : 'Open'}{' '}
                           <ArrowRight size={15} aria-hidden="true" />
                         </Link>
@@ -586,7 +587,9 @@ export default function PeoplePage() {
                     <span className="people-sidebar-conversation-copy">
                       <strong>
                         {conversation.displayName ?? 'Finapp user'}
-                        {conversation.unreadCount ? ` · ${conversation.unreadCount} new` : ''}
+                        {conversation.unreadCount
+                          ? ` · ${conversation.unreadCount}${conversation.unreadCapped ? '+' : ''} new`
+                          : ''}
                       </strong>
                       <small>{conversation.lastMessage?.text ?? 'Start the conversation'}</small>
                     </span>

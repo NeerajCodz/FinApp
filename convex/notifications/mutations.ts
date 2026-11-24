@@ -1,5 +1,5 @@
 import { internal } from '../_generated/api';
-import { mutation, type MutationCtx } from '../_generated/server';
+import { internalMutation, mutation, type MutationCtx } from '../_generated/server';
 import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
@@ -173,41 +173,76 @@ export const markAllRead = mutation({
     if (replay.found) return replay.result as { count: number; more: boolean };
     const now = Date.now();
     const before = args.before ?? now;
-    const unread = await ctx.db
-      .query('notifications')
-      .withIndex('by_recipient_createdAt', (query) =>
-        query.eq('recipientId', user._id).lte('createdAt', before),
-      )
-      .order('desc')
-      .filter((query) => query.eq(query.field('readAt'), undefined))
-      .take(MARK_ALL_READ_LIMIT + 1);
-    const batch = unread.slice(0, MARK_ALL_READ_LIMIT);
-    let revision: bigint | undefined;
-    for (const notification of batch) {
-      await ctx.db.patch(notification._id, { readAt: now });
-      revision = await recordSyncChange(
-        ctx,
-        user._id,
-        'notifications',
-        String(notification._id),
-        now,
-        { ...notification, readAt: now },
-        undefined,
-        args.clientMutationId,
-      );
-    }
-    const result = { count: batch.length, more: unread.length > batch.length };
+    const batch = await markReadBatch(ctx, user._id, before, now, args.clientMutationId);
+    // Older unread records beyond one batch are finished in the background, so clients that
+    // send one mark-all call never leave them unread.
+    if (batch.more)
+      await ctx.scheduler.runAfter(0, internal.notifications.mutations.continueMarkAllRead, {
+        userId: user._id,
+        before,
+        readAt: now,
+      });
+    const state = await ctx.db
+      .query('userSyncState')
+      .withIndex('by_user', (query) => query.eq('userId', user._id))
+      .unique();
+    const result = { count: batch.count, more: batch.more };
+    // A bulk operation has no single entity: the user id is its stable receipt entity, and
+    // the receipt always carries a revision so client outboxes can settle it.
     await storeMutationReceipt(
       ctx,
       user._id,
       args.clientMutationId,
       'notification.markAllRead',
       result,
-      undefined,
-      revision,
+      String(user._id),
+      batch.revision ?? state?.revision ?? 1n,
       now,
     );
     return result;
+  },
+});
+
+async function markReadBatch(
+  ctx: MutationCtx,
+  userId: Id<'users'>,
+  before: number,
+  readAt: number,
+  clientMutationId?: string,
+): Promise<{ count: number; more: boolean; revision?: bigint }> {
+  const unread = await ctx.db
+    .query('notifications')
+    .withIndex('by_recipient_createdAt', (query) =>
+      query.eq('recipientId', userId).lte('createdAt', before),
+    )
+    .order('desc')
+    .filter((query) => query.eq(query.field('readAt'), undefined))
+    .take(MARK_ALL_READ_LIMIT + 1);
+  const batch = unread.slice(0, MARK_ALL_READ_LIMIT);
+  let revision: bigint | undefined;
+  for (const notification of batch) {
+    await ctx.db.patch(notification._id, { readAt });
+    revision = await recordSyncChange(
+      ctx,
+      userId,
+      'notifications',
+      String(notification._id),
+      readAt,
+      { ...notification, readAt },
+      undefined,
+      clientMutationId,
+    );
+  }
+  return { count: batch.length, more: unread.length > batch.length, revision };
+}
+
+/** Marks the next batch of a mark-all-read call and reschedules itself until none remain. */
+export const continueMarkAllRead = internalMutation({
+  args: { userId: v.id('users'), before: v.number(), readAt: v.number() },
+  handler: async (ctx, args) => {
+    const batch = await markReadBatch(ctx, args.userId, args.before, args.readAt);
+    if (batch.more)
+      await ctx.scheduler.runAfter(0, internal.notifications.mutations.continueMarkAllRead, args);
   },
 });
 
@@ -219,7 +254,10 @@ export const NUDGE_WINDOW_MS = 86_400_000;
  */
 export const nudge = mutation({
   args: { groupId: v.id('groups'), userId: v.id('users') },
-  handler: async (ctx, args): Promise<{ status: 'sent' | 'alreadySent'; amountMinor: bigint }> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ status: 'sent' | 'alreadySent' | 'muted'; amountMinor: bigint }> => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     if (args.userId === user._id) throw new Error('INVALID_NUDGE_TARGET');
@@ -264,7 +302,7 @@ export const nudge = mutation({
       .unique();
     if (existing) return { status: 'alreadySent', amountMinor };
     const name = user.displayName?.trim() || user.name?.trim() || 'A group member';
-    await createNotification(
+    const created = await createNotification(
       ctx,
       args.userId,
       eventKey,
@@ -274,6 +312,9 @@ export const nudge = mutation({
       `${name} sent a payment reminder`,
       `You owe ${formatMinor(amountMinor, group.currency)} in ${group.name}. Tap to settle up.`,
     );
+    // Null here means the recipient muted settlement notifications (duplicates were ruled out
+    // above): say so instead of claiming it was sent.
+    if (!created) return { status: 'muted', amountMinor };
     return { status: 'sent', amountMinor };
   },
 });
