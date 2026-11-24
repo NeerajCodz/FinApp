@@ -174,6 +174,28 @@ describe('FinAI assistant', () => {
     });
   });
 
+  it('opens an empty conversation for streaming and titles it from the first prompt', async () => {
+    const { owner } = await fixture();
+    const conversationId = await owner.mutation(api.ai.assistant.createConversation, {});
+    expect(await owner.query(api.ai.assistant.conversations, {})).toEqual([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL | Request) =>
+        String(url).includes('streamGenerateContent')
+          ? new Response(
+              `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Sure.' }] }, finishReason: 'STOP' }] })}
+
+`,
+              { status: 200 },
+            )
+          : new Response('no', { status: 404 }),
+      ),
+    );
+    await owner.action(api.ai.assistant.send, { conversationId, text: 'Plan my week' });
+    const [row] = await owner.query(api.ai.assistant.conversations, {});
+    expect(row).toMatchObject({ id: conversationId, title: 'Plan my week', preview: 'Sure.' });
+  });
+
   it('reports AI_NOT_CONFIGURED without a key', async () => {
     const { owner } = await fixture();
     vi.stubEnv('GEMINI_API_KEY', '');

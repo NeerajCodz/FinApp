@@ -40,12 +40,15 @@ export const conversations = query({
       .withIndex('by_user_updatedAt', (q) => q.eq('userId', user._id))
       .order('desc')
       .take(Math.max(1, Math.min(100, Math.floor(limit ?? 30))));
-    return rows.map((row) => ({
-      id: row._id,
-      title: row.title ?? 'New chat',
-      preview: row.preview ?? '',
-      updatedAt: row.updatedAt,
-    }));
+    // Conversations opened but never used have no preview; keep them out of the list.
+    return rows
+      .filter((row) => row.preview !== undefined)
+      .map((row) => ({
+        id: row._id,
+        title: row.title ?? 'New chat',
+        preview: row.preview ?? '',
+        updatedAt: row.updatedAt,
+      }));
   },
 });
 
@@ -114,6 +117,22 @@ export const deleteConversation = mutation({
   },
 });
 
+/** An empty conversation, so the client can open the thread before the first reply streams. */
+export const createConversation = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const now = Date.now();
+    return ctx.db.insert('finaiConversations', {
+      userId: user._id,
+      title: 'New chat',
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
 /**
  * Stores the prompt and an assistant placeholder (creating the conversation if needed), after
  * counting one chat request. Returns the earlier turns for the model.
@@ -144,17 +163,26 @@ export const begin = internalMutation({
         throw new Error('REPLY_IN_PROGRESS');
     }
     await consumeAiQuota(ctx, user._id, 'chat', now);
-    const isNew = !conversationId;
+    const title =
+      text.length > TITLE_FALLBACK_CHARS ? `${text.slice(0, TITLE_FALLBACK_CHARS - 1)}…` : text;
     if (!conversationId)
       conversationId = await ctx.db.insert('finaiConversations', {
         userId: user._id,
-        title:
-          text.length > TITLE_FALLBACK_CHARS ? `${text.slice(0, TITLE_FALLBACK_CHARS - 1)}…` : text,
+        title,
         preview: text.slice(0, 120),
         createdAt: now,
         updatedAt: now,
       });
-    else await ctx.db.patch(conversationId, { updatedAt: now, preview: text.slice(0, 120) });
+    const hasMessages = !!(await ctx.db
+      .query('finaiMessages')
+      .withIndex('by_conversation_createdAt', (q) => q.eq('conversationId', conversationId!))
+      .first());
+    const isNew = !hasMessages;
+    await ctx.db.patch(conversationId, {
+      updatedAt: now,
+      preview: text.slice(0, 120),
+      ...(isNew ? { title } : {}),
+    });
 
     const earlier = await ctx.db
       .query('finaiMessages')
