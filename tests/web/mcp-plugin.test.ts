@@ -133,6 +133,8 @@ describe('MCP plugin tools', () => {
           'finapp.groups.members.remove',
           'finapp.groups.nudge',
           'finapp.personal.notifications.mark_all_read',
+          'finapp.groups.messages.pin',
+          'finapp.social.direct_messages.pinned',
         ]),
       );
       expect(new Set(names).size).toBe(names.length);
@@ -306,7 +308,7 @@ describe('MCP plugin tools', () => {
     const client = await connect();
     try {
       await client.callTool({ name: 'finapp.groups.expenses.update', arguments: expenseArgs });
-      expect(backend.calls[0]!.args).not.toHaveProperty('items');
+      expect(backend.calls[0]!.args.items).toBeUndefined();
       backend.calls = [];
       const mismatch = await client.callTool({
         name: 'finapp.groups.expenses.update',
@@ -315,6 +317,18 @@ describe('MCP plugin tools', () => {
       expect(mismatch.isError).toBe(true);
       expect(text(mismatch)).toContain('ITEMS_TOTAL_MISMATCH');
       expect(backend.calls).toEqual([]);
+      await client.callTool({
+        name: 'finapp.groups.expenses.update',
+        arguments: {
+          ...expenseArgs,
+          items: [],
+          participants: expenseArgs.participants.map((row) => ({ ...row, method: 'itemized' })),
+        },
+      });
+      expect(backend.calls[0]!.args).toMatchObject({
+        items: [],
+        participants: [{ method: 'itemized' }, { method: 'itemized' }],
+      });
     } finally {
       await client.close();
     }

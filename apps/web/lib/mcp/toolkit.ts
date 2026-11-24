@@ -111,7 +111,7 @@ export function idempotencyKey(value: unknown): string {
   return typeof value === 'string' && value.length > 0 ? value : crypto.randomUUID();
 }
 
-// ---------- Line items (shared contract with the line-items feature) ----------
+// ---------- Line items (transactions.items) ----------
 
 export const lineItem = z.object({
   id: z
@@ -133,11 +133,10 @@ export const lineItem = z.object({
 });
 export const lineItems = z
   .array(lineItem)
-  .min(1)
   .max(100)
   .optional()
   .describe(
-    'Optional itemised breakdown. Item amounts must sum exactly to amountMinor (else ITEMS_TOTAL_MISMATCH).',
+    'Optional itemised breakdown; item amounts must sum exactly to amountMinor (else ITEMS_TOTAL_MISMATCH). On updates, omit to keep the current items or pass [] to clear them.',
   );
 
 export type LineItemInput = z.infer<typeof lineItem>;
@@ -161,6 +160,7 @@ export function prepareItems(
   amountMinor: bigint,
 ): LineItemPayload[] | undefined {
   if (!items) return undefined;
+  if (items.length === 0) return [];
   const total = items.reduce((sum, item) => sum + item.amountMinor, 0n);
   if (total !== amountMinor) throw new ToolInputError('ITEMS_TOTAL_MISMATCH');
   return items.map((item) => ({
@@ -172,13 +172,4 @@ export function prepareItems(
       ? {}
       : { participantIds: item.participantIds.map((value) => id<'users'>(value)) }),
   }));
-}
-
-/**
- * Adds `items` to mutation args only when provided. Convex arg validators gain `items` with the
- * line-items feature; until then omitting the key keeps every existing call valid, and the
- * generated arg types (which may not list `items` yet) stay the declared shape.
- */
-export function withItems<T extends object>(args: T, items: LineItemPayload[] | undefined): T {
-  return items ? Object.assign(args, { items }) : args;
 }

@@ -64,6 +64,10 @@ async function fixture() {
       amountMinor: 25_000n,
       title: 'Coffee',
       note: 'oat flat white',
+      items: [
+        { id: 'i1', title: 'Flat white', amountMinor: 20_000n },
+        { id: 'i2', title: 'Croissant', amountMinor: 5_000n },
+      ],
       occurredAt: now - DAY,
     });
     const rent = await ctx.db.insert('transactions', {
@@ -122,6 +126,11 @@ describe('MCP transaction search', () => {
       search: 'flat white',
     });
     expect(byNote.items.map((item) => item.title)).toEqual(['Coffee']);
+    const byItem = await as('owner').query(api.mcp.listTransactions, {
+      ...window,
+      search: 'croissant',
+    });
+    expect(byItem.items[0]?.items?.map((item) => item.title)).toEqual(['Flat white', 'Croissant']);
   });
 
   it('rejects an inverted amount range', async () => {
@@ -144,6 +153,7 @@ describe('MCP transaction detail', () => {
     const { as, coffee } = await fixture();
     const detail = await as('owner').query(api.mcp.getTransaction, { transactionId: coffee });
     expect(detail).toMatchObject({ title: 'Coffee', accountName: 'Wallet', group: null });
+    expect(detail.items).toHaveLength(2);
     await expect(
       as('friend').query(api.mcp.getTransaction, { transactionId: coffee }),
     ).rejects.toThrow('TRANSACTION_UNAVAILABLE');

@@ -17,7 +17,6 @@ import {
   page,
   prepareItems,
   timestamp,
-  withItems,
   type ToolFactory,
 } from '../toolkit';
 
@@ -62,12 +61,11 @@ const payers = z
   .describe('Who paid and how much (must sum to amountMinor). Omit to keep current payers scaled.');
 
 type SplitInput = z.infer<typeof participants>;
-/** The Convex validator gains 'itemized' with the line-items feature; the shape is otherwise identical. */
 function splitPayload(rows: SplitInput) {
   return rows.map((row) => ({
     userId: id<'users'>(row.userId),
     amountMinor: row.amountMinor,
-    method: row.method as 'equal' | 'exact' | 'percentage' | 'shares',
+    method: row.method,
     ...(row.basisValue === undefined ? {} : { basisValue: row.basisValue }),
   }));
 }
@@ -473,25 +471,20 @@ export const groupTools: ToolFactory = (client) => [
       clientMutationId: mutationId,
     },
     run: (args) =>
-      client.mutation(
-        api.groups.mutations.addExpense,
-        withItems(
-          {
-            groupId: id<'groups'>(args.groupId),
-            accountId: id<'accounts'>(args.accountId),
-            title: args.title,
-            amountMinor: args.amountMinor,
-            currency: args.currency,
-            occurredAt: args.occurredAt,
-            categoryId: id<'categories'>(args.categoryId),
-            merchant: args.merchant,
-            note: args.note,
-            participants: splitPayload(args.participants),
-            clientMutationId: idempotencyKey(args.clientMutationId),
-          },
-          prepareItems(args.items, args.amountMinor),
-        ),
-      ),
+      client.mutation(api.groups.mutations.addExpense, {
+        groupId: id<'groups'>(args.groupId),
+        accountId: id<'accounts'>(args.accountId),
+        title: args.title,
+        amountMinor: args.amountMinor,
+        currency: args.currency,
+        occurredAt: args.occurredAt,
+        categoryId: id<'categories'>(args.categoryId),
+        merchant: args.merchant,
+        note: args.note,
+        participants: splitPayload(args.participants),
+        clientMutationId: idempotencyKey(args.clientMutationId),
+        items: prepareItems(args.items, args.amountMinor),
+      }),
   }),
   defineTool({
     name: 'finapp.groups.expenses.update',
@@ -516,30 +509,25 @@ export const groupTools: ToolFactory = (client) => [
       clientMutationId: mutationId,
     },
     run: (args) =>
-      client.mutation(
-        api.groups.mutations.updateExpense,
-        withItems(
-          {
-            transactionId: id<'transactions'>(args.expenseId),
-            accountId: id<'accounts'>(args.accountId),
-            title: args.title,
-            amountMinor: args.amountMinor,
-            currency: args.currency,
-            occurredAt: args.occurredAt,
-            categoryId: id<'categories'>(args.categoryId),
-            merchant: args.merchant,
-            note: args.note,
-            participants: splitPayload(args.participants),
-            payers: args.payers?.map((payer) => ({
-              userId: id<'users'>(payer.userId),
-              amountMinor: payer.amountMinor,
-            })),
-            expectedVersion: args.expectedVersion,
-            clientMutationId: idempotencyKey(args.clientMutationId),
-          },
-          prepareItems(args.items, args.amountMinor),
-        ),
-      ),
+      client.mutation(api.groups.mutations.updateExpense, {
+        transactionId: id<'transactions'>(args.expenseId),
+        accountId: id<'accounts'>(args.accountId),
+        title: args.title,
+        amountMinor: args.amountMinor,
+        currency: args.currency,
+        occurredAt: args.occurredAt,
+        categoryId: id<'categories'>(args.categoryId),
+        merchant: args.merchant,
+        note: args.note,
+        participants: splitPayload(args.participants),
+        payers: args.payers?.map((payer) => ({
+          userId: id<'users'>(payer.userId),
+          amountMinor: payer.amountMinor,
+        })),
+        expectedVersion: args.expectedVersion,
+        clientMutationId: idempotencyKey(args.clientMutationId),
+        items: prepareItems(args.items, args.amountMinor),
+      }),
   }),
   defineTool({
     name: 'finapp.groups.expenses.delete',
@@ -670,6 +658,57 @@ export const groupTools: ToolFactory = (client) => [
         groupId: id<'groups'>(args.groupId),
         text: args.text,
       }),
+  }),
+  defineTool({
+    name: 'finapp.groups.messages.pinned',
+    title: 'Pinned group messages',
+    description:
+      'Pinned messages in a group chat plus your unread count and read position (epoch ms).',
+    scope: 'finapp:read',
+    input: { groupId: docId('Group') },
+    run: async (args) => {
+      const meta = await client.query(api.groups.queries.chatMeta, { groupId: args.groupId });
+      if (!meta) throw new Error('NOT_MEMBER');
+      return {
+        pinned: meta.pinned,
+        unreadCount: meta.unreadCount,
+        myLastReadAt: meta.myLastReadAt,
+        canPinAny: meta.canPinAny,
+      };
+    },
+  }),
+  defineTool({
+    name: 'finapp.groups.messages.pin',
+    title: 'Pin or unpin group message',
+    description: 'Pin (or unpin) a group chat message. At most 20 pins per chat.',
+    scope: 'finapp:write:groups',
+    input: { messageId: docId('Group message'), pinned: z.boolean() },
+    run: (args) =>
+      client.mutation(api.groups.mutations.setChatMessagePinned, {
+        messageId: id<'groupMessages'>(args.messageId),
+        pinned: args.pinned,
+      }),
+  }),
+  defineTool({
+    name: 'finapp.groups.messages.react',
+    title: 'React to group message',
+    description: 'Toggle an emoji reaction on a group chat message.',
+    scope: 'finapp:write:groups',
+    input: { messageId: docId('Group message'), emoji: z.enum(['❤️', '👍', '😂', '😮']) },
+    run: (args) =>
+      client.mutation(api.groups.mutations.toggleChatReaction, {
+        messageId: id<'groupMessages'>(args.messageId),
+        emoji: args.emoji,
+      }),
+  }),
+  defineTool({
+    name: 'finapp.groups.unread_counts',
+    title: 'Unread group chats',
+    description:
+      'Unread message counts per group id (groups with no unread messages are omitted; capped at 99).',
+    scope: 'finapp:read',
+    input: {},
+    run: async () => ({ counts: await client.query(api.groups.queries.chatUnreadCounts, {}) }),
   }),
   defineTool({
     name: 'finapp.groups.shared_history',

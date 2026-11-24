@@ -4,21 +4,9 @@ import { getOptionalUser } from './shared/auth';
 import { query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
 
-/**
- * Line items on a transaction. The contract (`transactions.items`) is owned by the line-items
- * feature; reading through this narrow view keeps MCP output stable whether or not the schema
- * field is present in this checkout.
- */
-type McpLineItem = {
-  id: string;
-  title: string;
-  amountMinor: bigint;
-  quantity?: number;
-  participantIds?: string[];
-};
-function lineItems(transaction: Doc<'transactions'>): McpLineItem[] | undefined {
-  const items = (transaction as Doc<'transactions'> & { items?: McpLineItem[] }).items;
-  return items && items.length > 0 ? items : undefined;
+/** Line items for output; an empty list reads as "no items". */
+function lineItems(transaction: Doc<'transactions'>) {
+  return transaction.items?.length ? transaction.items : undefined;
 }
 
 const resourceValidator = v.union(
