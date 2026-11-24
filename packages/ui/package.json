@@ -68,6 +68,7 @@
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
     "@phosphor-icons/react": "^2.1.10",
+    "@yogesharc/thinking-orbs": "^0.1.2",
     "earcut": "^3.2.4",
     "phosphor-react-native": "^3.0.6"
   },
