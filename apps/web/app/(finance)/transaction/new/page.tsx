@@ -275,6 +275,7 @@ export default function NewPersonalTransactionPage() {
   const receiptScanner = useReceiptScanner({
     currency: source?.currency ?? profile?.defaultCurrency ?? 'INR',
     disabled: saving || !userId,
+    onReview: setReview,
     onFields: (fields, scanReview) => {
       setType('expense');
       setTitle(fields.title);
@@ -285,6 +286,7 @@ export default function NewPersonalTransactionPage() {
       }
       setAmount(fields.amount);
       setItems(fields.rows);
+      if (fields.categoryId) setCategoryId(fields.categoryId);
       setReview(scanReview);
     },
   });

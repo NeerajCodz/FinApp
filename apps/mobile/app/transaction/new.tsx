@@ -110,6 +110,7 @@ export default function NewTransactionScreen() {
   const receiptScanner = useReceiptScanner({
     currency: itemCurrency,
     disabled: saving || !userId,
+    onReview: setReview,
     onFields: (fields, scanReview) => {
       setType('expense');
       setTitle(fields.title);
@@ -120,6 +121,7 @@ export default function NewTransactionScreen() {
       }
       setAmount(fields.amount);
       setItems(fields.rows);
+      if (fields.categoryId) setCategoryId(fields.categoryId);
       setReview(scanReview);
     },
   });
