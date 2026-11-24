@@ -18,6 +18,9 @@ import {
 } from '@finapp/ui/chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toast } from '@/lib/toast';
+import { useFinaiDecide } from '@/hooks/useFinaiDecide';
+import { FinaiSurface } from '@finapp/ui/ai';
+import { FINAI_MENTION, finaiChatOverrides, finaiTypingNames } from '@finapp/ui/ai/finai';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 const PAGE_SIZE = 30;
@@ -58,6 +61,7 @@ export default function DirectConversationScreen() {
   const markRead = useMutation(api.presence.mutations.markRead);
   const setTyping = useMutation(api.presence.mutations.setTyping);
   const toggleReaction = useMutation(api.directMessages.mutations.toggleReaction);
+  const decideFinai = useFinaiDecide();
   const setPinned = useMutation(api.directMessages.mutations.setPinned);
   const optimistic = useOptimisticMessages((error) =>
     toast.error(error instanceof Error ? error.message : 'Message could not be sent'),
@@ -110,6 +114,7 @@ export default function DirectConversationScreen() {
           pinned: message.pinnedAt !== null || pinnedIds.has(message.id),
           canPin: true,
           seen: mine && peerLastReadAt >= message.createdAt,
+          ...finaiChatOverrides(message.ai),
         };
       }),
     [history.results, peerLastReadAt, pinnedIds, userId],
@@ -238,7 +243,17 @@ export default function DirectConversationScreen() {
             loadingOlder={history.status === 'LoadingMore'}
             onLoadOlder={() => history.loadMore(PAGE_SIZE)}
             firstUnreadId={firstUnreadId ?? undefined}
-            typingNames={typistIds.length ? [peerName] : []}
+            typingNames={[
+              ...(typistIds.length ? [peerName] : []),
+              ...finaiTypingNames(serverMessages),
+            ]}
+            renderAiContent={(message) => (
+              <FinaiSurface
+                a2ui={message.ai?.a2ui}
+                actions={message.ai?.actions}
+                onDecide={decideFinai}
+              />
+            )}
             pinned={(meta?.pinned ?? []).map((pin) => ({
               id: String(pin.id),
               text: pin.text,
@@ -273,7 +288,8 @@ export default function DirectConversationScreen() {
               onAttach: () => void attachImage(),
               attachLabel: 'Attach image',
               uploading,
-              placeholder: 'Message',
+              placeholder: 'Message (@finai to ask FinAI)',
+              mentions: [FINAI_MENTION],
             }}
           />
         </View>

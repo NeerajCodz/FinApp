@@ -34,6 +34,7 @@ import type { GroupChatItem } from '@finapp/ui/finance';
 import { IncludePastExpensesSheet } from '@finapp/ui/finance';
 import { useLateJoiners } from '@/lib/groups/useLateJoiners';
 import type { LocalRecord } from '@/lib/offline/repository';
+import { useFinaiDecide } from '@/lib/finai/useFinaiDecide';
 
 type Group = LocalRecord & {
   name?: string;
@@ -159,6 +160,7 @@ export default function GroupHomePage() {
       ? { groupId: cloudGroupId as Id<'groups'>, limit: 20 }
       : 'skip',
   );
+  const decideFinai = useFinaiDecide();
   const chatHistory = usePaginatedQuery(
     api.groups.queries.chatMessagesPage,
     canUseGroupChat && standaloneChat ? { groupId: cloudGroupId } : 'skip',
@@ -619,7 +621,8 @@ export default function GroupHomePage() {
         senderAvatarUrl: message.senderAvatarUrl,
         senderAvatarId: message.senderAvatarId,
         ownMessage,
-        text: message.kind === 'text' ? message.text : undefined,
+        text: message.kind === 'text' || message.kind === 'ai' ? message.text : undefined,
+        ai: message.ai,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
         reactions: message.reactions,
         myReaction: message.myReaction,
@@ -737,6 +740,7 @@ export default function GroupHomePage() {
   const balanceMeaning =
     myBalance === 0n ? 'You are settled' : myBalance > 0n ? 'Owed to you' : 'You owe';
   const chat: GroupChatScreenProps = {
+    onFinaiDecide: decideFinai,
     group: {
       name: group.name ?? 'Group',
       currency: group.currency ?? 'INR',

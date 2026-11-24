@@ -28,6 +28,16 @@ import {
   type ChatRow,
 } from '../model';
 import styles from './ChatThread.module.css';
+import { ThinkingOrb } from '../../web/ThinkingOrb';
+import {
+  activeMention,
+  applyMention,
+  finaiErrorMessage,
+  isFinaiBusy,
+  mentionMatches,
+  orbStateFor,
+  type MentionOption,
+} from '../../ai/finai';
 
 export type ChatComposerProps = {
   draft: string;
@@ -39,6 +49,8 @@ export type ChatComposerProps = {
   placeholder?: string;
   disabled?: boolean;
   uploading?: boolean;
+  /** Handles offered when the user types `@` (e.g. FinAI). */
+  mentions?: readonly MentionOption[];
 };
 
 export type ChatThreadProps = {
@@ -59,6 +71,8 @@ export type ChatThreadProps = {
   /** Called with the newest incoming message time while the viewer is at the bottom. */
   onSeenLatest?: (createdAt: number) => void;
   renderEvent?: (message: ChatMessage) => React.ReactNode;
+  /** Rich content under a FinAI reply (A2UI cards). */
+  renderAiContent?: (message: ChatMessage) => React.ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
   composer?: ChatComposerProps;
@@ -316,6 +330,7 @@ export function ChatThread(p: ChatThreadProps) {
               mode={p.mode}
               highlighted={row.type === 'message' && row.message.id === highlightId}
               renderEvent={p.renderEvent}
+              renderAiContent={p.renderAiContent}
               onOpenImage={setPreview}
               onReact={p.onReact}
               onTogglePin={p.onTogglePin}
@@ -370,6 +385,7 @@ function Row({
   mode,
   highlighted,
   renderEvent,
+  renderAiContent,
   onOpenImage,
   onReact,
   onTogglePin,
@@ -380,6 +396,7 @@ function Row({
   mode: 'direct' | 'group';
   highlighted: boolean;
   renderEvent?: (message: ChatMessage) => React.ReactNode;
+  renderAiContent?: (message: ChatMessage) => React.ReactNode;
   onOpenImage: (url: string) => void;
   onReact?: (id: string, emoji: ChatReactionEmoji) => void;
   onTogglePin?: (id: string, pinned: boolean) => void;
@@ -434,14 +451,23 @@ function Row({
     >
       {mode === 'group' && !message.mine && (
         <div className={styles.avatarSlot}>
-          {lastInGroup && (
-            <Avatar
-              label={message.senderName ?? 'Member'}
-              initials={(message.senderName ?? '?').slice(0, 2).toUpperCase()}
-              imageUrl={message.senderAvatarUrl}
-              avatarId={message.senderAvatarId}
-              size={30}
-            />
+          {lastInGroup && message.kind === 'ai' ? (
+            <span className={styles.aiAvatar} aria-hidden>
+              <ThinkingOrb
+                state={isFinaiBusy(message.ai) ? orbStateFor(message.ai!) : 'idle'}
+                size={18}
+              />
+            </span>
+          ) : (
+            lastInGroup && (
+              <Avatar
+                label={message.senderName ?? 'Member'}
+                initials={(message.senderName ?? '?').slice(0, 2).toUpperCase()}
+                imageUrl={message.senderAvatarUrl}
+                avatarId={message.senderAvatarId}
+                size={30}
+              />
+            )
           )}
         </div>
       )}
@@ -479,6 +505,8 @@ function Row({
               ) : (
                 <span>Image is no longer available.</span>
               )
+            ) : message.kind === 'ai' && message.ai ? (
+              <AiBody message={message} />
             ) : (
               message.text
             )}
@@ -509,6 +537,7 @@ function Row({
             </div>
           )}
         </div>
+        {message.kind === 'ai' && message.ai?.status === 'done' && renderAiContent?.(message)}
         {!!message.reactions?.length && (
           <div className={styles.reactions}>
             {message.reactions.map(({ emoji, count }) => (
@@ -566,9 +595,50 @@ function Row({
   );
 }
 
+function AiBody({ message }: { message: ChatMessage }) {
+  const ai = message.ai!;
+  if (ai.status === 'error')
+    return <span className={styles.aiError}>{finaiErrorMessage(ai.errorCode)}</span>;
+  if (!message.text && isFinaiBusy(ai))
+    return (
+      <span className={styles.aiThinking}>
+        <ThinkingOrb
+          state={orbStateFor(ai)}
+          size={20}
+          label="FinAI is thinking"
+          caption={ai.stageLabel ?? 'Thinking…'}
+        />
+      </span>
+    );
+  return (
+    <>
+      {message.text}
+      {isFinaiBusy(ai) && <span className={styles.aiCaret} aria-hidden />}
+    </>
+  );
+}
+
 function Composer(c: ChatComposerProps) {
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const canSend = !c.disabled && !!c.draft.trim();
+  const [caret, setCaret] = React.useState<number | null>(null);
+  const [highlight, setHighlight] = React.useState(0);
+  const [dismissed, setDismissed] = React.useState<string | null>(null);
+  const active = c.mentions?.length ? activeMention(c.draft, caret ?? c.draft.length) : null;
+  const options = active ? mentionMatches(c.mentions!, active.query) : [];
+  const open = options.length > 0 && dismissed !== c.draft;
+  const choose = (index: number) => {
+    const option = options[index];
+    if (!option) return;
+    const next = applyMention(c.draft, option, caret ?? c.draft.length);
+    c.onDraftChange(next.draft);
+    setCaret(next.caret);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(next.caret, next.caret);
+    });
+  };
   return (
     <form
       className={styles.composer}
@@ -602,16 +672,64 @@ function Composer(c: ChatComposerProps) {
           </button>
         </>
       )}
+      {open && (
+        <ul className={styles.mentions} role="listbox" aria-label="Mention suggestions">
+          {options.map((option, index) => (
+            <li key={option.handle} role="option" aria-selected={index === highlight}>
+              <button
+                type="button"
+                className={cx(styles.mention, index === highlight && styles.mentionActive)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => choose(index)}
+              >
+                <span className={styles.aiAvatar} aria-hidden>
+                  <ThinkingOrb state="idle" size={16} />
+                </span>
+                <span>
+                  <strong>@{option.handle}</strong> {option.label}
+                  <small>{option.description}</small>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <textarea
+        ref={inputRef}
         aria-label="Message"
+        aria-autocomplete={c.mentions?.length ? 'list' : undefined}
+        aria-expanded={c.mentions?.length ? open : undefined}
         rows={1}
         value={c.draft}
         maxLength={CHAT_TEXT_LIMIT}
         placeholder={c.placeholder ?? 'Write a message…'}
         disabled={c.disabled}
-        onChange={(event) => c.onDraftChange(event.currentTarget.value)}
+        onChange={(event) => {
+          c.onDraftChange(event.currentTarget.value);
+          setCaret(event.currentTarget.selectionStart);
+          setHighlight(0);
+        }}
+        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
         onBlur={c.onBlur}
         onKeyDown={(event) => {
+          if (open) {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              const step = event.key === 'ArrowDown' ? 1 : -1;
+              setHighlight((highlight + step + options.length) % options.length);
+              return;
+            }
+            if (event.key === 'Enter' || event.key === 'Tab') {
+              event.preventDefault();
+              choose(highlight);
+              return;
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setDismissed(c.draft);
+              return;
+            }
+          }
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             if (canSend) c.onSend();

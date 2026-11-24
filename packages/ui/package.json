@@ -51,7 +51,13 @@
     "./finance/sync-errors": "./src/finance/syncErrors.ts",
     "./finance/expense-outbox": "./src/finance/groupExpenseOutbox.ts",
     "./finance/line-items": "./src/finance/lineItems.ts",
-    "./ai/receipt-scan": "./src/ai/receiptScan.ts"
+    "./ai/receipt-scan": "./src/ai/receiptScan.ts",
+    "./ai": {
+      "react-native": "./src/ai/native/index.ts",
+      "browser": "./src/ai/web/index.ts",
+      "default": "./src/ai/web/index.ts"
+    },
+    "./ai/finai": "./src/ai/finai.ts"
   },
   "sideEffects": [
     "./src/web/styles.css"
@@ -67,11 +73,14 @@
     "react-native": ">=0.86.0"
   },
   "dependencies": {
+    "@a2ui/react": "0.16.1",
+    "@a2ui/web_core": "0.16.1",
     "@emoji-mart/data": "^1.2.1",
     "@phosphor-icons/react": "^2.1.10",
     "@yogesharc/thinking-orbs": "^0.1.2",
     "earcut": "^3.2.4",
-    "phosphor-react-native": "^3.0.6"
+    "phosphor-react-native": "^3.0.6",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/earcut": "^3.0.0"

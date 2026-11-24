@@ -31,6 +31,7 @@ import { formatMinor } from '../shared/money';
 import { assertCurrency } from '../shared/validators';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 import { advanceReadPointer, CHAT_PIN_LIMIT, chatReactionEmoji, clearTyping } from '../shared/chat';
+import { maybeScheduleFinaiReply } from '../ai/mentions';
 
 const participantMethodValidator = v.union(
   v.literal('equal'),
@@ -1119,6 +1120,14 @@ export const sendChatText = mutation({
         messageId,
       });
     await afterChatSend(ctx, args.groupId, user._id, now);
+    await maybeScheduleFinaiReply(
+      ctx,
+      { type: 'group', id: args.groupId, expiresAt },
+      user._id,
+      String(messageId),
+      text,
+      now,
+    );
     return messageId;
   },
 });

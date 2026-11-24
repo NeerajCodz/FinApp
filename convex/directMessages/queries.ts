@@ -12,6 +12,8 @@ import {
   profileLoader,
   summariseReactions,
 } from '../shared/chat';
+import { actionViews } from '../ai/actions';
+import { finaiFields } from '../ai/chatShape';
 
 async function participantConversation(
   ctx: QueryCtx,
@@ -36,6 +38,11 @@ async function enrichMessages(
   actorId: Id<'users'>,
 ) {
   const profile = profileLoader(ctx, 'Finapp user');
+  const actions = await actionViews(
+    ctx,
+    messages.filter((message) => message.kind === 'ai').map((message) => String(message._id)),
+    actorId,
+  );
   return Promise.all(
     messages.map(async (message) => {
       const [sender, reactions, attachmentUrl] = await Promise.all([
@@ -60,6 +67,7 @@ async function enrichMessages(
         senderAvatarUrl: sender.avatarUrl,
         pinnedAt: message.pinnedAt ?? null,
         ...summariseReactions(reactions, actorId),
+        ...finaiFields(message, actions, actorId),
       };
     }),
   );

@@ -13,6 +13,13 @@ import {
 } from './GroupPrimitives';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { ChatThread } from '../../chat/native/ChatThread';
+import { FinaiSurface } from '../../ai/native/FinaiSurface';
+import {
+  FINAI_MENTION,
+  finaiChatOverrides,
+  finaiTypingNames,
+  type ServerFinaiChatFields,
+} from '../../ai/finai';
 import type { ChatMessage, ChatPerson, ChatPin, ChatReactionEmoji } from '../../chat/model';
 
 export type GroupChatItem = {
@@ -43,6 +50,8 @@ export type GroupChatItem = {
   pinned?: boolean;
   canPin?: boolean;
   seenByPeople?: readonly ChatPerson[];
+  /** FinAI reply state when this message is an @finai answer. */
+  ai?: ServerFinaiChatFields;
 };
 export type GroupChatScreenProps = {
   items: readonly GroupChatItem[];
@@ -80,6 +89,8 @@ export type GroupChatScreenProps = {
   onRetry?: (id: string) => void;
   onDiscard?: (id: string) => void;
   onSeenLatest?: (createdAt: number) => void;
+  /** Confirms or cancels a FinAI card. */
+  onFinaiDecide?: (actionId: string, decision: 'confirm' | 'cancel') => Promise<unknown>;
 };
 
 /** Maps timeline items onto the shared chat thread model; ledger items become event cards. */
@@ -123,6 +134,7 @@ export function groupChatMessages(items: readonly GroupChatItem[]): ChatMessage[
       pinned: item.pinned,
       canPin: item.canPin,
       seenBy: item.seenByPeople,
+      ...finaiChatOverrides(item.ai),
     };
   });
 }
@@ -485,7 +497,14 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
           loadingOlder={p.loadingOlder}
           onLoadOlder={p.onLoadOlder}
           firstUnreadId={p.firstUnreadId}
-          typingNames={p.typingNames}
+          typingNames={[...(p.typingNames ?? []), ...finaiTypingNames(p.items)]}
+          renderAiContent={(message) => (
+            <FinaiSurface
+              a2ui={message.ai?.a2ui}
+              actions={message.ai?.actions}
+              onDecide={p.onFinaiDecide}
+            />
+          )}
           pinned={p.pinned}
           onTogglePin={p.onTogglePin}
           onReact={p.onReact}
@@ -513,6 +532,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                   attachLabel: 'Attach bill image',
                   uploading: p.pending,
                   placeholder: p.group ? `Message ${p.group.name}…` : 'Write a message…',
+                  mentions: [FINAI_MENTION],
                 }
               : undefined
           }

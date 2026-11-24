@@ -1,3 +1,5 @@
+import type { FinaiReply } from '../ai/finai';
+
 /**
  * Platform-neutral chat model shared by the native and web threads: message shapes, row
  * building (day separators, sender grouping, unread marker) and receipt/typing helpers.
@@ -57,6 +59,8 @@ export type ChatMessage = {
   /** DM receipt: whether the other participant has read this message. */
   seen?: boolean;
   event?: ChatEvent;
+  /** FinAI reply state for `ai` messages (Thinking Orb, streamed text, cards). */
+  ai?: FinaiReply & { isRequester?: boolean };
 };
 
 export type ChatPin = { id: string; text: string; senderName: string };
