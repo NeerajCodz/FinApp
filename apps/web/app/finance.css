@@ -661,19 +661,6 @@
   min-height: 54px;
   justify-content: space-between;
 }
-@media (min-width: 791px) {
-  .finance-app ~ .finapp-overlay--sheet {
-    align-items: center;
-    padding: 1.25rem;
-  }
-  .finance-app ~ .finapp-overlay--sheet .finapp-overlay__panel {
-    width: min(100%, 30rem);
-    border: 1px solid var(--finance-line);
-    border-radius: 1.5rem;
-    padding: 1.25rem;
-    animation-name: finapp-panel-in;
-  }
-}
 @media (max-width: 1020px) {
   .finance-app {
     grid-template-columns: clamp(148px, 15vw, 184px) minmax(0, 1fr);
@@ -1292,22 +1279,6 @@
 .finance-settings-row > svg:last-child {
   flex: 0 0 auto;
   color: var(--finance-muted);
-}
-
-@media (min-width: 791px) {
-  .finance-app ~ .finapp-overlay--sheet {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .finance-app ~ .finapp-overlay--sheet .finapp-overlay__panel {
-    width: min(100%, 430px);
-    margin-inline: auto;
-    border: 1px solid var(--finance-line);
-    border-bottom: 0;
-    border-radius: 24px 24px 0 0;
-    padding: 20px;
-    animation-name: finapp-panel-in;
-  }
 }
 
 .activity-page {
@@ -2146,16 +2117,14 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 22px;
-  padding: 4px 90px 3px 0;
+  padding: 4px 0 3px;
 }
+/* Notifications + sync sit at the end of the same row, same size as the other controls. */
 .finance-home-status-actions {
-  position: absolute;
-  top: 4px;
-  right: 0;
-  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  margin-left: 4px;
 }
 .finance-home-title {
   display: grid;
@@ -2193,13 +2162,15 @@
 .finance-home-controls select,
 .finance-home-search,
 .finance-home-status-actions button {
-  min-height: 39px;
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
   border: 1px solid var(--finance-line);
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--finance-panel);
   color: var(--finance-text);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 .finance-home-filter,
 .finance-home-sync,
@@ -2216,12 +2187,17 @@
   white-space: nowrap;
 }
 .finance-home-account-filter {
-  width: 130px;
+  width: 156px;
   min-width: 0;
+}
+.finance-home-account-filter .finapp-select-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .finance-home-search {
   display: flex;
-  width: 126px;
+  width: 168px;
   align-items: center;
   gap: 6px;
   padding: 0 9px;
@@ -2240,7 +2216,8 @@
   color: var(--finance-dim);
 }
 .finance-home-sync {
-  width: 39px;
+  position: relative;
+  width: 40px;
   padding: 0;
   color: var(--finance-muted);
 }
@@ -2666,7 +2643,7 @@
   }
   .finance-home-controls {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr) 38px;
+    grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr) auto;
     gap: 6px;
   }
   .finance-home-filter {
@@ -2683,8 +2660,11 @@
     min-width: 0;
   }
   .finance-home-search {
-    grid-column: 1 / -1;
+    grid-column: 1 / -2;
     width: auto;
+  }
+  .finance-home-status-actions {
+    margin-left: 0;
   }
   .finance-home-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3608,5 +3588,75 @@
 @media (prefers-reduced-motion: reduce) {
   .people-sidebar-conversation {
     transition: none;
+  }
+}
+
+/* FinAI launcher: an orb button above the + button, opening a chat panel. */
+.finai-launcher {
+  position: fixed;
+  z-index: 16;
+  right: 34px;
+  bottom: 112px;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 50%;
+  background: var(--finapp-card);
+  box-shadow: 0 10px 30px #0006; /* theme-exempt: shadows stay dark in both themes */
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease;
+}
+.finai-launcher:hover {
+  transform: translateY(-2px);
+  border-color: var(--finapp-primary);
+}
+.finai-launcher:focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 3px;
+}
+.finai-launcher[aria-expanded='true'] {
+  border-color: var(--finapp-primary);
+}
+.finai-launcher-panel {
+  position: fixed;
+  z-index: 40;
+  right: 100px;
+  bottom: 30px;
+  width: min(420px, calc(100vw - 132px));
+  height: min(680px, calc(100dvh - 60px));
+  animation: finapp-panel-in 180ms ease-out both;
+}
+@media (max-width: 767px) {
+  .finai-launcher {
+    right: 16px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    width: 48px;
+    height: 48px;
+  }
+  .finai-launcher-panel {
+    inset: 0;
+    z-index: 60;
+    width: auto;
+    height: auto;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    background: var(--finapp-background);
+  }
+  .finai-launcher-panel > section {
+    border-radius: 0;
+    border: 0;
+  }
+  .finai-launcher[aria-expanded='true'] {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .finai-launcher,
+  .finai-launcher-panel {
+    transition: none;
+    animation: none;
   }
 }

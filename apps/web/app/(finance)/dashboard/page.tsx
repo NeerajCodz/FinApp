@@ -168,7 +168,6 @@ export default function DashboardPage() {
         onChooseDate={() => setPeriodOpen(true)}
         onOpenSync={() => setSyncOpen(true)}
         onOpenNotifications={() => router.push('/notifications')}
-        onOpenAssistant={() => router.push('/finai')}
         onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
         onSeeAllTransactions={() => router.push('/activity')}
         onOpenBudget={(id) => router.push(`/budget/${encodeURIComponent(id)}`)}

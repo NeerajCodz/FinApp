@@ -15,7 +15,6 @@ import {
   History,
   House,
   Landmark,
-  Sparkles,
   Tags,
   Target,
   UserRound,
@@ -25,6 +24,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Avatar, Sheet } from '@finapp/ui/web';
+import { FinaiLauncher } from './FinaiLauncher';
 import { FinanceBrand, FinanceWorkspace, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -42,7 +42,6 @@ type SidebarProfile = LocalRecord & {
 };
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
-  { href: '/finai', label: 'FinAI', icon: Sparkles },
   { href: '/activity', label: 'Activity', icon: History },
   { href: '/accounts', label: 'Accounts', icon: Landmark },
   { href: '/budgets', label: 'Budgets', icon: Activity },
@@ -140,13 +139,9 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       <FinanceWorkspace
         onAdd={openQuickAdd}
         brandLink={
-          pathname === '/dashboard' ? (
-            <Link href="/dashboard" aria-label="Finapp overview">
-              <FinanceBrand />
-            </Link>
-          ) : (
-            <></>
-          )
+          <Link href="/dashboard" aria-label="Finapp overview">
+            <FinanceBrand />
+          </Link>
         }
         navigation={
           <>
@@ -244,6 +239,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
       <Sheet visible={quickAddOpen} onClose={closeQuickAdd} title="Add">
         <QuickAddActions onClose={closeQuickAdd} />
       </Sheet>
+      <FinaiLauncher />
       <NotificationToasts />
     </QuickAddContext.Provider>
   );

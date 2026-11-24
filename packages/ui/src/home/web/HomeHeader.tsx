@@ -2,7 +2,18 @@ import React from 'react';
 import { Bell, CalendarDays, Search, ShieldCheck } from 'lucide-react';
 import type { HomeAccountOption } from '../types';
 import { CustomSelect } from '@finapp/ui/web';
-import { ThinkingOrb } from '../../web/ThinkingOrb';
+
+/** Trigger styling that matches the other toolbar controls (same height, radius and type). */
+const accountTriggerStyle: React.CSSProperties = {
+  minHeight: 40,
+  height: 40,
+  padding: '0 12px',
+  borderRadius: 12,
+  border: '1px solid var(--finance-line)',
+  background: 'var(--finance-panel)',
+  fontSize: '0.8125rem',
+  whiteSpace: 'nowrap',
+};
 
 export function HomeHeader({
   accounts,
@@ -14,7 +25,6 @@ export function HomeHeader({
   onChooseDate,
   onOpenSync,
   onOpenNotifications,
-  onOpenAssistant,
   notificationCount = 0,
 }: {
   accounts: readonly HomeAccountOption[];
@@ -26,49 +36,10 @@ export function HomeHeader({
   onChooseDate: () => void;
   onOpenSync: () => void;
   onOpenNotifications?: () => void;
-  onOpenAssistant?: () => void;
   notificationCount?: number;
 }) {
   return (
     <header className="finance-home-toolbar">
-      <div className="finance-home-status-actions">
-        {onOpenAssistant && (
-          <button
-            className="finance-home-sync"
-            type="button"
-            aria-label="Ask FinAI"
-            onClick={onOpenAssistant}
-          >
-            <ThinkingOrb state="idle" size={20} />
-          </button>
-        )}
-        {onOpenNotifications && (
-          <button
-            className="finance-home-sync"
-            type="button"
-            aria-label={
-              notificationCount > 0 ? `Notifications, ${notificationCount} unread` : 'Notifications'
-            }
-            onClick={onOpenNotifications}
-            style={{ position: 'relative' }}
-          >
-            <Bell size={18} aria-hidden="true" />
-            {notificationCount > 0 ? (
-              <span className="finance-nav-badge" aria-hidden="true">
-                {notificationCount > 99 ? '99+' : notificationCount}
-              </span>
-            ) : null}
-          </button>
-        )}
-        <button
-          className="finance-home-sync"
-          type="button"
-          aria-label="Open sync status"
-          onClick={onOpenSync}
-        >
-          <ShieldCheck size={18} aria-hidden="true" />
-        </button>
-      </div>
       <div className="finance-home-title">
         <span className="finance-eyebrow">PERSONAL FINANCE</span>
         <h1>Home</h1>
@@ -83,6 +54,7 @@ export function HomeHeader({
           className="finance-home-account-filter"
           aria-label="Filter by account"
           value={selectedAccountId}
+          style={accountTriggerStyle}
           onChange={(event) => onAccountChange(event.currentTarget.value)}
         >
           <option value="">All accounts</option>
@@ -102,6 +74,35 @@ export function HomeHeader({
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </label>
+        <div className="finance-home-status-actions">
+          {onOpenNotifications && (
+            <button
+              className="finance-home-sync"
+              type="button"
+              aria-label={
+                notificationCount > 0
+                  ? `Notifications, ${notificationCount} unread`
+                  : 'Notifications'
+              }
+              onClick={onOpenNotifications}
+            >
+              <Bell size={18} aria-hidden="true" />
+              {notificationCount > 0 ? (
+                <span className="finance-nav-badge" aria-hidden="true">
+                  {notificationCount > 99 ? '99+' : notificationCount}
+                </span>
+              ) : null}
+            </button>
+          )}
+          <button
+            className="finance-home-sync"
+            type="button"
+            aria-label="Open sync status"
+            onClick={onOpenSync}
+          >
+            <ShieldCheck size={18} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </header>
   );
