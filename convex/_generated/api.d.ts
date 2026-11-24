@@ -22,6 +22,7 @@ import type * as ai_chatContext from "../ai/chatContext.js";
 import type * as ai_chatShape from "../ai/chatShape.js";
 import type * as ai_chatTools from "../ai/chatTools.js";
 import type * as ai_config from "../ai/config.js";
+import type * as ai_decisions from "../ai/decisions.js";
 import type * as ai_errors from "../ai/errors.js";
 import type * as ai_gemini from "../ai/gemini.js";
 import type * as ai_geminiChat from "../ai/geminiChat.js";
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   "ai/chatShape": typeof ai_chatShape;
   "ai/chatTools": typeof ai_chatTools;
   "ai/config": typeof ai_config;
+  "ai/decisions": typeof ai_decisions;
   "ai/errors": typeof ai_errors;
   "ai/gemini": typeof ai_gemini;
   "ai/geminiChat": typeof ai_geminiChat;
