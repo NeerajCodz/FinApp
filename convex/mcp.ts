@@ -2,6 +2,12 @@ import { paginationOptsValidator } from 'convex/server';
 import { v } from 'convex/values';
 import { getOptionalUser } from './shared/auth';
 import { query } from './_generated/server';
+import type { Doc } from './_generated/dataModel';
+
+/** Line items for output; an empty list reads as "no items". */
+function lineItems(transaction: Doc<'transactions'>) {
+  return transaction.items?.length ? transaction.items : undefined;
+}
 
 const resourceValidator = v.union(
   v.literal('accounts'),
@@ -29,12 +35,17 @@ export const listTransactions = query({
       ),
     ),
     search: v.optional(v.string()),
+    minAmountMinor: v.optional(v.int64()),
+    maxAmountMinor: v.optional(v.int64()),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
     if (
+      (args.minAmountMinor !== undefined &&
+        args.maxAmountMinor !== undefined &&
+        args.minAmountMinor > args.maxAmountMinor) ||
       !Number.isFinite(args.startAt) ||
       !Number.isFinite(args.endAt) ||
       args.endAt <= args.startAt ||
@@ -61,9 +72,13 @@ export const listTransactions = query({
           (!args.accountId || String(transaction.accountId) === args.accountId) &&
           (!args.categoryId || transaction.categoryId === args.categoryId) &&
           (!args.type || transaction.type === args.type) &&
+          (args.minAmountMinor === undefined || transaction.amountMinor >= args.minAmountMinor) &&
+          (args.maxAmountMinor === undefined || transaction.amountMinor <= args.maxAmountMinor) &&
           (!search ||
             transaction.title.toLowerCase().includes(search) ||
-            transaction.merchant?.toLowerCase().includes(search)),
+            transaction.merchant?.toLowerCase().includes(search) ||
+            transaction.note?.toLowerCase().includes(search) ||
+            lineItems(transaction)?.some((item) => item.title.toLowerCase().includes(search))),
       )
       .map((transaction) => ({
         id: transaction._id,
@@ -77,6 +92,8 @@ export const listTransactions = query({
         note: transaction.note,
         occurredAt: transaction.occurredAt,
         status: transaction.status,
+        groupId: transaction.groupId,
+        items: lineItems(transaction),
       }));
     return {
       items: results,
@@ -363,6 +380,9 @@ export const listGroupExpenses = query({
           occurredAt: row.occurredAt,
           accountId: row.accountId,
           categoryId: row.categoryId,
+          createdById: row.ownerId,
+          version: row.version ?? 1,
+          items: lineItems(row),
         })),
       nextCursor: page.isDone ? null : page.continueCursor,
       isDone: page.isDone,
@@ -926,6 +946,107 @@ export const listDirectConversations = query({
       }),
       nextCursor: page.isDone ? null : page.continueCursor,
       isDone: page.isDone,
+    };
+  },
+});
+
+/**
+ * One transaction with its line items and, for group expenses, the payer and participant split.
+ * Readable by its owner, or by a current member of the expense's group (deleted group expenses
+ * stay readable so their audit history keeps context).
+ */
+export const getTransaction = query({
+  args: { transactionId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getOptionalUser(ctx);
+    if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
+    const transactionId = ctx.db.normalizeId('transactions', args.transactionId);
+    const transaction = transactionId ? await ctx.db.get(transactionId) : null;
+    if (!transactionId || !transaction) throw new Error('TRANSACTION_UNAVAILABLE');
+    const groupId = transaction.groupId ? ctx.db.normalizeId('groups', transaction.groupId) : null;
+    const membership = groupId
+      ? await ctx.db
+          .query('groupMembers')
+          .withIndex('by_group_user', (index) =>
+            index.eq('groupId', groupId).eq('userId', user._id),
+          )
+          .unique()
+      : null;
+    const isOwner = transaction.ownerId === user._id;
+    const readable = groupId ? membership !== null : isOwner && transaction.deletedAt === undefined;
+    if (!readable) throw new Error('TRANSACTION_UNAVAILABLE');
+    const names = new Map<string, string>();
+    const nameOf = async (userId: Doc<'users'>['_id']) => {
+      const cached = names.get(userId);
+      if (cached) return cached;
+      const profile = await ctx.db.get(userId);
+      const name = profile?.displayName ?? profile?.name ?? 'Former member';
+      names.set(userId, name);
+      return name;
+    };
+    const [group, payers, participants] = groupId
+      ? await Promise.all([
+          ctx.db.get(groupId),
+          ctx.db
+            .query('expensePayers')
+            .withIndex('by_transaction', (index) => index.eq('transactionId', transactionId))
+            .collect(),
+          ctx.db
+            .query('expenseParticipants')
+            .withIndex('by_transaction', (index) => index.eq('transactionId', transactionId))
+            .collect(),
+        ])
+      : [null, [], []];
+    const categoryId = transaction.categoryId
+      ? ctx.db.normalizeId('categories', transaction.categoryId)
+      : null;
+    const category = isOwner && categoryId ? await ctx.db.get(categoryId) : null;
+    const account = isOwner ? await ctx.db.get(transaction.accountId) : null;
+    return {
+      id: transaction._id,
+      title: transaction.title,
+      type: transaction.type,
+      status: transaction.status,
+      amountMinor: transaction.amountMinor,
+      currency: transaction.currency,
+      occurredAt: transaction.occurredAt,
+      merchant: transaction.merchant,
+      note: transaction.note,
+      ...(isOwner
+        ? {
+            accountId: transaction.accountId,
+            accountName: account?.name,
+            categoryId: transaction.categoryId,
+            categoryName: category?.name,
+          }
+        : {}),
+      createdById: transaction.ownerId,
+      createdByName: await nameOf(transaction.ownerId),
+      deleted: transaction.deletedAt !== undefined,
+      items: lineItems(transaction),
+      group: group
+        ? {
+            id: group._id,
+            name: group.name,
+            version: transaction.version ?? 1,
+            payers: await Promise.all(
+              payers.map(async (payer) => ({
+                userId: payer.userId,
+                displayName: await nameOf(payer.userId),
+                amountMinor: payer.amountMinor,
+              })),
+            ),
+            participants: await Promise.all(
+              participants.map(async (participant) => ({
+                userId: participant.userId,
+                displayName: await nameOf(participant.userId),
+                amountMinor: participant.amountMinor,
+                method: participant.method,
+                basisValue: participant.basisValue,
+              })),
+            ),
+          }
+        : null,
     };
   },
 });

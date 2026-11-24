@@ -118,7 +118,28 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * A person opening the connector URL in a browser asks for HTML; MCP clients never do (they
+ * send `Accept: text/event-stream` for the optional GET stream). Send people to the landing
+ * page and keep the spec's 405 for everyone else.
+ */
+function wantsHtml(request: Request): boolean {
+  const accept = request.headers.get('accept') ?? '';
+  return /\btext\/html\b/i.test(accept) && !/\btext\/event-stream\b/i.test(accept);
+}
+
 export async function GET(request: Request) {
+  if (wantsHtml(request)) {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        // Relative, so the redirect stays on whatever public host the proxy served.
+        Location: '/mcp/dashboard',
+        'Cache-Control': 'no-store',
+        Vary: 'Accept',
+      },
+    });
+  }
   if (!isConfigured()) return configurationUnavailable();
   if (!allowedOrigin(request.headers.get('origin'), request)) {
     return new Response('Forbidden origin.', { status: 403 });
