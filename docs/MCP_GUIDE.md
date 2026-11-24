@@ -168,13 +168,13 @@ Declining a validated request uses non-prefetching navigation to the exact
 registered client redirect URI with `error=access_denied` and the original
 `state`. Invalid requests never produce an external denial callback.
 
-| Scope                   | Access through MCP                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `finapp:read`           | Every read tool: overview, transaction search/detail, accounts, categories, budgets, goals, analytics, groups, balances, history, people, messages, profile. Required.    |
-| `finapp:write:finance`  | Create/update/delete personal transactions (with line items), accounts, categories and limits, budgets, goals and contributions, recurring rules.                         |
-| `finapp:write:social`   | Send/answer/cancel friend requests, start conversations, send direct messages and reactions.                                                                              |
-| `finapp:write:groups`   | Create/update groups, invitations and links, member roles/removal, leave, add/edit/delete expenses, late joiners, record/undo settlements, payment reminders, group chat. |
-| `finapp:write:personal` | Profile, default account/category, notification preferences, mark one/all notifications read, privacy.                                                                    |
+| Scope                   | Access through MCP                                                                                                                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `finapp:read`           | Every read tool: overview, transaction search/detail, accounts, categories, budgets, goals, analytics, groups, balances, history, people, messages, profile. Required.                                |
+| `finapp:write:finance`  | Create/update/delete personal transactions (with line items), accounts, categories and limits, budgets, goals and contributions, recurring rules.                                                     |
+| `finapp:write:social`   | Send/answer/cancel friend requests, start conversations, send direct messages, reactions and pins.                                                                                                    |
+| `finapp:write:groups`   | Create/update groups, invitations and links, member roles/removal, leave, add/edit/delete expenses, late joiners, record/undo settlements, payment reminders, group chat (messages, pins, reactions). |
+| `finapp:write:personal` | Profile, default account/category, notification preferences, mark one/all notifications read, privacy.                                                                                                |
 
 The endpoint validates the token and active grant before dispatch. Convex checks
 record ownership and group/conversation membership. Tool annotations describe
@@ -191,8 +191,8 @@ token and grant.
 The registry (`apps/web/lib/mcp/tools/*`) is the single source of truth:
 `finapp.catalog`, the four `finapp.<domain>.parent` tools, the
 `finapp://catalog` resource, `/mcp/status` and the dashboard catalog are all
-generated from it. It currently holds `finapp.catalog`, 4 parents and 91 domain
-tools (96 total).
+generated from it. It currently holds `finapp.catalog`, 4 parents and 97 domain
+tools (102 total).
 
 Good starting points: `finapp.finance.overview`,
 `finapp.finance.transactions.list`, `finapp.groups.list` →
@@ -272,26 +272,32 @@ Good starting points: `finapp.finance.overview`,
 | `finapp.groups.settlements.delete`       | Undo settlement               | write:groups | confirm: true          |
 | `finapp.groups.messages.list`            | List group messages           | read         |                        |
 | `finapp.groups.messages.send`            | Send group message            | write:groups |                        |
+| `finapp.groups.messages.pinned`          | Pinned group messages         | read         |                        |
+| `finapp.groups.messages.pin`             | Pin or unpin group message    | write:groups |                        |
+| `finapp.groups.messages.react`           | React to group message        | write:groups |                        |
+| `finapp.groups.unread_counts`            | Unread group chats            | read         |                        |
 | `finapp.groups.shared_history`           | Shared expenses with a person | read         |                        |
 
 #### Social
 
-| Tool                                               | Purpose                   | Scope        | Notes |
-| -------------------------------------------------- | ------------------------- | ------------ | ----- |
-| `finapp.social.friends.list`                       | List friends              | read         |       |
-| `finapp.social.requests.list`                      | List friend requests      | read         |       |
-| `finapp.social.people.search`                      | Search people             | read         |       |
-| `finapp.social.people.get`                         | Get person                | read         |       |
-| `finapp.social.people.suggestions`                 | Friend suggestions        | read         |       |
-| `finapp.social.people.frequent`                    | Frequent people           | read         |       |
-| `finapp.social.requests.send`                      | Send friend request       | write:social |       |
-| `finapp.social.requests.respond`                   | Respond to friend request | write:social |       |
-| `finapp.social.requests.cancel`                    | Cancel friend request     | write:social |       |
-| `finapp.social.direct_messages.conversations.list` | List conversations        | read         |       |
-| `finapp.social.direct_messages.list`               | List direct messages      | read         |       |
-| `finapp.social.direct_messages.start`              | Start conversation        | write:social |       |
-| `finapp.social.direct_messages.send`               | Send direct message       | write:social |       |
-| `finapp.social.direct_messages.react`              | React to message          | write:social |       |
+| Tool                                               | Purpose                     | Scope        | Notes |
+| -------------------------------------------------- | --------------------------- | ------------ | ----- |
+| `finapp.social.friends.list`                       | List friends                | read         |       |
+| `finapp.social.requests.list`                      | List friend requests        | read         |       |
+| `finapp.social.people.search`                      | Search people               | read         |       |
+| `finapp.social.people.get`                         | Get person                  | read         |       |
+| `finapp.social.people.suggestions`                 | Friend suggestions          | read         |       |
+| `finapp.social.people.frequent`                    | Frequent people             | read         |       |
+| `finapp.social.requests.send`                      | Send friend request         | write:social |       |
+| `finapp.social.requests.respond`                   | Respond to friend request   | write:social |       |
+| `finapp.social.requests.cancel`                    | Cancel friend request       | write:social |       |
+| `finapp.social.direct_messages.conversations.list` | List conversations          | read         |       |
+| `finapp.social.direct_messages.list`               | List direct messages        | read         |       |
+| `finapp.social.direct_messages.start`              | Start conversation          | write:social |       |
+| `finapp.social.direct_messages.send`               | Send direct message         | write:social |       |
+| `finapp.social.direct_messages.react`              | React to message            | write:social |       |
+| `finapp.social.direct_messages.pinned`             | Pinned direct messages      | read         |       |
+| `finapp.social.direct_messages.pin`                | Pin or unpin direct message | write:social |       |
 
 #### Personal
 
@@ -334,12 +340,13 @@ settle up before leaving or removing a member), `ITEMS_TOTAL_MISMATCH`,
 
 `finapp.finance.transactions.create/update` and
 `finapp.groups.expenses.create/update` accept optional `items`:
-`[{ id?, title, amountMinor, quantity?, participantIds? }]`. Item amounts must
+`[{ id?, title, amountMinor, quantity?, participantIds? }]`. On updates, omit
+`items` to keep the current ones or pass `[]` to clear them. Item amounts must
 sum exactly to `amountMinor` (checked locally, then by Convex) or the call fails
 with `ITEMS_TOTAL_MISMATCH`. Omitted ids are generated; keep ids when editing.
 A group split with method `itemized` shares each item equally among its
-`participantIds` (empty = every participant). `items` is only forwarded when
-provided. Transaction and expense outputs include `items`, and transaction
+`participantIds` (empty = every participant) and needs non-empty `items`.
+Transaction and expense outputs include `items`, and transaction
 search also matches item titles.
 
 ### Group expenses
