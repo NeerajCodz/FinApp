@@ -50,7 +50,8 @@
     "./finance/expense-impact": "./src/finance/expenseImpact.ts",
     "./finance/sync-errors": "./src/finance/syncErrors.ts",
     "./finance/expense-outbox": "./src/finance/groupExpenseOutbox.ts",
-    "./finance/line-items": "./src/finance/lineItems.ts"
+    "./finance/line-items": "./src/finance/lineItems.ts",
+    "./ai/receipt-scan": "./src/ai/receiptScan.ts"
   },
   "sideEffects": [
     "./src/web/styles.css"

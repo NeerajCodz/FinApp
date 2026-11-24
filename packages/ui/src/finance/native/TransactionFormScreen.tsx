@@ -17,6 +17,7 @@ import { CurrencyInput } from './CurrencyInput';
 import { DateTimePicker } from './DateTimePicker';
 import { TransactionCards, type TransactionTableItem } from './TransactionsScreen';
 import { LineItemsEditor } from './LineItems';
+import { ReceiptReviewNotice, ReviewMark, type ReceiptReview } from './ReceiptScan';
 import {
   computeLineItems,
   formatLineAmount,
@@ -76,6 +77,11 @@ export type TransactionFormScreenProps = {
   items?: readonly LineItemDraft[] | null;
   /** Enables the "Itemize" section. */
   onItemsChange?: (items: LineItemDraft[] | null) => void;
+  /** "Scan receipt" entry (create mode, not transfers). */
+  receiptScan?: React.ReactNode;
+  /** What a receipt scan was unsure about; highlights those fields. */
+  review?: ReceiptReview | null;
+  onDismissReview?: () => void;
 };
 
 export function TransactionFormScreen(props: TransactionFormScreenProps) {
@@ -126,6 +132,14 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
     null,
   );
   const account = accounts.find((item) => item.id === accountId);
+  const flagged = (field: ReceiptReview['fields'][number]) =>
+    Boolean(props.review?.fields.includes(field));
+  const labelRow = (label: string, show: boolean) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Typography variant="label">{label}</Typography>
+      <ReviewMark show={show} />
+    </View>
+  );
   const category = categories.find((item) => item.id === categoryId);
   const options =
     picker === 'category'
@@ -180,6 +194,10 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
             </Typography>
           </View>
         </View>
+        {mode === 'create' && type !== 'transfer' ? props.receiptScan : null}
+        {props.review ? (
+          <ReceiptReviewNotice review={props.review} onDismiss={props.onDismissReview} />
+        ) : null}
         <View
           style={{
             gap: 14,
@@ -205,7 +223,7 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
           </View>
           {type !== 'transfer' && (
             <View style={{ gap: 7 }}>
-              <Typography variant="label">Title *</Typography>
+              {labelRow('Title *', flagged('merchant'))}
               <Input
                 accessibilityLabel="Transaction title"
                 placeholder="e.g. Grocery shopping, Salary, Rent…"
@@ -215,7 +233,7 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
               />
             </View>
           )}
-          <Typography variant="label">Amount *</Typography>
+          {labelRow('Amount *', flagged('amount') || flagged('currency'))}
           {props.items ? (
             <View style={{ alignItems: 'center', gap: 4 }}>
               <Typography
@@ -260,6 +278,7 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
               rows={props.items}
               currency={account?.currency ?? currency}
               disabled={saving}
+              reviewIds={props.review?.itemIds}
               onChange={props.onItemsChange}
             />
           )}
@@ -291,14 +310,14 @@ export function TransactionFormScreen(props: TransactionFormScreenProps) {
             />
           )}
           <SettingsRow
-            label="Date"
+            label={flagged('occurredAt') ? 'Date · check' : 'Date'}
             value={new Date(occurredAt).toLocaleDateString()}
             onPress={() => setPicker('date')}
           />
           <Button size="sm" variant="outline" onPress={() => onHasTimeChange(!hasTime)}>
             {hasTime ? 'Remove time' : 'Include time'}
           </Button>
-          <Typography variant="label">Merchant / Payee</Typography>
+          {labelRow('Merchant / Payee', flagged('merchant'))}
           <Input
             accessibilityLabel="Merchant or payee"
             placeholder="Merchant / Payee (optional)"

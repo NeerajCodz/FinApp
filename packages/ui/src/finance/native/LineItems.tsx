@@ -44,6 +44,8 @@ export type LineItemsEditorProps = {
   /** People sharing the expense: shows a "who had this" picker on every item. */
   people?: readonly LineItemPerson[];
   disabled?: boolean;
+  /** Rows to highlight for review (e.g. lines a receipt scan was unsure about). */
+  reviewIds?: readonly string[];
 };
 
 /** Add, edit, reorder and remove line items, with a live total. */
@@ -54,6 +56,7 @@ export function LineItemsEditor({
   rowErrors,
   people,
   disabled,
+  reviewIds,
 }: LineItemsEditorProps) {
   const { tokens } = useTheme();
   const parsed = computeLineItems(rows, currency);
@@ -65,6 +68,7 @@ export function LineItemsEditor({
         const sharers = people ? itemSharers(row, participantIds) : [];
         const error = errors[index] ?? '';
         const nobody = Boolean(people && !sharers.length);
+        const review = Boolean(reviewIds?.includes(row.id));
         return (
           <View
             key={row.id}
@@ -73,7 +77,7 @@ export function LineItemsEditor({
               padding: 12,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: error || nobody ? tokens.warning : tokens.borderSubtle,
+              borderColor: error || nobody || review ? tokens.warning : tokens.borderSubtle,
               backgroundColor: tokens.card,
             }}
           >
@@ -171,6 +175,11 @@ export function LineItemsEditor({
                 style={{ color: tokens.warning }}
               >
                 {nobody ? 'Tap the people who had this item.' : error}
+              </Typography>
+            )}
+            {review && !error && !nobody && (
+              <Typography variant="caption" style={{ color: tokens.warning }}>
+                Check this line against the bill.
               </Typography>
             )}
           </View>

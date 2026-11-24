@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button, CustomSelect, Switch } from '@finapp/ui/web';
 import { LineItemsEditor } from './LineItems';
+import { ReceiptReviewNotice, ReviewMark, type ReceiptReview } from './ReceiptScan';
 import {
   computeLineItems,
   formatLineAmount,
@@ -75,6 +76,11 @@ export type TransactionFormScreenProps = {
   items?: readonly LineItemDraft[] | null;
   /** Enables the "Itemize" section. */
   onItemsChange?: (items: LineItemDraft[] | null) => void;
+  /** "Scan receipt" entry (create mode, not transfers). */
+  receiptScan?: React.ReactNode;
+  /** What a receipt scan was unsure about; highlights those fields. */
+  review?: ReceiptReview | null;
+  onDismissReview?: () => void;
 };
 
 export function TransactionFormScreen(p: TransactionFormScreenProps) {
@@ -100,6 +106,14 @@ export function TransactionFormScreen(p: TransactionFormScreenProps) {
         <p role="status">Loading transaction options…</p>
       </main>
     );
+  const reviewLabels: Record<string, ReceiptReview['fields'][number][]> = {
+    Title: ['merchant'],
+    Amount: ['amount', 'currency'],
+    Date: ['occurredAt'],
+    'Merchant / Payee': ['merchant'],
+  };
+  const flagged = (label: string) =>
+    Boolean(reviewLabels[label]?.some((name) => p.review?.fields.includes(name)));
   const field = (label: string, control: React.ReactNode, wide = false) => (
     <div className={`${styles.field} ${wide ? styles.wide : ''}`}>
       <span>
@@ -116,7 +130,8 @@ export function TransactionFormScreen(p: TransactionFormScreenProps) {
           ].includes(label)
             ? ' *'
             : ''}
-        </span>
+        </span>{' '}
+        <ReviewMark show={flagged(label)} />
       </span>
       {control}
       {label === 'To account' && account && destinations.length === 0 ? (
@@ -185,6 +200,12 @@ export function TransactionFormScreen(p: TransactionFormScreenProps) {
       </header>
       <div className={p.mode === 'create' ? styles.create : styles.formLayout}>
         <form onSubmit={p.onSubmit} className={`${styles.panel} ${styles.form}`}>
+          {p.mode === 'create' && p.type !== 'transfer' && p.receiptScan ? (
+            <div className={styles.wide}>{p.receiptScan}</div>
+          ) : null}
+          {p.review ? (
+            <ReceiptReviewNotice review={p.review} onDismiss={p.onDismissReview} />
+          ) : null}
           <div className={styles.fields}>
             {field('Transaction type', types, p.mode === 'edit')}
             {p.type !== 'transfer' &&
@@ -242,6 +263,7 @@ export function TransactionFormScreen(p: TransactionFormScreenProps) {
                   rows={p.items}
                   currency={itemCurrency}
                   disabled={p.saving}
+                  reviewIds={p.review?.itemIds}
                   onChange={p.onItemsChange}
                 />
               </div>

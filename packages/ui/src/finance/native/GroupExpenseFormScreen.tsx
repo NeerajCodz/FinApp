@@ -30,6 +30,7 @@ import { EntityIcon } from './EntityIconPicker';
 import { GroupAvatar, GroupHeading, GroupPanel, GroupTile } from './GroupPrimitives';
 import { MemberShareRow, StepProgress, allocationVisualTone } from './SplitVisuals';
 import { LineItemsEditor } from './LineItems';
+import { ReceiptReviewNotice, ReviewMark, type ReceiptReview } from './ReceiptScan';
 
 export type { GroupExpenseMethod } from '../groupExpenseDraft';
 export type GroupExpenseGroupOption = { id: string; name: string; currency?: string };
@@ -82,7 +83,21 @@ export type GroupExpenseFormScreenProps = {
   onBack: () => void;
   onCreateGroup?: () => void;
   onSignIn?: () => void;
+  /** "Scan receipt" entry shown on the amount step. */
+  receiptScan?: React.ReactNode;
+  /** What a receipt scan was unsure about; highlights those fields. */
+  review?: ReceiptReview | null;
+  onDismissReview?: () => void;
 };
+
+function ScanSlot({ p }: { p: GroupExpenseFormScreenProps }) {
+  return (
+    <>
+      {p.receiptScan ?? null}
+      {p.review ? <ReceiptReviewNotice review={p.review} onDismiss={p.onDismissReview} /> : null}
+    </>
+  );
+}
 
 const methods: readonly {
   value: GroupExpenseMethod;
@@ -365,11 +380,13 @@ function AmountStep({ p }: { p: GroupExpenseFormScreenProps }) {
           title="What was on the bill?"
           hint={`The total is the sum of the items, in ${p.currency}`}
         />
+        <ScanSlot p={p} />
         <Switch label="Itemize the bill" value onValueChange={c.setItemize} />
         <LineItemsEditor
           rows={c.items}
           currency={p.currency}
           rowErrors={c.itemErrors}
+          reviewIds={p.review?.itemIds}
           disabled={p.saving}
           onChange={c.setItems}
         />
@@ -378,6 +395,7 @@ function AmountStep({ p }: { p: GroupExpenseFormScreenProps }) {
   return (
     <View style={{ gap: 14 }}>
       <StepTitle icon="phosphor:Coins" title="How much was it?" hint={`In ${p.currency}`} />
+      <ScanSlot p={p} />
       <Switch label="Itemize the bill" value={false} onValueChange={c.setItemize} />
       <View
         style={{
@@ -425,7 +443,10 @@ function DetailsStep({ p }: { p: GroupExpenseFormScreenProps }) {
   return (
     <View style={{ gap: 12 }}>
       <StepTitle icon="phosphor:Receipt" title="What was it for?" hint="Title, category and date" />
-      <Label>Title *</Label>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Label>Title *</Label>
+        <ReviewMark show={Boolean(p.review?.fields.includes('merchant'))} />
+      </View>
       <Input
         accessibilityLabel="Expense title"
         placeholder="Dinner, travel, groceries"
@@ -478,7 +499,10 @@ function DetailsStep({ p }: { p: GroupExpenseFormScreenProps }) {
           </ScrollView>
         </View>
       )}
-      <Label>Date</Label>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Label>Date</Label>
+        <ReviewMark show={Boolean(p.review?.fields.includes('occurredAt'))} />
+      </View>
       <DateTimePicker value={c.occurredAt} onChange={(value) => c.set('occurredAt', value)} />
       {p.accountLocked ? (
         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -533,7 +557,10 @@ function DetailsStep({ p }: { p: GroupExpenseFormScreenProps }) {
           )}
         </View>
       )}
-      <Label>Merchant (optional)</Label>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Label>Merchant (optional)</Label>
+        <ReviewMark show={Boolean(p.review?.fields.includes('merchant'))} />
+      </View>
       <Input
         accessibilityLabel="Merchant"
         placeholder="Where was it?"
@@ -776,6 +803,7 @@ function SplitStep({
             rows={c.items}
             currency={p.currency}
             rowErrors={c.itemErrors}
+            reviewIds={p.review?.itemIds}
             disabled={p.saving}
             onChange={c.setItems}
             people={c.participantIds.map((id) => ({

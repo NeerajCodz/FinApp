@@ -15,6 +15,7 @@ import { EntityIcon } from './EntityIconPicker';
 import { Crumb, GroupPage, PersonAvatar, Tile } from './GroupUI';
 import f from './SplitFlow.module.css';
 import { LineItemsEditor } from './LineItems';
+import { ReceiptReviewNotice, ReviewMark, type ReceiptReview } from './ReceiptScan';
 
 export type { GroupExpenseMethod } from '../groupExpenseDraft';
 export type GroupExpenseGroupOption = { id: string; name: string; currency?: string };
@@ -66,7 +67,21 @@ export type GroupExpenseFormScreenProps = {
   onBack: () => void;
   onCreateGroup?: () => void;
   onSignIn?: () => void;
+  /** "Scan receipt" entry shown on the amount step. */
+  receiptScan?: React.ReactNode;
+  /** What a receipt scan was unsure about; highlights those fields. */
+  review?: ReceiptReview | null;
+  onDismissReview?: () => void;
 };
+
+function ScanSlot({ p }: { p: GroupExpenseFormScreenProps }) {
+  return (
+    <>
+      {p.receiptScan ?? null}
+      {p.review ? <ReceiptReviewNotice review={p.review} onDismiss={p.onDismissReview} /> : null}
+    </>
+  );
+}
 
 const methods: readonly {
   value: GroupExpenseMethod;
@@ -361,11 +376,13 @@ function AmountStep({ p }: { p: GroupExpenseFormScreenProps }) {
           title="What was on the bill?"
           hint={`The total is the sum of the items, in ${p.currency}`}
         />
+        <ScanSlot p={p} />
         <Switch label="Itemize the bill" value onValueChange={c.setItemize} disabled={p.saving} />
         <LineItemsEditor
           rows={c.items}
           currency={p.currency}
           rowErrors={c.itemErrors}
+          reviewIds={p.review?.itemIds}
           disabled={p.saving}
           onChange={c.setItems}
         />
@@ -374,6 +391,7 @@ function AmountStep({ p }: { p: GroupExpenseFormScreenProps }) {
   return (
     <>
       <StepTitle icon="phosphor:Coins" title="How much was it?" hint={`In ${p.currency}`} />
+      <ScanSlot p={p} />
       <Switch
         label="Itemize the bill"
         value={false}
@@ -404,7 +422,9 @@ function DetailsStep({ p }: { p: GroupExpenseFormScreenProps }) {
     <>
       <StepTitle icon="phosphor:Receipt" title="What was it for?" hint="Title, category and date" />
       <label className={f.field}>
-        Title *
+        <span>
+          Title * <ReviewMark show={Boolean(p.review?.fields.includes('merchant'))} />
+        </span>
         <input
           className={f.input}
           value={c.title}
@@ -439,7 +459,9 @@ function DetailsStep({ p }: { p: GroupExpenseFormScreenProps }) {
       )}
       <div className={f.grid2}>
         <div className={f.field}>
-          Date
+          <span>
+            Date <ReviewMark show={Boolean(p.review?.fields.includes('occurredAt'))} />
+          </span>
           <DateTimePicker value={c.occurredAt} onChange={(value) => c.set('occurredAt', value)} />
         </div>
         {p.accountLocked ? (
@@ -475,7 +497,9 @@ function DetailsStep({ p }: { p: GroupExpenseFormScreenProps }) {
       </div>
       <div className={f.grid2}>
         <label className={f.field}>
-          Merchant (optional)
+          <span>
+            Merchant (optional) <ReviewMark show={Boolean(p.review?.fields.includes('merchant'))} />
+          </span>
           <input
             className={f.input}
             value={c.merchant}
@@ -687,6 +711,7 @@ function SplitStep({
             rows={c.items}
             currency={p.currency}
             rowErrors={c.itemErrors}
+            reviewIds={p.review?.itemIds}
             disabled={p.saving}
             onChange={c.setItems}
             people={c.participantIds.map((id) => ({
