@@ -10,6 +10,8 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { commitLocalWrite } from '@/local/commands';
 import { displayAccountName } from '@/lib/ledger';
 import { personalItemsState, type LineItemDraft } from '@finapp/ui/finance/line-items';
+import type { ReceiptReview } from '@finapp/ui/finance';
+import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 
 type ProfileRecord = LocalRecord & {
   defaultCurrency?: string;
@@ -58,6 +60,7 @@ export default function NewTransactionScreen() {
   });
   const [hasTime, setHasTime] = useState(scalar(params.hasTime) === 'true');
   const [items, setItems] = useState<LineItemDraft[] | null>(null);
+  const [review, setReview] = useState<ReceiptReview | null>(null);
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
   const [savingDefault, setSavingDefault] = useState(false);
@@ -104,6 +107,22 @@ export default function NewTransactionScreen() {
     if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));
   }, [category, categoryId, type]);
   const itemCurrency = account?.currency ?? profile?.defaultCurrency ?? 'INR';
+  const receiptScanner = useReceiptScanner({
+    currency: itemCurrency,
+    disabled: saving || !userId,
+    onFields: (fields, scanReview) => {
+      setType('expense');
+      setTitle(fields.title);
+      setMerchant(fields.merchant);
+      if (fields.occurredAt !== null) {
+        setOccurredAt(fields.occurredAt);
+        setHasTime(false);
+      }
+      setAmount(fields.amount);
+      setItems(fields.rows);
+      setReview(scanReview);
+    },
+  });
   const itemsState = personalItemsState(type === 'transfer' ? null : items, itemCurrency, amount);
   let amountMinor: bigint | null = null;
   try {
@@ -299,6 +318,9 @@ export default function NewTransactionScreen() {
       onSplitExpense={() => router.push('/split/new' as never)}
       items={items}
       onItemsChange={setItems}
+      receiptScan={receiptScanner.card}
+      review={review}
+      onDismissReview={() => setReview(null)}
     />
   );
 }

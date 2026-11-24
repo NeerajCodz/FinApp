@@ -50,7 +50,8 @@
     "./finance/expense-impact": "./src/finance/expenseImpact.ts",
     "./finance/sync-errors": "./src/finance/syncErrors.ts",
     "./finance/expense-outbox": "./src/finance/groupExpenseOutbox.ts",
-    "./finance/line-items": "./src/finance/lineItems.ts"
+    "./finance/line-items": "./src/finance/lineItems.ts",
+    "./ai/receipt-scan": "./src/ai/receiptScan.ts"
   },
   "sideEffects": [
     "./src/web/styles.css"
@@ -68,6 +69,7 @@
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
     "@phosphor-icons/react": "^2.1.10",
+    "@yogesharc/thinking-orbs": "^0.1.2",
     "earcut": "^3.2.4",
     "phosphor-react-native": "^3.0.6"
   },

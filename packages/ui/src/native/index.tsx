@@ -67,6 +67,7 @@ export {
   type SidebarSlotProps,
 } from './Sidebar';
 export { Spinner, type SpinnerProps } from './Spinner';
+export { ThinkingOrb, type ThinkingOrbProps, type ThinkingOrbState } from './ThinkingOrb';
 export { Table, type TableColumn, type TableProps } from './Table';
 export {
   ToggleGroup,

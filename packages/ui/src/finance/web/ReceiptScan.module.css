@@ -1,0 +1,85 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px dashed var(--finapp-border);
+  border-radius: 16px;
+  background: var(--finapp-card);
+  color: var(--finapp-foreground);
+}
+
+.card[data-state='busy'],
+.card[data-state='error'] {
+  align-items: center;
+  text-align: center;
+  padding-block: 22px;
+  border-style: solid;
+  border-color: var(--finapp-border-subtle);
+}
+
+.card[data-dragging] {
+  border-color: var(--finapp-primary);
+  background: var(--finapp-primary-soft);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  flex: 1;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--finapp-foreground-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--finapp-foreground);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--finapp-warning-soft);
+}
+
+.review[data-clean] {
+  background: var(--finapp-positive-soft);
+}
+
+.warnings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--finapp-foreground-muted);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

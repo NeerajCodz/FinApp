@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { TransactionFormScreen, type TransactionFormType } from '@finapp/ui/finance';
 import { parseMinor } from '@convex/shared/money';
 import { personalItemsState, type LineItemDraft } from '@finapp/ui/finance/line-items';
+import type { ReceiptReview } from '@finapp/ui/finance';
+import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -43,6 +45,7 @@ export default function NewPersonalTransactionPage() {
   });
   const [hasTime, setHasTime] = React.useState(false);
   const [items, setItems] = React.useState<LineItemDraft[] | null>(null);
+  const [review, setReview] = React.useState<ReceiptReview | null>(null);
   const [savingDefault, setSavingDefault] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -269,6 +272,23 @@ export default function NewPersonalTransactionPage() {
     }
   }
 
+  const receiptScanner = useReceiptScanner({
+    currency: source?.currency ?? profile?.defaultCurrency ?? 'INR',
+    disabled: saving || !userId,
+    onFields: (fields, scanReview) => {
+      setType('expense');
+      setTitle(fields.title);
+      setMerchant(fields.merchant);
+      if (fields.occurredAt !== null) {
+        setOccurredAt(fields.occurredAt);
+        setHasTime(false);
+      }
+      setAmount(fields.amount);
+      setItems(fields.rows);
+      setReview(scanReview);
+    },
+  });
+
   let amountValid: boolean;
   try {
     const amountMinor =
@@ -354,6 +374,9 @@ export default function NewPersonalTransactionPage() {
       onSplitExpense={() => router.push('/split/new')}
       items={items}
       onItemsChange={setItems}
+      receiptScan={receiptScanner.card}
+      review={review}
+      onDismissReview={() => setReview(null)}
     />
   );
 }

@@ -7,6 +7,8 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
 import { useExpenseLedger } from '@/hooks/useExpenseLedger';
 import { toast } from '@/lib/toast';
+import type { ReceiptReview } from '@finapp/ui/finance';
+import { useReceiptScanner } from './useReceiptScanner';
 
 /**
  * New group expense: a stepped composer (amount → details → who paid → split). The server
@@ -52,6 +54,24 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
   const [error, setError] = useState('');
+  const [review, setReview] = useState<ReceiptReview | null>(null);
+  const receiptScanner = useReceiptScanner({
+    currency,
+    disabled: saving || !group || !isConnected,
+    onFields: (fields, scanReview) => {
+      // Scanned bills open as an itemized expense split "By item".
+      composer.reset({
+        title: fields.title,
+        merchant: fields.merchant,
+        ...(fields.occurredAt !== null ? { occurredAt: fields.occurredAt } : {}),
+        itemize: true,
+        items: fields.rows,
+        method: 'itemized',
+        basis: {},
+      });
+      setReview(scanReview);
+    },
+  });
 
   function chooseGroup(id: string) {
     setGroupId(id);
@@ -208,6 +228,9 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
       }}
       onCreateGroup={() => router.push('/groups/new' as never)}
       onSignIn={() => router.push('/(auth)/sign-in' as never)}
+      receiptScan={group ? receiptScanner.card : undefined}
+      review={review}
+      onDismissReview={() => setReview(null)}
     />
   );
 }

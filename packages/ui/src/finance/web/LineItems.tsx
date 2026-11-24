@@ -35,6 +35,8 @@ export type LineItemsEditorProps = {
   /** People sharing the expense: shows a "who had this" picker on every item. */
   people?: readonly LineItemPerson[];
   disabled?: boolean;
+  /** Rows to highlight for review (e.g. lines a receipt scan was unsure about). */
+  reviewIds?: readonly string[];
 };
 
 /** Add, edit, reorder and remove line items, with a live total. */
@@ -45,6 +47,7 @@ export function LineItemsEditor({
   rowErrors,
   people,
   disabled,
+  reviewIds,
 }: LineItemsEditorProps) {
   const parsed = computeLineItems(rows, currency);
   const errors = rowErrors ?? parsed.rowErrors;
@@ -55,8 +58,9 @@ export function LineItemsEditor({
         const sharers = people ? itemSharers(row, participantIds) : [];
         const nobody = Boolean(people && !sharers.length);
         const problem = nobody ? 'Choose the people who had this item.' : (errors[index] ?? '');
+        const review = Boolean(reviewIds?.includes(row.id));
         return (
-          <div key={row.id} className={s.item} data-invalid={problem ? '' : undefined}>
+          <div key={row.id} className={s.item} data-invalid={problem || review ? '' : undefined}>
             <div className={s.itemTop}>
               <span className={s.index} aria-hidden>
                 {index + 1}
@@ -182,6 +186,7 @@ export function LineItemsEditor({
                 {problem}
               </p>
             )}
+            {review && !problem && <p className={s.problem}>Check this line against the bill.</p>}
           </div>
         );
       })}
