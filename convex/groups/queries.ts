@@ -137,7 +137,8 @@ export const list = query({
 });
 
 export const personTimeline = query({
-  args: { username: v.string() },
+  /** `limit` bounds the read: at most that many newest rows per shared group, then overall. */
+  args: { username: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const user = await getOptionalUser(ctx);
     if (!user) return [];
@@ -161,16 +162,19 @@ export const personTimeline = query({
         .unique();
       if (otherMembership) groupIds.add(membership.groupId);
     }
+    const limit =
+      args.limit === undefined ? undefined : Math.max(1, Math.min(500, Math.floor(args.limit)));
     const transactions = [];
     for (const groupId of groupIds) {
-      const groupTransactions = await ctx.db
+      const newestFirst = ctx.db
         .query('transactions')
         .withIndex('by_group_occurredAt', (query) => query.eq('groupId', groupId))
-        .collect();
-      transactions.push(...groupTransactions);
+        .order('desc');
+      transactions.push(...(limit ? await newestFirst.take(limit) : await newestFirst.collect()));
     }
     return transactions
       .sort((left, right) => right.occurredAt - left.occurredAt)
+      .slice(0, limit)
       .map((transaction) => ({
         id: transaction._id,
         title: transaction.title,
