@@ -72,16 +72,21 @@ export async function promptForPushOnce(convex: ConvexReactClient): Promise<void
   await registerForPush(convex, { prompt: true });
 }
 
-/** Stops pushes for the signed-in account on this device; call before signing out. */
+/**
+ * Stops pushes for the signed-in account on this device; call before signing out. The token is
+ * forgotten only after the server removed the device, so a failed attempt can be retried
+ * (one retry here, then the next call) instead of leaving the device registered forever.
+ */
 export async function unregisterPush(convex: ConvexReactClient): Promise<void> {
   if (!pushSupported()) return;
   const token = await SecureStore.getItemAsync(TOKEN_KEY);
   if (!token) return;
   try {
     await convex.mutation(api.notifications.push.unregisterDevice, { token });
-  } finally {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  } catch {
+    await convex.mutation(api.notifications.push.unregisterDevice, { token });
   }
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
 /** In-app path for a notification route; null when it must not be followed. */

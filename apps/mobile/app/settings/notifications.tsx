@@ -162,21 +162,21 @@ export default function NotificationSettingsScreen() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Bell size={19} color={tokens.primary} />
-          <Typography variant="heading">Device reminders</Typography>
+          <Typography variant="heading">Push notifications</Typography>
         </View>
         <Text style={{ color: tokens.foregroundMuted }}>
-          Only recurring due dates can alert this device. Other activity stays in the in-app inbox;
-          push delivery is not configured.
+          Allow notifications to get alerts on this device for the activity types switched on above
+          — group expenses, settlements, payment reminders, security and recurring due dates.
         </Text>
         {permission === null && (
           <Typography variant="small">Checking device permission…</Typography>
         )}
         {permission === 'granted' && (
-          <Typography variant="small">Device reminders allowed.</Typography>
+          <Typography variant="small">Push notifications are on for this device.</Typography>
         )}
         {permission === 'undetermined' && (
           <Button variant="outline" onPress={() => void enableDeviceDelivery()}>
-            Allow device reminders
+            Allow push notifications
           </Button>
         )}
         {permission === 'denied' && (
