@@ -36,7 +36,8 @@ export type McpWidgetPreview = {
   sample: unknown;
 };
 export type McpServerStatus = {
-  status: 'ok' | 'not_configured';
+  /** `degraded`: configured, but the backend could not be reached. */
+  status: 'ok' | 'degraded' | 'not_configured';
   version: string;
   toolCount: number;
   widgetCount: number;
@@ -99,9 +100,9 @@ export function CopyButton({
 
 export function ServerStatusCard({ statusUrl, endpoint }: { statusUrl: string; endpoint: string }) {
   const [status, setStatus] = useState<McpServerStatus | null>(null);
-  const [state, setState] = useState<'checking' | 'online' | 'unconfigured' | 'offline'>(
-    'checking',
-  );
+  const [state, setState] = useState<
+    'checking' | 'online' | 'degraded' | 'unconfigured' | 'offline'
+  >('checking');
   const [latency, setLatency] = useState<number | null>(null);
   const check = useCallback(async () => {
     setState('checking');
@@ -111,7 +112,9 @@ export function ServerStatusCard({ statusUrl, endpoint }: { statusUrl: string; e
       const body = (await response.json()) as McpServerStatus;
       setLatency(Math.round(performance.now() - started));
       setStatus(body);
-      setState(body.status === 'ok' ? 'online' : 'unconfigured');
+      setState(
+        body.status === 'ok' ? 'online' : body.status === 'degraded' ? 'degraded' : 'unconfigured',
+      );
     } catch {
       setLatency(null);
       setState('offline');
@@ -126,9 +129,11 @@ export function ServerStatusCard({ statusUrl, endpoint }: { statusUrl: string; e
       ? { label: 'Online', tone: 'income' as const }
       : state === 'checking'
         ? { label: 'Checking…', tone: 'neutral' as const }
-        : state === 'unconfigured'
-          ? { label: 'Not configured', tone: 'warning' as const }
-          : { label: 'Unreachable', tone: 'destructive' as const };
+        : state === 'degraded'
+          ? { label: 'Degraded', tone: 'warning' as const }
+          : state === 'unconfigured'
+            ? { label: 'Not configured', tone: 'warning' as const }
+            : { label: 'Unreachable', tone: 'destructive' as const };
   return (
     <HeroCard tone={state === 'online' ? 'accent' : 'neutral'} className="mcp-status-card">
       <div className="mcp-status-head">

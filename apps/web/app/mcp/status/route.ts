@@ -1,11 +1,43 @@
-import { mcpResourceUrl } from '@/lib/mcp/oauth';
+import {
+  mcpConvexUrl,
+  mcpIssuer,
+  mcpResourceUrl,
+  prepareMcpAccessTokenSigner,
+} from '@/lib/mcp/oauth';
 import { MCP_SERVER_VERSION, toolCatalog } from '@/lib/mcp/server';
 import { widgets } from '@/lib/mcp/widgets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Public, data-free health summary for the dashboard's live "server status" check. */
+type Check = 'ok' | 'missing' | 'unreachable';
+
+async function check(run: () => unknown): Promise<Check> {
+  try {
+    await run();
+    return 'ok';
+  } catch {
+    return 'missing';
+  }
+}
+
+/** A cheap unauthenticated request to the Convex deployment. */
+async function backendReachable(): Promise<Check> {
+  try {
+    const response = await fetch(new URL('/version', mcpConvexUrl()), {
+      signal: AbortSignal.timeout(3_000),
+      cache: 'no-store',
+    });
+    return response.ok ? 'ok' : 'unreachable';
+  } catch {
+    return 'unreachable';
+  }
+}
+
+/**
+ * Public, data-free health summary for the dashboard's live "server status" check. "ok" only
+ * when the endpoint, issuer, token signing and backend are all usable.
+ */
 export async function GET() {
   let endpoint: string | null;
   try {
@@ -13,10 +45,19 @@ export async function GET() {
   } catch {
     endpoint = null;
   }
+  const [issuer, signing, backend] = await Promise.all([
+    check(mcpIssuer),
+    check(prepareMcpAccessTokenSigner),
+    backendReachable(),
+  ]);
+  const checks = { endpoint: endpoint ? 'ok' : 'missing', issuer, signing, backend } as const;
+  const healthy = Object.values(checks).every((value) => value === 'ok');
+  const configured = endpoint && issuer === 'ok' && signing === 'ok';
   const tools = toolCatalog();
   return Response.json(
     {
-      status: endpoint ? 'ok' : 'not_configured',
+      status: healthy ? 'ok' : configured ? 'degraded' : 'not_configured',
+      checks,
       name: 'finapp',
       version: MCP_SERVER_VERSION,
       transport: 'streamable-http',
@@ -29,6 +70,6 @@ export async function GET() {
       widgetCount: Object.keys(widgets).length,
       checkedAt: Date.now(),
     },
-    { status: endpoint ? 200 : 503, headers: { 'Cache-Control': 'no-store' } },
+    { status: healthy ? 200 : 503, headers: { 'Cache-Control': 'no-store' } },
   );
 }
