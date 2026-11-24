@@ -1,0 +1,394 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--finapp-border-subtle);
+  background: var(--finapp-card);
+  color: var(--finapp-card-foreground);
+  animation: rise 220ms ease-out both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.header h4,
+.actionHeader h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.header p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--finapp-foreground-muted);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.metric {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--finapp-surface-subtle);
+}
+
+.metric dt {
+  font-size: 12px;
+  color: var(--finapp-foreground-muted);
+}
+
+.metric dd {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.tone-positive {
+  color: var(--finapp-income);
+}
+
+.tone-negative {
+  color: var(--finapp-expense);
+}
+
+.tone-accent {
+  color: var(--finapp-primary);
+}
+
+.tone-neutral {
+  color: var(--finapp-foreground);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--finapp-border-subtle);
+}
+
+.list li:first-child {
+  border-top: 0;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--finapp-foreground-subtle);
+}
+
+.dot[data-tone='positive'],
+.initial[data-tone='positive'] {
+  background: var(--finapp-income);
+  color: var(--finapp-background);
+}
+
+.dot[data-tone='negative'],
+.initial[data-tone='negative'] {
+  background: var(--finapp-expense);
+  color: var(--finapp-background);
+}
+
+.dot[data-tone='accent'] {
+  background: var(--finapp-primary);
+}
+
+.initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--finapp-surface-subtle);
+  color: var(--finapp-foreground);
+}
+
+.itemText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.itemText strong {
+  font-weight: 550;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemText small {
+  font-size: 12px;
+  color: var(--finapp-foreground-muted);
+}
+
+.amount {
+  font-weight: 600;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.empty,
+.caption {
+  margin: 0;
+  font-size: 13px;
+  color: var(--finapp-foreground-muted);
+}
+
+.bars,
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bars li {
+  display: grid;
+  grid-template-columns: minmax(64px, 30%) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.barLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barTrack,
+.progressTrack {
+  position: relative;
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--finapp-surface-subtle);
+  overflow: hidden;
+}
+
+.barFill,
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--finapp-primary);
+  transform-origin: left;
+  animation: grow 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.progressFill[data-tone='negative'] {
+  background: var(--finapp-expense);
+}
+
+.progressFill[data-tone='positive'] {
+  background: var(--finapp-income);
+}
+
+.barValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.progressRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.progressRow small {
+  color: var(--finapp-foreground-muted);
+  font-size: 12px;
+}
+
+.transfers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--finapp-surface-subtle);
+}
+
+.transfer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.transfer strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.action {
+  border-color: var(--finapp-primary-soft);
+  background: linear-gradient(180deg, var(--finapp-primary-soft), var(--finapp-card) 64%);
+}
+
+.action[data-status='done'] {
+  border-color: var(--finapp-border-subtle);
+  background: var(--finapp-card);
+}
+
+.actionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionHeader h4 {
+  flex: 1;
+}
+
+.actionIcon {
+  display: inline-flex;
+  color: var(--finapp-primary);
+}
+
+.action[data-status='done'] .actionIcon {
+  color: var(--finapp-income);
+}
+
+.action[data-status='failed'] .actionIcon,
+.action[data-status='cancelled'] .actionIcon,
+.action[data-status='expired'] .actionIcon {
+  color: var(--finapp-foreground-subtle);
+}
+
+.badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground-muted);
+}
+
+.badge[data-status='pending'] {
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+}
+
+.badge[data-status='done'] {
+  background: var(--finapp-positive-soft);
+  color: var(--finapp-income);
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.lines div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.lines dt {
+  color: var(--finapp-foreground-muted);
+}
+
+.lines dd {
+  margin: 0;
+  font-weight: 550;
+  text-align: right;
+}
+
+.actionError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--finapp-destructive);
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.primary,
+.secondary {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+}
+
+.secondary {
+  border: 1px solid var(--finapp-border-subtle);
+  background: var(--finapp-surface-raised);
+  color: var(--finapp-foreground);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .barFill,
+  .progressFill {
+    animation: none;
+  }
+}

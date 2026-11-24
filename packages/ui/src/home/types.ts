@@ -31,6 +31,8 @@ export type HomeDashboardProps = {
   syncIcon?: ReactNode;
   notificationCount?: number;
   onOpenNotifications?: () => void;
+  /** Opens the FinAI assistant. */
+  onOpenAssistant?: () => void;
   onOpenTransaction: (id: string) => void;
   onSeeAllTransactions: () => void;
   onOpenBudget: (id: string) => void;

@@ -161,7 +161,58 @@
 
 .ai .bubble {
   background: var(--finapp-surface-subtle);
+  border-color: var(--finapp-primary-soft);
   color: var(--finapp-foreground);
+}
+
+.ai .column {
+  max-width: min(92%, 620px);
+}
+
+.aiAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--finapp-primary-soft);
+  color: var(--finapp-primary);
+  flex-shrink: 0;
+}
+
+.aiThinking {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  font-size: 14px;
+}
+
+.aiError {
+  color: var(--finapp-foreground-muted);
+}
+
+.aiCaret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: text-bottom;
+  border-radius: 2px;
+  background: var(--finapp-primary);
+  animation: aiCaret 1s steps(2, start) infinite;
+}
+
+@keyframes aiCaret {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aiCaret {
+    animation: none;
+  }
 }
 
 .message:not(.mine):not(.first) .bubble {
@@ -386,6 +437,7 @@
 }
 
 .composer {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 8px;
@@ -444,4 +496,46 @@
   max-width: 100%;
   max-height: 100%;
   border-radius: 12px;
+}
+
+.mentions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 16px;
+  border: 1px solid var(--finapp-border-subtle);
+  background: var(--finapp-popover);
+  color: var(--finapp-popover-foreground);
+  box-shadow: 0 12px 32px var(--finapp-overlay);
+}
+
+.mention {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mention small {
+  display: block;
+  color: var(--finapp-foreground-muted);
+  font-size: 12px;
+}
+
+.mention:hover,
+.mentionActive {
+  background: var(--finapp-primary-soft);
 }

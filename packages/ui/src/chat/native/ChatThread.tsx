@@ -28,6 +28,16 @@ import { useTheme } from '../../native/ThemeProvider';
 import { Sheet } from '../../native/overlays';
 import { AvatarStack, ListSkeleton } from '../../native/visual';
 import { useReducedMotion } from '../../native/motion';
+import { ThinkingOrb } from '../../native/ThinkingOrb';
+import {
+  activeMention,
+  applyMention,
+  finaiErrorMessage,
+  isFinaiBusy,
+  mentionMatches,
+  orbStateFor,
+  type MentionOption,
+} from '../../ai/finai';
 import { Illustration } from '../../illustrations/native';
 import { withAlpha } from '../../tokens';
 import {
@@ -57,6 +67,8 @@ export type ChatComposerProps = {
   disabled?: boolean;
   /** An upload is in flight; attach is disabled, text sending stays available. */
   uploading?: boolean;
+  /** Handles offered when the user types `@` (e.g. FinAI). */
+  mentions?: readonly MentionOption[];
 };
 
 export type ChatThreadProps = {
@@ -77,6 +89,8 @@ export type ChatThreadProps = {
   /** Called with the newest visible incoming message time while the viewer is at the bottom. */
   onSeenLatest?: (createdAt: number) => void;
   renderEvent?: (message: ChatMessage) => React.ReactNode;
+  /** Rich content under a FinAI reply (A2UI cards). */
+  renderAiContent?: (message: ChatMessage) => React.ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
   composer?: ChatComposerProps;
@@ -242,6 +256,7 @@ export function ChatThread(p: ChatThreadProps) {
         mode={p.mode}
         highlighted={highlight?.id === item.message.id}
         renderEvent={p.renderEvent}
+        renderAiContent={p.renderAiContent}
         onLongPress={() => setActionId(item.message.id)}
         onOpenImage={setPreview}
         onReact={p.onReact}
@@ -501,6 +516,7 @@ function MessageRow({
   mode,
   highlighted,
   renderEvent,
+  renderAiContent,
   onLongPress,
   onOpenImage,
   onReact,
@@ -511,6 +527,7 @@ function MessageRow({
   mode: 'direct' | 'group';
   highlighted: boolean;
   renderEvent?: (message: ChatMessage) => React.ReactNode;
+  renderAiContent?: (message: ChatMessage) => React.ReactNode;
   onLongPress: () => void;
   onOpenImage: (url: string) => void;
   onReact?: (id: string, emoji: ChatReactionEmoji) => void;
@@ -558,18 +575,42 @@ function MessageRow({
     >
       {showAvatar && (
         <View style={{ width: 30 }}>
-          {lastInGroup && (
-            <Avatar
-              label={message.senderName ?? 'Member'}
-              initials={(message.senderName ?? '?').slice(0, 2).toUpperCase()}
-              imageUrl={message.senderAvatarUrl}
-              avatarId={message.senderAvatarId}
-              size={30}
-            />
+          {lastInGroup && message.kind === 'ai' ? (
+            <View
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 15,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: withAlpha(tokens.primary, 0.14),
+              }}
+            >
+              <ThinkingOrb
+                state={isFinaiBusy(message.ai) ? orbStateFor(message.ai!) : 'idle'}
+                size={18}
+              />
+            </View>
+          ) : (
+            lastInGroup && (
+              <Avatar
+                label={message.senderName ?? 'Member'}
+                initials={(message.senderName ?? '?').slice(0, 2).toUpperCase()}
+                imageUrl={message.senderAvatarUrl}
+                avatarId={message.senderAvatarId}
+                size={30}
+              />
+            )
           )}
         </View>
       )}
-      <View style={{ maxWidth: '78%', alignItems: mine ? 'flex-end' : 'flex-start', gap: 3 }}>
+      <View
+        style={{
+          maxWidth: message.kind === 'ai' ? '88%' : '78%',
+          alignItems: mine ? 'flex-end' : 'flex-start',
+          gap: 3,
+        }}
+      >
         {firstInGroup && !mine && (mode === 'group' || message.kind === 'ai') && (
           <Typography variant="caption" style={{ marginLeft: 4 }}>
             {message.senderName ?? 'Member'}
@@ -620,12 +661,30 @@ function MessageRow({
                 Image is no longer available.
               </Typography>
             )
+          ) : message.kind === 'ai' && message.ai?.status === 'error' ? (
+            <Typography variant="body" style={{ color: tokens.foregroundMuted }}>
+              {finaiErrorMessage(message.ai.errorCode)}
+            </Typography>
+          ) : message.kind === 'ai' && !message.text && isFinaiBusy(message.ai) ? (
+            <View
+              accessibilityLiveRegion="polite"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 22 }}
+            >
+              <ThinkingOrb state={orbStateFor(message.ai!)} size={20} label="FinAI is thinking" />
+              <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+                {message.ai!.stageLabel ?? 'Thinking…'}
+              </Typography>
+            </View>
           ) : (
             <Typography variant="body" style={{ color: textColor }} selectable>
               {message.text}
+              {message.kind === 'ai' && isFinaiBusy(message.ai) ? (
+                <Typography style={{ color: tokens.primary }}> ▍</Typography>
+              ) : null}
             </Typography>
           )}
         </Pressable>
+        {message.kind === 'ai' && message.ai?.status === 'done' && renderAiContent?.(message)}
         {!!message.reactions?.length && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
             {message.reactions.map(({ emoji, count }) => (
@@ -757,55 +816,119 @@ function TypingIndicator({ names }: { names: readonly string[] }) {
 function Composer(c: ChatComposerProps) {
   const { tokens } = useTheme();
   const canSend = !c.disabled && !!c.draft.trim();
+  const [selection, setSelection] = React.useState<{ start: number; end: number } | undefined>();
+  const caret = selection?.start ?? c.draft.length;
+  const active = c.mentions?.length ? activeMention(c.draft, caret) : null;
+  const options = active ? mentionMatches(c.mentions!, active.query) : [];
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        gap: 6,
-        borderTopWidth: 1,
-        borderColor: tokens.borderSubtle,
-        paddingTop: 8,
-      }}
-    >
-      {!!c.onAttach && (
-        <IconButton
-          label={c.attachLabel ?? 'Attach image'}
-          variant="ghost"
-          disabled={c.disabled || c.uploading}
-          onPress={c.onAttach}
+    <View>
+      {options.length > 0 && (
+        <View
+          accessibilityRole="menu"
+          style={{
+            marginBottom: 6,
+            padding: 6,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.popover,
+          }}
         >
-          {c.uploading ? (
-            <ActivityIndicator color={tokens.primary} />
-          ) : (
-            <ImageSquare size={23} color={tokens.foreground} weight="fill" />
-          )}
-        </IconButton>
+          {options.map((option) => (
+            <Pressable
+              key={option.handle}
+              accessibilityRole="menuitem"
+              accessibilityLabel={`Mention ${option.label}`}
+              onPress={() => {
+                const next = applyMention(c.draft, option, caret);
+                c.onDraftChange(next.draft);
+                setSelection({ start: next.caret, end: next.caret });
+              }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                padding: 8,
+                borderRadius: 12,
+                backgroundColor: pressed ? withAlpha(tokens.primary, 0.14) : 'transparent',
+              })}
+            >
+              <View
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: withAlpha(tokens.primary, 0.14),
+                }}
+              >
+                <ThinkingOrb state="idle" size={16} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Typography variant="label">
+                  @{option.handle} · {option.label}
+                </Typography>
+                <Typography variant="caption">{option.description}</Typography>
+              </View>
+            </Pressable>
+          ))}
+        </View>
       )}
-      <TextInput
-        accessibilityLabel="Message"
-        value={c.draft}
-        onChangeText={c.onDraftChange}
-        onBlur={c.onBlur}
-        placeholder={c.placeholder ?? 'Message'}
-        placeholderTextColor={tokens.foregroundSubtle}
-        multiline
-        maxLength={CHAT_TEXT_LIMIT}
-        editable={!c.disabled}
+      <View
         style={{
-          flex: 1,
-          maxHeight: 120,
-          minHeight: 42,
-          borderRadius: 20,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          color: tokens.foreground,
-          backgroundColor: tokens.surfaceSubtle,
+          flexDirection: 'row',
+          alignItems: 'flex-end',
+          gap: 6,
+          borderTopWidth: 1,
+          borderColor: tokens.borderSubtle,
+          paddingTop: 8,
         }}
-      />
-      <IconButton variant="primary" label="Send message" disabled={!canSend} onPress={c.onSend}>
-        <PaperPlaneTilt size={21} color={tokens.primaryForeground} weight="fill" />
-      </IconButton>
+      >
+        {!!c.onAttach && (
+          <IconButton
+            label={c.attachLabel ?? 'Attach image'}
+            variant="ghost"
+            disabled={c.disabled || c.uploading}
+            onPress={c.onAttach}
+          >
+            {c.uploading ? (
+              <ActivityIndicator color={tokens.primary} />
+            ) : (
+              <ImageSquare size={23} color={tokens.foreground} weight="fill" />
+            )}
+          </IconButton>
+        )}
+        <TextInput
+          accessibilityLabel="Message"
+          value={c.draft}
+          onChangeText={(value) => {
+            c.onDraftChange(value);
+            setSelection(undefined);
+          }}
+          onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
+          selection={selection}
+          onBlur={c.onBlur}
+          placeholder={c.placeholder ?? 'Message'}
+          placeholderTextColor={tokens.foregroundSubtle}
+          multiline
+          maxLength={CHAT_TEXT_LIMIT}
+          editable={!c.disabled}
+          style={{
+            flex: 1,
+            maxHeight: 120,
+            minHeight: 42,
+            borderRadius: 20,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            color: tokens.foreground,
+            backgroundColor: tokens.surfaceSubtle,
+          }}
+        />
+        <IconButton variant="primary" label="Send message" disabled={!canSend} onPress={c.onSend}>
+          <PaperPlaneTilt size={21} color={tokens.primaryForeground} weight="fill" />
+        </IconButton>
+      </View>
     </View>
   );
 }

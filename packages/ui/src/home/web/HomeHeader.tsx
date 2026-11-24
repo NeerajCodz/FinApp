@@ -2,6 +2,7 @@ import React from 'react';
 import { Bell, CalendarDays, Search, ShieldCheck } from 'lucide-react';
 import type { HomeAccountOption } from '../types';
 import { CustomSelect } from '@finapp/ui/web';
+import { ThinkingOrb } from '../../web/ThinkingOrb';
 
 export function HomeHeader({
   accounts,
@@ -13,6 +14,7 @@ export function HomeHeader({
   onChooseDate,
   onOpenSync,
   onOpenNotifications,
+  onOpenAssistant,
   notificationCount = 0,
 }: {
   accounts: readonly HomeAccountOption[];
@@ -24,11 +26,22 @@ export function HomeHeader({
   onChooseDate: () => void;
   onOpenSync: () => void;
   onOpenNotifications?: () => void;
+  onOpenAssistant?: () => void;
   notificationCount?: number;
 }) {
   return (
     <header className="finance-home-toolbar">
       <div className="finance-home-status-actions">
+        {onOpenAssistant && (
+          <button
+            className="finance-home-sync"
+            type="button"
+            aria-label="Ask FinAI"
+            onClick={onOpenAssistant}
+          >
+            <ThinkingOrb state="idle" size={20} />
+          </button>
+        )}
         {onOpenNotifications && (
           <button
             className="finance-home-sync"
