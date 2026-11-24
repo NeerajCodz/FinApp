@@ -31,6 +31,9 @@ export const personalTools: ToolFactory = (client) => [
         username: profile.username,
         defaultCurrency: profile.defaultCurrency,
         timezone: profile.timezone,
+        defaultAccountId: profile.defaultAccountId ?? null,
+        defaultExpenseCategoryId: profile.defaultExpenseCategoryId ?? null,
+        defaultIncomeCategoryId: profile.defaultIncomeCategoryId ?? null,
         avatarId: profile.avatarId,
         accent: profile.accent,
       };

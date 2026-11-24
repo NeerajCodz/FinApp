@@ -77,10 +77,18 @@ export const socialTools: ToolFactory = (client) => [
   defineTool({
     name: 'finapp.social.people.frequent',
     title: 'Frequent people',
-    description: 'People you split with most often.',
+    description:
+      'People you split with most often; amounts are in your default currency (`currency`).',
     scope: 'finapp:read',
     input: {},
-    run: async () => ({ items: await client.query(api.dashboard.queries.frequentPeople, {}) }),
+    run: async () => {
+      const [items, profile] = await Promise.all([
+        client.query(api.dashboard.queries.frequentPeople, {}),
+        client.query(api.users.queries.current, {}),
+      ]);
+      // frequentPeople totals only expenses in the default currency.
+      return { currency: profile?.defaultCurrency ?? 'INR', items };
+    },
   }),
   defineTool({
     name: 'finapp.social.requests.send',
@@ -119,12 +127,15 @@ export const socialTools: ToolFactory = (client) => [
   defineTool({
     name: 'finapp.social.direct_messages.conversations.list',
     title: 'List conversations',
-    description: 'Your direct conversations, most recent first, with the last message preview.',
+    description:
+      'One page of your direct conversations with the other person. Conversations are stored on two sides: list `side: "low"` until isDone, then `side: "high"`.',
     scope: 'finapp:read',
-    input: {},
-    run: async () => ({
-      items: await client.query(api.directMessages.queries.listConversations, {}),
-    }),
+    input: { side: z.enum(['low', 'high']).default('low'), limit, cursor },
+    run: (args) =>
+      client.query(api.mcp.listDirectConversations, {
+        side: args.side,
+        paginationOpts: page(args),
+      }),
   }),
   defineTool({
     name: 'finapp.social.direct_messages.list',

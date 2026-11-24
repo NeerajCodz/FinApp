@@ -297,6 +297,12 @@ export const financeTools: ToolFactory = (client) => [
     input: {
       name: z.string().min(1).max(120),
       type: accountType,
+      customType: z
+        .string()
+        .min(1)
+        .max(40)
+        .optional()
+        .describe('Required when type is "other", e.g. "Brokerage".'),
       currency,
       openingBalanceMinor: minorUnits,
       isIncludedInTotal: z.boolean().describe('Count this account in net-worth totals.'),
@@ -307,10 +313,13 @@ export const financeTools: ToolFactory = (client) => [
       provider: z.string().max(120).optional().describe('Bank or issuer name.'),
       clientMutationId: mutationId,
     },
-    run: (args) =>
-      client.mutation(api.accounts.mutations.create, {
+    run: (args) => {
+      if (args.type === 'other' && !args.customType?.trim())
+        throw new Error('INVALID_ACCOUNT: customType is required when type is "other".');
+      return client.mutation(api.accounts.mutations.create, {
         name: args.name,
         type: args.type,
+        ...(args.type === 'other' ? { customType: args.customType!.trim() } : {}),
         currency: args.currency,
         openingBalanceMinor: args.openingBalanceMinor,
         isIncludedInTotal: args.isIncludedInTotal,
@@ -320,7 +329,8 @@ export const financeTools: ToolFactory = (client) => [
         notes: args.notes,
         provider: args.provider,
         clientMutationId: idempotencyKey(args.clientMutationId),
-      }),
+      });
+    },
   }),
   defineTool({
     name: 'finapp.finance.accounts.rename',
@@ -474,7 +484,8 @@ export const financeTools: ToolFactory = (client) => [
       categoryId: docId('Category'),
       kind: z.enum(['expense', 'income']),
       color: z.string().max(32).nullable(),
-      icon: z.string().max(80).nullable().optional(),
+      // Same limit as categories.setIcon, so a bad icon fails before anything changes.
+      icon: z.string().min(1).max(32).nullable().optional(),
       notes: z.string().max(2000).nullable().optional(),
       includeInBudgets: z.boolean().optional(),
       clientMutationId: mutationId,
@@ -482,6 +493,14 @@ export const financeTools: ToolFactory = (client) => [
     run: async (args) => {
       const key = idempotencyKey(args.clientMutationId);
       const categoryId = id<'categories'>(args.categoryId);
+      // The icon is the stricter check, so apply it first.
+      if (args.icon !== undefined) {
+        await client.mutation(api.categories.mutations.setIcon, {
+          categoryId,
+          icon: args.icon,
+          clientMutationId: `${key}:icon`,
+        });
+      }
       const result = await client.mutation(api.categories.mutations.setPreferences, {
         categoryId,
         kind: args.kind,
@@ -490,13 +509,6 @@ export const financeTools: ToolFactory = (client) => [
         includeInBudgets: args.includeInBudgets,
         clientMutationId: key,
       });
-      if (args.icon !== undefined) {
-        await client.mutation(api.categories.mutations.setIcon, {
-          categoryId,
-          icon: args.icon,
-          clientMutationId: `${key}:icon`,
-        });
-      }
       return result ?? { categoryId };
     },
   }),
