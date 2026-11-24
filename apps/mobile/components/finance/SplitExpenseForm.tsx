@@ -58,6 +58,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const receiptScanner = useReceiptScanner({
     currency,
     disabled: saving || !group || !isConnected,
+    onReview: setReview,
     onFields: (fields, scanReview) => {
       // Scanned bills open as an itemized expense split "By item".
       composer.reset({
@@ -68,6 +69,7 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
         items: fields.rows,
         method: 'itemized',
         basis: {},
+        ...(fields.categoryId ? { categoryId: fields.categoryId } : {}),
       });
       setReview(scanReview);
     },

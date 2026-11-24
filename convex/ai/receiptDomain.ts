@@ -33,6 +33,8 @@ export type ReceiptDraft = {
   /** Fields to highlight for review. */
   lowConfidence: ReceiptField[];
   warnings: string[];
+  /** The user's category `gemini-decision-1` picked after OCR, when it was confident. */
+  categoryId?: string;
 };
 
 /** Below this the field is highlighted for review. */
@@ -79,7 +81,7 @@ export const receiptResponseSchema: GeminiSchema = {
           amount: { type: 'NUMBER', description: 'Line total for this item.' },
           confidence: { type: 'NUMBER', description: '0 to 1: how sure you are of this line.' },
         },
-        required: ['title', 'amount'],
+        required: ['title', 'amount', 'confidence'],
         propertyOrdering: ['title', 'quantity', 'unitPrice', 'amount', 'confidence'],
       },
     },
@@ -167,9 +169,10 @@ function text(value: unknown): string | null {
   return trimmed || null;
 }
 
+/** A 0..1 score; a missing or unreadable score counts as uncertain so it gets reviewed. */
 function confidence(value: unknown): number {
   const parsed = num(value);
-  return parsed === null ? 1 : Math.min(1, Math.max(0, parsed));
+  return parsed === null ? 0 : Math.min(1, Math.max(0, parsed));
 }
 
 function toMinor(value: number | null, digits: number): bigint | null {

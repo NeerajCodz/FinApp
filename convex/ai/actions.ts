@@ -17,6 +17,7 @@ import {
 import { requireUser } from '../shared/auth';
 import { allocateParticipants } from '../splits/domain';
 import { toolErrorCode } from './agent';
+import { finaiAgent } from './config';
 import { finaiActionKind, finaiActionStatus, finaiScopeType } from './validators';
 
 export const propose = internalMutation({
@@ -32,14 +33,40 @@ export const propose = internalMutation({
   },
   handler: async (ctx, { ttlMs, ...args }): Promise<Id<'finaiActions'>> => {
     const now = Date.now();
-    return ctx.db.insert('finaiActions', {
+    const existing = await ctx.db
+      .query('finaiActions')
+      .withIndex('by_message', (q) => q.eq('messageId', args.messageId))
+      .collect();
+    if (existing.length >= finaiAgent.maxProposals) throw new Error('TOO_MANY_PROPOSALS');
+    const actionId = await ctx.db.insert('finaiActions', {
       ...args,
       status: 'pending',
       createdAt: now,
       expiresAt: now + ttlMs,
     });
+    // Flip the row at its deadline so subscribed cards stop offering Confirm on their own.
+    await ctx.scheduler.runAt(now + ttlMs, internal.ai.actions.expire, { actionId });
+    return actionId;
   },
 });
+
+/** Marks a still-pending action expired once its deadline has passed. */
+export const expire = internalMutation({
+  args: { actionId: v.id('finaiActions') },
+  handler: async (ctx, { actionId }) => {
+    const row = await ctx.db.get(actionId);
+    if (!row || row.status !== 'pending' || row.expiresAt > Date.now()) return;
+    await ctx.db.patch(actionId, { status: 'expired', decidedAt: Date.now() });
+  },
+});
+
+/**
+ * A confirmation interrupted after `claim` (worker restart, timeout) stays `running`. After
+ * this long it may be confirmed again; the action id is the idempotency key, so a retry can't
+ * apply twice.
+ */
+const isStaleRunning = (row: Doc<'finaiActions'>, now: number) =>
+  row.status === 'running' && (row.decidedAt ?? row.createdAt) + finaiAgent.staleRunningMs <= now;
 
 export type FinaiActionView = {
   id: Id<'finaiActions'>;
@@ -66,7 +93,11 @@ export async function actionViews(
       return [
         messageId,
         rows.map((row): FinaiActionView => {
-          const status = row.status === 'pending' && row.expiresAt <= now ? 'expired' : row.status;
+          const status = isStaleRunning(row, now)
+            ? 'pending'
+            : row.status === 'pending' && row.expiresAt <= now
+              ? 'expired'
+              : row.status;
           return {
             id: row._id,
             title: row.title,
@@ -88,7 +119,7 @@ export const cancel = mutation({
     if (!user) throw new Error('AUTH_REQUIRED');
     const row = await ctx.db.get(actionId);
     if (!row || row.userId !== user._id) throw new Error('ACTION_NOT_FOUND');
-    if (row.status !== 'pending') return row.status;
+    if (row.status !== 'pending' && !isStaleRunning(row, Date.now())) return row.status;
     await ctx.db.patch(actionId, { status: 'cancelled', decidedAt: Date.now() });
     return 'cancelled' as const;
   },
@@ -102,8 +133,13 @@ export const claim = internalMutation({
     if (!user) throw new Error('AUTH_REQUIRED');
     const row = await ctx.db.get(actionId);
     if (!row || row.userId !== user._id) throw new Error('ACTION_NOT_FOUND');
-    if (row.status !== 'pending') throw new Error('ACTION_ALREADY_DECIDED');
     const now = Date.now();
+    // An interrupted confirmation was already accepted before its deadline: let it retry.
+    if (isStaleRunning(row, now)) {
+      await ctx.db.patch(actionId, { decidedAt: now });
+      return { kind: row.kind, payload: row.payload, userId: row.userId };
+    }
+    if (row.status !== 'pending') throw new Error('ACTION_ALREADY_DECIDED');
     if (row.expiresAt <= now) {
       await ctx.db.patch(actionId, { status: 'expired', decidedAt: now });
       throw new Error('ACTION_EXPIRED');
@@ -121,7 +157,8 @@ export const finish = internalMutation({
     errorCode: v.optional(v.string()),
   },
   handler: async (ctx, { actionId, ...patch }) => {
-    await ctx.db.patch(actionId, patch);
+    // The conversation may have been deleted while the write ran.
+    if (await ctx.db.get(actionId)) await ctx.db.patch(actionId, patch);
   },
 });
 

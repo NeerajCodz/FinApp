@@ -33,8 +33,12 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
   const sendAction = useAction(api.ai.assistant.send);
   const remove = useMutation(api.ai.assistant.deleteConversation);
   const createConversation = useMutation(api.ai.assistant.createConversation);
-  // The prompt shows immediately while the action stores it.
-  const [optimistic, setOptimistic] = React.useState<FinaiAssistantMessage | null>(null);
+  // The prompt shows immediately while the action stores it, only in its own conversation
+  // (`conversationId` is null until a new conversation has been created).
+  const [optimistic, setOptimistic] = React.useState<{
+    conversationId: string | null;
+    message: FinaiAssistantMessage;
+  } | null>(null);
 
   const messages = React.useMemo<FinaiAssistantMessage[]>(() => {
     const rows = activeId
@@ -42,23 +46,24 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
           .reverse()
           .map((row) => ({ ...row, id: String(row.id) }) as FinaiAssistantMessage)
       : [];
+    const pending = optimistic?.conversationId === activeId ? optimistic?.message : undefined;
     if (
-      optimistic &&
+      pending &&
       !rows.some(
         (row) =>
           row.role === 'user' &&
-          row.text === optimistic.text &&
-          row.createdAt >= optimistic.createdAt - 5_000,
+          row.text === pending.text &&
+          row.createdAt >= pending.createdAt - 5_000,
       )
     )
-      rows.push(optimistic, {
+      rows.push(pending, {
         id: 'pending-reply',
         role: 'assistant',
         text: '',
         status: 'pending',
         stage: 'reasoning',
         stageLabel: 'Thinking…',
-        createdAt: optimistic.createdAt + 1,
+        createdAt: pending.createdAt + 1,
       });
     return rows;
   }, [activeId, history.results, optimistic]);
@@ -71,17 +76,17 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
       setError(null);
       setDraft('');
       setOptimistic({
-        id: 'pending-user',
-        role: 'user',
-        text,
-        status: 'done',
-        createdAt: Date.now(),
+        conversationId: activeId,
+        message: { id: 'pending-user', role: 'user', text, status: 'done', createdAt: Date.now() },
       });
       try {
         let conversationId = activeId as Id<'finaiConversations'> | null;
         if (!conversationId) {
-          conversationId = await createConversation({});
-          setActiveId(String(conversationId));
+          const created = await createConversation({});
+          conversationId = created;
+          setOptimistic((prev) => (prev ? { ...prev, conversationId: String(created) } : prev));
+          // Open it unless the user has already moved to another conversation.
+          setActiveId((current) => current ?? String(created));
         }
         await sendAction({ text, conversationId });
       } catch (cause) {

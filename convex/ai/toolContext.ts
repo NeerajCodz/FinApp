@@ -15,6 +15,8 @@ export type FinaiToolCtx = {
   /** The reply message the tools' cards and proposals attach to. */
   messageId: string;
   defaultCurrency: string;
+  /** IANA timezone used for dates on cards (the requester's). */
+  timeZone: string;
 };
 
 export type FinaiTool = AgentTool<FinaiToolCtx>;

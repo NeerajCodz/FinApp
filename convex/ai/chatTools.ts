@@ -102,7 +102,7 @@ export function chatTools(info: ChatScopeInfo): FinaiTool[] {
                 id: expense.id,
                 title: expense.title,
                 subtitle: [
-                  shortDate(expense.occurredAt),
+                  shortDate(expense.occurredAt, ctx.timeZone),
                   expense.paidBy.length
                     ? `paid by ${expense.paidBy.map((p) => p.name).join(', ')}`
                     : '',
@@ -165,7 +165,7 @@ export function chatTools(info: ChatScopeInfo): FinaiTool[] {
               value: ledger.members.find((member) => member.userId === me)?.name ?? 'Requester',
             },
             { label: 'Split equally', value: participants.map((member) => member.name).join(', ') },
-            { label: 'Date', value: shortDate(occurredAt) },
+            { label: 'Date', value: shortDate(occurredAt, ctx.timeZone) },
           ],
         });
       },

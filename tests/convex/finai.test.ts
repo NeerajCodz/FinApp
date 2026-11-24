@@ -267,6 +267,51 @@ describe('FinAI assistant', () => {
   });
 });
 
+describe('FinAI review fixes', () => {
+  async function proposeOne() {
+    const f = await fixture();
+    mockGemini([
+      { call: { name: 'propose_transaction', args: { title: 'Snacks', amount: '3' } } },
+      { text: 'Confirm?' },
+    ]);
+    const sent = await f.owner.action(api.ai.assistant.send, { text: 'snacks 3' });
+    const rows = await f.owner.query(api.ai.assistant.messages, {
+      conversationId: sent.conversationId,
+      paginationOpts: page,
+    });
+    const [card] = rows.page.find((row) => row.id === sent.replyId)!.actions;
+    return { ...f, ...sent, card: card! };
+  }
+
+  it('lets an interrupted confirmation be confirmed again, applying once', async () => {
+    const { t, owner, card, conversationId } = await proposeOne();
+    await t.run((ctx) =>
+      ctx.db.patch(card.id, { status: 'running', decidedAt: Date.now() - 10 * 60_000 }),
+    );
+    const view = await owner.query(api.ai.assistant.messages, {
+      conversationId,
+      paginationOpts: page,
+    });
+    expect(view.page.flatMap((row) => row.actions)[0]).toMatchObject({
+      status: 'pending',
+      canDecide: true,
+    });
+    expect(await owner.action(api.ai.actions.confirm, { actionId: card.id })).toMatchObject({
+      status: 'done',
+    });
+    expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(1);
+  });
+
+  it('expires cards on schedule and deletes payloads with the conversation', async () => {
+    const { t, owner, card, conversationId } = await proposeOne();
+    await t.run((ctx) => ctx.db.patch(card.id, { expiresAt: Date.now() - 1 }));
+    await t.mutation(internal.ai.actions.expire, { actionId: card.id });
+    expect((await t.run((ctx) => ctx.db.get(card.id)))!.status).toBe('expired');
+    await owner.mutation(api.ai.assistant.deleteConversation, { conversationId });
+    expect(await t.run((ctx) => ctx.db.query('finaiActions').collect())).toHaveLength(0);
+  });
+});
+
 describe('@finai in chats', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -274,8 +319,9 @@ describe('@finai in chats', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+  // Advance in small steps: running every timer would also fire the 30-minute card expiry.
   const drain = (t: Awaited<ReturnType<typeof fixture>>['t']) =>
-    t.finishAllScheduledFunctions(vi.runAllTimers);
+    t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1_000));
   async function replyFor(
     t: Awaited<ReturnType<typeof fixture>>['t'],
     table: 'groupMessages' | 'directMessages',

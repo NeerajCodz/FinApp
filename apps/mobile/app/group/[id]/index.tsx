@@ -5,6 +5,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { formatMinor } from '@convex/shared/money';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useFinaiDecide } from '@/hooks/useFinaiDecide';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import {
@@ -58,6 +59,7 @@ export default function GroupHomeScreen() {
   );
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
+  const decideFinai = useFinaiDecide();
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
@@ -222,8 +224,9 @@ export default function GroupHomeScreen() {
         senderAvatarUrl: message.senderAvatarUrl,
         senderAvatarId: message.senderAvatarId,
         ownMessage,
-        text: message.kind === 'text' ? message.text : undefined,
+        text: message.kind === 'text' || message.kind === 'ai' ? message.text : undefined,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+        ai: message.ai,
       };
     }
     if (item.kind === 'expense') {
@@ -391,6 +394,7 @@ export default function GroupHomeScreen() {
             avatarUrl: member.avatarUrl ?? undefined,
           })),
           items: groupChatItems,
+          onFinaiDecide: decideFinai,
           loading: canUseGroupChat && chatMessages === undefined,
           canSend: canUseGroupChat,
           connected: isConnected,

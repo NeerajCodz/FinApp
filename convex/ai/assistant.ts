@@ -107,9 +107,9 @@ export const deleteConversation = mutation({
         .query('finaiActions')
         .withIndex('by_message', (q) => q.eq('messageId', String(row._id)))
         .collect();
-      for (const pending of actions)
-        if (pending.status === 'pending')
-          await ctx.db.patch(pending._id, { status: 'cancelled', decidedAt: Date.now() });
+      // The user deleted the chat: drop the stored payloads (notes, amounts, people) too.
+      // A confirmation that is mid-write finishes on its own; its row is then simply gone.
+      for (const stored of actions) await ctx.db.delete(stored._id);
       await ctx.db.delete(row._id);
     }
     await ctx.db.delete(conversationId);
@@ -288,10 +288,10 @@ export const setTitle = internalMutation({
   },
 });
 
-export const consumeDecision = internalMutation({
+export const consumeUtility = internalMutation({
   args: { userId: v.id('users') },
   handler: async (ctx, { userId }) => {
-    await consumeAiQuota(ctx, userId, 'decision');
+    await consumeAiQuota(ctx, userId, 'utility');
   },
 });
 
@@ -311,15 +311,15 @@ export function historyContents(
   return contents;
 }
 
-/** A short title from the `decision` model; best effort, the prompt prefix stays otherwise. */
+/** A short title from the `utility` model; best effort, the prompt prefix stays otherwise. */
 async function nameConversation(prompt: string, reply: string): Promise<string | null> {
   try {
     const result = await generateText({
-      role: 'decision',
+      role: 'utility',
       systemInstruction:
         'Write a title of at most 5 words for this finance chat. Reply with the title only, no quotes or punctuation at the end.',
       parts: [{ text: `User: ${prompt.slice(0, 500)}\nAssistant: ${reply.slice(0, 500)}` }],
-      maxOutputTokens: 24,
+      maxOutputTokens: 256,
     });
     const title = result.text.replace(/["“”]/g, '').split('\n')[0]!.trim();
     return title && title.length <= 60 ? title : null;
@@ -374,6 +374,7 @@ export const send = action({
           scope: { type: 'assistant', id: String(conversationId) },
           messageId: String(replyId),
           defaultCurrency,
+          timeZone: timezone,
         },
         system,
         contents: historyContents(started.history, args.text.trim()),
@@ -405,7 +406,7 @@ export const send = action({
       });
       if (started.isNew) {
         try {
-          await ctx.runMutation(internal.ai.assistant.consumeDecision, { userId: started.userId });
+          await ctx.runMutation(internal.ai.assistant.consumeUtility, { userId: started.userId });
           const title = await nameConversation(args.text, result.text);
           if (title)
             await ctx.runMutation(internal.ai.assistant.setTitle, { conversationId, title });
