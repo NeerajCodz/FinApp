@@ -96,25 +96,59 @@ type PendingSend = {
  * arrives (Convex resolves a mutation after its query results include the write), and turns
  * `failed` with retry/discard if the mutation throws.
  */
+/** Releases a local preview (`blob:` URL) once its pending message is gone. */
+function releasePreview(message: ChatMessage | undefined) {
+  const url = message?.imageUrl;
+  if (
+    typeof url === 'string' &&
+    url.startsWith('blob:') &&
+    typeof URL.revokeObjectURL === 'function'
+  )
+    URL.revokeObjectURL(url);
+}
+
 export function useOptimisticMessages(onError?: (error: unknown) => void) {
   const [pending, setPending] = React.useState<PendingSend[]>([]);
   const onErrorRef = React.useRef(onError);
   onErrorRef.current = onError;
-  const execute = React.useCallback(async (id: string, run: () => Promise<unknown>) => {
-    try {
-      await run();
-      setPending((items) => items.filter((item) => item.message.id !== id));
-    } catch (error) {
-      setPending((items) =>
-        items.map((item) =>
-          item.message.id === id
-            ? { ...item, message: { ...item.message, status: 'failed' as const } }
-            : item,
-        ),
-      );
-      onErrorRef.current?.(error);
-    }
+  const pendingRef = React.useRef(pending);
+  pendingRef.current = pending;
+  const remove = React.useCallback((id: string) => {
+    releasePreview(pendingRef.current.find((item) => item.message.id === id)?.message);
+    setPending((items) => items.filter((item) => item.message.id !== id));
   }, []);
+  // Previews still pending when the thread closes are released too.
+  React.useEffect(
+    () => () => {
+      for (const item of pendingRef.current) releasePreview(item.message);
+    },
+    [],
+  );
+  /** Runs the job; resolves true when it succeeded (the pending message is then removed). */
+  const execute = React.useCallback(
+    async (id: string, run: () => Promise<unknown>) => {
+      try {
+        await run();
+        remove(id);
+        return true;
+      } catch (error) {
+        setPending((items) =>
+          items.map((item) =>
+            item.message.id === id
+              ? { ...item, message: { ...item.message, status: 'failed' as const } }
+              : item,
+          ),
+        );
+        onErrorRef.current?.(error);
+        return false;
+      }
+    },
+    [remove],
+  );
+  /**
+   * Shows the message at once and runs `run`. Resolves when it settles (true on success), so
+   * callers can keep an upload control busy until the upload actually finished.
+   */
   const send = React.useCallback(
     (
       draft: Omit<ChatMessage, 'id' | 'createdAt' | 'mine' | 'status'>,
@@ -129,13 +163,10 @@ export function useOptimisticMessages(onError?: (error: unknown) => void) {
         status: 'pending',
       };
       setPending((items) => [...items, { message, run }]);
-      void execute(id, run);
-      return id;
+      return execute(id, run);
     },
     [execute],
   );
-  const pendingRef = React.useRef(pending);
-  pendingRef.current = pending;
   const retry = React.useCallback(
     (id: string) => {
       const job = pendingRef.current.find((item) => item.message.id === id);
@@ -151,10 +182,7 @@ export function useOptimisticMessages(onError?: (error: unknown) => void) {
     },
     [execute],
   );
-  const discard = React.useCallback(
-    (id: string) => setPending((items) => items.filter((item) => item.message.id !== id)),
-    [],
-  );
+  const discard = remove;
   const messages = React.useMemo(() => pending.map((item) => item.message), [pending]);
   return { messages, send, retry, discard, isPending: (id: string) => id.startsWith('pending:') };
 }
@@ -195,4 +223,49 @@ export function useReadMarker(
     },
     [serverLastReadAt],
   );
+}
+
+/**
+ * Before the unread divider is frozen, pages back until the oldest loaded message is at or
+ * before the read pointer, so the divider sits on the thread's real first unread message even
+ * when more than one page is unread. Returns true while it is still loading those pages.
+ *
+ * `createdAtOldestFirst` are the loaded server messages' timestamps, oldest first.
+ */
+export function useLoadUnreadHistory({
+  active,
+  createdAtOldestFirst,
+  lastReadAt,
+  unreadCount,
+  status,
+  loadMore,
+  maxPages = 4,
+}: {
+  /** False once the divider is frozen. */
+  active: boolean;
+  createdAtOldestFirst: readonly number[];
+  lastReadAt: number | undefined;
+  unreadCount: number | undefined;
+  status: 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted';
+  loadMore: () => void;
+  maxPages?: number;
+}): boolean {
+  const pages = React.useRef(0);
+  const oldest = createdAtOldestFirst[0];
+  const needsOlder =
+    active &&
+    lastReadAt !== undefined &&
+    !!unreadCount &&
+    oldest !== undefined &&
+    oldest > lastReadAt &&
+    pages.current < maxPages &&
+    (status === 'CanLoadMore' || status === 'LoadingMore');
+  const loadMoreRef = React.useRef(loadMore);
+  loadMoreRef.current = loadMore;
+  React.useEffect(() => {
+    if (!needsOlder || status !== 'CanLoadMore') return;
+    pages.current += 1;
+    loadMoreRef.current();
+  }, [needsOlder, status, oldest]);
+  return needsOlder;
 }

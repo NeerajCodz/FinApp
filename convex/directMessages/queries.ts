@@ -6,6 +6,7 @@ import { getOptionalUser } from '../shared/auth';
 import { avatarUrlForUser } from '../avatars/helpers';
 import {
   CHAT_PIN_LIMIT,
+  CHAT_UNREAD_CAP,
   countUnread,
   emptyPage,
   loadReadPointers,
@@ -73,6 +74,10 @@ async function enrichMessages(
   );
 }
 
+/** Unread threads (newest first) that get an exact count; the rest stop at the soft cap. */
+const INBOX_EXACT_UNREAD_ROWS = 10;
+const INBOX_UNREAD_SOFT_CAP = 9;
+
 export const listConversations = query({
   args: {},
   handler: async (ctx) => {
@@ -89,6 +94,9 @@ export const listConversations = query({
         .collect(),
     ]);
     const rows = [...low, ...high];
+    // Exact counts only for the most recent unread threads; older ones stop at a small cap so
+    // the inbox's reads stay bounded however many unread conversations there are.
+    let exactBudget = INBOX_EXACT_UNREAD_ROWS;
     return Promise.all(
       rows
         .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -107,10 +115,12 @@ export const listConversations = query({
           const latest = latestMessages[0];
           const myLastReadAt = pointers.get(actor._id) ?? 0;
           const peerLastReadAt = pointers.get(userId) ?? 0;
-          const unreadCount =
-            latest && latest.senderId !== actor._id && latest.createdAt > myLastReadAt
-              ? await countUnread(ctx, scope, actor._id, myLastReadAt)
-              : 0;
+          const hasUnread =
+            !!latest && latest.senderId !== actor._id && latest.createdAt > myLastReadAt;
+          const cap = hasUnread && exactBudget-- > 0 ? CHAT_UNREAD_CAP : INBOX_UNREAD_SOFT_CAP;
+          const unreadCount = hasUnread
+            ? await countUnread(ctx, scope, actor._id, myLastReadAt, undefined, cap)
+            : 0;
           return {
             id: row._id,
             userId,
@@ -124,6 +134,8 @@ export const listConversations = query({
                 }
               : {}),
             unreadCount,
+            /** The count stopped at its cap: show it as "N+". */
+            unreadCapped: hasUnread && unreadCount >= cap,
             lastMessage: latest
               ? {
                   kind: latest.kind,
