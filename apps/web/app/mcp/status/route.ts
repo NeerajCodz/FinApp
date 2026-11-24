@@ -3,6 +3,7 @@ import {
   mcpIssuer,
   mcpResourceUrl,
   prepareMcpAccessTokenSigner,
+  verifyMcpAccessToken,
 } from '@/lib/mcp/oauth';
 import { MCP_SERVER_VERSION, toolCatalog } from '@/lib/mcp/server';
 import { widgets } from '@/lib/mcp/widgets';
@@ -47,7 +48,12 @@ export async function GET() {
   }
   const [issuer, signing, backend] = await Promise.all([
     check(mcpIssuer),
-    check(prepareMcpAccessTokenSigner),
+    // Sign and verify a probe token: proves the private key, key id and public key match.
+    check(async () => {
+      const sign = await prepareMcpAccessTokenSigner();
+      const principal = await verifyMcpAccessToken(await sign('status-probe', 'status-probe', []));
+      if (!principal) throw new Error('MCP_SIGNING_MISMATCH');
+    }),
     backendReachable(),
   ]);
   const checks = { endpoint: endpoint ? 'ok' : 'missing', issuer, signing, backend } as const;

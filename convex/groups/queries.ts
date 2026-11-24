@@ -172,18 +172,16 @@ export const personTimeline = query({
         .order('desc');
       transactions.push(...(limit ? await newestFirst.take(limit) : await newestFirst.collect()));
     }
-    return transactions
-      .sort((left, right) => right.occurredAt - left.occurredAt)
-      .slice(0, limit)
-      .map((transaction) => ({
-        id: transaction._id,
-        title: transaction.title,
-        amountMinor: transaction.amountMinor,
-        currency: transaction.currency,
-        type: transaction.type,
-        occurredAt: transaction.occurredAt,
-        status: transaction.status,
-      }));
+    const newest = transactions.sort((left, right) => right.occurredAt - left.occurredAt);
+    return (limit === undefined ? newest : newest.slice(0, limit)).map((transaction) => ({
+      id: transaction._id,
+      title: transaction.title,
+      amountMinor: transaction.amountMinor,
+      currency: transaction.currency,
+      type: transaction.type,
+      occurredAt: transaction.occurredAt,
+      status: transaction.status,
+    }));
   },
 });
 

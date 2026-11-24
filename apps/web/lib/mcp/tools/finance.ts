@@ -493,14 +493,8 @@ export const financeTools: ToolFactory = (client) => [
     run: async (args) => {
       const key = idempotencyKey(args.clientMutationId);
       const categoryId = id<'categories'>(args.categoryId);
-      // The icon is the stricter check, so apply it first.
-      if (args.icon !== undefined) {
-        await client.mutation(api.categories.mutations.setIcon, {
-          categoryId,
-          icon: args.icon,
-          clientMutationId: `${key}:icon`,
-        });
-      }
+      // Preferences carry the broader validation (colour, system categories), so they go first;
+      // the icon is pre-validated by this schema (1-32 chars), matching categories.setIcon.
       const result = await client.mutation(api.categories.mutations.setPreferences, {
         categoryId,
         kind: args.kind,
@@ -509,6 +503,13 @@ export const financeTools: ToolFactory = (client) => [
         includeInBudgets: args.includeInBudgets,
         clientMutationId: key,
       });
+      if (args.icon !== undefined) {
+        await client.mutation(api.categories.mutations.setIcon, {
+          categoryId,
+          icon: args.icon,
+          clientMutationId: `${key}:icon`,
+        });
+      }
       return result ?? { categoryId };
     },
   }),
