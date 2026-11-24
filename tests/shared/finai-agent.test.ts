@@ -58,8 +58,10 @@ describe('SSE parsing', () => {
   });
 
   it('URL-encodes the configured model id', () => {
-    expect(geminiStreamUrl('chat')).toContain(':streamGenerateContent?alt=sse');
-    expect(geminiStreamUrl('decision')).toContain('gemini%20decision%201');
+    expect(geminiStreamUrl('gemini-3.8-flash')).toContain(
+      '/models/gemini-3.8-flash:streamGenerateContent?alt=sse',
+    );
+    expect(geminiStreamUrl('a b')).toContain('a%20b');
   });
 });
 
@@ -122,7 +124,7 @@ describe('streamChat', () => {
       sleep,
     });
     expect(result.text).toBe('ok');
-    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled(); // the retry used the fallback model
 
     const blocked = streamChat({
       role: 'chat',

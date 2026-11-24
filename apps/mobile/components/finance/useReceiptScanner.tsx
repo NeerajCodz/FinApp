@@ -7,11 +7,13 @@ import type { Id } from '@convex/_generated/dataModel';
 import { ReceiptScanCard, type ReceiptReview } from '@finapp/ui/finance';
 import {
   receiptDraftToForm,
+  receiptReviewFor,
   receiptFileProblem,
   receiptMimeType,
   useReceiptScan,
   type ReceiptFormFields,
 } from '@finapp/ui/ai/receipt-scan';
+import type { ReceiptDraft } from '@convex/ai/receiptDomain';
 
 /**
  * "Scan receipt" for the mobile composers: picks a photo (camera or library) with
@@ -22,16 +24,32 @@ export function useReceiptScanner({
   currency,
   disabled,
   onFields,
+  onReview,
 }: {
   /** The composer's currency (account or group); also the parser's fallback currency. */
   currency: string;
   disabled?: boolean;
   onFields: (fields: ReceiptFormFields, review: ReceiptReview) => void;
+  /** Called with a fresh review when the composer's currency changes after a scan. */
+  onReview?: (review: ReceiptReview) => void;
 }) {
   const generateUploadUrl = useMutation(api.ai.receipts.generateUploadUrl);
+  const registerUpload = useMutation(api.ai.receipts.registerUpload);
   const parse = useAction(api.ai.receipts.parse);
+  // The last scan, so switching account / group re-checks the bill's currency.
+  const lastScan = React.useRef<{ draft: ReceiptDraft; currency: string } | null>(null);
+  const onReviewRef = React.useRef(onReview);
+  onReviewRef.current = onReview;
+  React.useEffect(() => {
+    const last = lastScan.current;
+    if (!last || !currency || last.currency === currency) return;
+    last.currency = currency;
+    onReviewRef.current?.(receiptReviewFor(last.draft, currency));
+  }, [currency]);
   const scanner = useReceiptScan({
     generateUploadUrl: () => generateUploadUrl({}),
+    registerUpload: (args) =>
+      registerUpload({ ticket: args.ticket, storageId: args.storageId as Id<'_storage'> }),
     parse: (args) => parse({ ...args, storageId: args.storageId as Id<'_storage'> }),
   });
   const { scan, fail } = scanner;
@@ -71,6 +89,7 @@ export function useReceiptScanner({
         }, currency || undefined);
         if (!draft) return;
         const fields = receiptDraftToForm(draft, currency || draft.currency);
+        lastScan.current = { draft, currency: currency || draft.currency };
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onFields(fields, {
           fields: fields.review,

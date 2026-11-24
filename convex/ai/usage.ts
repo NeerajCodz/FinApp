@@ -37,7 +37,12 @@ export async function consumeAiQuota(
   return { used: used + 1, limit };
 }
 
-const kindValidator = v.union(v.literal('ocr'), v.literal('chat'), v.literal('decision'));
+const kindValidator = v.union(
+  v.literal('ocr'),
+  v.literal('chat'),
+  v.literal('decision'),
+  v.literal('utility'),
+);
 
 /** Adds token usage from a finished Gemini call to today's row (best effort, for reporting). */
 export const recordTokens = internalMutation({

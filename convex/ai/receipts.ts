@@ -6,13 +6,20 @@
  * the stored image.
  */
 import { v } from 'convex/values';
-import { internal } from '../_generated/api';
+import { api, internal } from '../_generated/api';
 import type { Id } from '../_generated/dataModel';
-import { action, internalMutation, mutation } from '../_generated/server';
+import {
+  action,
+  internalMutation,
+  mutation,
+  type ActionCtx,
+  type MutationCtx,
+} from '../_generated/server';
 import { requireUser } from '../shared/auth';
 import { minorDigits } from '../shared/money';
 import { receiptUpload } from './config';
 import { aiError } from './errors';
+import { classifyReceiptCategory } from './decisions';
 import { bytesToBase64, generateStructured, isGeminiConfigured } from './gemini';
 import {
   normalizeReceipt,
@@ -57,13 +64,87 @@ export const generateUploadUrl = mutation({
     if (!user) throw new Error('AUTH_REQUIRED');
     if (!isGeminiConfigured()) throw aiError('AI_NOT_CONFIGURED');
     const ticket = crypto.randomUUID();
-    await ctx.db.insert('aiReceiptUploads', { ticket, userId: user._id, createdAt: Date.now() });
+    const now = Date.now();
+    const uploadId = await ctx.db.insert('aiReceiptUploads', {
+      ticket,
+      userId: user._id,
+      createdAt: now,
+    });
+    // Tickets (and any image that never reached parsing) are cleaned up after they expire.
+    await ctx.scheduler.runAt(
+      now + receiptUpload.ticketTtlMs + 60_000,
+      internal.ai.receipts.expireUpload,
+      {
+        uploadId,
+      },
+    );
     return {
       uploadUrl: await ctx.storage.generateUploadUrl(),
       ticket,
       maxBytes: receiptUpload.maxBytes,
       mimeTypes: [...receiptUpload.mimeTypes],
     };
+  },
+});
+
+/** Image ids already used by chat messages; those are never receipt scratch uploads. */
+async function storageInUse(ctx: MutationCtx, storageId: Id<'_storage'>): Promise<boolean> {
+  const [directMessage, groupMessage] = await Promise.all([
+    ctx.db
+      .query('directMessages')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .first(),
+    ctx.db
+      .query('groupMessages')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .first(),
+  ]);
+  return Boolean(directMessage || groupMessage);
+}
+
+/**
+ * Records the uploaded image on its ticket right after the upload, so an image whose parse
+ * never arrives (app killed, connection lost, scan cancelled) can still be deleted.
+ */
+export const registerUpload = mutation({
+  args: { ticket: v.string(), storageId: v.id('_storage') },
+  handler: async (ctx, { ticket, storageId }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const upload = await ctx.db
+      .query('aiReceiptUploads')
+      .withIndex('by_ticket', (q) => q.eq('ticket', ticket))
+      .unique();
+    const file = await ctx.db.system.get('_storage', storageId);
+    if (
+      !upload ||
+      upload.userId !== user._id ||
+      upload.usedAt !== undefined ||
+      upload.storageId !== undefined ||
+      !file ||
+      file._creationTime < upload.createdAt - 1000 ||
+      (await storageInUse(ctx, storageId))
+    )
+      throw aiError('INVALID_UPLOAD_TICKET');
+    await ctx.db.patch(upload._id, { storageId });
+    return null;
+  },
+});
+
+/** Deletes an expired ticket and, if it was never parsed, the image it uploaded. */
+export const expireUpload = internalMutation({
+  args: { uploadId: v.id('aiReceiptUploads') },
+  handler: async (ctx, { uploadId }) => {
+    const upload = await ctx.db.get(uploadId);
+    if (!upload) return;
+    if (
+      upload.usedAt === undefined &&
+      upload.storageId &&
+      !(await storageInUse(ctx, upload.storageId)) &&
+      (await ctx.db.system.get('_storage', upload.storageId))
+    )
+      await ctx.storage.delete(upload.storageId);
+    await ctx.db.delete(uploadId);
   },
 });
 
@@ -98,18 +179,12 @@ export const beginParse = internalMutation({
       file._creationTime < upload.createdAt - 1000
     )
       throw aiError('INVALID_UPLOAD_TICKET');
-    const [directMessage, groupMessage] = await Promise.all([
-      ctx.db
-        .query('directMessages')
-        .withIndex('by_storage', (q) => q.eq('storageId', storageId))
-        .first(),
-      ctx.db
-        .query('groupMessages')
-        .withIndex('by_storage', (q) => q.eq('storageId', storageId))
-        .first(),
-    ]);
-    if (directMessage || groupMessage) throw aiError('INVALID_UPLOAD_TICKET');
-    await ctx.db.patch(upload._id, { usedAt: now });
+    if (
+      (upload.storageId !== undefined && upload.storageId !== storageId) ||
+      (await storageInUse(ctx, storageId))
+    )
+      throw aiError('INVALID_UPLOAD_TICKET');
+    await ctx.db.patch(upload._id, { usedAt: now, storageId });
     if (!validateReceiptImage({ contentType: file.contentType, size: file.size })) {
       await ctx.storage.delete(storageId);
       return { ok: false, code: 'INVALID_IMAGE' };
@@ -121,6 +196,41 @@ export const beginParse = internalMutation({
       return { ok: false, code: 'AI_RATE_LIMITED' };
     }
     return { ok: true, userId: user._id };
+  },
+});
+
+/**
+ * After OCR, `gemini-decision-1` picks the receipt's category among the user's own. Best
+ * effort: quota, missing categories or a failed call simply leave the category empty.
+ */
+async function suggestCategory(
+  ctx: ActionCtx,
+  userId: Id<'users'>,
+  draft: ReceiptDraft,
+): Promise<{ categoryId?: string }> {
+  try {
+    const categories = await ctx.runQuery(api.categories.queries.list, {});
+    if (!categories.length) return {};
+    await ctx.runMutation(internal.ai.receipts.consumeDecision, { userId });
+    const picked = await classifyReceiptCategory(
+      draft,
+      categories.map((category) => ({
+        id: String(category._id),
+        name: category.name,
+        ...(category.notes ? { notes: category.notes } : {}),
+      })),
+    );
+    return picked ? { categoryId: picked.categoryId } : {};
+  } catch (cause) {
+    console.warn('[ai] receipt category decision skipped', String(cause));
+    return {};
+  }
+}
+
+export const consumeDecision = internalMutation({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    await consumeAiQuota(ctx, userId, 'decision');
   },
 });
 
@@ -157,13 +267,17 @@ export const parse = action({
         ],
         responseSchema: receiptResponseSchema,
       });
-      await ctx.runMutation(internal.ai.usage.recordTokens, {
-        userId: begun.userId,
-        kind: 'ocr',
-        promptTokens: result.usage.promptTokens,
-        outputTokens: result.usage.outputTokens,
-      });
-      return normalizeReceipt(result.data, { fallbackCurrency: hint });
+      // Usage accounting is best effort: never throw away a good scan because it failed.
+      await ctx
+        .runMutation(internal.ai.usage.recordTokens, {
+          userId: begun.userId,
+          kind: 'ocr',
+          promptTokens: result.usage.promptTokens,
+          outputTokens: result.usage.outputTokens,
+        })
+        .catch((cause: unknown) => console.warn('[ai] token accounting failed', String(cause)));
+      const draft = normalizeReceipt(result.data, { fallbackCurrency: hint });
+      return { ...draft, ...(await suggestCategory(ctx, begun.userId, draft)) };
     } finally {
       await ctx.storage.delete(storageId).catch(() => undefined);
     }

@@ -100,10 +100,15 @@ export function presentMoney(value: unknown, inheritedCurrency?: string): unknow
   return output;
 }
 
-export function shortDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('en', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
+/** "Nov 3" in the given IANA timezone; falls back to UTC for a missing or unknown zone. */
+export function shortDate(timestamp: number, timeZone?: string): string {
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  try {
+    return new Date(timestamp).toLocaleDateString('en', {
+      ...options,
+      timeZone: timeZone || 'UTC',
+    });
+  } catch {
+    return new Date(timestamp).toLocaleDateString('en', { ...options, timeZone: 'UTC' });
+  }
 }

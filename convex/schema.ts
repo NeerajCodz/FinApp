@@ -653,7 +653,7 @@ export default defineSchema({
   /** Per-user AI requests and token usage per UTC day, for rate limits. */
   aiUsage: defineTable({
     userId: v.id('users'),
-    kind: v.union(v.literal('ocr'), v.literal('chat'), v.literal('decision')),
+    kind: v.union(v.literal('ocr'), v.literal('chat'), v.literal('decision'), v.literal('utility')),
     windowStart: timestamp,
     count: v.number(),
     promptTokens: v.optional(v.number()),
@@ -710,6 +710,8 @@ export default defineSchema({
     userId: v.id('users'),
     createdAt: timestamp,
     usedAt: optionalTime,
+    /** The uploaded image, reported by the client right after the upload, for cleanup. */
+    storageId: v.optional(v.id('_storage')),
   })
     .index('by_ticket', ['ticket'])
     .index('by_user_createdAt', ['userId', 'createdAt']),

@@ -4,6 +4,7 @@
  * auth: FinAI can never see more than the user can. Writes only create confirmation cards.
  */
 import { api } from '../_generated/api';
+import type { FunctionReturnType } from 'convex/server';
 import type { Id } from '../_generated/dataModel';
 import type { FinView, ListItem, Tone } from './a2ui';
 import { formatAbsMinor, formatMinor, shortDate } from './present';
@@ -27,19 +28,25 @@ const transactionTypes = ['expense', 'income', 'transfer', 'refund', 'adjustment
 const toneForType = (type: string): Tone =>
   type === 'income' || type === 'refund' ? 'positive' : type === 'expense' ? 'negative' : 'neutral';
 
-function transactionItem(row: {
-  id: string;
-  title: string;
-  type: string;
-  amountMinor: bigint;
-  currency: string;
-  occurredAt: number;
-  merchant?: string;
-}): ListItem {
+/** Raw 100-row pages `search_transactions` may scan for matches. */
+const SEARCH_MAX_PAGES = 10;
+
+function transactionItem(
+  row: {
+    id: string;
+    title: string;
+    type: string;
+    amountMinor: bigint;
+    currency: string;
+    occurredAt: number;
+    merchant?: string;
+  },
+  timeZone: string,
+): ListItem {
   return {
     id: String(row.id),
     title: row.title,
-    subtitle: [shortDate(row.occurredAt), row.merchant].filter(Boolean).join(' · '),
+    subtitle: [shortDate(row.occurredAt, timeZone), row.merchant].filter(Boolean).join(' · '),
     amount: `${row.type === 'expense' ? '−' : row.type === 'income' ? '+' : ''}${formatMinor(row.amountMinor, row.currency)}`,
     tone: toneForType(row.type),
   };
@@ -202,14 +209,32 @@ export const assistantTools: FinaiTool[] = [
     run: async (ctx, args) => {
       const range = window(args, 30);
       const currency = ctx.defaultCurrency;
-      const result = await ctx.run.runQuery(api.mcp.listTransactions, {
+      const limit = int(args, 'limit', 20, 1, 50);
+      const filters = {
         ...range,
         type: oneOf(args, 'type', transactionTypes),
         search: str(args, 'query', 120),
         minAmountMinor: amountMinor(args, 'minAmount', currency),
         maxAmountMinor: amountMinor(args, 'maxAmount', currency),
-        paginationOpts: { numItems: int(args, 'limit', 20, 1, 50), cursor: null },
-      });
+      };
+      // Filters apply after pagination, so walk raw pages until enough rows match.
+      type Row = FunctionReturnType<typeof api.mcp.listTransactions>['items'][number];
+      const items: Row[] = [];
+      let cursor: string | null = null;
+      let isDone = false;
+      for (let page = 0; page < SEARCH_MAX_PAGES && items.length < limit && !isDone; page++) {
+        const result: FunctionReturnType<typeof api.mcp.listTransactions> = await ctx.run.runQuery(
+          api.mcp.listTransactions,
+          {
+            ...filters,
+            paginationOpts: { numItems: 100, cursor },
+          },
+        );
+        items.push(...result.items);
+        cursor = result.nextCursor;
+        isDone = result.isDone;
+      }
+      const result = { items: items.slice(0, limit), isDone: isDone && items.length <= limit };
       return {
         data: { window: range, items: result.items, more: !result.isDone },
         views: [
@@ -218,7 +243,7 @@ export const assistantTools: FinaiTool[] = [
             title: str(args, 'query') ? `Matches for “${str(args, 'query', 40)}”` : 'Transactions',
             emptyText: 'No transactions match.',
             items: result.items.map((row) =>
-              transactionItem({ ...row, id: String(row.id), merchant: row.merchant }),
+              transactionItem({ ...row, id: String(row.id), merchant: row.merchant }, ctx.timeZone),
             ),
           },
         ],
@@ -444,7 +469,7 @@ export const assistantTools: FinaiTool[] = [
             title: 'Group expenses',
             emptyText: 'No expenses in this window.',
             items: result.items.map((row) =>
-              transactionItem({ ...row, id: String(row.id), type: 'expense' }),
+              transactionItem({ ...row, id: String(row.id), type: 'expense' }, ctx.timeZone),
             ),
           },
         ],
@@ -512,7 +537,7 @@ export const assistantTools: FinaiTool[] = [
         lines: [
           { label: 'Amount', value: formatMinor(total, currency) },
           { label: 'Account', value: account?.name ?? `Default ${currency} account` },
-          { label: 'Date', value: shortDate(occurredAt) },
+          { label: 'Date', value: shortDate(occurredAt, ctx.timeZone) },
           ...(str(args, 'merchant') ? [{ label: 'Merchant', value: str(args, 'merchant')! }] : []),
         ],
       });
@@ -569,7 +594,7 @@ export const assistantTools: FinaiTool[] = [
               .map((member) => (member.userId === String(ctx.userId) ? 'You' : member.displayName))
               .join(', '),
           },
-          { label: 'Date', value: shortDate(occurredAt) },
+          { label: 'Date', value: shortDate(occurredAt, ctx.timeZone) },
         ],
       });
     },

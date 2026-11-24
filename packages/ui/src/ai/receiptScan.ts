@@ -91,6 +91,8 @@ export const receiptScanStages: Record<
 export type ReceiptUploadTicket = { uploadUrl: string; ticket: string };
 export type UseReceiptScanOptions = {
   generateUploadUrl: () => Promise<ReceiptUploadTicket>;
+  /** Records the uploaded image on its ticket so an abandoned scan can be cleaned up. */
+  registerUpload?: (args: { storageId: string; ticket: string }) => Promise<unknown>;
   parse: (args: { storageId: string; ticket: string; currency?: string }) => Promise<ReceiptDraft>;
 };
 
@@ -99,7 +101,11 @@ export type UseReceiptScanOptions = {
  * POSTs the image and resolves to the storage id), then parses. Resolves to the draft, or null on
  * failure/cancel (with `error` set on failure).
  */
-export function useReceiptScan({ generateUploadUrl, parse }: UseReceiptScanOptions) {
+export function useReceiptScan({
+  generateUploadUrl,
+  registerUpload,
+  parse,
+}: UseReceiptScanOptions) {
   const [phase, setPhase] = useState<ReceiptScanPhase>('idle');
   const [error, setError] = useState('');
   const run = useRef(0);
@@ -119,6 +125,8 @@ export function useReceiptScan({ generateUploadUrl, parse }: UseReceiptScanOptio
       try {
         const { uploadUrl, ticket } = await generateUploadUrl();
         const storageId = await upload(uploadUrl);
+        // Best effort: parsing still works (and cleans up) if this fails.
+        await registerUpload?.({ storageId, ticket }).catch(() => undefined);
         if (!current()) return null;
         setPhase('reading');
         clearTimer();
@@ -136,7 +144,7 @@ export function useReceiptScan({ generateUploadUrl, parse }: UseReceiptScanOptio
         return null;
       }
     },
-    [generateUploadUrl, parse],
+    [generateUploadUrl, registerUpload, parse],
   );
   const fail = useCallback((message: string) => {
     run.current++;
@@ -185,16 +193,15 @@ export type ReceiptFormFields = {
   /** Row ids to highlight. */
   reviewItemIds: string[];
   warnings: string[];
+  /** Category picked by the decision model after OCR; empty when it wasn't confident. */
+  categoryId: string | null;
 };
 
-/**
- * Composer fields for a draft. Amounts are written in the composer's currency digits; when the
- * receipt's currency differs from the account's that is flagged for review.
- */
-export function receiptDraftToForm(
+/** What to review for a scanned draft shown in `composerCurrency` (rechecked on account change). */
+export function receiptReviewFor(
   draft: ReceiptDraft,
   composerCurrency: string,
-): ReceiptFormFields {
+): { fields: ReceiptField[]; itemIds: string[]; warnings: string[] } {
   const review = new Set<ReceiptField>(draft.lowConfidence);
   const warnings = [...draft.warnings];
   const target = composerCurrency.toUpperCase();
@@ -204,15 +211,71 @@ export function receiptDraftToForm(
       `This bill is in ${draft.currency} but the account uses ${target}. Amounts are copied as printed.`,
     );
   }
-  const amountText = (minor: bigint) => {
-    const printed = minorToInput(minor, draft.currency);
-    const targetDigits = minorDigits(target) ?? 2;
-    const [whole, fraction = ''] = printed.split('.');
-    if (fraction.length <= targetDigits) return printed;
-    // e.g. a KWD bill (3 decimals) into an INR account: keep the account's precision.
-    const rounded = Number(printed).toFixed(targetDigits);
-    return targetDigits ? rounded : String(Math.round(Number(`${whole}.${fraction}`)));
+  return {
+    fields: [...review],
+    itemIds: draft.items.filter((item) => item.lowConfidence).map((item) => item.id),
+    warnings,
   };
+}
+
+/**
+ * Rescales minor amounts to fewer decimal digits with largest-remainder rounding, so the
+ * rescaled parts still add up to the rescaled sum (half-up).
+ */
+export function rescaleMinor(amounts: readonly bigint[], dropDigits: number): bigint[] {
+  if (dropDigits <= 0) return [...amounts];
+  const factor = 10n ** BigInt(dropDigits);
+  const sum = amounts.reduce((total, amount) => total + amount, 0n);
+  const roundHalfUp = (value: bigint) =>
+    value >= 0n ? (value + factor / 2n) / factor : -((-value + factor / 2n) / factor);
+  const target = roundHalfUp(sum);
+  const floors = amounts.map((amount) =>
+    amount >= 0n ? amount / factor : -((-amount + factor - 1n) / factor),
+  );
+  let remainder = target - floors.reduce((total, value) => total + value, 0n);
+  const order = amounts
+    .map((amount, index) => ({ index, rest: amount - floors[index]! * factor }))
+    .sort((a, b) => (a.rest === b.rest ? a.index - b.index : a.rest > b.rest ? -1 : 1));
+  const result = [...floors];
+  for (let step = 0; remainder > 0n && order.length; step++, remainder--)
+    result[order[step % order.length]!.index]! += 1n;
+  for (let step = order.length - 1; remainder < 0n && order.length; step--, remainder++)
+    result[order[((step % order.length) + order.length) % order.length]!.index]! -= 1n;
+  return result;
+}
+
+/**
+ * Composer fields for a draft. Amounts are written in the composer's currency digits; when the
+ * receipt's currency differs from the account's that is flagged for review. When the account
+ * has fewer decimals, rows are rounded together so they still add up to the total.
+ */
+export function receiptDraftToForm(
+  draft: ReceiptDraft,
+  composerCurrency: string,
+): ReceiptFormFields {
+  const reviewed = receiptReviewFor(draft, composerCurrency);
+  const target = composerCurrency.toUpperCase();
+  const sourceDigits = minorDigits(draft.currency) ?? 2;
+  const targetDigits = minorDigits(target) ?? 2;
+  const drop = Math.max(0, sourceDigits - targetDigits);
+  const outDigits = drop ? targetDigits : sourceDigits;
+  const format = (minor: bigint) => {
+    const negative = minor < 0n;
+    const absolute = negative ? -minor : minor;
+    const scale = 10n ** BigInt(outDigits);
+    const fraction = outDigits ? `.${(absolute % scale).toString().padStart(outDigits, '0')}` : '';
+    return `${negative ? '-' : ''}${absolute / scale}${fraction}`;
+  };
+  const rowMinors = rescaleMinor(
+    draft.items.map((item) => item.amountMinor),
+    drop,
+  );
+  const rowsSum = draft.items.reduce((total, item) => total + item.amountMinor, 0n);
+  // The total matches the rounded rows whenever the bill's rows add up to it.
+  const totalMinor =
+    rowsSum === draft.amountMinor
+      ? rowMinors.reduce((total, value) => total + value, 0n)
+      : rescaleMinor([draft.amountMinor], drop)[0]!;
   const occurred =
     draft.occurredAt === null
       ? null
@@ -224,16 +287,17 @@ export function receiptDraftToForm(
     title: draft.title,
     merchant: draft.merchant ?? '',
     occurredAt: occurred,
-    amount: amountText(draft.amountMinor),
-    rows: draft.items.map((item) => ({
+    amount: format(totalMinor),
+    rows: draft.items.map((item, index) => ({
       id: item.id,
       title: item.title,
-      amount: amountText(item.amountMinor),
+      amount: format(rowMinors[index]!),
       quantity: item.quantity === undefined ? '' : String(item.quantity),
       participantIds: null,
     })),
-    review: [...review],
-    reviewItemIds: draft.items.filter((item) => item.lowConfidence).map((item) => item.id),
-    warnings,
+    review: reviewed.fields,
+    reviewItemIds: reviewed.itemIds,
+    warnings: reviewed.warnings,
+    categoryId: draft.categoryId ?? null,
   };
 }
