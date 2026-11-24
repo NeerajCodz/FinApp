@@ -6,6 +6,8 @@ import { GroupExpenseFormScreen, useExpenseComposer } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { aliases, idOf, useGroupLedger } from '@/lib/groupLedger';
+import type { ReceiptReview } from '@finapp/ui/finance';
+import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 
 const unsynced = (record: LocalRecord) => !record.cloudId && !record._id;
 
@@ -53,6 +55,24 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
   const category = data.categories.find((item) => aliases(item).includes(composer.categoryId));
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const [review, setReview] = React.useState<ReceiptReview | null>(null);
+  const receiptScanner = useReceiptScanner({
+    currency,
+    disabled: saving || !group || !isConnected,
+    onFields: (fields, scanReview) => {
+      // Scanned bills open as an itemized expense split "By item".
+      composer.reset({
+        title: fields.title,
+        merchant: fields.merchant,
+        ...(fields.occurredAt !== null ? { occurredAt: fields.occurredAt } : {}),
+        itemize: true,
+        items: fields.rows,
+        method: 'itemized',
+        basis: {},
+      });
+      setReview(scanReview);
+    },
+  });
   const saveLock = React.useRef(false);
 
   function chooseGroup(nextGroupId: string) {
@@ -209,6 +229,9 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       }
       onCreateGroup={() => router.push('/groups/new')}
       onSignIn={() => router.push('/sign-in')}
+      receiptScan={group ? receiptScanner.card : undefined}
+      review={review}
+      onDismissReview={() => setReview(null)}
     />
   );
 }
