@@ -7,13 +7,13 @@ import React from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 import {
   ArrowLeft,
+  ArrowUp,
   ChatsCircle,
   ClockCounterClockwise,
-  PaperPlaneTilt,
+  NotePencil,
   Plus,
   Trash,
 } from 'phosphor-react-native';
-import { Illustration } from '@finapp/ui/illustrations';
 import { IconButton, ThinkingOrb, Typography, useTheme } from '@finapp/ui/native';
 import { Sheet } from '../../native/overlays';
 import {
@@ -115,6 +115,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
   const canSend = p.available && !busy && !!p.draft.trim();
   const data = React.useMemo(() => [...p.messages].reverse(), [p.messages]);
   const empty = !p.loading && p.messages.length === 0;
+  const activeTitle = p.conversations.find((row) => row.id === p.activeId)?.title;
 
   return (
     <KeyboardAvoidingView
@@ -140,27 +141,29 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
         ) : null}
         <View
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
+            width: 36,
+            height: 36,
+            borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: tokens.surfaceSubtle,
           }}
         >
-          <ThinkingOrb state={busy ? 'working' : 'idle'} size={22} />
+          <ThinkingOrb state={busy ? 'working' : 'idle'} size={20} />
         </View>
-        <View style={{ flex: 1 }}>
-          <Typography variant="heading">{FINAI_NAME}</Typography>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="label" numberOfLines={1}>
+            {activeTitle ?? FINAI_NAME}
+          </Typography>
           <Typography variant="caption">
-            {busy ? 'Working on it…' : 'Changes always ask first'}
+            {busy ? 'Working on it…' : 'Asks before changing anything'}
           </Typography>
         </View>
         <IconButton label="Chat history" variant="ghost" onPress={() => setHistoryOpen(true)}>
           <ClockCounterClockwise size={21} color={tokens.foreground} />
         </IconButton>
         <IconButton label="New chat" variant="ghost" onPress={() => p.onSelect(null)}>
-          <Plus size={21} color={tokens.foreground} />
+          <NotePencil size={21} color={tokens.foreground} />
         </IconButton>
       </View>
 
@@ -169,34 +172,20 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           <ThinkingOrb state="searching" size={48} label="Loading your chat" />
         </View>
       ) : empty ? (
-        <View
-          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 }}
-        >
-          <Illustration scene="assistant" size={176} />
-          <Typography variant="title" style={{ textAlign: 'center' }}>
-            Ask {FINAI_NAME} about your money
+        <View style={{ flex: 1, justifyContent: 'flex-end', padding: 18, gap: 8 }}>
+          <ThinkingOrb state="idle" size={44} />
+          <Typography variant="title" style={{ marginTop: 8 }}>
+            What do you want to know?
           </Typography>
-          <Typography
-            variant="small"
-            style={{ textAlign: 'center', color: tokens.foregroundMuted }}
-          >
-            It reads your accounts, budgets, groups and friends, answers with live cards, and
-            prepares changes for you to confirm.
+          <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+            Ask about spending, budgets, groups or friends, or tell me what to add.
           </Typography>
           {!p.available ? (
             <Typography variant="caption" style={{ color: tokens.warning }}>
               {finaiErrorMessage('AI_NOT_CONFIGURED')}
             </Typography>
           ) : null}
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              gap: 8,
-              marginTop: 10,
-            }}
-          >
+          <View style={{ gap: 6, marginTop: 10 }}>
             {FINAI_SUGGESTIONS.map((suggestion) => (
               <Pressable
                 key={suggestion}
@@ -205,11 +194,11 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
                 onPress={() => p.onSend(suggestion)}
                 style={({ pressed }) => ({
                   paddingHorizontal: 14,
-                  paddingVertical: 9,
-                  borderRadius: 999,
+                  paddingVertical: 11,
+                  borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: tokens.borderSubtle,
-                  backgroundColor: pressed ? tokens.surfaceSubtle : tokens.surfaceRaised,
+                  borderColor: pressed ? tokens.primary : tokens.borderSubtle,
+                  backgroundColor: pressed ? tokens.surfaceSubtle : 'transparent',
                   opacity: !p.available || busy ? 0.5 : 1,
                 })}
               >
@@ -233,16 +222,14 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
                 <View
                   style={{
                     maxWidth: '82%',
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    borderRadius: 18,
-                    borderBottomRightRadius: 6,
-                    backgroundColor: tokens.primary,
+                    paddingHorizontal: 13,
+                    paddingVertical: 9,
+                    borderRadius: 16,
+                    borderBottomRightRadius: 4,
+                    backgroundColor: tokens.surfaceSubtle,
                   }}
                 >
-                  <Typography style={{ color: tokens.primaryForeground }} selectable>
-                    {item.text}
-                  </Typography>
+                  <Typography selectable>{item.text}</Typography>
                 </View>
               </View>
             ) : (
@@ -267,11 +254,16 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           flexDirection: 'row',
           alignItems: 'flex-end',
           gap: 8,
-          paddingHorizontal: 12,
-          paddingTop: 8,
-          paddingBottom: (p.bottomInset ?? 0) + 8,
-          borderTopWidth: 1,
-          borderTopColor: tokens.borderSubtle,
+          marginHorizontal: 12,
+          marginTop: 6,
+          marginBottom: (p.bottomInset ?? 0) + 10,
+          paddingLeft: 14,
+          paddingRight: 6,
+          paddingVertical: 6,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: tokens.borderSubtle,
+          backgroundColor: tokens.surfaceSubtle,
         }}
       >
         <TextInput
@@ -281,19 +273,14 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           editable={p.available}
           multiline
           maxLength={4000}
-          placeholder={p.available ? `Ask ${FINAI_NAME}…` : 'FinAI is unavailable'}
+          placeholder={p.available ? `Message ${FINAI_NAME}` : 'FinAI is unavailable'}
           placeholderTextColor={tokens.foregroundSubtle}
           style={{
             flex: 1,
-            minHeight: 44,
+            minHeight: 34,
             maxHeight: 140,
-            paddingHorizontal: 16,
-            paddingTop: 11,
-            paddingBottom: 11,
-            borderRadius: 22,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-            backgroundColor: tokens.surfaceSubtle,
+            paddingTop: 8,
+            paddingBottom: 8,
             color: tokens.foreground,
             fontFamily: 'SpaceGrotesk_400Regular',
             fontSize: 15,
@@ -305,9 +292,9 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           disabled={!canSend}
           onPress={() => p.onSend()}
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
+            width: 36,
+            height: 36,
+            borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: canSend ? tokens.primary : tokens.controlDisabledBackground,
@@ -316,9 +303,9 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           {busy ? (
             <ThinkingOrb state="working" size={20} />
           ) : (
-            <PaperPlaneTilt
-              size={20}
-              weight="fill"
+            <ArrowUp
+              size={18}
+              weight="bold"
               color={canSend ? tokens.primaryForeground : tokens.controlDisabledForeground}
             />
           )}
