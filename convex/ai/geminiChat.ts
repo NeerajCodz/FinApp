@@ -3,7 +3,13 @@
  * Used by the FinAI agent loop. Shares the key, retry, block-reason and usage handling of
  * `gemini.ts`; model ids come from `config.ts` by role. Server-only.
  */
-import { aiGeneration, aiModels, aiRetry, GEMINI_API_BASE, type AiRole } from './config';
+import {
+  aiAttempts,
+  aiGeneration,
+  aiModelForAttempt,
+  aiShouldBackoff,
+  GEMINI_API_BASE,
+} from './config';
 import { aiError } from './errors';
 import {
   backoff,
@@ -65,9 +71,9 @@ type StreamChunk = {
   usageMetadata?: GeminiResponse['usageMetadata'];
 };
 
-/** The streamGenerateContent (SSE) URL for a role; the model id is URL-encoded. */
-export function geminiStreamUrl(role: AiRole): string {
-  return `${GEMINI_API_BASE}/models/${encodeURIComponent(aiModels[role])}:streamGenerateContent?alt=sse`;
+/** The streamGenerateContent (SSE) URL for a model id (URL-encoded). */
+export function geminiStreamUrl(model: string): string {
+  return `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
 }
 
 /** Splits an SSE buffer into complete `data:` payloads and the unfinished remainder. */
@@ -132,7 +138,10 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
   });
 
   let lastFailure: 'busy' | 'unavailable' | 'timeout' = 'unavailable';
-  for (let attempt = 0; attempt <= aiRetry.retries; attempt++) {
+  const attempts = aiAttempts(options.role);
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const model = aiModelForAttempt(options.role, attempt);
+    const wait = attempt < attempts - 1 && aiShouldBackoff(options.role, attempt);
     const controller = new AbortController();
     let timer = setTimeout(() => controller.abort(), timeoutMs);
     const restartTimer = () => {
@@ -141,7 +150,7 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
     };
     let response: Response;
     try {
-      response = await fetchImpl(geminiStreamUrl(options.role), {
+      response = await fetchImpl(geminiStreamUrl(model), {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
         body,
@@ -150,21 +159,20 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
     } catch (cause) {
       clearTimeout(timer);
       lastFailure = controller.signal.aborted ? 'timeout' : 'unavailable';
-      console.warn('[ai] Gemini stream failed', options.role, lastFailure, String(cause));
-      if (attempt < aiRetry.retries) await sleep(backoff(attempt, null));
+      console.warn('[ai] Gemini stream failed', model, lastFailure, String(cause));
+      if (wait) await sleep(backoff(attempt, null));
       continue;
     }
     if (RETRYABLE.has(response.status)) {
       clearTimeout(timer);
       lastFailure = response.status === 429 ? 'busy' : 'unavailable';
-      console.warn('[ai] Gemini stream retryable status', options.role, response.status);
-      if (attempt < aiRetry.retries)
-        await sleep(backoff(attempt, response.headers.get('retry-after')));
+      console.warn('[ai] Gemini stream retryable status', model, response.status);
+      if (wait) await sleep(backoff(attempt, response.headers.get('retry-after')));
       continue;
     }
     if (!response.ok || !response.body) {
       clearTimeout(timer);
-      console.warn('[ai] Gemini rejected stream', options.role, response.status);
+      console.warn('[ai] Gemini rejected stream', model, response.status);
       throw aiError(response.ok ? 'AI_BAD_RESPONSE' : 'AI_REQUEST_REJECTED');
     }
 
@@ -217,9 +225,11 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
     const functionCalls = parts
       .filter((part) => part.functionCall?.name)
       .map((part) => part.functionCall!);
-    if (!text.trim() && functionCalls.length === 0)
-      throw aiError(finishReason === 'MAX_TOKENS' ? 'AI_TRUNCATED' : 'AI_BAD_RESPONSE');
-    return { parts, text, functionCalls, finishReason, usage, model: aiModels[options.role] };
+    // A turn cut off at the token limit is incomplete even if it streamed some text or a
+    // function call: never present it (or act on it) as a finished answer.
+    if (finishReason === 'MAX_TOKENS') throw aiError('AI_TRUNCATED');
+    if (!text.trim() && functionCalls.length === 0) throw aiError('AI_BAD_RESPONSE');
+    return { parts, text, functionCalls, finishReason, usage, model };
   }
   throw aiError(
     lastFailure === 'busy'

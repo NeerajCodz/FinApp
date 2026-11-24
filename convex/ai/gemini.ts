@@ -7,9 +7,11 @@
  * Server-only: it reads `GEMINI_API_KEY` from the Convex environment.
  */
 import {
+  aiAttempts,
   aiGeneration,
-  aiModels,
+  aiModelForAttempt,
   aiRetry,
+  aiShouldBackoff,
   GEMINI_API_BASE,
   GEMINI_API_KEY_ENV,
   type AiRole,
@@ -74,9 +76,9 @@ export function isGeminiConfigured(): boolean {
   return Boolean(process.env[GEMINI_API_KEY_ENV]?.trim());
 }
 
-/** The generateContent URL for a role; the model id is URL-encoded (it may contain spaces). */
-export function geminiUrl(role: AiRole): string {
-  return `${GEMINI_API_BASE}/models/${encodeURIComponent(aiModels[role])}:generateContent`;
+/** The generateContent URL for a model id (URL-encoded). */
+export function geminiUrl(model: string): string {
+  return `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent`;
 }
 
 export type GeminiResponse = {
@@ -148,12 +150,15 @@ async function callGemini(
   });
 
   let lastFailure: 'busy' | 'unavailable' | 'timeout' = 'unavailable';
-  for (let attempt = 0; attempt <= aiRetry.retries; attempt++) {
+  const attempts = aiAttempts(options.role);
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const model = aiModelForAttempt(options.role, attempt);
+    const wait = attempt < attempts - 1 && aiShouldBackoff(options.role, attempt);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response: Response;
     try {
-      response = await fetchImpl(geminiUrl(options.role), {
+      response = await fetchImpl(geminiUrl(model), {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
         body,
@@ -162,20 +167,19 @@ async function callGemini(
     } catch (cause) {
       clearTimeout(timer);
       lastFailure = controller.signal.aborted ? 'timeout' : 'unavailable';
-      console.warn('[ai] Gemini request failed', options.role, lastFailure, String(cause));
-      if (attempt < aiRetry.retries) await sleep(backoff(attempt, null));
+      console.warn('[ai] Gemini request failed', model, lastFailure, String(cause));
+      if (wait) await sleep(backoff(attempt, null));
       continue;
     }
     clearTimeout(timer);
     if (RETRYABLE.has(response.status)) {
       lastFailure = response.status === 429 ? 'busy' : 'unavailable';
-      console.warn('[ai] Gemini retryable status', options.role, response.status);
-      if (attempt < aiRetry.retries)
-        await sleep(backoff(attempt, response.headers.get('retry-after')));
+      console.warn('[ai] Gemini retryable status', model, response.status);
+      if (wait) await sleep(backoff(attempt, response.headers.get('retry-after')));
       continue;
     }
     if (!response.ok) {
-      console.warn('[ai] Gemini rejected request', options.role, response.status);
+      console.warn('[ai] Gemini rejected request', model, response.status);
       throw aiError('AI_REQUEST_REJECTED');
     }
     let payload: GeminiResponse;
@@ -194,7 +198,7 @@ async function callGemini(
       .map((part) => part.text)
       .join('');
     if (!text.trim()) throw aiError('AI_BAD_RESPONSE');
-    return { text, model: aiModels[options.role], finishReason, usage: usageOf(payload) };
+    return { text, model, finishReason, usage: usageOf(payload) };
   }
   throw aiError(
     lastFailure === 'busy'

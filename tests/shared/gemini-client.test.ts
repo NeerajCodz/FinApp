@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aiModels } from '../../convex/ai/config';
+import { aiModelChain, aiModels } from '../../convex/ai/config';
 import { aiErrorCode } from '../../convex/ai/errors';
 import { bytesToBase64, generateStructured, generateText, geminiUrl } from '../../convex/ai/gemini';
 
@@ -30,11 +30,38 @@ describe('gemini client', () => {
     expect(aiModels).toEqual({
       chat: 'gemini-3.8-flash',
       ocr: 'gemini-3.5-flash-lite',
-      decision: 'gemini decision 1',
+      decision: 'gemini-decision-1',
+      utility: 'gemini-3.5-flash-lite',
     });
-    expect(geminiUrl('decision')).toBe(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini%20decision%201:generateContent',
+    expect(geminiUrl('a model')).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/a%20model:generateContent',
     );
+  });
+
+  it('falls back to the next model when the primary is overloaded, without waiting', async () => {
+    const urls: string[] = [];
+    const sleep = vi.fn(async () => {});
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      urls.push(String(url));
+      if (urls.length === 1) return new Response('{}', { status: 503 });
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    const result = await generateText({
+      role: 'chat',
+      parts: [{ text: 'x' }],
+      fetchImpl,
+      sleep,
+      apiKey: 'k',
+    });
+    expect(urls[0]).toContain(`/models/${aiModelChain('chat')[0]}:`);
+    expect(urls[1]).toContain(`/models/${aiModelChain('chat')[1]}:`);
+    expect(result.model).toBe(aiModelChain('chat')[1]);
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it('fails with AI_NOT_CONFIGURED without a key and never calls fetch', async () => {
@@ -87,7 +114,8 @@ describe('gemini client', () => {
     });
     expect(result.text).toBe('hello');
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(sleep).toHaveBeenCalledTimes(2);
+    // Each retry moves straight to the next model in the chain.
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it('maps failures to error codes', async () => {
