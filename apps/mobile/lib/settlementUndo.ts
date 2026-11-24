@@ -23,7 +23,7 @@ export function useUndoSettlement() {
         return true;
       } catch (cause) {
         toast.error('Could not undo the payment', {
-          description: groupErrorMessage(cause, 'Try again from the group history.'),
+          description: groupErrorMessage(cause, 'Try again.'),
         });
         return false;
       }

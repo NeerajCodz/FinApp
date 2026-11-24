@@ -178,7 +178,10 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
     if (sourceSelected)
       balanceMinor +=
         transaction.type === 'expense' || transaction.type === 'transfer'
-          ? -transactionAmount
+          ? // A group expense with other payers charges only the owner's part.
+            -(transaction.accountAmountMinor === undefined
+              ? transactionAmount
+              : amount(transaction.accountAmountMinor))
           : transactionAmount;
     if (destinationSelected) balanceMinor += transactionAmount;
   }

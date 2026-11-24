@@ -48,7 +48,10 @@ export const detail = query({
       if (source !== undefined) {
         balances.set(
           transaction.accountId,
-          source + (outgoing ? -transaction.amountMinor : transaction.amountMinor),
+          source +
+            (outgoing
+              ? -(transaction.accountAmountMinor ?? transaction.amountMinor)
+              : transaction.amountMinor),
         );
       }
       if (transaction.type === 'transfer' && transaction.transferAccountId) {
@@ -95,7 +98,10 @@ export const list = query({
         const outgoing = transaction.type === 'expense' || transaction.type === 'transfer';
         balances.set(
           transaction.accountId,
-          sourceBalance + (outgoing ? -transaction.amountMinor : transaction.amountMinor),
+          sourceBalance +
+            (outgoing
+              ? -(transaction.accountAmountMinor ?? transaction.amountMinor)
+              : transaction.amountMinor),
         );
       }
       if (transaction.type === 'transfer' && transaction.transferAccountId) {

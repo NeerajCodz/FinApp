@@ -78,6 +78,8 @@ export type GroupEditScreenProps = GroupMetadataFieldsProps & {
   onMemberInputChange: (value: string) => void;
   onAddMember: () => void;
   onChangeRole: (member: GroupEditMember, makeAdmin: boolean) => void;
+  /** Owner only: hand the group to this member (you stay on as an admin). */
+  onMakeOwner?: (member: GroupEditMember) => void;
   onRemoveMember: (member: GroupEditMember) => void;
   onRetry: () => void;
   onBack: () => void;
@@ -421,6 +423,16 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                           >
                             {member.role === 'admin' ? 'Demote to member' : 'Promote to admin'}
                           </Button>
+                          {p.onMakeOwner && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onPress={() => p.onMakeOwner?.(member)}
+                            >
+                              Make owner
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -577,7 +589,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
         self={p.balanceGuard?.self ?? false}
         balance={p.balanceGuard?.balance ?? null}
         onClose={() => p.onDismissBalanceGuard?.()}
-        onSettleFirst={() => p.onSettleFirst?.()}
+        onSettleFirst={p.onSettleFirst}
       />
     </KeyboardAvoidingView>
   );

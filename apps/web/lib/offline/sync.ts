@@ -9,7 +9,7 @@ import {
   type OutboxEntry,
   type SyncReceipt,
 } from './repository';
-import { outboxErrorText } from '@finapp/ui/finance/sync-errors';
+import { outboxErrorText, syncErrorCode } from '@finapp/ui/finance/sync-errors';
 
 export type SyncResult = {
   localId: string;
@@ -82,8 +82,8 @@ export async function syncOutbox(
         else await markOperationSynced(userId, current.localId, receipt);
         results.push({ localId: current.localId, status: 'synced' });
       } catch (error) {
-        const reason = error instanceof Error ? error.message : 'SYNC_FAILED';
-        const isConflict = reason === 'TRANSACTION_CHANGED';
+        // Convex wraps server errors, so match the code inside the message, not the whole text.
+        const isConflict = syncErrorCode(error) === 'TRANSACTION_CHANGED';
         const retryCount = current.retryCount + 1;
         const retryAfter =
           !isConflict && isTransientFailure(error) ? nextRetryDelay(retryCount) : undefined;

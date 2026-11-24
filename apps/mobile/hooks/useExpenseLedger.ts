@@ -92,19 +92,26 @@ export function useExpenseLedger(userId: string | null, groupId: string | undefi
       avatarUrl: text(profile?.avatarUrl) ?? null,
       role: group.ownerId === userId ? 'owner' : undefined,
     });
-  const ledger: ExpenseLedger | null = group
-    ? {
-        group,
-        transactions: range.transactions ?? transactions.data ?? [],
-        payers: payers.data ?? [],
-        participants: participants.data ?? [],
-        settlements: range.settlements ?? settlements.data ?? [],
-      }
-    : null;
+  // Balances need the group's all-time history: until that range is covered (downloading, or
+  // offline without it cached) there is no ledger rather than a wrong one from a partial window.
+  const ledger: ExpenseLedger | null =
+    group && range.covered && range.transactions && range.settlements
+      ? {
+          group,
+          transactions: range.transactions,
+          payers: payers.data ?? [],
+          participants: participants.data ?? [],
+          settlements: range.settlements,
+        }
+      : null;
   return {
-    loading: states.some((state) => state.loading),
-    error: states.find((state) => state.error)?.error,
-    retry: () => states.forEach((state) => state.retry()),
+    loading: states.some((state) => state.loading) || (!!group && !range.covered && !range.error),
+    error: states.find((state) => state.error)?.error ?? range.error ?? undefined,
+    refreshing: range.refreshing,
+    retry: () => {
+      states.forEach((state) => state.retry());
+      range.retry();
+    },
     groups: groups.data ?? [],
     group,
     members,

@@ -58,6 +58,8 @@ export type GroupEditScreenProps = {
   onMemberInputChange: (value: string) => void;
   onAddMember: () => void;
   onChangeRole: (member: GroupEditMember, role: 'admin' | 'member') => void;
+  /** Owner only: hand the group to this member (you stay on as an admin). */
+  onMakeOwner?: (member: GroupEditMember) => void;
   onRemoveMember: (member: GroupEditMember) => void;
   onBack: () => void;
   onOpenAnalytics: () => void;
@@ -385,6 +387,16 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
                                       ? 'Demote'
                                       : 'Promote'}
                                 </Button>
+                                {p.onMakeOwner && p.meId && p.meId === p.group.ownerId && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!!p.saving}
+                                    onPress={() => p.onMakeOwner?.(m)}
+                                  >
+                                    Make owner
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -574,7 +586,7 @@ export function GroupEditScreen(p: GroupEditScreenProps) {
         self={p.balanceGuard?.self ?? false}
         balance={p.balanceGuard?.balance ?? null}
         onClose={() => p.onDismissBalanceGuard?.()}
-        onSettleFirst={() => p.onSettleFirst?.()}
+        onSettleFirst={p.onSettleFirst}
       />
     </GroupPage>
   );

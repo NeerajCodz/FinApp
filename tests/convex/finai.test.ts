@@ -320,8 +320,23 @@ describe('@finai in chats', () => {
     vi.useRealTimers();
   });
   // Advance in small steps: running every timer would also fire the 30-minute card expiry.
-  const drain = (t: Awaited<ReturnType<typeof fixture>>['t']) =>
-    t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1_000));
+  // Repeats until no FinAI reply is still in progress, so a slow run can't return early.
+  const drain = async (t: Awaited<ReturnType<typeof fixture>>['t']) => {
+    for (let round = 0; round < 50; round++) {
+      await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1_000));
+      const busy = await t.run(async (ctx) =>
+        [
+          ...(await ctx.db.query('groupMessages').collect()),
+          ...(await ctx.db.query('directMessages').collect()),
+        ].some(
+          (message) =>
+            message.kind === 'ai' &&
+            (message.ai?.status === 'pending' || message.ai?.status === 'streaming'),
+        ),
+      );
+      if (!busy) return;
+    }
+  };
   async function replyFor(
     t: Awaited<ReturnType<typeof fixture>>['t'],
     table: 'groupMessages' | 'directMessages',

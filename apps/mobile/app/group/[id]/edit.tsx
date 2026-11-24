@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Share } from 'react-native';
+import { Alert, Share } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -22,6 +22,17 @@ import {
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
 import { toast } from '@/lib/toast';
+
+/** You can record a payment with a member only if one of you owes and the other is owed. */
+function canSettleWith(
+  balances: Record<string, bigint> | null | undefined,
+  meId: string | null | undefined,
+  memberId: string,
+) {
+  const mine = (meId && balances?.[meId]) || 0n;
+  const theirs = balances?.[memberId] ?? 0n;
+  return (mine > 0n && theirs < 0n) || (mine < 0n && theirs > 0n);
+}
 
 export default function GroupSettingsScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -75,6 +86,7 @@ export default function GroupSettingsScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const updateGroupSettings = useMutation(api.groups.mutations.updateSettings);
   const updateMemberRole = useMutation(api.groups.mutations.setMemberRole);
+  const transferOwnership = useMutation(api.groups.mutations.transferOwnership);
   const addGroupMember = useMutation(api.groups.mutations.addMember);
   const removeGroupMember = useMutation(api.groups.mutations.removeMember);
   const leaveGroupMutation = useMutation(api.groups.mutations.leaveGroup);
@@ -157,6 +169,37 @@ export default function GroupSettingsScreen() {
     } finally {
       setPending(null);
     }
+  }
+
+  function makeOwner(member: LocalRecord) {
+    if (!isConnected) {
+      setActionError('You are offline. Reconnect to hand over the group.');
+      return;
+    }
+    const memberUserId = typeof member.userId === 'string' ? member.userId : '';
+    const memberRecordId = recordId(member);
+    if (!cloudGroupId || pending || !memberUserId || !memberRecordId) return;
+    const name = String(member.displayName ?? member.name ?? 'this member');
+    Alert.alert('Hand over the group?', `${name} becomes the owner. You stay on as an admin.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Make owner',
+        onPress: () => {
+          setPending(memberRecordId);
+          setActionError('');
+          transferOwnership({
+            groupId: cloudGroupId as Id<'groups'>,
+            newOwnerId: memberUserId as Id<'users'>,
+          })
+            .catch((cause: unknown) =>
+              setActionError(
+                cause instanceof Error ? cause.message : 'Could not hand over the group.',
+              ),
+            )
+            .finally(() => setPending(null));
+        },
+      },
+    ]);
   }
 
   async function toggleAdmin(member: LocalRecord, makeAdmin: boolean) {
@@ -422,6 +465,11 @@ export default function GroupSettingsScreen() {
       onMemberInputChange={setMemberInput}
       onAddMember={() => void addMember()}
       onChangeRole={(member, makeAdmin) => void toggleAdmin(member as LocalRecord, makeAdmin)}
+      onMakeOwner={
+        remoteGroup && userId && remoteGroup.ownerId === userId
+          ? (member) => makeOwner(member as LocalRecord)
+          : undefined
+      }
       onRemoveMember={(member) =>
         void removeMember(
           (members.find((record) => recordId(record) === member.id) ?? member) as LocalRecord,
@@ -440,18 +488,23 @@ export default function GroupSettingsScreen() {
       onLeave={() => void leaveGroup()}
       balanceGuard={balanceGuard}
       onDismissBalanceGuard={() => setBalanceGuard(null)}
-      onSettleFirst={() => {
-        const guard = balanceGuard;
-        setBalanceGuard(null);
-        if (!guard) return;
-        const counterpart = guard.self
-          ? settleFirstCounterpart(ledger?.balances, guard.memberId)
-          : guard.memberId;
-        router.push({
-          pathname: '/settle/new',
-          params: { groupId: id ?? '', ...(counterpart ? { member: counterpart } : {}) },
-        });
-      }}
+      onSettleFirst={
+        balanceGuard &&
+        (balanceGuard.self || canSettleWith(ledger?.balances, userId, balanceGuard.memberId))
+          ? () => {
+              const guard = balanceGuard;
+              setBalanceGuard(null);
+              if (!guard) return;
+              const counterpart = guard.self
+                ? settleFirstCounterpart(ledger?.balances, guard.memberId)
+                : guard.memberId;
+              router.push({
+                pathname: '/settle/new',
+                params: { groupId: id ?? '', ...(counterpart ? { member: counterpart } : {}) },
+              });
+            }
+          : undefined
+      }
       onRetry={retry}
       onBack={() => router.back()}
       onOpenAnalytics={() =>

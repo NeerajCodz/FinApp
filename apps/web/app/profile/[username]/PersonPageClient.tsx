@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { calculateBilateralBalance } from '@convex/splits/domain';
+import { bilateralBalancesByCurrency } from '@convex/splits/domain';
 import { ArrowLeft, ArrowLeftRight, UsersRound } from 'lucide-react';
 import { Avatar, Card, Empty, SectionHeader, Separator } from '@finapp/ui/web';
 import {
@@ -202,9 +202,10 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
           )
           .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
       : [];
-  const bilateralBalance =
+  // One balance per shared currency; group order never picks the currency.
+  const balances =
     userId && personId
-      ? calculateBilateralBalance(
+      ? bilateralBalancesByCurrency(
           userId,
           personId,
           sharedGroups,
@@ -212,9 +213,10 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
           payers,
           participants,
           settlements,
-          String(sharedGroups[0]?.currency ?? 'INR'),
         )
-      : 0n;
+      : [];
+  const bilateralBalance = balances[0]?.balanceMinor ?? 0n;
+  const otherBalances = balances.slice(1).filter((row) => row.balanceMinor !== 0n);
   const balanceAvailable =
     Boolean(userId && personId && sharedGroups.length) &&
     rangeState === 'loaded' &&
@@ -284,11 +286,25 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
                   <Separator />
                   <div style={{ display: 'grid', gap: 5 }}>
                     {balanceAvailable ? (
-                      <Money
-                        amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
-                        currency={String(sharedGroups[0]?.currency ?? 'INR')}
-                        size="display"
-                      />
+                      <>
+                        <Money
+                          amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
+                          currency={balances[0]?.currency ?? 'INR'}
+                          size="display"
+                        />
+                        {otherBalances.map((row) => (
+                          <span key={row.currency} className="finance-muted">
+                            <Money
+                              amountMinor={
+                                row.balanceMinor < 0n ? -row.balanceMinor : row.balanceMinor
+                              }
+                              currency={row.currency}
+                              size="body"
+                            />{' '}
+                            {row.balanceMinor > 0n ? 'they owe you' : 'you owe'}
+                          </span>
+                        ))}
+                      </>
                     ) : (
                       <p className="finance-muted">
                         Balance unavailable until saved group ranges are complete.

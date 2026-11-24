@@ -184,7 +184,11 @@ export function GroupExpenseEditor({ transaction }: { transaction: LocalRecord }
           ? { categoryId: text(record.categoryId) || undefined }
           : category
             ? { category }
-            : {}),
+            : composer.categoryId
+              ? // The current category is archived or not synced yet, so it isn't an option:
+                // keep it rather than clearing it on an unrelated edit.
+                { categoryId: text(record.categoryId) || undefined }
+              : {}),
         title: composer.title,
         amountMinor: totalMinor,
         currency,

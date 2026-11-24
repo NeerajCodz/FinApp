@@ -18,7 +18,7 @@ import {
   useLocalRecords,
   type FetchCloudGroupRangePage,
 } from '@/hooks/useLocalRecords';
-import { calculateBilateralBalance } from '../../../convex/splits/domain';
+import { bilateralBalancesByCurrency } from '../../../convex/splits/domain';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
@@ -179,8 +179,9 @@ export default function PublicProfileScreen() {
     Boolean(userId && personId && groups && allMembers) &&
     recordsReady &&
     rangesCovered;
-  const bilateralBalance = balanceAvailable
-    ? calculateBilateralBalance(
+  // One balance per shared currency; group order never picks the currency.
+  const balances = balanceAvailable
+    ? bilateralBalancesByCurrency(
         userId!,
         personId,
         sharedGroups,
@@ -188,9 +189,10 @@ export default function PublicProfileScreen() {
         ledger[1].data ?? [],
         ledger[2].data ?? [],
         ledger[3].data ?? [],
-        String(sharedGroups[0]?.currency ?? 'INR'),
       )
-    : 0n;
+    : [];
+  const bilateralBalance = balances[0]?.balanceMinor ?? 0n;
+  const otherBalances = balances.slice(1).filter((row) => row.balanceMinor !== 0n);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
@@ -272,11 +274,28 @@ export default function PublicProfileScreen() {
               }}
             >
               {balanceAvailable ? (
-                <Money
-                  amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
-                  currency={String(sharedGroups[0]?.currency ?? 'INR')}
-                  size="display"
-                />
+                <>
+                  <Money
+                    amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
+                    currency={balances[0]?.currency ?? 'INR'}
+                    size="display"
+                  />
+                  {otherBalances.map((row) => (
+                    <View
+                      key={row.currency}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                    >
+                      <Money
+                        amountMinor={row.balanceMinor < 0n ? -row.balanceMinor : row.balanceMinor}
+                        currency={row.currency}
+                        size="body"
+                      />
+                      <Typography variant="caption">
+                        {row.balanceMinor > 0n ? 'they owe you' : 'you owe'}
+                      </Typography>
+                    </View>
+                  ))}
+                </>
               ) : (
                 <Typography variant="small">
                   Balance unavailable until saved group ranges are complete.
