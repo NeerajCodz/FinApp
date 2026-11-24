@@ -39,6 +39,11 @@ function assertCurrency(currency: string): number {
   return digits;
 }
 
+/** Minor-unit digits for a supported ISO 4217 currency (INR → 2, JPY → 0), or null. */
+export function minorDigits(currency: string): number | null {
+  return MINOR_DIGITS[currency.trim().toUpperCase()] ?? null;
+}
+
 export function parseMinor(input: string, currency: string): bigint {
   const digits = assertCurrency(currency);
   const normalized = input.trim().replace(/[₹$€£,\s]/g, '');

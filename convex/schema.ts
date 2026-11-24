@@ -638,6 +638,25 @@ export default defineSchema({
   })
     .index('by_user', ['userId'])
     .index('by_token', ['token']),
+  /** Per-user AI requests and token usage per UTC day, for rate limits. */
+  aiUsage: defineTable({
+    userId: v.id('users'),
+    kind: v.union(v.literal('ocr'), v.literal('chat'), v.literal('decision')),
+    windowStart: timestamp,
+    count: v.number(),
+    promptTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    updatedAt: timestamp,
+  }).index('by_user_kind_window', ['userId', 'kind', 'windowStart']),
+  /** Single-use tickets for receipt images uploaded for AI parsing (deleted after parsing). */
+  aiReceiptUploads: defineTable({
+    ticket: v.string(),
+    userId: v.id('users'),
+    createdAt: timestamp,
+    usedAt: optionalTime,
+  })
+    .index('by_ticket', ['ticket'])
+    .index('by_user_createdAt', ['userId', 'createdAt']),
   avatars: defineTable({
     avatarId: v.string(),
     gender: v.union(v.literal('neutral'), v.literal('male'), v.literal('female')),
