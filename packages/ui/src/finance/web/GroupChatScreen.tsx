@@ -7,8 +7,11 @@ import { FinanceEmptyState } from './FinanceEmptyState';
 import { GroupPage, Crumb, Tile, PersonAvatar, s } from './GroupUI';
 import { ChatThread } from '../../chat/web/ChatThread';
 import { FinaiSurface } from '../../ai/web/FinaiSurface';
+import { ThinkingOrb } from '../../web/ThinkingOrb';
 import {
   FINAI_MENTION,
+  finaiErrorMessage,
+  orbStateFor,
   finaiChatOverrides,
   finaiTypingNames,
   type ServerFinaiChatFields,
@@ -213,92 +216,135 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
             Loading saved messages…
           </p>
         )}
-        {p.items.map((item) => (
-          <article
-            key={item.id}
-            className={`${s.message} ${item.ownMessage ? s.own : ''}`}
-            aria-label={item.accessibleLabel}
-          >
-            {!item.ownMessage && (
-              <PersonAvatar
-                name={item.sender ?? (item.kind === 'message' ? 'Member' : 'Group')}
-                url={item.senderAvatarUrl}
-                avatarId={item.senderAvatarId}
+        {p.items.map((item) =>
+          item.ai ? (
+            <article key={item.id} className={s.message} aria-label="FinAI reply">
+              <ThinkingOrb
+                state={
+                  item.ai.status === 'done' || item.ai.status === 'error'
+                    ? 'idle'
+                    : orbStateFor(item.ai)
+                }
                 size={38}
+                paused={item.ai.status === 'done' || item.ai.status === 'error'}
               />
-            )}
-            <div className={s.messageCopy}>
-              <div className={s.messageMeta}>
-                <strong>
-                  {item.ownMessage
-                    ? 'You'
-                    : (item.sender ??
-                      (item.kind === 'expense' ? 'Expense added' : 'Recorded settlement'))}
-                </strong>
-                <time>{item.date}</time>
+              <div className={s.messageCopy}>
+                <div className={s.messageMeta}>
+                  <strong>FinAI</strong>
+                  <time>{item.date}</time>
+                </div>
+                <div className={s.bubble}>
+                  {item.ai.status === 'error' ? (
+                    <p>{finaiErrorMessage(item.ai.errorCode)}</p>
+                  ) : item.text ? (
+                    <p>{item.text}</p>
+                  ) : (
+                    <ThinkingOrb
+                      state={orbStateFor(item.ai)}
+                      size={18}
+                      caption={item.ai.stageLabel ?? 'Thinking…'}
+                      label="FinAI is working"
+                    />
+                  )}
+                  <FinaiSurface
+                    a2ui={item.ai.a2ui}
+                    actions={item.ai.actions}
+                    onDecide={p.onFinaiDecide}
+                  />
+                </div>
               </div>
-              <div className={s.bubble}>
-                {item.kind === 'message' ? (
-                  <>
-                    {item.text && <p>{item.text}</p>}
-                    {item.attachmentUrl && (
-                      <a href={item.attachmentUrl} target="_blank" rel="noreferrer">
-                        <img
-                          className={s.attachment}
-                          src={item.attachmentUrl}
-                          alt={`Bill shared by ${item.ownMessage ? 'you' : (item.sender ?? 'a member')}`}
-                        />
-                      </a>
-                    )}
-                    {!item.text && !item.attachmentUrl && (
-                      <span className={s.muted}>Bill image is no longer available.</span>
-                    )}
-                  </>
-                ) : item.onPress ? (
-                  <button type="button" className={s.expenseBubble} onClick={item.onPress}>
-                    <Tile
-                      icon={
-                        item.icon ??
-                        (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')
-                      }
-                      color={item.color ?? tokens.warning}
-                    />
-                    <span className={s.activityCopy}>
-                      <small>
-                        {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'}
-                      </small>
-                      <span>{item.title}</span>
-                      <strong>{item.amount}</strong>
-                      <small>View ledger record →</small>
-                    </span>
-                  </button>
-                ) : (
-                  <div className={s.expenseBubble}>
-                    <Tile
-                      icon={
-                        item.icon ??
-                        (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')
-                      }
-                      color={item.color ?? tokens.warning}
-                    />
-                    <div className={s.activityCopy}>
-                      <small>
-                        {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'}
-                      </small>
-                      <span>{item.title}</span>
-                      <strong>{item.amount}</strong>
+            </article>
+          ) : (
+            <article
+              key={item.id}
+              className={`${s.message} ${item.ownMessage ? s.own : ''}`}
+              aria-label={item.accessibleLabel}
+            >
+              {!item.ownMessage && (
+                <PersonAvatar
+                  name={item.sender ?? (item.kind === 'message' ? 'Member' : 'Group')}
+                  url={item.senderAvatarUrl}
+                  avatarId={item.senderAvatarId}
+                  size={38}
+                />
+              )}
+              <div className={s.messageCopy}>
+                <div className={s.messageMeta}>
+                  <strong>
+                    {item.ownMessage
+                      ? 'You'
+                      : (item.sender ??
+                        (item.kind === 'expense' ? 'Expense added' : 'Recorded settlement'))}
+                  </strong>
+                  <time>{item.date}</time>
+                </div>
+                <div className={s.bubble}>
+                  {item.kind === 'message' ? (
+                    <>
+                      {item.text && <p>{item.text}</p>}
+                      {item.attachmentUrl && (
+                        <a href={item.attachmentUrl} target="_blank" rel="noreferrer">
+                          <img
+                            className={s.attachment}
+                            src={item.attachmentUrl}
+                            alt={`Bill shared by ${item.ownMessage ? 'you' : (item.sender ?? 'a member')}`}
+                          />
+                        </a>
+                      )}
+                      {!item.text && !item.attachmentUrl && (
+                        <span className={s.muted}>Bill image is no longer available.</span>
+                      )}
+                    </>
+                  ) : item.onPress ? (
+                    <button type="button" className={s.expenseBubble} onClick={item.onPress}>
+                      <Tile
+                        icon={
+                          item.icon ??
+                          (item.kind === 'expense'
+                            ? 'phosphor:Receipt'
+                            : 'phosphor:ArrowsLeftRight')
+                        }
+                        color={item.color ?? tokens.warning}
+                      />
+                      <span className={s.activityCopy}>
+                        <small>
+                          {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'}
+                        </small>
+                        <span>{item.title}</span>
+                        <strong>{item.amount}</strong>
+                        <small>View ledger record →</small>
+                      </span>
+                    </button>
+                  ) : (
+                    <div className={s.expenseBubble}>
+                      <Tile
+                        icon={
+                          item.icon ??
+                          (item.kind === 'expense'
+                            ? 'phosphor:Receipt'
+                            : 'phosphor:ArrowsLeftRight')
+                        }
+                        color={item.color ?? tokens.warning}
+                      />
+                      <div className={s.activityCopy}>
+                        <small>
+                          {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'}
+                        </small>
+                        <span>{item.title}</span>
+                        <strong>{item.amount}</strong>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                </div>
+                {item.ownMessage && !!item.readBy?.length && (
+                  <small aria-label={`Seen by ${item.readBy.join(', ')}`}>
+                    Seen by {item.readBy.join(', ')}
+                  </small>
                 )}
               </div>
-              {item.ownMessage && !!item.readBy?.length && (
-                <small aria-label={`Seen by ${item.readBy.join(', ')}`}>
-                  Seen by {item.readBy.join(', ')}
-                </small>
-              )}
-            </div>
-          </article>
-        ))}
+            </article>
+          ),
+        )}
         {!!p.typingNames?.length && (
           <p className={s.muted} role="status">
             {p.typingNames.join(', ')} {p.typingNames.length === 1 ? 'is' : 'are'} typing…

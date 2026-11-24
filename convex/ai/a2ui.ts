@@ -149,18 +149,22 @@ function component(view: FinView, id: string): Component {
 }
 
 /**
- * The A2UI messages for one reply: a surface whose root `Column` holds one component per view
- * (at most `A2UI_LIMITS.views`, keeping confirmation cards first). Returns null without views.
+ * The A2UI messages for one reply: a surface whose root `Column` holds one component per view.
+ * Every confirmation card is kept (proposals are capped when stored), first; other views fill
+ * the remaining room up to `A2UI_LIMITS.views`. Returns null without views.
  */
 export function buildA2uiMessages(
   surfaceId: string,
   views: readonly FinView[],
 ): A2uiMessage[] | null {
   if (!views.length) return null;
+  const actions = views.filter((view) => view.kind === 'action');
   const ordered = [
-    ...views.filter((view) => view.kind === 'action'),
-    ...views.filter((view) => view.kind !== 'action'),
-  ].slice(0, A2UI_LIMITS.views);
+    ...actions,
+    ...views
+      .filter((view) => view.kind !== 'action')
+      .slice(0, Math.max(0, A2UI_LIMITS.views - actions.length)),
+  ];
   const children = ordered.map((view, index) => component(view, `view-${index}`));
   return [
     { version: A2UI_VERSION, createSurface: { surfaceId, catalogId: FINAI_CATALOG_ID } },

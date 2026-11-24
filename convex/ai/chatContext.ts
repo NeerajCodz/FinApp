@@ -145,11 +145,23 @@ export const threadSnapshot = internalQuery({
         : null,
       participants,
       requesterName: await displayName(ctx, args.requesterId, names),
+      requesterTimeZone: await requesterTimeZone(ctx, args.requesterId),
       sharedGroups: args.scopeType === 'direct' ? await sharedGroups(ctx, thread.userIds) : [],
       messages,
     };
   },
 });
+
+/** The requester's timezone: their settings, then their profile, else UTC. */
+async function requesterTimeZone(ctx: QueryCtx, userId: Id<'users'>): Promise<string> {
+  const settings = await ctx.db
+    .query('userSettings')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .unique();
+  if (settings?.timezone) return settings.timezone;
+  const user = await ctx.db.get(userId);
+  return user?.timezone || 'UTC';
+}
 
 /**
  * A group's ledger for a thread: only when every viewer is a current member. Balances,

@@ -264,6 +264,7 @@ export const runReply = internalAction({
           scope: { type: args.scopeType, id: args.scopeId },
           messageId: args.replyId,
           defaultCurrency: snapshot.group?.currency ?? snapshot.sharedGroups[0]?.currency ?? 'INR',
+          timeZone: snapshot.requesterTimeZone,
         },
         system,
         contents,

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, IconButton, Input, Typography, useTheme } from '@finapp/ui/native';
+import { Button, IconButton, Input, ThinkingOrb, Typography, useTheme } from '@finapp/ui/native';
 import { ImageSquare, PaperPlaneTilt } from 'phosphor-react-native';
 import { Money } from './Money';
 import {
@@ -16,6 +16,8 @@ import { ChatThread } from '../../chat/native/ChatThread';
 import { FinaiSurface } from '../../ai/native/FinaiSurface';
 import {
   FINAI_MENTION,
+  finaiErrorMessage,
+  orbStateFor,
   finaiChatOverrides,
   finaiTypingNames,
   type ServerFinaiChatFields,
@@ -232,125 +234,182 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
           contentContainerStyle={{ padding: 4, gap: 16, flexGrow: 1 }}
         >
           {!!p.loading && <Typography variant="small">Loading saved messages…</Typography>}
-          {p.items.map((item) => (
-            <View
-              key={item.id}
-              accessibilityLabel={item.accessibleLabel}
-              style={{
-                flexDirection: item.ownMessage ? 'row-reverse' : 'row',
-                gap: 8,
-                alignItems: 'flex-start',
-              }}
-            >
-              <GroupAvatar
-                name={
-                  item.ownMessage
-                    ? 'You'
-                    : (item.sender ?? (item.kind === 'message' ? 'Member' : 'Group'))
-                }
-                avatarUrl={item.senderAvatarUrl}
-                avatarId={item.senderAvatarId}
-                size={32}
-              />
+          {p.items.map((item) =>
+            item.ai ? (
               <View
-                style={{ flex: 1, gap: 5, alignItems: item.ownMessage ? 'flex-end' : 'flex-start' }}
+                key={item.id}
+                accessibilityLabel="FinAI reply"
+                style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}
               >
-                <Typography variant="caption">
-                  {item.ownMessage ? 'You' : (item.sender ?? 'Group')} · {item.date}
-                </Typography>
-                {item.kind === 'message' ? (
+                <ThinkingOrb
+                  state={
+                    item.ai.status === 'done' || item.ai.status === 'error'
+                      ? 'idle'
+                      : orbStateFor(item.ai)
+                  }
+                  size={32}
+                  paused={item.ai.status === 'done' || item.ai.status === 'error'}
+                />
+                <View style={{ flex: 1, gap: 5 }}>
+                  <Typography variant="caption">FinAI · {item.date}</Typography>
                   <View
                     style={{
-                      maxWidth: '100%',
-                      gap: 7,
+                      gap: 8,
                       borderRadius: 9,
                       padding: 10,
                       borderWidth: 1,
-                      borderColor: item.ownMessage ? tokens.primary : tokens.borderSubtle,
-                      backgroundColor: item.ownMessage ? tokens.secondary : tokens.surfaceRaised,
-                    }}
-                  >
-                    {!!item.text && (
-                      <Typography
-                        variant="body"
-                        style={{
-                          color: item.ownMessage ? tokens.secondaryForeground : tokens.foreground,
-                        }}
-                      >
-                        {item.text}
-                      </Typography>
-                    )}
-                    {!!item.attachmentUrl && (
-                      <Image
-                        source={{ uri: item.attachmentUrl }}
-                        accessibilityLabel={`Bill shared by ${item.ownMessage ? 'you' : (item.sender ?? 'a member')}`}
-                        resizeMode="contain"
-                        style={{ width: 210, maxWidth: '100%', height: 170, borderRadius: 6 }}
-                      />
-                    )}
-                    {!item.text && !item.attachmentUrl && (
-                      <Typography variant="caption">Bill image is no longer available.</Typography>
-                    )}
-                  </View>
-                ) : (
-                  <Pressable
-                    accessibilityRole={item.onPress ? 'button' : undefined}
-                    disabled={!item.onPress}
-                    onPress={item.onPress}
-                    style={({ pressed }) => ({
-                      opacity: pressed ? 0.75 : 1,
-                      width: '100%',
-                      gap: 8,
-                      padding: 12,
-                      borderRadius: 10,
-                      borderWidth: 1,
                       borderColor: tokens.borderSubtle,
                       backgroundColor: tokens.surfaceRaised,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                    })}
+                    }}
                   >
-                    <GroupTile
-                      icon={
-                        item.icon ??
-                        (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')
-                      }
-                      color={
-                        item.color ?? (item.kind === 'expense' ? tokens.warning : tokens.income)
-                      }
-                      size={42}
+                    {item.ai.status === 'error' ? (
+                      <Typography variant="body">{finaiErrorMessage(item.ai.errorCode)}</Typography>
+                    ) : item.text ? (
+                      <Typography variant="body">{item.text}</Typography>
+                    ) : (
+                      <ThinkingOrb
+                        state={orbStateFor(item.ai)}
+                        size={18}
+                        caption={item.ai.stageLabel ?? 'Thinking…'}
+                        label="FinAI is working"
+                      />
+                    )}
+                    <FinaiSurface
+                      a2ui={item.ai.a2ui}
+                      actions={item.ai.actions}
+                      onDecide={p.onFinaiDecide}
                     />
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <Typography variant="caption">
-                        {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'}
-                      </Typography>
-                      <Typography variant="label">{item.title}</Typography>
-                      {item.amountMinor !== undefined ? (
-                        <Money
-                          amountMinor={item.amountMinor}
-                          currency={item.currency ?? p.group?.currency ?? ''}
-                          size="body"
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View
+                key={item.id}
+                accessibilityLabel={item.accessibleLabel}
+                style={{
+                  flexDirection: item.ownMessage ? 'row-reverse' : 'row',
+                  gap: 8,
+                  alignItems: 'flex-start',
+                }}
+              >
+                <GroupAvatar
+                  name={
+                    item.ownMessage
+                      ? 'You'
+                      : (item.sender ?? (item.kind === 'message' ? 'Member' : 'Group'))
+                  }
+                  avatarUrl={item.senderAvatarUrl}
+                  avatarId={item.senderAvatarId}
+                  size={32}
+                />
+                <View
+                  style={{
+                    flex: 1,
+                    gap: 5,
+                    alignItems: item.ownMessage ? 'flex-end' : 'flex-start',
+                  }}
+                >
+                  <Typography variant="caption">
+                    {item.ownMessage ? 'You' : (item.sender ?? 'Group')} · {item.date}
+                  </Typography>
+                  {item.kind === 'message' ? (
+                    <View
+                      style={{
+                        maxWidth: '100%',
+                        gap: 7,
+                        borderRadius: 9,
+                        padding: 10,
+                        borderWidth: 1,
+                        borderColor: item.ownMessage ? tokens.primary : tokens.borderSubtle,
+                        backgroundColor: item.ownMessage ? tokens.secondary : tokens.surfaceRaised,
+                      }}
+                    >
+                      {!!item.text && (
+                        <Typography
+                          variant="body"
+                          style={{
+                            color: item.ownMessage ? tokens.secondaryForeground : tokens.foreground,
+                          }}
+                        >
+                          {item.text}
+                        </Typography>
+                      )}
+                      {!!item.attachmentUrl && (
+                        <Image
+                          source={{ uri: item.attachmentUrl }}
+                          accessibilityLabel={`Bill shared by ${item.ownMessage ? 'you' : (item.sender ?? 'a member')}`}
+                          resizeMode="contain"
+                          style={{ width: 210, maxWidth: '100%', height: 170, borderRadius: 6 }}
                         />
-                      ) : (
-                        <Typography variant="heading">
-                          {item.amount ?? 'Amount unavailable'}
+                      )}
+                      {!item.text && !item.attachmentUrl && (
+                        <Typography variant="caption">
+                          Bill image is no longer available.
                         </Typography>
                       )}
                     </View>
-                    {!!item.onPress && <Typography>›</Typography>}
-                  </Pressable>
+                  ) : (
+                    <Pressable
+                      accessibilityRole={item.onPress ? 'button' : undefined}
+                      disabled={!item.onPress}
+                      onPress={item.onPress}
+                      style={({ pressed }) => ({
+                        opacity: pressed ? 0.75 : 1,
+                        width: '100%',
+                        gap: 8,
+                        padding: 12,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: tokens.borderSubtle,
+                        backgroundColor: tokens.surfaceRaised,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      })}
+                    >
+                      <GroupTile
+                        icon={
+                          item.icon ??
+                          (item.kind === 'expense'
+                            ? 'phosphor:Receipt'
+                            : 'phosphor:ArrowsLeftRight')
+                        }
+                        color={
+                          item.color ?? (item.kind === 'expense' ? tokens.warning : tokens.income)
+                        }
+                        size={42}
+                      />
+                      <View style={{ flex: 1, gap: 3 }}>
+                        <Typography variant="caption">
+                          {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'}
+                        </Typography>
+                        <Typography variant="label">{item.title}</Typography>
+                        {item.amountMinor !== undefined ? (
+                          <Money
+                            amountMinor={item.amountMinor}
+                            currency={item.currency ?? p.group?.currency ?? ''}
+                            size="body"
+                          />
+                        ) : (
+                          <Typography variant="heading">
+                            {item.amount ?? 'Amount unavailable'}
+                          </Typography>
+                        )}
+                      </View>
+                      {!!item.onPress && <Typography>›</Typography>}
+                    </Pressable>
+                  )}
+                </View>
+                {item.ownMessage && !!item.readBy?.length && (
+                  <Typography
+                    variant="caption"
+                    accessibilityLabel={`Seen by ${item.readBy.join(', ')}`}
+                  >
+                    Seen by {item.readBy.join(', ')}
+                  </Typography>
                 )}
               </View>
-              {item.ownMessage && !!item.readBy?.length && (
-                <Typography
-                  variant="caption"
-                  accessibilityLabel={`Seen by ${item.readBy.join(', ')}`}
-                >
-                  Seen by {item.readBy.join(', ')}
-                </Typography>
-              )}
-            </View>
-          ))}
+            ),
+          )}
           {!!p.typingNames?.length && (
             <Typography variant="caption" accessibilityLiveRegion="polite">
               {p.typingNames.join(', ')} {p.typingNames.length === 1 ? 'is' : 'are'} typing…
