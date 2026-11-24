@@ -204,6 +204,9 @@ export const assistantTools: FinaiTool[] = [
       minAmount: s.amount('Smallest amount.'),
       maxAmount: s.amount('Largest amount.'),
       limit: s.integer('Rows to return (1-50). Default 20.', 1, 50),
+      cursor: s.string(
+        'Pass the `cursor` from a previous result to keep searching older transactions.',
+      ),
     }),
     progress: { stage: 'searching', label: 'Searching your transactions…' },
     run: async (ctx, args) => {
@@ -220,7 +223,7 @@ export const assistantTools: FinaiTool[] = [
       // Filters apply after pagination, so walk raw pages until enough rows match.
       type Row = FunctionReturnType<typeof api.mcp.listTransactions>['items'][number];
       const items: Row[] = [];
-      let cursor: string | null = null;
+      let cursor: string | null = str(args, 'cursor', 2000) ?? null;
       let isDone = false;
       for (let page = 0; page < SEARCH_MAX_PAGES && items.length < limit && !isDone; page++) {
         const result: FunctionReturnType<typeof api.mcp.listTransactions> = await ctx.run.runQuery(
@@ -234,9 +237,24 @@ export const assistantTools: FinaiTool[] = [
         cursor = result.nextCursor;
         isDone = result.isDone;
       }
-      const result = { items: items.slice(0, limit), isDone: isDone && items.length <= limit };
+      // Stopped at the page budget with source left: hand back a cursor to continue from.
+      const result = {
+        items: items.slice(0, limit),
+        isDone: isDone && items.length <= limit,
+        cursor: !isDone && items.length < limit ? cursor : null,
+      };
       return {
-        data: { window: range, items: result.items, more: !result.isDone },
+        data: {
+          window: range,
+          items: result.items,
+          more: !result.isDone,
+          ...(result.cursor
+            ? {
+                cursor: result.cursor,
+                note: 'Only part of the history was searched. Call again with this cursor to continue.',
+              }
+            : {}),
+        },
         views: [
           {
             kind: 'transactions',

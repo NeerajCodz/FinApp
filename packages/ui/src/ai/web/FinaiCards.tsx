@@ -237,13 +237,15 @@ export function ActionCardView({
           >
             Confirm
           </button>
-          <button
-            type="button"
-            className={styles.secondary}
-            onClick={() => (onCancel ? onCancel() : onDecide(actionId, 'cancel'))}
-          >
-            Cancel
-          </button>
+          {state?.canCancel !== false && (
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => (onCancel ? onCancel() : onDecide(actionId, 'cancel'))}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       ) : status === 'pending' && state && !state.canDecide ? (
         <p className={styles.caption}>Waiting for the person who asked to confirm.</p>

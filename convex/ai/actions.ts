@@ -75,6 +75,11 @@ export type FinaiActionView = {
   errorCode?: string;
   /** Whether the viewer may confirm or cancel (only the requester, only while pending). */
   canDecide: boolean;
+  /**
+   * False for an interrupted confirmation: its write may already exist, so it can only be
+   * retried (idempotently), never cancelled.
+   */
+  canCancel: boolean;
 };
 
 /** Action states for reply messages, keyed by message id, as the viewer sees them. */
@@ -98,12 +103,14 @@ export async function actionViews(
             : row.status === 'pending' && row.expiresAt <= now
               ? 'expired'
               : row.status;
+          const canDecide = status === 'pending' && row.userId === viewerId;
           return {
             id: row._id,
             title: row.title,
             status,
             ...(row.errorCode ? { errorCode: row.errorCode } : {}),
-            canDecide: status === 'pending' && row.userId === viewerId,
+            canDecide,
+            canCancel: canDecide && row.status === 'pending',
           };
         }),
       ] as const;
@@ -119,7 +126,8 @@ export const cancel = mutation({
     if (!user) throw new Error('AUTH_REQUIRED');
     const row = await ctx.db.get(actionId);
     if (!row || row.userId !== user._id) throw new Error('ACTION_NOT_FOUND');
-    if (row.status !== 'pending' && !isStaleRunning(row, Date.now())) return row.status;
+    // An interrupted confirmation may already have written: it can be retried, not cancelled.
+    if (row.status !== 'pending') return row.status;
     await ctx.db.patch(actionId, { status: 'cancelled', decidedAt: Date.now() });
     return 'cancelled' as const;
   },

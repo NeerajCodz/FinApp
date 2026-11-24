@@ -14,6 +14,7 @@ import {
   type ReceiptFormFields,
 } from '@finapp/ui/ai/receipt-scan';
 import type { ReceiptDraft } from '@convex/ai/receiptDomain';
+import { minorDigits } from '@convex/shared/money';
 
 /**
  * "Scan receipt" for the mobile composers: picks a photo (camera or library) with
@@ -40,11 +41,24 @@ export function useReceiptScanner({
   const lastScan = React.useRef<{ draft: ReceiptDraft; currency: string } | null>(null);
   const onReviewRef = React.useRef(onReview);
   onReviewRef.current = onReview;
+  const onFieldsRef = React.useRef(onFields);
+  onFieldsRef.current = onFields;
   React.useEffect(() => {
     const last = lastScan.current;
     if (!last || !currency || last.currency === currency) return;
+    const digitsChanged = (minorDigits(last.currency) ?? 2) !== (minorDigits(currency) ?? 2);
     last.currency = currency;
-    onReviewRef.current?.(receiptReviewFor(last.draft, currency));
+    // Amounts depend on the currency's decimals (e.g. KWD 3 → INR 2): rebuild them, not just
+    // the review, so the rows stay valid for the new account.
+    // Only then are the rows rewritten; otherwise the user's edits are kept.
+    const review = receiptReviewFor(last.draft, currency);
+    if (digitsChanged)
+      onFieldsRef.current(receiptDraftToForm(last.draft, currency), {
+        fields: review.fields,
+        itemIds: review.itemIds,
+        warnings: review.warnings,
+      });
+    onReviewRef.current?.(review);
   }, [currency]);
   const scanner = useReceiptScan({
     generateUploadUrl: () => generateUploadUrl({}),
