@@ -14,6 +14,7 @@ import {
   useTypingSender,
 } from '@finapp/ui/chat';
 import { toast } from '@/lib/toast';
+import { useFinaiDecide } from '@/hooks/useFinaiDecide';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { recordId, recordIds } from '@/lib/ledger';
 import type { LocalRecord } from '@/local/repository';
@@ -55,6 +56,7 @@ export default function GroupChatRoute() {
   const setTypingMutation = useMutation(api.presence.mutations.setTyping);
   const markRead = useMutation(api.presence.mutations.markRead);
   const setPinned = useMutation(api.groups.mutations.setChatMessagePinned);
+  const decideFinai = useFinaiDecide();
   const toggleReaction = useMutation(api.groups.mutations.toggleChatReaction);
   const typing = useTypingSender(
     canUseChat
@@ -178,7 +180,8 @@ export default function GroupChatRoute() {
         senderAvatarUrl: message.senderAvatarUrl,
         senderAvatarId: message.senderAvatarId,
         ownMessage,
-        text: message.kind === 'text' ? message.text : undefined,
+        text: message.kind === 'text' || message.kind === 'ai' ? message.text : undefined,
+        ai: message.ai,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
         reactions: message.reactions,
         myReaction: message.myReaction,
@@ -321,6 +324,7 @@ export default function GroupChatRoute() {
       }
       members={members}
       typingNames={typingNames}
+      onFinaiDecide={decideFinai}
       onTypingChange={(active) => (active ? typing.onDraftChange('typing') : typing.stop())}
       onOpenGroup={() => router.push({ pathname: '/group/[id]', params: { id: id ?? '' } })}
       onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
