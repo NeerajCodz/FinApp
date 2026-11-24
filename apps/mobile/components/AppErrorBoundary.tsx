@@ -1,16 +1,18 @@
 import React from 'react';
 import { Text as RNText, View } from 'react-native';
 import { createTokens, type ThemeTokens } from '@finapp/ui/tokens';
-import { ThemeProvider, useTheme } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
 import { Illustration } from '@finapp/ui/illustrations';
 
 type FallbackProps = {
   error: Error;
   retry: () => void;
   tokens: ThemeTokens;
+  /** The themed illustration needs the ThemeProvider; the last-resort fallback skips it. */
+  illustrated?: boolean;
 };
 
-export function ErrorFallbackView({ error, retry, tokens }: FallbackProps) {
+export function ErrorFallbackView({ error, retry, tokens, illustrated = true }: FallbackProps) {
   return (
     <View
       accessibilityRole="alert"
@@ -23,7 +25,7 @@ export function ErrorFallbackView({ error, retry, tokens }: FallbackProps) {
         backgroundColor: tokens.background,
       }}
     >
-      <Illustration scene="error" size={168} />
+      {illustrated ? <Illustration scene="error" size={168} /> : null}
       <RNText
         style={{
           color: tokens.foreground,
@@ -69,13 +71,19 @@ export function ThemedErrorFallback({ error, retry }: { error: Error; retry: () 
   return <ErrorFallbackView error={error} retry={retry} tokens={tokens} />;
 }
 
-/** Last-resort fallback for errors thrown outside the theme provider. */
+/**
+ * Last-resort fallback for errors thrown outside the theme provider. It must not mount the
+ * provider again (the failure may come from it), so it uses a static palette and no
+ * illustration.
+ */
 export function StaticErrorFallback({ error, retry }: { error: Error; retry: () => void }) {
-  // Outside the app providers: give the fallback its own theme so the illustration resolves.
   return (
-    <ThemeProvider forcedMode="dark">
-      <ErrorFallbackView error={error} retry={retry} tokens={createTokens('dark')} />
-    </ThemeProvider>
+    <ErrorFallbackView
+      error={error}
+      retry={retry}
+      tokens={createTokens('dark')}
+      illustrated={false}
+    />
   );
 }
 

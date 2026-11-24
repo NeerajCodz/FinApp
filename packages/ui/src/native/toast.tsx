@@ -1,5 +1,6 @@
 import React from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, View } from 'react-native';
+import { useReducedMotion } from './motion';
 import { useTheme } from './ThemeProvider';
 import { Text } from './typography';
 import { layoutTokens, motionTokens, space, withAlpha } from '../tokens';
@@ -42,8 +43,9 @@ export function dismissToast(id: number): void {
   emit();
 }
 
-function ToastCard({ item, onDone }: { item: ToastItem; onDone: () => void }) {
+function ToastCard({ item }: { item: ToastItem }) {
   const { tokens } = useTheme();
+  const reducedMotion = useReducedMotion();
   const progress = React.useRef(new Animated.Value(0)).current;
   const color =
     item.tone === 'error'
@@ -51,34 +53,44 @@ function ToastCard({ item, onDone }: { item: ToastItem; onDone: () => void }) {
       : item.tone === 'info'
         ? tokens.split
         : tokens.positive;
+  // Stable per toast (keyed by id), so other toasts coming and going never restart its timer.
+  const id = item.id;
   const close = React.useCallback(() => {
     Animated.timing(progress, {
       toValue: 0,
-      duration: motionTokens.standard,
+      duration: reducedMotion ? 0 : motionTokens.standard,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start(onDone);
-  }, [onDone, progress]);
+    }).start(() => dismissToast(id));
+  }, [id, progress, reducedMotion]);
+  const closeRef = React.useRef(close);
+  closeRef.current = close;
 
   React.useEffect(() => {
     Animated.timing(progress, {
       toValue: 1,
-      duration: motionTokens.sheet,
+      duration: reducedMotion ? 0 : motionTokens.sheet,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-    const timeout = setTimeout(close, item.duration ?? (item.action ? 6000 : 3500));
+    // reducedMotion is read once at mount for the entrance; the timer must not restart.
+  }, [progress]);
+  React.useEffect(() => {
+    const timeout = setTimeout(
+      () => closeRef.current(),
+      item.duration ?? (item.action ? 6000 : 3500),
+    );
     return () => clearTimeout(timeout);
-  }, [close, item.action, item.duration, progress]);
+  }, [item.action, item.duration]);
 
   return (
     <Animated.View
       accessibilityLiveRegion="polite"
       style={{
         opacity: progress,
-        transform: [
-          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
-        ],
+        transform: reducedMotion
+          ? []
+          : [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }],
       }}
     >
       <Pressable
@@ -155,7 +167,7 @@ export function ToastViewport({ bottomInset = 0 }: { bottomInset?: number }) {
       }}
     >
       {shown.map((item) => (
-        <ToastCard key={item.id} item={item} onDone={() => dismissToast(item.id)} />
+        <ToastCard key={item.id} item={item} />
       ))}
     </View>
   );

@@ -13,6 +13,7 @@ import { Button, View } from '@finapp/ui/native';
 import type { AccentValue } from '@finapp/ui/tokens';
 import Storage from 'expo-sqlite/kv-store';
 import { api } from '@convex/_generated/api';
+import { FinaiLauncher } from '@/components/FinaiLauncher';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
@@ -223,6 +224,7 @@ export default function RootLayout() {
             <AuthGate>
               <ThemedStack />
             </AuthGate>
+            <FinaiLauncher />
             <AppToasts />
             <NotificationEffects />
           </AppErrorBoundary>

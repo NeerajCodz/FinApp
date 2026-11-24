@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Dimensions,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -32,7 +33,10 @@ export function Sheet({
   const [mounted, setMounted] = React.useState(visible);
   const progress = React.useRef(new Animated.Value(0)).current;
   const drag = React.useRef(new Animated.Value(0)).current;
-  const height = React.useRef(480);
+  // Start fully offscreen; the real height replaces this after the first layout so the
+  // slide interpolation is rebuilt for tall sheets too.
+  const height = React.useRef(Dimensions.get('window').height);
+  const [measuredHeight, setMeasuredHeight] = React.useState(height.current);
 
   React.useEffect(() => {
     if (visible) {
@@ -72,7 +76,7 @@ export function Sheet({
 
   if (!mounted) return null;
   const translateY = Animated.add(
-    progress.interpolate({ inputRange: [0, 1], outputRange: [height.current, 0] }),
+    progress.interpolate({ inputRange: [0, 1], outputRange: [measuredHeight, 0] }),
     drag,
   );
   return (
@@ -89,7 +93,9 @@ export function Sheet({
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Animated.View
             onLayout={(event) => {
-              height.current = event.nativeEvent.layout.height;
+              const measured = event.nativeEvent.layout.height;
+              height.current = measured;
+              if (Math.abs(measured - measuredHeight) > 1) setMeasuredHeight(measured);
             }}
             style={{
               transform: [{ translateY }],

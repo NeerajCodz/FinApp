@@ -6,7 +6,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Avatar, Input, Text, ThinkingOrb, Typography, useTheme } from '@finapp/ui/native';
+import { Avatar, Input, Text, Typography, useTheme } from '@finapp/ui/native';
 import { EntityIcon, type SocialProfileSummary, DEFAULT_GROUP_COLOR } from '@finapp/ui/finance';
 import { contrastForeground } from '@finapp/ui/tokens';
 import { recordId, recordIds } from '@/lib/ledger';
@@ -256,23 +256,6 @@ export default function NetworkHomeScreen() {
               Connect, split expenses, and manage your circles.
             </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ask FinAI"
-            onPress={() => router.push('/finai' as never)}
-            style={{
-              width: 43,
-              height: 43,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1,
-              borderColor: tokens.borderSubtle,
-              borderRadius: 13,
-              backgroundColor: tokens.surfaceSubtle,
-            }}
-          >
-            <ThinkingOrb state="idle" size={22} />
-          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={

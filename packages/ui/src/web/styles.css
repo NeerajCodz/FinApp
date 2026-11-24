@@ -649,6 +649,27 @@
   padding-top: 0.25rem;
 }
 
+/* Wide screens: a sheet becomes a centred dialog instead of a full-width bottom bar. */
+@media (min-width: 791px) {
+  .finapp-overlay--sheet {
+    align-items: center;
+    padding: 1.25rem;
+  }
+  .finapp-overlay--sheet .finapp-overlay__panel {
+    width: min(100%, 30rem);
+    border: 1px solid var(--finapp-border-subtle);
+    border-radius: 1.5rem;
+    padding: 1.25rem;
+    animation-name: finapp-panel-in;
+  }
+  .finapp-overlay--sheet .finapp-sheet-handle {
+    display: none;
+  }
+  .finapp-overlay--sheet .finapp-overlay__heading {
+    padding-top: 0;
+  }
+}
+
 .finapp-overlay--drawer {
   justify-content: flex-end;
   padding: 0;
