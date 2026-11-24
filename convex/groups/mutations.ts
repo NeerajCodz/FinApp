@@ -30,6 +30,7 @@ import {
 import { formatMinor } from '../shared/money';
 import { assertCurrency } from '../shared/validators';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
+import { advanceReadPointer, CHAT_PIN_LIMIT, chatReactionEmoji, clearTyping } from '../shared/chat';
 
 const participantMethodValidator = v.union(
   v.literal('equal'),
@@ -979,6 +980,95 @@ export const leaveGroup = mutation({
   },
 });
 
+/** Sending ends typing and implies the sender has read everything before their message. */
+async function afterChatSend(
+  ctx: MutationCtx,
+  groupId: Id<'groups'>,
+  userId: Id<'users'>,
+  createdAt: number,
+) {
+  const scope = { type: 'group' as const, id: groupId };
+  await clearTyping(ctx, scope, userId);
+  await advanceReadPointer(ctx, scope, userId, createdAt);
+}
+
+async function liveChatMessageForMember(
+  ctx: MutationCtx,
+  messageId: Id<'groupMessages'>,
+  userId: Id<'users'>,
+) {
+  const message = await ctx.db.get(messageId);
+  if (!message || (message.expiresAt !== undefined && message.expiresAt <= Date.now()))
+    throw new Error('MESSAGE_UNAVAILABLE');
+  const group = await ctx.db.get(message.groupId);
+  if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+  const membership = await ctx.db
+    .query('groupMembers')
+    .withIndex('by_group_user', (query) =>
+      query.eq('groupId', message.groupId).eq('userId', userId),
+    )
+    .unique();
+  if (!membership) throw new Error('NOT_MEMBER');
+  return { message, membership };
+}
+
+/** Admins and owners may pin any message; members may pin or unpin their own. */
+export const setChatMessagePinned = mutation({
+  args: { messageId: v.id('groupMessages'), pinned: v.boolean() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const { message, membership } = await liveChatMessageForMember(ctx, args.messageId, user._id);
+    if (!isGroupAdmin(membership.role) && message.senderId !== user._id)
+      throw new Error('INSUFFICIENT_PERMISSION');
+    if (!args.pinned) {
+      if (message.pinnedAt !== undefined)
+        await ctx.db.patch(message._id, { pinnedAt: undefined, pinnedBy: undefined });
+      return { pinned: false as const };
+    }
+    if (message.pinnedAt !== undefined) return { pinned: true as const };
+    const pins = await ctx.db
+      .query('groupMessages')
+      .withIndex('by_group_pinnedAt', (query) =>
+        query.eq('groupId', message.groupId).gt('pinnedAt', 0),
+      )
+      .take(CHAT_PIN_LIMIT);
+    if (pins.length >= CHAT_PIN_LIMIT) throw new Error('PIN_LIMIT_REACHED');
+    await ctx.db.patch(message._id, { pinnedAt: Date.now(), pinnedBy: user._id });
+    return { pinned: true as const };
+  },
+});
+
+/** One reaction per member per message; choosing the same emoji again removes it. */
+export const toggleChatReaction = mutation({
+  args: { messageId: v.id('groupMessages'), emoji: chatReactionEmoji },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const { message } = await liveChatMessageForMember(ctx, args.messageId, user._id);
+    const existing = await ctx.db
+      .query('groupMessageReactions')
+      .withIndex('by_message_user', (query) =>
+        query.eq('messageId', message._id).eq('userId', user._id),
+      )
+      .unique();
+    if (existing?.emoji === args.emoji) {
+      await ctx.db.delete(existing._id);
+      return { active: false as const, emoji: null };
+    }
+    if (existing) await ctx.db.patch(existing._id, { emoji: args.emoji, createdAt: Date.now() });
+    else
+      await ctx.db.insert('groupMessageReactions', {
+        messageId: message._id,
+        groupId: message.groupId,
+        userId: user._id,
+        emoji: args.emoji,
+        createdAt: Date.now(),
+      });
+    return { active: true as const, emoji: args.emoji };
+  },
+});
+
 // Chat bypasses the offline finance outbox so message authorization and attachment expiry stay server-owned.
 export const createChatUploadUrl = mutation({
   args: { groupId: v.id('groups') },
@@ -1028,6 +1118,7 @@ export const sendChatText = mutation({
       await ctx.scheduler.runAt(expiresAt, internal.groups.mutations.deleteExpiredMessage, {
         messageId,
       });
+    await afterChatSend(ctx, args.groupId, user._id, now);
     return messageId;
   },
 });
@@ -1080,6 +1171,7 @@ export const sendBillAttachment = mutation({
       await ctx.scheduler.runAt(expiresAt, internal.groups.mutations.deleteExpiredMessage, {
         messageId,
       });
+    await afterChatSend(ctx, args.groupId, user._id, now);
     return messageId;
   },
 });
@@ -1100,7 +1192,11 @@ export const deleteExpiredMessage = internalMutation({
       .query('groupMessageReads')
       .withIndex('by_message_user', (query) => query.eq('messageId', messageId))
       .collect();
-    await Promise.all(reads.map((read) => ctx.db.delete(read._id)));
+    const reactions = await ctx.db
+      .query('groupMessageReactions')
+      .withIndex('by_message_user', (query) => query.eq('messageId', messageId))
+      .collect();
+    await Promise.all([...reads, ...reactions].map((row) => ctx.db.delete(row._id)));
     await ctx.db.delete(messageId);
   },
 });

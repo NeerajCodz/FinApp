@@ -224,7 +224,15 @@ describe('social and messaging backend', () => {
     await expect(
       outsider.mutation(api.presence.mutations.markGroupSeen, { messageId: groupMessageId }),
     ).rejects.toThrow('NOT_MEMBER');
-    expect(await t.run((ctx) => ctx.db.query('groupMessageReads').collect())).toHaveLength(1);
+    // Receipts are one pointer per reader per thread, not one row per message.
+    const pointers = await t.run((ctx) =>
+      ctx.db
+        .query('chatReadPointers')
+        .withIndex('by_scope', (q) => q.eq('scopeType', 'group').eq('scopeId', ids.groupId))
+        .collect(),
+    );
+    expect(pointers.map((row) => row.userId).sort()).toEqual([ids.firstId, ids.secondId].sort());
+    expect(await t.run((ctx) => ctx.db.query('groupMessageReads').collect())).toHaveLength(0);
   });
 
   it('expires presence and typing and honors active/last-seen privacy', async () => {

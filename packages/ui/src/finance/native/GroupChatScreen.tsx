@@ -12,6 +12,8 @@ import {
   type GroupMetadata,
 } from './GroupPrimitives';
 import { FinanceEmptyState } from './FinanceEmptyState';
+import { ChatThread } from '../../chat/native/ChatThread';
+import type { ChatMessage, ChatPerson, ChatPin, ChatReactionEmoji } from '../../chat/model';
 
 export type GroupChatItem = {
   id: string;
@@ -32,6 +34,15 @@ export type GroupChatItem = {
   color?: string;
   readBy?: readonly string[];
   onPress?: () => void;
+  /** Thread fields (full chat screen). */
+  createdAt?: number;
+  senderId?: string;
+  status?: 'sent' | 'pending' | 'failed';
+  reactions?: readonly { emoji: string; count: number }[];
+  myReaction?: string | null;
+  pinned?: boolean;
+  canPin?: boolean;
+  seenByPeople?: readonly ChatPerson[];
 };
 export type GroupChatScreenProps = {
   items: readonly GroupChatItem[];
@@ -59,15 +70,72 @@ export type GroupChatScreenProps = {
   onAddExpense?: () => void;
   onOpenSettings?: () => void;
   embedded?: boolean;
+  canLoadOlder?: boolean;
+  loadingOlder?: boolean;
+  onLoadOlder?: () => void;
+  firstUnreadId?: string;
+  pinned?: readonly (ChatPin & { canUnpin?: boolean })[];
+  onTogglePin?: (id: string, pinned: boolean) => void;
+  onReact?: (id: string, emoji: ChatReactionEmoji) => void;
+  onRetry?: (id: string) => void;
+  onDiscard?: (id: string) => void;
+  onSeenLatest?: (createdAt: number) => void;
 };
+
+/** Maps timeline items onto the shared chat thread model; ledger items become event cards. */
+export function groupChatMessages(items: readonly GroupChatItem[]): ChatMessage[] {
+  return items.map((item) => {
+    const base = {
+      id: item.id,
+      createdAt: item.createdAt ?? 0,
+      mine: !!item.ownMessage,
+      senderId: item.senderId,
+      senderName: item.ownMessage ? 'You' : item.sender,
+      senderAvatarUrl: item.senderAvatarUrl,
+      senderAvatarId: item.senderAvatarId,
+    };
+    if (item.kind !== 'message')
+      return {
+        ...base,
+        kind: 'event' as const,
+        event: {
+          label: item.kind === 'expense' ? 'Expense added' : 'Settlement recorded',
+          title: item.title ?? '',
+          amount: item.amount,
+          amountMinor: item.amountMinor,
+          currency: item.currency,
+          icon: item.icon,
+          color: item.color,
+          onPress: item.onPress,
+        },
+      };
+    return {
+      ...base,
+      kind:
+        item.text === undefined && item.attachmentUrl !== undefined
+          ? ('image' as const)
+          : ('text' as const),
+      text: item.text,
+      imageUrl: item.attachmentUrl,
+      status: item.status,
+      reactions: item.reactions,
+      myReaction: item.myReaction,
+      pinned: item.pinned,
+      canPin: item.canPin,
+      seenBy: item.seenByPeople,
+    };
+  });
+}
 
 export function GroupChatScreen(p: GroupChatScreenProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const timelineRef = useRef<ScrollView>(null);
   useEffect(() => {
-    if (p.canSend && p.items.length) timelineRef.current?.scrollToEnd({ animated: true });
-  }, [p.canSend, p.items.length]);
+    if (p.embedded && p.canSend && p.items.length)
+      timelineRef.current?.scrollToEnd({ animated: true });
+  }, [p.embedded, p.canSend, p.items.length]);
+  const threadMessages = React.useMemo(() => groupChatMessages(p.items), [p.items]);
   const content = (
     <>
       {!p.embedded && (
@@ -357,6 +425,18 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
     </>
   );
   if (p.embedded) return <View style={{ gap: 12 }}>{content}</View>;
+  const offline = (
+    <View style={{ gap: 5, borderTopWidth: 1, borderColor: tokens.borderSubtle, paddingTop: 12 }}>
+      <Typography variant="label">
+        {p.connected ? 'Chat is not synced yet' : 'Group chat is offline'}
+      </Typography>
+      <Typography variant="caption">
+        {p.connected
+          ? 'Sync the saved group to connect chat and bill sharing.'
+          : 'Connect to load messages or send notes and bill images. Your ledger remains available offline.'}
+      </Typography>
+    </View>
+  );
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -365,14 +445,123 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
       <View
         style={{
           flex: 1,
-          paddingHorizontal: 20,
+          paddingHorizontal: 16,
           paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 12,
-          gap: 12,
+          paddingBottom: insets.bottom + 10,
+          gap: 10,
         }}
       >
-        {content}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+          {!!p.onBack && (
+            <Button size="sm" variant="outline" onPress={p.onBack}>
+              ‹ Back
+            </Button>
+          )}
+          <View style={{ flex: 1 }}>
+            <Typography variant="heading" numberOfLines={1}>
+              {p.group?.name ?? 'Group chat'}
+            </Typography>
+            <Typography variant="caption" accessibilityLiveRegion="polite">
+              {p.members?.length ? `${p.members.length} members · ` : ''}
+              {p.group?.currency ? `${p.group.currency} · ` : ''}Group chat
+            </Typography>
+          </View>
+          {!!p.onOpenGroup && (
+            <Button size="sm" variant="outline" onPress={p.onOpenGroup}>
+              Group
+            </Button>
+          )}
+          {!!p.onAddExpense && (
+            <Button size="sm" onPress={p.onAddExpense}>
+              + Expense
+            </Button>
+          )}
+        </View>
+        <ChatThread
+          mode="group"
+          messages={threadMessages}
+          loading={p.loading}
+          canLoadOlder={p.canLoadOlder}
+          loadingOlder={p.loadingOlder}
+          onLoadOlder={p.onLoadOlder}
+          firstUnreadId={p.firstUnreadId}
+          typingNames={p.typingNames}
+          pinned={p.pinned}
+          onTogglePin={p.onTogglePin}
+          onReact={p.onReact}
+          onRetry={p.onRetry}
+          onDiscard={p.onDiscard}
+          onSeenLatest={p.onSeenLatest}
+          error={p.error}
+          renderEvent={(message) => {
+            const item = p.items.find((entry) => entry.id === message.id);
+            return item ? <EventCard item={item} currency={p.group?.currency ?? ''} /> : null;
+          }}
+          emptyTitle="Start the conversation"
+          emptyDescription="Share a note or a bill with the group."
+          composer={
+            p.canSend
+              ? {
+                  draft: p.draft,
+                  onDraftChange: (value) => {
+                    p.onDraftChange(value);
+                    p.onTypingChange?.(Boolean(value.trim()));
+                  },
+                  onSend: p.onSend,
+                  onBlur: () => p.onTypingChange?.(false),
+                  onAttach: p.onChooseBillImage,
+                  attachLabel: 'Attach bill image',
+                  uploading: p.pending,
+                  placeholder: p.group ? `Message ${p.group.name}…` : 'Write a message…',
+                }
+              : undefined
+          }
+          footer={offline}
+        />
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function EventCard({ item, currency }: { item: GroupChatItem; currency: string }) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole={item.onPress ? 'button' : undefined}
+      accessibilityLabel={item.accessibleLabel}
+      disabled={!item.onPress}
+      onPress={item.onPress}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.75 : 1,
+        gap: 8,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: tokens.borderSubtle,
+        backgroundColor: tokens.surfaceRaised,
+        flexDirection: 'row',
+        alignItems: 'center',
+      })}
+    >
+      <GroupTile
+        icon={
+          item.icon ?? (item.kind === 'expense' ? 'phosphor:Receipt' : 'phosphor:ArrowsLeftRight')
+        }
+        color={item.color ?? (item.kind === 'expense' ? tokens.warning : tokens.income)}
+        size={40}
+      />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Typography variant="caption">
+          {item.kind === 'expense' ? 'Expense added' : 'Settlement recorded'} · {item.date}
+        </Typography>
+        <Typography variant="label">{item.title}</Typography>
+        {item.amountMinor !== undefined ? (
+          <Money amountMinor={item.amountMinor} currency={item.currency ?? currency} size="body" />
+        ) : (
+          <Typography variant="label">{item.amount ?? 'Amount unavailable'}</Typography>
+        )}
+      </View>
+      {!!item.onPress && <Typography>›</Typography>}
+    </Pressable>
   );
 }

@@ -1,15 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
-import { useMutation, useQuery } from 'convex/react';
+import React, { useMemo, useState } from 'react';
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { router, useLocalSearchParams } from 'expo-router';
 import { formatTransactionDate, GroupChatScreen, type GroupChatItem } from '@finapp/ui/finance';
+import {
+  firstUnreadMessageId,
+  readersOf,
+  useLiveTypists,
+  useOptimisticMessages,
+  useReadMarker,
+  useTypingSender,
+} from '@finapp/ui/chat';
+import { toast } from '@/lib/toast';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { recordId, recordIds } from '@/lib/ledger';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+
+const PAGE_SIZE = 30;
 
 type Group = LocalRecord & { name?: string; currency?: string; icon?: string; color?: string };
 
@@ -29,46 +39,48 @@ export default function GroupChatRoute() {
     api.groups.queries.detail,
     canUseChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
   );
-  const chatMessages = useQuery(
-    api.groups.queries.chatMessages,
-    canUseChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+  const history = usePaginatedQuery(
+    api.groups.queries.chatMessagesPage,
+    canUseChat ? { groupId: cloudGroupId } : 'skip',
+    { initialNumItems: PAGE_SIZE },
+  );
+  const chatMeta = useQuery(
+    api.groups.queries.chatMeta,
+    canUseChat ? { groupId: cloudGroupId } : 'skip',
   );
   const scopeState = useQuery(
     api.presence.queries.scopeState,
-    canUseChat ? { scopeType: 'group', scopeId: cloudGroupId as Id<'groups'> } : 'skip',
+    canUseChat ? { scopeType: 'group', scopeId: cloudGroupId } : 'skip',
   );
   const setTypingMutation = useMutation(api.presence.mutations.setTyping);
-  const markGroupSeen = useMutation(api.presence.mutations.markGroupSeen);
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const typingActive = useRef(false);
-  const typingLastSent = useRef(0);
-  const markedSeenIds = useRef(new Set<string>());
-  useEffect(() => {
-    const stopTyping = () => {
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-      typingTimer.current = undefined;
-      if (typingActive.current && cloudGroupId) {
-        typingActive.current = false;
-        void setTypingMutation({
-          scopeType: 'group',
-          scopeId: cloudGroupId as Id<'groups'>,
-          typing: false,
-        }).catch(() => {});
-      }
-    };
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') stopTyping();
-    });
-    return () => {
-      subscription.remove();
-      stopTyping();
-    };
-  }, [cloudGroupId, setTypingMutation]);
+  const markRead = useMutation(api.presence.mutations.markRead);
+  const setPinned = useMutation(api.groups.mutations.setChatMessagePinned);
+  const toggleReaction = useMutation(api.groups.mutations.toggleChatReaction);
+  const typing = useTypingSender(
+    canUseChat
+      ? (active) =>
+          setTypingMutation({
+            scopeType: 'group',
+            scopeId: cloudGroupId as Id<'groups'>,
+            typing: active,
+          })
+      : undefined,
+  );
+  const onSeenLatest = useReadMarker(
+    canUseChat
+      ? (readAt) => markRead({ scopeType: 'group', scopeId: cloudGroupId, readAt })
+      : undefined,
+    chatMeta?.myLastReadAt,
+  );
+  const optimistic = useOptimisticMessages((cause) =>
+    toast.error(cause instanceof Error ? cause.message : 'Could not send this message.'),
+  );
+  const typistIds = useLiveTypists(scopeState?.typing);
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
   const [draft, setDraft] = useState('');
-  const [pending, setPending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const members = remoteGroup?.members
     ? remoteGroup.members.map((member) => ({
@@ -99,56 +111,24 @@ export default function GroupChatRoute() {
     memberId === userId
       ? 'You'
       : (members.find((member) => member.id === memberId)?.name ?? 'Group member');
-  const typingNames = (scopeState?.typingUserIds ?? [])
+  const typingNames = typistIds
     .filter(
       (typingUserId) =>
         typingUserId !== userId && members.some((member) => member.id === typingUserId),
     )
     .map(memberName);
-  function setTyping(typing: boolean) {
-    if (typing && !canUseChat) return;
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = undefined;
-    if (typing) {
-      const now = Date.now();
-      if (!typingActive.current || now - typingLastSent.current >= 4_000) {
-        typingActive.current = true;
-        typingLastSent.current = now;
-        void setTypingMutation({
-          scopeType: 'group',
-          scopeId: cloudGroupId as Id<'groups'>,
-          typing: true,
-        }).catch(() => {
-          typingActive.current = false;
-        });
-      }
-      typingTimer.current = setTimeout(() => setTyping(false), 2_500);
-      return;
-    }
-    if (!typingActive.current) return;
-    typingActive.current = false;
-    void setTypingMutation({
-      scopeType: 'group',
-      scopeId: cloudGroupId as Id<'groups'>,
-      typing: false,
-    }).catch(() => {});
-  }
-  useEffect(() => {
-    if (!userId || !canUseChat || !chatMessages) return;
-    for (const message of chatMessages) {
-      if (
-        String(message.senderId) !== String(userId) &&
-        !message.seenBy?.some((seenById) => String(seenById) === String(userId)) &&
-        !markedSeenIds.current.has(String(message.id))
-      ) {
-        const messageId = String(message.id);
-        markedSeenIds.current.add(messageId);
-        void markGroupSeen({ messageId: message.id }).catch(() => {
-          markedSeenIds.current.delete(messageId);
-        });
-      }
-    }
-  }, [canUseChat, chatMessages, markGroupSeen, userId]);
+  const people = members.map((member) => ({
+    id: member.id,
+    name: member.name,
+    avatarUrl: member.avatarUrl,
+    avatarId: member.avatarId,
+  }));
+  const pointers = useMemo(
+    () => (chatMeta?.readPointers ?? []).map((row) => ({ ...row, userId: String(row.userId) })),
+    [chatMeta?.readPointers],
+  );
+  const pinnedIds = new Set((chatMeta?.pinned ?? []).map((pin) => String(pin.id)));
+  const canPinAny = chatMeta?.canPinAny ?? false;
   const expenseEvents = (transactions.data ?? [])
     .filter(
       (expense) =>
@@ -184,29 +164,68 @@ export default function GroupChatRoute() {
     });
   const items: GroupChatItem[] = [
     ...expenseEvents,
-    ...(chatMessages ?? []).map((message) => ({
-      id: `message:${message.id}`,
+    ...[...history.results].reverse().map((message) => {
+      const ownMessage = String(message.senderId) === String(userId);
+      return {
+        id: String(message.id),
+        kind: 'message' as const,
+        timestamp: message.createdAt,
+        createdAt: message.createdAt,
+        date: new Date(message.createdAt).toLocaleString(),
+        accessibleLabel: `${ownMessage ? 'You' : message.senderName}, ${new Date(message.createdAt).toLocaleString()}`,
+        senderId: String(message.senderId),
+        sender: message.senderName,
+        senderAvatarUrl: message.senderAvatarUrl,
+        senderAvatarId: message.senderAvatarId,
+        ownMessage,
+        text: message.kind === 'text' ? message.text : undefined,
+        attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+        reactions: message.reactions,
+        myReaction: message.myReaction,
+        pinned: message.pinnedAt !== null || pinnedIds.has(String(message.id)),
+        canPin: canPinAny || ownMessage,
+        seenByPeople: ownMessage
+          ? readersOf(message.createdAt, String(message.senderId), pointers, people).filter(
+              (person) => person.id !== userId,
+            )
+          : undefined,
+      };
+    }),
+    ...optimistic.messages.map((message) => ({
+      id: message.id,
       kind: 'message' as const,
       timestamp: message.createdAt,
+      createdAt: message.createdAt,
       date: new Date(message.createdAt).toLocaleString(),
-      accessibleLabel: `${message.senderId === userId ? 'You' : message.senderName}, ${new Date(message.createdAt).toLocaleString()}`,
-      sender: message.senderName,
-      senderAvatarUrl: message.senderAvatarUrl,
-      senderAvatarId: message.senderAvatarId,
-      ownMessage: message.senderId === userId,
-      text: message.kind === 'text' ? message.text : undefined,
-      attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
-      readBy: message.seenBy
-        ?.filter(
-          (seenById) => seenById !== userId && members.some((member) => member.id === seenById),
-        )
-        .map(memberName),
+      accessibleLabel: `You, ${message.status === 'failed' ? 'not sent' : 'sending'}`,
+      senderId: userId ? String(userId) : undefined,
+      ownMessage: true,
+      text: message.text,
+      attachmentUrl: message.imageUrl,
+      status: message.status,
     })),
   ]
     .sort((left, right) => left.timestamp - right.timestamp)
-    .map(({ timestamp: _timestamp, ...item }) => item);
+    .map(({ timestamp: _timestamp, ...item }) => ({ ...item, createdAt: _timestamp }));
 
-  async function sendMessage() {
+  const [firstUnreadId, setFirstUnreadId] = useState<string | undefined | null>(null);
+  if (firstUnreadId === null && chatMeta && history.status !== 'LoadingFirstPage')
+    setFirstUnreadId(
+      firstUnreadMessageId(
+        items
+          .filter((item) => item.kind === 'message')
+          .map((item) => ({
+            id: item.id,
+            kind: 'text' as const,
+            createdAt: item.createdAt ?? 0,
+            mine: !!item.ownMessage,
+            status: item.status,
+          })),
+        chatMeta.myLastReadAt,
+      ) ?? undefined,
+    );
+
+  function sendMessage() {
     if (!canUseChat) {
       setError(
         isConnected
@@ -215,18 +234,14 @@ export default function GroupChatRoute() {
       );
       return;
     }
-    if (!draft.trim() || pending) return;
-    setPending(true);
+    const text = draft.trim();
+    if (!text) return;
     setError('');
-    try {
-      await sendChatText({ groupId: cloudGroupId as Id<'groups'>, text: draft.trim() });
-      setDraft('');
-      setTyping(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send this message.');
-    } finally {
-      setPending(false);
-    }
+    setDraft('');
+    typing.stop();
+    optimistic.send({ kind: 'text', text, senderName: 'You' }, () =>
+      sendChatText({ groupId: cloudGroupId as Id<'groups'>, text }),
+    );
   }
   async function chooseBillImage() {
     if (!canUseChat) {
@@ -237,7 +252,7 @@ export default function GroupChatRoute() {
       );
       return;
     }
-    if (pending) return;
+    if (uploading) return;
     setError('');
     let selection: ImagePicker.ImagePickerResult;
     try {
@@ -260,11 +275,22 @@ export default function GroupChatRoute() {
       setError('Choose a JPEG, PNG, or WebP bill image up to 5 MB.');
       return;
     }
-    setPending(true);
+    setUploading(true);
+    let image: Blob;
     try {
+      image = await (await fetch(asset.uri)).blob();
+    } catch {
+      setUploading(false);
+      setError('Could not read this image.');
+      return;
+    }
+    setUploading(false);
+    if (!image.size || image.size > 5 * 1024 * 1024) {
+      setError('Choose a JPEG, PNG, or WebP bill image up to 5 MB.');
+      return;
+    }
+    optimistic.send({ kind: 'image', imageUrl: asset.uri, senderName: 'You' }, async () => {
       const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
-      const image = await (await fetch(asset.uri)).blob();
-      if (!image.size || image.size > 5 * 1024 * 1024) throw new Error('INVALID_BILL_IMAGE');
       const response = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': mimeType },
@@ -278,11 +304,7 @@ export default function GroupChatRoute() {
         storageId: result.storageId as Id<'_storage'>,
       });
       if (!messageId) throw new Error('INVALID_BILL_IMAGE');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not upload this bill image.');
-    } finally {
-      setPending(false);
-    }
+    });
   }
 
   return (
@@ -299,21 +321,48 @@ export default function GroupChatRoute() {
       }
       members={members}
       typingNames={typingNames}
-      onTypingChange={setTyping}
+      onTypingChange={(active) => (active ? typing.onDraftChange('typing') : typing.stop())}
       onOpenGroup={() => router.push({ pathname: '/group/[id]', params: { id: id ?? '' } })}
       onAddExpense={() => router.push({ pathname: '/group/[id]/new', params: { id: id ?? '' } })}
       onOpenSettings={() => router.push({ pathname: '/group/[id]/edit', params: { id: id ?? '' } })}
       items={items}
-      loading={groups.loading || transactions.loading || (canUseChat && chatMessages === undefined)}
+      loading={
+        groups.loading ||
+        transactions.loading ||
+        (canUseChat && history.status === 'LoadingFirstPage')
+      }
+      canLoadOlder={history.status === 'CanLoadMore'}
+      loadingOlder={history.status === 'LoadingMore'}
+      onLoadOlder={() => history.loadMore(PAGE_SIZE)}
+      firstUnreadId={firstUnreadId ?? undefined}
+      pinned={(chatMeta?.pinned ?? []).map((pin) => ({
+        id: String(pin.id),
+        text: pin.text,
+        senderName: String(pin.senderId) === String(userId) ? 'You' : pin.senderName,
+        canUnpin: canPinAny || String(pin.senderId) === String(userId),
+      }))}
+      onTogglePin={(messageId, pinned) =>
+        void setPinned({ messageId: messageId as Id<'groupMessages'>, pinned }).catch((cause) =>
+          toast.error(cause instanceof Error ? cause.message : 'Could not update the pin.'),
+        )
+      }
+      onReact={(messageId, emoji) =>
+        void toggleReaction({ messageId: messageId as Id<'groupMessages'>, emoji }).catch((cause) =>
+          toast.error(cause instanceof Error ? cause.message : 'Could not update this reaction.'),
+        )
+      }
+      onRetry={optimistic.retry}
+      onDiscard={optimistic.discard}
+      onSeenLatest={onSeenLatest}
       canSend={canUseChat}
       connected={isConnected}
       draft={draft}
-      pending={pending}
+      pending={uploading}
       error={
         error || groups.error?.message || memberships.error?.message || transactions.error?.message
       }
       onDraftChange={setDraft}
-      onSend={() => void sendMessage()}
+      onSend={sendMessage}
       onChooseBillImage={() => void chooseBillImage()}
       onBack={() => router.back()}
     />

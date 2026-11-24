@@ -26,6 +26,7 @@ type Conversation = Profile & {
   id: Id<'directConversations'>;
   userId: Id<'users'>;
   updatedAt: number;
+  unreadCount?: number;
   lastMessage: null | { text?: string };
 };
 type PeopleFilter = 'all' | 'nearby' | 'mutuals';
@@ -346,14 +347,19 @@ export default function PeopleScreen() {
                 action={
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant={conversation.unreadCount ? 'primary' : 'outline'}
+                    accessibilityLabel={
+                      conversation.unreadCount ? `Chat, ${conversation.unreadCount} unread` : 'Chat'
+                    }
                     onPress={() =>
                       router.push(
                         `/messages/${encodeURIComponent(String(conversation.id))}` as never,
                       )
                     }
                   >
-                    Chat
+                    {conversation.unreadCount
+                      ? `${conversation.unreadCount >= 99 ? '99+' : conversation.unreadCount} new`
+                      : 'Chat'}
                   </Button>
                 }
               />

@@ -333,8 +333,13 @@ export default defineSchema({
     size: v.optional(v.number()),
     createdAt: timestamp,
     expiresAt: optionalTime,
+    // Pins live on the message: one optional pair per row, removed with the message, and the
+    // index below lists a thread's pins without a join table.
+    pinnedAt: optionalTime,
+    pinnedBy: v.optional(v.id('users')),
   })
     .index('by_group_createdAt', ['groupId', 'createdAt'])
+    .index('by_group_pinnedAt', ['groupId', 'pinnedAt'])
     .index('by_storage', ['storageId']),
   friendRequests: defineTable({
     requesterId: v.id('users'),
@@ -376,8 +381,11 @@ export default defineSchema({
     mimeType: optionalText,
     size: v.optional(v.number()),
     createdAt: timestamp,
+    pinnedAt: optionalTime,
+    pinnedBy: v.optional(v.id('users')),
   })
     .index('by_conversation_createdAt', ['conversationId', 'createdAt'])
+    .index('by_conversation_pinnedAt', ['conversationId', 'pinnedAt'])
     .index('by_storage', ['storageId']),
   directMessageReactions: defineTable({
     messageId: v.id('directMessages'),
@@ -388,6 +396,16 @@ export default defineSchema({
   })
     .index('by_message_user', ['messageId', 'userId'])
     .index('by_conversation', ['conversationId']),
+  groupMessageReactions: defineTable({
+    messageId: v.id('groupMessages'),
+    groupId: v.id('groups'),
+    userId: v.id('users'),
+    emoji: v.union(v.literal('❤️'), v.literal('👍'), v.literal('😂'), v.literal('😮')),
+    createdAt: timestamp,
+  })
+    .index('by_message_user', ['messageId', 'userId'])
+    .index('by_group', ['groupId']),
+  // Legacy per-message receipts; read only as a fallback until a reader has a chatReadPointers row.
   groupMessageReads: defineTable({
     messageId: v.id('groupMessages'),
     groupId: v.id('groups'),
@@ -423,7 +441,19 @@ export default defineSchema({
     conversationId: v.id('directConversations'),
     userId: v.id('users'),
     seenAt: timestamp,
-  }).index('by_message_user', ['messageId', 'userId']),
+  })
+    .index('by_message_user', ['messageId', 'userId'])
+    .index('by_conversation_user', ['conversationId', 'userId']),
+  // One row per reader per thread: every message created at or before lastReadAt counts as seen.
+  chatReadPointers: defineTable({
+    scopeType: v.union(v.literal('group'), v.literal('direct')),
+    scopeId: v.union(v.id('groups'), v.id('directConversations')),
+    userId: v.id('users'),
+    lastReadAt: timestamp,
+    updatedAt: timestamp,
+  })
+    .index('by_scope_user', ['scopeType', 'scopeId', 'userId'])
+    .index('by_scope', ['scopeType', 'scopeId']),
   expensePayers: defineTable({
     transactionId: v.id('transactions'),
     userId: v.id('users'),

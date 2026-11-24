@@ -25,6 +25,7 @@ type Conversation = Profile & {
   userId: Id<'users'>;
   id: Id<'directConversations'>;
   updatedAt: number;
+  unreadCount?: number;
   lastMessage: null | {
     kind: 'text' | 'image';
     text: string;
@@ -522,7 +523,10 @@ export default function PeoplePage() {
                           className="finance-secondary-action"
                           href={`/messages/${encodeURIComponent(String(conversation.id))}`}
                         >
-                          Open <ArrowRight size={15} aria-hidden="true" />
+                          {conversation.unreadCount
+                            ? `${conversation.unreadCount >= 99 ? '99+' : conversation.unreadCount} new`
+                            : 'Open'}{' '}
+                          <ArrowRight size={15} aria-hidden="true" />
                         </Link>
                       }
                     />
@@ -580,7 +584,10 @@ export default function PeoplePage() {
                     className="people-sidebar-conversation"
                   >
                     <span className="people-sidebar-conversation-copy">
-                      <strong>{conversation.displayName ?? 'Finapp user'}</strong>
+                      <strong>
+                        {conversation.displayName ?? 'Finapp user'}
+                        {conversation.unreadCount ? ` · ${conversation.unreadCount} new` : ''}
+                      </strong>
                       <small>{conversation.lastMessage?.text ?? 'Start the conversation'}</small>
                     </span>
                     <small>

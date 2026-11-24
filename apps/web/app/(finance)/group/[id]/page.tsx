@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { ArrowRight } from 'lucide-react';
@@ -11,6 +11,14 @@ import { projectGroupBalances } from '@convex/splits/domain';
 import { formatMinor } from '@convex/shared/money';
 import { Empty, ListSkeleton } from '@finapp/ui/web';
 import { formatTransactionDate } from '@finapp/ui/finance';
+import {
+  firstUnreadMessageId,
+  readersOf,
+  useLiveTypists,
+  useOptimisticMessages,
+  useReadMarker,
+  useTypingSender,
+} from '@finapp/ui/chat';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered, readLocal } from '@/lib/offline/repository';
@@ -82,6 +90,7 @@ const recordIds = (record: LocalRecord) =>
     (value): value is string => typeof value === 'string',
   );
 const recordId = (record: LocalRecord) => String(record.id ?? record._id ?? '');
+const CHAT_PAGE_SIZE = 30;
 
 export default function GroupHomePage() {
   const router = useRouter();
@@ -143,9 +152,21 @@ export default function GroupHomePage() {
     api.groups.queries.detail,
     canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
   );
+  // The detail page embeds a short preview; the chat route pages the full history.
   const chatMessages = useQuery(
     api.groups.queries.chatMessages,
-    canUseGroupChat ? { groupId: cloudGroupId as Id<'groups'> } : 'skip',
+    canUseGroupChat && !standaloneChat
+      ? { groupId: cloudGroupId as Id<'groups'>, limit: 20 }
+      : 'skip',
+  );
+  const chatHistory = usePaginatedQuery(
+    api.groups.queries.chatMessagesPage,
+    canUseGroupChat && standaloneChat ? { groupId: cloudGroupId } : 'skip',
+    { initialNumItems: CHAT_PAGE_SIZE },
+  );
+  const chatMeta = useQuery(
+    api.groups.queries.chatMeta,
+    canUseGroupChat && standaloneChat ? { groupId: cloudGroupId } : 'skip',
   );
   const chatScopeState = useQuery(
     api.presence.queries.scopeState,
@@ -154,18 +175,55 @@ export default function GroupHomePage() {
       : 'skip',
   );
   const setChatTypingMutation = useMutation(api.presence.mutations.setTyping);
-  const markGroupMessageSeen = useMutation(api.presence.mutations.markGroupSeen);
+  const markChatRead = useMutation(api.presence.mutations.markRead);
+  const setChatPinned = useMutation(api.groups.mutations.setChatMessagePinned);
+  const toggleChatReaction = useMutation(api.groups.mutations.toggleChatReaction);
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
   const [chatDraft, setChatDraft] = React.useState('');
-  const [chatPending, setChatPending] = React.useState(false);
-  const chatLock = React.useRef(false);
+  const [chatUploading, setChatUploading] = React.useState(false);
   const [chatError, setChatError] = React.useState('');
-  const chatTypingTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const chatTypingActive = React.useRef(false);
-  const chatTypingLastSent = React.useRef(0);
-  const markedSeenMessageIds = React.useRef(new Set<string>());
+  const chatTyping = useTypingSender(
+    canUseGroupChat && standaloneChat
+      ? (typing) =>
+          setChatTypingMutation({
+            scopeType: 'group',
+            scopeId: cloudGroupId as Id<'groups'>,
+            typing,
+          })
+      : undefined,
+  );
+  const updateChatTyping = (typing: boolean) =>
+    typing ? chatTyping.onDraftChange('typing') : chatTyping.stop();
+  const onChatSeenLatest = useReadMarker(
+    canUseGroupChat && standaloneChat
+      ? (readAt) => markChatRead({ scopeType: 'group', scopeId: cloudGroupId, readAt })
+      : undefined,
+    chatMeta?.myLastReadAt,
+  );
+  const chatOptimistic = useOptimisticMessages((cause) =>
+    setChatError(cause instanceof Error ? cause.message : 'Could not send this message.'),
+  );
+  const chatTypistIds = useLiveTypists(chatScopeState?.typing);
+  const [chatFirstUnreadId, setChatFirstUnreadId] = React.useState<string | undefined | null>(null);
+  if (
+    standaloneChat &&
+    chatFirstUnreadId === null &&
+    chatMeta &&
+    chatHistory.status !== 'LoadingFirstPage'
+  )
+    setChatFirstUnreadId(
+      firstUnreadMessageId(
+        [...chatHistory.results].reverse().map((message) => ({
+          id: String(message.id),
+          kind: 'text' as const,
+          createdAt: message.createdAt,
+          mine: String(message.senderId) === String(userId),
+        })),
+        chatMeta.myLastReadAt,
+      ) ?? undefined,
+    );
 
   React.useEffect(() => {
     if (!userId || !group) return;
@@ -269,64 +327,7 @@ export default function GroupHomePage() {
     participants,
     settlements,
   ]);
-  const updateChatTyping = React.useCallback(
-    (typing: boolean) => {
-      if (chatTypingTimer.current) clearTimeout(chatTypingTimer.current);
-      chatTypingTimer.current = undefined;
-      if (typing) {
-        if (!canUseGroupChat) return;
-        const now = Date.now();
-        if (!chatTypingActive.current || now - chatTypingLastSent.current >= 4_000) {
-          chatTypingActive.current = true;
-          chatTypingLastSent.current = now;
-          void setChatTypingMutation({
-            scopeType: 'group',
-            scopeId: cloudGroupId as Id<'groups'>,
-            typing: true,
-          }).catch(() => {
-            chatTypingActive.current = false;
-          });
-        }
-        chatTypingTimer.current = setTimeout(() => {
-          chatTypingTimer.current = undefined;
-          if (!chatTypingActive.current) return;
-          chatTypingActive.current = false;
-          void setChatTypingMutation({
-            scopeType: 'group',
-            scopeId: cloudGroupId as Id<'groups'>,
-            typing: false,
-          }).catch(() => undefined);
-        }, 2_500);
-        return;
-      }
-      if (!chatTypingActive.current) return;
-      chatTypingActive.current = false;
-      void setChatTypingMutation({
-        scopeType: 'group',
-        scopeId: cloudGroupId as Id<'groups'>,
-        typing: false,
-      }).catch(() => undefined);
-    },
-    [canUseGroupChat, cloudGroupId, setChatTypingMutation],
-  );
-  React.useEffect(() => () => updateChatTyping(false), [updateChatTyping]);
-  React.useEffect(() => {
-    if (!standaloneChat || !userId || !chatMessages) return;
-    for (const message of chatMessages) {
-      const messageId = String(message.id);
-      if (
-        message.senderId === userId ||
-        message.seenBy?.some((seenById) => String(seenById) === String(userId)) ||
-        markedSeenMessageIds.current.has(messageId)
-      )
-        continue;
-      markedSeenMessageIds.current.add(messageId);
-      void markGroupMessageSeen({ messageId: message.id }).catch(() => {
-        markedSeenMessageIds.current.delete(messageId);
-      });
-    }
-  }, [chatMessages, markGroupMessageSeen, standaloneChat, userId]);
-  const chatTypingNames = (chatScopeState?.typingUserIds ?? [])
+  const chatTypingNames = chatTypistIds
     .filter((id) => id !== userId)
     .map((id) => {
       const remoteMember = remoteGroup?.members.find((member) => member.id === id);
@@ -547,6 +548,17 @@ export default function GroupHomePage() {
       color: typeof category?.color === 'string' ? category.color : undefined,
     };
   };
+  const chatPeople = memberNames.map((member) => ({
+    id: member.id,
+    name: member.name,
+    avatarUrl: member.avatarUrl,
+    avatarId: member.avatarId,
+  }));
+  const chatPointers = (chatMeta?.readPointers ?? []).map((row) => ({
+    userId: String(row.userId),
+    lastReadAt: row.lastReadAt,
+  }));
+  const chatPinnedIds = new Set((chatMeta?.pinned ?? []).map((pin) => String(pin.id)));
   const chatTimelineItems = [
     ...recent.map((expense) => ({
       id: `expense:${recordId(expense)}`,
@@ -560,15 +572,39 @@ export default function GroupHomePage() {
       createdAt: Number(settlement.occurredAt ?? 0),
       settlement,
     })),
-    ...(chatMessages ?? []).map((message) => ({
-      id: `message:${message.id}`,
+    ...(standaloneChat
+      ? [...chatHistory.results].reverse()
+      : (chatMessages ?? []).map((message) => ({ ...message, pinnedAt: null }))
+    ).map((message) => ({
+      id: standaloneChat ? String(message.id) : `message:${message.id}`,
       kind: 'message' as const,
       createdAt: message.createdAt,
       message,
     })),
+    ...chatOptimistic.messages.map((message) => ({
+      id: message.id,
+      kind: 'pending' as const,
+      createdAt: message.createdAt,
+      pending: message,
+    })),
   ].sort((left, right) => left.createdAt - right.createdAt);
   const groupChatItems: GroupChatItem[] = chatTimelineItems.map((item) => {
     const date = new Date(item.createdAt);
+    if (item.kind === 'pending') {
+      const pending = item.pending;
+      return {
+        id: item.id,
+        kind: 'message',
+        date: date.toLocaleString(),
+        accessibleLabel: `You, ${pending.status === 'failed' ? 'not sent' : 'sending'}`,
+        ownMessage: true,
+        createdAt: item.createdAt,
+        senderId: userId ?? undefined,
+        text: pending.text,
+        attachmentUrl: pending.imageUrl,
+        status: pending.status,
+      };
+    }
     if (item.kind === 'message') {
       const message = item.message;
       const ownMessage = message.senderId === userId;
@@ -577,18 +613,23 @@ export default function GroupHomePage() {
         kind: 'message',
         date: date.toLocaleString(),
         accessibleLabel: `${ownMessage ? 'You' : message.senderName}, ${date.toLocaleString()}`,
+        createdAt: item.createdAt,
+        senderId: String(message.senderId),
         sender: message.senderName,
         senderAvatarUrl: message.senderAvatarUrl,
         senderAvatarId: message.senderAvatarId,
         ownMessage,
         text: message.kind === 'text' ? message.text : undefined,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
-        readBy: message.seenBy
-          ?.filter(
-            (seenById) =>
-              seenById !== userId && memberNames.some((member) => member.id === seenById),
-          )
-          .map((seenById) => memberName(seenById)),
+        reactions: message.reactions,
+        myReaction: message.myReaction,
+        pinned: message.pinnedAt !== null || chatPinnedIds.has(String(message.id)),
+        canPin: (chatMeta?.canPinAny ?? false) || ownMessage,
+        seenByPeople: ownMessage
+          ? readersOf(message.createdAt, String(message.senderId), chatPointers, chatPeople).filter(
+              (person) => person.id !== userId,
+            )
+          : undefined,
       };
     }
     if (item.kind === 'expense') {
@@ -616,8 +657,7 @@ export default function GroupHomePage() {
       amount: formatMinor(asMinor(settlement.amountMinor), group.currency ?? 'INR'),
     };
   });
-  async function submitChatMessage(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function sendChatMessage() {
     if (!canUseGroupChat) {
       setChatError(
         isConnected
@@ -626,29 +666,16 @@ export default function GroupHomePage() {
       );
       return;
     }
-    if (!chatDraft.trim() || chatLock.current) return;
-    chatLock.current = true;
-    setChatPending(true);
+    const text = chatDraft.trim();
+    if (!text) return;
     setChatError('');
-    try {
-      await sendChatText({
-        groupId: cloudGroupId as Id<'groups'>,
-        text: chatDraft.trim(),
-      });
-      setChatDraft('');
-      updateChatTyping(false);
-    } catch (cause) {
-      setChatError(cause instanceof Error ? cause.message : 'Could not send this message.');
-    } finally {
-      chatLock.current = false;
-      setChatPending(false);
-    }
+    setChatDraft('');
+    chatTyping.stop();
+    chatOptimistic.send({ kind: 'text', text, senderName: 'You' }, () =>
+      sendChatText({ groupId: cloudGroupId as Id<'groups'>, text }),
+    );
   }
-  async function uploadBillImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
+  function attachBillImage(file: File) {
     if (
       !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) ||
       file.size > 5 * 1024 * 1024
@@ -664,31 +691,29 @@ export default function GroupHomePage() {
       );
       return;
     }
-    if (chatLock.current) return;
-    chatLock.current = true;
-    setChatPending(true);
     setChatError('');
-    try {
-      const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': file.type },
-        body: file,
-      });
-      if (!response.ok) throw new Error('BILL_UPLOAD_FAILED');
-      const result = (await response.json()) as { storageId?: string };
-      if (!result.storageId) throw new Error('BILL_UPLOAD_FAILED');
-      const messageId = await sendBillAttachment({
-        groupId: cloudGroupId as Id<'groups'>,
-        storageId: result.storageId as Id<'_storage'>,
-      });
-      if (!messageId) throw new Error('INVALID_BILL_IMAGE');
-    } catch (cause) {
-      setChatError(cause instanceof Error ? cause.message : 'Could not upload this bill image.');
-    } finally {
-      chatLock.current = false;
-      setChatPending(false);
-    }
+    const previewUrl = URL.createObjectURL(file);
+    setChatUploading(true);
+    chatOptimistic.send({ kind: 'image', imageUrl: previewUrl, senderName: 'You' }, async () => {
+      try {
+        const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!response.ok) throw new Error('BILL_UPLOAD_FAILED');
+        const result = (await response.json()) as { storageId?: string };
+        if (!result.storageId) throw new Error('BILL_UPLOAD_FAILED');
+        const messageId = await sendBillAttachment({
+          groupId: cloudGroupId as Id<'groups'>,
+          storageId: result.storageId as Id<'_storage'>,
+        });
+        if (!messageId) throw new Error('INVALID_BILL_IMAGE');
+      } finally {
+        setChatUploading(false);
+      }
+    });
   }
 
   const detailMembers = memberNames;
@@ -735,15 +760,40 @@ export default function GroupHomePage() {
     onAddExpense: () => router.push(`/group/${encodeURIComponent(localGroupId)}/new`),
     onOpenSettings: () => router.push(`/group/${encodeURIComponent(localGroupId)}/edit`),
     items: groupChatItems,
-    loading: canUseGroupChat && chatMessages === undefined,
+    loading:
+      canUseGroupChat &&
+      (standaloneChat ? chatHistory.status === 'LoadingFirstPage' : chatMessages === undefined),
+    canLoadOlder: chatHistory.status === 'CanLoadMore',
+    loadingOlder: chatHistory.status === 'LoadingMore',
+    onLoadOlder: () => chatHistory.loadMore(CHAT_PAGE_SIZE),
+    firstUnreadId: chatFirstUnreadId ?? undefined,
+    pinned: (chatMeta?.pinned ?? []).map((pin) => ({
+      id: String(pin.id),
+      text: pin.text,
+      senderName: String(pin.senderId) === String(userId) ? 'You' : pin.senderName,
+      canUnpin: (chatMeta?.canPinAny ?? false) || String(pin.senderId) === String(userId),
+    })),
+    onTogglePin: (messageId, pinned) =>
+      void setChatPinned({ messageId: messageId as Id<'groupMessages'>, pinned }).catch(
+        (cause: unknown) =>
+          setChatError(cause instanceof Error ? cause.message : 'Could not update the pin.'),
+      ),
+    onReact: (messageId, emoji) =>
+      void toggleChatReaction({ messageId: messageId as Id<'groupMessages'>, emoji }).catch(
+        (cause: unknown) =>
+          setChatError(cause instanceof Error ? cause.message : 'Could not update this reaction.'),
+      ),
+    onRetry: chatOptimistic.retry,
+    onDiscard: chatOptimistic.discard,
+    onSeenLatest: onChatSeenLatest,
     canSend: canUseGroupChat,
     connected: isConnected,
     draft: chatDraft,
-    pending: chatPending,
+    pending: chatUploading,
     error: chatError || undefined,
     onDraftChange: setChatDraft,
-    onSubmit: submitChatMessage,
-    onUpload: uploadBillImage,
+    onSend: sendChatMessage,
+    onAttachFile: attachBillImage,
   };
   if (standaloneChat) return <GroupChatScreen {...chat} />;
   return (
