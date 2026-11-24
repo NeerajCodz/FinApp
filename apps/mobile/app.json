@@ -16,7 +16,15 @@
           "useSQLCipher": true
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Finapp uses the camera to scan receipts and bills.",
+          "photosPermission": "Finapp reads photos you pick to scan receipts or share in chats.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
