@@ -431,13 +431,17 @@ export function calculateBilateralBalance(
       rows
         .filter((row) => userOf(row) === userId)
         .reduce((total, row) => total + minorAmount(row.amountMinor), 0n);
-    const totalPaid = payers.reduce((total, row) => total + minorAmount(row.amountMinor), 0n);
-    if (totalPaid <= 0n) continue;
-    // person's share funded by me, minus my share funded by person.
-    const numerator =
-      amountFor(participants, personId) * amountFor(payers, currentUserId) -
-      amountFor(participants, currentUserId) * amountFor(payers, personId);
-    balance += numerator / totalPaid;
+    const paidBy = [...new Set(payers.map(userOf))].map((userId): [string, bigint] => [
+      userId,
+      amountFor(payers, userId),
+    ]);
+    if (paidBy.reduce((total, [, paid]) => total + paid, 0n) <= 0n) continue;
+    // Each share is split across the payers in proportion to what they paid, remainders
+    // included, so no minor unit disappears: person's share funded by me, minus my share
+    // funded by person.
+    balance +=
+      (allocateProportionally(amountFor(participants, personId), paidBy).get(currentUserId) ?? 0n) -
+      (allocateProportionally(amountFor(participants, currentUserId), paidBy).get(personId) ?? 0n);
   }
   for (const settlement of settlementRecords) {
     if (
@@ -452,6 +456,75 @@ export function calculateBilateralBalance(
       balance -= minorAmount(settlement.amountMinor);
   }
   return balance;
+}
+
+/**
+ * Splits `amount` across `weights` in proportion, largest remainder first (ties by id), so the
+ * parts always add up to `amount`.
+ */
+export function allocateProportionally(
+  amount: bigint,
+  weights: readonly (readonly [string, bigint])[],
+): Map<string, bigint> {
+  const positive = weights.filter(([, weight]) => weight > 0n);
+  const total = positive.reduce((sum, [, weight]) => sum + weight, 0n);
+  const parts = new Map<string, bigint>();
+  if (total <= 0n || amount === 0n) return parts;
+  const negative = amount < 0n;
+  const absolute = negative ? -amount : amount;
+  const rows = positive.map(([id, weight]) => ({
+    id,
+    floor: (absolute * weight) / total,
+    rest: (absolute * weight) % total,
+  }));
+  let remainder = absolute - rows.reduce((sum, row) => sum + row.floor, 0n);
+  const order = [...rows].sort((a, b) =>
+    a.rest === b.rest ? (a.id < b.id ? -1 : 1) : a.rest > b.rest ? -1 : 1,
+  );
+  for (const row of order) {
+    if (remainder <= 0n) break;
+    row.floor += 1n;
+    remainder -= 1n;
+  }
+  for (const row of rows) parts.set(row.id, negative ? -row.floor : row.floor);
+  return parts;
+}
+
+/**
+ * One bilateral balance per currency of the shared groups (amounts are never mixed), sorted
+ * with non-zero balances first, then by currency.
+ */
+export function bilateralBalancesByCurrency(
+  currentUserId: string,
+  personId: string,
+  groups: readonly GroupLedgerRecord[],
+  transactions: readonly GroupLedgerRecord[],
+  payerRecords: readonly GroupLedgerRecord[],
+  participantRecords: readonly GroupLedgerRecord[],
+  settlementRecords: readonly GroupLedgerRecord[],
+): { currency: string; balanceMinor: bigint }[] {
+  const currencies = [
+    ...new Set(
+      groups
+        .map((group) => group.currency)
+        .filter((currency): currency is string => typeof currency === 'string'),
+    ),
+  ].sort();
+  return currencies
+    .map((currency) => ({
+      currency,
+      balanceMinor: calculateBilateralBalance(
+        currentUserId,
+        personId,
+        groups,
+        transactions,
+        payerRecords,
+        participantRecords,
+        settlementRecords,
+        currency,
+      ),
+    }))
+    .sort((left, right) => Number(right.balanceMinor !== 0n) - Number(left.balanceMinor !== 0n));
 }
 
 export type BalanceMap = Record<string, bigint>;
@@ -501,12 +574,68 @@ export function serializeBalances(balances: BalanceMap): Record<string, string> 
 
 export type SuggestedTransfer = { fromUserId: string; toUserId: string; amountMinor: bigint };
 
+/** Exact search is used up to this many non-zero members (2^n subsets). */
+const EXACT_PLAN_MAX_MEMBERS = 12;
+
 /**
- * Greedy minimum-transfer plan that clears every balance: the largest debtor pays the largest
- * creditor until one side reaches zero. Produces at most n-1 transfers; ties are broken by
- * user id so the plan is stable.
+ * Splits members into the most groups whose balances each sum to zero (each group of k then
+ * settles in k-1 transfers, so more groups means fewer transfers). Classic subset DP.
+ */
+function zeroSumGroups(ids: readonly string[], amounts: readonly bigint[]): string[][] {
+  const count = ids.length;
+  const full = (1 << count) - 1;
+  const sums: bigint[] = new Array(full + 1).fill(0n);
+  const best = new Int8Array(full + 1);
+  for (let mask = 1; mask <= full; mask++) {
+    const low = mask & -mask;
+    sums[mask] = sums[mask ^ low]! + amounts[31 - Math.clz32(low)]!;
+    let most = 0;
+    for (let bit = 0; bit < count; bit++)
+      if (mask & (1 << bit)) most = Math.max(most, best[mask ^ (1 << bit)]!);
+    best[mask] = most + (sums[mask] === 0n ? 1 : 0);
+  }
+  const groups: string[][] = [];
+  let remaining = full;
+  while (remaining) {
+    let chosen = remaining;
+    for (let sub = remaining; sub; sub = (sub - 1) & remaining) {
+      if (sums[sub] !== 0n || best[remaining ^ sub] !== best[remaining]! - 1) continue;
+      // Prefer the smallest such group; ties are irrelevant to the transfer count.
+      if (popcount(sub) < popcount(chosen)) chosen = sub;
+    }
+    groups.push(ids.filter((_, bit) => chosen & (1 << bit)));
+    remaining ^= chosen;
+  }
+  return groups;
+}
+
+function popcount(value: number): number {
+  let bits = 0;
+  for (let rest = value; rest; rest &= rest - 1) bits++;
+  return bits;
+}
+
+/**
+ * The fewest transfers that clear every balance. Members are first split into the most
+ * zero-sum groups (exact for up to 12 members with a balance, greedy beyond); inside each
+ * group the largest debtor pays the largest creditor. Ties break by user id, so the plan is
+ * stable.
  */
 export function simplifyDebts(balances: BalanceMap): SuggestedTransfer[] {
+  const owing = Object.entries(balances)
+    .filter(([, amount]) => amount !== 0n)
+    .sort(([left], [right]) => (left < right ? -1 : 1));
+  if (owing.length < 3 || owing.length > EXACT_PLAN_MAX_MEMBERS) return greedyTransfers(balances);
+  return zeroSumGroups(
+    owing.map(([userId]) => userId),
+    owing.map(([, amount]) => amount),
+  ).flatMap((group) =>
+    greedyTransfers(Object.fromEntries(group.map((userId) => [userId, balances[userId]!]))),
+  );
+}
+
+/** Largest debtor pays largest creditor until one side reaches zero (at most n-1 transfers). */
+function greedyTransfers(balances: BalanceMap): SuggestedTransfer[] {
   const byAmount = (left: [string, bigint], right: [string, bigint]) =>
     right[1] === left[1] ? (left[0] < right[0] ? -1 : 1) : right[1] > left[1] ? 1 : -1;
   const creditors = Object.entries(balances)
