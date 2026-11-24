@@ -188,4 +188,31 @@ export const socialTools: ToolFactory = (client) => [
         emoji: args.emoji,
       }),
   }),
+  defineTool({
+    name: 'finapp.social.direct_messages.pinned',
+    title: 'Pinned direct messages',
+    description:
+      'Pinned messages in a direct conversation plus your unread count and both read positions (epoch ms).',
+    scope: 'finapp:read',
+    input: { conversationId: docId('Conversation') },
+    run: async (args) => {
+      const meta = await client.query(api.directMessages.queries.conversationMeta, {
+        conversationId: args.conversationId,
+      });
+      if (!meta) throw new Error('CONVERSATION_UNAVAILABLE');
+      return meta;
+    },
+  }),
+  defineTool({
+    name: 'finapp.social.direct_messages.pin',
+    title: 'Pin or unpin direct message',
+    description: 'Pin (or unpin) a message in a direct conversation.',
+    scope: 'finapp:write:social',
+    input: { messageId: docId('Direct message'), pinned: z.boolean() },
+    run: (args) =>
+      client.mutation(api.directMessages.mutations.setPinned, {
+        messageId: id<'directMessages'>(args.messageId),
+        pinned: args.pinned,
+      }),
+  }),
 ];

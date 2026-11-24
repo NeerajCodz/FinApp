@@ -26,6 +26,8 @@ const hints: Record<string, string> = {
   GROUP_NOT_FOUND: 'That group does not exist or is not visible to you.',
   GROUP_UNAVAILABLE: 'That group does not exist or is not visible to you.',
   TRANSACTION_UNAVAILABLE: 'That transaction does not exist or is not visible to you.',
+  CONVERSATION_UNAVAILABLE: 'That conversation does not exist or you are not part of it.',
+  PIN_LIMIT_REACHED: 'This chat already has the maximum of 20 pinned messages; unpin one first.',
   NOTHING_OWED: 'That member does not currently owe you anything in this group.',
   INVALID_NUDGE_TARGET: 'You can only remind another current or former member of the group.',
   DUPLICATE_MUTATION: 'This change was already applied.',
