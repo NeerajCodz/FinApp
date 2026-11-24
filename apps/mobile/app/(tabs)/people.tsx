@@ -27,6 +27,7 @@ type Conversation = Profile & {
   userId: Id<'users'>;
   updatedAt: number;
   unreadCount?: number;
+  unreadCapped?: boolean;
   lastMessage: null | { text?: string };
 };
 type PeopleFilter = 'all' | 'nearby' | 'mutuals';
@@ -358,7 +359,7 @@ export default function PeopleScreen() {
                     }
                   >
                     {conversation.unreadCount
-                      ? `${conversation.unreadCount >= 99 ? '99+' : conversation.unreadCount} new`
+                      ? `${conversation.unreadCount}${conversation.unreadCapped || conversation.unreadCount >= 99 ? '+' : ''} new`
                       : 'Chat'}
                   </Button>
                 }

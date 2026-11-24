@@ -96,6 +96,8 @@ export type GroupDetailScreenProps = {
   onOpenExpenses?: () => void;
   onSettle: () => void;
   onSettleWith?: (memberId: string) => void;
+  /** Sends a payment reminder to a member who owes you. */
+  onRemind?: (memberId: string) => void;
   onAddExpense: () => void;
   onOpenPerson: (username: string) => void;
   onOpenActivity: (id: string) => void;
@@ -304,6 +306,9 @@ export function GroupDetailScreen(p: GroupDetailScreenProps) {
                       people={people}
                       meId={p.meId}
                       limit={3}
+                      onRemind={
+                        p.onRemind ? (transfer) => p.onRemind?.(transfer.fromUserId) : undefined
+                      }
                       onSettle={
                         p.onSettleWith
                           ? (transfer) =>

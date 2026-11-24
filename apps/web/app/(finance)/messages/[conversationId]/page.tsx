@@ -13,6 +13,7 @@ import {
   ChatThread,
   firstUnreadMessageId,
   useLiveTypists,
+  useLoadUnreadHistory,
   useOptimisticMessages,
   useReadMarker,
   useTypingSender,
@@ -121,7 +122,15 @@ export default function DirectConversationPage() {
     [optimistic.messages, serverMessages],
   );
   const [firstUnreadId, setFirstUnreadId] = React.useState<string | undefined | null>(null);
-  if (firstUnreadId === null && meta && history.status !== 'LoadingFirstPage')
+  const loadingUnread = useLoadUnreadHistory({
+    active: firstUnreadId === null,
+    createdAtOldestFirst: serverMessages.map((message) => message.createdAt),
+    lastReadAt: meta?.myLastReadAt,
+    unreadCount: meta?.unreadCount,
+    status: history.status,
+    loadMore: () => history.loadMore(PAGE_SIZE),
+  });
+  if (firstUnreadId === null && meta && history.status !== 'LoadingFirstPage' && !loadingUnread)
     setFirstUnreadId(firstUnreadMessageId(serverMessages, meta.myLastReadAt) ?? undefined);
 
   function submitText() {

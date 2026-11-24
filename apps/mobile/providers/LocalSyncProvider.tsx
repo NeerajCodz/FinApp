@@ -5,6 +5,7 @@ import type { NotificationResponse } from 'expo-notifications';
 import { appPathForNotificationUrl } from '@/lib/push';
 import { router } from 'expo-router';
 import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import type { GroupSettlementRangeResult, GroupTransactionRangeResult } from '@convex/sync/types';
 import { useConvex, useConvexAuth, useConvexConnectionState, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
@@ -37,7 +38,12 @@ import {
   resolveConflict as resolveLocalConflict,
 } from '@/local/repository';
 import { putLocalNotification } from '@/local/repository';
-import { clearDeviceReminders, reconcileRecurringNotifications } from '@/local/notification-events';
+import {
+  clearDeviceReminders,
+  markNotificationAsRead,
+  reconcileRecurringNotifications,
+  type NotificationRecord,
+} from '@/local/notification-events';
 import { normalizeNotificationPreferences } from '@convex/notifications/domain';
 import { syncOutbox } from '@/local/sync/engine';
 import {
@@ -1064,10 +1070,31 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, [userId, scopedFailedEntries]);
 
+  // Push taps arrive outside React state: read the signed-in user and client through refs.
+  const pushUserRef = React.useRef(userId);
+  pushUserRef.current = userId;
+  const pushConvexRef = React.useRef(convex);
+  pushConvexRef.current = convex;
+
   React.useEffect(() => {
     if (isExpoGo() || Platform.OS === 'web') return;
     let active = true;
     let subscription: { remove: () => void } | null = null;
+    /** Opening a push is opening the notification: mark it read like the centre does. */
+    const markOpened = async (notificationId: unknown) => {
+      const owner = pushUserRef.current;
+      if (!owner || typeof notificationId !== 'string' || !notificationId) return;
+      const records = await readLocal<NotificationRecord>(owner, 'notification');
+      const local = records.find((record) =>
+        [record.id, record._id, record.cloudId].includes(notificationId),
+      );
+      if (local) await markNotificationAsRead(owner, local);
+      else
+        await pushConvexRef.current.mutation(api.notifications.mutations.markRead, {
+          notificationId: notificationId as Id<'notifications'>,
+          clientMutationId: `push-open:${notificationId}`,
+        });
+    };
     void import('expo-notifications')
       .then((Notifications) => {
         if (!active) return;
@@ -1085,8 +1112,12 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
           },
         });
         const follow = (response: NotificationResponse | null) => {
-          const path = appPathForNotificationUrl(response?.notification.request.content.data?.url);
+          const data = response?.notification.request.content.data;
+          const path = appPathForNotificationUrl(data?.url);
           if (path) router.push(path as never);
+          void markOpened(data?.notificationId).catch((error: unknown) =>
+            console.warn('[local-sync] Could not mark the opened notification read.', error),
+          );
         };
         subscription = Notifications.addNotificationResponseReceivedListener(follow);
         // A tap that launched the app from a killed state.

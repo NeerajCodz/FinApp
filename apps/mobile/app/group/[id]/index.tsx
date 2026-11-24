@@ -5,6 +5,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { formatMinor } from '@convex/shared/money';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useNudge } from '@/hooks/useNudge';
 import { useFinaiDecide } from '@/hooks/useFinaiDecide';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -60,6 +61,7 @@ export default function GroupHomeScreen() {
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
   const decideFinai = useFinaiDecide();
+  const { nudge } = useNudge();
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatPending, setChatPending] = React.useState(false);
@@ -417,6 +419,16 @@ export default function GroupHomeScreen() {
           router.push({ pathname: '/group/[id]/balances', params: { id: id ?? '' } })
         }
         onSettle={() => router.push({ pathname: '/settle/new', params: { groupId: id ?? '' } })}
+        onRemind={
+          cloudGroupId && isConnected
+            ? (memberId) =>
+                void nudge(
+                  String(cloudGroupId),
+                  memberId,
+                  detailMembers.find((member) => member.id === memberId)?.name,
+                )
+            : undefined
+        }
         onSettleWith={(memberId) =>
           router.push({ pathname: '/settle/new', params: { groupId: id ?? '', member: memberId } })
         }

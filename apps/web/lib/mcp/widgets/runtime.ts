@@ -368,7 +368,7 @@ export const widgetRuntime = String.raw`
       }, true));
       if (t.direction === 'you_receive') actions.push(actionButton('Remind', function () {
         return callTool('finapp.groups.nudge', { groupId: data.group.id, userId: t.fromUserId }).then(function (r) {
-          flash(r && r.status === 'alreadySent' ? 'Already reminded ' + t.fromName + ' today.' : 'Reminder sent to ' + t.fromName + '.', 'ok');
+          flash(r && r.status === 'alreadySent' ? 'Already reminded ' + t.fromName + ' today.' : r && r.status === 'muted' ? t.fromName + ' has turned off payment reminders.' : 'Reminder sent to ' + t.fromName + '.', 'ok');
         });
       }));
       var body = [h('div', { class: 'grow' }, h('div', { class: 'title', text: label }), h('div', { class: 'sub', text: t.direction === 'you_pay' ? 'You pay' : t.direction === 'you_receive' ? 'You receive' : 'Between others' })),

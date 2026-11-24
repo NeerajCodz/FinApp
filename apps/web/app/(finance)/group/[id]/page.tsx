@@ -15,10 +15,12 @@ import {
   firstUnreadMessageId,
   readersOf,
   useLiveTypists,
+  useLoadUnreadHistory,
   useOptimisticMessages,
   useReadMarker,
   useTypingSender,
 } from '@finapp/ui/chat';
+import { useNudge } from '@/lib/useNudge';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { isGroupRangeCovered, readLocal } from '@/lib/offline/repository';
@@ -161,6 +163,7 @@ export default function GroupHomePage() {
       : 'skip',
   );
   const decideFinai = useFinaiDecide();
+  const { nudge } = useNudge();
   const chatHistory = usePaginatedQuery(
     api.groups.queries.chatMessagesPage,
     canUseGroupChat && standaloneChat ? { groupId: cloudGroupId } : 'skip',
@@ -209,11 +212,20 @@ export default function GroupHomePage() {
   );
   const chatTypistIds = useLiveTypists(chatScopeState?.typing);
   const [chatFirstUnreadId, setChatFirstUnreadId] = React.useState<string | undefined | null>(null);
+  const loadingUnread = useLoadUnreadHistory({
+    active: standaloneChat && chatFirstUnreadId === null,
+    createdAtOldestFirst: [...chatHistory.results].reverse().map((message) => message.createdAt),
+    lastReadAt: chatMeta?.myLastReadAt,
+    unreadCount: chatMeta?.unreadCount,
+    status: chatHistory.status,
+    loadMore: () => chatHistory.loadMore(CHAT_PAGE_SIZE),
+  });
   if (
     standaloneChat &&
     chatFirstUnreadId === null &&
     chatMeta &&
-    chatHistory.status !== 'LoadingFirstPage'
+    chatHistory.status !== 'LoadingFirstPage' &&
+    !loadingUnread
   )
     setChatFirstUnreadId(
       firstUnreadMessageId(
@@ -859,6 +871,16 @@ export default function GroupHomePage() {
         onOpenSettings={() => router.push(`/group/${encodeURIComponent(localGroupId)}/edit`)}
         onOpenBalances={() => router.push(`/group/${encodeURIComponent(localGroupId)}/balances`)}
         onSettle={() => router.push(`/settle/new?groupId=${encodeURIComponent(localGroupId)}`)}
+        onRemind={
+          cloudGroupId && isConnected
+            ? (memberId) =>
+                void nudge(
+                  String(cloudGroupId),
+                  memberId,
+                  detailMembers.find((member) => member.id === memberId)?.name,
+                )
+            : undefined
+        }
         onSettleWith={(memberId) =>
           router.push(
             `/settle/new?groupId=${encodeURIComponent(localGroupId)}&member=${encodeURIComponent(memberId)}`,

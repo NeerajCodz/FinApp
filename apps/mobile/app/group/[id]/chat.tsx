@@ -9,6 +9,7 @@ import {
   firstUnreadMessageId,
   readersOf,
   useLiveTypists,
+  useLoadUnreadHistory,
   useOptimisticMessages,
   useReadMarker,
   useTypingSender,
@@ -212,7 +213,15 @@ export default function GroupChatRoute() {
     .map(({ timestamp: _timestamp, ...item }) => ({ ...item, createdAt: _timestamp }));
 
   const [firstUnreadId, setFirstUnreadId] = useState<string | undefined | null>(null);
-  if (firstUnreadId === null && chatMeta && history.status !== 'LoadingFirstPage')
+  const loadingUnread = useLoadUnreadHistory({
+    active: firstUnreadId === null,
+    createdAtOldestFirst: [...history.results].reverse().map((message) => message.createdAt),
+    lastReadAt: chatMeta?.myLastReadAt,
+    unreadCount: chatMeta?.unreadCount,
+    status: history.status,
+    loadMore: () => history.loadMore(PAGE_SIZE),
+  });
+  if (firstUnreadId === null && chatMeta && history.status !== 'LoadingFirstPage' && !loadingUnread)
     setFirstUnreadId(
       firstUnreadMessageId(
         items
@@ -287,12 +296,13 @@ export default function GroupChatRoute() {
       setError('Could not read this image.');
       return;
     }
-    setUploading(false);
     if (!image.size || image.size > 5 * 1024 * 1024) {
+      setUploading(false);
       setError('Choose a JPEG, PNG, or WebP bill image up to 5 MB.');
       return;
     }
-    optimistic.send({ kind: 'image', imageUrl: asset.uri, senderName: 'You' }, async () => {
+    // Stay busy until the upload and message have settled, so one tap is one upload.
+    await optimistic.send({ kind: 'image', imageUrl: asset.uri, senderName: 'You' }, async () => {
       const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
       const response = await fetch(uploadUrl, {
         method: 'POST',
@@ -308,6 +318,7 @@ export default function GroupChatRoute() {
       });
       if (!messageId) throw new Error('INVALID_BILL_IMAGE');
     });
+    setUploading(false);
   }
 
   return (

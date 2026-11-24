@@ -107,7 +107,11 @@ export function isSafeNotificationUrl(value: unknown): value is string {
 
 /** Client-facing copy for the result of `notifications.mutations.nudge`. */
 export type NudgeOutcome =
-  { status: 'sent' } | { status: 'alreadySent' } | { status: 'error'; code: string };
+  | { status: 'sent' }
+  | { status: 'alreadySent' }
+  /** The member turned off settlement reminders: nothing was delivered. */
+  | { status: 'muted' }
+  | { status: 'error'; code: string };
 
 export function nudgeErrorCode(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -125,6 +129,8 @@ export function nudgeMessage(outcome: NudgeOutcome, name?: string): string {
   if (outcome.status === 'sent') return name ? `Reminder sent to ${name}.` : 'Reminder sent.';
   if (outcome.status === 'alreadySent')
     return name ? `${name} was already reminded today.` : 'Already reminded today.';
+  if (outcome.status === 'muted')
+    return name ? `${name} has turned off payment reminders.` : 'They’ve turned off reminders.';
   if (outcome.code === 'NOTHING_OWED')
     return name
       ? `${name} doesn’t owe you anything in this group.`
