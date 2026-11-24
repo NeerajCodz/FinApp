@@ -79,7 +79,7 @@ export function geminiUrl(role: AiRole): string {
   return `${GEMINI_API_BASE}/models/${encodeURIComponent(aiModels[role])}:generateContent`;
 }
 
-type GeminiResponse = {
+export type GeminiResponse = {
   candidates?: {
     content?: { parts?: { text?: string; thought?: boolean }[] };
     finishReason?: string;
@@ -92,8 +92,8 @@ type GeminiResponse = {
   };
 };
 
-const RETRYABLE = new Set([429, 500, 502, 503, 504]);
-const BLOCKED_FINISH = new Set([
+export const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+export const BLOCKED_FINISH = new Set([
   'SAFETY',
   'RECITATION',
   'BLOCKLIST',
@@ -103,9 +103,9 @@ const BLOCKED_FINISH = new Set([
   'LANGUAGE',
 ]);
 
-const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+export const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-function backoff(attempt: number, retryAfter: string | null): number {
+export function backoff(attempt: number, retryAfter: string | null): number {
   const seconds = retryAfter ? Number(retryAfter) : NaN;
   if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, aiRetry.maxDelayMs);
   const exponential = aiRetry.baseDelayMs * 2 ** attempt;
@@ -115,7 +115,7 @@ function backoff(attempt: number, retryAfter: string | null): number {
   );
 }
 
-function usageOf(response: GeminiResponse): GeminiUsage {
+export function usageOf(response: GeminiResponse): GeminiUsage {
   const meta = response.usageMetadata ?? {};
   const promptTokens = meta.promptTokenCount ?? 0;
   const outputTokens = meta.candidatesTokenCount ?? 0;

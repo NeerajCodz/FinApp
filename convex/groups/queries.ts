@@ -15,6 +15,8 @@ import { normalizeUsername } from '../users/domain';
 import { avatarUrlForUser } from '../avatars/helpers';
 import { groupBalances, isGroupAdmin } from './ledger';
 import { simplifyDebts } from '../splits/domain';
+import { actionViews } from '../ai/actions';
+import { finaiFields } from '../ai/chatShape';
 
 async function hashInvitationToken(token: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
@@ -269,6 +271,11 @@ async function enrichChatMessages(
   viewerId: Id<'users'>,
 ) {
   const profile = profileLoader(ctx, 'Member');
+  const actions = await actionViews(
+    ctx,
+    messages.filter((message) => message.kind === 'ai').map((message) => String(message._id)),
+    viewerId,
+  );
   return Promise.all(
     messages.map(async (message) => {
       const [sender, attachmentUrl, reactions] = await Promise.all([
@@ -294,6 +301,7 @@ async function enrichChatMessages(
         ...(message.size === undefined ? {} : { size: message.size }),
         pinnedAt: message.pinnedAt ?? null,
         ...summariseReactions(reactions, viewerId),
+        ...finaiFields(message, actions, viewerId),
       };
     }),
   );

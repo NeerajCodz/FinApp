@@ -5,6 +5,7 @@ import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
 import { validateBillImageMetadata } from '../groups/domain';
 import { advanceReadPointer, CHAT_PIN_LIMIT, chatReactionEmoji, clearTyping } from '../shared/chat';
+import { maybeScheduleFinaiReply } from '../ai/mentions';
 
 async function getConversationForParticipant(
   ctx: MutationCtx,
@@ -94,6 +95,14 @@ export const sendText = mutation({
     });
     await ctx.db.patch(conversation._id, { updatedAt: createdAt });
     await afterSend(ctx, conversationId, actor._id, createdAt);
+    await maybeScheduleFinaiReply(
+      ctx,
+      { type: 'direct', id: conversationId },
+      actor._id,
+      String(messageId),
+      trimmed,
+      createdAt,
+    );
     return messageId;
   },
 });

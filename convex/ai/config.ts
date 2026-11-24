@@ -51,3 +51,28 @@ export const receiptUpload = {
   mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
   ticketTtlMs: 15 * 60 * 1000,
 } as const;
+
+/** FinAI agent loop: the in-app assistant and `@finai` replies in chats. */
+export const finaiAgent = {
+  /** Gemini rounds per reply (each round may call several tools). */
+  maxSteps: 6,
+  /** Tool calls per reply across all rounds. */
+  maxToolCalls: 12,
+  /** Earlier turns of an assistant conversation sent as history. */
+  historyTurns: 24,
+  /** Recent thread messages given to an `@finai` reply as context. */
+  mentionContextMessages: 30,
+  /** Streamed text is written to the message at most this often. */
+  streamFlushMs: 250,
+  /** Longest reply the agent may produce, in characters. */
+  maxReplyChars: 6_000,
+  /** Longest user prompt, in characters. */
+  maxPromptChars: 4_000,
+  /** Confirmation cards expire after this long. */
+  actionTtlMs: 30 * 60 * 1000,
+  /** A thread can have one FinAI reply in progress; mentions inside this window are ignored. */
+  mentionCooldownMs: 4_000,
+} as const;
+
+/** The mention handle that summons FinAI in group chats and DMs (case-insensitive). */
+export const FINAI_HANDLE = 'finai';

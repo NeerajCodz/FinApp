@@ -1,6 +1,14 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { authTables } from '@convex-dev/auth/server';
 import { v } from 'convex/values';
+import {
+  finaiActionKind,
+  finaiActionStatus,
+  finaiChatState,
+  finaiReplyStatus,
+  finaiScopeType,
+  finaiStage,
+} from './ai/validators';
 
 const timestamp = v.number();
 const role = v.union(v.literal('owner'), v.literal('admin'), v.literal('member'));
@@ -326,7 +334,9 @@ export default defineSchema({
   groupMessages: defineTable({
     groupId: v.id('groups'),
     senderId: v.id('users'),
-    kind: v.union(v.literal('text'), v.literal('bill')),
+    // `ai`: a FinAI reply to an @finai mention; senderId is the member who asked.
+    kind: v.union(v.literal('text'), v.literal('bill'), v.literal('ai')),
+    ai: v.optional(finaiChatState),
     text: optionalText,
     storageId: v.optional(v.id('_storage')),
     mimeType: optionalText,
@@ -375,7 +385,9 @@ export default defineSchema({
   directMessages: defineTable({
     conversationId: v.id('directConversations'),
     senderId: v.id('users'),
-    kind: v.union(v.literal('text'), v.literal('image')),
+    // `ai`: a FinAI reply to an @finai mention; senderId is the participant who asked.
+    kind: v.union(v.literal('text'), v.literal('image'), v.literal('ai')),
+    ai: v.optional(finaiChatState),
     text: optionalText,
     storageId: v.optional(v.id('_storage')),
     mimeType: optionalText,
@@ -648,6 +660,50 @@ export default defineSchema({
     outputTokens: v.optional(v.number()),
     updatedAt: timestamp,
   }).index('by_user_kind_window', ['userId', 'kind', 'windowStart']),
+  /** In-app FinAI assistant threads, one owner each. */
+  finaiConversations: defineTable({
+    userId: v.id('users'),
+    title: optionalText,
+    preview: optionalText,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).index('by_user_updatedAt', ['userId', 'updatedAt']),
+  finaiMessages: defineTable({
+    conversationId: v.id('finaiConversations'),
+    userId: v.id('users'),
+    role: v.union(v.literal('user'), v.literal('assistant')),
+    text: v.string(),
+    status: finaiReplyStatus,
+    stage: v.optional(finaiStage),
+    stageLabel: optionalText,
+    /** A2UI v0.9 messages (JSON) for the reply's cards. */
+    a2ui: optionalText,
+    errorCode: optionalText,
+    toolsUsed: v.optional(v.array(v.string())),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).index('by_conversation_createdAt', ['conversationId', 'createdAt']),
+  /**
+   * Writes FinAI proposed and the user must confirm (or cancel) before they run. Payload is
+   * JSON with amounts as integer strings in minor units.
+   */
+  finaiActions: defineTable({
+    userId: v.id('users'),
+    scopeType: finaiScopeType,
+    scopeId: v.string(),
+    messageId: v.string(),
+    kind: finaiActionKind,
+    payload: v.string(),
+    title: v.string(),
+    status: finaiActionStatus,
+    resultId: optionalText,
+    errorCode: optionalText,
+    createdAt: timestamp,
+    expiresAt: timestamp,
+    decidedAt: optionalTime,
+  })
+    .index('by_message', ['messageId'])
+    .index('by_user_status', ['userId', 'status']),
   /** Single-use tickets for receipt images uploaded for AI parsing (deleted after parsing). */
   aiReceiptUploads: defineTable({
     ticket: v.string(),
