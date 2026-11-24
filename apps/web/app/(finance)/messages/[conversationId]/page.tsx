@@ -19,6 +19,9 @@ import {
   type ChatMessage,
 } from '@finapp/ui/chat';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
+import { useFinaiDecide } from '@/lib/finai/useFinaiDecide';
+import { FinaiSurface } from '@finapp/ui/ai';
+import { FINAI_MENTION, finaiChatOverrides, finaiTypingNames } from '@finapp/ui/ai/finai';
 
 const PAGE_SIZE = 30;
 type Presence = {
@@ -61,6 +64,7 @@ export default function DirectConversationPage() {
   const setTypingMutation = useMutation(api.presence.mutations.setTyping);
   const markRead = useMutation(api.presence.mutations.markRead);
   const toggleReaction = useMutation(api.directMessages.mutations.toggleReaction);
+  const decideFinai = useFinaiDecide();
   const setPinned = useMutation(api.directMessages.mutations.setPinned);
   const typedConversationId = conversationId as Id<'directConversations'>;
   const typing = useTypingSender(
@@ -107,6 +111,7 @@ export default function DirectConversationPage() {
           pinned: message.pinnedAt !== null || pinnedIds.has(String(message.id)),
           canPin: true,
           seen: mine && peerLastReadAt >= message.createdAt,
+          ...finaiChatOverrides(message.ai),
         };
       }),
     [history.results, peerLastReadAt, pinnedIds, userId],
@@ -240,7 +245,14 @@ export default function DirectConversationPage() {
           loadingOlder={history.status === 'LoadingMore'}
           onLoadOlder={() => history.loadMore(PAGE_SIZE)}
           firstUnreadId={firstUnreadId ?? undefined}
-          typingNames={peerTyping ? [peerName] : []}
+          typingNames={[...(peerTyping ? [peerName] : []), ...finaiTypingNames(serverMessages)]}
+          renderAiContent={(message) => (
+            <FinaiSurface
+              a2ui={message.ai?.a2ui}
+              actions={message.ai?.actions}
+              onDecide={decideFinai}
+            />
+          )}
           pinned={(meta?.pinned ?? []).map((pin) => ({
             id: String(pin.id),
             text: pin.text,
@@ -273,7 +285,8 @@ export default function DirectConversationPage() {
             onBlur: typing.stop,
             onAttachFile: submitImage,
             attachLabel: 'Attach JPEG, PNG, or WebP image',
-            placeholder: 'Write a message…',
+            placeholder: 'Write a message… (@finai to ask FinAI)',
+            mentions: [FINAI_MENTION],
           }}
         />
       )}

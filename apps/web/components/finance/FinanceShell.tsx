@@ -15,6 +15,7 @@ import {
   History,
   House,
   Landmark,
+  Sparkles,
   Tags,
   Target,
   UserRound,
@@ -41,6 +42,7 @@ type SidebarProfile = LocalRecord & {
 };
 const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
+  { href: '/finai', label: 'FinAI', icon: Sparkles },
   { href: '/activity', label: 'Activity', icon: History },
   { href: '/accounts', label: 'Accounts', icon: Landmark },
   { href: '/budgets', label: 'Budgets', icon: Activity },
