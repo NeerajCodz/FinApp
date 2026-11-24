@@ -15,6 +15,11 @@ const backend = vi.hoisted(() => ({
 
 vi.mock('@/lib/mcp/oauth', () => ({
   mcpResourceUrl: () => 'https://finapp.test/mcp',
+  mcpIssuer: () => 'https://finapp.test',
+  mcpConvexUrl: () => 'https://convex.invalid',
+  prepareMcpAccessTokenSigner: async () => {
+    throw new Error('MCP_SIGNING_PRIVATE_KEY and MCP_SIGNING_KEY_ID are required');
+  },
   verifyMcpAccessToken: async () => ({
     userId: 'user-one',
     grantId: 'grant-one',
@@ -80,6 +85,7 @@ const expenseArgs = {
     { userId: 'user-one', amountMinor: '1500', method: 'equal' },
     { userId: 'user-two', amountMinor: '1500', method: 'equal' },
   ],
+  expectedVersion: 1,
 };
 
 beforeEach(() => {
@@ -302,6 +308,24 @@ describe('MCP plugin tools', () => {
     }
   });
 
+  it('requires expectedVersion so a concurrent edit is never overwritten', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:groups'];
+    backend.mutations = { 'groups/mutations:updateExpense': () => 'expense-1' };
+    const client = await connect();
+    try {
+      const { expectedVersion: _omitted, ...withoutVersion } = expenseArgs;
+      void _omitted;
+      const result = await client.callTool({
+        name: 'finapp.groups.expenses.update',
+        arguments: withoutVersion,
+      });
+      expect(result.isError).toBe(true);
+      expect(backend.calls).toEqual([]);
+    } finally {
+      await client.close();
+    }
+  });
+
   it('omits items when not provided and rejects mismatched item totals locally', async () => {
     backend.scopes = ['finapp:read', 'finapp:write:groups'];
     backend.mutations = { 'groups/mutations:updateExpense': () => 'expense-1' };
@@ -465,5 +489,9 @@ describe('MCP endpoint browser UX', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(body).toMatchObject({ name: 'finapp', widgetCount: 5, transport: 'streamable-http' });
     expect(body.toolCount).toBe(toolCatalog().length + 5);
+    // No signing key in the test env: never advertised as online.
+    expect(response.status).toBe(503);
+    expect(body.status).not.toBe('ok');
+    expect(body.checks).toMatchObject({ endpoint: 'ok', issuer: 'ok', signing: 'missing' });
   });
 });

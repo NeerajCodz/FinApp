@@ -327,7 +327,7 @@ export const groupTools: ToolFactory = (client) => [
     description: 'Disable the active join link of a group you administer.',
     scope: 'finapp:write:groups',
     destructive: true,
-    input: { groupId: docId('Group') },
+    input: { groupId: docId('Group'), confirm: confirm('revoke this invitation link') },
     run: (args) =>
       client.mutation(api.groups.mutations.revokeInvitationLink, {
         groupId: id<'groups'>(args.groupId),
@@ -505,7 +505,11 @@ export const groupTools: ToolFactory = (client) => [
       participants,
       payers,
       items: lineItems,
-      expectedVersion: z.number().int().min(1).optional().describe('Version from expenses.get.'),
+      expectedVersion: z
+        .number()
+        .int()
+        .min(1)
+        .describe('Version from expenses.get; required so a concurrent edit is never overwritten.'),
       clientMutationId: mutationId,
     },
     run: (args) =>
@@ -557,8 +561,9 @@ export const groupTools: ToolFactory = (client) => [
     scope: 'finapp:write:groups',
     input: {
       groupId: docId('Group'),
-      expenseIds: z.array(docId('Expense transaction')).min(1).max(100),
-      userIds: z.array(docId('Member user')).min(1).max(50),
+      // Matches the backend limits in groups.mutations.addMembersToExpenses.
+      expenseIds: z.array(docId('Expense transaction')).min(1).max(50),
+      userIds: z.array(docId('Member user')).min(1).max(20),
       clientMutationId: mutationId,
     },
     run: (args) =>
@@ -598,7 +603,7 @@ export const groupTools: ToolFactory = (client) => [
       amountMinor: minorUnits,
       currency,
       occurredAt: timestamp.optional().describe('Default: now.'),
-      note: z.string().max(500).optional().describe('e.g. "UPI ref 1234".'),
+      note: z.string().max(280).optional().describe('At most 280 characters, e.g. "UPI ref 1234".'),
       clientMutationId: mutationId,
     },
     run: async (args) => ({
@@ -718,9 +723,10 @@ export const groupTools: ToolFactory = (client) => [
     scope: 'finapp:read',
     input: { username: z.string().min(3).max(32), limit },
     run: async (args) => ({
-      items: (
-        await client.query(api.groups.queries.personTimeline, { username: args.username })
-      ).slice(0, args.limit),
+      items: await client.query(api.groups.queries.personTimeline, {
+        username: args.username,
+        limit: args.limit,
+      }),
     }),
   }),
 ];
