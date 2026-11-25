@@ -1,6 +1,6 @@
 {
   "name": "@finapp/ui",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "exports": {
     "./native": "./src/native/index.tsx",
@@ -52,6 +52,7 @@
     "./finance/expense-outbox": "./src/finance/groupExpenseOutbox.ts",
     "./finance/line-items": "./src/finance/lineItems.ts",
     "./ai/receipt-scan": "./src/ai/receiptScan.ts",
+    "./version": "./src/version/model.ts",
     "./ai": {
       "react-native": "./src/ai/native/index.ts",
       "browser": "./src/ai/web/index.ts",

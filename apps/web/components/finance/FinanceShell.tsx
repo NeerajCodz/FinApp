@@ -25,6 +25,7 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Avatar, Sheet } from '@finapp/ui/web';
 import { FinaiLauncher } from './FinaiLauncher';
+import { UpdateBanner } from './UpdateBanner';
 import { FinanceBrand, FinanceWorkspace, MobileFinanceNav } from '@finapp/ui/finance';
 import { quickAddActions } from '@finapp/ui/quick-add';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -240,6 +241,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         <QuickAddActions onClose={closeQuickAdd} />
       </Sheet>
       <FinaiLauncher />
+      <UpdateBanner />
       <NotificationToasts />
     </QuickAddContext.Provider>
   );

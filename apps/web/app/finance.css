@@ -3674,3 +3674,33 @@
     animation: none;
   }
 }
+
+/* Shown when this tab runs a web build older than the backend supports. */
+.finance-update-banner {
+  position: fixed;
+  z-index: 70;
+  top: 12px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--finapp-warning);
+  border-radius: 14px;
+  background: var(--finapp-popover);
+  color: var(--finapp-foreground);
+  font-size: 0.875rem;
+  transform: translateX(-50%);
+  box-shadow: 0 12px 32px #0006; /* theme-exempt: shadows stay dark in both themes */
+}
+.finance-update-banner button {
+  border: 0;
+  border-radius: 10px;
+  padding: 6px 12px;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

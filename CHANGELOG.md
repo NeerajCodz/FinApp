@@ -1,0 +1,22 @@
+# FinApp changelog
+
+Product releases. Each release lists the component versions it shipped with; component
+changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
+[ui](packages/ui/CHANGELOG.md), [backend](convex/CHANGELOG.md). Manifests live in
+[`releases/`](releases/).
+
+## 1.4.0
+
+Web 1.4.0 · Mobile 1.4.0 (build 10) · UI 1.4.0 · Backend 1.4.0 · API 1 · Schema 4
+
+- **FinAI** assistant with live cards, confirm-first actions and `@finai` in group chats and DMs; a floating launcher across the app.
+- **Receipt scanning** into itemized transactions, with the category picked by `gemini-decision-1`.
+- **Line items** and by-item group splits.
+- **Chat**: pins, read receipts, typing indicators, true first-unread divider.
+- **MCP plugin** (102 tools) for ChatGPT and Claude.
+- **Groups**: ownership handoff, payment reminders, exact split math, per-currency person balances.
+- Versioning: `version.json` manifest, release archive, in-app version details and update checks.
+
+## 1.3.0
+
+Groups, settle-up hub, notifications, theme foundation and stability fixes.

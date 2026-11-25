@@ -1,17 +1,37 @@
 import React from 'react';
-import { Linking, ScrollView, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Share, View } from 'react-native';
+import Constants from 'expo-constants';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { diagnosticsText, versionRows } from '@finapp/ui/version';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Heart } from '@finapp/ui/icons/native';
 import { IconButton, Text, Typography, useTheme } from '@finapp/ui/native';
 import { CoinLogo } from '@/components/brand/CoinLogo';
-import { APP_VERSION } from '@convex/shared/version';
 
 const DEVELOPER_URL = 'https://github.com/NeerajCodz';
 
 export default function AboutScreen() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const { isConnected } = useLocalSync();
+  const backend = useQuery(api.system.info, {});
+  const extra = (Constants.expoConfig?.extra ?? {}) as { gitSha?: string };
+  const rows = versionRows({
+    platform: 'mobile',
+    backend: backend ?? (isConnected ? undefined : null),
+    commit: extra.gitSha,
+    environment: __DEV__ ? 'development' : 'production',
+  });
+  async function shareDiagnostics() {
+    try {
+      await Share.share({ message: diagnosticsText(rows) });
+    } catch {
+      // Sharing was dismissed or is unavailable; nothing to do.
+    }
+  }
 
   async function openDeveloperLink() {
     try {
@@ -45,9 +65,33 @@ export default function AboutScreen() {
       </View>
 
       <View style={{ gap: 20 }}>
-        <View style={{ gap: 6 }}>
-          <Typography variant="heading">About Finapp</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>{APP_VERSION}</Text>
+        <View
+          accessibilityLabel="Version information"
+          style={{
+            gap: 10,
+            padding: 16,
+            borderRadius: 18,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.card,
+          }}
+        >
+          {rows.map((row) => (
+            <View
+              key={row.label}
+              style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}
+            >
+              <Text style={{ color: tokens.foregroundMuted }}>{row.label}</Text>
+              <Text style={{ flexShrink: 1, textAlign: 'right' }}>{row.value}</Text>
+            </View>
+          ))}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void shareDiagnostics()}
+            style={{ alignSelf: 'flex-start', paddingVertical: 6 }}
+          >
+            <Text style={{ color: tokens.primary }}>Share diagnostics</Text>
+          </Pressable>
         </View>
         <View style={{ gap: 6 }}>
           <Typography variant="label">Developer</Typography>

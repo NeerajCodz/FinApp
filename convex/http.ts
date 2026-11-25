@@ -1,6 +1,6 @@
 import { httpRouter } from 'convex/server';
 import { httpAction } from './_generated/server';
-import { APP_VERSION } from './shared/version';
+import { BACKEND_INFO, PRODUCT_VERSION } from './shared/version';
 import { auth } from './auth';
 
 const http = httpRouter();
@@ -10,7 +10,7 @@ http.route({
   method: 'GET',
   handler: httpAction(
     async () =>
-      new Response(JSON.stringify({ version: APP_VERSION }), {
+      new Response(JSON.stringify({ productVersion: PRODUCT_VERSION, ...BACKEND_INFO }), {
         status: 200,
         headers: {
           'Access-Control-Allow-Origin': '*',
