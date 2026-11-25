@@ -92,7 +92,16 @@ async function openStream(
   let lastFailure: 'busy' | 'unavailable' | 'timeout' = 'unavailable';
   for (let attempt = 0; attempt <= aiRetry.retries; attempt++) {
     const controller = new AbortController();
-    let timer = setTimeout(() => controller.abort(), timeoutMs);
+    // The first chunk may take longer (reasoning models think before answering).
+    const firstChunkMs = Math.max(
+      timeoutMs,
+      options.firstChunkTimeoutMs ?? aiGeneration.chat.firstChunkTimeoutMs ?? timeoutMs,
+    );
+    const connectMs = Math.min(
+      firstChunkMs,
+      options.connectTimeoutMs ?? aiGeneration.chat.connectTimeoutMs ?? firstChunkMs,
+    );
+    let timer = setTimeout(() => controller.abort(), connectMs);
     const restart = () => {
       clearTimeout(timer);
       timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -124,6 +133,9 @@ async function openStream(
       console.warn('[ai] BYOK provider rejected request', response.status);
       throw aiError(response.ok ? 'AI_BAD_RESPONSE' : 'AI_REQUEST_REJECTED');
     }
+    // Started: allow the model time to think before its first chunk.
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(), firstChunkMs);
     return { response, controller, restart, stop };
   }
   throw aiError(

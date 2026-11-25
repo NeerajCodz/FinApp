@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { FinaiAssistantScreen, FinaiLogo } from '@finapp/ui/ai';
@@ -9,6 +10,7 @@ import { ThinkingOrb } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useFinaiAssistant } from '@/lib/finai/useFinaiAssistant';
 import { useFinaiDecide } from '@/lib/finai/useFinaiDecide';
+import { useFinaiActivity } from '@/lib/finai/useFinaiActivity';
 
 /**
  * FinAI everywhere: a floating orb button above the + button that opens the chat as a panel
@@ -33,6 +35,26 @@ export function FinaiLauncher() {
   const finaiSettings = useQuery(api.ai.settings.get, userId && isConnected ? {} : 'skip');
   const assistant = useFinaiAssistant(live);
   const decide = useFinaiDecide();
+  const router = useRouter();
+  const onFinaiPage = pathname === '/finai' || pathname.startsWith('/finai/');
+  const { select } = assistant;
+  // Replies keep going after the chat is closed: say when one lands somewhere off screen.
+  const activity = useFinaiActivity(Boolean(userId && isConnected), (reply) => {
+    toast(reply.failed ? 'FinAI couldn’t finish a reply' : 'FinAI replied', {
+      description: reply.failed ? reply.title : reply.preview || reply.title,
+      action: {
+        label: 'Open',
+        onClick: () => {
+          if (onFinaiPage) {
+            router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}`);
+            return;
+          }
+          select(reply.conversationId);
+          setOpen(true);
+        },
+      },
+    });
+  });
 
   React.useEffect(() => {
     if (!open) return;
@@ -73,7 +95,7 @@ export function FinaiLauncher() {
     };
   }, [fullScreen, open]);
 
-  if (!userId || pathname === '/finai' || pathname.startsWith('/finai/')) return null;
+  if (!userId || onFinaiPage) return null;
   if (finaiSettings && (!finaiSettings.enabled || !finaiSettings.showLauncher)) return null;
   return (
     <>
@@ -112,11 +134,27 @@ export function FinaiLauncher() {
         ref={buttonRef}
         type="button"
         className="finai-launcher"
-        aria-label={open ? 'Close FinAI' : 'Ask FinAI'}
+        aria-label={
+          open
+            ? 'Close FinAI'
+            : activity.unreadCount > 0
+              ? `Ask FinAI, ${activity.unreadCount} new ${activity.unreadCount === 1 ? 'reply' : 'replies'}`
+              : 'Ask FinAI'
+        }
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        {assistant.sending ? <ThinkingOrb state="working" size={26} /> : <FinaiLogo size={28} />}
+        {/* The orb replaces the logo while any reply is being written, even with the chat closed. */}
+        {assistant.sending || activity.working ? (
+          <ThinkingOrb state="working" size={26} />
+        ) : (
+          <FinaiLogo size={28} />
+        )}
+        {activity.unreadCount > 0 && !open ? (
+          <span className="finai-launcher-badge" aria-hidden="true">
+            {activity.unreadCount > 9 ? '9+' : activity.unreadCount}
+          </span>
+        ) : null}
       </button>
     </>
   );

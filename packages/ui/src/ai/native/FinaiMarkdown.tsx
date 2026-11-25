@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { useTheme } from '../../native/ThemeProvider';
 import { fontFamilies } from '../../tokens';
 import { parseMarkdown, type MdBlock, type MdInline } from '../markdown';
+import { useStreamedText } from '../streamedText';
 
 function inline(nodes: readonly MdInline[], codeBackground: string, key = ''): React.ReactNode[] {
   return nodes.map((node, index) => {
@@ -38,7 +39,9 @@ function inline(nodes: readonly MdInline[], codeBackground: string, key = ''): R
 /** A FinAI reply in its reading face, with safe Markdown rendered as native text. */
 export function FinaiMarkdown({ text, streaming }: { text: string; streaming?: boolean }) {
   const { tokens } = useTheme();
-  const blocks = React.useMemo(() => parseMarkdown(text), [text]);
+  // Grows smoothly frame by frame while the reply streams in.
+  const shown = useStreamedText(text, Boolean(streaming));
+  const blocks = React.useMemo(() => parseMarkdown(shown), [shown]);
   const body = {
     color: tokens.foreground,
     fontFamily: fontFamilies.ai.regular,

@@ -115,11 +115,17 @@ export async function runAgent<Ctx>(options: AgentRunOptions<Ctx>): Promise<Agen
     });
     const prefix = text ? `${text}\n\n` : '';
     let stepText = '';
+    let thinking = false;
     const result = await chat({
       role: 'chat',
       systemInstruction: options.system,
       contents,
       functions: lastChance ? undefined : functions,
+      onThought: async () => {
+        if (thinking || stepText) return;
+        thinking = true;
+        await options.onProgress?.({ stage: 'reasoning', label: 'Thinking it through…' });
+      },
       onText: async (delta) => {
         stepText += delta;
         if (prefix.length + stepText.length > finaiAgent.maxReplyChars) return;

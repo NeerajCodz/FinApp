@@ -70,6 +70,7 @@
 }
 
 .iconButton {
+  position: relative;
   display: grid;
   place-items: center;
   width: 36px;
@@ -452,4 +453,37 @@
   .caret {
     animation: none;
   }
+}
+
+.conversationMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.unreadTitle {
+  font-weight: 700;
+}
+
+.unreadPill {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.unreadDot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--finapp-primary);
+  box-shadow: 0 0 0 2px var(--finapp-card);
 }

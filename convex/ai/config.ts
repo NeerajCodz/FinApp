@@ -28,7 +28,9 @@ export type AiModelId = (typeof aiModels)[AiRole];
  * unreachable, before anything has streamed.
  */
 export const aiFallbackModels: Record<AiRole, readonly string[]> = {
-  chat: ['gemini-3.6-flash', 'gemini-flash-latest'],
+  // The lite model goes last: it doesn't think, but it stays responsive when the flash models are
+  // overloaded (they can 503 or hang without sending a byte under high demand).
+  chat: ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite'],
   ocr: ['gemini-3.1-flash-lite'],
   /** A different API: no text-model fallback. */
   decision: [],
@@ -65,9 +67,27 @@ export const GEMINI_API_KEY_ENV = 'GEMINI_API_KEY';
 /** Per-role generation defaults; callers may override `temperature` and `maxOutputTokens`. */
 export const aiGeneration: Record<
   AiRole,
-  { temperature: number; maxOutputTokens: number; timeoutMs: number }
+  {
+    temperature: number;
+    maxOutputTokens: number;
+    /** Longest silence between streamed chunks once the reply has started. */
+    timeoutMs: number;
+    /** Longest wait for the response to start (headers); a hung model is skipped after this. */
+    connectTimeoutMs?: number;
+    /**
+     * Longest wait for the first chunk. Thinking models can reason for a long time before
+     * answering, especially after large tool results, so this is more generous than `timeoutMs`.
+     */
+    firstChunkTimeoutMs?: number;
+  }
 > = {
-  chat: { temperature: 0.7, maxOutputTokens: 8192, timeoutMs: 30_000 },
+  chat: {
+    temperature: 0.7,
+    maxOutputTokens: 8192,
+    timeoutMs: 30_000,
+    connectTimeoutMs: 20_000,
+    firstChunkTimeoutMs: 60_000,
+  },
   ocr: { temperature: 0, maxOutputTokens: 4096, timeoutMs: 45_000 },
   /** Only `timeoutMs` applies (the decisions API has no generation settings). */
   decision: { temperature: 0, maxOutputTokens: 1, timeoutMs: 10_000 },
@@ -103,8 +123,8 @@ export const finaiAgent = {
   historyTurns: 24,
   /** Recent thread messages given to an `@finai` reply as context. */
   mentionContextMessages: 30,
-  /** Streamed text is written to the message at most this often. */
-  streamFlushMs: 250,
+  /** Live text is written to the reply at most this often (writes never block the stream). */
+  streamFlushMs: 80,
   /** Longest reply the agent may produce, in characters. */
   maxReplyChars: 6_000,
   /** Longest user prompt, in characters. */

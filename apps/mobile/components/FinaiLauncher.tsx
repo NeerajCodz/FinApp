@@ -1,12 +1,14 @@
 import React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useSegments } from 'expo-router';
 import { useConvexAuth, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_HEIGHT } from '@/lib/tabBar';
-import { useTheme } from '@finapp/ui/native';
+import { ThinkingOrb, useTheme } from '@finapp/ui/native';
 import { FinaiLogo } from '@finapp/ui/ai';
+import { useFinaiActivity } from '@/hooks/useFinaiActivity';
+import { toast } from '@/lib/toast';
 
 /**
  * FinAI everywhere on the main tabs: a floating orb button above the tab bar that opens the
@@ -18,6 +20,16 @@ export function FinaiLauncher() {
   const segments = useSegments();
   const { isAuthenticated } = useConvexAuth();
   const finaiSettings = useQuery(api.ai.settings.get, isAuthenticated ? {} : 'skip');
+  // Replies keep going after the FinAI screen is closed: toast them on any screen.
+  const activity = useFinaiActivity(isAuthenticated, (reply) => {
+    const open = () => router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}` as never);
+    const options = {
+      description: reply.failed ? reply.title : reply.preview || reply.title,
+      action: { label: 'Open', onPress: open },
+    };
+    if (reply.failed) toast.error('FinAI couldn’t finish a reply', options);
+    else toast.info('FinAI replied', options);
+  });
   // Only on the tab screens themselves (not nested routes such as profile settings).
   if (!isAuthenticated || segments[0] !== '(tabs)' || segments.length > 2) return null;
   if (finaiSettings && (!finaiSettings.enabled || !finaiSettings.showLauncher)) return null;
@@ -28,7 +40,11 @@ export function FinaiLauncher() {
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Ask FinAI"
+        accessibilityLabel={
+          activity.unreadCount > 0
+            ? `Ask FinAI, ${activity.unreadCount} new ${activity.unreadCount === 1 ? 'reply' : 'replies'}`
+            : 'Ask FinAI'
+        }
         onPress={() => router.push('/finai' as never)}
         style={({ pressed }) => ({
           width: 52,
@@ -47,7 +63,35 @@ export function FinaiLauncher() {
           elevation: 6,
         })}
       >
-        <FinaiLogo size={28} title="FinAI" />
+        {/* The orb replaces the logo while a reply is being written, even with the chat closed. */}
+        {activity.working ? (
+          <ThinkingOrb state="working" size={26} />
+        ) : (
+          <FinaiLogo size={28} title="FinAI" />
+        )}
+        {activity.unreadCount > 0 ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: -3,
+              right: -3,
+              minWidth: 20,
+              height: 20,
+              paddingHorizontal: 5,
+              borderRadius: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: tokens.primary,
+              borderWidth: 2,
+              borderColor: tokens.background,
+            }}
+          >
+            <Text style={{ color: tokens.primaryForeground, fontSize: 11, fontWeight: '700' }}>
+              {activity.unreadCount > 9 ? '9+' : activity.unreadCount}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );

@@ -391,3 +391,38 @@ export function stepsSummary(steps: readonly FinaiStep[], busy: boolean): string
     .filter(Boolean)
     .join(' · ');
 }
+
+// ---------- Background replies ----------
+
+let viewingConversation: string | null = null;
+
+/** Records which FinAI chat is on screen right now (null when none), so its replies don't toast. */
+export function setFinaiViewing(conversationId: string | null) {
+  viewingConversation = conversationId;
+}
+
+/** The FinAI chat currently on screen, if any. */
+export function finaiViewing(): string | null {
+  return viewingConversation;
+}
+
+export type FinaiLatestReply = {
+  conversationId: string;
+  replyId: string;
+  title: string;
+  preview: string;
+  failed: boolean;
+  at: number;
+};
+
+/**
+ * Whether a finished reply deserves a "FinAI replied" toast: it's newer than anything already
+ * seen or toasted, and its chat isn't the one on screen.
+ */
+export function shouldToastReply(
+  latest: FinaiLatestReply | null | undefined,
+  seenAt: number,
+  viewing: string | null,
+): boolean {
+  return !!latest && latest.at > seenAt && latest.conversationId !== viewing;
+}

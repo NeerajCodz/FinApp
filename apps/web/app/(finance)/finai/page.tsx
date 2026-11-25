@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { FinaiAssistantScreen } from '@finapp/ui/ai';
@@ -9,9 +11,24 @@ import { useFinaiAssistant } from '@/lib/finai/useFinaiAssistant';
 import { useFinaiDecide } from '@/lib/finai/useFinaiDecide';
 
 export default function FinaiPage() {
+  // useSearchParams needs a Suspense boundary for static rendering.
+  return (
+    <React.Suspense fallback={null}>
+      <FinaiPageContent />
+    </React.Suspense>
+  );
+}
+
+function FinaiPageContent() {
   const { userId, isConnected } = useBrowserSync();
   const live = Boolean(userId && isConnected);
-  const assistant = useFinaiAssistant(live);
+  const requested = useSearchParams().get('c');
+  const assistant = useFinaiAssistant(live, requested);
+  const { select } = assistant;
+  // "Open" on a FinAI toast links here with the chat to show.
+  React.useEffect(() => {
+    if (requested) select(requested);
+  }, [requested, select]);
   const decide = useFinaiDecide();
   const finaiSettings = useQuery(api.ai.settings.get, live ? {} : 'skip');
   if (!userId)

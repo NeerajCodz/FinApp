@@ -3,6 +3,7 @@
 import React from 'react';
 import { parseMarkdown, type MdBlock, type MdInline } from '../markdown';
 import styles from './FinaiMarkdown.module.css';
+import { useStreamedText } from '../streamedText';
 
 function Inline({ nodes }: { nodes: readonly MdInline[] }) {
   return (
@@ -72,7 +73,9 @@ function Block({ block }: { block: MdBlock }) {
 
 /** A FinAI reply in its reading face, with safe Markdown (no HTML is ever injected). */
 export function FinaiMarkdown({ text, streaming }: { text: string; streaming?: boolean }) {
-  const blocks = React.useMemo(() => parseMarkdown(text), [text]);
+  // Grows smoothly frame by frame while the reply streams in.
+  const shown = useStreamedText(text, Boolean(streaming));
+  const blocks = React.useMemo(() => parseMarkdown(shown), [shown]);
   return (
     <div className={styles.markdown}>
       {blocks.map((block, index) => (

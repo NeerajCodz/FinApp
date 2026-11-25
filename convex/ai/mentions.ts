@@ -5,6 +5,7 @@
  * `runReply`, which builds the thread's shared context, runs the agent with chat-scoped tools
  * and streams the answer into that bubble.
  */
+import { createStreamWriter } from './streamWriter';
 import { v } from 'convex/values';
 import { internal } from '../_generated/api';
 import type { Id } from '../_generated/dataModel';
@@ -284,8 +285,11 @@ ${finaiPreferencePrompt(settings)}`;
           ],
         },
       ];
-      let lastFlush = 0;
       let steps: AgentStep[] = [];
+      const live = createStreamWriter(
+        (text) => patch({ text, status: 'streaming' }),
+        finaiAgent.streamFlushMs,
+      );
       byok = await chatForUser(ctx, args.requesterId);
       const result = await runAgent({
         ...(byok.chat ? { chat: byok.chat } : {}),
@@ -313,12 +317,9 @@ ${finaiPreferencePrompt(settings)}`;
             ...(next ? { steps: next } : {}),
           });
         },
-        onText: async (text) => {
-          if (Date.now() - lastFlush < finaiAgent.streamFlushMs) return;
-          lastFlush = Date.now();
-          await patch({ text, status: 'streaming' });
-        },
+        onText: (text) => live.push(text),
       });
+      await live.drain();
       const a2ui = buildA2uiMessages(`finai-${args.replyId}`, result.views);
       await patch({
         status: 'done',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -12,7 +12,13 @@ export default function FinaiScreen() {
   const insets = useSafeAreaInsets();
   const { userId, isConnected } = useLocalSync();
   const live = Boolean(userId && isConnected);
-  const assistant = useFinaiAssistant(live);
+  // "Open" on a FinAI toast links here with the chat to show.
+  const { c: requested } = useLocalSearchParams<{ c?: string }>();
+  const assistant = useFinaiAssistant(live, requested ?? null);
+  const { select } = assistant;
+  React.useEffect(() => {
+    if (requested) select(requested);
+  }, [requested, select]);
   const decide = useFinaiDecide();
   const finaiSettings = useQuery(api.ai.settings.get, live ? {} : 'skip');
   return (

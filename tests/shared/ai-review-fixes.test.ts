@@ -18,8 +18,10 @@ describe('model chain', () => {
     expect(aiAttempts('chat')).toBeGreaterThanOrEqual(3);
     expect(aiModelForAttempt('chat', 0)).toBe('gemini-3.8-flash');
     expect(aiModelForAttempt('chat', 1)).toBe('gemini-3.6-flash');
+    expect(aiModelForAttempt('chat', 3)).toBe('gemini-3.5-flash-lite');
     expect(aiShouldBackoff('chat', 0)).toBe(false);
-    expect(aiShouldBackoff('chat', 2)).toBe(true);
+    expect(aiShouldBackoff('chat', 2)).toBe(false);
+    expect(aiShouldBackoff('chat', 3)).toBe(true);
     // The decision model has no text fallback.
     expect(aiModelForAttempt('decision', 3)).toBe('gemini-decision-1');
   });
