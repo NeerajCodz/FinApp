@@ -1,12 +1,12 @@
 {
   "$schema": "./scripts/version.schema.json",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "channel": "stable",
   "components": {
-    "web": "1.7.1",
+    "web": "1.8.0",
     "mobile": "1.7.1",
     "ui": "1.7.1",
-    "backend": "1.7.1"
+    "backend": "1.8.0"
   },
   "build": {
     "android": 16,
