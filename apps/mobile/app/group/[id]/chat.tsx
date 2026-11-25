@@ -13,8 +13,10 @@ import {
   useOptimisticMessages,
   useReadMarker,
   useTypingSender,
+  recordTime,
 } from '@finapp/ui/chat';
 import { toast } from '@/lib/toast';
+import type { NativeVoiceClip } from '@finapp/ui/chat';
 import { useFinaiDecide } from '@/hooks/useFinaiDecide';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { recordId, recordIds } from '@/lib/ledger';
@@ -24,6 +26,20 @@ import { useLocalSync } from '@/providers/LocalSyncProvider';
 const PAGE_SIZE = 30;
 
 type Group = LocalRecord & { name?: string; currency?: string; icon?: string; color?: string };
+
+/** Uploads a recorded clip (local file URI) to a Convex upload URL; returns the storage id. */
+async function uploadVoice(uploadUrl: string, clip: NativeVoiceClip): Promise<string> {
+  const file = await (await fetch(clip.uri)).blob();
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': clip.mimeType },
+    body: file,
+  });
+  if (!response.ok) throw new Error('VOICE_UPLOAD_FAILED');
+  const result = (await response.json()) as { storageId?: string };
+  if (!result.storageId) throw new Error('VOICE_UPLOAD_FAILED');
+  return result.storageId;
+}
 
 export default function GroupChatRoute() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
@@ -82,6 +98,7 @@ export default function GroupChatRoute() {
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
+  const sendVoiceMessage = useMutation(api.groups.mutations.sendVoiceMessage);
   const [draft, setDraft] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -153,8 +170,8 @@ export default function GroupChatRoute() {
       return {
         id: `expense:${recordId(expense)}`,
         kind: 'expense' as const,
-        timestamp: Number(expense.occurredAt ?? 0),
-        date: formatTransactionDate(Number(expense.occurredAt ?? 0), Boolean(expense.hasTime)),
+        timestamp: recordTime(expense),
+        date: formatTransactionDate(recordTime(expense), Boolean(expense.hasTime)),
         accessibleLabel: `Shared expense: ${String(expense.title ?? 'Group expense')}`,
         title: String(expense.title ?? 'Group expense'),
         amountMinor: expense.amountMinor as bigint,
@@ -184,6 +201,9 @@ export default function GroupChatRoute() {
         text: message.kind === 'text' || message.kind === 'ai' ? message.text : undefined,
         ai: message.ai,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+        ...(message.kind === 'audio'
+          ? { audioUrl: message.attachmentUrl, durationMs: message.durationMs }
+          : {}),
         reactions: message.reactions,
         myReaction: message.myReaction,
         pinned: message.pinnedAt !== null || pinnedIds.has(String(message.id)),
@@ -206,6 +226,9 @@ export default function GroupChatRoute() {
       ownMessage: true,
       text: message.text,
       attachmentUrl: message.imageUrl,
+      ...(message.kind === 'audio'
+        ? { audioUrl: message.audioUrl, durationMs: message.durationMs }
+        : {}),
       status: message.status,
     })),
   ]
@@ -379,6 +402,25 @@ export default function GroupChatRoute() {
       onDraftChange={setDraft}
       onSend={sendMessage}
       onChooseBillImage={() => void chooseBillImage()}
+      onSendVoice={(clip) => {
+        if (!canUseChat) {
+          setError('Connect to send a voice message.');
+          return;
+        }
+        void optimistic.send(
+          { kind: 'audio', audioUrl: clip.uri, durationMs: clip.durationMs, senderName: 'You' },
+          async () => {
+            const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
+            const storageId = await uploadVoice(uploadUrl, clip);
+            await sendVoiceMessage({
+              groupId: cloudGroupId as Id<'groups'>,
+              storageId: storageId as Id<'_storage'>,
+              durationMs: clip.durationMs,
+            });
+          },
+        );
+      }}
+      onlineCount={scopeState?.participants.filter((person) => person.active).length}
       onBack={() => router.back()}
     />
   );

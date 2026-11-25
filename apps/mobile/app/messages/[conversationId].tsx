@@ -19,6 +19,7 @@ import {
 } from '@finapp/ui/chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toast } from '@/lib/toast';
+import type { NativeVoiceClip } from '@finapp/ui/chat';
 import { useFinaiDecide } from '@/hooks/useFinaiDecide';
 import { FinaiSurface } from '@finapp/ui/ai';
 import { FINAI_MENTION, finaiChatOverrides, finaiTypingNames } from '@finapp/ui/ai/finai';
@@ -31,6 +32,20 @@ const extensionMimeTypes: Record<string, string> = {
   png: 'image/png',
   webp: 'image/webp',
 };
+
+/** Uploads a recorded clip (local file URI) to a Convex upload URL; returns the storage id. */
+async function uploadVoice(uploadUrl: string, clip: NativeVoiceClip): Promise<string> {
+  const file = await (await fetch(clip.uri)).blob();
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': clip.mimeType },
+    body: file,
+  });
+  if (!response.ok) throw new Error('VOICE_UPLOAD_FAILED');
+  const result = (await response.json()) as { storageId?: string };
+  if (!result.storageId) throw new Error('VOICE_UPLOAD_FAILED');
+  return result.storageId;
+}
 
 export default function DirectConversationScreen() {
   const { conversationId: routeId } = useLocalSearchParams<{ conversationId: string }>();
@@ -59,6 +74,7 @@ export default function DirectConversationScreen() {
   const sendText = useMutation(api.directMessages.mutations.sendText);
   const createUpload = useMutation(api.directMessages.mutations.createImageUpload);
   const sendImage = useMutation(api.directMessages.mutations.sendImage);
+  const sendVoice = useMutation(api.directMessages.mutations.sendVoice);
   const markRead = useMutation(api.presence.mutations.markRead);
   const setTyping = useMutation(api.presence.mutations.setTyping);
   const toggleReaction = useMutation(api.directMessages.mutations.toggleReaction);
@@ -109,7 +125,10 @@ export default function DirectConversationScreen() {
           senderAvatarUrl: message.senderAvatarUrl,
           senderAvatarId: message.senderAvatarId,
           text: message.text,
-          imageUrl: message.attachmentUrl,
+          imageUrl: message.kind === 'audio' ? undefined : message.attachmentUrl,
+          ...(message.kind === 'audio'
+            ? { audioUrl: message.attachmentUrl, durationMs: message.durationMs }
+            : {}),
           reactions: message.reactions,
           myReaction: message.myReaction,
           pinned: message.pinnedAt !== null || pinnedIds.has(message.id),
@@ -297,6 +316,27 @@ export default function DirectConversationScreen() {
               onSend: submitText,
               onBlur: typing.stop,
               onAttach: () => void attachImage(),
+              onSendVoice: (clip) => {
+                if (!conversationId) return;
+                void optimistic.send(
+                  {
+                    kind: 'audio',
+                    audioUrl: clip.uri,
+                    durationMs: clip.durationMs,
+                    senderName: 'You',
+                  },
+                  async () => {
+                    const { uploadUrl, ticket } = await createUpload({ conversationId });
+                    const storageId = await uploadVoice(uploadUrl, clip);
+                    await sendVoice({
+                      conversationId,
+                      storageId: storageId as Id<'_storage'>,
+                      ticket,
+                      durationMs: clip.durationMs,
+                    });
+                  },
+                );
+              },
               attachLabel: 'Attach image',
               uploading,
               placeholder: 'Message (@finai to ask FinAI)',

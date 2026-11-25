@@ -19,6 +19,8 @@ import {
   useOptimisticMessages,
   useReadMarker,
   useTypingSender,
+  recordTime,
+  type VoiceClip,
 } from '@finapp/ui/chat';
 import { useNudge } from '@/lib/useNudge';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -186,6 +188,7 @@ export default function GroupHomePage() {
   const createChatUploadUrl = useMutation(api.groups.mutations.createChatUploadUrl);
   const sendChatText = useMutation(api.groups.mutations.sendChatText);
   const sendBillAttachment = useMutation(api.groups.mutations.sendBillAttachment);
+  const sendVoiceMessage = useMutation(api.groups.mutations.sendVoiceMessage);
   const [chatDraft, setChatDraft] = React.useState('');
   const [chatUploading, setChatUploading] = React.useState(false);
   const [chatError, setChatError] = React.useState('');
@@ -577,13 +580,14 @@ export default function GroupHomePage() {
     ...recent.map((expense) => ({
       id: `expense:${recordId(expense)}`,
       kind: 'expense' as const,
-      createdAt: Number(expense.occurredAt ?? 0),
+      // Never 0 ("Jan 1, 1970"): fall back to when the record was made.
+      createdAt: recordTime(expense),
       expense,
     })),
     ...recentSettlements.map((settlement) => ({
       id: `settlement:${recordId(settlement)}`,
       kind: 'settlement' as const,
-      createdAt: Number(settlement.occurredAt ?? 0),
+      createdAt: recordTime(settlement),
       settlement,
     })),
     ...(standaloneChat
@@ -616,6 +620,9 @@ export default function GroupHomePage() {
         senderId: userId ?? undefined,
         text: pending.text,
         attachmentUrl: pending.imageUrl,
+        ...(pending.kind === 'audio'
+          ? { audioUrl: pending.audioUrl, durationMs: pending.durationMs }
+          : {}),
         status: pending.status,
       };
     }
@@ -636,6 +643,9 @@ export default function GroupHomePage() {
         text: message.kind === 'text' || message.kind === 'ai' ? message.text : undefined,
         ai: message.ai,
         attachmentUrl: message.kind === 'bill' ? message.attachmentUrl : undefined,
+        ...(message.kind === 'audio'
+          ? { audioUrl: message.attachmentUrl, durationMs: message.durationMs }
+          : {}),
         reactions: message.reactions,
         myReaction: message.myReaction,
         pinned: message.pinnedAt !== null || chatPinnedIds.has(String(message.id)),
@@ -731,6 +741,42 @@ export default function GroupHomePage() {
     });
   }
 
+  function sendVoice(clip: VoiceClip) {
+    if (!canUseGroupChat) {
+      setChatError(
+        isConnected
+          ? 'Sync this group before sending voice messages.'
+          : 'You are offline. Reconnect to send a voice message.',
+      );
+      return;
+    }
+    setChatError('');
+    chatOptimistic.send(
+      {
+        kind: 'audio',
+        audioUrl: URL.createObjectURL(clip.blob),
+        durationMs: clip.durationMs,
+        senderName: 'You',
+      },
+      async () => {
+        const uploadUrl = await createChatUploadUrl({ groupId: cloudGroupId as Id<'groups'> });
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': clip.mimeType },
+          body: clip.blob,
+        });
+        if (!response.ok) throw new Error('VOICE_UPLOAD_FAILED');
+        const result = (await response.json()) as { storageId?: string };
+        if (!result.storageId) throw new Error('VOICE_UPLOAD_FAILED');
+        await sendVoiceMessage({
+          groupId: cloudGroupId as Id<'groups'>,
+          storageId: result.storageId as Id<'_storage'>,
+          durationMs: clip.durationMs,
+        });
+      },
+    );
+  }
+
   const detailMembers = memberNames;
   const detailActivities: GroupDetailActivity[] = recent.map((expense) => ({
     id: recordId(expense),
@@ -812,6 +858,8 @@ export default function GroupHomePage() {
     onDraftChange: setChatDraft,
     onSend: sendChatMessage,
     onAttachFile: attachBillImage,
+    onSendVoice: sendVoice,
+    onlineCount: chatScopeState?.participants.filter((person) => person.active).length,
   };
   if (standaloneChat) return <GroupChatScreen {...chat} />;
   return (
