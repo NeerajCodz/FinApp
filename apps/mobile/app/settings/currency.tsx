@@ -1,15 +1,22 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { ArrowLeft } from '@finapp/ui/icons/native';
+import React, { useState } from 'react';
+import { Text, TextInput } from 'react-native';
 import { router } from 'expo-router';
+import { Coins, Search } from 'lucide-react-native';
 import { currencies } from '@convex/shared/validators';
+import { useTheme } from '@finapp/ui/native';
+import {
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsLink,
+  SettingsScreen,
+  useSettingsToneColor,
+} from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { commitLocalWrite } from '@/local/commands';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconButton, Button, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { toast } from '@/lib/toast';
 
 function currencyLabel(currency: string) {
   try {
@@ -19,87 +26,115 @@ function currencyLabel(currency: string) {
   }
 }
 
+function currencySymbol(currency: string) {
+  try {
+    return (
+      new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value ?? currency
+    );
+  } catch {
+    return currency;
+  }
+}
+
+/** The default currency for new accounts, budgets, groups and transactions. */
 export default function CurrencySettingsScreen() {
+  const { tokens } = useTheme();
+  const tone = useSettingsToneColor();
   const { userId } = useLocalSync();
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
-  const [currency, setCurrency] = useState('INR');
+  const [chosen, setChosen] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
-  const options = useMemo(() => [...currencies], []);
+  const [query, setQuery] = useState('');
   const selected =
-    typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : currency;
+    chosen ?? (typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR');
+
+  const choose = async (option: string) => {
+    if (!userId || pending || option === selected) return;
+    setPending(true);
+    try {
+      const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
+      await commitLocalWrite(
+        userId,
+        'profile',
+        'user.update',
+        { ...currentProfile, defaultCurrency: option },
+        {
+          displayName: String(currentProfile.displayName ?? 'Your profile'),
+          defaultCurrency: option,
+        },
+        { recordId: String(currentProfile.id ?? currentProfile._id ?? userId) },
+      );
+      setChosen(option);
+      toast.success(`Default currency is now ${currencyLabel(option)}`);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'Couldn’t save the currency');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const needle = query.trim().toLowerCase();
+  const shown = currencies.filter(
+    (currency) =>
+      !needle ||
+      currency.toLowerCase().includes(needle) ||
+      currencyLabel(currency).toLowerCase().includes(needle),
+  );
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 24,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="title">Currency</Typography>
-      </View>
-      <View style={{ gap: 12 }}>
-        <Typography variant="label">Default currency</Typography>
-        <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
-          Used for new accounts, budgets, groups, and transactions. Changing this does not rewrite
-          historical entries.
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {options.map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              disabled={!userId || pending}
-              onPress={async () => {
-                if (!userId || pending) return;
-                setPending(true);
-                setError('');
-                try {
-                  const currentProfile = profile ?? { id: userId, displayName: 'Your profile' };
-                  await commitLocalWrite(
-                    userId,
-                    'profile',
-                    'user.update',
-                    { ...currentProfile, defaultCurrency: option },
-                    {
-                      displayName: String(currentProfile.displayName ?? 'Your profile'),
-                      defaultCurrency: option,
-                    },
-                    {
-                      recordId: String(currentProfile.id ?? currentProfile._id ?? userId),
-                    },
-                  );
-                  setCurrency(option);
-                } catch (cause) {
-                  setError(cause instanceof Error ? cause.message : 'Could not save currency.');
-                } finally {
-                  setPending(false);
-                }
-              }}
-              style={{ width: '31%', minHeight: 44 }}
-            >
-              {option}
-            </Button>
-          ))}
-        </View>
-        {error ? (
-          <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
-            {error}
-          </Text>
-        ) : null}
-        <Typography variant="caption">
-          Selected: {currencyLabel(selected)} · {selected}
-        </Typography>
-      </View>
-    </ScrollView>
+    <SettingsScreen title="Currency" subtitle="Your default currency" onBack={back}>
+      <SettingsHero
+        icon={<Coins size={22} color={tone('primary')} />}
+        title={`${currencyLabel(selected)} (${selected})`}
+        description="Used for new accounts, budgets, groups and transactions. Past entries keep their own currency."
+      />
+      <SettingsGroup title="Choose a currency">
+        <SettingsItem icon={<Search size={19} color={tone()} />} title="Search">
+          <TextInput
+            accessibilityLabel="Search currencies"
+            value={query}
+            onChangeText={setQuery}
+            placeholder="e.g. euro or EUR"
+            placeholderTextColor={tokens.foregroundSubtle}
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={{
+              height: 40,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: tokens.borderSubtle,
+              backgroundColor: tokens.surfaceSubtle,
+              color: tokens.foreground,
+              fontSize: 15,
+            }}
+          />
+        </SettingsItem>
+        {shown.length === 0 ? <SettingsItem title="No matching currency" /> : null}
+        {shown.map((currency) => (
+          <SettingsLink
+            key={currency}
+            icon={
+              <Text
+                style={{
+                  color: tone(currency === selected ? 'primary' : undefined),
+                  fontWeight: '700',
+                  fontSize: 13,
+                }}
+              >
+                {currencySymbol(currency)}
+              </Text>
+            }
+            tone={currency === selected ? 'primary' : undefined}
+            title={currencyLabel(currency)}
+            value={currency === selected ? `${currency} · Default` : currency}
+            onPress={pending || currency === selected ? undefined : () => void choose(currency)}
+          />
+        ))}
+      </SettingsGroup>
+    </SettingsScreen>
   );
 }

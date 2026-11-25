@@ -1,12 +1,33 @@
 import React from 'react';
-import { Linking, ScrollView, View } from 'react-native';
-import { ArrowLeft, Bell } from '@finapp/ui/icons/native';
+import { Linking } from 'react-native';
+import {
+  Bell,
+  BellRing,
+  CalendarClock,
+  Gauge,
+  HandCoins,
+  ReceiptText,
+  RefreshCw,
+  ShieldCheck,
+  Split,
+  Target,
+  UserPlus,
+  UsersRound,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useConvex } from 'convex/react';
 import { registerForPush } from '@/lib/push';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, IconButton, Separator, Switch, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { Button } from '@finapp/ui/native';
+import {
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsLink,
+  SettingsScreen,
+  SettingsSwitch,
+  useSettingsToneColor,
+} from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
@@ -22,41 +43,103 @@ import {
   type NotificationType,
 } from '@convex/notifications/domain';
 
-const options: { type: NotificationType; label: string; detail: string }[] = [
-  { type: 'transaction', label: 'Transactions', detail: 'Recorded transactions.' },
-  { type: 'budget', label: 'Budget limits', detail: 'When spending crosses 80% or 100%.' },
-  { type: 'goal', label: 'Goals', detail: 'When a savings target is reached.' },
-  { type: 'recurring', label: 'Recurring reminders', detail: 'Due dates for reminder-only rules.' },
+type Tone = 'primary' | 'positive' | 'warning' | 'danger' | 'info' | 'violet' | undefined;
+type Option = {
+  type: NotificationType;
+  label: string;
+  detail: string;
+  Icon: LucideIcon;
+  tone?: Tone;
+};
+
+const sections: { title: string; options: Option[] }[] = [
   {
-    type: 'split',
-    label: 'Shared expenses',
-    detail: 'When a group expense you share is added, edited, or removed.',
+    title: 'Your money',
+    options: [
+      {
+        type: 'transaction',
+        label: 'Transactions',
+        detail: 'Each transaction you record',
+        Icon: ReceiptText,
+      },
+      {
+        type: 'budget',
+        label: 'Budget limits',
+        detail: 'When spending crosses 80% or 100%',
+        Icon: Gauge,
+        tone: 'warning',
+      },
+      {
+        type: 'goal',
+        label: 'Goals',
+        detail: 'When a savings target is reached',
+        Icon: Target,
+        tone: 'positive',
+      },
+      {
+        type: 'recurring',
+        label: 'Recurring payments',
+        detail: 'Due dates for reminder-only rules',
+        Icon: CalendarClock,
+        tone: 'info',
+      },
+    ],
   },
   {
-    type: 'settlement',
-    label: 'Settlements & reminders',
-    detail: 'Payments recorded or undone, and reminders to settle up.',
+    title: 'Shared with others',
+    options: [
+      {
+        type: 'split',
+        label: 'Shared expenses',
+        detail: 'Group expenses you’re in',
+        Icon: Split,
+        tone: 'violet',
+      },
+      {
+        type: 'settlement',
+        label: 'Settlements',
+        detail: 'Payments and settle-up reminders',
+        Icon: HandCoins,
+        tone: 'positive',
+      },
+      {
+        type: 'group',
+        label: 'Groups',
+        detail: 'Invitations, joins and leaves',
+        Icon: UsersRound,
+        tone: 'info',
+      },
+      {
+        type: 'social',
+        label: 'Friends',
+        detail: 'Friend requests and accepted requests',
+        Icon: UserPlus,
+        tone: 'primary',
+      },
+    ],
   },
   {
-    type: 'group',
-    label: 'Group membership',
-    detail: 'Invitations, and members joining or leaving your groups.',
-  },
-  {
-    type: 'security',
-    label: 'Security',
-    detail: 'When a verified email recovery code is used for this device’s app passcode.',
-  },
-  {
-    type: 'sync',
-    label: 'Sync problems',
-    detail: 'Changes that need your attention on this device.',
+    title: 'Account',
+    options: [
+      {
+        type: 'security',
+        label: 'Security',
+        detail: 'New sign-ins, MCP apps and account changes',
+        Icon: ShieldCheck,
+        tone: 'danger',
+      },
+      {
+        type: 'sync',
+        label: 'Sync problems',
+        detail: 'Changes that need your attention',
+        Icon: RefreshCw,
+      },
+    ],
   },
 ];
 
 export default function NotificationSettingsScreen() {
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
+  const tone = useSettingsToneColor();
   const { userId, isConnected } = useLocalSync();
   const convex = useConvex();
   const settings = useLocalRecords<LocalRecord>(userId, 'settings');
@@ -126,106 +209,88 @@ export default function NotificationSettingsScreen() {
     }
   }
 
+  const prefs = preferences;
+  const all = sections.flatMap((section) => section.options);
+  const enabled = prefs ? all.filter((option) => prefs[option.type]).length : 0;
+  const pushDescription =
+    permission === null
+      ? 'Checking permission…'
+      : permission === 'granted'
+        ? registration === 'registered'
+          ? 'On: alerts reach this phone even when Finapp is closed'
+          : registration === 'checking'
+            ? 'Registering this phone…'
+            : registration === 'offline'
+              ? 'Allowed. This phone registers once you’re online.'
+              : 'Allowed, but this phone couldn’t be registered'
+        : permission === 'denied'
+          ? 'Blocked. Allow notifications for Finapp in your phone’s settings.'
+          : 'Get alerts on this phone when Finapp is closed';
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 24,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="title">Notifications</Typography>
-      </View>
-      <View style={{ gap: 8 }}>
-        <Typography variant="heading">In-app activity</Typography>
-        <Text style={{ color: tokens.foregroundMuted }}>
-          Choose what enters your inbox. Changes save on this device first and sync when connected.
-        </Text>
-      </View>
-      {!!settings.loading && <Typography variant="small">Loading preferences…</Typography>}
-      {!!settings.error && (
-        <Button variant="outline" onPress={settings.retry}>
-          Retry loading preferences
-        </Button>
-      )}
-      {!settings.loading && !settings.error && !settings.data?.[0] && (
-        <Text style={{ color: tokens.foregroundMuted }}>
-          Connect once to load your account settings.
-        </Text>
-      )}
-      {!!preferences && (
-        <View>
-          {options.map((option, index) => (
-            <View key={option.type}>
-              {index > 0 && <Separator />}
-              <Switch
-                label={option.label}
-                value={preferences[option.type]}
-                onValueChange={(value) => void change(option.type, value)}
-              />
-              <Typography variant="small" style={{ marginTop: -4, marginBottom: 12 }}>
-                {option.detail}
-              </Typography>
-            </View>
-          ))}
-        </View>
-      )}
-      <View
-        style={{ gap: 10, paddingTop: 12, borderTopWidth: 1, borderColor: tokens.borderSubtle }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Bell size={19} color={tokens.primary} />
-          <Typography variant="heading">Push notifications</Typography>
-        </View>
-        <Text style={{ color: tokens.foregroundMuted }}>
-          Allow notifications to get alerts on this device for the activity types switched on above
-          — group expenses, settlements, payment reminders, security and recurring due dates.
-        </Text>
-        {permission === null && (
-          <Typography variant="small">Checking device permission…</Typography>
-        )}
-        {permission === 'granted' && (
-          <View style={{ gap: 8 }}>
-            <Typography variant="small">
-              {registration === 'registered'
-                ? 'Push notifications are on for this device.'
-                : registration === 'checking'
-                  ? 'Notifications allowed. Registering this device…'
-                  : registration === 'offline'
-                    ? 'Notifications allowed. This device registers for pushes once you are online.'
-                    : 'Notifications allowed, but this device could not be registered for pushes.'}
-            </Typography>
-            {registration === 'failed' && (
-              <Button variant="outline" onPress={() => void register()}>
-                Try again
+    <SettingsScreen title="Notifications" subtitle="What reaches your inbox" onBack={back}>
+      <SettingsHero
+        icon={<Bell size={22} color={tone('primary')} />}
+        title={prefs ? `${enabled} of ${all.length} kinds on` : 'Notifications'}
+        description="They appear in your inbox and the bell badge, and on this phone when push is on."
+      />
+      <SettingsGroup title="This phone">
+        <SettingsItem
+          icon={<BellRing size={19} color={tone('warning')} />}
+          tone="warning"
+          title="Push notifications"
+          description={pushDescription}
+          trailing={
+            permission === 'undetermined' ? (
+              <Button size="sm" onPress={() => void enableDeviceDelivery()}>
+                Allow
               </Button>
-            )}
-          </View>
-        )}
-        {permission === 'undetermined' && (
-          <Button variant="outline" onPress={() => void enableDeviceDelivery()}>
-            Allow push notifications
-          </Button>
-        )}
-        {permission === 'denied' && (
-          <Button variant="outline" onPress={() => void Linking.openSettings()}>
-            Open device settings
-          </Button>
-        )}
-        {!isConnected && (
-          <Typography variant="small">
-            Offline: your inbox and preferences remain available.
-          </Typography>
-        )}
-      </View>
-      {!!saving && <Typography variant="small">Saving…</Typography>}
-      {!!error && <Text style={{ color: tokens.destructive }}>{error}</Text>}
-    </ScrollView>
+            ) : permission === 'denied' ? (
+              <Button size="sm" variant="outline" onPress={() => void Linking.openSettings()}>
+                Settings
+              </Button>
+            ) : permission === 'granted' && registration === 'failed' ? (
+              <Button size="sm" variant="outline" onPress={() => void register()}>
+                Retry
+              </Button>
+            ) : null
+          }
+        />
+      </SettingsGroup>
+      {settings.error ? (
+        <SettingsGroup>
+          <SettingsLink
+            title="Couldn’t load preferences"
+            description="Tap to retry"
+            onPress={settings.retry}
+          />
+        </SettingsGroup>
+      ) : (
+        sections.map((section) => (
+          <SettingsGroup key={section.title} title={section.title}>
+            {section.options.map(({ type, label, detail, Icon, tone: optionTone }) => (
+              <SettingsSwitch
+                key={type}
+                icon={<Icon size={19} color={tone(optionTone)} />}
+                tone={optionTone}
+                title={label}
+                description={detail}
+                checked={prefs?.[type] ?? false}
+                disabled={!prefs || saving}
+                onChange={(value) => void change(type, value)}
+              />
+            ))}
+          </SettingsGroup>
+        ))
+      )}
+      {error || !isConnected ? (
+        <SettingsGroup>
+          <SettingsItem
+            title={error ? 'Couldn’t save' : 'Offline'}
+            description={error || 'Changes save on this phone and sync when you reconnect.'}
+          />
+        </SettingsGroup>
+      ) : null}
+    </SettingsScreen>
   );
 }
