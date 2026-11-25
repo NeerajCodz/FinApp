@@ -2,6 +2,22 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.0
+
+- Trash: list, restore with companions, purge with cascades, empty, daily retention purge;
+  category delete with transactions; recurring delete
+- Friend and MCP-connection notifications; consistent notification copy
+- FinAI management tools and confirmed actions (create, edit, delete, restore, purge); bulk
+  spreadsheet import (`transaction.import`)
+- FinAI streaming: non-blocking 80ms live writes; connect, first-chunk and idle timeouts; thought
+  summaries; stall retry; lite fallback model; background reply state (`ai.assistant.activity`,
+  `markRead`)
+- `finaiAttachments` (10MB images, PDFs, xlsx/csv/tsv, text), inline model input, BYOK media
+  parts, retention setting with hourly purge
+- MCP access policy (`mcpSettings`, per-grant scopes) enforced by the MCP server
+- `security`: discoverability and friend-request controls, sign-in alerts, `sessionDevices` with
+  sign out per device or everywhere else, account deletion requests
+
 ## 1.9.0
 
 - `finaiSettings` (`ai.settings.get/update/clearHistory`) applied to prompts, tools, mentions and

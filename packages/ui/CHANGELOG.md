@@ -2,6 +2,14 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.0
+
+- Category delete sheet (keep or trash transactions); compact profile tiles
+- FinAI: `useStreamedText` (adaptive reveal, balanced partial Markdown), unread and working
+  indicators in chat lists, composer attachments and sent-file previews (web and native),
+  `useComposerFiles`
+- Settings kit: `SettingsItem` (custom trailing and body) on both platforms, `SettingsField` (web)
+
 ## 1.9.0
 
 - Settings kit for web and native (shell, groups, link/switch/choice/text rows, hero)
