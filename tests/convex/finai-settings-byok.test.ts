@@ -19,7 +19,11 @@ async function signedIn() {
   const t = convexTest(schema, modules);
   const subject = 'finai-settings-user';
   const userId = await t.run((ctx) =>
-    ctx.db.insert('users', { identityId: subject, email: `${subject}@example.com`, displayName: 'Asha' }),
+    ctx.db.insert('users', {
+      identityId: subject,
+      email: `${subject}@example.com`,
+      displayName: 'Asha',
+    }),
   );
   return { t, userId, me: t.withIdentity({ subject, email: `${subject}@example.com` }) };
 }
@@ -63,10 +67,12 @@ describe('FinAI settings', () => {
   });
 
   it('drops unknown or malformed stored values', () => {
-    expect(resolveFinaiSettings({ tone: 'angry' as never, enabled: 'yes' as never })).toMatchObject({
-      tone: 'friendly',
-      enabled: true,
-    });
+    expect(resolveFinaiSettings({ tone: 'angry' as never, enabled: 'yes' as never })).toMatchObject(
+      {
+        tone: 'friendly',
+        enabled: true,
+      },
+    );
   });
 
   it('clears every conversation', async () => {
@@ -75,7 +81,10 @@ describe('FinAI settings', () => {
       for (let index = 0; index < 3; index += 1)
         await ctx.db.insert('finaiConversations', { userId, createdAt: index, updatedAt: index });
     });
-    expect(await me.mutation(api.ai.settings.clearHistory, {})).toEqual({ deleted: 3, more: false });
+    expect(await me.mutation(api.ai.settings.clearHistory, {})).toEqual({
+      deleted: 3,
+      more: false,
+    });
     expect(await t.run((ctx) => ctx.db.query('finaiConversations').collect())).toHaveLength(0);
   });
 });
@@ -85,7 +94,10 @@ describe('BYOK adapters', () => {
     { role: 'user' as const, parts: [{ text: 'How much on food?' }] },
     {
       role: 'model' as const,
-      parts: [{ text: 'Checking.' }, { functionCall: { name: 'spending_breakdown', args: { days: 30 } } }],
+      parts: [
+        { text: 'Checking.' },
+        { functionCall: { name: 'spending_breakdown', args: { days: 30 } } },
+      ],
     },
     {
       role: 'user' as const,
@@ -96,7 +108,9 @@ describe('BYOK adapters', () => {
   it('maps turns to OpenAI chat messages with paired tool call ids', () => {
     const messages = openAiMessages('System', contents);
     expect(messages[0]).toEqual({ role: 'system', content: 'System' });
-    const assistant = messages[2] as { tool_calls: { id: string; function: { arguments: string } }[] };
+    const assistant = messages[2] as {
+      tool_calls: { id: string; function: { arguments: string } }[];
+    };
     const tool = messages[3] as { role: string; tool_call_id: string; content: string };
     expect(assistant.tool_calls[0]!.function.arguments).toBe('{"days":30}');
     expect(tool.role).toBe('tool');
@@ -114,7 +128,10 @@ describe('BYOK adapters', () => {
 
   it('converts Gemini schemas to JSON Schema', () => {
     expect(
-      toJsonSchema({ type: 'OBJECT', properties: { days: { type: 'INTEGER', description: 'd' } } } as never),
+      toJsonSchema({
+        type: 'OBJECT',
+        properties: { days: { type: 'INTEGER', description: 'd' } },
+      } as never),
     ).toEqual({ type: 'object', properties: { days: { type: 'integer', description: 'd' } } });
   });
 
@@ -141,7 +158,10 @@ describe('BYOK key vault and storage', () => {
   });
 
   it('adds a checked key, activates it, and never returns the secret', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"data":[]}', { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"data":[]}', { status: 200 })),
+    );
     const { me } = await signedIn();
     const result = await me.action(api.ai.keys.add, {
       provider: 'openai',
@@ -152,7 +172,12 @@ describe('BYOK key vault and storage', () => {
     const listed = await me.query(api.ai.keys.list, {});
     expect(listed.vault).toBe(true);
     expect(listed.keys).toEqual([
-      expect.objectContaining({ provider: 'openai', active: true, keyHint: 'sk-…9999', status: 'ok' }),
+      expect.objectContaining({
+        provider: 'openai',
+        active: true,
+        keyHint: 'sk-…9999',
+        status: 'ok',
+      }),
     ]);
     expect(JSON.stringify(listed)).not.toContain('abcdefgh9999');
     await me.mutation(api.ai.keys.setActive, { keyId: null });
@@ -160,10 +185,17 @@ describe('BYOK key vault and storage', () => {
   });
 
   it('refuses a key the provider rejects', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 401 })),
+    );
     const { me } = await signedIn();
     await expect(
-      me.action(api.ai.keys.add, { provider: 'anthropic', apiKey: 'sk-ant-bad', model: 'claude-sonnet-5-5' }),
+      me.action(api.ai.keys.add, {
+        provider: 'anthropic',
+        apiKey: 'sk-ant-bad',
+        model: 'claude-sonnet-5-5',
+      }),
     ).rejects.toThrow('AI_KEY_INVALID');
     expect((await me.query(api.ai.keys.list, {})).keys).toHaveLength(0);
   });
@@ -171,7 +203,12 @@ describe('BYOK key vault and storage', () => {
   it('requires an HTTPS base URL for custom endpoints', async () => {
     const { me } = await signedIn();
     await expect(
-      me.action(api.ai.keys.add, { provider: 'custom', apiKey: 'k', model: 'm', baseUrl: 'http://x.example.com' }),
+      me.action(api.ai.keys.add, {
+        provider: 'custom',
+        apiKey: 'k',
+        model: 'm',
+        baseUrl: 'http://x.example.com',
+      }),
     ).rejects.toThrow('INVALID_BASE_URL');
   });
 });

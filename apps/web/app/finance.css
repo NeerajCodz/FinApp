@@ -4009,8 +4009,16 @@
 .me-cover {
   height: clamp(80px, 12vw, 120px);
   background:
-    radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--finance-lime) 38%, transparent), transparent 60%),
-    radial-gradient(ellipse at 92% 100%, color-mix(in srgb, #9d7bff 30%, transparent), transparent 55%),
+    radial-gradient(
+      ellipse at 12% 0%,
+      color-mix(in srgb, var(--finance-lime) 38%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 92% 100%,
+      color-mix(in srgb, #9d7bff 30%, transparent),
+      transparent 55%
+    ),
     var(--finapp-surface-subtle);
 }
 .me-hero-body {
