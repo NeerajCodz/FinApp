@@ -1,0 +1,56 @@
+name: Release
+
+# When version.json changes on main, tag the release and publish a GitHub release for it.
+# Tags: finapp-v<product>, web-v<x>, mobile-v<x>, ui-v<x>, backend-v<x> (existing tags are kept).
+on:
+  push:
+    branches: [main]
+    paths: [version.json]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Check derived files
+        run: node scripts/version.mjs check
+      - name: Create missing tags
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for tag in $(node scripts/version.mjs tags); do
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "keep $tag"
+            else
+              git tag -a "$tag" -m "$tag" && git push origin "$tag"
+            fi
+          done
+      - name: Publish the product release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./version.json').version")
+          tag="finapp-v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists."
+            exit 0
+          fi
+          # Notes: this version's section of CHANGELOG.md, plus the component manifest.
+          awk -v v="## $version" '$0 ~ "^## " { p = ($0 ~ "^" v) } p' CHANGELOG.md > notes.md
+          {
+            echo
+            echo '### Components'
+            echo '```json'
+            cat "releases/v$version.json"
+            echo '```'
+          } >> notes.md
+          gh release create "$tag" --title "FinApp $version" --notes-file notes.md

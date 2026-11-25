@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FinApp version manifest",
+  "type": "object",
+  "required": ["version", "channel", "components", "build", "compatibility"],
+  "properties": {
+    "version": { "type": "string", "description": "FinApp product release (SemVer)." },
+    "channel": { "enum": ["stable", "beta", "alpha", "rc"] },
+    "components": {
+      "type": "object",
+      "required": ["web", "mobile", "ui", "backend"],
+      "additionalProperties": { "type": "string" }
+    },
+    "build": {
+      "type": "object",
+      "required": ["android", "ios"],
+      "properties": {
+        "android": { "type": "integer", "minimum": 1 },
+        "ios": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "required": ["minimumMobileVersion", "minimumWebVersion", "apiVersion", "schemaVersion"]
+    }
+  }
+}
