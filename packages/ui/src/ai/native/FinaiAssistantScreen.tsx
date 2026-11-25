@@ -38,6 +38,8 @@ export type FinaiConversationSummary = {
 
 export type FinaiAssistantScreenProps = {
   available: boolean;
+  /** Show the tool steps under replies (FinAI setting; default on). */
+  showSteps?: boolean;
   conversations: readonly FinaiConversationSummary[];
   activeId: string | null;
   onSelect: (id: string | null) => void;
@@ -61,9 +63,11 @@ export type FinaiAssistantScreenProps = {
 function Reply({
   message,
   onDecide,
+  showSteps = true,
 }: {
   message: FinaiAssistantMessage;
   onDecide: FinaiAssistantScreenProps['onDecide'];
+  showSteps?: boolean;
 }) {
   const { tokens } = useTheme();
   const busy = isFinaiBusy(message);
@@ -82,7 +86,9 @@ function Reply({
         {busy ? <ThinkingOrb state={orbStateFor(message)} size={18} /> : <FinaiLogo size={20} />}
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-        {message.steps?.length ? <FinaiSteps steps={message.steps} busy={busy} /> : null}
+        {showSteps && message.steps?.length ? (
+          <FinaiSteps steps={message.steps} busy={busy} />
+        ) : null}
         {message.status === 'error' ? (
           <View style={{ padding: 10, borderRadius: 14, backgroundColor: tokens.surfaceSubtle }}>
             <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
@@ -238,7 +244,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
                 </View>
               </View>
             ) : (
-              <Reply message={item} onDecide={p.onDecide} />
+              <Reply message={item} onDecide={p.onDecide} showSteps={p.showSteps !== false} />
             )
           }
         />
