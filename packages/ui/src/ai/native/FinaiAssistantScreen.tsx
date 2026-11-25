@@ -25,6 +25,9 @@ import {
   type FinaiAssistantMessage,
 } from '../finai';
 import { FinaiSurface, type FinaiDecision } from './FinaiSurface';
+import { FinaiLogo } from './FinaiLogo';
+import { FinaiMarkdown } from './FinaiMarkdown';
+import { FinaiSteps } from './FinaiSteps';
 
 export type FinaiConversationSummary = {
   id: string;
@@ -76,9 +79,10 @@ function Reply({
           backgroundColor: tokens.surfaceSubtle,
         }}
       >
-        <ThinkingOrb state={busy ? orbStateFor(message) : 'idle'} size={18} />
+        {busy ? <ThinkingOrb state={orbStateFor(message)} size={18} /> : <FinaiLogo size={20} />}
       </View>
-      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+        {message.steps?.length ? <FinaiSteps steps={message.steps} busy={busy} /> : null}
         {message.status === 'error' ? (
           <View style={{ padding: 10, borderRadius: 14, backgroundColor: tokens.surfaceSubtle }}>
             <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
@@ -86,19 +90,20 @@ function Reply({
             </Typography>
           </View>
         ) : !message.text && busy ? (
-          <View
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 6 }}
-            accessibilityLiveRegion="polite"
-          >
-            <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-              {message.stageLabel ?? 'Thinking…'}
-            </Typography>
-          </View>
+          message.steps?.some((step) => step.status === 'running') ? null : (
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 6 }}
+              accessibilityLiveRegion="polite"
+            >
+              <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+                {message.stageLabel ?? 'Thinking…'}
+              </Typography>
+            </View>
+          )
         ) : (
-          <Typography style={{ paddingTop: 5 }} selectable>
-            {message.text}
-            {busy ? <Typography style={{ color: tokens.primary }}> ▍</Typography> : null}
-          </Typography>
+          <View style={{ paddingTop: 4 }}>
+            <FinaiMarkdown text={message.text} streaming={message.status === 'streaming'} />
+          </View>
         )}
         {message.status === 'done' && message.a2ui ? (
           <FinaiSurface a2ui={message.a2ui} actions={message.actions} onDecide={onDecide} />
@@ -149,7 +154,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
             backgroundColor: tokens.surfaceSubtle,
           }}
         >
-          <ThinkingOrb state={busy ? 'working' : 'idle'} size={20} />
+          {busy ? <ThinkingOrb state="working" size={20} /> : <FinaiLogo size={22} />}
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Typography variant="label" numberOfLines={1}>
@@ -173,7 +178,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
         </View>
       ) : empty ? (
         <View style={{ flex: 1, justifyContent: 'flex-end', padding: 18, gap: 8 }}>
-          <ThinkingOrb state="idle" size={44} />
+          <FinaiLogo size={44} />
           <Typography variant="title" style={{ marginTop: 8 }}>
             What do you want to know?
           </Typography>

@@ -17,6 +17,17 @@ export const finaiStage = v.union(
 );
 
 /** FinAI state on a group or direct message of kind `ai`. */
+/** One tool call the agent made, shown as a collapsible step on the reply. */
+export const finaiStep = v.object({
+  tool: v.string(),
+  label: v.string(),
+  stage: finaiStage,
+  status: v.union(v.literal('running'), v.literal('done'), v.literal('error')),
+  startedAt: v.number(),
+  durationMs: v.optional(v.number()),
+});
+export type FinaiStep = Infer<typeof finaiStep>;
+
 export const finaiChatState = v.object({
   /** The member whose `@finai` mention started this reply; only they can confirm its actions. */
   requesterId: v.id('users'),
@@ -28,6 +39,7 @@ export const finaiChatState = v.object({
   /** A2UI v0.9 messages (JSON) for the reply's cards. */
   a2ui: v.optional(v.string()),
   errorCode: v.optional(v.string()),
+  steps: v.optional(v.array(finaiStep)),
 });
 export type FinaiChatState = Infer<typeof finaiChatState>;
 

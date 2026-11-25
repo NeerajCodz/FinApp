@@ -1,0 +1,108 @@
+/* FinAI's reading voice: a serif face with comfortable rhythm. Theme tokens only. */
+.markdown {
+  font-family: var(--finapp-font-ai);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--finapp-foreground);
+  overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p {
+  margin: 0 0 0.6em;
+}
+
+.markdown h3,
+.markdown h4,
+.markdown h5 {
+  margin: 0.9em 0 0.35em;
+  font-family: var(--finapp-font-sans);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.markdown h3 {
+  font-size: 1.05em;
+}
+
+.markdown h4,
+.markdown h5 {
+  font-size: 0.95em;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 0 0 0.6em;
+  padding-left: 1.25em;
+}
+
+.markdown li {
+  margin: 0.2em 0;
+  padding-left: 0.15em;
+}
+
+.markdown li::marker {
+  color: var(--finapp-foreground-muted);
+}
+
+.markdown strong {
+  font-weight: 600;
+}
+
+.markdown code {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: var(--finapp-surface-subtle);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.markdown pre {
+  margin: 0 0 0.6em;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--finapp-surface-subtle);
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown blockquote {
+  margin: 0 0 0.6em;
+  padding-left: 10px;
+  border-left: 3px solid var(--finapp-border-subtle);
+  color: var(--finapp-foreground-muted);
+}
+
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 2px;
+  background: var(--finapp-primary);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    animation: none;
+  }
+}

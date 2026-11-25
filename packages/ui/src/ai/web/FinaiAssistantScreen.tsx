@@ -18,6 +18,9 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { ThinkingOrb } from '../../web/ThinkingOrb';
+import { FinaiLogo } from './FinaiLogo';
+import { FinaiMarkdown } from './FinaiMarkdown';
+import { FinaiSteps } from './FinaiSteps';
 import {
   FINAI_NAME,
   FINAI_SUGGESTIONS,
@@ -148,7 +151,8 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           </button>
         ) : (
           <span className={styles.orbBadge} aria-hidden>
-            <ThinkingOrb state={busy ? 'working' : 'idle'} size={20} paused={!busy} />
+            {/* The orb only appears while FinAI is thinking; otherwise its logo. */}
+            {busy ? <ThinkingOrb state="working" size={20} /> : <FinaiLogo size={22} />}
           </span>
         )}
         <div className={styles.titleBlock}>
@@ -252,7 +256,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
               </div>
             ) : empty ? (
               <div className={styles.welcome}>
-                <ThinkingOrb state="idle" size={44} />
+                <FinaiLogo size={44} />
                 <h2>What do you want to know?</h2>
                 <p>Ask about spending, budgets, groups or friends, or tell me what to add.</p>
                 {!p.available && (
@@ -284,31 +288,33 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
                     aria-label={`${FINAI_NAME} reply`}
                   >
                     <span className={styles.avatar} aria-hidden>
-                      <ThinkingOrb
-                        state={isFinaiBusy(message) ? orbStateFor(message) : 'idle'}
-                        size={16}
-                        paused={!isFinaiBusy(message)}
-                      />
+                      {isFinaiBusy(message) ? (
+                        <ThinkingOrb state={orbStateFor(message)} size={16} />
+                      ) : (
+                        <FinaiLogo size={18} />
+                      )}
                     </span>
                     <div className={styles.reply}>
+                      {message.steps?.length ? (
+                        <FinaiSteps steps={message.steps} busy={isFinaiBusy(message)} />
+                      ) : null}
                       {message.status === 'error' ? (
                         <p className={styles.errorText}>{finaiErrorMessage(message.errorCode)}</p>
                       ) : !message.text && isFinaiBusy(message) ? (
-                        <ThinkingOrb
-                          state={orbStateFor(message)}
-                          size={18}
-                          label={`${FINAI_NAME} is thinking`}
-                          caption={message.stageLabel ?? 'Thinking…'}
-                        />
+                        message.steps?.some((step) => step.status === 'running') ? null : (
+                          <ThinkingOrb
+                            state={orbStateFor(message)}
+                            size={18}
+                            label={`${FINAI_NAME} is thinking`}
+                            caption={message.stageLabel ?? 'Thinking…'}
+                          />
+                        )
                       ) : (
-                        <p className={styles.replyText}>
-                          {message.text}
-                          {isFinaiBusy(message) && <span className={styles.caret} aria-hidden />}
-                        </p>
+                        <FinaiMarkdown
+                          text={message.text}
+                          streaming={message.status === 'streaming'}
+                        />
                       )}
-                      {message.status === 'streaming' && message.stageLabel && message.text ? (
-                        <span className={styles.stage}>{message.stageLabel}</span>
-                      ) : null}
                       {message.status === 'done' && message.a2ui ? (
                         <FinaiSurface
                           a2ui={message.a2ui}

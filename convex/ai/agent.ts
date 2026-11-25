@@ -21,7 +21,15 @@ import type { FinView } from './a2ui';
 import { presentMoney } from './present';
 
 export type AgentStage = 'reasoning' | 'working' | 'searching';
-export type AgentProgress = { stage: AgentStage; label: string; tool?: string };
+export type AgentProgress = {
+  stage: AgentStage;
+  label: string;
+  tool?: string;
+  /** For tool calls: `start` before running, `end` after (with `ok` and `durationMs`). */
+  phase?: 'start' | 'end';
+  ok?: boolean;
+  durationMs?: number;
+};
 
 export type AgentToolResult = {
   /** JSON-safe data for the model (bigints are converted by the loop). */
@@ -134,14 +142,24 @@ export async function runAgent<Ctx>(options: AgentRunOptions<Ctx>): Promise<Agen
       else {
         toolCalls += 1;
         toolsUsed.push(tool.name);
-        await options.onProgress?.({ ...tool.progress, tool: tool.name });
+        await options.onProgress?.({ ...tool.progress, tool: tool.name, phase: 'start' });
+        const started = Date.now();
+        let ok = true;
         try {
           const outcome = await tool.run(options.ctx, call.args ?? {});
           data = asRecord(outcome.data);
           if (outcome.views) views.push(...outcome.views);
         } catch (error) {
+          ok = false;
           data = { error: toolErrorCode(error) };
         }
+        await options.onProgress?.({
+          ...tool.progress,
+          tool: tool.name,
+          phase: 'end',
+          ok,
+          durationMs: Date.now() - started,
+        });
       }
       responses.push({
         functionResponse: { name: call.name, response: data, ...(call.id ? { id: call.id } : {}) },
@@ -151,4 +169,40 @@ export async function runAgent<Ctx>(options: AgentRunOptions<Ctx>): Promise<Agen
   }
 
   return { text: text.trim(), views, toolsUsed, usage, steps };
+}
+
+/** A tool call as recorded on the reply (see `finaiStep`). */
+export type AgentStep = {
+  tool: string;
+  label: string;
+  stage: AgentStage;
+  status: 'running' | 'done' | 'error';
+  startedAt: number;
+  durationMs?: number;
+};
+
+/** Steps after a progress event; null when the event is not a tool call (no change). */
+export function applyStep(
+  steps: readonly AgentStep[],
+  progress: AgentProgress,
+  now = Date.now(),
+): AgentStep[] | null {
+  if (!progress.tool || !progress.phase) return null;
+  const label = progress.label.replace(/…$/, '');
+  if (progress.phase === 'start')
+    return [
+      ...steps,
+      { tool: progress.tool, label, stage: progress.stage, status: 'running', startedAt: now },
+    ];
+  const index = steps.findLastIndex(
+    (step) => step.tool === progress.tool && step.status === 'running',
+  );
+  if (index < 0) return null;
+  const next = [...steps];
+  next[index] = {
+    ...next[index]!,
+    status: progress.ok === false ? 'error' : 'done',
+    durationMs: progress.durationMs ?? now - next[index]!.startedAt,
+  };
+  return next;
 }

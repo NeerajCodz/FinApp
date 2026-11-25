@@ -29,6 +29,9 @@ import {
 } from '../model';
 import styles from './ChatThread.module.css';
 import { ThinkingOrb } from '../../web/ThinkingOrb';
+import { FinaiLogo } from '../../ai/web/FinaiLogo';
+import { FinaiMarkdown } from '../../ai/web/FinaiMarkdown';
+import { FinaiSteps } from '../../ai/web/FinaiSteps';
 import {
   activeMention,
   applyMention,
@@ -453,10 +456,11 @@ function Row({
         <div className={styles.avatarSlot}>
           {lastInGroup && message.kind === 'ai' ? (
             <span className={styles.aiAvatar} aria-hidden>
-              <ThinkingOrb
-                state={isFinaiBusy(message.ai) ? orbStateFor(message.ai!) : 'idle'}
-                size={18}
-              />
+              {isFinaiBusy(message.ai) ? (
+                <ThinkingOrb state={orbStateFor(message.ai!)} size={18} />
+              ) : (
+                <FinaiLogo size={20} />
+              )}
             </span>
           ) : (
             lastInGroup && (
@@ -599,21 +603,26 @@ function AiBody({ message }: { message: ChatMessage }) {
   const ai = message.ai!;
   if (ai.status === 'error')
     return <span className={styles.aiError}>{finaiErrorMessage(ai.errorCode)}</span>;
-  if (!message.text && isFinaiBusy(ai))
+  const busy = isFinaiBusy(ai);
+  const steps = ai.steps?.length ? <FinaiSteps steps={ai.steps} busy={busy} /> : null;
+  if (!message.text && busy)
     return (
       <span className={styles.aiThinking}>
-        <ThinkingOrb
-          state={orbStateFor(ai)}
-          size={20}
-          label="FinAI is thinking"
-          caption={ai.stageLabel ?? 'Thinking…'}
-        />
+        {steps}
+        {ai.steps?.some((step) => step.status === 'running') ? null : (
+          <ThinkingOrb
+            state={orbStateFor(ai)}
+            size={20}
+            label="FinAI is thinking"
+            caption={ai.stageLabel ?? 'Thinking…'}
+          />
+        )}
       </span>
     );
   return (
     <>
-      {message.text}
-      {isFinaiBusy(ai) && <span className={styles.aiCaret} aria-hidden />}
+      {steps}
+      <FinaiMarkdown text={message.text ?? ''} streaming={ai.status === 'streaming'} />
     </>
   );
 }

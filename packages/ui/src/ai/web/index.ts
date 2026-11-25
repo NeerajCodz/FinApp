@@ -3,3 +3,6 @@ export type { FinaiAssistantScreenProps, FinaiConversationSummary } from './Fina
 export { FinaiSurface, finaiCatalog } from './FinaiSurface';
 export type { FinaiSurfaceProps } from './FinaiSurface';
 export type { FinaiDecision } from './FinaiCards';
+export { FinaiLogo } from './FinaiLogo';
+export { FinaiMarkdown } from './FinaiMarkdown';
+export { FinaiSteps } from './FinaiSteps';

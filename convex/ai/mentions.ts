@@ -10,7 +10,7 @@ import { internal } from '../_generated/api';
 import type { Id } from '../_generated/dataModel';
 import { internalAction, internalMutation, type MutationCtx } from '../_generated/server';
 import { buildA2uiMessages } from './a2ui';
-import { runAgent } from './agent';
+import { applyStep, runAgent, type AgentStep } from './agent';
 import { chatTools } from './chatTools';
 import { FINAI_HANDLE, finaiAgent } from './config';
 import { aiErrorCode, type AiErrorCode } from './errors';
@@ -18,7 +18,7 @@ import { isGeminiConfigured } from './gemini';
 import type { GeminiContent } from './geminiChat';
 import { chatSystemPrompt } from './prompts';
 import { consumeAiQuota } from './usage';
-import { finaiReplyStatus, finaiStage } from './validators';
+import { finaiReplyStatus, finaiStage, finaiStep } from './validators';
 
 const mentionPattern = new RegExp(`(^|[^\\w@])@${FINAI_HANDLE}\\b`, 'i');
 
@@ -161,6 +161,7 @@ export const patchReply = internalMutation({
     stageLabel: v.optional(v.string()),
     a2ui: v.optional(v.string()),
     errorCode: v.optional(v.string()),
+    steps: v.optional(v.array(finaiStep)),
   },
   handler: async (ctx, { scopeType: type, replyId, text, ...patch }) => {
     const id =
@@ -179,6 +180,7 @@ export const patchReply = internalMutation({
       ...(patch.stageLabel ? { stageLabel: patch.stageLabel } : {}),
       ...(patch.a2ui ? { a2ui: patch.a2ui } : {}),
       ...(patch.errorCode ? { errorCode: patch.errorCode } : {}),
+      ...(patch.steps ? { steps: patch.steps } : {}),
     };
     if (finished) {
       delete ai.stage;
@@ -257,6 +259,7 @@ export const runReply = internalAction({
         },
       ];
       let lastFlush = 0;
+      let steps: AgentStep[] = [];
       const result = await runAgent({
         ctx: {
           run: ctx,
@@ -274,7 +277,13 @@ export const runReply = internalAction({
           sharedGroupIds: snapshot.sharedGroups.map((g) => String(g.id)),
         }),
         onProgress: async (step) => {
-          await patch({ stage: step.stage, stageLabel: step.label });
+          const next = applyStep(steps, step);
+          if (next) steps = next;
+          await patch({
+            stage: step.stage,
+            stageLabel: step.label,
+            ...(next ? { steps: next } : {}),
+          });
         },
         onText: async (text) => {
           if (Date.now() - lastFlush < finaiAgent.streamFlushMs) return;

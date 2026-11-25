@@ -25,11 +25,23 @@ export type FinaiActionState = {
   canCancel?: boolean;
 };
 
+/** One tool call the agent made for a reply. */
+export type FinaiStep = {
+  tool: string;
+  label: string;
+  stage: FinaiStage;
+  status: 'running' | 'done' | 'error';
+  startedAt: number;
+  durationMs?: number;
+};
+
 /** FinAI fields on a reply (assistant message or chat bubble). */
 export type FinaiReply = {
   status: FinaiReplyStatus;
   stage?: FinaiStage;
   stageLabel?: string;
+  /** Tool calls, in order (shown as a collapsible process list). */
+  steps?: readonly FinaiStep[];
   a2ui?: string;
   errorCode?: string;
   actions?: readonly FinaiActionState[];
@@ -355,4 +367,25 @@ export function finaiTypingNames(
   messages: readonly { ai?: Pick<FinaiReply, 'status'> }[],
 ): string[] {
   return messages.some((message) => isFinaiBusy(message.ai)) ? [FINAI_NAME] : [];
+}
+
+/** "4.2s" / "850ms" for a step's duration. */
+export function formatStepDuration(ms: number | undefined): string {
+  if (ms === undefined) return '';
+  return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+/**
+ * The collapsed header of a reply's process list: what is running now, or a summary once
+ * done ("Used 3 tools · 2.4s").
+ */
+export function stepsSummary(steps: readonly FinaiStep[], busy: boolean): string {
+  const running = steps.findLast((step) => step.status === 'running');
+  if (busy && running) return `${running.label}…`;
+  const total = steps.reduce((sum, step) => sum + (step.durationMs ?? 0), 0);
+  const failed = steps.filter((step) => step.status === 'error').length;
+  const used = `Used ${steps.length} ${steps.length === 1 ? 'tool' : 'tools'}`;
+  return [used, failed ? `${failed} failed` : '', total ? formatStepDuration(total) : '']
+    .filter(Boolean)
+    .join(' · ');
 }

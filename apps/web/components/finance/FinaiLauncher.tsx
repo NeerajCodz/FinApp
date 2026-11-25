@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { usePathname } from 'next/navigation';
-import { FinaiAssistantScreen } from '@finapp/ui/ai';
+import { FinaiAssistantScreen, FinaiLogo } from '@finapp/ui/ai';
 import { ThinkingOrb } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useFinaiAssistant } from '@/lib/finai/useFinaiAssistant';
@@ -111,7 +111,7 @@ export function FinaiLauncher() {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <ThinkingOrb state={assistant.sending ? 'working' : 'idle'} size={26} paused={!open} />
+        {assistant.sending ? <ThinkingOrb state="working" size={26} /> : <FinaiLogo size={28} />}
       </button>
     </>
   );
