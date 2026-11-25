@@ -1075,6 +1075,19 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   pushUserRef.current = userId;
   const pushConvexRef = React.useRef(convex);
   pushConvexRef.current = convex;
+  /** Opened before the identity loaded (cold start): marked read once it is known. */
+  const pendingPushReads = React.useRef<string[]>([]);
+  const markOpenedRef = React.useRef<(id: unknown) => Promise<void>>(async () => {});
+  React.useEffect(() => {
+    if (!userId || !pendingPushReads.current.length) return;
+    const queued = pendingPushReads.current.splice(0);
+    for (const id of queued)
+      void markOpenedRef
+        .current(id)
+        .catch((error: unknown) =>
+          console.warn('[local-sync] Could not mark the opened notification read.', error),
+        );
+  }, [userId]);
 
   React.useEffect(() => {
     if (isExpoGo() || Platform.OS === 'web') return;
@@ -1082,8 +1095,12 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
     let subscription: { remove: () => void } | null = null;
     /** Opening a push is opening the notification: mark it read like the centre does. */
     const markOpened = async (notificationId: unknown) => {
+      if (typeof notificationId !== 'string' || !notificationId) return;
       const owner = pushUserRef.current;
-      if (!owner || typeof notificationId !== 'string' || !notificationId) return;
+      if (!owner) {
+        pendingPushReads.current.push(notificationId);
+        return;
+      }
       const records = await readLocal<NotificationRecord>(owner, 'notification');
       const local = records.find((record) =>
         [record.id, record._id, record.cloudId].includes(notificationId),
@@ -1095,6 +1112,7 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
           clientMutationId: `push-open:${notificationId}`,
         });
     };
+    markOpenedRef.current = markOpened;
     void import('expo-notifications')
       .then((Notifications) => {
         if (!active) return;

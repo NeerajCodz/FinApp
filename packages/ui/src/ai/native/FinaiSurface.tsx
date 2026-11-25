@@ -176,14 +176,16 @@ function ActionCard({
           <Button size="sm" style={{ flex: 1 }} onPress={() => onDecide?.(FINAI_EVENTS.confirm)}>
             Confirm
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            style={{ flex: 1 }}
-            onPress={() => onDecide?.(FINAI_EVENTS.cancel)}
-          >
-            Cancel
-          </Button>
+          {state?.canCancel !== false ? (
+            <Button
+              size="sm"
+              variant="outline"
+              style={{ flex: 1 }}
+              onPress={() => onDecide?.(FINAI_EVENTS.cancel)}
+            >
+              Cancel
+            </Button>
+          ) : null}
         </View>
       ) : status === 'pending' && state && !state.canDecide ? (
         <Typography variant="caption">Waiting for the person who asked to confirm.</Typography>

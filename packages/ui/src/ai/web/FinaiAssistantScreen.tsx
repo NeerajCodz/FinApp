@@ -76,6 +76,12 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
   const nearBottom = React.useRef(true);
   const [showJump, setShowJump] = React.useState(false);
   const [view, setView] = React.useState<'chat' | 'history'>('chat');
+  /** Thread position kept while history is open (the thread unmounts meanwhile). */
+  const savedScroll = React.useRef<number | null>(null);
+  const openHistory = () => {
+    savedScroll.current = scroller.current?.scrollTop ?? null;
+    setView('history');
+  };
   const busy = p.sending || p.messages.some((message) => isFinaiBusy(message));
   const last = p.messages[p.messages.length - 1];
   const scrollKey = `${p.messages.length}:${last?.text.length ?? 0}:${last?.status ?? ''}:${last?.a2ui ? 1 : 0}`;
@@ -95,6 +101,18 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
     nearBottom.current = true;
     scrollToBottom(false);
   }, [p.activeId, scrollToBottom]);
+  // Back from history: put the thread where it was, or at the bottom.
+  React.useLayoutEffect(() => {
+    if (view !== 'chat') return;
+    const node = scroller.current;
+    if (!node) return;
+    if (savedScroll.current !== null) node.scrollTop = savedScroll.current;
+    else {
+      nearBottom.current = true;
+      node.scrollTop = node.scrollHeight;
+    }
+    savedScroll.current = null;
+  }, [view]);
   // Grow the composer with its text, up to a few lines.
   React.useLayoutEffect(() => {
     const node = input.current;
@@ -106,6 +124,8 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
   const canSend = p.available && !busy && !!p.draft.trim();
   const empty = !p.loading && p.messages.length === 0;
   const select = (id: string | null) => {
+    // Another conversation opens at its latest message; the same one where it was left.
+    if (id !== p.activeId) savedScroll.current = null;
     p.onSelect(id);
     setView('chat');
     requestAnimationFrame(() => input.current?.focus());
@@ -147,7 +167,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
             className={styles.iconButton}
             aria-label="Chat history"
             title="Chat history"
-            onClick={() => setView('history')}
+            onClick={openHistory}
           >
             <ClockCounterClockwise size={18} />
           </button>

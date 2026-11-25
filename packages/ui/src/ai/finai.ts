@@ -21,6 +21,8 @@ export type FinaiActionState = {
   status: FinaiActionStatus;
   errorCode?: string;
   canDecide: boolean;
+  /** False when only a retry is safe (an interrupted confirmation). */
+  canCancel?: boolean;
 };
 
 /** FinAI fields on a reply (assistant message or chat bubble). */

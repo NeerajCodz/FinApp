@@ -249,7 +249,9 @@ export default function DirectConversationPage() {
           mode="direct"
           style={{ padding: '8px max(16px, calc((100vw - 760px) / 2)) 12px' }}
           messages={messages}
-          loading={history.status === 'LoadingFirstPage' || conversations === undefined}
+          loading={
+            history.status === 'LoadingFirstPage' || conversations === undefined || loadingUnread
+          }
           canLoadOlder={history.status === 'CanLoadMore'}
           loadingOlder={history.status === 'LoadingMore'}
           onLoadOlder={() => history.loadMore(PAGE_SIZE)}

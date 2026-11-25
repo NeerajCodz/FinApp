@@ -11,6 +11,12 @@ import {
 import { updateOutboxStatus } from '../outbox/storage';
 import { outboxErrorText, syncErrorCode } from '@finapp/ui/finance/sync-errors';
 
+/**
+ * Bulk writes (one call for many records) settle as operations: their receipt's entity is not
+ * the local record they were queued against, so it must never remap that record's id.
+ */
+const BULK_OPERATIONS = new Set(['notification.markAllRead']);
+
 function isTransientSyncFailure(error: unknown): boolean {
   if (error && typeof error === 'object') {
     const details = error as { status?: unknown; data?: unknown };
@@ -70,7 +76,7 @@ export async function syncOutbox(
       await updateOutboxStatus(userId, current.localId, 'syncing', current.retryCount);
       try {
         const response = await send(current);
-        if (current.entityType && current.recordId) {
+        if (current.entityType && current.recordId && !BULK_OPERATIONS.has(current.operation)) {
           await markSynced(
             userId,
             current.localId,

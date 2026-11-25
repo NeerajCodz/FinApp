@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   allocateProportionally,
+  paymentMatrix,
   bilateralBalancesByCurrency,
   calculateBilateralBalance,
   simplifyDebts,
@@ -128,5 +129,30 @@ describe('sync conflicts', () => {
         new Error('[CONVEX M(groups/mutations:updateExpense)] Uncaught Error: TRANSACTION_CHANGED'),
       ),
     ).toBe('TRANSACTION_CHANGED');
+  });
+});
+
+describe('payment matrix', () => {
+  it('keeps every share and payment, so remainders are not double-assigned', () => {
+    const matrix = paymentMatrix(
+      [
+        ['alice', 1n],
+        ['bob', 1n],
+        ['carol', 1n],
+      ],
+      [
+        ['alice', 2n],
+        ['carol', 1n],
+      ],
+    );
+    const column = (payer: string) =>
+      [...matrix.values()].reduce((sum, row) => sum + (row.get(payer) ?? 0n), 0n);
+    expect(column('alice')).toBe(2n);
+    expect(column('carol')).toBe(1n);
+    for (const row of matrix.values()) expect(sumOf(row.values())).toBe(1n);
+    // Alice is owed 1 in total: by exactly one of Bob or Carol, never both.
+    const owedToAlice =
+      (matrix.get('bob')?.get('alice') ?? 0n) + (matrix.get('carol')?.get('alice') ?? 0n);
+    expect(owedToAlice).toBe(1n);
   });
 });

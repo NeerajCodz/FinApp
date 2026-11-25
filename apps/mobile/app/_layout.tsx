@@ -223,8 +223,9 @@ export default function RootLayout() {
           <AppErrorBoundary>
             <AuthGate>
               <ThemedStack />
+              {/* Inside the app-lock boundary, so a locked app hides it from assistive tech too. */}
+              <FinaiLauncher />
             </AuthGate>
-            <FinaiLauncher />
             <AppToasts />
             <NotificationEffects />
           </AppErrorBoundary>

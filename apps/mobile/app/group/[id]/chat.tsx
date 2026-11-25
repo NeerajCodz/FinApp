@@ -344,7 +344,7 @@ export default function GroupChatRoute() {
       loading={
         groups.loading ||
         transactions.loading ||
-        (canUseChat && history.status === 'LoadingFirstPage')
+        (canUseChat && (history.status === 'LoadingFirstPage' || loadingUnread))
       }
       canLoadOlder={history.status === 'CanLoadMore'}
       loadingOlder={history.status === 'LoadingMore'}

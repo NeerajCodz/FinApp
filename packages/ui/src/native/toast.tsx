@@ -66,15 +66,21 @@ function ToastCard({ item }: { item: ToastItem }) {
   const closeRef = React.useRef(close);
   closeRef.current = close;
 
+  // Entrance; re-applied when the reduced-motion preference resolves (it loads async), which
+  // snaps to the final state instead of animating. The dismissal timer is separate.
   React.useEffect(() => {
+    if (reducedMotion) {
+      progress.stopAnimation();
+      progress.setValue(1);
+      return;
+    }
     Animated.timing(progress, {
       toValue: 1,
-      duration: reducedMotion ? 0 : motionTokens.sheet,
+      duration: motionTokens.sheet,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-    // reducedMotion is read once at mount for the entrance; the timer must not restart.
-  }, [progress]);
+  }, [progress, reducedMotion]);
   React.useEffect(() => {
     const timeout = setTimeout(
       () => closeRef.current(),

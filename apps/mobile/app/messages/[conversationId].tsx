@@ -249,7 +249,7 @@ export default function DirectConversationScreen() {
           <ChatThread
             mode="direct"
             messages={messages}
-            loading={history.status === 'LoadingFirstPage'}
+            loading={history.status === 'LoadingFirstPage' || loadingUnread}
             canLoadOlder={history.status === 'CanLoadMore'}
             loadingOlder={history.status === 'LoadingMore'}
             onLoadOlder={() => history.loadMore(PAGE_SIZE)}
