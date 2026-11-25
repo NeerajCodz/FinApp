@@ -15,6 +15,8 @@ import { chatTools } from './chatTools';
 import { FINAI_HANDLE, finaiAgent } from './config';
 import { aiErrorCode, type AiErrorCode } from './errors';
 import { isGeminiConfigured } from './gemini';
+import { chatForUser } from './keys';
+import { isVaultConfigured } from './keyVault';
 import type { GeminiContent } from './geminiChat';
 import { chatSystemPrompt } from './prompts';
 import { finaiPreferencePrompt, finaiToolAllowed } from '../shared/finaiSettings';
@@ -122,7 +124,15 @@ export async function maybeScheduleFinaiReply(
   if (!mentionsFinai(text)) return null;
   if (await replyInProgress(ctx, scope, createdAt)) return null;
   const replyAt = createdAt + 1;
-  if (!isGeminiConfigured())
+  const hasOwnKey =
+    isVaultConfigured() &&
+    (
+      await ctx.db
+        .query('aiProviderKeys')
+        .withIndex('by_user', (q) => q.eq('userId', requesterId))
+        .collect()
+    ).some((row) => row.active);
+  if (!isGeminiConfigured() && !hasOwnKey)
     return insertReply(ctx, scope, requesterId, promptMessageId, replyAt, {
       status: 'error',
       errorCode: 'AI_NOT_CONFIGURED',
@@ -222,6 +232,7 @@ export const runReply = internalAction({
           ...fields,
         }),
       );
+    let byok: Awaited<ReturnType<typeof chatForUser>> = { markInvalid: async () => undefined };
     try {
       const snapshot = await ctx.runQuery(internal.ai.chatContext.threadSnapshot, {
         scopeType: args.scopeType,
@@ -275,7 +286,9 @@ ${finaiPreferencePrompt(settings)}`;
       ];
       let lastFlush = 0;
       let steps: AgentStep[] = [];
+      byok = await chatForUser(ctx, args.requesterId);
       const result = await runAgent({
+        ...(byok.chat ? { chat: byok.chat } : {}),
         ctx: {
           run: ctx,
           userId: args.requesterId,
@@ -320,6 +333,7 @@ ${finaiPreferencePrompt(settings)}`;
       });
     } catch (error) {
       const errorCode = aiErrorCode(error) ?? 'AI_UNAVAILABLE';
+      if (errorCode === 'AI_KEY_INVALID') await byok.markInvalid();
       console.warn('[ai] @finai reply failed', errorCode, String(error));
       await patch({ status: 'error', errorCode });
     }

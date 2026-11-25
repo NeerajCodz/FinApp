@@ -699,6 +699,22 @@ export default defineSchema({
     outputTokens: v.optional(v.number()),
     updatedAt: timestamp,
   }).index('by_user_kind_window', ['userId', 'kind', 'windowStart']),
+  /** Bring-your-own-key model credentials (encrypted; see convex/ai/keyVault.ts). */
+  aiProviderKeys: defineTable({
+    userId: v.id('users'),
+    provider: v.string(),
+    label: v.string(),
+    model: v.string(),
+    baseUrl: v.optional(v.string()),
+    /** AES-GCM ciphertext; never returned to clients. */
+    encryptedKey: v.string(),
+    keyHint: v.string(),
+    /** The key FinAI uses (at most one per user); none means Finapp's built-in model. */
+    active: v.boolean(),
+    status: v.union(v.literal('ok'), v.literal('invalid'), v.literal('unreachable')),
+    lastCheckedAt: timestamp,
+    createdAt: timestamp,
+  }).index('by_user', ['userId']),
   /** FinAI preferences, one row per user (see convex/shared/finaiSettings.ts). */
   finaiSettings: defineTable({
     userId: v.id('users'),

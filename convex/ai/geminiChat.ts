@@ -7,6 +7,7 @@ import {
   aiAttempts,
   aiGeneration,
   aiModelForAttempt,
+  aiRetry,
   aiShouldBackoff,
   GEMINI_API_BASE,
 } from './config';
@@ -53,6 +54,10 @@ export type ChatStreamOptions = Omit<GenerateOptions, 'parts'> & {
   functions?: GeminiFunctionDeclaration[];
   /** Called with each text delta as it streams (never with thoughts or function calls). */
   onText?: (delta: string) => void | Promise<void>;
+  /** BYOK: one fixed model instead of the role's model chain. */
+  model?: string;
+  /** BYOK: API base override (defaults to GEMINI_API_BASE). */
+  baseUrl?: string;
 };
 
 export type ChatStreamResult = {
@@ -72,8 +77,8 @@ type StreamChunk = {
 };
 
 /** The streamGenerateContent (SSE) URL for a model id (URL-encoded). */
-export function geminiStreamUrl(model: string): string {
-  return `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+export function geminiStreamUrl(model: string, base: string = GEMINI_API_BASE): string {
+  return `${base.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
 }
 
 /** Splits an SSE buffer into complete `data:` payloads and the unfinished remainder. */
@@ -138,10 +143,11 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
   });
 
   let lastFailure: 'busy' | 'unavailable' | 'timeout' = 'unavailable';
-  const attempts = aiAttempts(options.role);
+  const attempts = options.model ? aiRetry.retries + 1 : aiAttempts(options.role);
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const model = aiModelForAttempt(options.role, attempt);
-    const wait = attempt < attempts - 1 && aiShouldBackoff(options.role, attempt);
+    const model = options.model ?? aiModelForAttempt(options.role, attempt);
+    const wait =
+      attempt < attempts - 1 && (options.model ? true : aiShouldBackoff(options.role, attempt));
     const controller = new AbortController();
     let timer = setTimeout(() => controller.abort(), timeoutMs);
     const restartTimer = () => {
@@ -150,7 +156,7 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
     };
     let response: Response;
     try {
-      response = await fetchImpl(geminiStreamUrl(model), {
+      response = await fetchImpl(geminiStreamUrl(model, options.baseUrl), {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
         body,
@@ -169,6 +175,10 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
       console.warn('[ai] Gemini stream retryable status', model, response.status);
       if (wait) await sleep(backoff(attempt, response.headers.get('retry-after')));
       continue;
+    }
+    if (options.model && (response.status === 401 || response.status === 403)) {
+      clearTimeout(timer);
+      throw aiError('AI_KEY_INVALID');
     }
     if (!response.ok || !response.body) {
       clearTimeout(timer);

@@ -8,6 +8,7 @@ export const aiErrorCodes = [
   /** `GEMINI_API_KEY` is not set on the deployment. */
   'AI_NOT_CONFIGURED',
   'AI_DISABLED',
+  'AI_KEY_INVALID',
   /** The user hit their daily limit for this kind of request. */
   'AI_RATE_LIMITED',
   /** Gemini kept answering 429 after retries. */
@@ -34,6 +35,8 @@ export type AiErrorData = { code: AiErrorCode; message: string; retryAfterMs?: n
 const defaultMessages: Record<AiErrorCode, string> = {
   AI_NOT_CONFIGURED: 'AI features are not set up on this server yet.',
   AI_DISABLED: 'FinAI is turned off. Turn it on in Settings → AI → FinAI.',
+  AI_KEY_INVALID:
+    'Your API key was rejected by the provider. Check it in Settings → AI → API keys.',
   AI_RATE_LIMITED: 'You have reached today’s limit for this AI feature. Try again tomorrow.',
   AI_BUSY: 'The AI service is busy right now. Try again in a moment.',
   AI_UNAVAILABLE: 'The AI service is unavailable right now. Try again in a moment.',
