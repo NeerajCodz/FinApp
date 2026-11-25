@@ -65,8 +65,7 @@ out.push(
     `- [\`${apk}-armeabi-v7a.apk\`](${download(`${apk}-armeabi-v7a.apk`)}): older 32-bit phones`,
     `- [\`${apk}-x86_64.apk\`](${download(`${apk}-x86_64.apk`)}) / [\`${apk}-x86.apk\`](${download(`${apk}-x86.apk`)}): emulators and x86 devices`,
     `- [\`SHA256SUMS.txt\`](${download('SHA256SUMS.txt')})`,
-  ].join('
-'),
+  ].join('\n'),
 );
 
 out.push(
