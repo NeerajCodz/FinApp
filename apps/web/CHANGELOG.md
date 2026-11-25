@@ -2,6 +2,11 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.9.0
+
+- Settings hub and Profile redesigned; AI settings: FinAI, API keys (BYOK), MCP connections
+- FinAI launcher and step list follow FinAI settings
+
 ## 1.8.0
 
 - OAuth for every MCP client registration method (CIMD, DCR with secrets or `private_key_jwt`,

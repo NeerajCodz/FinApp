@@ -6,6 +6,34 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 its manifest as `version.json`
 (`https://github.com/NeerajCodz/FinApp/releases/download/finapp-v<version>/version.json`).
 
+## 1.9.0
+
+Web 1.9.0 · Mobile 1.9.0 · UI 1.9.0 · Backend 1.9.0 · API 1 · Schema 6
+
+A new **AI** section in Settings and Profile, plus redesigned settings and profile screens on web
+and mobile.
+
+- **FinAI settings**: turn FinAI on or off, and choose:
+  - Tone (friendly, concise, professional or playful), answer length, reply language and emoji.
+  - "About you" and custom instructions FinAI keeps in mind.
+  - What FinAI can read (money, budgets and goals, groups, people). Turning one off removes those
+    tools.
+  - Whether it may prepare changes, answer @finai in chats and auto-categorise receipts.
+  - Whether to show the floating button and the step list.
+  - A button to clear all FinAI history.
+- **API keys (bring your own key)**: run FinAI on your own OpenAI, Anthropic, Google Gemini,
+  OpenRouter, Groq, Mistral, xAI or DeepSeek account, or any OpenAI-compatible endpoint.
+  - Keys are checked with the provider, encrypted on the server (AES-256-GCM, tied to your
+    account) and never shown again.
+  - Tools, cards and confirmations work the same on every model.
+  - Switch back to the built-in model at any time.
+- **MCP connections**: see the AI apps connected to your Finapp and what each may do. Disconnect
+  them, and manage the client credentials you created for ChatGPT.
+- **Settings and Profile redesigned**: grouped cards with icons and descriptions, two columns on
+  large screens.
+  - Profile: a cover and avatar header, workspace tiles, a gear button for Settings, and the new AI
+    section.
+
 ## 1.8.0
 
 Web 1.8.0 · Mobile 1.7.1 (build 16) · UI 1.7.1 · Backend 1.8.0 · API 1 · Schema 6

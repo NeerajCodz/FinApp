@@ -2,6 +2,11 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.9.0
+
+- Settings kit for web and native (shell, groups, link/switch/choice/text rows, hero)
+- `showSteps` on the FinAI assistant screens; error copy for `AI_DISABLED` and `AI_KEY_INVALID`
+
 ## 1.7.1
 
 - No UI library changes (version aligned with the 1.7.1 release)

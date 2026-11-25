@@ -2,6 +2,11 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.9.0
+
+- Settings hub and Profile AI section; FinAI, API keys and MCP connections screens
+- Floating FinAI button and step list follow FinAI settings
+
 ## 1.7.1
 
 - Redesigned public profile: cover, avatar, actions, stats, shared groups, mutual friends
