@@ -1,14 +1,11 @@
 import React from 'react';
-import { TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
-import { Typography, useTheme } from '@finapp/ui/native';
-import { CategoryIcon } from '../../finance/native/CategoryIcon';
-import { formatMinor } from '@finapp/ui/finance/money';
+import { Text } from 'react-native';
+import { formatMinor } from '@convex/shared/money';
 import type { AnalyticsBreakdownItem } from '@convex/analytics/domain';
-import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
+import { DonutChart } from '../../charts/native';
+import { toMajor } from '../chart-utils';
 
-const chartColors = ['primary', 'blue', 'violet', 'orange', 'pink', 'cyan', 'yellow'] as const;
-
+/** Spending by category: a donut with the total in the middle and a legend (share, amount). */
 export function BreakdownDonut({
   items,
   totalMinor,
@@ -22,101 +19,41 @@ export function BreakdownDonut({
   onSelectItem?: (item: AnalyticsBreakdownItem) => void;
   iconForCategory?: (id: string) => string | undefined;
 }) {
-  const { tokens } = useTheme();
-  const colors = chartColors.map((name) =>
-    name === 'primary' ? tokens.primary : tokens.chart[name],
-  );
-  const radius = 48;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+  // Eight colours at most (never cycled): everything past the top seven folds into "Other".
+  const sorted = [...items].sort((a, b) => (b.amountMinor > a.amountMinor ? 1 : -1));
+  const head = sorted.slice(0, 7);
+  const rest = sorted.slice(7);
+  const otherMinor = rest.reduce((sum, item) => sum + item.amountMinor, 0n);
+  const rows = [
+    ...head.map((item) => ({
+      item: item as AnalyticsBreakdownItem | null,
+      minor: item.amountMinor,
+    })),
+    ...(otherMinor > 0n ? [{ item: null, minor: otherMinor }] : []),
+  ];
   return (
-    <View style={{ gap: 18 }}>
-      {totalMinor > 0n && (
-        <View style={{ alignItems: 'center', justifyContent: 'center', height: 142 }}>
-          <Svg
-            width={142}
-            height={142}
-            viewBox="0 0 142 142"
-            accessibilityLabel="Expense share by category"
-          >
-            <Circle
-              cx={71}
-              cy={71}
-              r={radius}
-              stroke={tokens.borderSubtle}
-              strokeWidth={19}
-              fill="none"
-            />
-            {items.map((item, index) => {
-              const fraction = Number((item.amountMinor * 10000n) / totalMinor) / 10000;
-              const length = circumference * fraction;
-              const segment = (
-                <Circle
-                  key={item.id}
-                  cx={71}
-                  cy={71}
-                  r={radius}
-                  stroke={colors[index % colors.length]}
-                  strokeWidth={19}
-                  fill="none"
-                  strokeDasharray={`${length} ${circumference - length}`}
-                  strokeDashoffset={-offset}
-                  rotation={-90}
-                  origin="71, 71"
-                />
-              );
-              offset += length;
-              return segment;
-            })}
-          </Svg>
-          <View style={{ position: 'absolute', alignItems: 'center' }}>
-            <Typography variant="caption">Total spent</Typography>
-            <Typography variant="small">{formatMinor(totalMinor, currency)}</Typography>
-          </View>
-        </View>
-      )}
-      {items.length === 0 ? (
-        <FinanceEmptyState
-          kind="analytics"
-          title="No posted expenses in this period."
-          description="Choose another period to review spending by category."
-          compact
-        />
-      ) : (
-        items.map((item, index) => {
-          const percentage =
-            totalMinor > 0n ? Number((item.amountMinor * 1000n) / totalMinor) / 10 : 0;
-          return (
-            <TouchableOpacity
-              key={item.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.label}, ${formatMinor(item.amountMinor, currency)}, ${percentage}% of spending`}
-              onPress={() => onSelectItem?.(item)}
-              activeOpacity={0.65}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 }}
-            >
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: colors[index % colors.length],
-                }}
-              />
-              {!!iconForCategory && (
-                <CategoryIcon label={item.label} icon={iconForCategory(item.id)} />
-              )}
-              <Typography variant="small" numberOfLines={2} style={{ flex: 1 }}>
-                {item.label}
-              </Typography>
-              <View style={{ alignItems: 'flex-end', minWidth: 88 }}>
-                <Typography variant="small">{formatMinor(item.amountMinor, currency)}</Typography>
-                <Typography variant="caption">{percentage}%</Typography>
-              </View>
-            </TouchableOpacity>
-          );
-        })
-      )}
-    </View>
+    <DonutChart
+      caption="Expenses by category"
+      centerValue={formatMinor(totalMinor, currency)}
+      centerLabel="Total spent"
+      items={rows.map(({ item, minor }) => {
+        const icon = item ? iconForCategory?.(item.id) : undefined;
+        return {
+          id: item?.id ?? '__other__',
+          label: item?.label ?? `Other (${rest.length})`,
+          value: toMajor(minor, currency),
+          display: formatMinor(minor, currency),
+          ...(icon ? { icon: <Text>{icon}</Text> } : {}),
+        };
+      })}
+      onSelect={
+        onSelectItem
+          ? (picked) => {
+              const match = items.find((item) => item.id === picked.id);
+              if (match) onSelectItem(match);
+            }
+          : undefined
+      }
+    />
   );
 }

@@ -59,7 +59,13 @@
       "default": "./src/ai/web/index.ts"
     },
     "./ai/finai": "./src/ai/finai.ts",
-    "./ai/composer-files": "./src/ai/useComposerFiles.ts"
+    "./ai/composer-files": "./src/ai/useComposerFiles.ts",
+    "./charts": {
+      "react-native": "./src/charts/native/index.ts",
+      "browser": "./src/charts/web/index.ts",
+      "default": "./src/charts/web/index.ts"
+    },
+    "./charts/core": "./src/charts/core.ts"
   },
   "sideEffects": [
     "./src/web/styles.css"
