@@ -26,6 +26,7 @@ async function displayName(ctx: QueryCtx, userId: Id<'users'>, cache: Map<string
 function messageText(message: Doc<'groupMessages'> | Doc<'directMessages'>): string {
   if (message.kind === 'bill') return '[shared a bill photo]';
   if (message.kind === 'image') return '[shared an image]';
+  if (message.kind === 'audio') return '[sent a voice message]';
   return message.text ?? '';
 }
 

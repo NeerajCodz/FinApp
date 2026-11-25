@@ -88,6 +88,7 @@ import type * as shared_money from "../shared/money.js";
 import type * as shared_permissions from "../shared/permissions.js";
 import type * as shared_validators from "../shared/validators.js";
 import type * as shared_version from "../shared/version.js";
+import type * as shared_voice from "../shared/voice.js";
 import type * as social_mutations from "../social/mutations.js";
 import type * as social_queries from "../social/queries.js";
 import type * as splits_domain from "../splits/domain.js";
@@ -191,6 +192,7 @@ declare const fullApi: ApiFromModules<{
   "shared/permissions": typeof shared_permissions;
   "shared/validators": typeof shared_validators;
   "shared/version": typeof shared_version;
+  "shared/voice": typeof shared_voice;
   "social/mutations": typeof social_mutations;
   "social/queries": typeof social_queries;
   "splits/domain": typeof splits_domain;

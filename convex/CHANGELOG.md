@@ -2,6 +2,11 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.6.0
+
+- `audio` message kind with `durationMs`; `groups.sendVoiceMessage`, `directMessages.sendVoice`
+- Retention changes applied in batches (`applyMessageRetention`)
+
 ## 1.5.0
 
 - FinAI replies record each tool call as `steps` (schema 5)

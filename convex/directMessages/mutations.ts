@@ -3,6 +3,7 @@ import type { MutationCtx } from '../_generated/server';
 import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
+import { validateVoiceMetadata, validVoiceDuration } from '../shared/voice';
 import { validateBillImageMetadata } from '../groups/domain';
 import { advanceReadPointer, CHAT_PIN_LIMIT, chatReactionEmoji, clearTyping } from '../shared/chat';
 import { maybeScheduleFinaiReply } from '../ai/mentions';
@@ -162,6 +163,64 @@ export const sendImage = mutation({
     return messageId;
   },
 });
+/** Attaches an uploaded voice clip (ticket from `createImageUpload`, which issues any upload). */
+export const sendVoice = mutation({
+  args: {
+    conversationId: v.id('directConversations'),
+    storageId: v.id('_storage'),
+    ticket: v.string(),
+    durationMs: v.number(),
+  },
+  handler: async (ctx, { conversationId, storageId, ticket, durationMs }) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    const conversation = await getConversationForParticipant(ctx, conversationId, actor._id);
+    const upload = await ctx.db
+      .query('directUploadTickets')
+      .withIndex('by_ticket', (q) => q.eq('ticket', ticket))
+      .unique();
+    if (
+      !upload ||
+      upload.userId !== actor._id ||
+      upload.conversationId !== conversationId ||
+      upload.usedAt !== undefined
+    )
+      throw new Error('INVALID_UPLOAD_TICKET');
+    const metadata = await ctx.db.system.get('_storage', storageId);
+    const mimeType = metadata ? validateVoiceMetadata(metadata) : null;
+    if (!metadata || !mimeType || !validVoiceDuration(durationMs)) {
+      if (metadata) await ctx.storage.delete(storageId);
+      throw new Error('INVALID_VOICE_MESSAGE');
+    }
+    const [existingDirect, existingGroup] = await Promise.all([
+      ctx.db
+        .query('directMessages')
+        .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+        .unique(),
+      ctx.db
+        .query('groupMessages')
+        .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+        .unique(),
+    ]);
+    if (existingDirect || existingGroup) throw new Error('VOICE_ALREADY_ATTACHED');
+    const createdAt = Date.now();
+    const messageId = await ctx.db.insert('directMessages', {
+      conversationId,
+      senderId: actor._id,
+      kind: 'audio',
+      storageId,
+      mimeType,
+      size: metadata.size,
+      durationMs: Math.round(durationMs),
+      createdAt,
+    });
+    await ctx.db.patch(upload._id, { usedAt: createdAt });
+    await ctx.db.patch(conversation._id, { updatedAt: createdAt });
+    await afterSend(ctx, conversationId, actor._id, createdAt);
+    return messageId;
+  },
+});
+
 export const toggleReaction = mutation({
   args: {
     messageId: v.id('directMessages'),
