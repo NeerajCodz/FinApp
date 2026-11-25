@@ -52,6 +52,23 @@ const componentNotes = components
   .filter(Boolean);
 if (componentNotes.length) out.push('## Components', ...componentNotes);
 
+const download = (file) =>
+  `https://github.com/NeerajCodz/FinApp/releases/download/finapp-v${manifest.version}/${file}`;
+const apk = `finapp-v${manifest.version.replace(/\./g, '_')}`;
+out.push(
+  '## Android',
+  [
+    'APKs are attached once the Android release is approved (Android APKs workflow):',
+    '',
+    `- [\`${apk}.apk\`](${download(`${apk}.apk`)}): universal, works on every device`,
+    `- [\`${apk}-arm64-v8a.apk\`](${download(`${apk}-arm64-v8a.apk`)}): most phones (64-bit ARM)`,
+    `- [\`${apk}-armeabi-v7a.apk\`](${download(`${apk}-armeabi-v7a.apk`)}): older 32-bit phones`,
+    `- [\`${apk}-x86_64.apk\`](${download(`${apk}-x86_64.apk`)}) / [\`${apk}-x86.apk\`](${download(`${apk}-x86.apk`)}): emulators and x86 devices`,
+    `- [\`SHA256SUMS.txt\`](${download('SHA256SUMS.txt')})`,
+  ].join('
+'),
+);
+
 out.push(
   '## Versions',
   [

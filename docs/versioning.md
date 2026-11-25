@@ -39,6 +39,18 @@ Merge to `main`. The **Release** workflow tags `finapp-v…`, `web-v…`, `mobil
 `backend-v…` and publishes a GitHub release from the `CHANGELOG.md` section, with the root
 `version.json` (as committed at the tag) attached as an asset.
 
+## Android APKs
+
+Android builds ship only when approved: run the **Android APKs** workflow (Actions → Android APKs
+→ Run workflow, optionally with a version). It builds every EAS profile and attaches these files to
+the `finapp-v<version>` release:
+
+- `finapp-v1_8_0.apk`: universal
+- `finapp-v1_8_0-arm64-v8a.apk`, `-armeabi-v7a.apk`, `-x86_64.apk`, `-x86.apk`: one per architecture
+- `SHA256SUMS.txt`
+
+It needs the `EXPO_TOKEN` repository secret.
+
 ## Release history
 
 Shipped manifests aren't kept in the repo. Every product release carries its `version.json`:
