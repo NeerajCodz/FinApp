@@ -699,6 +699,13 @@ export default defineSchema({
     outputTokens: v.optional(v.number()),
     updatedAt: timestamp,
   }).index('by_user_kind_window', ['userId', 'kind', 'windowStart']),
+  /** FinAI preferences, one row per user (see convex/shared/finaiSettings.ts). */
+  finaiSettings: defineTable({
+    userId: v.id('users'),
+    /** Partial FinaiSettings; resolved over the defaults on read. */
+    settings: v.any(),
+    updatedAt: timestamp,
+  }).index('by_user', ['userId']),
   /** In-app FinAI assistant threads, one owner each. */
   finaiConversations: defineTable({
     userId: v.id('users'),

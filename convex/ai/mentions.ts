@@ -17,6 +17,7 @@ import { aiErrorCode, type AiErrorCode } from './errors';
 import { isGeminiConfigured } from './gemini';
 import type { GeminiContent } from './geminiChat';
 import { chatSystemPrompt } from './prompts';
+import { finaiPreferencePrompt, finaiToolAllowed } from '../shared/finaiSettings';
 import { consumeAiQuota } from './usage';
 import { finaiReplyStatus, finaiStage, finaiStep } from './validators';
 
@@ -233,10 +234,21 @@ export const runReply = internalAction({
         await patch({ status: 'error', errorCode: 'NOT_MEMBER' });
         return;
       }
+      // The person who asked decides whether FinAI answers for them in chats.
+      const settings = await ctx.runQuery(internal.ai.settings.forUser, {
+        userId: args.requesterId,
+      });
+      if (!settings.enabled || !settings.allowChatMentions) {
+        await patch({
+          status: 'done',
+          text: `FinAI is turned off for ${snapshot.requesterName} in chats. They can turn it on in Settings → AI → FinAI.`,
+        });
+        return;
+      }
       const groups = snapshot.group
         ? [snapshot.group]
         : snapshot.sharedGroups.map((g) => ({ ...g, id: String(g.id) }));
-      const system = chatSystemPrompt({
+      const baseSystem = chatSystemPrompt({
         scope: args.scopeType,
         title: snapshot.title,
         today: new Date().toISOString().slice(0, 10),
@@ -244,6 +256,9 @@ export const runReply = internalAction({
         participants: snapshot.participants,
         groups,
       });
+      const system = `${baseSystem}
+
+${finaiPreferencePrompt(settings)}`;
       const promptMessage = snapshot.messages[snapshot.messages.length - 1];
       const promptId =
         promptMessage && promptMessage.createdAt === args.promptCreatedAt ? promptMessage.id : null;
@@ -275,7 +290,7 @@ export const runReply = internalAction({
           viewerIds: snapshot.participants.map((p) => p.id as Id<'users'>),
           groupId: snapshot.group?.id ?? null,
           sharedGroupIds: snapshot.sharedGroups.map((g) => String(g.id)),
-        }),
+        }).filter((tool) => finaiToolAllowed(settings, tool.name)),
         onProgress: async (step) => {
           const next = applyStep(steps, step);
           if (next) steps = next;
