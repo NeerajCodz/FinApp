@@ -34,7 +34,7 @@ export function HomeHeader({
   onSearchChange: (value: string) => void;
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
-  onOpenSync: () => void;
+  onOpenSync?: () => void;
   onOpenNotifications?: () => void;
   notificationCount?: number;
 }) {
@@ -94,14 +94,16 @@ export function HomeHeader({
               ) : null}
             </button>
           )}
-          <button
-            className="finance-home-sync"
-            type="button"
-            aria-label="Open sync status"
-            onClick={onOpenSync}
-          >
-            <ShieldCheck size={18} aria-hidden="true" />
-          </button>
+          {onOpenSync ? (
+            <button
+              className="finance-home-sync"
+              type="button"
+              aria-label="Open sync status"
+              onClick={onOpenSync}
+            >
+              <ShieldCheck size={18} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </div>
     </header>
