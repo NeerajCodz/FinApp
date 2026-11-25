@@ -14,6 +14,7 @@ import type { AccentValue } from '@finapp/ui/tokens';
 import Storage from 'expo-sqlite/kv-store';
 import { api } from '@convex/_generated/api';
 import { FinaiLauncher } from '@/components/FinaiLauncher';
+import { UpdateRequiredNotice } from '@/components/UpdateRequiredNotice';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
 import { BackendConnectionNotice } from '@/components/BackendConnectionNotice';
@@ -175,6 +176,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       {!invitationRoute && (
         <BackendConnectionNotice isConnected={connection.isWebSocketConnected} tokens={tokens} />
       )}
+      {!invitationRoute && <UpdateRequiredNotice tokens={tokens} />}
     </AppLockProvider>
   );
 }

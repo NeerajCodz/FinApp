@@ -95,6 +95,7 @@ import type * as splits_mutations from "../splits/mutations.js";
 import type * as sync_common from "../sync/common.js";
 import type * as sync_queries from "../sync/queries.js";
 import type * as sync_types from "../sync/types.js";
+import type * as system from "../system.js";
 import type * as transactions_domain from "../transactions/domain.js";
 import type * as transactions_mutations from "../transactions/mutations.js";
 import type * as transactions_queries from "../transactions/queries.js";
@@ -197,6 +198,7 @@ declare const fullApi: ApiFromModules<{
   "sync/common": typeof sync_common;
   "sync/queries": typeof sync_queries;
   "sync/types": typeof sync_types;
+  system: typeof system;
   "transactions/domain": typeof transactions_domain;
   "transactions/mutations": typeof transactions_mutations;
   "transactions/queries": typeof transactions_queries;
