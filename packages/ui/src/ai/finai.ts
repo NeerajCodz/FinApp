@@ -47,12 +47,105 @@ export type FinaiReply = {
   actions?: readonly FinaiActionState[];
 };
 
+export type FinaiAttachmentKind = 'image' | 'pdf' | 'spreadsheet' | 'text';
+
+/** A file sent with a message. `available` is false once it has expired and been deleted. */
+export type FinaiAttachmentView = {
+  id: string;
+  name: string;
+  kind: FinaiAttachmentKind;
+  size: number;
+  available: boolean;
+  /** Image preview (short-lived), while the file exists. */
+  url?: string;
+  expiresAt?: number;
+};
+
 export type FinaiAssistantMessage = FinaiReply & {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   createdAt: number;
+  attachments?: readonly FinaiAttachmentView[];
 };
+
+// ---------- Attachments ----------
+
+/** File types FinAI reads (for file pickers and checks before uploading). */
+export const FINAI_ATTACHMENT_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'heic',
+  'heif',
+  'pdf',
+  'xlsx',
+  'csv',
+  'tsv',
+  'txt',
+  'md',
+  'json',
+] as const;
+export const FINAI_ATTACHMENT_ACCEPT = FINAI_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(
+  ',',
+);
+export const FINAI_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export const FINAI_ATTACHMENTS_PER_MESSAGE = 5;
+
+/** An upload waiting in the composer. */
+export type FinaiComposerAttachment = {
+  /** Local key (stable from pick to send). */
+  key: string;
+  name: string;
+  size: number;
+  kind: FinaiAttachmentKind;
+  status: 'uploading' | 'ready' | 'error';
+  /** Set once registered. */
+  id?: string;
+  error?: string;
+  /** Local preview for images (object URL / file URI). */
+  previewUrl?: string;
+};
+
+/** The kind for a file name, or null when FinAI can't read it. */
+export function finaiAttachmentKind(name: string): FinaiAttachmentKind | null {
+  const ext = /\.([a-z0-9]{1,5})$/i.exec(name)?.[1]?.toLowerCase() ?? '';
+  if (['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(ext)) return 'image';
+  if (ext === 'pdf') return 'pdf';
+  if (['xlsx', 'csv', 'tsv'].includes(ext)) return 'spreadsheet';
+  if (['txt', 'md', 'json'].includes(ext)) return 'text';
+  return null;
+}
+
+/** Why a file can't be attached (checked before uploading), or null if it can. */
+export function finaiAttachmentProblem(name: string, size: number): string | null {
+  if (/\.xls$/i.test(name)) return 'Save old .xls files as .xlsx or .csv first.';
+  if (!finaiAttachmentKind(name)) return 'FinAI reads images, PDFs, spreadsheets and text files.';
+  if (size > FINAI_ATTACHMENT_MAX_BYTES) return 'Files can be up to 10 MB.';
+  if (size <= 0) return 'This file is empty.';
+  return null;
+}
+
+const ATTACHMENT_ERRORS: Record<string, string> = {
+  FILE_TOO_LARGE: 'Files can be up to 10 MB.',
+  FILE_EMPTY: 'This file is empty.',
+  UNSUPPORTED_FILE: 'FinAI reads images, PDFs, spreadsheets and text files.',
+  ATTACHMENTS_DISABLED: 'Attachments are turned off in FinAI settings.',
+  TOO_MANY_ATTACHMENTS: `Attach up to ${FINAI_ATTACHMENTS_PER_MESSAGE} files per message.`,
+  ATTACHMENT_NOT_FOUND: 'That file is no longer available. Attach it again.',
+};
+
+export function finaiAttachmentError(code: string | undefined): string {
+  return (code && ATTACHMENT_ERRORS[code]) || 'Couldn’t upload this file. Try again.';
+}
+
+/** "820 KB", "4.2 MB". */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
 
 // ---------- A2UI catalog (mirror of convex/ai/a2ui.ts) ----------
 

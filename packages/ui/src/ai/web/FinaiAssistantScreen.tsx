@@ -13,8 +13,15 @@ import {
   ArrowLeft,
   ArrowUp,
   ClockCounterClockwise,
+  File as FileIcon,
+  FilePdf,
+  FileText,
+  ImageSquare,
   NotePencil,
+  Paperclip,
+  Table,
   Trash,
+  WarningCircle,
   X,
 } from '@phosphor-icons/react';
 import { ThinkingOrb } from '../../web/ThinkingOrb';
@@ -22,9 +29,14 @@ import { FinaiLogo } from './FinaiLogo';
 import { FinaiMarkdown } from './FinaiMarkdown';
 import { FinaiSteps } from './FinaiSteps';
 import {
+  FINAI_ATTACHMENT_ACCEPT,
   FINAI_NAME,
   FINAI_SUGGESTIONS,
   finaiErrorMessage,
+  formatFileSize,
+  type FinaiAttachmentKind,
+  type FinaiAttachmentView,
+  type FinaiComposerAttachment,
   isFinaiBusy,
   orbStateFor,
   type FinaiAssistantMessage,
@@ -66,7 +78,51 @@ export type FinaiAssistantScreenProps = {
   variant?: 'page' | 'panel';
   /** Shown as a close button (panel). */
   onClose?: () => void;
+  /** Files waiting in the composer (attachments on when `onAttach` is set). */
+  attachments?: readonly FinaiComposerAttachment[];
+  onAttach?: (files: File[]) => void;
+  onRemoveAttachment?: (key: string) => void;
 };
+
+function KindIcon({ kind, size = 16 }: { kind: FinaiAttachmentKind; size?: number }) {
+  if (kind === 'image') return <ImageSquare size={size} />;
+  if (kind === 'pdf') return <FilePdf size={size} />;
+  if (kind === 'spreadsheet') return <Table size={size} />;
+  if (kind === 'text') return <FileText size={size} />;
+  return <FileIcon size={size} />;
+}
+
+/** Files on a sent message: image thumbnails, other files as chips; expired ones say so. */
+function SentAttachments({ files }: { files: readonly FinaiAttachmentView[] }) {
+  return (
+    <div className={styles.sentFiles}>
+      {files.map((file) =>
+        file.kind === 'image' && file.available && file.url ? (
+          <a
+            key={file.id}
+            className={styles.sentImage}
+            href={file.url}
+            target="_blank"
+            rel="noreferrer"
+            title={file.name}
+          >
+            <img src={file.url} alt={file.name} />
+          </a>
+        ) : (
+          <span
+            key={file.id}
+            className={cx(styles.fileChip, !file.available && styles.fileGone)}
+            title={file.available ? file.name : `${file.name} (deleted)`}
+          >
+            <KindIcon kind={file.kind} />
+            <span className={styles.fileName}>{file.name}</span>
+            <small>{file.available ? formatFileSize(file.size) : 'Deleted'}</small>
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
 
 const cx = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(' ');
 
@@ -131,7 +187,16 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
     node.style.height = `${Math.min(node.scrollHeight, 140)}px`;
   }, [p.draft]);
 
-  const canSend = p.available && !busy && !!p.draft.trim();
+  const files = p.attachments ?? [];
+  const uploading = files.some((file) => file.status === 'uploading');
+  const readyFiles = files.filter((file) => file.status === 'ready').length;
+  const canSend = p.available && !busy && !uploading && (!!p.draft.trim() || readyFiles > 0);
+  const filePicker = React.useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = React.useState(false);
+  const attach = (list: FileList | File[] | null | undefined) => {
+    const picked = Array.from(list ?? []);
+    if (picked.length && p.onAttach) p.onAttach(picked);
+  };
   const empty = !p.loading && p.messages.length === 0;
   const select = (id: string | null) => {
     // Another conversation opens at its latest message; the same one where it was left.
@@ -298,7 +363,14 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
               p.messages.map((message) =>
                 message.role === 'user' ? (
                   <div key={message.id} className={cx(styles.row, styles.mine)}>
-                    <div className={styles.userBubble}>{message.text}</div>
+                    <div className={styles.mineStack}>
+                      {message.attachments?.length ? (
+                        <SentAttachments files={message.attachments} />
+                      ) : null}
+                      {message.text ? (
+                        <div className={styles.userBubble}>{message.text}</div>
+                      ) : null}
+                    </div>
                   </div>
                 ) : (
                   <article
@@ -369,35 +441,116 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           )}
 
           <form
-            className={styles.composer}
+            className={cx(styles.composer, dragging && styles.dragging)}
             onSubmit={(event) => {
               event.preventDefault();
               if (canSend) p.onSend();
             }}
+            onDragOver={(event) => {
+              if (!p.onAttach || !event.dataTransfer.types.includes('Files')) return;
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              if (!p.onAttach) return;
+              event.preventDefault();
+              setDragging(false);
+              attach(event.dataTransfer.files);
+            }}
           >
-            <textarea
-              ref={input}
-              aria-label={`Message ${FINAI_NAME}`}
-              rows={1}
-              value={p.draft}
-              maxLength={4000}
-              disabled={!p.available}
-              placeholder={p.available ? `Message ${FINAI_NAME}` : 'FinAI is unavailable'}
-              onChange={(event) => p.onDraftChange(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            {files.length ? (
+              <ul className={styles.pending} aria-label="Attached files">
+                {files.map((file) => (
+                  <li
+                    key={file.key}
+                    className={cx(styles.fileChip, file.status === 'error' && styles.fileError)}
+                    title={file.error ?? file.name}
+                  >
+                    {file.status === 'uploading' ? (
+                      <ThinkingOrb state="working" size={14} label={`Uploading ${file.name}`} />
+                    ) : file.status === 'error' ? (
+                      <WarningCircle size={16} />
+                    ) : file.kind === 'image' && file.previewUrl ? (
+                      <img className={styles.chipThumb} src={file.previewUrl} alt="" />
+                    ) : (
+                      <KindIcon kind={file.kind} />
+                    )}
+                    <span className={styles.fileName}>{file.name}</span>
+                    <small>
+                      {file.status === 'error' ? file.error : formatFileSize(file.size)}
+                    </small>
+                    {p.onRemoveAttachment ? (
+                      <button
+                        type="button"
+                        className={styles.chipRemove}
+                        aria-label={`Remove ${file.name}`}
+                        onClick={() => p.onRemoveAttachment?.(file.key)}
+                      >
+                        <X size={12} weight="bold" />
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className={styles.composerRow}>
+              {p.onAttach ? (
+                <>
+                  <button
+                    type="button"
+                    className={styles.attach}
+                    aria-label="Attach files"
+                    title="Attach images, PDFs or spreadsheets (up to 10 MB)"
+                    disabled={!p.available}
+                    onClick={() => filePicker.current?.click()}
+                  >
+                    <Paperclip size={18} />
+                  </button>
+                  <input
+                    ref={filePicker}
+                    type="file"
+                    hidden
+                    multiple
+                    accept={FINAI_ATTACHMENT_ACCEPT}
+                    onChange={(event) => {
+                      attach(event.currentTarget.files);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                </>
+              ) : null}
+              <textarea
+                ref={input}
+                aria-label={`Message ${FINAI_NAME}`}
+                rows={1}
+                value={p.draft}
+                maxLength={4000}
+                disabled={!p.available}
+                placeholder={p.available ? `Message ${FINAI_NAME}` : 'FinAI is unavailable'}
+                onChange={(event) => p.onDraftChange(event.currentTarget.value)}
+                onPaste={(event) => {
+                  if (!p.onAttach) return;
+                  const pasted = Array.from(event.clipboardData.files);
+                  if (!pasted.length) return;
                   event.preventDefault();
-                  if (canSend) p.onSend();
-                }
-              }}
-            />
-            <button type="submit" className={styles.send} aria-label="Send" disabled={!canSend}>
-              {busy ? (
-                <ThinkingOrb state="working" size={16} />
-              ) : (
-                <ArrowUp size={18} weight="bold" />
-              )}
-            </button>
+                  attach(pasted);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    if (canSend) p.onSend();
+                  }
+                }}
+              />
+              <button type="submit" className={styles.send} aria-label="Send" disabled={!canSend}>
+                {busy ? (
+                  <ThinkingOrb state="working" size={16} />
+                ) : (
+                  <ArrowUp size={18} weight="bold" />
+                )}
+              </button>
+            </div>
           </form>
         </>
       )}

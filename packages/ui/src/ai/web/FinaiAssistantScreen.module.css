@@ -384,13 +384,166 @@
 
 .composer {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   margin: 10px 12px 12px;
-  padding: 6px 6px 6px 14px;
+  padding: 6px;
   border: 1px solid var(--finapp-border-subtle);
   border-radius: 20px;
   background: var(--finapp-surface-subtle);
+  transition: border-color 120ms ease;
+}
+
+.composerRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding-left: 8px;
+}
+
+.composerRow:has(.attach) {
+  padding-left: 0;
+}
+
+.dragging {
+  border-style: dashed;
+  border-color: var(--finapp-primary);
+}
+
+.attach {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--finapp-foreground-muted);
+  cursor: pointer;
+}
+
+.attach:hover:not(:disabled) {
+  background: var(--finapp-card);
+  color: var(--finapp-foreground);
+}
+
+.attach:focus-visible {
+  outline: 2px solid var(--finapp-primary);
+  outline-offset: 1px;
+}
+
+.pending {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+}
+
+.fileChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 12px;
+  background: var(--finapp-card);
+  color: var(--finapp-foreground);
+  font-size: 12px;
+}
+
+.fileChip small {
+  flex-shrink: 0;
+  color: var(--finapp-foreground-subtle);
+  font-size: 11px;
+}
+
+.fileName {
+  overflow: hidden;
+  max-width: 180px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fileError {
+  border-color: var(--finapp-destructive);
+  color: var(--finapp-destructive);
+}
+
+.fileError small {
+  color: var(--finapp-destructive);
+}
+
+.fileGone {
+  opacity: 0.6;
+}
+
+.fileGone .fileName {
+  text-decoration: line-through;
+}
+
+.chipThumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.chipRemove {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: -2px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--finapp-surface-subtle);
+  color: var(--finapp-foreground-muted);
+  cursor: pointer;
+}
+
+.chipRemove:hover {
+  color: var(--finapp-foreground);
+}
+
+.mineStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: min(82%, 560px);
+}
+
+.mineStack .userBubble {
+  max-width: 100%;
+}
+
+.sentFiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.sentImage {
+  display: block;
+  overflow: hidden;
+  width: 132px;
+  height: 132px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  background: var(--finapp-surface-subtle);
+}
+
+.sentImage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .composer:focus-within {
