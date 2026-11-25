@@ -132,7 +132,7 @@ export default function NotificationSettingsPage() {
 
   const selectedPreferences = preferences ?? defaultNotificationPreferences;
   return (
-    <div className="finance-page" style={{ gap: 24 }}>
+    <div className="finance-page finance-page--narrow" style={{ gap: 24 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
           <ArrowLeft size={21} aria-hidden="true" />

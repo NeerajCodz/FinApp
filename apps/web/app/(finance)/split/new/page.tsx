@@ -8,7 +8,7 @@ export default function NewSplitPage() {
   return (
     <React.Suspense
       fallback={
-        <main className="finance-page">
+        <main className="finance-page finance-page--narrow">
           <p className="finance-muted" role="status">
             Opening split form…
           </p>

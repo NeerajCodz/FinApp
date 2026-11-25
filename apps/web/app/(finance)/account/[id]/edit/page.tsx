@@ -185,13 +185,13 @@ export default function EditAccountPage() {
     );
   if (loading)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--narrow">
         <p role="status">Loading account details…</p>
       </div>
     );
   if (!account || account.archivedAt !== undefined)
     return (
-      <div className="finance-page" style={{ gap: 16 }}>
+      <div className="finance-page finance-page--narrow" style={{ gap: 16 }}>
         <h1>Account unavailable</h1>
         <p>{error ?? 'This account could not be found.'}</p>
         <button type="button" onClick={() => router.replace('/accounts')}>

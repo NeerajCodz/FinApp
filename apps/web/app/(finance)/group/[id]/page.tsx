@@ -416,13 +416,13 @@ export default function GroupHomePage() {
     );
   if (groupsLoading && !group)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--wide">
         <ListSkeleton rows={5} />
       </div>
     );
   if (!group)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--wide">
         <Link className="finance-secondary-action" href="/groups">
           ‹ All groups
         </Link>

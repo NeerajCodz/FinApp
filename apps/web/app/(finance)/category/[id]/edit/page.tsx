@@ -179,19 +179,19 @@ export default function EditCategoryPage() {
     );
   if (loading)
     return (
-      <div className="finance-page" role="status">
+      <div className="finance-page finance-page--narrow" role="status">
         Loading category…
       </div>
     );
   if (error)
     return (
-      <div className="finance-page" role="alert">
+      <div className="finance-page finance-page--narrow" role="alert">
         Category could not be opened: {error}
       </div>
     );
   if (!category || category.archivedAt !== undefined || category.isSystem)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--narrow">
         <h1>Category unavailable</h1>
         <p>This category could not be found or cannot be edited.</p>
         <button onClick={() => router.push('/categories')}>Back to categories</button>

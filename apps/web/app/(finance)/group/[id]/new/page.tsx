@@ -9,7 +9,7 @@ export default function NewGroupExpensePage() {
   return (
     <React.Suspense
       fallback={
-        <main className="finance-page">
+        <main className="finance-page finance-page--narrow">
           <p className="finance-muted" role="status">
             Opening group expense form…
           </p>

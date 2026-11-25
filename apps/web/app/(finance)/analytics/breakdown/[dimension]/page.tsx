@@ -265,7 +265,7 @@ export default function AnalyticsBreakdownPage() {
     (result && !result.item && !rangeLoading && !rangeError);
 
   return (
-    <div className="finance-page" style={{ gap: 24 }}>
+    <div className="finance-page finance-page--wide" style={{ gap: 24 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} aria-hidden="true" />

@@ -478,13 +478,13 @@ export default function GroupSettingsPage() {
     );
   if (groupsLoading && !group)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--narrow">
         <ListSkeleton rows={5} />
       </div>
     );
   if (!group)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--narrow">
         <Link className="finance-secondary-action" href="/groups">
           ‹ Groups
         </Link>

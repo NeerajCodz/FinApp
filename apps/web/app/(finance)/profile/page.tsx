@@ -105,7 +105,7 @@ export default function ProfilePage() {
   }
   return (
     <>
-      <div className="finance-page">
+      <div className="finance-page finance-page--medium">
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="title">Profile</Typography>
           <IconButton

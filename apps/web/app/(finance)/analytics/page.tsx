@@ -684,7 +684,10 @@ export default function AnalyticsPage() {
     );
 
   return (
-    <div className="finance-page" style={{ display: 'grid', gap: 14, paddingBottom: 88 }}>
+    <div
+      className="finance-page finance-page--wide"
+      style={{ display: 'grid', gap: 14, paddingBottom: 88 }}
+    >
       <AnalyticsHeader onExport={downloadCsv} />
 
       <AnalyticsFilters

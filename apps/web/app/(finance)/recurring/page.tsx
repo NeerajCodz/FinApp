@@ -186,7 +186,7 @@ export default function RecurringPage() {
 
   if (!userId)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--medium">
         <section className="finance-welcome">
           <p className="finance-kicker">REPEAT, WITHOUT AUTOPILOT</p>
           <h1>Recurring</h1>
@@ -199,7 +199,7 @@ export default function RecurringPage() {
     );
   const loadError = rulesState.error || accountsState.error;
   return (
-    <div className="finance-page">
+    <div className="finance-page finance-page--medium">
       <RecurringIndexView
         rules={rules.map((rule) => ({ ...rule, id: recordId(rule) }))}
         accounts={accounts.map((account) => ({ ...account, id: recordId(account) }))}

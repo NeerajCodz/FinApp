@@ -55,7 +55,7 @@ export default function RecurringDetailPage() {
   }
 
   return (
-    <div className="finance-page">
+    <div className="finance-page finance-page--narrow">
       <RecurringDetailView
         rule={rule ? { ...rule, id: idOf(rule) } : null}
         accountName={account?.name}

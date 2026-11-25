@@ -127,7 +127,7 @@ export default function EditProfilePage() {
     }
   }
   return (
-    <div className="finance-page">
+    <div className="finance-page finance-page--narrow">
       <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <IconButton
           label="Go back to profile"

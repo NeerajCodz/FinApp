@@ -103,7 +103,7 @@ export default function GroupAnalyticsPage() {
 
   if (!userId)
     return (
-      <main className="finance-page">
+      <main className="finance-page finance-page--wide">
         <h1>Group analytics</h1>
         <p>Sign in to view saved group records.</p>
         <Link className="finance-secondary-action" href="/sign-in">
@@ -113,13 +113,13 @@ export default function GroupAnalyticsPage() {
     );
   if (groupsLoading)
     return (
-      <main className="finance-page">
+      <main className="finance-page finance-page--wide">
         <p role="status">Loading group analytics…</p>
       </main>
     );
   if (!group)
     return (
-      <main className="finance-page">
+      <main className="finance-page finance-page--wide">
         <Link className="finance-secondary-action" href="/groups">
           ← All groups
         </Link>
@@ -195,7 +195,7 @@ export default function GroupAnalyticsPage() {
 
   return (
     <main
-      className="finance-page"
+      className="finance-page finance-page--wide"
       style={{
         display: 'grid',
         gap: 24,

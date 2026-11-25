@@ -168,7 +168,7 @@ export default function SecuritySettingsPage() {
     );
 
   return (
-    <div className="finance-page">
+    <div className="finance-page finance-page--narrow">
       <header className="finance-page-heading">
         <div>
           <p className="finance-kicker">ACCOUNT ACCESS</p>
