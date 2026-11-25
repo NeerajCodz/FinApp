@@ -2,6 +2,15 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.7.1
+
+- No UI library changes (version aligned with the 1.7.1 release)
+
+## 1.7.0
+
+- `PeopleHubScreen`, `PeopleAnalyticsScreen`, `PersonAnalyticsScreen` (web and native),
+  `peopleHub` model helpers; native `ChartBar`, `ChatCircle`, `Target` icons
+
 ## 1.6.0
 
 - `VoiceBubble`, `useVoiceRecorder` (web and native), emoji picker, `chatHeaderSubtitle`, `recordTime`

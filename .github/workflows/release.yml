@@ -6,6 +6,12 @@ on:
   push:
     branches: [main]
     paths: [version.json]
+  # Rebuild an existing release's notes and version.json (e.g. after editing a changelog).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Product version to republish (blank = version.json)
+        required: false
 
 permissions:
   contents: write
@@ -34,30 +40,31 @@ jobs:
               git tag -a "$tag" -m "$tag" && git push origin "$tag"
             fi
           done
-      - name: Publish the product release with its version.json
+      - name: Publish the product release with notes and version.json
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          version=$(node -p "require('./version.json').version")
+          version="${INPUT_VERSION:-$(node -p "require('./version.json').version")}"
           tag="finapp-v$version"
           # The release's manifest is the root version.json exactly as committed at the tag:
           # https://github.com/<repo>/releases/download/finapp-v<version>/version.json
-          git show "$tag:version.json" > version.release.json
-          mkdir -p dist && cp version.release.json dist/version.json
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag exists; making sure version.json is attached."
-            if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -qx version.json; then
-              gh release upload "$tag" dist/version.json
-            fi
-            exit 0
+          mkdir -p dist
+          git show "$tag:version.json" > dist/version.json
+
+          # Notes: product + component changelog sections, the version table, then GitHub's list
+          # of merged pull requests since the previous product release.
+          node scripts/release-notes.mjs dist/version.json > notes.md
+          previous=$(git tag --list 'finapp-v*' | sort -V | awk -v t="$tag" '$0 == t { print prev; exit } { prev = $0 }')
+          args=(-f tag_name="$tag")
+          [ -n "$previous" ] && args+=(-f previous_tag_name="$previous")
+          if prs=$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" "${args[@]}" --jq .body); then
+            { echo; echo '## Pull requests'; echo; echo "$prs" | sed '1{/^## /d}'; } >> notes.md
           fi
-          # Notes: this version's section of CHANGELOG.md, plus the component manifest.
-          awk -v v="## $version" '$0 ~ "^## " { p = ($0 ~ "^" v) } p' CHANGELOG.md > notes.md
-          {
-            echo
-            echo '### Components'
-            echo '```json'
-            cat dist/version.json
-            echo '```'
-          } >> notes.md
-          gh release create "$tag" --title "FinApp $version" --notes-file notes.md dist/version.json
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "FinApp $version" --notes-file notes.md
+            gh release upload "$tag" dist/version.json --clobber
+          else
+            gh release create "$tag" --title "FinApp $version" --notes-file notes.md dist/version.json
+          fi

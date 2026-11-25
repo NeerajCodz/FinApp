@@ -2,6 +2,14 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.7.1
+
+- Redesigned public profile: cover, avatar, actions, stats, shared groups, mutual friends
+
+## 1.7.0
+
+- People tab hub with people cards and groups, Goals tab, people and person analytics screens
+
 ## 1.6.0
 
 - Voice messages via expo-audio (microphone permission added)

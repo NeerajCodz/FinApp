@@ -1,0 +1,70 @@
+#!/usr/bin/env node
+/**
+ * Builds the GitHub release notes for a product version from every changelog:
+ *
+ *   CHANGELOG.md                 product highlights (the `## <version>` section)
+ *   apps/web/CHANGELOG.md        web component section for components.web
+ *   apps/mobile/CHANGELOG.md     mobile section for components.mobile
+ *   packages/ui/CHANGELOG.md     ui section for components.ui
+ *   convex/CHANGELOG.md          backend section for components.backend
+ *
+ * The Release workflow appends GitHub's generated list of merged pull requests and attaches
+ * version.json. Usage: node scripts/release-notes.mjs [version.json path] > notes.md
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const manifestPath = process.argv[2] ?? join(root, 'version.json');
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+
+/** The body of `## <version>` in a changelog, without the heading ('' when missing). */
+export function section(markdown, version) {
+  const lines = markdown.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `## ${version}`);
+  if (start < 0) return '';
+  const end = lines.findIndex((line, index) => index > start && /^## /.test(line));
+  return lines
+    .slice(start + 1, end < 0 ? undefined : end)
+    .join('\n')
+    .trim();
+}
+
+const read = (file) => (existsSync(join(root, file)) ? readFileSync(join(root, file), 'utf8') : '');
+
+const components = [
+  ['Web', 'apps/web/CHANGELOG.md', manifest.components.web],
+  ['Mobile', 'apps/mobile/CHANGELOG.md', manifest.components.mobile],
+  ['UI library', 'packages/ui/CHANGELOG.md', manifest.components.ui],
+  ['Backend', 'convex/CHANGELOG.md', manifest.components.backend],
+];
+
+const out = [];
+const highlights = section(read('CHANGELOG.md'), manifest.version);
+out.push(highlights || `FinApp ${manifest.version}.`);
+
+const componentNotes = components
+  .map(([name, file, version]) => {
+    const body = section(read(file), version);
+    return body ? `### ${name} ${version}\n\n${body}` : '';
+  })
+  .filter(Boolean);
+if (componentNotes.length) out.push('## Components', ...componentNotes);
+
+out.push(
+  '## Versions',
+  [
+    '| Component | Version |',
+    '| --- | --- |',
+    `| Web | ${manifest.components.web} |`,
+    `| Mobile | ${manifest.components.mobile} (Android ${manifest.build.android}, iOS ${manifest.build.ios}) |`,
+    `| UI library | ${manifest.components.ui} |`,
+    `| Backend | ${manifest.components.backend} |`,
+    `| API / schema | ${manifest.compatibility.apiVersion} / ${manifest.compatibility.schemaVersion} |`,
+    `| Minimum mobile / web | ${manifest.compatibility.minimumMobileVersion} / ${manifest.compatibility.minimumWebVersion} |`,
+  ].join('\n'),
+  `The full manifest is attached as [\`version.json\`](https://github.com/NeerajCodz/FinApp/releases/download/finapp-v${manifest.version}/version.json).`,
+);
+
+process.stdout.write(`${out.join('\n\n')}\n`);
