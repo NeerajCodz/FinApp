@@ -24,6 +24,27 @@ export const FINAI_LANGUAGES = [
   'Japanese',
   'Arabic',
 ] as const;
+/** How long FinAI chat attachments are kept before their files are deleted. */
+export const FINAI_ATTACHMENT_RETENTIONS = ['1h', '24h', '7d', '30d', 'never'] as const;
+export type FinaiAttachmentRetention = (typeof FINAI_ATTACHMENT_RETENTIONS)[number];
+
+/** Milliseconds for a retention choice, or null for "never". */
+export function attachmentRetentionMs(retention: FinaiAttachmentRetention): number | null {
+  const hour = 60 * 60 * 1000;
+  switch (retention) {
+    case '1h':
+      return hour;
+    case '24h':
+      return 24 * hour;
+    case '7d':
+      return 7 * 24 * hour;
+    case '30d':
+      return 30 * 24 * hour;
+    case 'never':
+      return null;
+  }
+}
+
 /** What FinAI may read. Each maps to a set of tools. */
 export const FINAI_DATA_SCOPES = ['money', 'planning', 'groups', 'people'] as const;
 
@@ -55,6 +76,10 @@ export type FinaiSettings = {
   showSteps: boolean;
   /** Show the floating FinAI button across the app. */
   showLauncher: boolean;
+  /** Attach images, PDFs and spreadsheets to FinAI chats. */
+  allowAttachments: boolean;
+  /** When attached files are deleted from storage (the chat keeps their names). */
+  attachmentRetention: FinaiAttachmentRetention;
 };
 
 export const FINAI_DEFAULTS: FinaiSettings = {
@@ -71,6 +96,8 @@ export const FINAI_DEFAULTS: FinaiSettings = {
   autoCategorizeReceipts: true,
   showSteps: true,
   showLauncher: true,
+  allowAttachments: true,
+  attachmentRetention: '24h',
 };
 
 export const FINAI_LIMITS = { customInstructions: 1500, aboutMe: 1000 } as const;
@@ -127,6 +154,12 @@ export function resolveFinaiSettings(
     ),
     showSteps: bool(value.showSteps, FINAI_DEFAULTS.showSteps),
     showLauncher: bool(value.showLauncher, FINAI_DEFAULTS.showLauncher),
+    allowAttachments: bool(value.allowAttachments, FINAI_DEFAULTS.allowAttachments),
+    attachmentRetention: pick(
+      FINAI_ATTACHMENT_RETENTIONS,
+      value.attachmentRetention,
+      FINAI_DEFAULTS.attachmentRetention,
+    ),
   };
 }
 

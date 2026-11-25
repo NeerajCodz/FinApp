@@ -8,7 +8,7 @@ import { v } from 'convex/values';
 import { paginationOptsValidator } from 'convex/server';
 import { api, internal } from '../_generated/api';
 import type { Doc, Id } from '../_generated/dataModel';
-import { action, internalMutation, mutation, query } from '../_generated/server';
+import { action, internalMutation, mutation, query, type QueryCtx } from '../_generated/server';
 import { getOptionalUser, requireUser } from '../shared/auth';
 import { buildA2uiMessages } from './a2ui';
 import { actionViews } from './actions';
@@ -17,12 +17,15 @@ import { assistantTools } from './assistantTools';
 import { aiLimits, finaiAgent } from './config';
 import { aiError, aiErrorCode } from './errors';
 import { generateText, isGeminiConfigured } from './gemini';
-import type { GeminiContent } from './geminiChat';
+import type { GeminiContent, GeminiContentPart } from './geminiChat';
 import { assistantSystemPrompt } from './prompts';
 import { finaiPreferencePrompt, finaiToolAllowed } from '../shared/finaiSettings';
 import { chatForUser } from './keys';
 import { manageTools } from './manageTools';
+import { importTools } from './importTools';
 import { createStreamWriter } from './streamWriter';
+import { deleteConversationAttachments, linkAttachments, presentAttachment } from './attachments';
+import { attachmentParts } from './attachmentContent';
 import { finaiStage, finaiStep } from './validators';
 import { consumeAiQuota } from './usage';
 
@@ -119,7 +122,14 @@ export const markRead = mutation({
   },
 });
 
-function shapeMessage(row: Doc<'finaiMessages'>, actions: Awaited<ReturnType<typeof actionViews>>) {
+type PresentedAttachment = Awaited<ReturnType<typeof presentAttachment>>;
+
+function shapeMessage(
+  row: Doc<'finaiMessages'>,
+  actions: Awaited<ReturnType<typeof actionViews>>,
+  attachments: Map<string, PresentedAttachment[]>,
+) {
+  const files = attachments.get(String(row._id));
   return {
     id: row._id,
     role: row.role,
@@ -131,6 +141,7 @@ function shapeMessage(row: Doc<'finaiMessages'>, actions: Awaited<ReturnType<typ
     ...(row.a2ui ? { a2ui: row.a2ui } : {}),
     ...(row.errorCode ? { errorCode: row.errorCode } : {}),
     actions: actions.get(String(row._id)) ?? [],
+    ...(files?.length ? { attachments: files } : {}),
     createdAt: row.createdAt,
   };
 }
@@ -155,7 +166,23 @@ export const messages = query({
       result.page.filter((row) => row.role === 'assistant').map((row) => String(row._id)),
       user._id,
     );
-    return { ...result, page: result.page.map((row) => shapeMessage(row, actions)) };
+    const attachments = new Map<string, PresentedAttachment[]>();
+    for (const row of result.page) {
+      if (!row.attachments?.length) continue;
+      const files = await Promise.all(row.attachments.map((id) => ctx.db.get(id)));
+      attachments.set(
+        String(row._id),
+        await Promise.all(
+          files
+            .filter((file): file is Doc<'finaiAttachments'> => !!file && file.userId === user._id)
+            .map((file) => presentAttachment(ctx, file)),
+        ),
+      );
+    }
+    return {
+      ...result,
+      page: result.page.map((row) => shapeMessage(row, actions, attachments)),
+    };
   },
 });
 
@@ -180,6 +207,7 @@ export const deleteConversation = mutation({
       for (const stored of actions) await ctx.db.delete(stored._id);
       await ctx.db.delete(row._id);
     }
+    await deleteConversationAttachments(ctx, conversationId);
     await ctx.db.delete(conversationId);
     return conversationId;
   },
@@ -201,17 +229,40 @@ export const createConversation = mutation({
   },
 });
 
+/** An earlier turn for the model: its text plus the files it carried (by name and id). */
+async function turnText(ctx: { db: QueryCtx['db'] }, row: Doc<'finaiMessages'>) {
+  if (!row.attachments?.length) return row.text;
+  const files = await Promise.all(row.attachments.map((id) => ctx.db.get(id)));
+  const names = files
+    .filter((file): file is Doc<'finaiAttachments'> => !!file)
+    .map(
+      (file) =>
+        `"${file.name}" (id: ${file._id}, ${file.kind}${file.deletedAt !== undefined ? ', deleted' : ''})`,
+    );
+  return `${row.text}${row.text ? '\n' : ''}[Attached: ${names.join(', ')}]`;
+}
+
 /**
  * Stores the prompt and an assistant placeholder (creating the conversation if needed), after
  * counting one chat request. Returns the earlier turns for the model.
  */
 export const begin = internalMutation({
-  args: { conversationId: v.optional(v.id('finaiConversations')), text: v.string() },
+  args: {
+    conversationId: v.optional(v.id('finaiConversations')),
+    text: v.string(),
+    attachmentIds: v.optional(v.array(v.id('finaiAttachments'))),
+  },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     const text = args.text.trim();
-    if (!text || text.length > finaiAgent.maxPromptChars) throw new Error('INVALID_PROMPT');
+    const attachmentIds = args.attachmentIds ?? [];
+    if ((!text && !attachmentIds.length) || text.length > finaiAgent.maxPromptChars)
+      throw new Error('INVALID_PROMPT');
+    // An attachment-only message is titled and previewed by its first file's name.
+    const firstFile = attachmentIds.length ? await ctx.db.get(attachmentIds[0]!) : null;
+    const label =
+      text || (firstFile && firstFile.userId === user._id ? `📎 ${firstFile.name}` : '📎 Files');
     const now = Date.now();
     let conversationId = args.conversationId;
     if (conversationId) {
@@ -232,12 +283,12 @@ export const begin = internalMutation({
     }
     await consumeAiQuota(ctx, user._id, 'chat', now);
     const title =
-      text.length > TITLE_FALLBACK_CHARS ? `${text.slice(0, TITLE_FALLBACK_CHARS - 1)}…` : text;
+      label.length > TITLE_FALLBACK_CHARS ? `${label.slice(0, TITLE_FALLBACK_CHARS - 1)}…` : label;
     if (!conversationId)
       conversationId = await ctx.db.insert('finaiConversations', {
         userId: user._id,
         title,
-        preview: text.slice(0, 120),
+        preview: label.slice(0, 120),
         createdAt: now,
         updatedAt: now,
       });
@@ -248,7 +299,7 @@ export const begin = internalMutation({
     const isNew = !hasMessages;
     await ctx.db.patch(conversationId, {
       updatedAt: now,
-      preview: text.slice(0, 120),
+      preview: label.slice(0, 120),
       working: true,
       unreadAt: undefined,
       ...(isNew ? { title } : {}),
@@ -259,7 +310,7 @@ export const begin = internalMutation({
       .withIndex('by_conversation_createdAt', (q) => q.eq('conversationId', conversationId!))
       .order('desc')
       .take(finaiAgent.historyTurns);
-    await ctx.db.insert('finaiMessages', {
+    const promptId = await ctx.db.insert('finaiMessages', {
       conversationId,
       userId: user._id,
       role: 'user',
@@ -268,6 +319,14 @@ export const begin = internalMutation({
       createdAt: now,
       updatedAt: now,
     });
+    const linked = await linkAttachments(ctx, {
+      userId: user._id,
+      conversationId,
+      messageId: promptId,
+      attachmentIds,
+      now,
+    });
+    if (linked.length) await ctx.db.patch(promptId, { attachments: linked });
     const replyId = await ctx.db.insert('finaiMessages', {
       conversationId,
       userId: user._id,
@@ -284,10 +343,13 @@ export const begin = internalMutation({
       replyId,
       isNew,
       userId: user._id,
-      history: earlier
-        .reverse()
-        .filter((row) => row.status === 'done' && row.text.trim())
-        .map((row) => ({ role: row.role, text: row.text })),
+      attachmentIds: linked,
+      history: await Promise.all(
+        earlier
+          .reverse()
+          .filter((row) => row.status === 'done' && (row.text.trim() || row.attachments?.length))
+          .map(async (row) => ({ role: row.role, text: await turnText(ctx, row) })),
+      ),
     };
   },
 });
@@ -394,15 +456,19 @@ export const consumeUtility = internalMutation({
 export function historyContents(
   history: readonly { role: 'user' | 'assistant'; text: string }[],
   prompt: string,
+  attachments: GeminiContentPart[] = [],
 ): GeminiContent[] {
   const contents: GeminiContent[] = [];
-  for (const turn of [...history, { role: 'user' as const, text: prompt }]) {
+  const current = prompt || (attachments.length ? 'Please look at the attached files.' : prompt);
+  for (const turn of [...history, { role: 'user' as const, text: current }]) {
     const role = turn.role === 'assistant' ? 'model' : 'user';
     const last = contents[contents.length - 1];
     if (last && last.role === role) last.parts.push({ text: turn.text });
     else contents.push({ role, parts: [{ text: turn.text }] });
   }
   while (contents[0]?.role === 'model') contents.shift();
+  // Files sent with this message go with the prompt (earlier ones are named in their turn).
+  if (attachments.length) contents[contents.length - 1]!.parts.push(...attachments);
   return contents;
 }
 
@@ -424,7 +490,11 @@ async function nameConversation(prompt: string, reply: string): Promise<string |
 }
 
 export const send = action({
-  args: { conversationId: v.optional(v.id('finaiConversations')), text: v.string() },
+  args: {
+    conversationId: v.optional(v.id('finaiConversations')),
+    text: v.string(),
+    attachmentIds: v.optional(v.array(v.id('finaiAttachments'))),
+  },
   handler: async (
     ctx,
     args,
@@ -480,8 +550,20 @@ ${finaiPreferencePrompt(settings)}`;
         },
         system,
         ...(byok.chat ? { chat: byok.chat } : {}),
-        contents: historyContents(started.history, args.text.trim()),
-        tools: [...assistantTools, ...manageTools].filter((tool) =>
+        contents: historyContents(
+          started.history,
+          args.text.trim(),
+          started.attachmentIds.length
+            ? await attachmentParts(
+                ctx,
+                await ctx.runQuery(internal.ai.attachments.forModel, {
+                  userId: started.userId,
+                  ids: started.attachmentIds,
+                }),
+              )
+            : [],
+        ),
+        tools: [...assistantTools, ...manageTools, ...importTools].filter((tool) =>
           finaiToolAllowed(settings, tool.name),
         ),
         onProgress: async (step: AgentProgress) => {

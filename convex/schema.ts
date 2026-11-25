@@ -770,6 +770,35 @@ export default defineSchema({
     createdAt: timestamp,
     updatedAt: timestamp,
   }).index('by_user_updatedAt', ['userId', 'updatedAt']),
+  /**
+   * Files attached to FinAI chats (images, PDFs, spreadsheets, text). The file is deleted from
+   * storage at `expiresAt` (FinAI setting, default 24h; unsent uploads after 1h); the row stays so
+   * the chat still shows the name.
+   */
+  finaiAttachments: defineTable({
+    userId: v.id('users'),
+    conversationId: v.optional(v.id('finaiConversations')),
+    /** The user message it was sent with (unset while it waits in the composer). */
+    messageId: v.optional(v.id('finaiMessages')),
+    /** Cleared once the file is deleted. */
+    storageId: v.optional(v.id('_storage')),
+    name: v.string(),
+    mimeType: v.string(),
+    kind: v.union(
+      v.literal('image'),
+      v.literal('pdf'),
+      v.literal('spreadsheet'),
+      v.literal('text'),
+    ),
+    size: v.number(),
+    createdAt: timestamp,
+    expiresAt: v.optional(timestamp),
+    deletedAt: v.optional(timestamp),
+  })
+    .index('by_message', ['messageId'])
+    .index('by_conversation', ['conversationId'])
+    .index('by_storage', ['storageId'])
+    .index('by_expiresAt', ['expiresAt']),
   finaiMessages: defineTable({
     conversationId: v.id('finaiConversations'),
     userId: v.id('users'),
@@ -784,6 +813,8 @@ export default defineSchema({
     toolsUsed: v.optional(v.array(v.string())),
     /** Tool calls made for this reply, in order. */
     steps: v.optional(v.array(finaiStep)),
+    /** Files sent with a user message (details in `finaiAttachments`). */
+    attachments: v.optional(v.array(v.id('finaiAttachments'))),
     createdAt: timestamp,
     updatedAt: timestamp,
   }).index('by_conversation_createdAt', ['conversationId', 'createdAt']),

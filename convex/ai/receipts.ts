@@ -87,9 +87,12 @@ export const generateUploadUrl = mutation({
   },
 });
 
-/** Image ids already used by chat messages; those are never receipt scratch uploads. */
-async function storageInUse(ctx: MutationCtx, storageId: Id<'_storage'>): Promise<boolean> {
-  const [directMessage, groupMessage] = await Promise.all([
+/**
+ * Files already used by chat messages or FinAI attachments; those are never scratch uploads
+ * (neither a receipt nor an attachment may claim or delete them).
+ */
+export async function storageInUse(ctx: MutationCtx, storageId: Id<'_storage'>): Promise<boolean> {
+  const [directMessage, groupMessage, attachment] = await Promise.all([
     ctx.db
       .query('directMessages')
       .withIndex('by_storage', (q) => q.eq('storageId', storageId))
@@ -98,8 +101,12 @@ async function storageInUse(ctx: MutationCtx, storageId: Id<'_storage'>): Promis
       .query('groupMessages')
       .withIndex('by_storage', (q) => q.eq('storageId', storageId))
       .first(),
+    ctx.db
+      .query('finaiAttachments')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .first(),
   ]);
-  return Boolean(directMessage || groupMessage);
+  return Boolean(directMessage || groupMessage || attachment);
 }
 
 /**

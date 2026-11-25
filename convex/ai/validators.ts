@@ -63,6 +63,8 @@ export const finaiActionKind = v.union(
   v.literal('entity.delete'),
   /** Deletes a Trash item for good. */
   v.literal('trash.purge'),
+  /** Adds every row of a spreadsheet attachment as transactions. */
+  v.literal('transaction.import'),
 );
 export type FinaiActionKind = Infer<typeof finaiActionKind>;
 

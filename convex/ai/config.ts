@@ -113,6 +113,20 @@ export const receiptUpload = {
   ticketTtlMs: 15 * 60 * 1000,
 } as const;
 
+/** FinAI chat attachments. */
+export const finaiAttachmentLimits = {
+  maxBytes: 10 * 1024 * 1024,
+  perMessage: 5,
+  /** Uploads that are never sent are deleted after this long. */
+  pendingTtlMs: 60 * 60 * 1000,
+  /** An upload must be registered within this long of reaching storage. */
+  registerWindowMs: 15 * 60 * 1000,
+  /** Images and PDFs sent inline to the model per message (Gemini's inline limit is ~20MB). */
+  maxInlineBytes: 14 * 1024 * 1024,
+  /** Spreadsheet/text characters shown to the model per message (the import tool reads all). */
+  maxTextChars: 40_000,
+} as const;
+
 /** FinAI agent loop: the in-app assistant and `@finai` replies in chats. */
 export const finaiAgent = {
   /** Gemini rounds per reply (each round may call several tools). */
