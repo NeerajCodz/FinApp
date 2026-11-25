@@ -277,3 +277,12 @@ export {
   type ReceiptReview,
   type ReceiptScanCardProps,
 } from './ReceiptScan';
+export { PeopleHubScreen, type PeopleHubScreenProps } from './PeopleHubScreen';
+export * from '../peopleHub';
+export {
+  PeopleAnalyticsScreen,
+  PersonAnalyticsScreen,
+  type PeopleAnalyticsScreenProps,
+  type PersonAnalyticsScreenProps,
+  type PersonAnalyticsData,
+} from './PeopleAnalyticsScreens';

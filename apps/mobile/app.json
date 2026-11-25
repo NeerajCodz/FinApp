@@ -2,7 +2,7 @@
   "expo": {
     "name": "Finapp",
     "slug": "finapp",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "scheme": "finapp",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -36,12 +36,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.neerajcodz.finapp",
       "associatedDomains": ["applinks:fin.neeraj.fyi"],
-      "buildNumber": "14"
+      "buildNumber": "15"
     },
     "android": {
       "package": "com.neerajcodz.finapp",
       "allowBackup": false,
-      "versionCode": 14,
+      "versionCode": 15,
       "intentFilters": [
         {
           "action": "VIEW",

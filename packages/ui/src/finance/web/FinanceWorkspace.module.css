@@ -184,3 +184,9 @@
     transition: none;
   }
 }
+
+.mobileHeaderAction {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}

@@ -1,0 +1,296 @@
+.page {
+  display: grid;
+  gap: 22px;
+  width: 100%;
+  max-width: 1080px;
+  margin-inline: auto;
+  color: var(--finapp-foreground);
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header h1 {
+  margin: 4px 0 0;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.eyebrow {
+  color: var(--finapp-primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 12px;
+  background: var(--finapp-surface-subtle);
+  color: var(--finapp-foreground);
+  cursor: pointer;
+}
+
+.iconButton:hover,
+.cardAnalytics:hover {
+  border-color: var(--finapp-primary);
+  color: var(--finapp-primary);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  background: var(--finapp-surface-subtle);
+  color: var(--finapp-foreground-muted);
+}
+
+.search:focus-within {
+  border-color: var(--finapp-primary);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--finapp-foreground);
+  font: inherit;
+}
+
+.sectionTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--finapp-foreground);
+  cursor: pointer;
+}
+
+.sectionTitle h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.sectionTitle:hover {
+  color: var(--finapp-primary);
+}
+
+.sectionTitle:focus-visible,
+.personMain:focus-visible,
+.groupMain:focus-visible,
+.cardAnalytics:focus-visible,
+.iconButton:focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 2px;
+}
+
+/* People: one horizontally scrolling row of cards. */
+.row {
+  display: flex;
+  gap: 12px;
+  margin: 0 -4px;
+  padding: 4px 4px 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.personCard {
+  position: relative;
+  flex: 0 0 136px;
+  min-height: 150px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 18px;
+  background: var(--finapp-card);
+  scroll-snap-align: start;
+}
+
+.personMain {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 10px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.personMain strong {
+  max-width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.personMain small,
+.groupCopy small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.avatarWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.activeDot {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--finapp-card);
+  border-radius: 50%;
+  background: var(--finapp-positive);
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.cardAnalytics {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 9px;
+  background: var(--finapp-popover);
+  color: var(--finapp-foreground-muted);
+  cursor: pointer;
+}
+
+/* Groups: cards in a responsive grid. */
+.groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.groupCard {
+  position: relative;
+  min-height: 76px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 18px;
+  background: var(--finapp-card);
+}
+
+.groupMain {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 46px 14px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupMain:hover,
+.personMain:hover {
+  background: var(--finapp-surface-subtle);
+}
+
+.groupCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.groupCopy strong {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.groupCopy [data-tone='positive'] {
+  color: var(--finapp-income);
+}
+
+.groupCopy [data-tone='negative'] {
+  color: var(--finapp-expense);
+}
+
+.groupCard .cardAnalytics {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.empty {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.9rem;
+}
+
+.skeleton {
+  background: var(--finapp-surface-subtle);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

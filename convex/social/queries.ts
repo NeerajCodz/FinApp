@@ -305,3 +305,215 @@ export const relationship = query({
     };
   },
 });
+
+/** People shown on the People hub at most (friends and direct-message contacts). */
+const PEOPLE_HUB_LIMIT = 60;
+const PEOPLE_HUB_UNREAD_CAP = 9;
+
+/**
+ * The People hub row: everyone you're friends with or have a direct conversation with, with
+ * unread counts and (when they allow it) whether they're active or when they were last seen.
+ * Unread people first, then most recent conversation.
+ */
+export const peopleHub = query({
+  args: {},
+  handler: async (ctx) => {
+    const actor = await getOptionalUser(ctx);
+    if (!actor || actor.deletedAt !== undefined) return [];
+    const [friendLow, friendHigh, convLow, convHigh] = await Promise.all([
+      ctx.db
+        .query('friendships')
+        .withIndex('by_low', (q) => q.eq('userLowId', actor._id))
+        .collect(),
+      ctx.db
+        .query('friendships')
+        .withIndex('by_high', (q) => q.eq('userHighId', actor._id))
+        .collect(),
+      ctx.db
+        .query('directConversations')
+        .withIndex('by_pair', (q) => q.eq('userLowId', actor._id))
+        .collect(),
+      ctx.db
+        .query('directConversations')
+        .withIndex('by_high', (q) => q.eq('userHighId', actor._id))
+        .collect(),
+    ]);
+    const conversationByPeer = new Map<string, Doc<'directConversations'>>();
+    for (const row of [...convLow, ...convHigh]) {
+      const peer = row.userLowId === actor._id ? row.userHighId : row.userLowId;
+      conversationByPeer.set(String(peer), row);
+    }
+    const peerIds = new Set<string>([
+      ...friendLow.map((row) => String(row.userHighId)),
+      ...friendHigh.map((row) => String(row.userLowId)),
+      ...conversationByPeer.keys(),
+    ]);
+    const now = Date.now();
+    const rows = await Promise.all(
+      [...peerIds].slice(0, PEOPLE_HUB_LIMIT * 2).map(async (rawId) => {
+        const userId = rawId as Id<'users'>;
+        const conversation = conversationByPeer.get(rawId);
+        const [user, settings, presence, pointer] = await Promise.all([
+          ctx.db.get(userId),
+          ctx.db
+            .query('userSettings')
+            .withIndex('by_user', (q) => q.eq('userId', userId))
+            .unique(),
+          ctx.db
+            .query('presence')
+            .withIndex('by_user', (q) => q.eq('userId', userId))
+            .unique(),
+          conversation
+            ? ctx.db
+                .query('chatReadPointers')
+                .withIndex('by_scope_user', (q) =>
+                  q
+                    .eq('scopeType', 'direct')
+                    .eq('scopeId', conversation._id)
+                    .eq('userId', actor._id),
+                )
+                .unique()
+            : Promise.resolve(null),
+        ]);
+        if (!user || user.deletedAt !== undefined) return null;
+        let unreadCount = 0;
+        if (conversation) {
+          const lastReadAt = pointer?.lastReadAt ?? 0;
+          const recent = await ctx.db
+            .query('directMessages')
+            .withIndex('by_conversation_createdAt', (q) =>
+              q.eq('conversationId', conversation._id).gt('createdAt', lastReadAt),
+            )
+            .order('desc')
+            .take(PEOPLE_HUB_UNREAD_CAP + 1);
+          unreadCount = recent.filter((message) => message.senderId !== actor._id).length;
+        }
+        const showActive = settings?.showActive ?? true;
+        const showLastSeen = settings?.showLastSeen ?? true;
+        return {
+          ...safeProfile(user),
+          avatarUrl: await avatarUrlForUser(ctx, user),
+          conversationId: conversation?._id ?? null,
+          lastMessageAt: conversation?.updatedAt ?? null,
+          unreadCount: Math.min(unreadCount, PEOPLE_HUB_UNREAD_CAP),
+          unreadCapped: unreadCount > PEOPLE_HUB_UNREAD_CAP,
+          active: showActive ? (presence?.activeUntil ?? 0) > now : null,
+          lastSeenAt: showLastSeen ? (presence?.lastSeenAt ?? null) : null,
+        };
+      }),
+    );
+    return rows
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort(
+        (a, b) =>
+          Number(b.unreadCount > 0) - Number(a.unreadCount > 0) ||
+          (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0) ||
+          a.displayName.localeCompare(b.displayName),
+      )
+      .slice(0, PEOPLE_HUB_LIMIT);
+  },
+});
+
+const ACTIVITY_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Messages read per conversation for analytics at most; older ones fall outside the window. */
+const ACTIVITY_MESSAGE_LIMIT = 2000;
+
+/**
+ * One person's analytics with you: direct messages per day for the last 30 days (sent and
+ * received), message mix, your shared groups and friendship status. Only for people you
+ * already share a conversation, friendship or group with.
+ */
+export const personAnalytics = query({
+  args: { userId: v.id('users'), tzOffsetMinutes: v.optional(v.number()) },
+  handler: async (ctx, { userId, tzOffsetMinutes = 0 }) => {
+    const actor = await getOptionalUser(ctx);
+    if (!actor || actor.deletedAt !== undefined || actor._id === userId) return null;
+    const person = await ctx.db.get(userId);
+    if (!person || person.deletedAt !== undefined) return null;
+    const lowId = String(actor._id) < String(userId) ? actor._id : userId;
+    const highId = lowId === actor._id ? userId : actor._id;
+    const [friendship, conversation, actorGroups, personGroups, presence, settings] =
+      await Promise.all([
+        ctx.db
+          .query('friendships')
+          .withIndex('by_pair', (q) => q.eq('userLowId', lowId).eq('userHighId', highId))
+          .unique(),
+        ctx.db
+          .query('directConversations')
+          .withIndex('by_pair', (q) => q.eq('userLowId', lowId).eq('userHighId', highId))
+          .unique(),
+        ctx.db
+          .query('groupMembers')
+          .withIndex('by_user', (q) => q.eq('userId', actor._id))
+          .collect(),
+        ctx.db
+          .query('groupMembers')
+          .withIndex('by_user', (q) => q.eq('userId', userId))
+          .collect(),
+        ctx.db
+          .query('presence')
+          .withIndex('by_user', (q) => q.eq('userId', userId))
+          .unique(),
+        ctx.db
+          .query('userSettings')
+          .withIndex('by_user', (q) => q.eq('userId', userId))
+          .unique(),
+      ]);
+    const viewerGroupIds = new Set(actorGroups.map((row) => String(row.groupId)));
+    const sharedGroupIds = personGroups
+      .map((row) => row.groupId)
+      .filter((id) => viewerGroupIds.has(String(id)));
+    if (!friendship && !conversation && sharedGroupIds.length === 0) return null;
+
+    const now = Date.now();
+    const offset = tzOffsetMinutes * 60_000;
+    const todayStart = Math.floor((now - offset) / DAY_MS) * DAY_MS + offset;
+    const windowStart = todayStart - (ACTIVITY_DAYS - 1) * DAY_MS;
+    const days = Array.from({ length: ACTIVITY_DAYS }, (_, index) => ({
+      dayStart: windowStart + index * DAY_MS,
+      sent: 0,
+      received: 0,
+    }));
+    const mix = { text: 0, image: 0, audio: 0, ai: 0 };
+    let total = 0;
+    if (conversation) {
+      const recent = await ctx.db
+        .query('directMessages')
+        .withIndex('by_conversation_createdAt', (q) =>
+          q.eq('conversationId', conversation._id).gte('createdAt', windowStart),
+        )
+        .take(ACTIVITY_MESSAGE_LIMIT);
+      for (const message of recent) {
+        const index = Math.floor((message.createdAt - windowStart) / DAY_MS);
+        const day = days[index];
+        if (!day) continue;
+        if (message.senderId === actor._id && message.kind !== 'ai') day.sent += 1;
+        else day.received += 1;
+        mix[message.kind] += 1;
+        total += 1;
+      }
+    }
+    const groups = await Promise.all(
+      sharedGroupIds.map(async (id) => {
+        const group = await ctx.db.get(id);
+        return group && group.archivedAt === undefined
+          ? { id, name: group.name, icon: group.icon, color: group.color }
+          : null;
+      }),
+    );
+    return {
+      profile: { ...safeProfile(person), avatarUrl: await avatarUrlForUser(ctx, person) },
+      friends: friendship !== null,
+      friendsSince: friendship?._creationTime ?? null,
+      conversationId: conversation?._id ?? null,
+      conversationSince: conversation?.createdAt ?? null,
+      active: (settings?.showActive ?? true) ? (presence?.activeUntil ?? 0) > now : null,
+      lastSeenAt: (settings?.showLastSeen ?? true) ? (presence?.lastSeenAt ?? null) : null,
+      days,
+      totalMessages: total,
+      mix,
+      sharedGroups: groups.filter((group) => group !== null),
+    };
+  },
+});

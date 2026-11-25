@@ -10,12 +10,15 @@ export function FinanceWorkspace({
   navigation,
   brandLink,
   mobileNavigation,
+  mobileHeaderAction,
   onAdd,
 }: {
   children: ReactNode;
   navigation: ReactNode;
   brandLink?: ReactNode;
   mobileNavigation?: ReactNode;
+  /** Top-right of the phone header (e.g. the profile avatar). */
+  mobileHeaderAction?: ReactNode;
   onAdd?: () => void;
 }) {
   return (
@@ -28,7 +31,12 @@ export function FinanceWorkspace({
         </nav>
       </aside>
       <div className={styles.main}>
-        <header className={styles.mobileHeader}>{brandLink ?? <FinanceBrand />}</header>
+        <header className={styles.mobileHeader}>
+          {brandLink ?? <FinanceBrand />}
+          {mobileHeaderAction ? (
+            <span className={styles.mobileHeaderAction}>{mobileHeaderAction}</span>
+          ) : null}
+        </header>
         <div className={styles.content}>{children}</div>
         {mobileNavigation}
       </div>
