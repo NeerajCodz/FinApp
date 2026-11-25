@@ -2,6 +2,10 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.6.0
+
+- `VoiceBubble`, `useVoiceRecorder` (web and native), emoji picker, `chatHeaderSubtitle`, `recordTime`
+
 ## 1.5.2
 
 - `User` icon for the native tab bar

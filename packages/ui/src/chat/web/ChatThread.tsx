@@ -4,9 +4,12 @@ import React from 'react';
 import {
   ArrowDown,
   Image as ImageIcon,
+  Microphone,
   PaperPlaneTilt,
   PushPin,
   PushPinSlash,
+  Smiley,
+  Trash,
   X,
 } from '@phosphor-icons/react';
 import { Avatar } from '../../web/fields';
@@ -17,6 +20,9 @@ import {
   CHAT_NEAR_BOTTOM_PX,
   CHAT_REACTIONS,
   CHAT_TEXT_LIMIT,
+  COMPOSER_EMOJI,
+  formatVoiceDuration,
+  insertAtCaret,
   messageAccessibleLabel,
   pinPreview,
   receiptLabel,
@@ -28,6 +34,7 @@ import {
   type ChatRow,
 } from '../model';
 import styles from './ChatThread.module.css';
+import { useVoiceRecorder, VoiceBubble, type VoiceClip } from './voice';
 import { ThinkingOrb } from '../../web/ThinkingOrb';
 import { FinaiLogo } from '../../ai/web/FinaiLogo';
 import { FinaiMarkdown } from '../../ai/web/FinaiMarkdown';
@@ -54,6 +61,8 @@ export type ChatComposerProps = {
   uploading?: boolean;
   /** Handles offered when the user types `@` (e.g. FinAI). */
   mentions?: readonly MentionOption[];
+  /** Sends a recorded voice clip; when set, an empty composer shows a mic instead of send. */
+  onSendVoice?: (clip: VoiceClip) => void;
 };
 
 export type ChatThreadProps = {
@@ -509,6 +518,12 @@ function Row({
               ) : (
                 <span>Image is no longer available.</span>
               )
+            ) : message.kind === 'audio' ? (
+              <VoiceBubble
+                src={message.audioUrl}
+                durationMs={message.durationMs}
+                mine={message.mine}
+              />
             ) : message.kind === 'ai' && message.ai ? (
               <AiBody message={message} />
             ) : (
@@ -634,19 +649,43 @@ function Composer(c: ChatComposerProps) {
   const [caret, setCaret] = React.useState<number | null>(null);
   const [highlight, setHighlight] = React.useState(0);
   const [dismissed, setDismissed] = React.useState<string | null>(null);
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const recorder = useVoiceRecorder();
+  const recording = recorder.state === 'recording';
+  // With nothing typed the action button records a voice message instead of sending.
+  const showMic = !!c.onSendVoice && !c.draft.trim() && !recording;
   const active = c.mentions?.length ? activeMention(c.draft, caret ?? c.draft.length) : null;
   const options = active ? mentionMatches(c.mentions!, active.query) : [];
   const open = options.length > 0 && dismissed !== c.draft;
+  const focusAt = (position: number) =>
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(position, position);
+    });
   const choose = (index: number) => {
     const option = options[index];
     if (!option) return;
     const next = applyMention(c.draft, option, caret ?? c.draft.length);
     c.onDraftChange(next.draft);
     setCaret(next.caret);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(next.caret, next.caret);
-    });
+    focusAt(next.caret);
+  };
+  const insertEmoji = (emoji: string) => {
+    const next = insertAtCaret(c.draft, emoji, caret);
+    c.onDraftChange(next.draft);
+    setCaret(next.caret);
+    focusAt(next.caret);
+  };
+  // Grow with the text, up to a few lines.
+  React.useLayoutEffect(() => {
+    const node = inputRef.current;
+    if (!node) return;
+    node.style.height = 'auto';
+    node.style.height = `${Math.min(node.scrollHeight, 132)}px`;
+  }, [c.draft]);
+  const finishRecording = async () => {
+    const clip = await recorder.stop();
+    if (clip) c.onSendVoice?.(clip);
   };
   return (
     <form
@@ -656,30 +695,13 @@ function Composer(c: ChatComposerProps) {
         if (canSend) c.onSend();
       }}
     >
-      {c.onAttachFile && (
-        <>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            hidden
-            aria-label={c.attachLabel ?? 'Attach image'}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = '';
-              if (file) c.onAttachFile?.(file);
-            }}
-          />
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label={c.attachLabel ?? 'Attach image'}
-            disabled={c.disabled || c.uploading}
-            onClick={() => fileRef.current?.click()}
-          >
-            <ImageIcon size={22} />
+      {recorder.error && (
+        <p className={styles.composerError} role="alert">
+          {recorder.error}{' '}
+          <button type="button" onClick={recorder.clearError}>
+            Dismiss
           </button>
-        </>
+        </p>
       )}
       {open && (
         <ul className={styles.mentions} role="listbox" aria-label="Mention suggestions">
@@ -692,7 +714,7 @@ function Composer(c: ChatComposerProps) {
                 onClick={() => choose(index)}
               >
                 <span className={styles.aiAvatar} aria-hidden>
-                  <ThinkingOrb state="idle" size={16} />
+                  <FinaiLogo size={16} />
                 </span>
                 <span>
                   <strong>@{option.handle}</strong> {option.label}
@@ -703,56 +725,154 @@ function Composer(c: ChatComposerProps) {
           ))}
         </ul>
       )}
-      <textarea
-        ref={inputRef}
-        aria-label="Message"
-        aria-autocomplete={c.mentions?.length ? 'list' : undefined}
-        aria-expanded={c.mentions?.length ? open : undefined}
-        rows={1}
-        value={c.draft}
-        maxLength={CHAT_TEXT_LIMIT}
-        placeholder={c.placeholder ?? 'Write a message…'}
-        disabled={c.disabled}
-        onChange={(event) => {
-          c.onDraftChange(event.currentTarget.value);
-          setCaret(event.currentTarget.selectionStart);
-          setHighlight(0);
-        }}
-        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-        onBlur={c.onBlur}
-        onKeyDown={(event) => {
-          if (open) {
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-              event.preventDefault();
-              const step = event.key === 'ArrowDown' ? 1 : -1;
-              setHighlight((highlight + step + options.length) % options.length);
-              return;
-            }
-            if (event.key === 'Enter' || event.key === 'Tab') {
-              event.preventDefault();
-              choose(highlight);
-              return;
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              setDismissed(c.draft);
-              return;
-            }
-          }
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-            event.preventDefault();
-            if (canSend) c.onSend();
-          }
-        }}
-      />
-      <button
-        type="submit"
-        className={cx(styles.iconButton, styles.primary)}
-        aria-label="Send message"
-        disabled={!canSend}
-      >
-        <PaperPlaneTilt size={20} weight="fill" />
-      </button>
+      {emojiOpen && !recording && (
+        <div className={styles.emojiPanel} role="dialog" aria-label="Emoji">
+          {COMPOSER_EMOJI.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => insertEmoji(emoji)}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+      {recording ? (
+        <>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Cancel recording"
+            onClick={recorder.cancel}
+          >
+            <Trash size={20} />
+          </button>
+          <div className={styles.recordingBar} role="status" aria-live="polite">
+            <span className={styles.recordingDot} aria-hidden />
+            <span>Recording</span>
+            <span className={styles.recordingTime}>{formatVoiceDuration(recorder.elapsedMs)}</span>
+          </div>
+          <button
+            type="button"
+            className={cx(styles.iconButton, styles.primary)}
+            aria-label="Send voice message"
+            onClick={() => void finishRecording()}
+          >
+            <PaperPlaneTilt size={20} weight="fill" />
+          </button>
+        </>
+      ) : (
+        <>
+          <div className={styles.inputPill}>
+            <button
+              type="button"
+              className={styles.pillButton}
+              aria-label={emojiOpen ? 'Close emoji' : 'Add emoji'}
+              aria-expanded={emojiOpen}
+              disabled={c.disabled}
+              onClick={() => setEmojiOpen((value) => !value)}
+            >
+              <Smiley size={22} />
+            </button>
+            <textarea
+              ref={inputRef}
+              aria-label="Message"
+              aria-autocomplete={c.mentions?.length ? 'list' : undefined}
+              aria-expanded={c.mentions?.length ? open : undefined}
+              rows={1}
+              value={c.draft}
+              maxLength={CHAT_TEXT_LIMIT}
+              placeholder={c.placeholder ?? 'Message'}
+              disabled={c.disabled}
+              onChange={(event) => {
+                c.onDraftChange(event.currentTarget.value);
+                setCaret(event.currentTarget.selectionStart);
+                setHighlight(0);
+              }}
+              onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+              onBlur={c.onBlur}
+              onKeyDown={(event) => {
+                if (open) {
+                  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    const step = event.key === 'ArrowDown' ? 1 : -1;
+                    setHighlight((highlight + step + options.length) % options.length);
+                    return;
+                  }
+                  if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault();
+                    choose(highlight);
+                    return;
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setDismissed(c.draft);
+                    return;
+                  }
+                }
+                if (event.key === 'Escape' && emojiOpen) {
+                  setEmojiOpen(false);
+                  return;
+                }
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  if (canSend) c.onSend();
+                }
+              }}
+            />
+            {c.onAttachFile && (
+              <>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  aria-label={c.attachLabel ?? 'Attach image'}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = '';
+                    if (file) c.onAttachFile?.(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  className={styles.pillButton}
+                  aria-label={c.attachLabel ?? 'Attach image'}
+                  disabled={c.disabled || c.uploading}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <ImageIcon size={22} />
+                </button>
+              </>
+            )}
+          </div>
+          {showMic ? (
+            <button
+              type="button"
+              className={cx(styles.iconButton, styles.primary)}
+              aria-label="Record voice message"
+              disabled={c.disabled || c.uploading}
+              onClick={() => {
+                setEmojiOpen(false);
+                void recorder.start();
+              }}
+            >
+              <Microphone size={20} weight="fill" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className={cx(styles.iconButton, styles.primary)}
+              aria-label="Send message"
+              disabled={!canSend}
+            >
+              <PaperPlaneTilt size={20} weight="fill" />
+            </button>
+          )}
+        </>
+      )}
     </form>
   );
 }

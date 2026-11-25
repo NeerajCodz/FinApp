@@ -16,9 +16,12 @@ import {
   ArrowClockwise,
   ArrowDown,
   ImageSquare,
+  Microphone,
   PaperPlaneTilt,
   PushPin,
   PushPinSlash,
+  Smiley,
+  Trash,
   X,
 } from 'phosphor-react-native';
 import { Avatar } from '../../native/feedback';
@@ -32,6 +35,7 @@ import { ThinkingOrb } from '../../native/ThinkingOrb';
 import { FinaiLogo } from '../../ai/native/FinaiLogo';
 import { FinaiMarkdown } from '../../ai/native/FinaiMarkdown';
 import { FinaiSteps } from '../../ai/native/FinaiSteps';
+import { useVoiceRecorder, VoiceBubble, type NativeVoiceClip } from './voice';
 import {
   activeMention,
   applyMention,
@@ -48,6 +52,9 @@ import {
   CHAT_NEAR_BOTTOM_PX,
   CHAT_REACTIONS,
   CHAT_TEXT_LIMIT,
+  COMPOSER_EMOJI,
+  formatVoiceDuration,
+  insertAtCaret,
   messageAccessibleLabel,
   pinPreview,
   receiptLabel,
@@ -72,6 +79,8 @@ export type ChatComposerProps = {
   uploading?: boolean;
   /** Handles offered when the user types `@` (e.g. FinAI). */
   mentions?: readonly MentionOption[];
+  /** Sends a recorded voice clip; when set, an empty composer shows a mic instead of send. */
+  onSendVoice?: (clip: NativeVoiceClip) => void;
 };
 
 export type ChatThreadProps = {
@@ -646,7 +655,9 @@ function MessageRow({
               </Typography>
             </View>
           )}
-          {message.kind === 'image' ? (
+          {message.kind === 'audio' ? (
+            <VoiceBubble src={message.audioUrl} durationMs={message.durationMs} mine={mine} />
+          ) : message.kind === 'image' ? (
             message.imageUrl ? (
               <Pressable
                 accessibilityRole="imagebutton"
@@ -839,16 +850,43 @@ function Composer(c: ChatComposerProps) {
   const { tokens } = useTheme();
   const canSend = !c.disabled && !!c.draft.trim();
   const [selection, setSelection] = React.useState<{ start: number; end: number } | undefined>();
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const voice = useVoiceRecorder();
+  const onSendVoice = c.onSendVoice;
+  voice.onLimit.current = (clip) => {
+    if (clip) onSendVoice?.(clip);
+  };
+  // With nothing typed the action button records a voice message instead of sending.
+  const showMic = !!onSendVoice && !c.draft.trim() && !voice.recording;
   const caret = selection?.start ?? c.draft.length;
   const active = c.mentions?.length ? activeMention(c.draft, caret) : null;
   const options = active ? mentionMatches(c.mentions!, active.query) : [];
+  const insertEmoji = (emoji: string) => {
+    const next = insertAtCaret(c.draft, emoji, caret);
+    c.onDraftChange(next.draft);
+    setSelection({ start: next.caret, end: next.caret });
+  };
+  const roundButton = (primary: boolean) => ({
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: primary ? tokens.primary : 'transparent',
+  });
   return (
-    <View>
+    <View style={{ gap: 6 }}>
+      {voice.error ? (
+        <Pressable accessibilityRole="alert" onPress={voice.clearError}>
+          <Typography variant="caption" style={{ color: tokens.destructive }}>
+            {voice.error} (tap to dismiss)
+          </Typography>
+        </Pressable>
+      ) : null}
       {options.length > 0 && (
         <View
           accessibilityRole="menu"
           style={{
-            marginBottom: 6,
             padding: 6,
             borderRadius: 16,
             borderWidth: 1,
@@ -897,6 +935,38 @@ function Composer(c: ChatComposerProps) {
           ))}
         </View>
       )}
+      {emojiOpen && !voice.recording ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            padding: 6,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: tokens.borderSubtle,
+            backgroundColor: tokens.popover,
+          }}
+        >
+          {COMPOSER_EMOJI.map((emoji) => (
+            <Pressable
+              key={emoji}
+              accessibilityRole="button"
+              accessibilityLabel={`Insert ${emoji}`}
+              onPress={() => insertEmoji(emoji)}
+              style={({ pressed }) => ({
+                width: '12.5%',
+                aspectRatio: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                backgroundColor: pressed ? tokens.surfaceSubtle : 'transparent',
+              })}
+            >
+              <Typography style={{ fontSize: 24, lineHeight: 30 }}>{emoji}</Typography>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <View
         style={{
           flexDirection: 'row',
@@ -907,49 +977,155 @@ function Composer(c: ChatComposerProps) {
           paddingTop: 8,
         }}
       >
-        {!!c.onAttach && (
-          <IconButton
-            label={c.attachLabel ?? 'Attach image'}
-            variant="ghost"
-            disabled={c.disabled || c.uploading}
-            onPress={c.onAttach}
-          >
-            {c.uploading ? (
-              <ActivityIndicator color={tokens.primary} />
+        {voice.recording ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel recording"
+              onPress={() => void voice.cancel()}
+              style={roundButton(false)}
+            >
+              <Trash size={21} color={tokens.foreground} />
+            </Pressable>
+            <View
+              accessibilityRole="progressbar"
+              accessibilityLiveRegion="polite"
+              style={{
+                flex: 1,
+                height: 44,
+                borderRadius: 22,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingHorizontal: 14,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                backgroundColor: tokens.surfaceSubtle,
+              }}
+            >
+              <View
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 5,
+                  backgroundColor: tokens.destructive,
+                }}
+              />
+              <Typography variant="small" style={{ flex: 1, color: tokens.foregroundMuted }}>
+                Recording
+              </Typography>
+              <Typography variant="label" style={{ fontVariant: ['tabular-nums'] }}>
+                {formatVoiceDuration(voice.elapsedMs)}
+              </Typography>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send voice message"
+              onPress={() =>
+                void voice.stop().then((clip) => {
+                  if (clip) onSendVoice?.(clip);
+                })
+              }
+              style={roundButton(true)}
+            >
+              <PaperPlaneTilt size={21} color={tokens.primaryForeground} weight="fill" />
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <View
+              style={{
+                flex: 1,
+                minHeight: 44,
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: tokens.borderSubtle,
+                backgroundColor: tokens.surfaceSubtle,
+                paddingHorizontal: 4,
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={emojiOpen ? 'Close emoji' : 'Add emoji'}
+                accessibilityState={{ expanded: emojiOpen }}
+                disabled={c.disabled}
+                onPress={() => setEmojiOpen((value) => !value)}
+                style={{ width: 38, height: 42, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Smiley size={23} color={emojiOpen ? tokens.primary : tokens.foregroundMuted} />
+              </Pressable>
+              <TextInput
+                accessibilityLabel="Message"
+                value={c.draft}
+                onChangeText={(value) => {
+                  c.onDraftChange(value);
+                  setSelection(undefined);
+                }}
+                onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
+                selection={selection}
+                onFocus={() => setEmojiOpen(false)}
+                onBlur={c.onBlur}
+                placeholder={c.placeholder ?? 'Message'}
+                placeholderTextColor={tokens.foregroundSubtle}
+                multiline
+                maxLength={CHAT_TEXT_LIMIT}
+                editable={!c.disabled}
+                style={{
+                  flex: 1,
+                  maxHeight: 120,
+                  minHeight: 42,
+                  paddingHorizontal: 4,
+                  paddingTop: 11,
+                  paddingBottom: 11,
+                  color: tokens.foreground,
+                  fontSize: 15,
+                }}
+              />
+              {!!c.onAttach && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={c.attachLabel ?? 'Attach image'}
+                  disabled={c.disabled || c.uploading}
+                  onPress={c.onAttach}
+                  style={{ width: 38, height: 42, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  {c.uploading ? (
+                    <ActivityIndicator color={tokens.primary} />
+                  ) : (
+                    <ImageSquare size={22} color={tokens.foregroundMuted} />
+                  )}
+                </Pressable>
+              )}
+            </View>
+            {showMic ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Record voice message"
+                disabled={c.disabled || c.uploading}
+                onPress={() => {
+                  setEmojiOpen(false);
+                  void voice.start();
+                }}
+                style={roundButton(true)}
+              >
+                <Microphone size={21} color={tokens.primaryForeground} weight="fill" />
+              </Pressable>
             ) : (
-              <ImageSquare size={23} color={tokens.foreground} weight="fill" />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                accessibilityState={{ disabled: !canSend }}
+                disabled={!canSend}
+                onPress={c.onSend}
+                style={[roundButton(true), { opacity: canSend ? 1 : 0.45 }]}
+              >
+                <PaperPlaneTilt size={21} color={tokens.primaryForeground} weight="fill" />
+              </Pressable>
             )}
-          </IconButton>
+          </>
         )}
-        <TextInput
-          accessibilityLabel="Message"
-          value={c.draft}
-          onChangeText={(value) => {
-            c.onDraftChange(value);
-            setSelection(undefined);
-          }}
-          onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
-          selection={selection}
-          onBlur={c.onBlur}
-          placeholder={c.placeholder ?? 'Message'}
-          placeholderTextColor={tokens.foregroundSubtle}
-          multiline
-          maxLength={CHAT_TEXT_LIMIT}
-          editable={!c.disabled}
-          style={{
-            flex: 1,
-            maxHeight: 120,
-            minHeight: 42,
-            borderRadius: 20,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            color: tokens.foreground,
-            backgroundColor: tokens.surfaceSubtle,
-          }}
-        />
-        <IconButton variant="primary" label="Send message" disabled={!canSend} onPress={c.onSend}>
-          <PaperPlaneTilt size={21} color={tokens.primaryForeground} weight="fill" />
-        </IconButton>
       </View>
     </View>
   );

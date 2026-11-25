@@ -447,17 +447,203 @@
   border-top: 1px solid var(--finapp-border-subtle);
 }
 
-.composer textarea {
+/* Input pill: emoji · message · attach. The textarea itself has no border or ring. */
+.inputPill {
   flex: 1;
-  resize: none;
-  min-height: 42px;
-  max-height: 140px;
-  padding: 10px 14px;
-  border-radius: 20px;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 22px;
   border: 1px solid var(--finapp-border-subtle);
   background: var(--finapp-surface-subtle);
+}
+
+.inputPill:focus-within {
+  border-color: var(--finapp-primary);
+}
+
+.inputPill textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  min-height: 36px;
+  max-height: 132px;
+  padding: 8px 4px;
+  border: 0;
+  outline: none;
+  background: transparent;
   color: var(--finapp-foreground);
   font: inherit;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.inputPill textarea:focus,
+.inputPill textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.pillButton {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--finapp-foreground-muted);
+  cursor: pointer;
+}
+
+.pillButton:hover:not(:disabled) {
+  color: var(--finapp-foreground);
+}
+
+.pillButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.emojiPanel {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  width: min(100%, 340px);
+  padding: 8px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 16px;
+  background: var(--finapp-popover);
+  box-shadow: 0 12px 32px #0006; /* theme-exempt: shadows stay dark in both themes */
+}
+
+.emojiPanel button {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.emojiPanel button:hover {
+  background: var(--finapp-surface-subtle);
+}
+
+.recordingBar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid var(--finapp-border-subtle);
+  background: var(--finapp-surface-subtle);
+  color: var(--finapp-foreground-muted);
+  font-size: 14px;
+}
+
+.recordingDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--finapp-destructive);
+  animation: recPulse 1s ease-in-out infinite;
+}
+
+.recordingTime {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--finapp-foreground);
+}
+
+@keyframes recPulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.composerError {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--finapp-popover);
+  color: var(--finapp-destructive);
+  font-size: 13px;
+}
+
+.composerError button {
+  border: 0;
+  background: none;
+  color: var(--finapp-foreground-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Voice message bubble */
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+}
+
+.voicePlay {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+  cursor: pointer;
+}
+
+.voiceTrack {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--finapp-border-subtle);
+  overflow: hidden;
+}
+
+.voiceFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--finapp-primary);
+}
+
+.voiceTime {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--finapp-foreground-muted);
+}
+
+.voiceGone {
+  font-size: 13px;
+  color: var(--finapp-foreground-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recordingDot {
+    animation: none;
+  }
 }
 
 .iconButton {
@@ -540,4 +726,22 @@
 .mention:hover,
 .mentionActive {
   background: var(--finapp-primary-soft);
+}
+
+/* Your own voice clips sit on the primary-coloured bubble: invert the controls. */
+.voice[data-mine] .voicePlay {
+  background: var(--finapp-primary-foreground);
+  color: var(--finapp-primary);
+}
+
+.voice[data-mine] .voiceTrack {
+  background: color-mix(in srgb, var(--finapp-primary-foreground) 25%, transparent);
+}
+
+.voice[data-mine] .voiceFill {
+  background: var(--finapp-primary-foreground);
+}
+
+.voice[data-mine] .voiceTime {
+  color: var(--finapp-primary-foreground);
 }

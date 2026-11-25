@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, Input, ThinkingOrb, Typography, useTheme } from '@finapp/ui/native';
-import { ImageSquare, PaperPlaneTilt } from 'phosphor-react-native';
+import { ArrowLeft, ImageSquare, PaperPlaneTilt, Plus } from 'phosphor-react-native';
 import { Money } from './Money';
 import {
   GroupAvatar,
@@ -22,7 +22,14 @@ import {
   finaiTypingNames,
   type ServerFinaiChatFields,
 } from '../../ai/finai';
-import type { ChatMessage, ChatPerson, ChatPin, ChatReactionEmoji } from '../../chat/model';
+import {
+  chatHeaderSubtitle,
+  type ChatMessage,
+  type ChatPerson,
+  type ChatPin,
+  type ChatReactionEmoji,
+} from '../../chat/model';
+import type { NativeVoiceClip } from '../../chat/native/voice';
 
 export type GroupChatItem = {
   id: string;
@@ -54,6 +61,9 @@ export type GroupChatItem = {
   seenByPeople?: readonly ChatPerson[];
   /** FinAI reply state when this message is an @finai answer. */
   ai?: ServerFinaiChatFields;
+  /** Voice message: clip URL and length. */
+  audioUrl?: string | null;
+  durationMs?: number;
 };
 export type GroupChatScreenProps = {
   items: readonly GroupChatItem[];
@@ -66,6 +76,10 @@ export type GroupChatScreenProps = {
   onDraftChange: (value: string) => void;
   onSend: () => void;
   onChooseBillImage: () => void;
+  /** Sends a recorded voice clip (an empty composer shows a mic). */
+  onSendVoice?: (clip: NativeVoiceClip) => void;
+  /** Members currently online (presence), for the header line. */
+  onlineCount?: number;
   onBack?: () => void;
   group?: GroupMetadata & { name: string; currency: string; icon?: string; color?: string };
   members?: readonly {
@@ -125,11 +139,15 @@ export function groupChatMessages(items: readonly GroupChatItem[]): ChatMessage[
     return {
       ...base,
       kind:
-        item.text === undefined && item.attachmentUrl !== undefined
-          ? ('image' as const)
-          : ('text' as const),
+        item.audioUrl !== undefined
+          ? ('audio' as const)
+          : item.text === undefined && item.attachmentUrl !== undefined
+            ? ('image' as const)
+            : ('text' as const),
       text: item.text,
-      imageUrl: item.attachmentUrl,
+      imageUrl: item.audioUrl !== undefined ? undefined : item.attachmentUrl,
+      audioUrl: item.audioUrl,
+      durationMs: item.durationMs,
       status: item.status,
       reactions: item.reactions,
       myReaction: item.myReaction,
@@ -508,6 +526,14 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
       </Typography>
     </View>
   );
+  const typing = [...(p.typingNames ?? []), ...finaiTypingNames(p.items)];
+  const subtitle = chatHeaderSubtitle({
+    mode: 'group',
+    typingNames: typing,
+    memberCount: p.members?.length,
+    onlineCount: p.onlineCount,
+  });
+  const openDetails = p.onOpenSettings ?? p.onOpenGroup;
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -517,35 +543,69 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
         style={{
           flex: 1,
           paddingHorizontal: 16,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 10,
-          gap: 10,
+          paddingTop: insets.top + 6,
+          paddingBottom: insets.bottom + 8,
+          gap: 8,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            marginHorizontal: -8,
+            paddingBottom: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: tokens.borderSubtle,
+          }}
+        >
           {!!p.onBack && (
-            <Button size="sm" variant="outline" onPress={p.onBack}>
-              ‹ Back
-            </Button>
+            <IconButton label="Back" variant="ghost" onPress={p.onBack}>
+              <ArrowLeft size={21} color={tokens.foreground} />
+            </IconButton>
           )}
-          <View style={{ flex: 1 }}>
-            <Typography variant="heading" numberOfLines={1}>
-              {p.group?.name ?? 'Group chat'}
-            </Typography>
-            <Typography variant="caption" accessibilityLiveRegion="polite">
-              {p.members?.length ? `${p.members.length} members · ` : ''}
-              {p.group?.currency ? `${p.group.currency} · ` : ''}Group chat
-            </Typography>
-          </View>
-          {!!p.onOpenGroup && (
-            <Button size="sm" variant="outline" onPress={p.onOpenGroup}>
-              Group
-            </Button>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${p.group?.name ?? 'Group'}, open group settings`}
+            disabled={!openDetails}
+            onPress={openDetails}
+            style={({ pressed }) => ({
+              flex: 1,
+              minWidth: 0,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              paddingVertical: 4,
+              paddingHorizontal: 6,
+              borderRadius: 12,
+              backgroundColor: pressed ? tokens.surfaceSubtle : 'transparent',
+            })}
+          >
+            {p.group ? <GroupTile icon={p.group.icon} color={p.group.color} size={40} /> : null}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                variant="label"
+                numberOfLines={1}
+                style={{ color: tokens.foreground, fontSize: 16 }}
+              >
+                {p.group?.name ?? 'Group chat'}
+              </Typography>
+              {subtitle ? (
+                <Typography
+                  variant="caption"
+                  numberOfLines={1}
+                  accessibilityLiveRegion="polite"
+                  style={{ color: typing.length ? tokens.primary : tokens.foregroundMuted }}
+                >
+                  {subtitle}
+                </Typography>
+              ) : null}
+            </View>
+          </Pressable>
           {!!p.onAddExpense && (
-            <Button size="sm" onPress={p.onAddExpense}>
-              + Expense
-            </Button>
+            <IconButton label="Add expense" variant="ghost" onPress={p.onAddExpense}>
+              <Plus size={21} color={tokens.foreground} />
+            </IconButton>
           )}
         </View>
         <ChatThread
@@ -556,7 +616,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
           loadingOlder={p.loadingOlder}
           onLoadOlder={p.onLoadOlder}
           firstUnreadId={p.firstUnreadId}
-          typingNames={[...(p.typingNames ?? []), ...finaiTypingNames(p.items)]}
+          typingNames={typing}
           renderAiContent={(message) => (
             <FinaiSurface
               a2ui={message.ai?.a2ui}
@@ -588,6 +648,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                   onSend: p.onSend,
                   onBlur: () => p.onTypingChange?.(false),
                   onAttach: p.onChooseBillImage,
+                  onSendVoice: p.onSendVoice,
                   attachLabel: 'Attach bill image',
                   uploading: p.pending,
                   placeholder: p.group ? `Message ${p.group.name}…` : 'Write a message…',

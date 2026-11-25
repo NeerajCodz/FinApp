@@ -1,6 +1,6 @@
 {
   "name": "@finapp/ui",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "private": true,
   "exports": {
     "./native": "./src/native/index.tsx",
@@ -67,6 +67,7 @@
     "@expo-google-fonts/manrope": "^0.4.1",
     "@expo-google-fonts/source-serif-4": "^0.4.1",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
+    "expo-audio": "~57.0.5",
     "expo-font": "~57.0.4",
     "expo-sqlite": "~57.0.3",
     "lucide-react": "^0.468.0",
