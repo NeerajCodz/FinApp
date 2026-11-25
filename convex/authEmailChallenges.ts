@@ -23,8 +23,10 @@ export const create = internalMutation({
     challengeIdHash: v.string(),
     codeHash: v.string(),
     now: v.number(),
+    /** False when no email is sent yet (authenticator app first). */
+    emailSent: v.optional(v.boolean()),
   },
-  handler: async (ctx, { userId, challengeIdHash, codeHash, now }) => {
+  handler: async (ctx, { userId, challengeIdHash, codeHash, now, emailSent }) => {
     const user = await ctx.db.get(userId);
     if (
       !user ||
@@ -50,6 +52,7 @@ export const create = internalMutation({
       expiresAt: now + challengeLifetimeMs,
       attempts: 0,
       consumedAt: undefined,
+      emailSentAt: emailSent === false ? undefined : now,
     };
     if (previous) {
       await ctx.db.patch(previous._id, challenge);
@@ -86,6 +89,75 @@ export const consume = internalMutation({
     }
     await ctx.db.patch(challenge._id, { consumedAt: now });
     return { userId: challenge.userId };
+  },
+});
+
+/**
+ * Puts a new email code on an active challenge (when someone with an authenticator app asks for
+ * the email code instead). Returns the address to send it to, or null if the challenge is gone.
+ */
+export const rotateCode = internalMutation({
+  args: { challengeIdHash: v.string(), codeHash: v.string(), now: v.number() },
+  handler: async (ctx, { challengeIdHash, codeHash, now }) => {
+    const challenge = await ctx.db
+      .query('authEmailChallenges')
+      .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
+      .unique();
+    if (!challenge || challenge.consumedAt !== undefined || challenge.expiresAt <= now) return null;
+    if (
+      challenge.emailSentAt !== undefined &&
+      now - challenge.emailSentAt < minimumResendIntervalMs
+    )
+      throw new Error('TWO_FACTOR_RATE_LIMITED');
+    const user = await ctx.db.get(challenge.userId);
+    if (!user?.email || user.deletedAt !== undefined) return null;
+    await ctx.db.patch(challenge._id, {
+      codeHash,
+      emailSentAt: now,
+      expiresAt: Math.max(challenge.expiresAt, now + challengeLifetimeMs),
+    });
+    return { email: user.email.toLowerCase() };
+  },
+});
+
+/** The user an unexpired, unconsumed challenge belongs to (for authenticator/recovery codes). */
+export const activeUser = internalQuery({
+  args: { challengeIdHash: v.string(), now: v.number() },
+  handler: async (ctx, { challengeIdHash, now }) => {
+    const challenge = await ctx.db
+      .query('authEmailChallenges')
+      .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
+      .unique();
+    if (
+      !challenge ||
+      challenge.consumedAt !== undefined ||
+      challenge.expiresAt <= now ||
+      challenge.attempts >= maxVerificationAttempts
+    )
+      return null;
+    return { userId: challenge.userId };
+  },
+});
+
+/** Closes a challenge after an authenticator/recovery check (or counts a failed attempt). */
+export const settle = internalMutation({
+  args: { challengeIdHash: v.string(), ok: v.boolean(), now: v.number() },
+  handler: async (ctx, { challengeIdHash, ok, now }) => {
+    const challenge = await ctx.db
+      .query('authEmailChallenges')
+      .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
+      .unique();
+    if (!challenge || challenge.consumedAt !== undefined) return null;
+    if (ok) {
+      await ctx.db.patch(challenge._id, { consumedAt: now });
+      return { userId: challenge.userId };
+    }
+    const attempts = challenge.attempts + 1;
+    await ctx.db.patch(challenge._id, {
+      attempts,
+      ...(attempts >= maxVerificationAttempts ? { consumedAt: now } : {}),
+    });
+    return null;
   },
 });
 

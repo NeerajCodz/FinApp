@@ -100,9 +100,28 @@ export default defineSchema({
     expiresAt: timestamp,
     attempts: v.number(),
     consumedAt: optionalTime,
+    /** When the email code was last sent (unset until asked for, with an authenticator app). */
+    emailSentAt: optionalTime,
   })
     .index('by_user', ['userId'])
     .index('by_challenge', ['challengeIdHash']),
+  /**
+   * Extra sign-in factors per user: an authenticator app (TOTP secret encrypted with the key
+   * vault; `totpLastStep` stops code replay) and single-use recovery codes (hashes only).
+   */
+  mfaFactors: defineTable({
+    userId: v.id('users'),
+    totpSecret: v.optional(v.string()),
+    /** Set while the user is scanning the QR code; becomes `totpSecret` once a code checks out. */
+    totpPendingSecret: v.optional(v.string()),
+    totpConfirmedAt: optionalTime,
+    totpLastStep: v.optional(v.number()),
+    recoveryCodes: v.optional(
+      v.array(v.object({ hash: v.string(), usedAt: v.optional(v.number()) })),
+    ),
+    recoveryCreatedAt: optionalTime,
+    updatedAt: timestamp,
+  }).index('by_user', ['userId']),
   appLockResetChallenges: defineTable({
     userId: v.id('users'),
     challengeIdHash: v.string(),
