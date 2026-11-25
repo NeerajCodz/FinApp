@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
+import { Manrope, Source_Serif_4 } from 'next/font/google';
 import appIcon from '../../mobile/assets/icon.png';
 import '@finapp/ui/web/styles.css';
 import './globals.css';
@@ -23,6 +24,23 @@ const spaceGrotesk = localFont({
   fallback: ['Avenir Next', 'sans-serif'],
 });
 
+/** Reading face for body copy (the brand face stays for headings, buttons and the logo). */
+const manrope = Manrope({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-manrope',
+  display: 'swap',
+});
+
+/** FinAI's voice in chat replies. */
+const sourceSerif = Source_Serif_4({
+  subsets: ['latin'],
+  weight: ['400', '600'],
+  style: ['normal', 'italic'],
+  variable: '--font-source-serif',
+  display: 'swap',
+});
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -38,7 +56,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={spaceGrotesk.variable} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${spaceGrotesk.variable} ${manrope.variable} ${sourceSerif.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         <Providers>{children}</Providers>
         <Analytics />

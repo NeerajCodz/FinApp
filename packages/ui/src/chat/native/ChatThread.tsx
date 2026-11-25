@@ -29,6 +29,9 @@ import { Sheet } from '../../native/overlays';
 import { AvatarStack, ListSkeleton } from '../../native/visual';
 import { useReducedMotion } from '../../native/motion';
 import { ThinkingOrb } from '../../native/ThinkingOrb';
+import { FinaiLogo } from '../../ai/native/FinaiLogo';
+import { FinaiMarkdown } from '../../ai/native/FinaiMarkdown';
+import { FinaiSteps } from '../../ai/native/FinaiSteps';
 import {
   activeMention,
   applyMention,
@@ -586,10 +589,11 @@ function MessageRow({
                 backgroundColor: withAlpha(tokens.primary, 0.14),
               }}
             >
-              <ThinkingOrb
-                state={isFinaiBusy(message.ai) ? orbStateFor(message.ai!) : 'idle'}
-                size={18}
-              />
+              {isFinaiBusy(message.ai) ? (
+                <ThinkingOrb state={orbStateFor(message.ai!)} size={18} />
+              ) : (
+                <FinaiLogo size={20} />
+              )}
             </View>
           ) : (
             lastInGroup && (
@@ -665,15 +669,33 @@ function MessageRow({
             <Typography variant="body" style={{ color: tokens.foregroundMuted }}>
               {finaiErrorMessage(message.ai.errorCode)}
             </Typography>
-          ) : message.kind === 'ai' && !message.text && isFinaiBusy(message.ai) ? (
-            <View
-              accessibilityLiveRegion="polite"
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 22 }}
-            >
-              <ThinkingOrb state={orbStateFor(message.ai!)} size={20} label="FinAI is thinking" />
-              <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-                {message.ai!.stageLabel ?? 'Thinking…'}
-              </Typography>
+          ) : message.kind === 'ai' && message.ai ? (
+            <View style={{ gap: 6 }}>
+              {message.ai.steps?.length ? (
+                <FinaiSteps steps={message.ai.steps} busy={isFinaiBusy(message.ai)} />
+              ) : null}
+              {!message.text && isFinaiBusy(message.ai) ? (
+                message.ai.steps?.some((step) => step.status === 'running') ? null : (
+                  <View
+                    accessibilityLiveRegion="polite"
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 22 }}
+                  >
+                    <ThinkingOrb
+                      state={orbStateFor(message.ai)}
+                      size={20}
+                      label="FinAI is thinking"
+                    />
+                    <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
+                      {message.ai.stageLabel ?? 'Thinking…'}
+                    </Typography>
+                  </View>
+                )
+              ) : (
+                <FinaiMarkdown
+                  text={message.text ?? ''}
+                  streaming={message.ai.status === 'streaming'}
+                />
+              )}
             </View>
           ) : (
             <Typography variant="body" style={{ color: textColor }} selectable>
@@ -863,7 +885,7 @@ function Composer(c: ChatComposerProps) {
                   backgroundColor: withAlpha(tokens.primary, 0.14),
                 }}
               >
-                <ThinkingOrb state="idle" size={16} />
+                <FinaiLogo size={18} />
               </View>
               <View style={{ flex: 1 }}>
                 <Typography variant="label">

@@ -69,7 +69,7 @@ export default function NewCategoryPage() {
       </SignInGate>
     );
   return (
-    <div className="finance-page">
+    <div className="finance-page finance-page--narrow">
       <CategoryFormScreen
         mode="create"
         name={name}

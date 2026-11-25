@@ -45,7 +45,21 @@
   --finapp-split-soft: color-mix(in srgb, var(--finapp-split) 14%, transparent);
   --finapp-settlement-soft: color-mix(in srgb, var(--finapp-settlement) 14%, transparent);
   --finapp-destructive-soft: color-mix(in srgb, var(--finapp-destructive) 14%, transparent);
-  --finapp-font-sans: 'Space Grotesk', 'Avenir Next', sans-serif;
+  /* Font roles: brand (display, headings, buttons, logo), sans (reading), ai (FinAI replies). */
+  --finapp-font-brand: 'Space Grotesk', 'Avenir Next', sans-serif;
+  --finapp-font-sans: 'Manrope', system-ui, sans-serif;
+  --finapp-font-ai: 'Source Serif 4', Georgia, serif;
+}
+
+/* The brand face is for branding, headings, numbers on display and primary actions. */
+.finapp-ui-root :is(h1, h2, h3),
+.finapp-typography--hero,
+.finapp-typography--display,
+.finapp-typography--title,
+.finapp-typography--heading,
+.finapp-typography--overline,
+.finapp-button {
+  font-family: var(--finapp-font-brand);
 }
 
 .finapp-ui-root,

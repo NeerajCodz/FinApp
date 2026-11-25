@@ -38,7 +38,7 @@ export default function NewSettlementPage() {
   return (
     <React.Suspense
       fallback={
-        <div className="finance-page">
+        <div className="finance-page finance-page--narrow">
           <ListSkeleton rows={3} />
         </div>
       }

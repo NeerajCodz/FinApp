@@ -7,6 +7,17 @@ import {
   SpaceGrotesk_600SemiBold,
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
+import {
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+} from '@expo-google-fonts/manrope';
+import {
+  SourceSerif4_400Regular,
+  SourceSerif4_400Regular_Italic,
+  SourceSerif4_600SemiBold,
+} from '@expo-google-fonts/source-serif-4';
 import Storage from 'expo-sqlite/kv-store';
 import { createTokens, type AccentValue, type ThemeMode, type ThemeTokens } from '../tokens';
 
@@ -51,6 +62,13 @@ export function ThemeProvider({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    SourceSerif4_400Regular,
+    SourceSerif4_400Regular_Italic,
+    SourceSerif4_600SemiBold,
   });
   const isDark = forcedMode
     ? forcedMode === 'dark'

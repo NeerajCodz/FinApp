@@ -46,7 +46,7 @@ export default function SyncSettingsPage() {
     );
 
   return (
-    <div className="finance-page">
+    <div className="finance-page finance-page--narrow">
       <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
           <ArrowLeft size={21} aria-hidden="true" />

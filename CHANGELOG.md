@@ -5,6 +5,18 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 [ui](packages/ui/CHANGELOG.md), [backend](convex/CHANGELOG.md). Manifests live in
 [`releases/`](releases/).
 
+## 1.5.0
+
+Web 1.5.0 · Mobile 1.5.0 (build 11) · UI 1.5.0 · Backend 1.5.0 · API 1 · Schema 5
+
+- **FinAI identity**: a new FinAI logo; the Thinking Orb now only appears while FinAI is thinking, with a distinct style per stage.
+- **Tool steps**: every tool FinAI uses shows in a collapsible process list on the reply, live while it works.
+- **Readable replies**: Markdown (bold, lists, headings, code) rendered safely in a serif reading face.
+- **Typography**: Space Grotesk for branding and buttons, Manrope for reading, Source Serif 4 for FinAI.
+- **Desktop layouts** no longer stretch: forms, lists and dashboards each have a comfortable width.
+- **Popups** are fully opaque everywhere.
+- Second-round review fixes across FinAI, chat, notifications, ledger and MCP.
+
 ## 1.4.0
 
 Web 1.4.0 · Mobile 1.4.0 (build 10) · UI 1.4.0 · Backend 1.4.0 · API 1 · Schema 4

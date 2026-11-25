@@ -215,7 +215,8 @@ describe('runAgent', () => {
     expect(result.views).toHaveLength(1);
     expect(result.toolsUsed).toEqual(['get_overview']);
     expect(result.usage).toEqual({ promptTokens: 20, outputTokens: 10 });
-    expect(progress).toEqual(['Thinking…', 'Reading…', 'Putting it together…']);
+    // Each tool call reports a start and an end (the end drives the collapsible step list).
+    expect(progress).toEqual(['Thinking…', 'Reading…', 'Reading…', 'Putting it together…']);
     expect(texts.at(-1)).toBe('You spent ₹1.00.');
     // The model turn is echoed with its signature, then the function response with money presented.
     const second = calls[1]!.contents;

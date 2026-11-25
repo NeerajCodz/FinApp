@@ -12,14 +12,14 @@ import { action, internalMutation, mutation, query } from '../_generated/server'
 import { getOptionalUser, requireUser } from '../shared/auth';
 import { buildA2uiMessages } from './a2ui';
 import { actionViews } from './actions';
-import { runAgent, type AgentProgress } from './agent';
+import { applyStep, runAgent, type AgentProgress, type AgentStep } from './agent';
 import { assistantTools } from './assistantTools';
 import { aiLimits, finaiAgent } from './config';
 import { aiError, aiErrorCode } from './errors';
 import { generateText, isGeminiConfigured } from './gemini';
 import type { GeminiContent } from './geminiChat';
 import { assistantSystemPrompt } from './prompts';
-import { finaiStage } from './validators';
+import { finaiStage, finaiStep } from './validators';
 import { consumeAiQuota } from './usage';
 
 const TITLE_FALLBACK_CHARS = 48;
@@ -60,6 +60,7 @@ function shapeMessage(row: Doc<'finaiMessages'>, actions: Awaited<ReturnType<typ
     status: row.status,
     ...(row.stage ? { stage: row.stage } : {}),
     ...(row.stageLabel ? { stageLabel: row.stageLabel } : {}),
+    ...(row.steps?.length ? { steps: row.steps } : {}),
     ...(row.a2ui ? { a2ui: row.a2ui } : {}),
     ...(row.errorCode ? { errorCode: row.errorCode } : {}),
     actions: actions.get(String(row._id)) ?? [],
@@ -223,11 +224,21 @@ export const begin = internalMutation({
 });
 
 export const progress = internalMutation({
-  args: { replyId: v.id('finaiMessages'), stage: finaiStage, label: v.string() },
-  handler: async (ctx, { replyId, stage, label }) => {
+  args: {
+    replyId: v.id('finaiMessages'),
+    stage: finaiStage,
+    label: v.string(),
+    steps: v.optional(v.array(finaiStep)),
+  },
+  handler: async (ctx, { replyId, stage, label, steps }) => {
     const row = await ctx.db.get(replyId);
     if (!row || row.status === 'done' || row.status === 'error') return;
-    await ctx.db.patch(replyId, { stage, stageLabel: label, updatedAt: Date.now() });
+    await ctx.db.patch(replyId, {
+      stage,
+      stageLabel: label,
+      ...(steps ? { steps } : {}),
+      updatedAt: Date.now(),
+    });
   },
 });
 
@@ -363,6 +374,7 @@ export const send = action({
       });
       let lastFlush = 0;
       let pendingText = '';
+      let steps: AgentStep[] = [];
       const flush = async () => {
         lastFlush = Date.now();
         await ctx.runMutation(internal.ai.assistant.streamText, { replyId, text: pendingText });
@@ -380,10 +392,13 @@ export const send = action({
         contents: historyContents(started.history, args.text.trim()),
         tools: assistantTools,
         onProgress: async (step: AgentProgress) => {
+          const next = applyStep(steps, step);
+          if (next) steps = next;
           await ctx.runMutation(internal.ai.assistant.progress, {
             replyId,
             stage: step.stage,
             label: step.label,
+            ...(next ? { steps: next } : {}),
           });
         },
         onText: async (text) => {

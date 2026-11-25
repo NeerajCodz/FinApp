@@ -297,14 +297,14 @@ export default function PersonalAccountDetailPage() {
   }
   if (loading || transactionLoading) {
     return (
-      <div className="finance-page" style={{ gap: 28 }}>
+      <div className="finance-page finance-page--wide" style={{ gap: 28 }}>
         <Typography variant="small">Loading account…</Typography>
       </div>
     );
   }
   if (error) {
     return (
-      <div className="finance-page" style={{ gap: 28 }}>
+      <div className="finance-page finance-page--wide" style={{ gap: 28 }}>
         <p className="finance-form-error" role="alert">
           Account data could not be opened: {error}
         </p>
@@ -313,7 +313,7 @@ export default function PersonalAccountDetailPage() {
   }
   if (!account) {
     return (
-      <div className="finance-page" style={{ gap: 28 }}>
+      <div className="finance-page finance-page--wide" style={{ gap: 28 }}>
         <Empty
           title="Account unavailable."
           description="This account could not be found or is no longer available."

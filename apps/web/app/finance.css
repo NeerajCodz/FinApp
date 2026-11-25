@@ -130,6 +130,20 @@
 .finance-page {
   display: grid;
   gap: 25px;
+  width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+}
+/* Page widths: forms and settings read best in a column; lists and details a little wider;
+   dashboards use the full (capped) workspace. Phones are unaffected. */
+.finance-page--narrow {
+  max-width: 760px;
+}
+.finance-page--medium {
+  max-width: 1080px;
+}
+.finance-page--wide {
+  max-width: 1440px;
 }
 .finance-page-heading {
   display: flex;
@@ -3233,7 +3247,7 @@
   padding: 22px;
   border: 1px solid var(--finance-line);
   border-radius: 18px;
-  background: var(--finance-panel);
+  background: var(--finapp-popover);
   color: var(--finance-ink);
 }
 .people-requests-dialog-heading {
@@ -3603,7 +3617,7 @@
   height: 52px;
   border: 1px solid var(--finapp-border-subtle);
   border-radius: 50%;
-  background: var(--finapp-card);
+  background: var(--finapp-popover);
   box-shadow: 0 10px 30px #0006; /* theme-exempt: shadows stay dark in both themes */
   cursor: pointer;
   transition:

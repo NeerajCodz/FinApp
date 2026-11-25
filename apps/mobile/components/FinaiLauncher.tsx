@@ -3,7 +3,8 @@ import { Pressable, View } from 'react-native';
 import { router, useSegments } from 'expo-router';
 import { useConvexAuth } from 'convex/react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThinkingOrb, useTheme } from '@finapp/ui/native';
+import { useTheme } from '@finapp/ui/native';
+import { FinaiLogo } from '@finapp/ui/ai';
 
 /** Height of the signature tab bar the launcher floats above. */
 const TAB_BAR_HEIGHT = 96;
@@ -45,7 +46,7 @@ export function FinaiLauncher() {
           elevation: 6,
         })}
       >
-        <ThinkingOrb state="idle" size={26} />
+        <FinaiLogo size={28} title="FinAI" />
       </Pressable>
     </View>
   );

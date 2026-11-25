@@ -17,6 +17,7 @@ export function finaiFields(
       ...(ai.stageLabel ? { stageLabel: ai.stageLabel } : {}),
       ...(ai.a2ui ? { a2ui: ai.a2ui } : {}),
       ...(ai.errorCode ? { errorCode: ai.errorCode } : {}),
+      ...(ai.steps?.length ? { steps: ai.steps } : {}),
       requesterId: ai.requesterId,
       isRequester: ai.requesterId === viewerId,
       actions: actions.get(String(message._id)) ?? [],

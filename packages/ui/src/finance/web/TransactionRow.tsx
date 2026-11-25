@@ -125,7 +125,7 @@ export function TransactionRow({
               padding: '10px 12px',
               border: `1px solid ${tokens.borderSubtle}`,
               borderRadius: 10,
-              background: tokens.surfaceRaised,
+              background: tokens.popover,
               boxShadow: '0 8px 28px rgba(0,0,0,.22)',
               color: tokens.foreground,
               fontSize: 12,

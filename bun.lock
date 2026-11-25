@@ -27,6 +27,8 @@
       "version": "1.4.0",
       "dependencies": {
         "@convex-dev/auth": "^0.0.95",
+        "@expo-google-fonts/manrope": "^0.4.1",
+        "@expo-google-fonts/source-serif-4": "^0.4.1",
         "@expo-google-fonts/space-grotesk": "^0.4.1",
         "@finapp/ui": "workspace:*",
         "@types/react": "~19.2.4",
@@ -390,7 +392,11 @@
 
     "@eslint/plugin-kit": ["@eslint/plugin-kit@0.7.2", "", { "dependencies": { "@eslint/core": "^1.2.1", "levn": "^0.4.1" } }, "sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A=="],
 
+    "@expo-google-fonts/manrope": ["@expo-google-fonts/manrope@0.4.3", "", {}, "sha512-Jvu9AYoSfjum1maq5JT01OLj1xlr90/tmb+6beHRhL1bC/lYzXMrieH6PzACP7YcE03PT9/Ks9l0WphoLEV/wg=="],
+
     "@expo-google-fonts/material-symbols": ["@expo-google-fonts/material-symbols@0.4.44", "", {}, ""],
+
+    "@expo-google-fonts/source-serif-4": ["@expo-google-fonts/source-serif-4@0.4.2", "", {}, "sha512-7X2w5KT0n/pxRXr5Ogv6W35D004IbCXUouTCr9VCh9bSlSWbryyvk8/ovXNOaJLOJV8QeIDnX0hIppgH0UZ8sA=="],
 
     "@expo-google-fonts/space-grotesk": ["@expo-google-fonts/space-grotesk@0.4.1", "", {}, "sha512-ZVQYw4Ok/pgcSJiufP8oRZE3AVxS9xtmKEUfsurbHkHNdMc/GA1gDXP9G4Cr7KL4KqSc0haexR2TuMigotCn4Q=="],
 

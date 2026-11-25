@@ -2,6 +2,11 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.5.0
+
+- FinAI launcher panel with logo, tool steps and Markdown replies
+- Page width system for desktop; opaque popups; new typography roles
+
 ## 1.4.0
 
 Shipped in FinApp 1.4.0. See the root [CHANGELOG](../../CHANGELOG.md) for highlights.

@@ -245,7 +245,7 @@ export default function PeoplePage() {
 
   if (!userId)
     return (
-      <div className="finance-page">
+      <div className="finance-page finance-page--medium">
         <header className="finance-page-heading">
           <div>
             <p className="finance-kicker">YOUR NETWORK</p>

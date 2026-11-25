@@ -5,6 +5,7 @@ import {
   finaiActionKind,
   finaiActionStatus,
   finaiChatState,
+  finaiStep,
   finaiReplyStatus,
   finaiScopeType,
   finaiStage,
@@ -682,6 +683,8 @@ export default defineSchema({
     a2ui: optionalText,
     errorCode: optionalText,
     toolsUsed: v.optional(v.array(v.string())),
+    /** Tool calls made for this reply, in order. */
+    steps: v.optional(v.array(finaiStep)),
     createdAt: timestamp,
     updatedAt: timestamp,
   }).index('by_conversation_createdAt', ['conversationId', 'createdAt']),

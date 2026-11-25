@@ -219,6 +219,31 @@ export type TypeStyle = {
 };
 
 /** Shared type scale; native maps it to Text styles, web exposes it as CSS variables. */
+/**
+ * Font roles. Space Grotesk is the brand face (display, headings, buttons, the logo); Manrope
+ * is the reading face for body copy; Source Serif 4 is FinAI's voice in replies.
+ * Native family names (expo-google-fonts); the web maps the same roles to CSS variables.
+ */
+export const fontFamilies = {
+  brand: {
+    regular: 'SpaceGrotesk_400Regular',
+    medium: 'SpaceGrotesk_500Medium',
+    semibold: 'SpaceGrotesk_600SemiBold',
+    bold: 'SpaceGrotesk_700Bold',
+  },
+  text: {
+    regular: 'Manrope_400Regular',
+    medium: 'Manrope_500Medium',
+    semibold: 'Manrope_600SemiBold',
+    bold: 'Manrope_700Bold',
+  },
+  ai: {
+    regular: 'SourceSerif4_400Regular',
+    italic: 'SourceSerif4_400Regular_Italic',
+    semibold: 'SourceSerif4_600SemiBold',
+  },
+} as const;
+
 export const typeScale: Record<TypeVariant, TypeStyle> = {
   hero: {
     fontFamily: 'SpaceGrotesk_600SemiBold',
@@ -249,21 +274,21 @@ export const typeScale: Record<TypeVariant, TypeStyle> = {
     letterSpacing: -0.3,
   },
   bodyLarge: {
-    fontFamily: 'SpaceGrotesk_500Medium',
+    fontFamily: 'Manrope_500Medium',
     fontWeight: '500',
     fontSize: 17,
     lineHeight: 24,
   },
-  body: { fontFamily: 'SpaceGrotesk_400Regular', fontWeight: '400', fontSize: 15, lineHeight: 22 },
+  body: { fontFamily: 'Manrope_400Regular', fontWeight: '400', fontSize: 15, lineHeight: 22 },
   small: {
-    fontFamily: 'SpaceGrotesk_400Regular',
+    fontFamily: 'Manrope_400Regular',
     fontWeight: '400',
     fontSize: 13,
     lineHeight: 18,
     tone: 'muted',
   },
   caption: {
-    fontFamily: 'SpaceGrotesk_500Medium',
+    fontFamily: 'Manrope_500Medium',
     fontWeight: '500',
     fontSize: 11,
     lineHeight: 15,
@@ -271,7 +296,7 @@ export const typeScale: Record<TypeVariant, TypeStyle> = {
     tone: 'subtle',
   },
   label: {
-    fontFamily: 'SpaceGrotesk_500Medium',
+    fontFamily: 'Manrope_600SemiBold',
     fontWeight: '500',
     fontSize: 13,
     lineHeight: 18,
