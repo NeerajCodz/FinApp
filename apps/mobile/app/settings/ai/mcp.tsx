@@ -4,12 +4,22 @@ import { router } from 'expo-router';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { ExternalLink, KeySquare, PlugZap, Unplug } from 'lucide-react-native';
+import {
+  ExternalLink,
+  Eye,
+  KeySquare,
+  PlugZap,
+  Power,
+  ShieldAlert,
+  SlidersHorizontal,
+  Unplug,
+} from 'lucide-react-native';
 import {
   SettingsGroup,
   SettingsHero,
   SettingsLink,
   SettingsScreen,
+  SettingsSwitch,
   useSettingsToneColor,
 } from '@finapp/ui/finance';
 import { useTheme } from '@finapp/ui/native';
@@ -36,6 +46,28 @@ export default function McpConnectionsScreen() {
   const clients = useQuery(api.mcpOAuth.listMyClients, live ? {} : 'skip');
   const revoke = useMutation(api.mcpOAuth.revokeGrant);
   const removeClient = useMutation(api.mcpOAuth.deleteMyClient);
+  const stored = useQuery(api.mcpOAuth.getSettings, live ? {} : 'skip');
+  const updateSettings = useMutation(api.mcpOAuth.updateSettings);
+  const updateScopes = useMutation(api.mcpOAuth.updateGrantScopes);
+  const [settings, setSettings] = React.useState(stored);
+  const [open, setOpen] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (stored) setSettings(stored);
+  }, [stored]);
+  const save = async (patch: {
+    enabled?: boolean;
+    readOnly?: boolean;
+    allowDestructive?: boolean;
+  }) => {
+    if (!settings) return;
+    const previous = settings;
+    setSettings({ ...settings, ...patch });
+    try {
+      await updateSettings(patch);
+    } catch {
+      setSettings(previous);
+    }
+  };
   const active = grants?.filter((grant) => grant.revokedAt === undefined) ?? [];
   return (
     <SettingsScreen
@@ -48,30 +80,107 @@ export default function McpConnectionsScreen() {
         title={`${active.length} active ${active.length === 1 ? 'connection' : 'connections'}`}
         description="Connect ChatGPT, Claude or any MCP client to fin.neeraj.fyi/mcp."
       />
+      <SettingsGroup title="Access control">
+        <SettingsSwitch
+          icon={<Power size={19} color={tone('primary')} />}
+          tone="primary"
+          title="Allow AI apps"
+          description="Off blocks every connected app at once"
+          checked={settings?.enabled ?? true}
+          disabled={!live || !settings}
+          onChange={(enabled) => void save({ enabled })}
+        />
+        <SettingsSwitch
+          icon={<Eye size={19} color={tone('info')} />}
+          tone="info"
+          title="Read-only mode"
+          description="Apps can look but not change anything"
+          checked={settings?.readOnly ?? false}
+          disabled={!live || !settings?.enabled}
+          onChange={(readOnly) => void save({ readOnly })}
+        />
+        <SettingsSwitch
+          icon={<ShieldAlert size={19} color={tone('warning')} />}
+          tone="warning"
+          title="Allow deletes"
+          description="Delete tools always need your confirmation"
+          checked={settings?.allowDestructive ?? true}
+          disabled={!live || !settings?.enabled || settings?.readOnly}
+          onChange={(allowDestructive) => void save({ allowDestructive })}
+        />
+        <SettingsLink
+          icon={<SlidersHorizontal size={19} color={tone()} />}
+          title="Block individual tools"
+          description={`${settings?.blockedTools.length ?? 0} blocked · manage on the web`}
+          onPress={() => void Linking.openURL('https://fin.neeraj.fyi/settings/ai/mcp')}
+        />
+      </SettingsGroup>
       <SettingsGroup title="Connected apps">
         {grants === undefined ? (
           <SettingsLink title={live ? 'Loading…' : 'Connect to see your apps'} />
         ) : active.length ? (
-          active.map((grant) => (
-            <SettingsLink
-              key={grant.id}
-              icon={<Unplug size={19} color={tone('info')} />}
-              tone="info"
-              title={grant.clientName}
-              description={`Since ${when(grant.createdAt)} · ${grant.scopes.map((scope) => SCOPES[scope] ?? scope).join(', ')}`}
-              value="Disconnect"
-              onPress={() =>
-                Alert.alert(`Disconnect ${grant.clientName}?`, 'It loses access right away.', [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Disconnect',
-                    style: 'destructive',
-                    onPress: () => void revoke({ grantId: grant.id as Id<'mcpOAuthGrants'> }),
-                  },
-                ])
-              }
-            />
-          ))
+          active.map((grant) => {
+            const expanded = open === String(grant.id);
+            return (
+              <React.Fragment key={grant.id}>
+                <SettingsLink
+                  icon={<Unplug size={19} color={tone('info')} />}
+                  tone="info"
+                  title={grant.clientName}
+                  description={`Since ${when(grant.createdAt)} · ${grant.scopes.map((scope) => SCOPES[scope] ?? scope).join(', ')}`}
+                  value={expanded ? 'Close' : 'Manage'}
+                  onPress={() => setOpen(expanded ? null : String(grant.id))}
+                />
+                {expanded
+                  ? [
+                      ...(
+                        [
+                          'finapp:write:finance',
+                          'finapp:write:groups',
+                          'finapp:write:social',
+                          'finapp:write:personal',
+                        ] as const
+                      ).map((scope) => (
+                        <SettingsSwitch
+                          key={scope}
+                          title={`Change ${SCOPES[scope]!.toLowerCase()}`}
+                          checked={grant.scopes.includes(scope)}
+                          disabled={!live}
+                          onChange={(next) =>
+                            void updateScopes({
+                              grantId: grant.id as Id<'mcpOAuthGrants'>,
+                              scopes: next
+                                ? [...grant.scopes, scope]
+                                : grant.scopes.filter((item) => item !== scope),
+                            })
+                          }
+                        />
+                      )),
+                      <SettingsLink
+                        key="disconnect"
+                        danger
+                        title={`Disconnect ${grant.clientName}`}
+                        onPress={() =>
+                          Alert.alert(
+                            `Disconnect ${grant.clientName}?`,
+                            'It loses access right away.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Disconnect',
+                                style: 'destructive',
+                                onPress: () =>
+                                  void revoke({ grantId: grant.id as Id<'mcpOAuthGrants'> }),
+                              },
+                            ],
+                          )
+                        }
+                      />,
+                    ]
+                  : null}
+              </React.Fragment>
+            );
+          })
         ) : (
           <SettingsLink
             title="No apps connected"

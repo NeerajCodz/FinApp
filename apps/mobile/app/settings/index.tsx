@@ -1,4 +1,5 @@
 import React from 'react';
+import { Linking } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -15,6 +16,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Trash2,
+  LayoutDashboard,
 } from 'lucide-react-native';
 import {
   SettingsGroup,
@@ -83,6 +85,13 @@ export default function SettingsHubScreen() {
           description="ChatGPT, Claude and other AI apps"
           value={grants ? `${active} active` : undefined}
           onPress={go('/settings/ai/mcp')}
+        />
+        <SettingsLink
+          icon={<LayoutDashboard size={19} color={tone('primary')} />}
+          tone="primary"
+          title="MCP dashboard"
+          description="Tools, activity and OAuth setup (opens the web)"
+          onPress={() => void Linking.openURL('https://fin.neeraj.fyi/mcp/dashboard')}
         />
       </SettingsGroup>
 

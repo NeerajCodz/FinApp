@@ -1,8 +1,9 @@
 import React from 'react';
+import { Linking } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Bot, KeyRound, PlugZap } from 'lucide-react-native';
+import { Bot, KeyRound, PlugZap, LayoutDashboard } from 'lucide-react-native';
 import { FinaiLogo } from '@finapp/ui/ai';
 import {
   SettingsGroup,
@@ -55,6 +56,13 @@ export default function AiSettingsHub() {
           description="Apps like ChatGPT and Claude"
           value={grants ? `${active} active` : undefined}
           onPress={() => router.push('/settings/ai/mcp' as never)}
+        />
+        <SettingsLink
+          icon={<LayoutDashboard size={19} color={tone('primary')} />}
+          tone="primary"
+          title="MCP dashboard"
+          description="Tools, activity and OAuth setup (opens the web)"
+          onPress={() => void Linking.openURL('https://fin.neeraj.fyi/mcp/dashboard')}
         />
       </SettingsGroup>
     </SettingsScreen>
