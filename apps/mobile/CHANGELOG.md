@@ -2,6 +2,10 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.5.1
+
+- Redesigned bottom navigation bar (solid, icons contained, + inline)
+
 ## 1.5.0
 
 - FinAI logo, tool steps and Markdown replies; launcher inside the app-lock boundary

@@ -5,6 +5,12 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 [ui](packages/ui/CHANGELOG.md), [backend](convex/CHANGELOG.md). Manifests live in
 [`releases/`](releases/).
 
+## 1.5.1
+
+Web 1.5.1 · Mobile 1.5.1 (build 12) · UI 1.5.1 · Backend 1.5.0
+
+- **Bottom bar** redesigned on web (phone widths) and mobile: a solid bar with every icon inside it, the + seated inline, and Profile no longer pushed off a 5-column grid on web.
+
 ## 1.5.0
 
 Web 1.5.0 · Mobile 1.5.0 (build 11) · UI 1.5.0 · Backend 1.5.0 · API 1 · Schema 5

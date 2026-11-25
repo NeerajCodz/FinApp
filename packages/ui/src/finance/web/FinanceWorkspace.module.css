@@ -172,7 +172,7 @@
     text-decoration: none;
   }
   .content {
-    padding: 20px 16px calc(100px + env(safe-area-inset-bottom));
+    padding: 20px 16px calc(88px + env(safe-area-inset-bottom));
   }
   .add {
     display: none;
