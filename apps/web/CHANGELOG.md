@@ -2,6 +2,15 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.1
+
+- Redesigned browser lock screen (brand, avatar in accent ring, name, @username, PIN boxes, sign
+  out)
+- Two-factor step with authenticator, email and recovery codes; authenticator app and recovery
+  code settings in Security
+- Signed-in visitors are sent from the landing, sign-in and sign-up pages to the dashboard; no
+  bounce back to sign-in right after two-factor sign-in
+
 ## 1.10.0
 
 - Trash page and settings; category delete with keep or trash transactions

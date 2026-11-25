@@ -28,6 +28,7 @@ import {
   SettingsSwitch,
 } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
+import { MfaSettings } from '@/components/security/MfaSettings';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import {
   enableWebAuthnLock,
@@ -65,6 +66,7 @@ export default function SecuritySettingsPage() {
   const preferences = useQuery(api.users.queries.securityPreferences, live ? {} : 'skip');
   const privacy = useQuery(api.security.privacy, live ? {} : 'skip');
   const sessions = useQuery(api.security.sessions, live ? {} : 'skip');
+  const mfa = useQuery(api.mfa.status, live ? {} : 'skip');
   const setTwoFactor = useMutation(api.users.mutations.setTwoFactorEnabled);
   const updatePrivacy = useMutation(api.security.updatePrivacy);
   const signOutSession = useMutation(api.security.signOutSession);
@@ -121,7 +123,7 @@ export default function SecuritySettingsPage() {
       />
     );
 
-  const twoFactor = preferences?.twoFactorEnabled ?? false;
+  const twoFactor = (preferences?.twoFactorEnabled ?? false) || (mfa?.totp ?? false);
   const others = (sessions ?? []).filter((session) => !session.current);
   const lockOn = passkeyOn || passcodeOn;
   const score = [twoFactor, lockOn, privacy?.signInAlerts !== false].filter(Boolean).length;
@@ -146,9 +148,9 @@ export default function SecuritySettingsPage() {
         <SettingsSwitch
           icon={<MailCheck size={19} />}
           tone="positive"
-          title="Two-factor sign-in"
+          title="Email codes"
           description="Ask for a six-digit email code after your password"
-          checked={twoFactor}
+          checked={preferences?.twoFactorEnabled ?? false}
           disabled={!live || preferences == null || busy === '2fa'}
           onChange={(enabled) =>
             void run(
@@ -158,6 +160,7 @@ export default function SecuritySettingsPage() {
             )
           }
         />
+        <MfaSettings live={live} onMessage={setMessage} />
         <SettingsLink
           icon={<KeyRound size={19} />}
           tone="info"
