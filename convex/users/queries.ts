@@ -137,6 +137,7 @@ export const publicProfile = query({
       .unique();
     if (!user || user.deletedAt !== undefined) return null;
     return {
+      id: user._id,
       username: user.username,
       displayName: user.displayName ?? user.name ?? 'Finapp user',
       ...(user.avatarId === undefined ? {} : { avatarId: user.avatarId }),

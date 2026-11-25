@@ -1,17 +1,25 @@
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
+import type { Id } from '@convex/_generated/dataModel';
 import { api } from '@convex/_generated/api';
 import React from 'react';
-import { ScrollView, View } from 'react-native';
-import { ArrowLeft, ArrowLeftRight, UsersThree } from '@finapp/ui/icons/native';
+import { Pressable, ScrollView, View } from 'react-native';
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  ChartBar,
+  ChatCircle,
+  UsersThree,
+} from '@finapp/ui/icons/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FinanceEmptyState,
   formatTransactionDate,
   Money,
+  personStatus,
   TransactionRow,
 } from '@finapp/ui/finance';
-import { Avatar, Button, IconButton, SectionHeader, Text, Typography } from '@finapp/ui/native';
+import { Avatar, IconButton, SectionHeader, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import {
   useLocalGroupRange,
@@ -21,6 +29,7 @@ import {
 import { bilateralBalancesByCurrency } from '../../../convex/splits/domain';
 import type { LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+import { toast } from '@/lib/toast';
 
 type GroupRecord = LocalRecord & { id?: string; _id?: string; name?: string; currency?: string };
 type GroupMemberRecord = LocalRecord & {
@@ -120,7 +129,7 @@ export default function PublicProfileScreen() {
   );
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const { userId, fetchGroupRange } = useLocalSync();
+  const { userId, isConnected, fetchGroupRange } = useLocalSync();
   const { data: groups } = useLocalRecords<GroupRecord>(userId, 'group');
   const { data: allMembers } = useLocalRecords<GroupMemberRecord>(userId, 'groupMember');
   const transactionsState = useLocalRecords<LocalRecord & { groupId?: string }>(
@@ -193,178 +202,431 @@ export default function PublicProfileScreen() {
     : [];
   const bilateralBalance = balances[0]?.balanceMinor ?? 0n;
   const otherBalances = balances.slice(1).filter((row) => row.balanceMinor !== 0n);
+  const otherId =
+    publicProfile?.id && publicProfile.id !== userId ? (publicProfile.id as Id<'users'>) : null;
+  const live = Boolean(userId && isConnected && otherId);
+  const relationship = useQuery(
+    api.social.queries.relationship,
+    live && otherId ? { userId: otherId } : 'skip',
+  );
+  const analytics = useQuery(
+    api.social.queries.personAnalytics,
+    live && otherId ? { userId: otherId, tzOffsetMinutes: new Date().getTimezoneOffset() } : 'skip',
+  );
+  const sendRequest = useMutation(api.social.mutations.sendRequest);
+  const respondToRequest = useMutation(api.social.mutations.respondToRequest);
+  const startConversation = useMutation(api.directMessages.mutations.startConversation);
+  const [busy, setBusy] = React.useState(false);
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await action();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'That didn’t work. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const isSelf = Boolean(userId && publicProfile?.id === userId);
+  const status = relationship?.status;
+  const incomingId =
+    relationship && 'incomingRequestId' in relationship
+      ? relationship.incomingRequestId
+      : undefined;
+  const mutualFriends = relationship?.mutualFriends ?? [];
+  const serverGroups = relationship?.sharedGroups ?? [];
+  const presence = analytics ? personStatus(analytics) : '';
+  const since = analytics?.friendsSince ?? analytics?.conversationSince;
+  const card = {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: tokens.borderSubtle,
+    backgroundColor: tokens.card,
+  } as const;
+  const chip = (label: string, accent = false) => (
+    <View
+      key={label}
+      style={{
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: accent ? tokens.primary : tokens.borderSubtle,
+      }}
+    >
+      <Text style={{ color: accent ? tokens.primary : tokens.foregroundMuted, fontSize: 12 }}>
+        {label}
+      </Text>
+    </View>
+  );
+  const actionButton = (
+    label: string,
+    onPress: () => void,
+    options: { primary?: boolean; icon?: React.ReactNode; disabled?: boolean } = {},
+  ) => (
+    <Pressable
+      key={label}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={options.disabled || busy}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexGrow: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 7,
+        height: 44,
+        paddingHorizontal: 14,
+        borderRadius: 13,
+        borderWidth: 1,
+        borderColor: options.primary ? tokens.primary : tokens.borderSubtle,
+        backgroundColor: options.primary ? tokens.primary : 'transparent',
+        opacity: options.disabled ? 0.6 : pressed ? 0.8 : 1,
+      })}
+    >
+      {options.icon}
+      <Text
+        style={{
+          color: options.primary ? tokens.primaryForeground : tokens.foreground,
+          fontFamily: 'SpaceGrotesk_600SemiBold',
+          fontSize: 14,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+  const primaryAction = () => {
+    if (!otherId) return null;
+    if (status === 'friends' || analytics?.conversationId)
+      return actionButton(
+        'Message',
+        () =>
+          void run(async () => {
+            const conversationId =
+              analytics?.conversationId ?? (await startConversation({ userId: otherId }));
+            router.push(`/messages/${encodeURIComponent(String(conversationId))}` as never);
+          }),
+        { primary: true, icon: <ChatCircle size={17} color={tokens.primaryForeground} /> },
+      );
+    if (status === 'incoming' && incomingId)
+      return actionButton(
+        'Accept request',
+        () =>
+          void run(async () => {
+            await respondToRequest({ requestId: incomingId, response: 'accept' });
+          }),
+        { primary: true },
+      );
+    if (status === 'outgoing') return actionButton('Request sent', () => {}, { disabled: true });
+    if (status === 'none')
+      return actionButton(
+        'Add friend',
+        () =>
+          void run(async () => {
+            await sendRequest({ recipientId: otherId });
+          }),
+        { primary: true },
+      );
+    return null;
+  };
+  const stat = (label: string, value: React.ReactNode, note?: string, tone?: string) => (
+    <View key={label} style={[card, { flexBasis: '47%', flexGrow: 1, padding: 14, gap: 4 }]}>
+      <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>{label}</Text>
+      {typeof value === 'string' ? (
+        <Text style={{ color: tokens.foreground, fontSize: 20, fontWeight: '600' }}>{value}</Text>
+      ) : (
+        value
+      )}
+      {note ? (
+        <Text style={{ color: tone ?? tokens.foregroundMuted, fontSize: 11 }}>{note}</Text>
+      ) : null}
+    </View>
+  );
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: tokens.background }}
       contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
+        paddingHorizontal: 16,
+        paddingTop: insets.top + 8,
         paddingBottom: insets.bottom + 32,
-        gap: 32,
+        gap: 16,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
-        <Typography variant="heading">
-          {publicProfile ? publicProfile.displayName : 'Profile unavailable'}
-        </Typography>
+        <Text style={{ flex: 1, color: tokens.foregroundMuted, fontSize: 15 }}>Profile</Text>
+        {otherId && userId ? (
+          <IconButton
+            label="Analytics"
+            variant="ghost"
+            onPress={() => router.push(`/network/person/${encodeURIComponent(otherId)}` as never)}
+          >
+            <ChartBar size={20} color={tokens.foreground} />
+          </IconButton>
+        ) : null}
       </View>
 
-      {!publicProfile ? (
+      {publicProfile === undefined && handle ? (
+        <Typography variant="body">Loading…</Typography>
+      ) : !publicProfile ? (
         <Typography variant="body">This profile could not be found.</Typography>
       ) : (
-        <View
-          style={{
-            padding: 20,
-            gap: 18,
-            borderRadius: 22,
-            backgroundColor: tokens.surfaceSubtle,
-            borderWidth: 1,
-            borderColor: tokens.borderSubtle,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            <Avatar
-              initials={publicProfile.displayName.slice(0, 2).toUpperCase()}
-              label={`@${profileHandle}`}
-              size={60}
-              imageUrl={publicProfile.avatarUrl ?? undefined}
-              avatarId={publicProfile.avatarId ?? undefined}
+        <View style={[card, { overflow: 'hidden' }]}>
+          <View style={{ height: 96, backgroundColor: tokens.surfaceSubtle }}>
+            <View
+              style={{
+                position: 'absolute',
+                left: -40,
+                top: -60,
+                width: 220,
+                height: 160,
+                borderRadius: 110,
+                backgroundColor: tokens.primary,
+                opacity: 0.22,
+              }}
             />
-            <View style={{ flex: 1, gap: 3 }}>
-              <Typography variant="heading">{publicProfile.displayName}</Typography>
-              <Typography variant="small">@{profileHandle}</Typography>
+            <View
+              style={{
+                position: 'absolute',
+                right: -30,
+                bottom: -70,
+                width: 200,
+                height: 140,
+                borderRadius: 100,
+                backgroundColor: tokens.chart.violet,
+                opacity: 0.2,
+              }}
+            />
+          </View>
+          <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: 12 }}>
+            <View
+              style={{
+                marginTop: -46,
+                alignSelf: 'flex-start',
+                borderRadius: 60,
+                borderWidth: 4,
+                borderColor: tokens.card,
+                backgroundColor: tokens.card,
+              }}
+            >
+              <Avatar
+                initials={publicProfile.displayName.slice(0, 2).toUpperCase()}
+                label={`@${profileHandle}`}
+                size={88}
+                imageUrl={publicProfile.avatarUrl ?? undefined}
+                avatarId={publicProfile.avatarId ?? undefined}
+              />
+              {analytics?.active ? (
+                <View
+                  accessibilityLabel="Active now"
+                  style={{
+                    position: 'absolute',
+                    right: 4,
+                    bottom: 4,
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    borderWidth: 3,
+                    borderColor: tokens.card,
+                    backgroundColor: tokens.positive,
+                  }}
+                />
+              ) : null}
+            </View>
+            <View style={{ gap: 3 }}>
+              <Text
+                accessibilityRole="header"
+                style={{
+                  color: tokens.foreground,
+                  fontSize: 26,
+                  fontFamily: 'SpaceGrotesk_600SemiBold',
+                  letterSpacing: -0.8,
+                }}
+              >
+                {publicProfile.displayName}
+              </Text>
+              <Text style={{ color: tokens.foregroundMuted, fontSize: 14 }}>
+                @{profileHandle}
+                {presence ? ` · ${presence}` : ''}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {isSelf ? chip('This is you') : null}
+              {status === 'friends' ? chip('Friends', true) : null}
+              {status === 'incoming' ? chip('Sent you a request') : null}
+              {serverGroups.length
+                ? chip(
+                    `${serverGroups.length} shared ${serverGroups.length === 1 ? 'group' : 'groups'}`,
+                  )
+                : null}
+              {mutualFriends.length ? chip(`${mutualFriends.length} mutual`) : null}
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {isSelf
+                ? actionButton('Edit profile', () => router.push('/(tabs)/profile' as never), {
+                    primary: true,
+                  })
+                : userId
+                  ? [
+                      primaryAction(),
+                      sharedGroups.length
+                        ? actionButton('Split', () => router.push('/split/new' as never), {
+                            icon: <UsersThree size={17} color={tokens.foreground} />,
+                          })
+                        : null,
+                      sharedGroups.length
+                        ? actionButton(
+                            'Settle',
+                            () => router.push(`/settle/${profileHandle}` as never),
+                            { icon: <ArrowLeftRight size={17} color={tokens.foreground} /> },
+                          )
+                        : null,
+                    ]
+                  : null}
             </View>
           </View>
         </View>
       )}
-      {authorizedSharedTimeline ? (
-        <>
-          <View
-            style={{
-              padding: 20,
-              gap: 18,
-              borderRadius: 22,
-              backgroundColor: tokens.surfaceSubtle,
-              borderWidth: 1,
-              borderColor: tokens.borderSubtle,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <Avatar
-                initials={profileHandle.slice(0, 2).toUpperCase()}
-                label={`@${profileHandle}`}
-                size={60}
-                imageUrl={matchingMembers[0]?.avatarUrl}
-                avatarId={matchingMembers[0]?.avatarId}
+
+      {publicProfile && userId && !isSelf ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {stat(
+            'Balance',
+            balanceAvailable ? (
+              <Money
+                amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
+                currency={balances[0]?.currency ?? 'INR'}
+                size="body"
               />
-              <View style={{ flex: 1, gap: 3 }}>
-                <Typography variant="heading">{publicProfile?.displayName}</Typography>
-                <Typography variant="small">Shared money timeline</Typography>
-              </View>
-            </View>
-            <View
-              style={{
-                paddingTop: 16,
-                borderTopWidth: 1,
-                borderTopColor: tokens.borderSubtle,
-                gap: 5,
-              }}
-            >
-              {balanceAvailable ? (
-                <>
-                  <Money
-                    amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
-                    currency={balances[0]?.currency ?? 'INR'}
-                    size="display"
-                  />
-                  {otherBalances.map((row) => (
-                    <View
-                      key={row.currency}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                    >
-                      <Money
-                        amountMinor={row.balanceMinor < 0n ? -row.balanceMinor : row.balanceMinor}
-                        currency={row.currency}
-                        size="body"
-                      />
-                      <Typography variant="caption">
-                        {row.balanceMinor > 0n ? 'they owe you' : 'you owe'}
-                      </Typography>
-                    </View>
-                  ))}
-                </>
-              ) : (
-                <Typography variant="small">
-                  Balance unavailable until saved group ranges are complete.
-                </Typography>
-              )}
+            ) : (
+              '—'
+            ),
+            !balanceAvailable
+              ? sharedGroups.length
+                ? 'Loading…'
+                : 'No shared groups'
+              : bilateralBalance === 0n
+                ? 'You’re even'
+                : bilateralBalance > 0n
+                  ? 'They owe you'
+                  : 'You owe them',
+            balanceAvailable && bilateralBalance > 0n
+              ? tokens.income
+              : balanceAvailable && bilateralBalance < 0n
+                ? tokens.expense
+                : undefined,
+          )}
+          {stat('Messages', analytics ? String(analytics.totalMessages) : '—', 'Last 30 days')}
+          {stat(
+            analytics?.friends ? 'Friends since' : 'Connected since',
+            since
+              ? new Date(since).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+              : '—',
+          )}
+          {stat('Shared groups', String(serverGroups.length || sharedGroups.length))}
+          {otherBalances.map((row) => (
+            <View key={row.currency} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Money
+                amountMinor={row.balanceMinor < 0n ? -row.balanceMinor : row.balanceMinor}
+                currency={row.currency}
+                size="body"
+              />
               <Typography variant="caption">
-                {balanceAvailable
-                  ? bilateralBalance === 0n
-                    ? 'Even across shared groups'
-                    : bilateralBalance > 0n
-                      ? 'They owe you across shared groups'
-                      : 'You owe across shared groups'
-                  : 'Across shared groups'}
+                {row.balanceMinor > 0n ? 'they owe you' : 'you owe'}
               </Typography>
             </View>
-          </View>
+          ))}
+        </View>
+      ) : null}
 
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Button
-              size="lg"
-              style={{ flex: 1 }}
-              onPress={() => router.push('/split/new' as never)}
+      {serverGroups.length ? (
+        <View style={[card, { padding: 16, gap: 6 }]}>
+          <SectionHeader title="Shared groups" />
+          {serverGroups.map((group) => (
+            <Pressable
+              key={group.id}
+              accessibilityRole="button"
+              accessibilityLabel={group.name}
+              onPress={() => router.push(`/group/${encodeURIComponent(group.id)}` as never)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 }}
             >
-              <UsersThree size={18} color={tokens.primaryForeground} />
-              <Text
+              <View
                 style={{
-                  marginLeft: 8,
-                  color: tokens.primaryForeground,
-                  fontFamily: 'SpaceGrotesk_600SemiBold',
-                  fontSize: 15,
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: group.color ?? tokens.primary,
                 }}
-              >
-                Split
-              </Text>
-            </Button>
-            <Button
-              size="lg"
-              style={{ flex: 1 }}
-              variant="outline"
-              onPress={() => router.push(`/settle/${profileHandle}` as never)}
-            >
-              <ArrowLeftRight size={18} color={tokens.foreground} />
-              <Text
-                style={{
-                  marginLeft: 8,
-                  color: tokens.foreground,
-                  fontFamily: 'SpaceGrotesk_600SemiBold',
-                  fontSize: 15,
-                }}
-              >
-                Settle
-              </Text>
-            </Button>
-          </View>
-          <View style={{ gap: 12 }}>
-            <SectionHeader title="Between you" />
-            {sharedGroups.map((group) => (
-              <GroupTimeline
-                key={String(group.id ?? group._id)}
-                userId={userId}
-                group={group}
-                startAt={startAt}
-                endAt={endAt}
-                fetchGroupRange={fetchGroupRange}
-                onRangeStatus={reportRangeStatus}
               />
-            ))}
-          </View>
-        </>
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: '600' }}>
+                  {group.name}
+                </Text>
+                <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>
+                  {group.memberCount} members
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {mutualFriends.length ? (
+        <View style={[card, { padding: 16, gap: 6 }]}>
+          <SectionHeader title="Mutual friends" />
+          {mutualFriends.map((friend) => (
+            <Pressable
+              key={friend.id}
+              accessibilityRole="button"
+              accessibilityLabel={friend.displayName}
+              onPress={() =>
+                friend.username
+                  ? router.push(`/@${encodeURIComponent(friend.username)}` as never)
+                  : undefined
+              }
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 }}
+            >
+              <Avatar
+                initials={friend.displayName.slice(0, 2).toUpperCase()}
+                size={34}
+                imageUrl={friend.avatarUrl ?? undefined}
+                avatarId={friend.avatarId}
+              />
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={{ color: tokens.foreground, fontWeight: '600' }}>
+                  {friend.displayName}
+                </Text>
+                {friend.username ? (
+                  <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>
+                    @{friend.username}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {authorizedSharedTimeline ? (
+        <View style={{ gap: 12 }}>
+          <SectionHeader title="Between you" />
+          {sharedGroups.map((group) => (
+            <GroupTimeline
+              key={String(group.id ?? group._id)}
+              userId={userId}
+              group={group}
+              startAt={startAt}
+              endAt={endAt}
+              fetchGroupRange={fetchGroupRange}
+              onRangeStatus={reportRangeStatus}
+            />
+          ))}
+        </View>
       ) : null}
     </ScrollView>
   );

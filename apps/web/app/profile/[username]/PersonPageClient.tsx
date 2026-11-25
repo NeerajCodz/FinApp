@@ -2,13 +2,25 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { bilateralBalancesByCurrency } from '@convex/splits/domain';
-import { ArrowLeft, ArrowLeftRight, UsersRound } from 'lucide-react';
-import { Avatar, Card, Empty, SectionHeader, Separator } from '@finapp/ui/web';
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  ChartColumn,
+  MessageCircle,
+  UserPlus,
+  UsersRound,
+} from 'lucide-react';
+import { Avatar, Empty } from '@finapp/ui/web';
 import {
   FinanceEmptyState,
   formatTransactionDate,
   Money,
+  personStatus,
   TransactionRow,
 } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -45,6 +57,7 @@ type Entry = LocalRecord & {
   payerAmountMinor?: bigint | number | string;
 };
 export type PublicProfile = {
+  id?: string;
   username: string;
   displayName: string;
   avatarId?: string;
@@ -73,8 +86,35 @@ const endAt = Date.now() + 1;
 const startAt = endAt - 90 * 24 * 60 * 60 * 1000;
 
 export default function PersonPage({ handle, profile, profileUnavailable }: PersonPageProps) {
+  const router = useRouter();
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
   const person = profile?.username.toLowerCase() === handle ? profile : null;
+  const otherId = person?.id && person.id !== userId ? (person.id as Id<'users'>) : null;
+  const live = Boolean(userId && isConnected && otherId);
+  const relationship = useQuery(
+    api.social.queries.relationship,
+    live && otherId ? { userId: otherId } : 'skip',
+  );
+  const analytics = useQuery(
+    api.social.queries.personAnalytics,
+    live && otherId ? { userId: otherId, tzOffsetMinutes: new Date().getTimezoneOffset() } : 'skip',
+  );
+  const sendRequest = useMutation(api.social.mutations.sendRequest);
+  const respondToRequest = useMutation(api.social.mutations.respondToRequest);
+  const startConversation = useMutation(api.directMessages.mutations.startConversation);
+  const [actionError, setActionError] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setActionError('');
+    try {
+      await action();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'That didn\u2019t work. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
   const {
     records: groups,
     loading: groupsLoading,
@@ -235,119 +275,273 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
   const recent = expenses;
   const routeToSettle = personId ?? handle;
 
+  const isSelf = Boolean(userId && person?.id && person.id === userId);
+  const status = relationship?.status;
+  const presence = analytics ? personStatus(analytics) : '';
+  const mutualFriends = relationship?.mutualFriends ?? [];
+  const serverGroups = relationship?.sharedGroups ?? [];
+  const groupCount = Math.max(sharedGroups.length, serverGroups.length);
+  const splitHref =
+    sharedGroups.length === 1
+      ? `/split/new?groupId=${encodeURIComponent(idOf(sharedGroups[0]!))}`
+      : '/split/new';
+  const balanceLabel = !balanceAvailable
+    ? sharedGroups.length
+      ? 'Loading balance…'
+      : 'No shared groups'
+    : bilateralBalance === 0n
+      ? 'You’re even'
+      : bilateralBalance > 0n
+        ? 'They owe you'
+        : 'You owe them';
+  const since = analytics?.friendsSince ?? analytics?.conversationSince;
+
+  const primaryAction = () => {
+    if (!person?.id) return null;
+    const personId = person.id as Id<'users'>;
+    if (status === 'friends' || analytics?.conversationId)
+      return (
+        <button
+          type="button"
+          className="profile-action profile-action--primary"
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              const conversationId =
+                analytics?.conversationId ?? (await startConversation({ userId: personId }));
+              router.push(`/messages/${encodeURIComponent(String(conversationId))}`);
+            })
+          }
+        >
+          <MessageCircle size={17} /> Message
+        </button>
+      );
+    const incomingId =
+      relationship && 'incomingRequestId' in relationship
+        ? relationship.incomingRequestId
+        : undefined;
+    if (status === 'incoming' && incomingId)
+      return (
+        <button
+          type="button"
+          className="profile-action profile-action--primary"
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              await respondToRequest({ requestId: incomingId, response: 'accept' });
+            })
+          }
+        >
+          <UserPlus size={17} /> Accept request
+        </button>
+      );
+    if (status === 'outgoing')
+      return (
+        <button type="button" className="profile-action" disabled>
+          Request sent
+        </button>
+      );
+    if (status === 'none')
+      return (
+        <button
+          type="button"
+          className="profile-action profile-action--primary"
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              await sendRequest({ recipientId: personId });
+            })
+          }
+        >
+          <UserPlus size={17} /> Add friend
+        </button>
+      );
+    return null;
+  };
+
   return (
-    <main className="public-profile-page">
-      <div className="finance-page public-profile-content">
-        <header className="public-profile-heading">
-          <Link className="finance-secondary-action" href="/people" aria-label="Go back to People">
-            <ArrowLeft size={18} />
+    <div className="finance-page finance-page--wide profile-page">
+      <header className="profile-topbar">
+        <Link className="profile-icon-button" href={userId ? '/network' : '/'} aria-label="Back">
+          <ArrowLeft size={18} />
+        </Link>
+        <span className="profile-crumb">{userId ? 'People' : 'Finapp'}</span>
+        <span aria-hidden>/</span>
+        <span className="profile-crumb profile-crumb--current">
+          {person ? person.displayName : `@${handle}`}
+        </span>
+      </header>
+      {profileUnavailable ? (
+        <section className="profile-card profile-error" role="alert">
+          <p className="public-profile-eyebrow">Profile temporarily unavailable</p>
+          <h2>We couldn’t load this profile.</h2>
+          <p>Check your connection and try again.</p>
+          <Link className="profile-action" href={`/@${encodeURIComponent(handle)}`}>
+            Retry
           </Link>
-          <div>
-            <p className="public-profile-eyebrow">Finapp · People</p>
-            <h1>Public profile</h1>
-          </div>
-        </header>
-        {profileUnavailable ? (
-          <div className="finance-record-panel public-profile-card" role="alert">
-            <div className="public-profile-error">
-              <p className="public-profile-eyebrow">PROFILE TEMPORARILY UNAVAILABLE</p>
-              <h2>We couldn’t load this profile.</h2>
-              <p>Check your connection and try again.</p>
-              <Link className="finance-secondary-action" href={`/@${encodeURIComponent(handle)}`}>
-                Retry
-              </Link>
-            </div>
-          </div>
-        ) : !person ? (
-          <Empty title="Profile not found" description={`No public profile matches @${handle}.`} />
-        ) : (
-          <>
-            <Card className="finance-record-panel public-profile-card">
-              <div className="public-profile-hero">
+        </section>
+      ) : !person ? (
+        <Empty title="Profile not found" description={`No public profile matches @${handle}.`} />
+      ) : (
+        <>
+          <section className="profile-card profile-hero">
+            <div className="profile-cover" aria-hidden />
+            <div className="profile-hero-body">
+              <span className="profile-avatar">
                 <Avatar
                   initials={(person.displayName || handle).slice(0, 2).toUpperCase()}
                   label={`@${person.username}`}
-                  size={88}
+                  size={104}
                   imageUrl={person.avatarUrl}
                   avatarId={person.avatarId}
                 />
-                <div className="public-profile-identity">
-                  <p className="public-profile-eyebrow">FINAPP MEMBER</p>
-                  <h2>{person.displayName}</h2>
-                  <p className="public-profile-handle">@{person.username}</p>
+                {analytics?.active ? (
+                  <span className="profile-online" role="img" aria-label="Active now" />
+                ) : null}
+              </span>
+              <div className="profile-identity">
+                <h1>{person.displayName}</h1>
+                <p>
+                  @{person.username}
+                  {presence ? <span> · {presence}</span> : null}
+                </p>
+                <div className="profile-chips">
+                  {isSelf ? <span className="profile-chip">This is you</span> : null}
+                  {status === 'friends' ? (
+                    <span className="profile-chip profile-chip--ok">Friends</span>
+                  ) : null}
+                  {status === 'incoming' ? (
+                    <span className="profile-chip">Sent you a request</span>
+                  ) : null}
+                  {groupCount ? (
+                    <span className="profile-chip">
+                      {groupCount} shared {groupCount === 1 ? 'group' : 'groups'}
+                    </span>
+                  ) : null}
+                  {mutualFriends.length ? (
+                    <span className="profile-chip">{mutualFriends.length} mutual</span>
+                  ) : null}
                 </div>
               </div>
-              <Separator />
-              <p className="public-profile-note">
-                Shared group activity appears here when you both belong to the same group.
-              </p>
-              {userId && sharedGroups.length > 0 && (
-                <>
-                  <Separator />
-                  <div style={{ display: 'grid', gap: 5 }}>
-                    {balanceAvailable ? (
+              <div className="profile-actions">
+                {isSelf ? (
+                  <Link className="profile-action profile-action--primary" href="/profile">
+                    Edit profile
+                  </Link>
+                ) : userId ? (
+                  <>
+                    {primaryAction()}
+                    {sharedGroups.length ? (
                       <>
-                        <Money
-                          amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
-                          currency={balances[0]?.currency ?? 'INR'}
-                          size="display"
-                        />
-                        {otherBalances.map((row) => (
-                          <span key={row.currency} className="finance-muted">
-                            <Money
-                              amountMinor={
-                                row.balanceMinor < 0n ? -row.balanceMinor : row.balanceMinor
-                              }
-                              currency={row.currency}
-                              size="body"
-                            />{' '}
-                            {row.balanceMinor > 0n ? 'they owe you' : 'you owe'}
-                          </span>
-                        ))}
+                        <Link className="profile-action" href={splitHref}>
+                          <UsersRound size={17} /> Split
+                        </Link>
+                        <Link
+                          className="profile-action"
+                          href={`/settle/${encodeURIComponent(routeToSettle)}`}
+                        >
+                          <ArrowLeftRight size={17} /> Settle
+                        </Link>
                       </>
-                    ) : (
-                      <p className="finance-muted">
-                        Balance unavailable until saved group ranges are complete.
-                      </p>
-                    )}
-                    <small>
-                      {balanceAvailable
-                        ? bilateralBalance === 0n
-                          ? 'Even across shared groups'
-                          : bilateralBalance > 0n
-                            ? 'They owe you across shared groups'
-                            : 'You owe across shared groups'
-                        : 'Across shared groups'}
-                    </small>
-                  </div>
-                </>
-              )}
-            </Card>
-            {userId && sharedGroups.length > 0 && (
-              <>
-                <div className="finance-page-actions">
-                  <Link
-                    className="finance-primary-link"
-                    href={
-                      sharedGroups.length === 1
-                        ? `/split/new?groupId=${encodeURIComponent(idOf(sharedGroups[0]!))}`
-                        : '/split/new'
-                    }
-                  >
-                    <UsersRound size={17} /> Split
+                    ) : null}
+                    {person.id ? (
+                      <Link
+                        className="profile-icon-button"
+                        href={`/network/person/${encodeURIComponent(person.id)}`}
+                        aria-label={`${person.displayName} analytics`}
+                        title="Analytics"
+                      >
+                        <ChartColumn size={18} />
+                      </Link>
+                    ) : null}
+                  </>
+                ) : (
+                  <Link className="profile-action profile-action--primary" href="/sign-in">
+                    Sign in to connect
                   </Link>
-                  <Link
-                    className="finance-secondary-action"
-                    href={`/settle/${encodeURIComponent(routeToSettle)}`}
-                  >
-                    <ArrowLeftRight size={17} /> Settle
-                  </Link>
-                </div>
-                {rangeState === 'loading' && sharedGroups.length > 0 && (
-                  <p className="finance-form-note" role="status">
-                    Loading shared group ranges…
-                  </p>
                 )}
+              </div>
+            </div>
+            {actionError ? (
+              <p className="finance-form-error profile-hero-error" role="alert">
+                {actionError}
+              </p>
+            ) : null}
+          </section>
+
+          {userId && !isSelf ? (
+            <section className="profile-stats" aria-label="Summary">
+              <div className="profile-stat">
+                <span>Balance</span>
+                <strong>
+                  {balanceAvailable ? (
+                    <Money
+                      amountMinor={bilateralBalance < 0n ? -bilateralBalance : bilateralBalance}
+                      currency={balances[0]?.currency ?? 'INR'}
+                      size="body"
+                    />
+                  ) : (
+                    '—'
+                  )}
+                </strong>
+                <small
+                  data-tone={
+                    !balanceAvailable
+                      ? undefined
+                      : bilateralBalance > 0n
+                        ? 'positive'
+                        : bilateralBalance < 0n
+                          ? 'negative'
+                          : undefined
+                  }
+                >
+                  {balanceLabel}
+                </small>
+                {otherBalances.map((row) => (
+                  <small key={row.currency}>
+                    <Money
+                      amountMinor={row.balanceMinor < 0n ? -row.balanceMinor : row.balanceMinor}
+                      currency={row.currency}
+                      size="body"
+                    />{' '}
+                    {row.balanceMinor > 0n ? 'they owe you' : 'you owe'}
+                  </small>
+                ))}
+              </div>
+              <div className="profile-stat">
+                <span>Shared expenses</span>
+                <strong>{recent.length}</strong>
+                <small>Last 90 days</small>
+              </div>
+              <div className="profile-stat">
+                <span>Messages</span>
+                <strong>{analytics ? analytics.totalMessages : '—'}</strong>
+                <small>Last 30 days</small>
+              </div>
+              <div className="profile-stat">
+                <span>{analytics?.friends ? 'Friends since' : 'Connected since'}</span>
+                <strong>
+                  {since
+                    ? new Date(since).toLocaleDateString(undefined, {
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : '—'}
+                </strong>
+                <small>{status === 'friends' ? 'Friends' : 'Not friends yet'}</small>
+              </div>
+            </section>
+          ) : null}
+
+          {userId && !isSelf ? (
+            <div className="profile-columns">
+              <section className="profile-card profile-panel">
+                <header className="profile-panel-head">
+                  <h2>Between you</h2>
+                  {rangeState === 'loading' && sharedGroups.length ? (
+                    <small role="status">Loading…</small>
+                  ) : null}
+                </header>
                 {(rangeState === 'uncached' || rangeState === 'error') && (
                   <p
                     className={rangeState === 'error' ? 'finance-form-error' : 'finance-form-note'}
@@ -356,45 +550,115 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
                     {rangeError}
                   </p>
                 )}
-                <section style={{ display: 'grid', gap: 12 }}>
-                  <SectionHeader title="Between you" />
-                  {recent.length ? (
-                    <div className="finance-record-list">
-                      {recent.map((expense) => {
-                        const group = sharedGroups.find((item) =>
-                          aliases(item).includes(String(expense.groupId)),
-                        );
-                        return (
-                          <TransactionRow
-                            key={idOf(expense)}
-                            title={expense.title ?? 'Group expense'}
-                            category="Shared expense"
-                            account={group?.name ?? 'Group'}
-                            amountMinor={asMinor(expense.amountMinor)}
-                            currency={expense.currency ?? group?.currency ?? 'INR'}
-                            type="expense"
-                            semanticType="split"
-                            date={formatTransactionDate(
-                              Number(expense.occurredAt ?? Date.now()),
-                              expense.hasTime,
-                            )}
-                          />
-                        );
-                      })}
-                    </div>
+                {recent.length ? (
+                  <div className="finance-record-list">
+                    {recent.map((expense) => {
+                      const group = sharedGroups.find((item) =>
+                        aliases(item).includes(String(expense.groupId)),
+                      );
+                      return (
+                        <TransactionRow
+                          key={idOf(expense)}
+                          title={expense.title ?? 'Group expense'}
+                          category="Shared expense"
+                          account={group?.name ?? 'Group'}
+                          amountMinor={asMinor(expense.amountMinor)}
+                          currency={expense.currency ?? group?.currency ?? 'INR'}
+                          type="expense"
+                          semanticType="split"
+                          date={formatTransactionDate(
+                            Number(expense.occurredAt ?? Date.now()),
+                            expense.hasTime,
+                          )}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <FinanceEmptyState
+                    kind="activity"
+                    compact
+                    title="Nothing shared yet"
+                    description={
+                      sharedGroups.length
+                        ? 'Expenses between you will appear here.'
+                        : 'Add them to a group to split expenses together.'
+                    }
+                  />
+                )}
+              </section>
+              <aside className="profile-side">
+                <section className="profile-card profile-panel">
+                  <h2>Shared groups</h2>
+                  {serverGroups.length ? (
+                    <ul className="profile-list">
+                      {serverGroups.map((group) => (
+                        <li key={group.id}>
+                          <Link href={`/group/${encodeURIComponent(group.id)}`}>
+                            <span
+                              className="profile-group-dot"
+                              style={{ background: group.color ?? 'var(--finance-lime)' }}
+                              aria-hidden
+                            />
+                            <span className="profile-list-copy">
+                              <strong>{group.name}</strong>
+                              <small>{group.memberCount} members</small>
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
-                    <FinanceEmptyState
-                      kind="activity"
-                      title="Nothing shared yet."
-                      description="Expenses between you will appear here, grouped across your shared groups."
-                    />
+                    <p className="finance-muted">No shared groups yet.</p>
                   )}
                 </section>
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </main>
+                <section className="profile-card profile-panel">
+                  <h2>Mutual friends</h2>
+                  {mutualFriends.length ? (
+                    <ul className="profile-list">
+                      {mutualFriends.map((friend) => (
+                        <li key={friend.id}>
+                          <Link
+                            href={
+                              friend.username
+                                ? `/profile/${encodeURIComponent(friend.username)}`
+                                : '/people'
+                            }
+                          >
+                            <Avatar
+                              initials={friend.displayName.slice(0, 2).toUpperCase()}
+                              label={friend.displayName}
+                              size={32}
+                              imageUrl={friend.avatarUrl}
+                              avatarId={friend.avatarId}
+                            />
+                            <span className="profile-list-copy">
+                              <strong>{friend.displayName}</strong>
+                              {friend.username ? <small>@{friend.username}</small> : null}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="finance-muted">No mutual friends.</p>
+                  )}
+                </section>
+              </aside>
+            </div>
+          ) : !userId ? (
+            <section className="profile-card profile-panel profile-cta">
+              <h2>Split expenses with {person.displayName}</h2>
+              <p className="finance-muted">
+                Sign in to add them as a friend, share a group and settle up.
+              </p>
+              <Link className="profile-action profile-action--primary" href="/sign-up">
+                Get started
+              </Link>
+            </section>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
