@@ -255,6 +255,34 @@ function RowText({
   );
 }
 
+/** A row with custom trailing content (e.g. a button) and optional content below the text. */
+export function SettingsItem({
+  icon,
+  tone,
+  title,
+  description,
+  trailing,
+  children,
+}: {
+  icon?: React.ReactNode;
+  tone?: Tone;
+  title: string;
+  description?: string;
+  trailing?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View style={[rowStyle, children ? { alignItems: 'flex-start' } : null]}>
+      <RowIcon icon={icon} tone={tone} />
+      <View style={{ flex: 1, minWidth: 0, gap: 10 }}>
+        <RowText title={title} description={description} />
+        {children}
+      </View>
+      {trailing}
+    </View>
+  );
+}
+
 export function SettingsLink({
   icon,
   tone,

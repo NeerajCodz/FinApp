@@ -96,6 +96,35 @@ function RowIcon({ icon, tone }: { icon?: React.ReactNode; tone?: string }) {
   );
 }
 
+/** A row with custom trailing content (e.g. a button) and optional content below the text. */
+export function SettingsItem({
+  icon,
+  tone,
+  title,
+  description,
+  trailing,
+  children,
+}: {
+  icon?: React.ReactNode;
+  tone?: string;
+  title: string;
+  description?: string;
+  trailing?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={styles.row} data-static>
+      <RowIcon icon={icon} tone={tone} />
+      <span className={styles.rowText}>
+        <strong>{title}</strong>
+        {description ? <small>{description}</small> : null}
+        {children ? <span className={styles.rowBody}>{children}</span> : null}
+      </span>
+      {trailing ? <span className={styles.rowTrailing}>{trailing}</span> : null}
+    </div>
+  );
+}
+
 /** A navigational row (chevron) or a plain action row. */
 export function SettingsLink({
   icon,
@@ -351,5 +380,18 @@ export function SettingsHero({
       </div>
       {action}
     </section>
+  );
+}
+
+/** A labelled text input for use inside `SettingsItem`. */
+export function SettingsField({
+  label,
+  ...input
+}: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+  return (
+    <label className={styles.field}>
+      {label}
+      <input {...input} />
+    </label>
   );
 }

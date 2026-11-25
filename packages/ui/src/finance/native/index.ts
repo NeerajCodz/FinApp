@@ -296,5 +296,6 @@ export {
   SettingsChips,
   SettingsTextArea,
   SettingsHero,
+  SettingsItem,
   useSettingsToneColor,
 } from './SettingsKit';
