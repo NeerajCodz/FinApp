@@ -4,15 +4,15 @@
  */
 
 /** The FinApp product release these components shipped in. */
-export const PRODUCT_VERSION = '1.7.1';
+export const PRODUCT_VERSION = '1.8.0';
 export const RELEASE_CHANNEL = 'stable';
 
 /** Independent component versions (SemVer). */
 export const COMPONENT_VERSIONS = {
-  web: '1.7.1',
+  web: '1.8.0',
   mobile: '1.7.1',
   ui: '1.7.1',
-  backend: '1.7.1',
+  backend: '1.8.0',
 } as const;
 
 /** Store build numbers for the current mobile version. */
@@ -23,7 +23,7 @@ export const BUILD_NUMBERS = { android: 16, ios: 16 } as const;
  * ask to update (mobile) or reload (web) when they are older.
  */
 export const BACKEND_INFO = {
-  version: '1.7.1',
+  version: '1.8.0',
   apiVersion: 1,
   schemaVersion: 6,
   minimumMobileVersion: '1.3.0',

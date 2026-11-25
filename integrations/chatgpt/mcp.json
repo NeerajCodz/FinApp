@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "finapp": {
+      "type": "http",
+      "url": "https://fin.neeraj.fyi/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": { "mode": "cimd" },
+            "baseScopes": ["finapp:read"]
+          }
+        }
+      }
+    }
+  }
+}

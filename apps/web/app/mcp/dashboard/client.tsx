@@ -6,6 +6,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { McpDashboard, type McpCatalogEntry, type McpWidgetPreview } from '@finapp/ui/mcp';
 import { useTheme } from '@finapp/ui/web';
+import { ClientCredentials } from './ClientCredentials';
 
 export function McpDashboardClient({
   endpoint,
@@ -58,49 +59,55 @@ export function McpDashboardClient({
     }
   }
 
+  const signedIn = isAuthenticated && Boolean(profile) && grants !== undefined;
   return (
-    <McpDashboard
-      signedIn={isAuthenticated && Boolean(profile) && grants !== undefined}
-      accountLoading={
-        isLoading || (isAuthenticated && (profile === undefined || grants === undefined))
-      }
-      displayName={profile?.displayName}
-      endpoint={endpoint}
-      connectHref="/mcp/login?next=%2Fmcp%2Fdashboard"
-      statusUrl="/mcp/status"
-      catalog={catalog}
-      widgetPreviews={widgetPreviews}
-      theme={isDark ? 'dark' : 'light'}
-      connections={
-        grants?.map((grant) => ({
-          id: String(grant.id),
-          clientName: grant.clientName,
-          scopes: grant.scopes,
-          createdAt: grant.createdAt,
-          revokedAt: grant.revokedAt,
-        })) ?? []
-      }
-      onRevoke={handleRevoke}
-      activity={
-        activity?.events.map((event) => ({
-          id: String(event.id),
-          clientName: event.clientName,
-          toolName: event.toolName,
-          succeeded: event.succeeded,
-          createdAt: event.createdAt,
-        })) ?? []
-      }
-      activityLoading={Boolean(isAuthenticated && profile && activity === undefined)}
-      activityRetained={activity?.retained ?? 0}
-      activityMatching={activity?.matching ?? 0}
-      activityHasMore={activity?.hasMore ?? false}
-      activityDomain={activityDomain}
-      onActivityDomainChange={setActivityDomain}
-      activityOutcome={activityOutcome}
-      onActivityOutcomeChange={setActivityOutcome}
-      activityWindow={activityWindow}
-      onActivityWindowChange={updateActivityWindow}
-      revokingGrantId={revokingGrantId}
-    />
+    <>
+      <McpDashboard
+        signedIn={isAuthenticated && Boolean(profile) && grants !== undefined}
+        accountLoading={
+          isLoading || (isAuthenticated && (profile === undefined || grants === undefined))
+        }
+        displayName={profile?.displayName}
+        endpoint={endpoint}
+        connectHref="/mcp/login?next=%2Fmcp%2Fdashboard"
+        statusUrl="/mcp/status"
+        catalog={catalog}
+        widgetPreviews={widgetPreviews}
+        theme={isDark ? 'dark' : 'light'}
+        connections={
+          grants?.map((grant) => ({
+            id: String(grant.id),
+            clientName: grant.clientName,
+            scopes: grant.scopes,
+            createdAt: grant.createdAt,
+            revokedAt: grant.revokedAt,
+          })) ?? []
+        }
+        onRevoke={handleRevoke}
+        activity={
+          activity?.events.map((event) => ({
+            id: String(event.id),
+            clientName: event.clientName,
+            toolName: event.toolName,
+            succeeded: event.succeeded,
+            createdAt: event.createdAt,
+          })) ?? []
+        }
+        activityLoading={Boolean(isAuthenticated && profile && activity === undefined)}
+        activityRetained={activity?.retained ?? 0}
+        activityMatching={activity?.matching ?? 0}
+        activityHasMore={activity?.hasMore ?? false}
+        activityDomain={activityDomain}
+        onActivityDomainChange={setActivityDomain}
+        activityOutcome={activityOutcome}
+        onActivityOutcomeChange={setActivityOutcome}
+        activityWindow={activityWindow}
+        onActivityWindowChange={updateActivityWindow}
+        revokingGrantId={revokingGrantId}
+      />
+      {signedIn ? (
+        <ClientCredentials origin={new URL(endpoint).origin} endpoint={endpoint} />
+      ) : null}
+    </>
   );
 }

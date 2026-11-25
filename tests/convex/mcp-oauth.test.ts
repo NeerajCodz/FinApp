@@ -147,7 +147,7 @@ describe('MCP OAuth authorization code exchange', () => {
 
       await expect(
         fixture.t.mutation(api.mcpOAuth.exchangeAuthorizationCode, exchange),
-      ).rejects.toThrow('INVALID_GRANT');
+      ).rejects.toThrow(field === 'client' ? 'INVALID_CLIENT' : 'INVALID_GRANT');
       expect((await fixture.storedCode())?.consumedAt).toBeUndefined();
       expect(await fixture.grants()).toHaveLength(0);
       await expect(
