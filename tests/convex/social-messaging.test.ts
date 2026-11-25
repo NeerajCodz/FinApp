@@ -121,6 +121,7 @@ describe('social and messaging backend', () => {
     expect(await first.query(api.social.queries.friends, {})).toEqual([]);
     expect(await first.query(api.users.queries.publicProfile, { username: 'second_user' })).toEqual(
       {
+        id: ids.secondId,
         username: 'second_user',
         displayName: 'Second',
         avatarUrl: null,
