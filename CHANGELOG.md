@@ -6,6 +6,26 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 its manifest as `version.json`
 (`https://github.com/NeerajCodz/FinApp/releases/download/finapp-v<version>/version.json`).
 
+## 1.10.1
+
+Web 1.10.1 · Mobile 1.10.1 · UI 1.10.1 · Backend 1.10.1 · API 1 · Schema 8
+
+A new lock screen, authenticator apps and recovery codes, and smoother sign-in.
+
+- **Lock screen**: redesigned on web and mobile with the Finapp logo, your photo in your accent
+  colour, your name and @username, a six-digit PIN that unlocks as you type the last digit, and
+  "Not you? Sign out". It follows your theme and custom accent.
+- **Authenticator apps**: turn on codes from Google Authenticator, 1Password, Authy or any TOTP
+  app in Settings → Security (scan the QR code, enter the key by hand, or open the setup link on
+  your phone). Sign-in then asks for an app code; email codes stay available as a fallback.
+- **Recovery codes**: ten single-use codes when you set up an authenticator app, to sign in if you
+  lose your phone. See how many are left and make new ones any time.
+- **Sign-in**: after the two-factor code you go straight to your dashboard, and opening the
+  landing, sign-in or sign-up page while signed in takes you to the dashboard instead of looking
+  signed out. The two-factor step lets you switch between app, email and recovery codes.
+- **Security notifications** when an authenticator app is turned on or off and when a recovery
+  code is used.
+
 ## 1.10.0
 
 Web 1.10.0 · Mobile 1.10.0 · UI 1.10.0 · Backend 1.10.0 · API 1 · Schema 7
