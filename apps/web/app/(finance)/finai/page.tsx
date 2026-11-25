@@ -9,6 +9,7 @@ import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useFinaiAssistant } from '@/lib/finai/useFinaiAssistant';
 import { useFinaiDecide } from '@/lib/finai/useFinaiDecide';
+import { toPicked } from '@/lib/finai/files';
 
 export default function FinaiPage() {
   // useSearchParams needs a Suspense boundary for static rendering.
@@ -57,6 +58,13 @@ function FinaiPageContent() {
       error={isConnected ? assistant.error : 'You’re offline. Reconnect to chat with FinAI.'}
       onDecide={decide}
       showSteps={finaiSettings?.showSteps !== false}
+      attachments={assistant.attachments}
+      onAttach={
+        finaiSettings?.allowAttachments === false
+          ? undefined
+          : (files) => assistant.attach(toPicked(files))
+      }
+      onRemoveAttachment={assistant.removeAttachment}
     />
   );
 }
