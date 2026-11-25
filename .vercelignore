@@ -1,6 +1,14 @@
 # Vercel reads only this file when it exists, so it mirrors .gitignore plus local agent folders.
 .claude/
 .agents/
+# From apps/mobile/.gitignore (Vercel reads no nested ignore files): native projects and builds.
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/web-build/
+apps/mobile/.kotlin/
+**/*.tsbuildinfo
 
 node_modules/
 apps/mobile/node_modules/
