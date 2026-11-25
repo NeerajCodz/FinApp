@@ -10,14 +10,12 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarClock,
-  CircleUserRound,
   HandCoins,
   History,
   House,
   Landmark,
   Tags,
   Target,
-  UserRound,
   UsersRound,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -47,19 +45,19 @@ const navigation: NavItem[] = [
   { href: '/accounts', label: 'Accounts', icon: Landmark },
   { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
-  { href: '/groups', label: 'Groups', icon: UsersRound },
   { href: '/categories', label: 'Categories', icon: Tags },
-  { href: '/people', label: 'People', icon: UserRound },
+  { href: '/network', label: 'People', icon: UsersRound },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 const mobileNavigation = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
-  { href: '/groups', label: 'Groups', icon: UsersRound },
-  { href: '/people', label: 'People', icon: UserRound },
-  { href: '/profile', label: 'Profile', icon: CircleUserRound },
+  { href: '/network', label: 'People', icon: UsersRound },
+  { href: '/goals', label: 'Goals', icon: Target },
 ] satisfies NavItem[];
+/** People covers the hub and everything under it: people, groups, chats and profiles. */
+const PEOPLE_SECTION = ['/network', '/people', '/groups', '/group', '/messages', '/profile/'];
 type QuickAddLabel = (typeof quickAddActions)[number]['label'];
 const quickAddIcons: Record<QuickAddLabel, LucideIcon> = {
   Expense: ArrowUpRight,
@@ -128,7 +126,13 @@ export function FinanceShell({ children }: { children: ReactNode }) {
 
   const profileHref = '/profile';
   const isActive = (href: string) =>
-    pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
+    href === '/network'
+      ? PEOPLE_SECTION.some((prefix) =>
+          prefix.endsWith('/')
+            ? pathname.startsWith(prefix)
+            : pathname === prefix || pathname.startsWith(`${prefix}/`),
+        )
+      : pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
   const isProfileActive =
     pathname === '/profile' ||
     pathname.startsWith('/profile/') ||
@@ -187,6 +191,17 @@ export function FinanceShell({ children }: { children: ReactNode }) {
               </span>
             </Link>
           </>
+        }
+        mobileHeaderAction={
+          <Link href={profileHref} aria-label={`Profile, ${profileName}`}>
+            <Avatar
+              initials={profileInitials}
+              label={profileName}
+              size={36}
+              imageUrl={profile?.avatarUrl}
+              avatarId={profile?.avatarId}
+            />
+          </Link>
         }
         mobileNavigation={
           <MobileFinanceNav
