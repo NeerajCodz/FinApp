@@ -301,6 +301,7 @@ async function enrichChatMessages(
         attachmentUrl,
         ...(message.mimeType === undefined ? {} : { mimeType: message.mimeType }),
         ...(message.size === undefined ? {} : { size: message.size }),
+        ...(message.durationMs === undefined ? {} : { durationMs: message.durationMs }),
         pinnedAt: message.pinnedAt ?? null,
         ...summariseReactions(reactions, viewerId),
         ...finaiFields(message, actions, viewerId),
@@ -412,7 +413,12 @@ export const chatMeta = query({
           .map(async (message) => ({
             id: message._id,
             kind: message.kind,
-            text: message.kind === 'text' ? (message.text ?? '') : 'Bill image',
+            text:
+              message.kind === 'audio'
+                ? 'Voice message'
+                : message.kind === 'bill'
+                  ? 'Bill image'
+                  : (message.text ?? ''),
             senderId: message.senderId,
             senderName: (await profile(message.senderId)).name,
             createdAt: message.createdAt,

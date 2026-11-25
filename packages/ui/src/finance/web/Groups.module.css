@@ -908,3 +908,110 @@
     padding: 12px 9px;
   }
 }
+
+/* Full-screen group chat: compact header, thread fills the rest, composer pinned. */
+.chatScreen {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--finapp-background);
+  color: var(--finapp-foreground);
+}
+
+.chatHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 60px;
+  padding: max(8px, env(safe-area-inset-top)) 8px 8px;
+  border-bottom: 1px solid var(--finapp-border-subtle);
+}
+
+.chatHeaderIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--finapp-foreground);
+  cursor: pointer;
+}
+
+.chatHeaderIcon:hover {
+  background: var(--finapp-surface-subtle);
+}
+
+.chatHeaderMain {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chatHeaderMain:hover:not(:disabled) {
+  background: var(--finapp-surface-subtle);
+}
+
+.chatHeaderMain:disabled {
+  cursor: default;
+}
+
+.chatHeaderIcon:focus-visible,
+.chatHeaderMain:focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 1px;
+}
+
+.chatHeaderMain > :first-child {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.chatHeaderCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.chatHeaderCopy strong {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chatHeaderCopy small {
+  overflow: hidden;
+  color: var(--finapp-foreground-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chatHeaderCopy small[data-typing] {
+  color: var(--finapp-primary);
+}
+
+.chatBody {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding: 0 max(12px, calc((100vw - 820px) / 2)) max(10px, env(safe-area-inset-bottom));
+}

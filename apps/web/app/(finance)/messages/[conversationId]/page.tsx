@@ -18,6 +18,7 @@ import {
   useReadMarker,
   useTypingSender,
   type ChatMessage,
+  type VoiceClip,
 } from '@finapp/ui/chat';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useFinaiDecide } from '@/lib/finai/useFinaiDecide';
@@ -62,6 +63,7 @@ export default function DirectConversationPage() {
   const sendText = useMutation(api.directMessages.mutations.sendText);
   const createImageUpload = useMutation(api.directMessages.mutations.createImageUpload);
   const sendImage = useMutation(api.directMessages.mutations.sendImage);
+  const sendVoiceMutation = useMutation(api.directMessages.mutations.sendVoice);
   const setTypingMutation = useMutation(api.presence.mutations.setTyping);
   const markRead = useMutation(api.presence.mutations.markRead);
   const toggleReaction = useMutation(api.directMessages.mutations.toggleReaction);
@@ -106,7 +108,10 @@ export default function DirectConversationPage() {
           senderAvatarUrl: message.senderAvatarUrl,
           senderAvatarId: message.senderAvatarId,
           text: message.text,
-          imageUrl: message.attachmentUrl,
+          imageUrl: message.kind === 'audio' ? undefined : message.attachmentUrl,
+          ...(message.kind === 'audio'
+            ? { audioUrl: message.attachmentUrl, durationMs: message.durationMs }
+            : {}),
           reactions: message.reactions,
           myReaction: message.myReaction,
           pinned: message.pinnedAt !== null || pinnedIds.has(String(message.id)),
@@ -141,6 +146,37 @@ export default function DirectConversationPage() {
     typing.stop();
     optimistic.send({ kind: 'text', text: value, senderName: 'You' }, () =>
       sendText({ conversationId: typedConversationId, text: value }),
+    );
+  }
+  function submitVoice(clip: VoiceClip) {
+    setError('');
+    optimistic.send(
+      {
+        kind: 'audio',
+        audioUrl: URL.createObjectURL(clip.blob),
+        durationMs: clip.durationMs,
+        senderName: 'You',
+      },
+      async () => {
+        const { uploadUrl, ticket } = await createImageUpload({
+          conversationId: typedConversationId,
+        });
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': clip.mimeType },
+          body: clip.blob,
+        });
+        if (!response.ok) throw new Error(`Voice upload failed (${response.status}).`);
+        const uploaded = (await response.json()) as { storageId?: string };
+        if (typeof uploaded.storageId !== 'string')
+          throw new Error('The voice upload did not return a storage ID.');
+        await sendVoiceMutation({
+          conversationId: typedConversationId,
+          storageId: uploaded.storageId as Id<'_storage'>,
+          ticket,
+          durationMs: clip.durationMs,
+        });
+      },
     );
   }
   function submitImage(file: File) {
@@ -295,6 +331,7 @@ export default function DirectConversationPage() {
             onSend: submitText,
             onBlur: typing.stop,
             onAttachFile: submitImage,
+            onSendVoice: submitVoice,
             attachLabel: 'Attach JPEG, PNG, or WebP image',
             placeholder: 'Write a message… (@finai to ask FinAI)',
             mentions: [FINAI_MENTION],

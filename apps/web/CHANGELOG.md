@@ -2,6 +2,11 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.6.0
+
+- Voice messages (record and play) in group chats and DMs
+- Full-screen group chat with a compact header that opens group settings; new message bar
+
 ## 1.5.1
 
 - Redesigned bottom navigation bar (solid, icons contained, + inline)

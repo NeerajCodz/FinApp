@@ -24,7 +24,7 @@ export type ChatPerson = {
  * `event` is a ledger card (expense or settlement), `system` a centred notice, and `ai` a
  * message from an assistant sender; all render without a reply bubble from the viewer.
  */
-export type ChatMessageKind = 'text' | 'image' | 'event' | 'system' | 'ai';
+export type ChatMessageKind = 'text' | 'image' | 'event' | 'system' | 'ai' | 'audio';
 export type ChatDeliveryStatus = 'sent' | 'pending' | 'failed';
 
 export type ChatEvent = {
@@ -49,6 +49,9 @@ export type ChatMessage = {
   senderAvatarId?: string;
   text?: string;
   imageUrl?: string | null;
+  /** Voice messages: playable clip URL (a local blob/file URI while pending) and length. */
+  audioUrl?: string | null;
+  durationMs?: number;
   status?: ChatDeliveryStatus;
   reactions?: readonly { emoji: string; count: number }[];
   myReaction?: string | null;
@@ -189,7 +192,9 @@ export function messageAccessibleLabel(message: ChatMessage, mode: 'direct' | 'g
       ? `${message.event?.label ?? 'Activity'}: ${message.event?.title ?? ''} ${message.event?.amount ?? ''}`
       : message.kind === 'image'
         ? 'sent a photo'
-        : (message.text ?? '');
+        : message.kind === 'audio'
+          ? `sent a voice message${message.durationMs ? ` (${formatVoiceDuration(message.durationMs)})` : ''}`
+          : (message.text ?? '');
   const receipt =
     message.mine && message.kind !== 'event'
       ? `, ${receiptLabel(message, mode)}${
@@ -205,4 +210,101 @@ export function messageAccessibleLabel(message: ChatMessage, mode: 'direct' | 'g
 export function pinPreview(text: string, max = 80): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/** "0:07" / "1:32" for a voice clip. */
+export function formatVoiceDuration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** A small set of quick emoji for the composer's emoji picker. */
+export const COMPOSER_EMOJI = [
+  '😀',
+  '😂',
+  '😊',
+  '😍',
+  '🥳',
+  '😎',
+  '🤔',
+  '😅',
+  '😢',
+  '😡',
+  '👍',
+  '👎',
+  '🙏',
+  '👏',
+  '🙌',
+  '💪',
+  '❤️',
+  '🔥',
+  '🎉',
+  '✅',
+  '💸',
+  '💰',
+  '🧾',
+  '🍕',
+  '☕',
+  '🍻',
+  '🚕',
+  '✈️',
+  '🏠',
+  '🛒',
+  '🎁',
+  '⭐',
+] as const;
+
+/** Inserts text at a caret position and returns the new draft and caret. */
+export function insertAtCaret(draft: string, text: string, caret?: number | null) {
+  const at = caret === undefined || caret === null ? draft.length : Math.min(caret, draft.length);
+  return { draft: draft.slice(0, at) + text + draft.slice(at), caret: at + text.length };
+}
+
+/**
+ * The short line under a chat's title: who is typing, else who is online, else a count.
+ * Group: "Maya is typing…" / "2 online · 5 members" / "5 members".
+ * Direct: "typing…" / "Online" / "Last seen 5m ago".
+ */
+export function chatHeaderSubtitle(input: {
+  mode: 'group' | 'direct';
+  typingNames?: readonly string[];
+  memberCount?: number;
+  onlineCount?: number;
+  peerActive?: boolean | null;
+  peerLastSeenAt?: number | null;
+  now?: number;
+}): string {
+  const typing = input.typingNames ?? [];
+  if (input.mode === 'direct') {
+    if (typing.length) return 'typing…';
+    if (input.peerActive) return 'Online';
+    if (input.peerLastSeenAt) return `Last seen ${relativeAgo(input.peerLastSeenAt, input.now)}`;
+    return '';
+  }
+  if (typing.length) return typingLabel(typing);
+  const members = input.memberCount ? `${input.memberCount} members` : '';
+  const online = input.onlineCount ? `${input.onlineCount} online` : '';
+  return [online, members].filter(Boolean).join(' · ');
+}
+
+function relativeAgo(timestamp: number, now = Date.now()): string {
+  const minutes = Math.max(0, Math.round((now - timestamp) / 60_000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(timestamp).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/**
+ * A record's time for chat timelines: when it happened, else when it was recorded — never 0
+ * (which would render as "Jan 1, 1970").
+ */
+export function recordTime(record: object): number {
+  const fields = record as { occurredAt?: unknown; createdAt?: unknown; _creationTime?: unknown };
+  for (const value of [fields.occurredAt, fields.createdAt, fields._creationTime]) {
+    const time = Number(value);
+    if (Number.isFinite(time) && time > 0) return time;
+  }
+  return Date.now();
 }

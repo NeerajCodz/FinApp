@@ -2,9 +2,9 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Button, useTheme } from '@finapp/ui/web';
-import { Image as ImageIcon, PaperPlaneTilt, Plus } from '@phosphor-icons/react';
+import { ArrowLeft, Image as ImageIcon, PaperPlaneTilt, Plus } from '@phosphor-icons/react';
 import { FinanceEmptyState } from './FinanceEmptyState';
-import { GroupPage, Crumb, Tile, PersonAvatar, s } from './GroupUI';
+import { GroupPage, Tile, PersonAvatar, s } from './GroupUI';
 import { ChatThread } from '../../chat/web/ChatThread';
 import { FinaiSurface } from '../../ai/web/FinaiSurface';
 import { ThinkingOrb } from '../../web/ThinkingOrb';
@@ -16,7 +16,14 @@ import {
   finaiTypingNames,
   type ServerFinaiChatFields,
 } from '../../ai/finai';
-import type { ChatMessage, ChatPerson, ChatPin, ChatReactionEmoji } from '../../chat/model';
+import {
+  chatHeaderSubtitle,
+  type ChatMessage,
+  type ChatPerson,
+  type ChatPin,
+  type ChatReactionEmoji,
+} from '../../chat/model';
+import type { VoiceClip } from '../../chat/web/voice';
 
 export type GroupChatItem = {
   id: string;
@@ -45,6 +52,9 @@ export type GroupChatItem = {
   seenByPeople?: readonly ChatPerson[];
   /** FinAI reply state when this message is an @finai answer. */
   ai?: ServerFinaiChatFields;
+  /** Voice message: clip URL and length. */
+  audioUrl?: string | null;
+  durationMs?: number;
 };
 
 export type GroupChatScreenProps = {
@@ -61,6 +71,10 @@ export type GroupChatScreenProps = {
   /** Full chat screen: send the current draft (optimistic). */
   onSend?: () => void;
   onAttachFile?: (file: File) => void;
+  /** Sends a recorded voice clip (an empty composer shows a mic). */
+  onSendVoice?: (clip: VoiceClip) => void;
+  /** Members currently online (presence), for the header line. */
+  onlineCount?: number;
   canLoadOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
@@ -117,11 +131,15 @@ function threadMessages(items: readonly GroupChatItem[]): ChatMessage[] {
     return {
       ...base,
       kind:
-        item.text === undefined && item.attachmentUrl !== undefined
-          ? ('image' as const)
-          : ('text' as const),
+        item.audioUrl !== undefined
+          ? ('audio' as const)
+          : item.text === undefined && item.attachmentUrl !== undefined
+            ? ('image' as const)
+            : ('text' as const),
       text: item.text,
-      imageUrl: item.attachmentUrl,
+      imageUrl: item.audioUrl !== undefined ? undefined : item.attachmentUrl,
+      audioUrl: item.audioUrl,
+      durationMs: item.durationMs,
       status: item.status,
       reactions: item.reactions,
       myReaction: item.myReaction,
@@ -423,120 +441,114 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
 
   if (p.embedded) return <GroupPage>{timeline}</GroupPage>;
 
+  const typing = [...(p.typingNames ?? []), ...finaiTypingNames(p.items)];
+  const subtitle = chatHeaderSubtitle({
+    mode: 'group',
+    typingNames: typing,
+    memberCount: members.length,
+    onlineCount: p.onlineCount,
+  });
+  const openDetails = p.onOpenSettings ?? p.onOpenGroup;
   return (
     <GroupPage>
-      <Crumb
-        onBack={p.onBack ?? p.onOpenGroup ?? (() => {})}
-        name={p.group?.name ?? 'Group'}
-        current="Chat"
-      />
-      <header className={s.hero}>
-        {p.group && <Tile large icon={p.group.icon} color={p.group.color} />}
-        <div className={s.heroCopy}>
-          <h1>{p.group?.name ?? 'Group chat'}</h1>
-          <p className={s.subtitle}>Messages, activity and shared receipts.</p>
-          <p className={s.muted}>
-            {members.length} members{p.group?.currency ? ` · ${p.group.currency}` : ''}
-          </p>
-        </div>
-        <span className={s.avatars}>
-          {members.slice(0, 6).map((member) => (
-            <PersonAvatar
-              key={member.id}
-              name={member.name}
-              url={member.avatarUrl}
-              avatarId={member.avatarId}
-              size={38}
-            />
-          ))}
-        </span>
-        <div className={s.actions}>
-          {p.onOpenGroup && (
-            <Button variant="outline" onPress={p.onOpenGroup}>
-              View group
-            </Button>
-          )}
+      <div className={s.chatScreen} role="region" aria-label={`${p.group?.name ?? 'Group'} chat`}>
+        <header className={s.chatHeader}>
+          <button
+            type="button"
+            className={s.chatHeaderIcon}
+            aria-label="Back"
+            onClick={p.onBack ?? p.onOpenGroup}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <button
+            type="button"
+            className={s.chatHeaderMain}
+            aria-label={`${p.group?.name ?? 'Group'}, open group settings`}
+            onClick={openDetails}
+            disabled={!openDetails}
+          >
+            {p.group && <Tile icon={p.group.icon} color={p.group.color} />}
+            <span className={s.chatHeaderCopy}>
+              <strong>{p.group?.name ?? 'Group chat'}</strong>
+              {subtitle ? (
+                <small data-typing={typing.length ? '' : undefined}>{subtitle}</small>
+              ) : null}
+            </span>
+          </button>
           {p.onAddExpense && (
-            <Button onPress={p.onAddExpense}>
-              <Plus size={17} /> Add expense
-            </Button>
+            <button
+              type="button"
+              className={s.chatHeaderIcon}
+              aria-label="Add expense"
+              onClick={p.onAddExpense}
+            >
+              <Plus size={20} />
+            </button>
           )}
-          {p.onOpenSettings && (
-            <Button variant="outline" onPress={p.onOpenSettings}>
-              Edit group
-            </Button>
-          )}
-        </div>
-      </header>
-      <section
-        id="group-chat"
-        className={`${s.panel} ${s.chat}`}
-        style={{
-          height: 'calc(100dvh - 190px)',
-          minHeight: 420,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <ChatThread
-          mode="group"
-          messages={messages}
-          loading={p.loading}
-          canLoadOlder={p.canLoadOlder}
-          loadingOlder={p.loadingOlder}
-          onLoadOlder={p.onLoadOlder}
-          firstUnreadId={p.firstUnreadId}
-          typingNames={[...(p.typingNames ?? []), ...finaiTypingNames(p.items)]}
-          renderAiContent={(message) => (
-            <FinaiSurface
-              a2ui={message.ai?.a2ui}
-              actions={message.ai?.actions}
-              onDecide={p.onFinaiDecide}
-            />
-          )}
-          pinned={p.pinned}
-          onTogglePin={p.onTogglePin}
-          onReact={p.onReact}
-          onRetry={p.onRetry}
-          onDiscard={p.onDiscard}
-          onSeenLatest={p.onSeenLatest}
-          error={p.error}
-          renderEvent={(message) => {
-            const item = p.items.find((entry) => entry.id === message.id);
-            return item ? <EventCard item={item} /> : null;
-          }}
-          emptyTitle="Start the conversation"
-          emptyDescription="Share a note or attach a bill for the group."
-          composer={
-            p.canSend
-              ? {
-                  draft: p.draft,
-                  onDraftChange: (value) => {
-                    p.onDraftChange(value);
-                    p.onTypingChange?.(Boolean(value.trim()));
-                  },
-                  onSend: () => p.onSend?.(),
-                  onBlur: () => p.onTypingChange?.(false),
-                  onAttachFile: p.onAttachFile,
-                  attachLabel: 'Attach bill image',
-                  uploading: p.pending,
-                  placeholder: `Message ${p.group?.name ?? 'the group'}… (@finai to ask FinAI)`,
-                  mentions: [FINAI_MENTION],
-                }
-              : undefined
-          }
-          footer={
-            <div className={s.panel}>
-              <strong>{p.connected ? 'Chat is not synced yet' : 'Group chat is offline'}</strong>
-              <p className={s.muted}>
-                {p.connected
-                  ? 'Sync this saved group before sending messages or bill images.'
-                  : 'Connect to the internet to load and send messages. The group ledger remains available offline.'}
-              </p>
-            </div>
-          }
-        />
-      </section>
+        </header>
+        <section id="group-chat" className={s.chatBody}>
+          <ChatThread
+            mode="group"
+            messages={messages}
+            loading={p.loading}
+            canLoadOlder={p.canLoadOlder}
+            loadingOlder={p.loadingOlder}
+            onLoadOlder={p.onLoadOlder}
+            firstUnreadId={p.firstUnreadId}
+            typingNames={typing}
+            renderAiContent={(message) => (
+              <FinaiSurface
+                a2ui={message.ai?.a2ui}
+                actions={message.ai?.actions}
+                onDecide={p.onFinaiDecide}
+              />
+            )}
+            pinned={p.pinned}
+            onTogglePin={p.onTogglePin}
+            onReact={p.onReact}
+            onRetry={p.onRetry}
+            onDiscard={p.onDiscard}
+            onSeenLatest={p.onSeenLatest}
+            error={p.error}
+            renderEvent={(message) => {
+              const item = p.items.find((entry) => entry.id === message.id);
+              return item ? <EventCard item={item} /> : null;
+            }}
+            emptyTitle="Start the conversation"
+            emptyDescription="Share a note or attach a bill for the group."
+            composer={
+              p.canSend
+                ? {
+                    draft: p.draft,
+                    onDraftChange: (value) => {
+                      p.onDraftChange(value);
+                      p.onTypingChange?.(Boolean(value.trim()));
+                    },
+                    onSend: () => p.onSend?.(),
+                    onBlur: () => p.onTypingChange?.(false),
+                    onAttachFile: p.onAttachFile,
+                    onSendVoice: p.onSendVoice,
+                    attachLabel: 'Attach bill image',
+                    uploading: p.pending,
+                    placeholder: `Message ${p.group?.name ?? 'the group'}… (@finai to ask FinAI)`,
+                    mentions: [FINAI_MENTION],
+                  }
+                : undefined
+            }
+            footer={
+              <div className={s.panel}>
+                <strong>{p.connected ? 'Chat is not synced yet' : 'Group chat is offline'}</strong>
+                <p className={s.muted}>
+                  {p.connected
+                    ? 'Sync this saved group before sending messages or bill images.'
+                    : 'Connect to the internet to load and send messages. The group ledger remains available offline.'}
+                </p>
+              </div>
+            }
+          />
+        </section>
+      </div>
     </GroupPage>
   );
 }

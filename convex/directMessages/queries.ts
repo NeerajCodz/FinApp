@@ -62,6 +62,7 @@ async function enrichMessages(
         ...(message.storageId ? { attachmentUrl } : {}),
         ...(message.mimeType === undefined ? {} : { mimeType: message.mimeType }),
         ...(message.size === undefined ? {} : { size: message.size }),
+        ...(message.durationMs === undefined ? {} : { durationMs: message.durationMs }),
         createdAt: message.createdAt,
         senderName: sender.name,
         ...(sender.avatarId === undefined ? {} : { senderAvatarId: sender.avatarId }),
@@ -77,6 +78,13 @@ async function enrichMessages(
 /** Unread threads (newest first) that get an exact count; the rest stop at the soft cap. */
 const INBOX_EXACT_UNREAD_ROWS = 10;
 const INBOX_UNREAD_SOFT_CAP = 9;
+
+/** One-line preview of a message for lists and pins. */
+function messagePreview(message: Doc<'directMessages'>): string {
+  if (message.kind === 'audio') return 'Voice message';
+  if (message.kind === 'image') return 'Photo';
+  return message.text ?? '';
+}
 
 export const listConversations = query({
   args: {},
@@ -147,7 +155,7 @@ export const listConversations = query({
           lastMessage: latest
             ? {
                 kind: latest.kind,
-                ...(latest.kind === 'text' ? { text: latest.text ?? '' } : { text: 'Photo' }),
+                ...{ text: messagePreview(latest) },
                 createdAt: latest.createdAt,
                 mine: latest.senderId === actor._id,
                 seen:
@@ -246,7 +254,7 @@ export const conversationMeta = query({
         pinnedRows.map(async (message) => ({
           id: message._id,
           kind: message.kind,
-          text: message.kind === 'text' ? (message.text ?? '') : 'Photo',
+          text: messagePreview(message),
           senderId: message.senderId,
           senderName: (await profile(message.senderId)).name,
           createdAt: message.createdAt,

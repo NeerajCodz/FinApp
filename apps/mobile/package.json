@@ -1,6 +1,6 @@
 {
   "name": "@finapp/mobile",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "private": true,
   "main": "expo-router/entry",
   "dependencies": {
@@ -12,6 +12,7 @@
     "@types/react": "~19.2.4",
     "convex": "^1.46.0",
     "expo": "~57.0.34",
+    "expo-audio": "~57.0.5",
     "expo-constants": "~57.0.25",
     "expo-contacts": "~57.0.9",
     "expo-crypto": "~57.0.4",

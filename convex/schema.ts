@@ -338,12 +338,14 @@ export default defineSchema({
     groupId: v.id('groups'),
     senderId: v.id('users'),
     // `ai`: a FinAI reply to an @finai mention; senderId is the member who asked.
-    kind: v.union(v.literal('text'), v.literal('bill'), v.literal('ai')),
+    kind: v.union(v.literal('text'), v.literal('bill'), v.literal('ai'), v.literal('audio')),
     ai: v.optional(finaiChatState),
     text: optionalText,
     storageId: v.optional(v.id('_storage')),
     mimeType: optionalText,
     size: v.optional(v.number()),
+    /** Voice messages: clip length. */
+    durationMs: v.optional(v.number()),
     createdAt: timestamp,
     expiresAt: optionalTime,
     // Pins live on the message: one optional pair per row, removed with the message, and the
@@ -389,12 +391,14 @@ export default defineSchema({
     conversationId: v.id('directConversations'),
     senderId: v.id('users'),
     // `ai`: a FinAI reply to an @finai mention; senderId is the participant who asked.
-    kind: v.union(v.literal('text'), v.literal('image'), v.literal('ai')),
+    kind: v.union(v.literal('text'), v.literal('image'), v.literal('ai'), v.literal('audio')),
     ai: v.optional(finaiChatState),
     text: optionalText,
     storageId: v.optional(v.id('_storage')),
     mimeType: optionalText,
     size: v.optional(v.number()),
+    /** Voice messages: clip length. */
+    durationMs: v.optional(v.number()),
     createdAt: timestamp,
     pinnedAt: optionalTime,
     pinnedBy: v.optional(v.id('users')),

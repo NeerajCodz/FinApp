@@ -5,6 +5,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { formatMinor } from '@convex/shared/money';
 import { router, useLocalSearchParams } from 'expo-router';
+import { recordTime } from '@finapp/ui/chat';
 import { useNudge } from '@/hooks/useNudge';
 import { useFinaiDecide } from '@/hooks/useFinaiDecide';
 import { useGroupLedger } from '@/hooks/useGroupLedger';
@@ -196,13 +197,13 @@ export default function GroupHomeScreen() {
     ...recent.map((expense) => ({
       id: `expense:${recordId(expense)}`,
       kind: 'expense' as const,
-      createdAt: Number(expense.occurredAt ?? 0),
+      createdAt: recordTime(expense),
       expense,
     })),
     ...recentSettlements.map((settlement) => ({
       id: `settlement:${recordId(settlement)}`,
       kind: 'settlement' as const,
-      createdAt: Number(settlement.occurredAt ?? 0),
+      createdAt: recordTime(settlement),
       settlement,
     })),
     ...(chatMessages ?? []).map((message) => ({
@@ -236,7 +237,7 @@ export default function GroupHomeScreen() {
       return {
         id: item.id,
         kind: 'expense',
-        date: formatTransactionDate(Number(expense.occurredAt ?? 0), Boolean(expense.hasTime)),
+        date: formatTransactionDate(recordTime(expense), Boolean(expense.hasTime)),
         accessibleLabel: `Shared expense: ${String(expense.title ?? 'Group expense')}`,
         title: String(expense.title ?? 'Group expense'),
         amountMinor: expense.amountMinor as bigint,
@@ -252,7 +253,7 @@ export default function GroupHomeScreen() {
     return {
       id: item.id,
       kind: 'settlement',
-      date: formatTransactionDate(Number(settlement.occurredAt ?? 0), true),
+      date: formatTransactionDate(recordTime(settlement), true),
       accessibleLabel: `Settlement: ${from} paid ${to}`,
       title: `${from} paid ${to}`,
       amountMinor: settlement.amountMinor as bigint,
@@ -305,7 +306,7 @@ export default function GroupHomeScreen() {
     title: String(expense.title ?? 'Group expense'),
     amountMinor: expense.amountMinor as bigint,
     currency: String(group?.currency ?? ledger?.currency ?? ''),
-    date: formatTransactionDate(Number(expense.occurredAt ?? 0), Boolean(expense.hasTime)),
+    date: formatTransactionDate(recordTime(expense), Boolean(expense.hasTime)),
     occurredAt: Number(expense.occurredAt ?? 0),
     ...expenseMetadata(expense),
   }));

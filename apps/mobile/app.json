@@ -2,7 +2,7 @@
   "expo": {
     "name": "Finapp",
     "slug": "finapp",
-    "version": "1.5.2",
+    "version": "1.6.0",
     "scheme": "finapp",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -24,18 +24,24 @@
           "photosPermission": "Finapp reads photos you pick to scan receipts or share in chats.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Finapp uses the microphone to record voice messages in chats."
+        }
       ]
     ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.neerajcodz.finapp",
       "associatedDomains": ["applinks:fin.neeraj.fyi"],
-      "buildNumber": "13"
+      "buildNumber": "14"
     },
     "android": {
       "package": "com.neerajcodz.finapp",
       "allowBackup": false,
-      "versionCode": 13,
+      "versionCode": 14,
       "intentFilters": [
         {
           "action": "VIEW",

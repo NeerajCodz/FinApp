@@ -5,6 +5,16 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 [ui](packages/ui/CHANGELOG.md), [backend](convex/CHANGELOG.md). Manifests live in
 [`releases/`](releases/).
 
+## 1.6.0
+
+Web 1.6.0 · Mobile 1.6.0 (build 14) · UI 1.6.0 · Backend 1.6.0 · API 1 · Schema 6
+
+- **Voice messages** in group chats and DMs: record with the mic (shown when nothing is typed), play back inline; clips follow the group's disappearing-message setting.
+- **Chat screens rebuilt**: a compact header (group name with who is online or typing) that opens group settings, the conversation filling the screen, and the message bar always visible.
+- **New message bar**: emoji · message · attach, with send or mic.
+- **Disappearing messages**: turning retention on re-times long histories in batches; voice clips and their audio files are removed on expiry.
+- Activity in chats no longer shows "Jan 1, 1970" for records without a date.
+
 ## 1.5.2
 
 Web 1.5.1 · Mobile 1.5.2 (build 13) · UI 1.5.2 · Backend 1.5.0

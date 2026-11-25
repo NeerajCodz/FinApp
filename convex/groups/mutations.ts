@@ -1,5 +1,6 @@
 import { internal } from '../_generated/api';
 import { internalMutation, mutation, type MutationCtx } from '../_generated/server';
+import { validateVoiceMetadata, validVoiceDuration } from '../shared/voice';
 import type { Doc, Id } from '../_generated/dataModel';
 import { ConvexError, v } from 'convex/values';
 import { requireIdentity, requireUser } from '../shared/auth';
@@ -415,25 +416,13 @@ export const updateSettings = mutation({
     };
     await ctx.db.patch(args.groupId, patch);
 
-    if (args.messageRetentionMs !== undefined) {
-      const messages = await ctx.db
-        .query('groupMessages')
-        .withIndex('by_group_createdAt', (query) => query.eq('groupId', args.groupId))
-        .collect();
-      for (const message of messages) {
-        const expiresAt =
-          args.messageRetentionMs === null
-            ? undefined
-            : message.createdAt + args.messageRetentionMs;
-        await ctx.db.patch(message._id, { expiresAt });
-        if (expiresAt !== undefined)
-          await ctx.scheduler.runAt(
-            Math.max(Date.now(), expiresAt),
-            internal.groups.mutations.deleteExpiredMessage,
-            { messageId: message._id },
-          );
-      }
-    }
+    // Re-time existing messages in bounded batches (a long history can't fit one mutation).
+    if (args.messageRetentionMs !== undefined)
+      await ctx.scheduler.runAfter(0, internal.groups.mutations.applyMessageRetention, {
+        groupId: args.groupId,
+        retentionMs: args.messageRetentionMs,
+        cursor: null,
+      });
     const updated = (await ctx.db.get(args.groupId)) ?? group;
     await publishMutationResult(
       ctx,
@@ -1244,6 +1233,99 @@ export const sendBillAttachment = mutation({
       });
     await afterChatSend(ctx, args.groupId, user._id, now);
     return messageId;
+  },
+});
+
+/** Attaches an uploaded voice clip to the group chat (members only; follows group retention). */
+export const sendVoiceMessage = mutation({
+  args: { groupId: v.id('groups'), storageId: v.id('_storage'), durationMs: v.number() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const group = await ctx.db.get(args.groupId);
+    if (!group || group.archivedAt !== undefined) throw new Error('GROUP_UNAVAILABLE');
+    const membership = await ctx.db
+      .query('groupMembers')
+      .withIndex('by_group_user', (query) =>
+        query.eq('groupId', args.groupId).eq('userId', user._id),
+      )
+      .unique();
+    if (!membership) throw new Error('NOT_MEMBER');
+    const metadata = await ctx.db.system.get('_storage', args.storageId);
+    const mimeType = metadata ? validateVoiceMetadata(metadata) : null;
+    if (!metadata || !mimeType || !validVoiceDuration(args.durationMs)) {
+      if (metadata) await ctx.storage.delete(args.storageId);
+      throw new Error('INVALID_VOICE_MESSAGE');
+    }
+    const [existingGroup, existingDirect] = await Promise.all([
+      ctx.db
+        .query('groupMessages')
+        .withIndex('by_storage', (query) => query.eq('storageId', args.storageId))
+        .unique(),
+      ctx.db
+        .query('directMessages')
+        .withIndex('by_storage', (query) => query.eq('storageId', args.storageId))
+        .unique(),
+    ]);
+    if (existingGroup || existingDirect) throw new Error('VOICE_ALREADY_ATTACHED');
+    const now = Date.now();
+    const expiresAt = group.messageRetentionMs ? now + group.messageRetentionMs : undefined;
+    const messageId = await ctx.db.insert('groupMessages', {
+      groupId: args.groupId,
+      senderId: user._id,
+      kind: 'audio',
+      storageId: args.storageId,
+      mimeType,
+      size: metadata.size,
+      durationMs: Math.round(args.durationMs),
+      createdAt: now,
+      expiresAt,
+    });
+    if (expiresAt !== undefined)
+      await ctx.scheduler.runAt(expiresAt, internal.groups.mutations.deleteExpiredMessage, {
+        messageId,
+      });
+    await afterChatSend(ctx, args.groupId, user._id, now);
+    return messageId;
+  },
+});
+
+/** Messages re-timed per batch when a group's disappearing-message setting changes. */
+const RETENTION_BATCH = 200;
+
+/**
+ * Applies a group's retention to its existing messages, oldest first, one batch at a time.
+ * Stops if the setting changed again meanwhile (the newer run takes over).
+ */
+export const applyMessageRetention = internalMutation({
+  args: {
+    groupId: v.id('groups'),
+    retentionMs: v.union(v.number(), v.null()),
+    cursor: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const group = await ctx.db.get(args.groupId);
+    if (!group || (group.messageRetentionMs ?? null) !== args.retentionMs) return;
+    const page = await ctx.db
+      .query('groupMessages')
+      .withIndex('by_group_createdAt', (query) => query.eq('groupId', args.groupId))
+      .paginate({ numItems: RETENTION_BATCH, cursor: args.cursor });
+    for (const message of page.page) {
+      const expiresAt =
+        args.retentionMs === null ? undefined : message.createdAt + args.retentionMs;
+      await ctx.db.patch(message._id, { expiresAt });
+      if (expiresAt !== undefined)
+        await ctx.scheduler.runAt(
+          Math.max(Date.now(), expiresAt),
+          internal.groups.mutations.deleteExpiredMessage,
+          { messageId: message._id },
+        );
+    }
+    if (!page.isDone)
+      await ctx.scheduler.runAfter(0, internal.groups.mutations.applyMessageRetention, {
+        ...args,
+        cursor: page.continueCursor,
+      });
   },
 });
 
