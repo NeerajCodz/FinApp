@@ -44,7 +44,8 @@ export default function RecurringPage() {
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
   const [now, setNow] = React.useState(() => Date.now());
-  const rules = rulesState.records;
+  // Rules in Trash are hidden here (restore them from Trash).
+  const rules = rulesState.records.filter((rule) => rule.archivedAt === undefined);
   const accounts = accountsState.records;
   const dueRules = React.useMemo(
     () =>

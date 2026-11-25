@@ -8,6 +8,9 @@ import {
   notificationRoute,
 } from '@convex/notifications/domain';
 import type { NotificationListItem } from '@finapp/ui/finance';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
@@ -114,4 +117,15 @@ export async function markAllNotificationsRead(
       })),
     },
   );
+}
+
+/** Unread chat messages across DMs and groups (for the People badge). */
+export function useUnreadChatCount(): number {
+  const { userId, isConnected } = useBrowserSync();
+  const live = Boolean(userId && isConnected);
+  const people = useQuery(api.social.queries.peopleHub, live ? {} : 'skip');
+  const groups = useQuery(api.groups.queries.chatUnreadCounts, live ? {} : 'skip');
+  const direct = people?.reduce((sum, person) => sum + person.unreadCount, 0) ?? 0;
+  const grouped = groups ? Object.values(groups).reduce((sum, count) => sum + count, 0) : 0;
+  return direct + grouped;
 }

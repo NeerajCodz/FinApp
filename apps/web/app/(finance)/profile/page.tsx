@@ -23,6 +23,7 @@ import {
   ReceiptText,
   Settings,
   ShieldCheck,
+  Trash2,
   Wallet,
 } from 'lucide-react';
 import { Avatar, Button, Sheet, Text, useTheme } from '@finapp/ui/web';
@@ -51,7 +52,7 @@ const links = [
     href: '/categories',
     icon: ReceiptText,
   },
-  { label: 'Budget', description: 'Limits and progress', href: '/budgets', icon: Coins },
+  { label: 'Trash', description: 'Deleted items you can restore', href: '/trash', icon: Trash2 },
   {
     label: 'Analytics',
     description: 'Patterns over time',
@@ -184,10 +185,7 @@ export default function ProfilePage() {
               <span className="me-tile-icon" aria-hidden="true">
                 <Icon size={19} color={tokens.primary} />
               </span>
-              <span>
-                <strong>{label}</strong>
-                <small>{description}</small>
-              </span>
+              <strong>{label}</strong>
             </Link>
           ))}
         </section>

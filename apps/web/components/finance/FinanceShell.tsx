@@ -14,6 +14,7 @@ import {
   History,
   House,
   Landmark,
+  CircleUserRound,
   Tags,
   Target,
   UsersRound,
@@ -30,6 +31,8 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { useUnreadNotificationCount } from '@/lib/notifications';
 import { NotificationToasts } from './NotificationToasts';
+import { HeaderStatusActions } from './HeaderStatusActions';
+import { useUnreadChatCount } from '@/lib/notifications';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -54,7 +57,7 @@ const mobileNavigation = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
   { href: '/network', label: 'People', icon: UsersRound },
-  { href: '/goals', label: 'Goals', icon: Target },
+  { href: '/profile', label: 'Profile', icon: CircleUserRound },
 ] satisfies NavItem[];
 /** People covers the hub and everything under it: people, groups, chats and profiles. */
 const PEOPLE_SECTION = ['/network', '/people', '/groups', '/group', '/messages', '/profile/'];
@@ -108,6 +111,7 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   const { records: profiles } = useLocalRecords<SidebarProfile>('profile');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const unreadNotifications = useUnreadNotificationCount();
+  const unreadChats = useUnreadChatCount();
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
   useEffect(() => {
@@ -151,7 +155,12 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         navigation={
           <>
             {navigation.map(({ href, label, icon: Icon }) => {
-              const badge = href === '/notifications' ? unreadNotifications : 0;
+              const badge =
+                href === '/notifications'
+                  ? unreadNotifications
+                  : href === '/network'
+                    ? unreadChats
+                    : 0;
               return (
                 <Link
                   key={href}
@@ -192,17 +201,8 @@ export function FinanceShell({ children }: { children: ReactNode }) {
             </Link>
           </>
         }
-        mobileHeaderAction={
-          <Link href={profileHref} aria-label={`Profile, ${profileName}`}>
-            <Avatar
-              initials={profileInitials}
-              label={profileName}
-              size={36}
-              imageUrl={profile?.avatarUrl}
-              avatarId={profile?.avatarId}
-            />
-          </Link>
-        }
+        mobileHeaderAction={<HeaderStatusActions unread={unreadNotifications} />}
+        brandAction={<HeaderStatusActions unread={unreadNotifications} />}
         mobileNavigation={
           <MobileFinanceNav
             onAdd={openQuickAdd}

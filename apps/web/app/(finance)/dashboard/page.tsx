@@ -13,7 +13,6 @@ import {
 import { resolveDefaultCurrency } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import { LocalSyncSheet } from '@/components/finance/dashboard/LocalSyncSheet';
 import { SpendingPeriodSheet } from '@/components/finance/dashboard/SpendingPeriodSheet';
 
 type HomeNotification = HomeRecord & { type?: string; readAt?: number };
@@ -21,19 +20,7 @@ type HomeNotification = HomeRecord & { type?: string; readAt?: number };
 export default function DashboardPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-  const {
-    identityReady,
-    userId,
-    isConnected,
-    isSyncing,
-    syncError,
-    status,
-    failedEntries,
-    conflicts,
-    retryNow,
-    retryEntry,
-    resolveConflict,
-  } = useBrowserSync();
+  const { identityReady, userId, isConnected } = useBrowserSync();
   const { records: accounts } = useLocalRecords<HomeRecord>('account');
   const { records: transactions } = useLocalRecords<HomeRecord>('transaction');
   const { records: categories } = useLocalRecords<HomeRecord>('category');
@@ -52,7 +39,6 @@ export default function DashboardPage() {
   const [customDate, setCustomDate] = React.useState('');
   const [appliedDate, setAppliedDate] = React.useState<Date | null>(null);
   const [dateError, setDateError] = React.useState('');
-  const [syncOpen, setSyncOpen] = React.useState(false);
   const [selectedAccountId, setSelectedAccountId] = React.useState('');
   const [search, setSearch] = React.useState('');
   const range = React.useMemo(() => {
@@ -166,8 +152,6 @@ export default function DashboardPage() {
         onSearchChange={setSearch}
         onAccountChange={setSelectedAccountId}
         onChooseDate={() => setPeriodOpen(true)}
-        onOpenSync={() => setSyncOpen(true)}
-        onOpenNotifications={() => router.push('/notifications')}
         onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
         onSeeAllTransactions={() => router.push('/activity')}
         onOpenBudget={(id) => router.push(`/budget/${encodeURIComponent(id)}`)}
@@ -211,24 +195,6 @@ export default function DashboardPage() {
           setAppliedDate(selected);
           setDateError('');
           setPeriodOpen(false);
-        }}
-      />
-      <LocalSyncSheet
-        visible={syncOpen}
-        isSignedIn={Boolean(userId)}
-        isConnected={isConnected}
-        isSyncing={isSyncing}
-        status={status}
-        failedEntries={failedEntries}
-        conflicts={conflicts}
-        syncError={syncError}
-        onClose={() => setSyncOpen(false)}
-        onRetry={() => void retryNow()}
-        onRetryEntry={(localId) => void retryEntry(localId)}
-        onResolveConflict={(conflictId, winner) => void resolveConflict(conflictId, winner)}
-        onOpenSettings={() => {
-          setSyncOpen(false);
-          router.push('/settings/sync');
         }}
       />
     </div>
