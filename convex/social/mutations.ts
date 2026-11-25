@@ -2,7 +2,8 @@ import { mutation } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
-import type { Id } from '../_generated/dataModel';
+import type { Doc, Id } from '../_generated/dataModel';
+import { createNotification } from '../notifications/mutations';
 
 function assertVerified(user: {
   emailVerificationTime?: number;
@@ -26,6 +27,48 @@ async function ensureFriendship(
     .withIndex('by_pair', (q) => q.eq('userLowId', userLowId).eq('userHighId', userHighId))
     .unique();
   if (!existing) await ctx.db.insert('friendships', { userLowId, userHighId, createdAt: now });
+}
+
+const nameOf = (user: Doc<'users'>) =>
+  user.displayName ?? user.name ?? (user.username ? `@${user.username}` : 'Someone');
+
+/** "Asha sent you a friend request" (one per request send). */
+async function notifyRequest(
+  ctx: MutationCtx,
+  recipientId: Id<'users'>,
+  actor: Doc<'users'>,
+  requestId: Id<'friendRequests'>,
+  sentAt: number,
+) {
+  await createNotification(
+    ctx,
+    recipientId,
+    `friend-request:${String(requestId)}:${sentAt}`,
+    'social',
+    'friendRequest',
+    String(requestId),
+    'New friend request',
+    `${nameOf(actor)} wants to connect with you on Finapp.`,
+  );
+}
+
+/** "Asha accepted your friend request". */
+async function notifyAccepted(
+  ctx: MutationCtx,
+  recipientId: Id<'users'>,
+  actor: Doc<'users'>,
+  requestId: Id<'friendRequests'>,
+) {
+  await createNotification(
+    ctx,
+    recipientId,
+    `friend-accepted:${String(requestId)}`,
+    'social',
+    'person',
+    String(actor._id),
+    'Friend request accepted',
+    `You and ${nameOf(actor)} are now friends. Split expenses or send a message.`,
+  );
 }
 
 export const sendRequest = mutation({
@@ -59,10 +102,12 @@ export const sendRequest = mutation({
     if (incoming?.status === 'pending') {
       await ctx.db.patch(incoming._id, { status: 'accepted', updatedAt: now });
       await ensureFriendship(ctx, actor._id, recipientId, now);
+      await notifyAccepted(ctx, recipientId, actor, incoming._id);
       return { requestId: incoming._id, status: 'accepted' as const };
     }
     if (outgoing) {
       await ctx.db.patch(outgoing._id, { status: 'pending', createdAt: now, updatedAt: now });
+      await notifyRequest(ctx, recipientId, actor, outgoing._id, now);
       return { requestId: outgoing._id, status: 'pending' as const };
     }
     const requestId = await ctx.db.insert('friendRequests', {
@@ -72,6 +117,7 @@ export const sendRequest = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    await notifyRequest(ctx, recipientId, actor, requestId, now);
     return { requestId, status: 'pending' as const };
   },
 });
@@ -94,7 +140,10 @@ export const respondToRequest = mutation({
     const now = Date.now();
     const status = response === 'accept' ? 'accepted' : 'declined';
     await ctx.db.patch(requestId, { status, updatedAt: now });
-    if (status === 'accepted') await ensureFriendship(ctx, actor._id, request.requesterId, now);
+    if (status === 'accepted') {
+      await ensureFriendship(ctx, actor._id, request.requesterId, now);
+      await notifyAccepted(ctx, request.requesterId, actor, requestId);
+    }
     return status;
   },
 });

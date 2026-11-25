@@ -337,8 +337,8 @@ export const contribute = mutation({
         'goal',
         'goal',
         String(goal._id),
-        `${goal.name} reached`,
-        'Your contributions reached the target.',
+        `Goal reached: ${goal.name}`,
+        'Your contributions hit the target. Nice work!',
       );
     }
     return id;

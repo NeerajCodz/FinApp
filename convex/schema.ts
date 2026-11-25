@@ -75,6 +75,8 @@ export default defineSchema({
     updatedAt: timestamp,
     showActive: v.optional(v.boolean()),
     showLastSeen: v.optional(v.boolean()),
+    /** Days items stay in Trash before they're deleted for good (default 30; 0 = never). */
+    trashRetentionDays: v.optional(v.number()),
   }).index('by_user', ['userId']),
   devices: defineTable({
     userId: v.id('users'),
@@ -132,7 +134,9 @@ export default defineSchema({
     updatedAt: timestamp,
   })
     .index('by_owner', ['ownerId'])
-    .index('by_clientId', ['clientId']),
+    .index('by_clientId', ['clientId'])
+    .index('by_owner_archivedAt', ['ownerId', 'archivedAt'])
+    .index('by_archivedAt', ['archivedAt']),
   accountMembers: defineTable({ accountId: v.id('accounts'), userId: v.id('users'), role })
     .index('by_account', ['accountId'])
     .index('by_user', ['userId']),
@@ -155,7 +159,9 @@ export default defineSchema({
     updatedAt: timestamp,
   })
     .index('by_owner', ['ownerId'])
-    .index('by_clientId', ['clientId']),
+    .index('by_clientId', ['clientId'])
+    .index('by_owner_archivedAt', ['ownerId', 'archivedAt'])
+    .index('by_archivedAt', ['archivedAt']),
   transactions: defineTable({
     ownerId: v.id('users'),
     clientId: optionalText,
@@ -189,8 +195,12 @@ export default defineSchema({
     createdAt: timestamp,
     updatedAt: timestamp,
     deletedAt: optionalTime,
+    /** Moved to Trash together with this category or account (restored with it). */
+    trashedWith: optionalText,
   })
     .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
+    .index('by_owner_deletedAt', ['ownerId', 'deletedAt'])
+    .index('by_deletedAt', ['deletedAt'])
     .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
     .index('by_account', ['accountId'])
     .index('by_transferAccountId', ['transferAccountId'])
@@ -537,7 +547,9 @@ export default defineSchema({
     updatedAt: timestamp,
   })
     .index('by_owner_period', ['ownerId', 'startAt'])
-    .index('by_clientId', ['clientId']),
+    .index('by_clientId', ['clientId'])
+    .index('by_owner_archivedAt', ['ownerId', 'archivedAt'])
+    .index('by_archivedAt', ['archivedAt']),
   goals: defineTable({
     ownerId: v.id('users'),
     clientId: optionalText,
@@ -561,7 +573,9 @@ export default defineSchema({
     updatedAt: timestamp,
   })
     .index('by_owner', ['ownerId'])
-    .index('by_clientId', ['clientId']),
+    .index('by_clientId', ['clientId'])
+    .index('by_owner_archivedAt', ['ownerId', 'archivedAt'])
+    .index('by_archivedAt', ['archivedAt']),
   goalContributions: defineTable({
     goalId: v.id('goals'),
     ownerId: v.id('users'),
@@ -594,10 +608,15 @@ export default defineSchema({
     autoCreate: v.boolean(),
     reminderSettings: v.any(),
     enabled: v.boolean(),
+    /** In Trash: disabled while there; `enabledBeforeTrash` is restored with it. */
+    archivedAt: optionalTime,
+    enabledBeforeTrash: v.optional(v.boolean()),
     createdAt: timestamp,
     updatedAt: timestamp,
   })
     .index('by_owner_nextOccurrence', ['ownerId', 'nextOccurrence'])
+    .index('by_owner_archivedAt', ['ownerId', 'archivedAt'])
+    .index('by_archivedAt', ['archivedAt'])
     .index('by_enabled_nextOccurrence', ['enabled', 'nextOccurrence'])
     .index('by_clientId', ['clientId']),
   notifications: defineTable({

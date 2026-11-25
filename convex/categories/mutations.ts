@@ -259,7 +259,12 @@ export const setLimit = mutation({
 });
 
 export const archive = mutation({
-  args: { categoryId: v.id('categories'), clientMutationId: v.optional(v.string()) },
+  args: {
+    categoryId: v.id('categories'),
+    clientMutationId: v.optional(v.string()),
+    /** Also move the category's transactions to Trash (restored with the category). */
+    deleteTransactions: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('INSUFFICIENT_PERMISSION');
@@ -274,6 +279,35 @@ export const archive = mutation({
     if (!category || category.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
     const now = Date.now();
     await ctx.db.patch(args.categoryId, { archivedAt: now, updatedAt: now });
+    if (args.deleteTransactions) {
+      const keys = [String(args.categoryId), category.clientId].filter(
+        (key): key is string => typeof key === 'string' && key.length > 0,
+      );
+      for (const key of keys) {
+        const rows = await ctx.db
+          .query('transactions')
+          .withIndex('by_owner_category_occurredAt', (q) =>
+            q.eq('ownerId', user._id).eq('categoryId', key),
+          )
+          .collect();
+        for (const row of rows) {
+          if (row.deletedAt !== undefined || row.groupId !== undefined) continue;
+          await ctx.db.patch(row._id, {
+            deletedAt: now,
+            trashedWith: `category:${String(args.categoryId)}`,
+            updatedAt: now,
+          });
+          await recordSyncChange(
+            ctx,
+            user._id,
+            'transactions',
+            String(row._id),
+            now,
+            await ctx.db.get(row._id),
+          );
+        }
+      }
+    }
     const updated = await ctx.db.get(args.categoryId);
     if (!updated) throw new Error('INSUFFICIENT_PERMISSION');
     await publishMutationResult(

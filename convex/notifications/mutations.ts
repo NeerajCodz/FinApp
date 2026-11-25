@@ -79,6 +79,7 @@ export const setPreferences = mutation({
       settlement: v.boolean(),
       security: v.boolean(),
       sync: v.boolean(),
+      social: v.optional(v.boolean()),
     }),
     clientMutationId: v.string(),
   },
@@ -101,6 +102,7 @@ export const setPreferences = mutation({
     const preferences: NotificationPreferences = {
       ...args.preferences,
       split: args.preferences.split ?? stored.split,
+      social: args.preferences.social ?? stored.social,
     };
     const now = Date.now();
     const updated = { ...settings, notificationPreferences: preferences, updatedAt: now };

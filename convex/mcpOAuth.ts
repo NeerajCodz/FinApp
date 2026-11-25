@@ -3,6 +3,7 @@ import { internalMutation, internalQuery, mutation, query } from './_generated/s
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { getOptionalUser, requireUser } from './shared/auth';
+import { createNotification } from './notifications/mutations';
 import {
   isConfidentialSecretMethod,
   isIssuedClientId,
@@ -413,6 +414,17 @@ async function exchangeCode(
     createdAt: Date.now(),
   });
   const refreshToken = await issueRefreshToken(ctx, grantId);
+  const client = await findClient(ctx, code.clientId);
+  await createNotification(
+    ctx,
+    code.userId,
+    `mcp-connected:${String(grantId)}`,
+    'security',
+    'mcpConnection',
+    String(grantId),
+    'New app connected',
+    `${client?.clientName ?? 'An AI app'} can now use your Finapp (${code.scopes.length} ${code.scopes.length === 1 ? 'permission' : 'permissions'}). Not you? Disconnect it in Settings → AI → MCP connections.`,
+  );
   return { userId: code.userId, scopes: code.scopes, grantId, refreshToken };
 }
 

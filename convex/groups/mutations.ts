@@ -97,8 +97,8 @@ async function createPendingInvite(
       'group',
       'groupInvitation',
       String(inviteId),
-      `Invitation to ${group?.name ?? 'a group'}`,
-      `${(await ctx.db.get(inviterId))?.displayName ?? 'Someone'} invited you to join a group.`,
+      `Invitation to join ${group?.name ?? 'a group'}`,
+      `${(await ctx.db.get(inviterId))?.displayName ?? 'Someone'} invited you to ${group?.name ?? 'a group'}. Accept or decline from Groups.`,
     );
   }
   return inviteId;
@@ -337,7 +337,7 @@ export const create = mutation({
           'group',
           String(groupId),
           `Added to ${name}`,
-          'A new shared group is ready.',
+          'You can now add expenses and chat with the group.',
         );
     }
     return groupId;
@@ -676,7 +676,7 @@ export const respondToInvitation = mutation({
         'group',
         String(group._id),
         `${user.displayName ?? user.name ?? 'A user'} declined your invitation`,
-        `Your invitation to ${group.name} was declined.`,
+        `They won’t be joining ${group.name}.`,
       );
       await publishMutationResult(
         ctx,
@@ -744,7 +744,7 @@ export const respondToInvitation = mutation({
       'group',
       String(group._id),
       `${user.displayName ?? user.name ?? 'A user'} accepted your invitation`,
-      `Your invitation to ${group.name} was accepted.`,
+      `They’re now a member of ${group.name}.`,
     );
     if (joinedNow)
       await announceMemberJoined(
