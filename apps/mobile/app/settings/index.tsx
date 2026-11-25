@@ -14,6 +14,7 @@ import {
   PlugZap,
   RefreshCw,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react-native';
 import {
   SettingsGroup,
@@ -115,6 +116,13 @@ export default function SettingsHubScreen() {
           title="Local sync"
           value={syncWindow === 'all' ? 'All history' : `${syncWindow} days`}
           onPress={go('/settings/sync')}
+        />
+        <SettingsLink
+          icon={<Trash2 size={19} color={tone('danger')} />}
+          tone="danger"
+          title="Trash"
+          description="Restore deleted items; choose when they’re cleared"
+          onPress={go('/trash')}
         />
         <SettingsLink
           icon={<Eye size={19} color={tone('primary')} />}

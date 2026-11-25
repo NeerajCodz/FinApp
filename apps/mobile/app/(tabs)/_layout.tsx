@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import { Slot, router, usePathname } from 'expo-router';
-import { ClockCounterClockwise, House, Plus, Target, UsersThree } from '@finapp/ui/icons/native';
+import { ClockCounterClockwise, House, Plus, User, UsersThree } from '@finapp/ui/icons/native';
 import { Button, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +19,7 @@ const navItems = [
     match: ['/network', '/people', '/groups'],
     icon: UsersThree,
   },
-  { label: 'Goals', route: '/(tabs)/goals', match: '/goals', icon: Target },
+  { label: 'Profile', route: '/(tabs)/profile', match: '/profile', icon: User },
 ] as const;
 
 type NavItem = (typeof navItems)[number];

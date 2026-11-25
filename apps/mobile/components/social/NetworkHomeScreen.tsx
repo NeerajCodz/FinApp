@@ -1,6 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
-import { Bell, ChevronRight, MessageCircle, Search, UserPlus, Users } from 'lucide-react-native';
+import {
+  Bell,
+  ChevronRight,
+  Cloud,
+  CloudAlert,
+  CloudOff,
+  MessageCircle,
+  RefreshCw,
+  Search,
+  UserPlus,
+  Users,
+} from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -67,7 +78,22 @@ export default function NetworkHomeScreen() {
   const { tokens } = useTheme();
   const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { userId, isConnected } = useLocalSync();
+  const { userId, isConnected, isSyncing, failedEntries, syncError } = useLocalSync();
+  const syncAttention = Boolean(syncError) || failedEntries.length > 0;
+  const SyncIcon = !isConnected
+    ? CloudOff
+    : syncAttention
+      ? CloudAlert
+      : isSyncing
+        ? RefreshCw
+        : Cloud;
+  const syncLabel = !isConnected
+    ? 'Offline, open sync status'
+    : syncAttention
+      ? 'Sync needs attention'
+      : isSyncing
+        ? 'Syncing'
+        : 'Synced, open sync status';
   const [search, setSearch] = useState('');
   const [inboxOpen, setInboxOpen] = useState(false);
   const friends = useQuery(api.social.queries.friends, userId && isConnected ? {} : 'skip') as
@@ -222,11 +248,6 @@ export default function NetworkHomeScreen() {
   const requestBadge = incomingCount > 0 ? incomingCount : undefined;
   const unreadNotifications = useUnreadNotificationCount(userId);
   // Profile lives in the header now (it left the tab bar).
-  const profile = useLocalRecords<LocalRecord>(userId, 'profile').data?.[0];
-  const profileName =
-    (typeof profile?.displayName === 'string' && profile.displayName.trim()) ||
-    (typeof profile?.username === 'string' && profile.username.trim()) ||
-    'Your profile';
   const homeGroupCardWidth = Math.floor(Math.max(64, (viewportWidth - 36 - 27) / 4));
 
   return (
@@ -262,6 +283,23 @@ export default function NetworkHomeScreen() {
               Connect, split expenses, and manage your circles.
             </Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={syncLabel}
+            onPress={() => router.push('/settings/sync' as never)}
+            style={{
+              width: 43,
+              height: 43,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: tokens.borderSubtle,
+              borderRadius: 13,
+              backgroundColor: tokens.surfaceSubtle,
+            }}
+          >
+            <SyncIcon size={18} color={syncAttention ? tokens.warning : tokens.foreground} />
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
@@ -342,21 +380,6 @@ export default function NetworkHomeScreen() {
                 </Text>
               </View>
             ) : null}
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Profile, ${profileName}`}
-            onPress={() => router.push('/(tabs)/profile' as never)}
-            hitSlop={4}
-            style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-          >
-            <Avatar
-              label={profileName}
-              initials={initials(profileName)}
-              size={43}
-              avatarId={typeof profile?.avatarId === 'string' ? profile.avatarId : undefined}
-              imageUrl={typeof profile?.avatarUrl === 'string' ? profile.avatarUrl : undefined}
-            />
           </Pressable>
         </View>
 
