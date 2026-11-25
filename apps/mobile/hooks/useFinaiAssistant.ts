@@ -2,7 +2,12 @@ import * as React from 'react';
 import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { finaiErrorMessage, type FinaiAssistantMessage } from '@finapp/ui/ai/finai';
+import {
+  finaiErrorMessage,
+  finaiViewing,
+  setFinaiViewing,
+  type FinaiAssistantMessage,
+} from '@finapp/ui/ai/finai';
 
 const PAGE_SIZE = 30;
 
@@ -31,6 +36,21 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
   const sendAction = useAction(api.ai.assistant.send);
   const remove = useMutation(api.ai.assistant.deleteConversation);
   const createConversation = useMutation(api.ai.assistant.createConversation);
+  const markRead = useMutation(api.ai.assistant.markRead);
+
+  // The open chat is "on screen": its replies are marked read and never toast.
+  React.useEffect(() => {
+    if (!enabled || !activeId) return;
+    setFinaiViewing(activeId);
+    return () => {
+      if (finaiViewing() === activeId) setFinaiViewing(null);
+    };
+  }, [enabled, activeId]);
+  const activeUnread = conversations?.some((row) => String(row.id) === activeId && row.unread);
+  React.useEffect(() => {
+    if (!enabled || !activeId || !activeUnread) return;
+    markRead({ conversationId: activeId as Id<'finaiConversations'> }).catch(() => undefined);
+  }, [enabled, activeId, activeUnread, markRead]);
   // The prompt shows immediately while the action stores it, only in its own conversation
   // (`conversationId` is null until a new conversation has been created).
   const [optimistic, setOptimistic] = React.useState<{
@@ -98,14 +118,16 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
     [activeId, createConversation, draft, sendAction, sending],
   );
 
+  const select = React.useCallback((id: string | null) => {
+    setActiveId(id);
+    setError(null);
+  }, []);
+
   return {
     available: status?.available ?? true,
     conversations: (conversations ?? []).map((row) => ({ ...row, id: String(row.id) })),
     activeId,
-    select: (id: string | null) => {
-      setActiveId(id);
-      setError(null);
-    },
+    select,
     remove: async (id: string) => {
       await remove({ conversationId: id as Id<'finaiConversations'> });
       if (id === activeId) setActiveId(null);
