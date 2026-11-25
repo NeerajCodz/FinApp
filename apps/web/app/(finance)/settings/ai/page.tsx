@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Bot, KeyRound, PlugZap } from 'lucide-react';
+import { Bot, KeyRound, LayoutDashboard, PlugZap } from 'lucide-react';
 import { FinaiLogo } from '@finapp/ui/ai';
 import { SettingsGroup, SettingsHero, SettingsLink, SettingsShell } from '@finapp/ui/finance';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -49,6 +49,13 @@ export default function AiSettingsPage() {
           description="Apps like ChatGPT and Claude that can use your Finapp"
           value={grants ? `${active} active` : undefined}
           onPress={() => router.push('/settings/ai/mcp')}
+        />
+        <SettingsLink
+          icon={<LayoutDashboard size={19} />}
+          tone="primary"
+          title="MCP dashboard"
+          description="Server URL, tools, widgets, activity and OAuth setup"
+          onPress={() => router.push('/mcp/dashboard')}
         />
       </SettingsGroup>
     </SettingsShell>

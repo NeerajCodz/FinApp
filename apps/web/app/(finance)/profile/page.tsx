@@ -15,6 +15,7 @@ import {
   Coins,
   Info,
   KeyRound,
+  LayoutDashboard,
   LogOut,
   Mail,
   Palette,
@@ -213,6 +214,13 @@ export default function ProfilePage() {
             description="ChatGPT, Claude and other AI apps"
             value={grants ? `${activeConnections} active` : undefined}
             onPress={() => router.push('/settings/ai/mcp')}
+          />
+          <SettingsLink
+            icon={<LayoutDashboard size={19} />}
+            tone="primary"
+            title="MCP dashboard"
+            description="Server URL, tools, widgets, activity and OAuth setup"
+            onPress={() => router.push('/mcp/dashboard')}
           />
         </SettingsGroup>
 
