@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import { Slot, router, usePathname } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
 import {
   ClockCounterClockwise,
   House,
@@ -13,8 +12,9 @@ import { Button, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { quickAddActions } from '@finapp/ui/quick-add';
+import { TAB_BAR_HEIGHT } from '@/lib/tabBar';
 
-const SIGNATURE_BAR_HEIGHT = 96;
+const ADD_SIZE = 52;
 
 const navItems = [
   { label: 'Home', route: '/(tabs)', match: '/(tabs)', icon: House },
@@ -30,6 +30,7 @@ function NavButton({ item }: { item: NavItem }) {
   const { tokens } = useTheme();
   const active = item.match === '/(tabs)' ? pathname === '/' : pathname.includes(item.match);
   const Icon = item.icon;
+  const color = active ? tokens.primary : tokens.foregroundSubtle;
   return (
     <TouchableOpacity
       accessibilityRole="tab"
@@ -39,31 +40,16 @@ function NavButton({ item }: { item: NavItem }) {
       onPress={() => router.navigate(item.route as never)}
       style={{
         flex: 1,
+        height: TAB_BAR_HEIGHT,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
+        gap: 3,
       }}
     >
-      {!!active && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            width: 18,
-            height: 2,
-            borderRadius: 1,
-            backgroundColor: tokens.primary,
-          }}
-        />
-      )}
-      <Icon size={22} color={active ? tokens.foreground : tokens.foregroundSubtle} />
+      <Icon size={22} color={color} weight={active ? 'bold' : 'regular'} />
       <Text
-        style={{
-          color: active ? tokens.foreground : tokens.foregroundSubtle,
-          fontFamily: 'SpaceGrotesk_500Medium',
-          fontSize: 10,
-          lineHeight: 13,
-        }}
+        numberOfLines={1}
+        style={{ color, fontFamily: 'SpaceGrotesk_500Medium', fontSize: 11, lineHeight: 14 }}
       >
         {item.label}
       </Text>
@@ -71,91 +57,49 @@ function NavButton({ item }: { item: NavItem }) {
   );
 }
 
+/** The + button, seated inside the bar like the tabs (nothing pokes out above it). */
 function AddButton({ onPress }: { onPress: () => void }) {
   const { tokens } = useTheme();
   return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: 'center',
-        zIndex: 20,
-        elevation: 20,
-      }}
-    >
-      <View
+    <View style={{ height: TAB_BAR_HEIGHT, paddingHorizontal: 4, justifyContent: 'center' }}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Add"
+        activeOpacity={0.85}
+        onPress={onPress}
         style={{
-          width: 58,
-          height: 58,
-          borderRadius: 29,
+          width: ADD_SIZE,
+          height: ADD_SIZE,
+          borderRadius: 18,
           backgroundColor: tokens.primary,
-          zIndex: 21,
-          elevation: 21,
-          shadowColor: tokens.primary,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.22,
-          shadowRadius: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Add"
-          activeOpacity={0.82}
-          onPress={onPress}
-          style={{
-            flex: 1,
-            borderRadius: 29,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Plus size={25} strokeWidth={2.2} color={tokens.primaryForeground} />
-        </TouchableOpacity>
-      </View>
+        <Plus size={24} strokeWidth={2.4} color={tokens.primaryForeground} />
+      </TouchableOpacity>
     </View>
   );
 }
 
-function SignatureBottomBar({ onAdd }: { onAdd: () => void }) {
-  const { width } = useWindowDimensions();
+/** A solid bar (nothing shows through it) with four tabs and the + in the middle. */
+function BottomBar({ onAdd }: { onAdd: () => void }) {
   const insets = useSafeAreaInsets();
   const { tokens } = useTheme();
-  const center = width / 2;
-  const height = SIGNATURE_BAR_HEIGHT + insets.bottom;
-  const topLine = 24;
-  const valleyBottom = 68;
-  const path = [
-    `M 0 ${topLine}`,
-    `L ${center - 74} ${topLine}`,
-    `C ${center - 57} ${topLine} ${center - 59} 52 ${center - 42} 60`,
-    `C ${center - 28} 66 ${center - 18} ${valleyBottom} ${center} ${valleyBottom}`,
-    `C ${center + 18} ${valleyBottom} ${center + 28} 66 ${center + 42} 60`,
-    `C ${center + 59} 52 ${center + 57} ${topLine} ${center + 74} ${topLine}`,
-    `L ${width} ${topLine}`,
-    `L ${width} ${height}`,
-    `L 0 ${height}`,
-    'Z',
-  ].join(' ');
-
   return (
     <View
-      pointerEvents="box-none"
-      style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height }}
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingBottom: insets.bottom,
+        backgroundColor: tokens.background,
+        borderTopWidth: 1,
+        borderTopColor: tokens.borderSubtle,
+      }}
     >
-      <Svg width={width} height={height} style={{ position: 'absolute' }} pointerEvents="none">
-        <Path d={path} fill={tokens.background} stroke={tokens.borderSubtle} strokeWidth={1} />
-      </Svg>
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 0,
-          height: 88,
-          flexDirection: 'row',
-          zIndex: 10,
-          elevation: 10,
-        }}
-      >
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 }}>
         <NavButton item={navItems[0]} />
         <NavButton item={navItems[1]} />
         <AddButton onPress={onAdd} />
@@ -174,12 +118,12 @@ export default function TabsLayout() {
       <View
         style={{
           flex: 1,
-          paddingBottom: SIGNATURE_BAR_HEIGHT + insets.bottom,
+          paddingBottom: TAB_BAR_HEIGHT + insets.bottom,
         }}
       >
         <Slot />
       </View>
-      <SignatureBottomBar onAdd={() => setOpen(true)} />
+      <BottomBar onAdd={() => setOpen(true)} />
       <Sheet visible={open} onClose={() => setOpen(false)} title="Add">
         <View>
           {quickAddActions.map((action, index) => (

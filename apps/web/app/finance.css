@@ -3647,7 +3647,7 @@
 @media (max-width: 767px) {
   .finai-launcher {
     right: 16px;
-    bottom: calc(92px + env(safe-area-inset-bottom));
+    bottom: calc(80px + env(safe-area-inset-bottom));
     width: 48px;
     height: 48px;
   }

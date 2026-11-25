@@ -197,21 +197,23 @@ function derivedOutputs(manifest) {
 
   writeText('convex/shared/version.ts', generatedVersionModule(manifest), outputs);
 
+  // The archive for a product version is written once: a release that has shipped (or been
+  // tagged) never changes. Bump the product version to record a new component set.
   const releaseFile = `releases/v${manifest.version}.json`;
-  const existing = existsSync(path(releaseFile)) ? readJson(releaseFile) : null;
-  writeJson(
-    releaseFile,
-    {
-      version: manifest.version,
-      channel: manifest.channel,
-      date: existing?.date ?? new Date().toISOString().slice(0, 10),
-      components: manifest.components,
-      build: manifest.build,
-      compatibility: manifest.compatibility,
-      tags: releaseTags(manifest),
-    },
-    outputs,
-  );
+  if (!existsSync(path(releaseFile)))
+    writeJson(
+      releaseFile,
+      {
+        version: manifest.version,
+        channel: manifest.channel,
+        date: new Date().toISOString().slice(0, 10),
+        components: manifest.components,
+        build: manifest.build,
+        compatibility: manifest.compatibility,
+        tags: releaseTags(manifest),
+      },
+      outputs,
+    );
   return outputs;
 }
 

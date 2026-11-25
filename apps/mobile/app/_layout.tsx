@@ -14,6 +14,7 @@ import type { AccentValue } from '@finapp/ui/tokens';
 import Storage from 'expo-sqlite/kv-store';
 import { api } from '@convex/_generated/api';
 import { FinaiLauncher } from '@/components/FinaiLauncher';
+import { TAB_BAR_HEIGHT } from '@/lib/tabBar';
 import { UpdateRequiredNotice } from '@/components/UpdateRequiredNotice';
 import { secureTokenStorage } from '@/lib/auth/session';
 import { resolveConvexUrl } from '@/lib/convex-url';
@@ -183,7 +184,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 function AppToasts() {
   const insets = useSafeAreaInsets();
-  return <ToastViewport bottomInset={insets.bottom + 56} />;
+  // Toasts float just above the tab bar.
+  return <ToastViewport bottomInset={insets.bottom + TAB_BAR_HEIGHT} />;
 }
 
 function ThemedStack() {

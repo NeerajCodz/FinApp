@@ -3,11 +3,9 @@ import { Pressable, View } from 'react-native';
 import { router, useSegments } from 'expo-router';
 import { useConvexAuth } from 'convex/react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_BAR_HEIGHT } from '@/lib/tabBar';
 import { useTheme } from '@finapp/ui/native';
 import { FinaiLogo } from '@finapp/ui/ai';
-
-/** Height of the signature tab bar the launcher floats above. */
-const TAB_BAR_HEIGHT = 96;
 
 /**
  * FinAI everywhere on the main tabs: a floating orb button above the tab bar that opens the
@@ -23,7 +21,7 @@ export function FinaiLauncher() {
   return (
     <View
       pointerEvents="box-none"
-      style={{ position: 'absolute', right: 16, bottom: insets.bottom + TAB_BAR_HEIGHT + 12 }}
+      style={{ position: 'absolute', right: 16, bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }}
     >
       <Pressable
         accessibilityRole="button"
