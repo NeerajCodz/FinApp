@@ -49,6 +49,20 @@ export const finaiActionKind = v.union(
   v.literal('settlement.create'),
   v.literal('goal.contribute'),
   v.literal('group.nudge'),
+  v.literal('transaction.update'),
+  v.literal('budget.create'),
+  v.literal('budget.update'),
+  v.literal('goal.create'),
+  v.literal('goal.update'),
+  v.literal('category.create'),
+  v.literal('category.update'),
+  v.literal('account.create'),
+  v.literal('account.update'),
+  v.literal('recurring.create'),
+  /** Moves a budget, goal, category, account or recurring rule to Trash. */
+  v.literal('entity.delete'),
+  /** Deletes a Trash item for good. */
+  v.literal('trash.purge'),
 );
 export type FinaiActionKind = Infer<typeof finaiActionKind>;
 

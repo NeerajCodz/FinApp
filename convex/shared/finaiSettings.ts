@@ -83,6 +83,8 @@ export const FINAI_SCOPE_TOOLS: Record<FinaiDataScope, readonly string[]> = {
     'spending_breakdown',
     'list_accounts',
     'list_categories',
+    'list_recurring',
+    'list_trash',
   ],
   planning: ['list_budgets', 'list_goals'],
   groups: ['list_groups', 'group_balances', 'group_expenses'],
@@ -128,9 +130,13 @@ export function resolveFinaiSettings(
   };
 }
 
+/** Tools that change data immediately (no confirmation card); they follow `allowActions`. */
+const DIRECT_ACTION_TOOLS = ['delete_transaction', 'restore_from_trash'];
+
 /** Whether a tool is allowed by these settings (unknown tools follow their family). */
 export function finaiToolAllowed(settings: FinaiSettings, toolName: string): boolean {
-  if (toolName.startsWith('propose_')) return settings.allowActions;
+  if (toolName.startsWith('propose_') || DIRECT_ACTION_TOOLS.includes(toolName))
+    return settings.allowActions;
   for (const scope of FINAI_DATA_SCOPES)
     if (FINAI_SCOPE_TOOLS[scope].includes(toolName)) return settings.dataScopes[scope];
   return true;
