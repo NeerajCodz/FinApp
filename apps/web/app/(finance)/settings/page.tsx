@@ -65,7 +65,7 @@ export default function SettingsPage() {
           icon={<ShieldCheck size={19} />}
           tone="positive"
           title="Security"
-          description="Password, two-factor and app lock"
+          description="Two-factor, devices, sign-in alerts and app lock"
           onPress={() => router.push('/settings/security')}
         />
       </SettingsGroup>
@@ -133,7 +133,7 @@ export default function SettingsPage() {
         <SettingsLink
           icon={<RefreshCw size={19} />}
           tone="positive"
-          title="Local sync"
+          title="Sync"
           description="How much history this browser keeps offline"
           value={syncWindow === 'all' ? 'All history' : `${syncWindow} days`}
           onPress={() => router.push('/settings/sync')}
@@ -148,8 +148,8 @@ export default function SettingsPage() {
         <SettingsLink
           icon={<Eye size={19} />}
           tone="primary"
-          title="Privacy and export"
-          description="Presence, visibility and data export"
+          title="Privacy"
+          description="Who can find you, activity status, export and account"
           onPress={() => router.push('/settings/privacy')}
         />
         <SettingsLink

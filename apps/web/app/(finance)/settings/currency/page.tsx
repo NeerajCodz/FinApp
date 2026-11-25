@@ -2,9 +2,16 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { Button, IconButton, Text, Typography } from '@finapp/ui/web';
-import { resolveDefaultCurrency } from '@finapp/ui/finance';
+import { Coins, Search } from 'lucide-react';
+import {
+  resolveDefaultCurrency,
+  SettingsField,
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsLink,
+  SettingsShell,
+} from '@finapp/ui/finance';
 import { currencies } from '@convex/shared/validators';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -17,6 +24,18 @@ type Settings = LocalRecord & { currency?: string; defaultCurrency?: string };
 function currencyLabel(currency: string) {
   try {
     return new Intl.DisplayNames(['en'], { type: 'currency' }).of(currency) ?? currency;
+  } catch {
+    return currency;
+  }
+}
+
+function currencySymbol(currency: string) {
+  try {
+    return (
+      new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value ?? currency
+    );
   } catch {
     return currency;
   }
@@ -38,6 +57,7 @@ export default function CurrencySettingsPage() {
   const error = profileState.error ?? settingsState.error;
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState('');
+  const [query, setQuery] = React.useState('');
 
   if (!userId)
     return (
@@ -68,7 +88,7 @@ export default function CurrencySettingsPage() {
         { defaultCurrency: value },
         { recordId: String(current.id ?? current._id ?? userId) },
       );
-      setMessage(`${value} is saved on this device and will sync when connected.`);
+      setMessage(`Default currency is now ${currencyLabel(value)}.`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Could not save the default currency.');
     } finally {
@@ -76,50 +96,72 @@ export default function CurrencySettingsPage() {
     }
   }
 
+  const needle = query.trim().toLowerCase();
+  const shown = currencies.filter(
+    (currency) =>
+      !needle ||
+      currency.toLowerCase().includes(needle) ||
+      currencyLabel(currency).toLowerCase().includes(needle),
+  );
   return (
-    <div className="finance-page finance-page--narrow">
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
-          <ArrowLeft size={21} aria-hidden="true" />
-        </IconButton>
-        <Typography variant="title">Currency</Typography>
-      </header>
-      <section style={{ display: 'grid', gap: 12 }}>
-        <Typography variant="label">Default currency</Typography>
-        <Text style={{ maxWidth: 320 }}>
-          Used for new accounts, budgets, groups, and transactions. Changing this does not rewrite
-          historical entries.
-        </Text>
+    <SettingsShell
+      title="Currency"
+      subtitle="Your default currency"
+      onBack={() => router.push('/settings')}
+    >
+      <SettingsHero
+        icon={<Coins size={22} />}
+        title={`${currencyLabel(selected)} (${selected})`}
+        description={`${currencySymbol(selected)} is used for new accounts, budgets, groups and transactions. Past entries keep their own currency.`}
+      />
+      <SettingsGroup title="Choose a currency">
+        <SettingsItem icon={<Search size={19} />} title="Search">
+          <SettingsField
+            label="Name or code"
+            type="search"
+            placeholder="e.g. euro or EUR"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            style={{ letterSpacing: 'normal' }}
+          />
+        </SettingsItem>
         {loading ? (
-          <Text role="status">Loading your profile…</Text>
+          <SettingsItem title="Loading your profile…" />
         ) : error ? (
-          <Text role="alert">
-            The saved currency could not be loaded. Reload the profile before changing it.
-          </Text>
+          <SettingsItem
+            title="Your saved currency couldn’t be loaded"
+            description="Reload and try again."
+          />
+        ) : shown.length === 0 ? (
+          <SettingsItem title="No matching currency" />
         ) : (
-          <>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {currencies.map((currency) => (
-                <Button
-                  key={currency}
-                  size="sm"
-                  variant={selected === currency ? 'primary' : 'outline'}
-                  disabled={saving}
-                  aria-pressed={selected === currency}
-                  onPress={() => void changeCurrency(currency)}
-                  style={{ width: '31%', minHeight: 44 }}
-                >
-                  {currency}
-                </Button>
-              ))}
-            </div>
-            <Typography variant="caption">
-              Selected: {currencyLabel(selected)} · {selected}
-            </Typography>
-          </>
+          <div role="radiogroup" aria-label="Default currency" style={{ display: 'grid' }}>
+            {shown.map((currency) => (
+              <SettingsLink
+                key={currency}
+                icon={
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>{currencySymbol(currency)}</span>
+                }
+                tone={currency === selected ? 'primary' : undefined}
+                title={currencyLabel(currency)}
+                value={currency}
+                badge={currency === selected ? 'Default' : undefined}
+                onPress={
+                  saving || currency === selected ? undefined : () => void changeCurrency(currency)
+                }
+              />
+            ))}
+          </div>
         )}
-        {message && <Text role="status">{message}</Text>}
-      </section>
-    </div>
+      </SettingsGroup>
+      {message ? (
+        <p
+          role="status"
+          style={{ margin: 0, gridColumn: '1 / -1', color: 'var(--finapp-foreground-muted)' }}
+        >
+          {message}
+        </p>
+      ) : null}
+    </SettingsShell>
   );
 }

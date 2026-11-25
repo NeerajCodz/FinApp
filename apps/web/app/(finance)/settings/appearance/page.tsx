@@ -2,9 +2,16 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ArrowLeft, Check } from 'lucide-react';
-import { Button, IconButton, Text, Typography, useTheme } from '@finapp/ui/web';
-import { EntityColorPicker } from '@finapp/ui/finance';
+import { Check, Palette, Pipette } from 'lucide-react';
+import { useTheme } from '@finapp/ui/web';
+import {
+  EntityColorPicker,
+  SettingsChoice,
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsShell,
+} from '@finapp/ui/finance';
 import type { Appearance } from '@finapp/ui/web';
 import { accentPalette, isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
@@ -61,84 +68,118 @@ export default function AppearanceSettingsPage() {
         description="Sign in to choose the appearance saved in this browser."
       />
     );
+  const swatch = isAccentColor(accent)
+    ? accent
+    : (accents.find((option) => option.value === accent)?.color ?? accentPalette.volt);
   return (
-    <>
-      <div className="finance-page finance-page--narrow">
-        <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
-            <ArrowLeft size={21} aria-hidden="true" />
-          </IconButton>
-          <Typography variant="title">Appearance</Typography>
-        </header>
-        <section style={{ display: 'grid', gap: 12 }}>
-          <Typography variant="label">Theme</Typography>
-          <Text style={{ maxWidth: 300 }}>
-            Choose the app theme. System follows your device setting.
-          </Text>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {options.map((option) => {
-              const selected = appearance === option.value;
-              return (
-                <Button
-                  key={option.value}
-                  variant={selected ? 'primary' : 'outline'}
-                  aria-pressed={selected}
-                  onPress={() => setAppearance(option.value)}
-                  style={{ justifyContent: 'space-between', minHeight: 56 }}
-                >
-                  <span>{option.label}</span>
-                  {selected && <Check size={18} aria-hidden="true" />}
-                </Button>
-              );
-            })}
-          </div>
-        </section>
-        <section style={{ display: 'grid', gap: 12 }}>
-          <Typography variant="label">Accent color</Typography>
-          {accentError && <Text role="status">{accentError}</Text>}
-          <Text style={{ maxWidth: 320 }}>
-            Choose the color used for primary actions and highlights.
-          </Text>
-          <div style={{ display: 'grid', gap: 8 }}>
+    <SettingsShell
+      title="Appearance"
+      subtitle="Theme and accent colour"
+      onBack={() => router.push('/settings')}
+    >
+      <SettingsHero
+        icon={
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'block',
+              width: 22,
+              height: 22,
+              borderRadius: '50%',
+              background: swatch,
+              boxShadow: '0 0 0 2px var(--finapp-card), 0 0 0 3px var(--finapp-border)',
+            }}
+          />
+        }
+        title={`${options.find((option) => option.value === appearance)?.label ?? 'System'} theme`}
+        description="Changes apply right away on this device and follow you to your other devices."
+      />
+
+      <SettingsGroup title="Theme">
+        <SettingsChoice
+          title="Mode"
+          description="System follows your device’s light or dark setting"
+          value={appearance}
+          options={options}
+          onChange={(next) => setAppearance(next)}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Accent colour" description="Used for buttons, highlights and charts">
+        <SettingsItem icon={<Palette size={19} />} tone="primary" title="Presets">
+          <div
+            role="radiogroup"
+            aria-label="Accent colour"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}
+          >
             {accents.map((option) => {
               const selected = accent === option.value;
               return (
-                <Button
+                <button
                   key={option.value}
-                  variant={selected ? 'primary' : 'outline'}
-                  aria-pressed={selected}
-                  onPress={() => void chooseAccent(option.value)}
-                  style={{ justifyContent: 'space-between', minHeight: 56 }}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={option.label}
+                  onClick={() => void chooseAccent(option.value)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 12px 6px 6px',
+                    borderRadius: 999,
+                    border: `1px solid ${selected ? 'var(--finapp-primary)' : 'var(--finapp-border-subtle)'}`,
+                    background: selected ? 'var(--finapp-surface-subtle)' : 'transparent',
+                    color: 'var(--finapp-foreground)',
+                    font: 'inherit',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
                 >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: '50%',
-                        background: option.color,
-                        border: option.value === 'white' ? '1px solid var(--finapp-border)' : 0,
-                      }}
-                    />
-                    {option.label}
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: 'grid',
+                      placeItems: 'center',
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: option.color,
+                      border: option.value === 'white' ? '1px solid var(--finapp-border)' : 0,
+                      color: option.value === 'white' ? '#000' : 'var(--finapp-primary-foreground)', // theme-exempt: contrast on a white swatch
+                    }}
+                  >
+                    {selected ? <Check size={13} strokeWidth={3} /> : null}
                   </span>
-                  {selected && <Check size={18} aria-hidden="true" />}
-                </Button>
+                  {option.label}
+                </button>
               );
             })}
+          </div>
+        </SettingsItem>
+        <SettingsItem
+          icon={<Pipette size={19} />}
+          tone="violet"
+          title="Custom colour"
+          description={isAccentColor(accent) ? `Using ${accent}` : 'Pick any colour'}
+          trailing={
             <EntityColorPicker
-              value={
-                isAccentColor(accent)
-                  ? accent
-                  : accents.find((option) => option.value === accent)?.color
-              }
+              value={swatch}
               onChange={(color) => void chooseAccent(color ?? accentPalette.volt)}
               label={isAccentColor(accent) ? 'Change custom accent' : 'Choose custom accent'}
             />
-          </div>
-        </section>
-      </div>
-    </>
+          }
+        />
+      </SettingsGroup>
+
+      {accentError ? (
+        <p
+          role="status"
+          style={{ margin: 0, gridColumn: '1 / -1', color: 'var(--finapp-foreground-muted)' }}
+        >
+          {accentError}
+        </p>
+      ) : null}
+    </SettingsShell>
   );
 }
