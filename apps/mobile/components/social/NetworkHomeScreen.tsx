@@ -221,6 +221,12 @@ export default function NetworkHomeScreen() {
   const activePeopleLoading = Boolean(userId && isConnected && suggestions === undefined);
   const requestBadge = incomingCount > 0 ? incomingCount : undefined;
   const unreadNotifications = useUnreadNotificationCount(userId);
+  // Profile lives in the header now (it left the tab bar).
+  const profile = useLocalRecords<LocalRecord>(userId, 'profile').data?.[0];
+  const profileName =
+    (typeof profile?.displayName === 'string' && profile.displayName.trim()) ||
+    (typeof profile?.username === 'string' && profile.username.trim()) ||
+    'Your profile';
   const homeGroupCardWidth = Math.floor(Math.max(64, (viewportWidth - 36 - 27) / 4));
 
   return (
@@ -336,6 +342,21 @@ export default function NetworkHomeScreen() {
                 </Text>
               </View>
             ) : null}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Profile, ${profileName}`}
+            onPress={() => router.push('/(tabs)/profile' as never)}
+            hitSlop={4}
+            style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+          >
+            <Avatar
+              label={profileName}
+              initials={initials(profileName)}
+              size={43}
+              avatarId={typeof profile?.avatarId === 'string' ? profile.avatarId : undefined}
+              imageUrl={typeof profile?.avatarUrl === 'string' ? profile.avatarUrl : undefined}
+            />
           </Pressable>
         </View>
 

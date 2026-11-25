@@ -1,13 +1,7 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import { Slot, router, usePathname } from 'expo-router';
-import {
-  ClockCounterClockwise,
-  House,
-  Plus,
-  UserCircle,
-  UsersThree,
-} from '@finapp/ui/icons/native';
+import { ClockCounterClockwise, House, Plus, User, UsersThree } from '@finapp/ui/icons/native';
 import { Button, Separator, Sheet, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,8 +13,8 @@ const ADD_SIZE = 52;
 const navItems = [
   { label: 'Home', route: '/(tabs)', match: '/(tabs)', icon: House },
   { label: 'Activity', route: '/(tabs)/activity', match: '/activity', icon: ClockCounterClockwise },
-  { label: 'People', route: '/(tabs)/people', match: '/people', icon: UsersThree },
-  { label: 'Profile', route: '/(tabs)/profile', match: '/profile', icon: UserCircle },
+  { label: 'Groups', route: '/(tabs)/groups', match: '/groups', icon: UsersThree },
+  { label: 'People', route: '/(tabs)/people', match: '/people', icon: User },
 ] as const;
 
 type NavItem = (typeof navItems)[number];

@@ -5,6 +5,12 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 [ui](packages/ui/CHANGELOG.md), [backend](convex/CHANGELOG.md). Manifests live in
 [`releases/`](releases/).
 
+## 1.5.2
+
+Web 1.5.1 · Mobile 1.5.2 (build 13) · UI 1.5.2 · Backend 1.5.0
+
+- **Mobile**: Profile moved from the tab bar to an avatar at the top right of Home; the bar is now Home, Activity, +, Groups, People (matching the web phone layout).
+
 ## 1.5.1
 
 Web 1.5.1 · Mobile 1.5.1 (build 12) · UI 1.5.1 · Backend 1.5.0
