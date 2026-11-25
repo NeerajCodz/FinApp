@@ -615,11 +615,31 @@ export default defineSchema({
     .index('by_recipient_createdAt', ['recipientId', 'createdAt'])
     .index('by_recipient_eventKey', ['recipientId', 'eventKey']),
   mcpOAuthClients: defineTable({
+    /** 64-hex id we issued, or the HTTPS URL of a Client ID Metadata Document. */
     clientId: v.string(),
     clientName: v.string(),
     redirectUris: v.array(v.string()),
     createdAt: timestamp,
-  }).index('by_client_id', ['clientId']),
+    /** How the client came to exist; missing on early DCR clients. */
+    registration: v.optional(v.union(v.literal('dcr'), v.literal('static'), v.literal('cimd'))),
+    /** Missing means `none` (public client with PKCE). */
+    tokenEndpointAuthMethod: v.optional(
+      v.union(
+        v.literal('none'),
+        v.literal('client_secret_basic'),
+        v.literal('client_secret_post'),
+        v.literal('private_key_jwt'),
+      ),
+    ),
+    clientSecretHash: v.optional(v.string()),
+    jwksUri: v.optional(v.string()),
+    /** Dashboard-created ("your own credentials") clients. */
+    ownerId: v.optional(v.id('users')),
+    /** CIMD clients: when the metadata document was last fetched and validated. */
+    metadataFetchedAt: optionalTime,
+  })
+    .index('by_client_id', ['clientId'])
+    .index('by_owner', ['ownerId']),
   mcpOAuthCodes: defineTable({
     codeHash: v.string(),
     clientId: v.string(),
@@ -637,9 +657,21 @@ export default defineSchema({
     scopes: v.array(v.string()),
     createdAt: timestamp,
     revokedAt: optionalTime,
+    /** Current (rotating) refresh token, hashed. */
+    refreshTokenHash: v.optional(v.string()),
+    refreshExpiresAt: optionalTime,
   })
     .index('by_user_createdAt', ['userId', 'createdAt'])
-    .index('by_user_client', ['userId', 'clientId']),
+    .index('by_user_client', ['userId', 'clientId'])
+    .index('by_client', ['clientId'])
+    .index('by_refresh_hash', ['refreshTokenHash']),
+  /** Used `private_key_jwt` assertion ids, kept until the assertion would have expired. */
+  mcpOAuthAssertionJtis: defineTable({
+    key: v.string(),
+    expiresAt: timestamp,
+  })
+    .index('by_key', ['key'])
+    .index('by_expiresAt', ['expiresAt']),
   mcpOAuthActivity: defineTable({
     userId: v.id('users'),
     grantId: v.id('mcpOAuthGrants'),
