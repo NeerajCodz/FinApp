@@ -264,7 +264,10 @@ export default function CategoryDetailScreen() {
         'category',
         'category.archive',
         { ...category, archivedAt: Date.now() },
-        { categoryId: categoryPayloadId, ...(deleteTransactions ? { deleteTransactions: true } : {}) },
+        {
+          categoryId: categoryPayloadId,
+          ...(deleteTransactions ? { deleteTransactions: true } : {}),
+        },
         {
           recordId: categoryLocalId,
           dependencies:
