@@ -22,6 +22,7 @@ import { assistantSystemPrompt } from './prompts';
 import { finaiPreferencePrompt, finaiToolAllowed } from '../shared/finaiSettings';
 import { chatForUser } from './keys';
 import { manageTools } from './manageTools';
+import { createStreamWriter } from './streamWriter';
 import { finaiStage, finaiStep } from './validators';
 import { consumeAiQuota } from './usage';
 
@@ -44,6 +45,7 @@ export const conversations = query({
       .order('desc')
       .take(Math.max(1, Math.min(100, Math.floor(limit ?? 30))));
     // Conversations opened but never used have no preview; keep them out of the list.
+    const now = Date.now();
     return rows
       .filter((row) => row.preview !== undefined)
       .map((row) => ({
@@ -51,7 +53,69 @@ export const conversations = query({
         title: row.title ?? 'New chat',
         preview: row.preview ?? '',
         updatedAt: row.updatedAt,
+        unread: row.unreadAt !== undefined,
+        working: isWorking(row, now),
       }));
+  },
+});
+
+/** A reply older than this without any update is treated as abandoned (the action died). */
+const REPLY_STALE_MS = 6 * 60_000;
+
+function isWorking(row: Doc<'finaiConversations'>, now: number) {
+  return row.working === true && now - row.updatedAt < REPLY_STALE_MS;
+}
+
+/**
+ * FinAI activity for the launcher, tabs and sidebar: whether a reply is being written, how many
+ * chats have unseen replies, and the newest finished reply (clients toast it when it changes and
+ * that chat isn't on screen). Replies keep going after the chat is closed.
+ */
+export const activity = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return { working: false, unreadCount: 0, latest: null };
+    const rows = await ctx.db
+      .query('finaiConversations')
+      .withIndex('by_user_updatedAt', (q) => q.eq('userId', user._id))
+      .order('desc')
+      .take(50);
+    const now = Date.now();
+    const unread = rows.filter((row) => row.unreadAt !== undefined);
+    const newest = unread.reduce<Doc<'finaiConversations'> | null>(
+      (best, row) => (!best || row.unreadAt! > best.unreadAt! ? row : best),
+      null,
+    );
+    return {
+      working: rows.some((row) => isWorking(row, now)),
+      unreadCount: unread.length,
+      latest:
+        newest && newest.lastReplyId
+          ? {
+              conversationId: newest._id,
+              replyId: newest.lastReplyId,
+              title: newest.title ?? 'New chat',
+              preview: newest.lastReplyFailed ? '' : (newest.preview ?? ''),
+              failed: newest.lastReplyFailed === true,
+              at: newest.unreadAt!,
+            }
+          : null,
+    };
+  },
+});
+
+/** Marks a conversation's replies as seen (the chat is open on screen). */
+export const markRead = mutation({
+  args: { conversationId: v.id('finaiConversations') },
+  handler: async (ctx, { conversationId }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const conversation = await ctx.db.get(conversationId);
+    if (!conversation || conversation.userId !== user._id) return null;
+    if (conversation.unreadAt !== undefined)
+      await ctx.db.patch(conversationId, { unreadAt: undefined });
+    return null;
   },
 });
 
@@ -162,7 +226,7 @@ export const begin = internalMutation({
       if (
         busy &&
         (busy.status === 'pending' || busy.status === 'streaming') &&
-        now - busy.updatedAt < 120_000
+        now - busy.updatedAt < REPLY_STALE_MS
       )
         throw new Error('REPLY_IN_PROGRESS');
     }
@@ -185,6 +249,8 @@ export const begin = internalMutation({
     await ctx.db.patch(conversationId, {
       updatedAt: now,
       preview: text.slice(0, 120),
+      working: true,
+      unreadAt: undefined,
       ...(isNew ? { title } : {}),
     });
 
@@ -274,7 +340,14 @@ export const complete = internalMutation({
       toolsUsed,
       updatedAt: now,
     });
-    await ctx.db.patch(row.conversationId, { updatedAt: now, preview: text.slice(0, 120) });
+    await ctx.db.patch(row.conversationId, {
+      updatedAt: now,
+      preview: text.slice(0, 120),
+      working: false,
+      unreadAt: now,
+      lastReplyId: replyId,
+      lastReplyFailed: false,
+    });
   },
 });
 
@@ -290,6 +363,14 @@ export const fail = internalMutation({
       stageLabel: undefined,
       ...(text !== undefined ? { text } : {}),
       updatedAt: Date.now(),
+    });
+    const now = Date.now();
+    await ctx.db.patch(row.conversationId, {
+      updatedAt: now,
+      working: false,
+      unreadAt: now,
+      lastReplyId: replyId,
+      lastReplyFailed: true,
     });
   },
 });
@@ -382,13 +463,12 @@ export const send = action({
       const system = `${baseSystem}
 
 ${finaiPreferencePrompt(settings)}`;
-      let lastFlush = 0;
-      let pendingText = '';
       let steps: AgentStep[] = [];
-      const flush = async () => {
-        lastFlush = Date.now();
-        await ctx.runMutation(internal.ai.assistant.streamText, { replyId, text: pendingText });
-      };
+      // Live text goes out on its own cadence so the model stream never waits on a write.
+      const live = createStreamWriter(
+        (text) => ctx.runMutation(internal.ai.assistant.streamText, { replyId, text }),
+        finaiAgent.streamFlushMs,
+      );
       const result = await runAgent({
         ctx: {
           run: ctx,
@@ -414,11 +494,9 @@ ${finaiPreferencePrompt(settings)}`;
             ...(next ? { steps: next } : {}),
           });
         },
-        onText: async (text) => {
-          pendingText = text;
-          if (Date.now() - lastFlush >= finaiAgent.streamFlushMs) await flush();
-        },
+        onText: (text) => live.push(text),
       });
+      await live.drain();
       const a2ui = buildA2uiMessages(`finai-${replyId}`, result.views);
       await ctx.runMutation(internal.ai.assistant.complete, {
         replyId,

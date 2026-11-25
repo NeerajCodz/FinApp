@@ -54,6 +54,12 @@ export type ChatStreamOptions = Omit<GenerateOptions, 'parts'> & {
   functions?: GeminiFunctionDeclaration[];
   /** Called with each text delta as it streams (never with thoughts or function calls). */
   onText?: (delta: string) => void | Promise<void>;
+  /** Called with each thought-summary delta while the model reasons (never shown as the reply). */
+  onThought?: (delta: string) => void | Promise<void>;
+  /** Longest wait for the response to start (defaults to the role's `connectTimeoutMs`). */
+  connectTimeoutMs?: number;
+  /** Longest wait for the first chunk (defaults to the role's `firstChunkTimeoutMs`). */
+  firstChunkTimeoutMs?: number;
   /** BYOK: one fixed model instead of the role's model chain. */
   model?: string;
   /** BYOK: API base override (defaults to GEMINI_API_BASE). */
@@ -116,8 +122,9 @@ export function mergeStreamParts(into: GeminiContentPart[], incoming: GeminiCont
 /**
  * One model turn of a multi-turn chat, streamed. Text deltas go to `onText` as they arrive;
  * function calls come back in `functionCalls`, with the raw `parts` to echo back. Retries
- * 429 / 5xx / network failures only before anything has streamed. The timeout is an idle
- * timeout that restarts whenever a chunk arrives.
+ * 429 / 5xx / network failures, and streams that stall, only before anything has streamed. The
+ * first chunk may take `firstChunkTimeoutMs` (thinking); after that the idle timeout restarts
+ * whenever a chunk arrives.
  */
 export async function streamChat(options: ChatStreamOptions): Promise<ChatStreamResult> {
   const apiKey = requireGeminiKey(options.apiKey);
@@ -125,6 +132,14 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? defaultSleep;
   const timeoutMs = options.timeoutMs ?? defaults.timeoutMs;
+  const firstChunkMs = Math.max(
+    timeoutMs,
+    options.firstChunkTimeoutMs ?? defaults.firstChunkTimeoutMs ?? timeoutMs,
+  );
+  const connectMs = Math.min(
+    firstChunkMs,
+    options.connectTimeoutMs ?? defaults.connectTimeoutMs ?? firstChunkMs,
+  );
   const body = JSON.stringify({
     ...(options.systemInstruction
       ? { systemInstruction: { parts: [{ text: options.systemInstruction }] } }
@@ -139,6 +154,12 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
     generationConfig: {
       temperature: options.temperature ?? defaults.temperature,
       maxOutputTokens: options.maxOutputTokens ?? defaults.maxOutputTokens,
+      // Thought summaries stream while the model reasons, so a long think is visible progress
+      // (and keeps the idle timer alive) instead of a silent stall. Not sent for BYOK models,
+      // which may not support thinking.
+      ...(options.role === 'chat' && !options.model
+        ? { thinkingConfig: { includeThoughts: true } }
+        : {}),
     },
   });
 
@@ -149,10 +170,10 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
     const wait =
       attempt < attempts - 1 && (options.model ? true : aiShouldBackoff(options.role, attempt));
     const controller = new AbortController();
-    let timer = setTimeout(() => controller.abort(), timeoutMs);
-    const restartTimer = () => {
+    let timer = setTimeout(() => controller.abort(), connectMs);
+    const restartTimer = (ms = timeoutMs) => {
       clearTimeout(timer);
-      timer = setTimeout(() => controller.abort(), timeoutMs);
+      timer = setTimeout(() => controller.abort(), ms);
     };
     let response: Response;
     try {
@@ -186,6 +207,8 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
       throw aiError(response.ok ? 'AI_BAD_RESPONSE' : 'AI_REQUEST_REJECTED');
     }
 
+    // The response has started: now allow time for the model to think before its first chunk.
+    restartTimer(firstChunkMs);
     const parts: GeminiContentPart[] = [];
     let finishReason = 'STOP';
     let usage: GeminiUsage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -207,6 +230,8 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
         if (isPlainText(part) && part.text) {
           text += part.text;
           await options.onText?.(part.text);
+        } else if (part.thought && part.text) {
+          await options.onThought?.(part.text);
         }
       }
     };
@@ -226,8 +251,14 @@ export async function streamChat(options: ChatStreamOptions): Promise<ChatStream
       const { events } = parseSseEvents(`${buffer}${decoder.decode()}\n\n`);
       for (const event of events) await handle(event);
     } catch (cause) {
-      if (controller.signal.aborted) throw aiError('AI_TIMEOUT');
-      throw cause;
+      if (!controller.signal.aborted) throw cause;
+      // Stalled before any answer text or tool call: nothing was shown or acted on, so the
+      // next model (or a retry) can take over safely. Once text has streamed, it's final.
+      const answered = text.length > 0 || parts.some((part) => part.functionCall);
+      if (answered) throw aiError('AI_TIMEOUT');
+      lastFailure = 'timeout';
+      console.warn('[ai] Gemini stream stalled before answering', model);
+      continue;
     } finally {
       clearTimeout(timer);
     }

@@ -150,6 +150,104 @@ describe('streamChat', () => {
   });
 });
 
+/** A stream that sends `chunks` and then goes silent until the request is aborted. */
+function stallingResponse(chunks: unknown[], signal: AbortSignal) {
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks)
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(chunk)}
+
+`),
+          );
+        signal.addEventListener('abort', () => controller.error(new Error('aborted')));
+      },
+    }),
+    { status: 200, headers: { 'content-type': 'text/event-stream' } },
+  );
+}
+
+describe('streamChat timeouts and thinking', () => {
+  it('moves to the next model when a stream stalls before answering (e.g. after tool calls)', async () => {
+    const models: string[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      models.push(String(url));
+      if (models.length === 1)
+        return stallingResponse(
+          [{ candidates: [{ content: { parts: [{ text: 'hmm', thought: true }] } }] }],
+          init!.signal!,
+        );
+      return sseResponse([textChunk('Here you go.', { finishReason: 'STOP' })]);
+    });
+    const thoughts: string[] = [];
+    const result = await streamChat({
+      role: 'chat',
+      apiKey: 'k',
+      contents: [],
+      fetchImpl: fetchImpl as never,
+      timeoutMs: 20,
+      firstChunkTimeoutMs: 20,
+      onThought: (delta) => {
+        thoughts.push(delta);
+      },
+    });
+    expect(result.text).toBe('Here you go.');
+    expect(models).toHaveLength(2);
+    expect(models[0]).not.toBe(models[1]);
+    expect(thoughts).toEqual(['hmm']);
+  });
+
+  it('skips a model that never starts responding (hung under high demand)', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          calls += 1;
+          if (calls > 1) resolve(sseResponse([textChunk('Answer.', { finishReason: 'STOP' })]));
+          else init!.signal!.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    const result = await streamChat({
+      role: 'chat',
+      apiKey: 'k',
+      contents: [],
+      fetchImpl: fetchImpl as never,
+      sleep: async () => {},
+      connectTimeoutMs: 20,
+    });
+    expect(result.text).toBe('Answer.');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('times out instead of retrying once answer text has streamed', async () => {
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) =>
+      stallingResponse([textChunk('Partial ')], init!.signal!),
+    );
+    const call = streamChat({
+      role: 'chat',
+      apiKey: 'k',
+      contents: [],
+      fetchImpl: fetchImpl as never,
+      timeoutMs: 20,
+      firstChunkTimeoutMs: 20,
+    });
+    await expect(call.catch(aiErrorCode)).resolves.toBe('AI_TIMEOUT');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks Gemini for thought summaries on chat, but not for BYOK models', async () => {
+    const fetchImpl = vi.fn(async () => sseResponse([textChunk('ok', { finishReason: 'STOP' })]));
+    await streamChat({ role: 'chat', apiKey: 'k', contents: [], fetchImpl });
+    await streamChat({ role: 'chat', apiKey: 'k', contents: [], fetchImpl, model: 'my-model' });
+    const bodies = fetchImpl.mock.calls.map((call) =>
+      JSON.parse((call as unknown as [string, RequestInit])[1].body as string),
+    );
+    expect(bodies[0].generationConfig.thinkingConfig).toEqual({ includeThoughts: true });
+    expect(bodies[1].generationConfig.thinkingConfig).toBeUndefined();
+  });
+});
+
 function fakeChat(turns: Partial<ChatStreamResult>[]) {
   const calls: ChatStreamOptions[] = [];
   const chat = async (options: ChatStreamOptions): Promise<ChatStreamResult> => {

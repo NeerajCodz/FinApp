@@ -174,6 +174,63 @@ describe('FinAI assistant', () => {
     });
   });
 
+  it('tracks replies finished in the background as unread until the chat is opened', async () => {
+    const { owner, outsider } = await fixture();
+    expect(await owner.query(api.ai.assistant.activity, {})).toEqual({
+      working: false,
+      unreadCount: 0,
+      latest: null,
+    });
+    // While a reply is being written the conversation is working.
+    const conversationId = await owner.mutation(api.ai.assistant.createConversation, {});
+    await owner.mutation(internal.ai.assistant.begin, { conversationId, text: 'slow one' });
+    expect(await owner.query(api.ai.assistant.activity, {})).toMatchObject({ working: true });
+
+    mockGemini([{ text: 'Your spending is steady.' }]);
+    const other = await owner.action(api.ai.assistant.send, { text: 'how am I doing' });
+    const activity = await owner.query(api.ai.assistant.activity, {});
+    expect(activity).toMatchObject({
+      working: true,
+      unreadCount: 1,
+      latest: {
+        conversationId: other.conversationId,
+        replyId: other.replyId,
+        preview: 'Your spending is steady.',
+        failed: false,
+      },
+    });
+    const listed = await owner.query(api.ai.assistant.conversations, {});
+    expect(listed.find((row) => row.id === other.conversationId)).toMatchObject({
+      unread: true,
+      working: false,
+    });
+    expect(listed.find((row) => row.id === conversationId)).toMatchObject({ working: true });
+
+    // Someone else can't clear it; opening the chat does.
+    await outsider.mutation(api.ai.assistant.markRead, { conversationId: other.conversationId });
+    expect((await owner.query(api.ai.assistant.activity, {})).unreadCount).toBe(1);
+    await owner.mutation(api.ai.assistant.markRead, { conversationId: other.conversationId });
+    expect(await owner.query(api.ai.assistant.activity, {})).toMatchObject({
+      unreadCount: 0,
+      latest: null,
+    });
+
+    // A failed reply is unread too, and says so.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('nope', { status: 403 })),
+    );
+    await owner.action(api.ai.assistant.send, {
+      conversationId: other.conversationId,
+      text: 'again',
+    });
+    expect((await owner.query(api.ai.assistant.activity, {})).latest).toMatchObject({
+      conversationId: other.conversationId,
+      failed: true,
+      preview: '',
+    });
+  });
+
   it('opens an empty conversation for streaming and titles it from the first prompt', async () => {
     const { owner } = await fixture();
     const conversationId = await owner.mutation(api.ai.assistant.createConversation, {});

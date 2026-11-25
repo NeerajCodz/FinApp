@@ -759,6 +759,14 @@ export default defineSchema({
     userId: v.id('users'),
     title: optionalText,
     preview: optionalText,
+    /** A reply is being written (set by `begin`, cleared when it finishes or fails). */
+    working: v.optional(v.boolean()),
+    /** When a reply finished that the user hasn't seen yet (cleared by `markRead`). */
+    unreadAt: v.optional(timestamp),
+    /** The newest finished reply, for "FinAI replied" toasts. */
+    lastReplyId: v.optional(v.id('finaiMessages')),
+    /** Whether that reply failed (the toast says so instead of "replied"). */
+    lastReplyFailed: v.optional(v.boolean()),
     createdAt: timestamp,
     updatedAt: timestamp,
   }).index('by_user_updatedAt', ['userId', 'updatedAt']),
