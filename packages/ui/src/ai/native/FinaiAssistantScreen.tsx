@@ -34,6 +34,10 @@ export type FinaiConversationSummary = {
   title: string;
   preview: string;
   updatedAt: number;
+  /** A reply finished that hasn't been seen yet. */
+  unread?: boolean;
+  /** A reply is being written (it keeps going after the chat is closed). */
+  working?: boolean;
 };
 
 export type FinaiAssistantScreenProps = {
@@ -127,6 +131,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
   const data = React.useMemo(() => [...p.messages].reverse(), [p.messages]);
   const empty = !p.loading && p.messages.length === 0;
   const activeTitle = p.conversations.find((row) => row.id === p.activeId)?.title;
+  const otherUnread = p.conversations.filter((row) => row.unread && row.id !== p.activeId).length;
 
   return (
     <KeyboardAvoidingView
@@ -170,8 +175,28 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
             {busy ? 'Working on it…' : 'Asks before changing anything'}
           </Typography>
         </View>
-        <IconButton label="Chat history" variant="ghost" onPress={() => setHistoryOpen(true)}>
+        <IconButton
+          label={otherUnread ? `Chat history, ${otherUnread} unread` : 'Chat history'}
+          variant="ghost"
+          onPress={() => setHistoryOpen(true)}
+        >
           <ClockCounterClockwise size={21} color={tokens.foreground} />
+          {otherUnread ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 6,
+                right: 6,
+                width: 9,
+                height: 9,
+                borderRadius: 5,
+                backgroundColor: tokens.primary,
+                borderWidth: 2,
+                borderColor: tokens.background,
+              }}
+            />
+          ) : null}
         </IconButton>
         <IconButton label="New chat" variant="ghost" onPress={() => p.onSelect(null)}>
           <NotePencil size={21} color={tokens.foreground} />
@@ -370,13 +395,36 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
                     }
                   />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="label" numberOfLines={1}>
+                    <Typography
+                      variant="label"
+                      numberOfLines={1}
+                      style={conversation.unread ? { fontWeight: '700' } : undefined}
+                    >
                       {conversation.title}
                     </Typography>
                     <Typography variant="caption" numberOfLines={1}>
-                      {conversation.preview}
+                      {conversation.working ? 'Writing a reply…' : conversation.preview}
                     </Typography>
                   </View>
+                  {conversation.working ? (
+                    <ThinkingOrb state="working" size={16} label="Writing a reply" />
+                  ) : conversation.unread ? (
+                    <View
+                      style={{
+                        paddingHorizontal: 7,
+                        paddingVertical: 1,
+                        borderRadius: 999,
+                        backgroundColor: tokens.primary,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        style={{ color: tokens.primaryForeground, fontSize: 10, fontWeight: '700' }}
+                      >
+                        New
+                      </Typography>
+                    </View>
+                  ) : null}
                 </Pressable>
                 {p.onDelete ? (
                   <IconButton

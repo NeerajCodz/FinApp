@@ -38,6 +38,10 @@ export type FinaiConversationSummary = {
   title: string;
   preview: string;
   updatedAt: number;
+  /** A reply finished that hasn't been seen yet. */
+  unread?: boolean;
+  /** A reply is being written (it keeps going after the chat is closed). */
+  working?: boolean;
 };
 
 export type FinaiAssistantScreenProps = {
@@ -91,6 +95,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
   const last = p.messages[p.messages.length - 1];
   const scrollKey = `${p.messages.length}:${last?.text.length ?? 0}:${last?.status ?? ''}:${last?.a2ui ? 1 : 0}`;
   const activeTitle = p.conversations.find((row) => row.id === p.activeId)?.title;
+  const otherUnread = p.conversations.filter((row) => row.unread && row.id !== p.activeId).length;
 
   const scrollToBottom = React.useCallback((smooth: boolean) => {
     const node = scroller.current;
@@ -171,11 +176,12 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
           <button
             type="button"
             className={styles.iconButton}
-            aria-label="Chat history"
+            aria-label={otherUnread ? `Chat history, ${otherUnread} unread` : 'Chat history'}
             title="Chat history"
             onClick={openHistory}
           >
             <ClockCounterClockwise size={18} />
+            {otherUnread ? <span className={styles.unreadDot} aria-hidden /> : null}
           </button>
         )}
         <button
@@ -217,10 +223,21 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
                     onClick={() => select(conversation.id)}
                   >
                     <span className={styles.conversationText}>
-                      <strong>{conversation.title}</strong>
-                      <small>{conversation.preview}</small>
+                      <strong className={conversation.unread ? styles.unreadTitle : undefined}>
+                        {conversation.title}
+                      </strong>
+                      <small>
+                        {conversation.working ? 'Writing a reply…' : conversation.preview}
+                      </small>
                     </span>
-                    <time>{relativeTime(conversation.updatedAt)}</time>
+                    <span className={styles.conversationMeta}>
+                      <time>{relativeTime(conversation.updatedAt)}</time>
+                      {conversation.working ? (
+                        <ThinkingOrb state="working" size={14} label="Writing a reply" />
+                      ) : conversation.unread ? (
+                        <span className={styles.unreadPill}>New</span>
+                      ) : null}
+                    </span>
                   </button>
                   {p.onDelete && (
                     <button
