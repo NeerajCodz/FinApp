@@ -17,6 +17,7 @@ import {
 import { requireUser } from '../shared/auth';
 import { allocateParticipants } from '../splits/domain';
 import { toolErrorCode } from './agent';
+import { executeManageAction, isManageKind } from './manageActions';
 import { finaiAgent } from './config';
 import { finaiActionKind, finaiActionStatus, finaiScopeType } from './validators';
 
@@ -200,7 +201,12 @@ export async function executeAction(
   kind: Doc<'finaiActions'>['kind'],
   payload: Payload,
   clientMutationId: string,
+  userId?: Id<'users'>,
 ): Promise<string | undefined> {
+  if (isManageKind(kind)) {
+    if (!userId) throw new Error('AUTH_REQUIRED');
+    return executeManageAction(ctx, userId, kind, payload, clientMutationId);
+  }
   switch (kind) {
     case 'transaction.create': {
       const currency = text(payload, 'currency')!;
@@ -286,7 +292,13 @@ export const confirm = action({
     try {
       const payload = JSON.parse(claimed.payload) as Payload;
       // The action id doubles as the idempotency key, so a retried confirm cannot apply twice.
-      const resultId = await executeAction(ctx, claimed.kind, payload, `finai:${actionId}`);
+      const resultId = await executeAction(
+        ctx,
+        claimed.kind,
+        payload,
+        `finai:${actionId}`,
+        claimed.userId,
+      );
       await ctx.runMutation(internal.ai.actions.finish, { actionId, status: 'done', resultId });
       return { status: 'done', ...(resultId ? { resultId } : {}) };
     } catch (error) {

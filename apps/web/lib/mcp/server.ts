@@ -138,10 +138,39 @@ function textFor(data: unknown, summary?: string) {
   return summary ? `${summary}\n\n${json}` : json;
 }
 
+export type McpAccessSettings = {
+  enabled: boolean;
+  readOnly: boolean;
+  allowDestructive: boolean;
+  blockedTools: readonly string[];
+};
+
+const OPEN_ACCESS: McpAccessSettings = {
+  enabled: true,
+  readOnly: false,
+  allowDestructive: true,
+  blockedTools: [],
+};
+
+/** Why the user's access-control settings hide a tool, or null when it's available. */
+export function blockedReason(
+  tool: { name: string; scope: string; destructive?: boolean },
+  settings: McpAccessSettings,
+): string | null {
+  if (!settings.enabled) return 'MCP access is turned off in Finapp settings.';
+  if (settings.blockedTools.includes(tool.name)) return 'This tool is blocked in Finapp settings.';
+  if (settings.readOnly && tool.scope !== READ_SCOPE)
+    return 'Finapp is in read-only mode for AI apps.';
+  if (!settings.allowDestructive && tool.destructive)
+    return 'Deletes are turned off for AI apps in Finapp settings.';
+  return null;
+}
+
 export function createMcpServer(
   client: ConvexHttpClient,
   scopes: readonly string[],
   grantId: string,
+  access: McpAccessSettings = OPEN_ACCESS,
 ) {
   const server = new McpServer(
     { name: 'finapp', version: MCP_SERVER_VERSION, title: 'FinApp' },
@@ -151,11 +180,12 @@ export function createMcpServer(
         'Good starting points: finapp.finance.overview, finapp.finance.transactions.list, finapp.groups.list then finapp.groups.balances.',
         'Money is always integer minor units as strings (amountMinor) plus a *Formatted display string; never send floats.',
         'Fetch one bounded page at a time with explicit windows; use nextCursor to continue.',
-        'Writes need the matching granted scope. Confirm with the user before any write, and always before destructive tools (they require confirm: true).',
+        'Writes need the matching granted scope. Confirm with the user before any write. Destructive tools (deleting goals, budgets, categories, accounts, groups, or purging Trash) require confirm: true; deleted records go to the Trash and can be restored.',
       ].join(' '),
     },
   );
-  const catalog = toolCatalog();
+  // Discovery only describes tools this connection can actually see.
+  const catalog = toolCatalog().filter((entry) => !blockedReason(entry, access));
   const recordActivity = async (toolName: string, succeeded: boolean) => {
     try {
       await client.mutation(api.mcpOAuth.recordToolInvocation, {
@@ -226,6 +256,7 @@ export function createMcpServer(
   );
 
   for (const domain of Object.keys(domainDescriptions) as ToolDomain[]) {
+    if (!catalog.some((entry) => entry.domain === domain)) continue;
     const name = `finapp.${domain}.parent`;
     server.registerTool(
       name,
@@ -274,6 +305,8 @@ export function createMcpServer(
   }
 
   for (const tool of allTools(client)) {
+    // Tools the user turned off aren't offered at all.
+    if (blockedReason(tool, access)) continue;
     const readOnly = tool.scope === READ_SCOPE;
     server.registerTool(
       tool.name,

@@ -691,6 +691,19 @@ export default defineSchema({
   })
     .index('by_key', ['key'])
     .index('by_expiresAt', ['expiresAt']),
+  /** MCP access control (Settings → AI → MCP connections), one row per user. */
+  mcpSettings: defineTable({
+    userId: v.id('users'),
+    /** Master switch: off refuses every MCP tool call. */
+    enabled: v.boolean(),
+    /** Only read tools are available. */
+    readOnly: v.boolean(),
+    /** Delete / remove / archive tools are available (they still need confirm: true). */
+    allowDestructive: v.boolean(),
+    /** Tool names that are never available. */
+    blockedTools: v.array(v.string()),
+    updatedAt: timestamp,
+  }).index('by_user', ['userId']),
   mcpOAuthActivity: defineTable({
     userId: v.id('users'),
     grantId: v.id('mcpOAuthGrants'),

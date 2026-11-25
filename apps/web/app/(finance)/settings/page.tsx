@@ -11,6 +11,7 @@ import {
   Eye,
   Info,
   KeyRound,
+  LayoutDashboard,
   Palette,
   PlugZap,
   RefreshCw,
@@ -92,6 +93,13 @@ export default function SettingsPage() {
           description="ChatGPT, Claude and other apps connected to your Finapp"
           value={grants ? `${activeConnections} active` : undefined}
           onPress={() => router.push('/settings/ai/mcp')}
+        />
+        <SettingsLink
+          icon={<LayoutDashboard size={19} />}
+          tone="primary"
+          title="MCP dashboard"
+          description="Server URL, tools, widgets, activity and OAuth setup"
+          onPress={() => router.push('/mcp/dashboard')}
         />
       </SettingsGroup>
 

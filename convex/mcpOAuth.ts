@@ -663,3 +663,100 @@ export const listActivity = query({
     };
   },
 });
+
+const MCP_DEFAULTS = {
+  enabled: true,
+  readOnly: false,
+  allowDestructive: true,
+  blockedTools: [] as string[],
+};
+
+async function mcpSettingsFor(ctx: { db: QueryCtx['db'] }, userId: Doc<'users'>['_id']) {
+  const row = await ctx.db
+    .query('mcpSettings')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .unique();
+  return row
+    ? {
+        enabled: row.enabled,
+        readOnly: row.readOnly,
+        allowDestructive: row.allowDestructive,
+        blockedTools: row.blockedTools,
+      }
+    : MCP_DEFAULTS;
+}
+
+/** Your MCP access-control settings. */
+export const getSettings = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user || user.deletedAt !== undefined) return MCP_DEFAULTS;
+    return mcpSettingsFor(ctx, user._id);
+  },
+});
+
+export const updateSettings = mutation({
+  args: {
+    enabled: v.optional(v.boolean()),
+    readOnly: v.optional(v.boolean()),
+    allowDestructive: v.optional(v.boolean()),
+    blockedTools: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, patch) => {
+    const user = await requireUser(ctx);
+    if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
+    if (patch.blockedTools) {
+      if (patch.blockedTools.length > 300) throw new Error('TOO_MANY_TOOLS');
+      if (patch.blockedTools.some((name) => !/^finapp\.[a-z0-9_.]{1,120}$/.test(name)))
+        throw new Error('INVALID_TOOL_NAME');
+    }
+    const current = await mcpSettingsFor(ctx, user._id);
+    const next = {
+      enabled: patch.enabled ?? current.enabled,
+      readOnly: patch.readOnly ?? current.readOnly,
+      allowDestructive: patch.allowDestructive ?? current.allowDestructive,
+      blockedTools: patch.blockedTools ? [...new Set(patch.blockedTools)] : current.blockedTools,
+      updatedAt: Date.now(),
+    };
+    const row = await ctx.db
+      .query('mcpSettings')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .unique();
+    if (row) await ctx.db.patch(row._id, next);
+    else await ctx.db.insert('mcpSettings', { userId: user._id, ...next });
+    const { updatedAt: _updatedAt, ...result } = next;
+    return result;
+  },
+});
+
+/** Changes what one connected app may do (read is always included). Applies on its next request. */
+export const updateGrantScopes = mutation({
+  args: { grantId: v.id('mcpOAuthGrants'), scopes: v.array(v.string()) },
+  handler: async (ctx, { grantId, scopes }) => {
+    const user = await requireUser(ctx);
+    if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
+    const grant = await ctx.db.get(grantId);
+    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined)
+      throw new Error('GRANT_NOT_FOUND');
+    const next = [...new Set(['finapp:read', ...scopes])];
+    if (next.some((scope) => !isAllowedScope(scope))) throw new Error('INVALID_SCOPE');
+    await ctx.db.patch(grantId, { scopes: next });
+    return next;
+  },
+});
+
+/**
+ * What the MCP server may do for this grant right now: whether it's active, its current scopes
+ * (editable in settings, so newer than the access token) and the user's access-control settings.
+ */
+export const accessPolicy = query({
+  args: { grantId: v.id('mcpOAuthGrants') },
+  handler: async (ctx, { grantId }) => {
+    const user = await getOptionalUser(ctx);
+    if (!user || user.deletedAt !== undefined) return null;
+    const grant = await ctx.db.get(grantId);
+    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined) return null;
+    return { scopes: grant.scopes, settings: await mcpSettingsFor(ctx, user._id) };
+  },
+});

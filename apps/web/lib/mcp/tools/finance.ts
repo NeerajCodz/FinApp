@@ -234,14 +234,12 @@ export const financeTools: ToolFactory = (client) => [
   }),
   defineTool({
     name: 'finapp.finance.transactions.delete',
-    title: 'Delete transaction',
+    title: 'Delete transaction (to Trash)',
     description:
-      'Soft-delete one personal transaction after explicit user confirmation. Group expenses use finapp.groups.expenses.delete.',
+      'Delete one personal transaction. It moves to Trash and can be restored with finapp.finance.trash.restore, so no confirmation is needed. Group expenses use finapp.groups.expenses.delete.',
     scope: 'finapp:write:finance',
-    destructive: true,
     input: {
       transactionId: docId('Transaction'),
-      confirm: confirm('delete this transaction'),
       clientMutationId: mutationId,
     },
     run: (args) =>
@@ -534,18 +532,24 @@ export const financeTools: ToolFactory = (client) => [
   }),
   defineTool({
     name: 'finapp.finance.categories.archive',
-    title: 'Archive category',
-    description: 'Archive a user-owned category after explicit user confirmation.',
+    title: 'Delete category (to Trash)',
+    description:
+      'Move a user-owned category to Trash after explicit user confirmation. Ask the user whether its transactions should be kept (default) or moved to Trash too (deleteTransactions: true). Restorable from Trash.',
     scope: 'finapp:write:finance',
     destructive: true,
     input: {
       categoryId: docId('Category'),
-      confirm: confirm('archive this category'),
+      deleteTransactions: z
+        .boolean()
+        .optional()
+        .describe('Also move the category’s transactions to Trash (restored with it).'),
+      confirm: confirm('delete this category'),
       clientMutationId: mutationId,
     },
     run: (args) =>
       client.mutation(api.categories.mutations.archive, {
         categoryId: id<'categories'>(args.categoryId),
+        ...(args.deleteTransactions ? { deleteTransactions: true } : {}),
         clientMutationId: idempotencyKey(args.clientMutationId),
       }),
   }),
@@ -839,6 +843,66 @@ export const financeTools: ToolFactory = (client) => [
         enabled: args.enabled,
         clientMutationId: idempotencyKey(args.clientMutationId),
       }),
+  }),
+
+  defineTool({
+    name: 'finapp.finance.recurring.delete',
+    title: 'Delete recurring rule (to Trash)',
+    description:
+      'Move a recurring rule to Trash after explicit user confirmation. It stops running and can be restored from Trash.',
+    scope: 'finapp:write:finance',
+    destructive: true,
+    input: {
+      ruleId: docId('Recurring rule'),
+      confirm: confirm('delete this recurring rule'),
+      clientMutationId: mutationId,
+    },
+    run: (args) =>
+      client.mutation(api.recurring.mutations.remove, {
+        ruleId: id<'recurringRules'>(args.ruleId),
+        clientMutationId: idempotencyKey(args.clientMutationId),
+      }),
+  }),
+
+  // ---------- Trash ----------
+  defineTool({
+    name: 'finapp.finance.trash.list',
+    title: 'List Trash',
+    description:
+      'Deleted transactions, accounts, categories, budgets, goals and recurring rules in Trash, with when each will be deleted for good.',
+    scope: 'finapp:read',
+    input: {
+      kind: z
+        .enum(['transaction', 'account', 'category', 'budget', 'goal', 'recurring'])
+        .optional(),
+    },
+    run: (args) => client.query(api.trash.list, args.kind ? { kind: args.kind } : {}),
+  }),
+  defineTool({
+    name: 'finapp.finance.trash.restore',
+    title: 'Restore from Trash',
+    description:
+      'Restore an item from Trash (a category or account brings back what was trashed with it).',
+    scope: 'finapp:write:finance',
+    input: {
+      kind: z.enum(['transaction', 'account', 'category', 'budget', 'goal', 'recurring']),
+      id: z.string().min(1).max(64),
+    },
+    run: (args) => client.mutation(api.trash.restore, { kind: args.kind, id: args.id }),
+  }),
+  defineTool({
+    name: 'finapp.finance.trash.purge',
+    title: 'Delete from Trash for good',
+    description:
+      'Permanently delete a Trash item after explicit user confirmation. Cannot be undone; an account takes its transactions with it, a goal its contributions.',
+    scope: 'finapp:write:finance',
+    destructive: true,
+    input: {
+      kind: z.enum(['transaction', 'account', 'category', 'budget', 'goal', 'recurring']),
+      id: z.string().min(1).max(64),
+      confirm: confirm('permanently delete this item'),
+    },
+    run: (args) => client.mutation(api.trash.purge, { kind: args.kind, id: args.id }),
   }),
 
   // ---------- Analytics ----------

@@ -21,6 +21,7 @@ import type { GeminiContent } from './geminiChat';
 import { assistantSystemPrompt } from './prompts';
 import { finaiPreferencePrompt, finaiToolAllowed } from '../shared/finaiSettings';
 import { chatForUser } from './keys';
+import { manageTools } from './manageTools';
 import { finaiStage, finaiStep } from './validators';
 import { consumeAiQuota } from './usage';
 
@@ -400,7 +401,9 @@ ${finaiPreferencePrompt(settings)}`;
         system,
         ...(byok.chat ? { chat: byok.chat } : {}),
         contents: historyContents(started.history, args.text.trim()),
-        tools: assistantTools.filter((tool) => finaiToolAllowed(settings, tool.name)),
+        tools: [...assistantTools, ...manageTools].filter((tool) =>
+          finaiToolAllowed(settings, tool.name),
+        ),
         onProgress: async (step: AgentProgress) => {
           const next = applyStep(steps, step);
           if (next) steps = next;

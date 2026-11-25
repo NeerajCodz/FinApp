@@ -1,12 +1,12 @@
 import { ArrowRight } from '@finapp/ui/icons/native';
 import { currencies } from '@convex/shared/validators';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, TouchableOpacity, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvex, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Bot, KeyRound, PlugZap, Trash2 as Trash } from 'lucide-react-native';
+import { Bot, KeyRound, PlugZap, Trash2 as Trash, LayoutDashboard } from 'lucide-react-native';
 import { unregisterPush } from '@/lib/push';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -339,6 +339,13 @@ export default function ProfileScreen() {
             description="ChatGPT, Claude and other AI apps"
             value={grants ? `${activeConnections} active` : undefined}
             onPress={() => router.push('/settings/ai/mcp' as never)}
+          />
+          <SettingsLink
+            icon={<LayoutDashboard size={19} color={tone('primary')} />}
+            tone="primary"
+            title="MCP dashboard"
+            description="Tools, activity and OAuth setup (opens the web)"
+            onPress={() => void Linking.openURL('https://fin.neeraj.fyi/mcp/dashboard')}
           />
         </SettingsGroup>
 
