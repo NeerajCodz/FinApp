@@ -88,6 +88,7 @@ import type * as recurring_domain from "../recurring/domain.js";
 import type * as recurring_mutations from "../recurring/mutations.js";
 import type * as search_domain from "../search/domain.js";
 import type * as search_queries from "../search/queries.js";
+import type * as security from "../security.js";
 import type * as settlements_domain from "../settlements/domain.js";
 import type * as settlements_mutations from "../settlements/mutations.js";
 import type * as shared_aiProviders from "../shared/aiProviders.js";
@@ -210,6 +211,7 @@ declare const fullApi: ApiFromModules<{
   "recurring/mutations": typeof recurring_mutations;
   "search/domain": typeof search_domain;
   "search/queries": typeof search_queries;
+  security: typeof security;
   "settlements/domain": typeof settlements_domain;
   "settlements/mutations": typeof settlements_mutations;
   "shared/aiProviders": typeof shared_aiProviders;

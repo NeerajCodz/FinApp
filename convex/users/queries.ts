@@ -1,3 +1,4 @@
+import { privacyFor } from '../security';
 import { internalQuery, query } from '../_generated/server';
 import { v } from 'convex/values';
 import { getOptionalUser } from '../shared/auth';
@@ -77,23 +78,28 @@ export const search = query({
     const searchTerm = normalizeUsername(args.query);
     if (!searchTerm) return [];
     const users = await ctx.db.query('users').collect();
+    const matches = users.filter(
+      (user) =>
+        user._id !== current._id &&
+        user.deletedAt === undefined &&
+        user.username?.startsWith(searchTerm),
+    );
+    // People who turned off discovery only show up for their exact username.
+    const visible: typeof matches = [];
+    for (const user of matches) {
+      if (visible.length >= 20) break;
+      if (user.username === searchTerm || (await privacyFor(ctx, user._id)).discoverable)
+        visible.push(user);
+    }
     return Promise.all(
-      users
-        .filter(
-          (user) =>
-            user._id !== current._id &&
-            user.deletedAt === undefined &&
-            user.username?.startsWith(searchTerm),
-        )
-        .slice(0, 20)
-        .map(async (user) => ({
-          id: user._id,
-          displayName: user.displayName ?? user.name ?? 'Finapp user',
-          username: user.username,
-          gender: user.gender,
-          avatarId: user.avatarId,
-          avatarUrl: (await avatarUrlForUser(ctx, user)) ?? undefined,
-        })),
+      visible.map(async (user) => ({
+        id: user._id,
+        displayName: user.displayName ?? user.name ?? 'Finapp user',
+        username: user.username,
+        gender: user.gender,
+        avatarId: user.avatarId,
+        avatarUrl: (await avatarUrlForUser(ctx, user)) ?? undefined,
+      })),
     );
   },
 });
