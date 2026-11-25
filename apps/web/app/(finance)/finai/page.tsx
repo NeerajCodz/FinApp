@@ -1,5 +1,7 @@
 'use client';
 
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { FinaiAssistantScreen } from '@finapp/ui/ai';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -11,6 +13,7 @@ export default function FinaiPage() {
   const live = Boolean(userId && isConnected);
   const assistant = useFinaiAssistant(live);
   const decide = useFinaiDecide();
+  const finaiSettings = useQuery(api.ai.settings.get, live ? {} : 'skip');
   if (!userId)
     return (
       <FinanceSignedOut
@@ -36,6 +39,7 @@ export default function FinaiPage() {
       sending={assistant.sending}
       error={isConnected ? assistant.error : 'You’re offline. Reconnect to chat with FinAI.'}
       onDecide={decide}
+      showSteps={finaiSettings?.showSteps !== false}
     />
   );
 }

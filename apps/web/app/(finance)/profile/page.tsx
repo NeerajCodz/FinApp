@@ -4,30 +4,29 @@ import { useAuthActions } from '@convex-dev/auth/react';
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import {
   ArrowRight,
+  AtSign,
   Bell,
+  Bot,
   ChartNoAxesCombined,
   Coins,
   Info,
+  KeyRound,
   LogOut,
+  Mail,
   Palette,
+  PencilLine,
+  PlugZap,
   ReceiptText,
-  Settings2,
+  Settings,
   ShieldCheck,
   Wallet,
 } from 'lucide-react';
-import {
-  Avatar,
-  Button,
-  Card,
-  IconButton,
-  Sheet,
-  Text,
-  Typography,
-  useTheme,
-} from '@finapp/ui/web';
-import { SettingsRow } from '@finapp/ui/finance';
+import { Avatar, Button, Sheet, Text, useTheme } from '@finapp/ui/web';
+import { SettingsGroup, SettingsIconButton, SettingsLink, SettingsShell } from '@finapp/ui/finance';
 import { currencies } from '@convex/shared/validators';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -66,8 +65,12 @@ const privacyLinks = [
 export default function ProfilePage() {
   const { signOut } = useAuthActions();
   const router = useRouter();
-  const { userId } = useBrowserSync();
+  const { userId, isConnected } = useBrowserSync();
   const { tokens, appearance } = useTheme();
+  const live = Boolean(userId && isConnected);
+  const finai = useQuery(api.ai.settings.get, live ? {} : 'skip');
+  const grants = useQuery(api.mcpOAuth.listGrants, live ? { limit: 50 } : 'skip');
+  const activeConnections = grants?.filter((grant) => grant.revokedAt === undefined).length ?? 0;
   const { records, loading, error } = useLocalRecords<Profile>('profile');
   const profile = records[0];
   const [currencyOpen, setCurrencyOpen] = React.useState(false);
@@ -103,168 +106,176 @@ export default function ProfilePage() {
     await signOut();
     router.replace('/sign-in');
   }
+  const name = profile?.displayName ?? 'Your profile';
   return (
     <>
-      <div className="finance-page finance-page--medium">
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="title">Profile</Typography>
-          <IconButton
-            label="Open settings"
-            variant="ghost"
-            onPress={() => router.push('/settings')}
-          >
-            <Settings2 size={21} aria-hidden="true" />
-          </IconButton>
-        </header>
-        <Card
-          variant="subtle"
-          style={{
-            display: 'grid',
-            gap: 18,
-            padding: 20,
-            borderRadius: 24,
-            border: `1px solid ${tokens.borderSubtle}`,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Avatar
-              initials={(profile?.displayName ?? 'NS').slice(0, 2)}
-              label="Your profile"
-              size={68}
-              imageUrl={profile?.avatarUrl}
-              avatarId={profile?.avatarId}
-            />
-            <div style={{ display: 'grid', minWidth: 0, gap: 3 }}>
-              <Typography variant="heading">{profile?.displayName ?? 'Your profile'}</Typography>
-              <Typography variant="small" style={{ overflowWrap: 'anywhere' }}>
-                {profile?.email ?? 'Private ledger'}
-              </Typography>
-              <Typography variant="small">
-                {profile?.username ? `@${profile.username}` : 'Username not set'}
-              </Typography>
+      <SettingsShell
+        title="Profile"
+        subtitle="Your account, preferences and AI"
+        wide
+        actions={
+          <SettingsIconButton label="Settings" onPress={() => router.push('/settings')}>
+            <Settings size={20} aria-hidden="true" />
+          </SettingsIconButton>
+        }
+      >
+        <section className="me-hero" data-span>
+          <div className="me-cover" aria-hidden />
+          <div className="me-hero-body">
+            <span className="me-avatar">
+              <Avatar
+                initials={name.slice(0, 2).toUpperCase()}
+                label="Your profile"
+                size={92}
+                imageUrl={profile?.avatarUrl}
+                avatarId={profile?.avatarId}
+              />
+            </span>
+            <div className="me-identity">
+              <h2>{name}</h2>
+              <p>
+                {profile?.username ? (
+                  <span>
+                    <AtSign size={14} aria-hidden />
+                    {profile.username}
+                  </span>
+                ) : (
+                  <span>Username not set</span>
+                )}
+                {profile?.email ? (
+                  <span>
+                    <Mail size={14} aria-hidden />
+                    {profile.email}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            <div className="me-actions">
+              <Button variant="outline" onPress={() => router.push('/profile/edit')}>
+                <PencilLine size={16} aria-hidden="true" /> Edit profile
+              </Button>
+              {profile?.username ? (
+                <Button
+                  variant="ghost"
+                  onPress={() => router.push(`/profile/${encodeURIComponent(profile.username!)}`)}
+                >
+                  Public profile <ArrowRight size={16} aria-hidden="true" />
+                </Button>
+              ) : null}
             </div>
           </div>
-          <Button variant="outline" onPress={() => router.push('/profile/edit')}>
-            Edit profile <ArrowRight size={17} aria-hidden="true" />
-          </Button>
-        </Card>
+        </section>
+
         {(loading || error) && (
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gap: 10, gridColumn: '1 / -1' }}>
             {loading && <Text role="status">Loading your local profile…</Text>}
             {error && <Text role="alert">Profile could not be loaded from this browser.</Text>}
           </div>
         )}
-        <section style={{ display: 'grid', gap: 12 }}>
-          <Typography variant="label" as="h2">
-            Money workspace
-          </Typography>
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              rowGap: 10,
-            }}
-          >
-            {links.map(({ label, description, href, icon: Icon }) => (
-              <Link
-                key={label}
-                href={href}
-                aria-label={`${label}, ${description}`}
-                style={{
-                  display: 'flex',
-                  width: '48.5%',
-                  minHeight: 126,
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  padding: 16,
-                  border: `1px solid ${tokens.borderSubtle}`,
-                  borderRadius: 18,
-                  background: tokens.surfaceSubtle,
-                  color: 'inherit',
-                  textDecoration: 'none',
-                }}
-              >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    display: 'grid',
-                    width: 38,
-                    height: 38,
-                    placeItems: 'center',
-                    borderRadius: 12,
-                    background: tokens.controlDisabledBackground,
-                  }}
-                >
-                  <Icon size={19} color={tokens.primary} />
-                </span>
-                <span style={{ display: 'grid', gap: 2 }}>
-                  <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
-                    {label}
-                  </Typography>
-                  <Typography variant="caption">{description}</Typography>
-                </span>
-              </Link>
-            ))}
-          </div>
+
+        <section className="me-workspace" data-span aria-label="Money workspace">
+          {links.map(({ label, description, href, icon: Icon }) => (
+            <Link
+              key={label}
+              href={href}
+              className="me-tile"
+              aria-label={`${label}, ${description}`}
+            >
+              <span className="me-tile-icon" aria-hidden="true">
+                <Icon size={19} color={tokens.primary} />
+              </span>
+              <span>
+                <strong>{label}</strong>
+                <small>{description}</small>
+              </span>
+            </Link>
+          ))}
         </section>
-        <section>
-          <Typography variant="label" as="h2" style={{ display: 'block', marginBottom: 4 }}>
-            Profile details
-          </Typography>
-          <SettingsRow
-            leadingIcon={<Coins size={19} color={tokens.foreground} />}
-            label="Default currency"
+
+        <SettingsGroup title="AI">
+          <SettingsLink
+            icon={<Bot size={19} />}
+            tone="violet"
+            title="FinAI"
+            description="Personality, data access, actions and chats"
+            value={finai ? (finai.enabled ? 'On' : 'Off') : undefined}
+            onPress={() => router.push('/settings/ai/finai')}
+          />
+          <SettingsLink
+            icon={<KeyRound size={19} />}
+            tone="warning"
+            title="API keys"
+            description="Bring your own model key"
+            onPress={() => router.push('/settings/ai/keys')}
+          />
+          <SettingsLink
+            icon={<PlugZap size={19} />}
+            tone="info"
+            title="MCP connections"
+            description="ChatGPT, Claude and other AI apps"
+            value={grants ? `${activeConnections} active` : undefined}
+            onPress={() => router.push('/settings/ai/mcp')}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title="Preferences">
+          <SettingsLink
+            icon={<Coins size={19} />}
+            tone="warning"
+            title="Default currency"
             value={profile?.defaultCurrency ?? 'INR'}
             onPress={() => setCurrencyOpen(true)}
           />
-        </section>
-        <section>
-          <Typography variant="label" as="h2" style={{ display: 'block', marginBottom: 4 }}>
-            Preferences
-          </Typography>
-          <SettingsRow
-            leadingIcon={<Palette size={19} color={tokens.foreground} />}
-            label="Appearance"
+          <SettingsLink
+            icon={<Palette size={19} />}
+            tone="violet"
+            title="Appearance"
             value={`${appearance.charAt(0).toUpperCase()}${appearance.slice(1)}`}
             onPress={() => router.push('/settings/appearance')}
           />
-          <SettingsRow
-            leadingIcon={<Bell size={19} color={tokens.foreground} />}
-            label="Notifications"
+          <SettingsLink
+            icon={<Bell size={19} />}
+            tone="info"
+            title="Notifications"
             onPress={() => router.push('/settings/notifications')}
           />
-          <SettingsRow
-            leadingIcon={<ShieldCheck size={19} color={tokens.foreground} />}
-            label="Security"
+        </SettingsGroup>
+
+        <SettingsGroup title="Security and data">
+          <SettingsLink
+            icon={<ShieldCheck size={19} />}
+            tone="positive"
+            title="Security"
+            description="Password, two-factor and app lock"
             onPress={() => router.push('/settings/security')}
           />
-        </section>
-        <section>
-          <Typography variant="label" as="h2" style={{ display: 'block', marginBottom: 4 }}>
-            Data and privacy
-          </Typography>
           {privacyLinks.map(({ label, href, icon: Icon }) => (
-            <SettingsRow
+            <SettingsLink
               key={label}
-              leadingIcon={<Icon size={19} color={tokens.foreground} />}
-              label={label}
+              icon={<Icon size={19} />}
+              tone="primary"
+              title={label}
               onPress={() => router.push(href)}
             />
           ))}
-        </section>
-        <SettingsRow
-          leadingIcon={<Info size={19} color={tokens.foreground} />}
-          label="About"
-          onPress={() => router.push('/about')}
-        />
+          <SettingsLink
+            icon={<Info size={19} />}
+            title="About"
+            onPress={() => router.push('/about')}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup>
+          <SettingsLink
+            icon={<LogOut size={19} />}
+            danger
+            title="Sign out"
+            description="Sign out of Finapp on this browser"
+            onPress={() => void leave()}
+          />
+        </SettingsGroup>
         {!!message && <Text role="status">{message}</Text>}
-        <Button variant="destructive" size="lg" onPress={() => void leave()}>
-          <LogOut size={16} aria-hidden="true" /> Sign out{' '}
-          <ArrowRight size={18} aria-hidden="true" style={{ marginLeft: 'auto' }} />
-        </Button>
-      </div>
+      </SettingsShell>
       <Sheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} title="Default currency">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {currencies.map((currency) => (

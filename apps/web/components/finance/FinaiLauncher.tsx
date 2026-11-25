@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 import { usePathname } from 'next/navigation';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { FinaiAssistantScreen, FinaiLogo } from '@finapp/ui/ai';
 import { ThinkingOrb } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -28,6 +30,7 @@ export function FinaiLauncher() {
     return () => query.removeEventListener('change', update);
   }, []);
   const live = Boolean(userId && isConnected && open);
+  const finaiSettings = useQuery(api.ai.settings.get, userId && isConnected ? {} : 'skip');
   const assistant = useFinaiAssistant(live);
   const decide = useFinaiDecide();
 
@@ -71,6 +74,7 @@ export function FinaiLauncher() {
   }, [fullScreen, open]);
 
   if (!userId || pathname === '/finai' || pathname.startsWith('/finai/')) return null;
+  if (finaiSettings && (!finaiSettings.enabled || !finaiSettings.showLauncher)) return null;
   return (
     <>
       {open ? (
@@ -100,6 +104,7 @@ export function FinaiLauncher() {
             sending={assistant.sending}
             error={isConnected ? assistant.error : 'You’re offline. Reconnect to chat with FinAI.'}
             onDecide={decide}
+            showSteps={finaiSettings?.showSteps !== false}
           />
         </div>
       ) : null}
