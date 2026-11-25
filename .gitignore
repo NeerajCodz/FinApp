@@ -12,3 +12,6 @@ artifacts/
 apps/web/.next/
 apps/web/out/
 apps/web/node_modules/
+
+# Local agent skills (skills-lock.json stays tracked)
+.agents/
