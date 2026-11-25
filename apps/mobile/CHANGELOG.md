@@ -2,6 +2,10 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.5.2
+
+- Profile is an avatar at the top right of Home; tab bar: Home, Activity, +, Groups, People
+
 ## 1.5.1
 
 - Redesigned bottom navigation bar (solid, icons contained, + inline)

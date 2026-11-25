@@ -38,6 +38,7 @@ import {
   TrendingUp as LucideTrendUp,
   TriangleAlert as LucideTriangleAlert,
   UserCircle as LucideUserCircle,
+  User as LucideUser,
   UsersRound as LucideUsersThree,
   Utensils as LucideUtensils,
   Wallet as LucideWallet,
@@ -92,6 +93,7 @@ export const ShieldCheck = withWeight(LucideShieldCheck);
 export const TrendDown = withWeight(LucideTrendDown);
 export const TrendUp = withWeight(LucideTrendUp);
 export const TriangleAlert = withWeight(LucideTriangleAlert);
+export const User = withWeight(LucideUser);
 export const UserCircle = withWeight(LucideUserCircle);
 export const ReceiptText = withWeight(LucideReceiptText);
 export const ShoppingBag = withWeight(LucideShoppingBag);

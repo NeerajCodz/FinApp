@@ -2,6 +2,10 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.5.2
+
+- `User` icon for the native tab bar
+
 ## 1.5.1
 
 - Redesigned bottom navigation bar (solid, icons contained, + inline)
