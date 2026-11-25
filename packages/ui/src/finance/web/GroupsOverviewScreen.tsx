@@ -12,6 +12,8 @@ import {
 import { FinanceEmptyState } from './FinanceEmptyState';
 export type GroupOverviewItem = {
   id: string;
+  /** Server id (chat and unread counts are keyed by it); missing for unsynced groups. */
+  cloudId?: string;
   name: string;
   currency: string;
   icon?: string;

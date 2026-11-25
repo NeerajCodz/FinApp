@@ -8,6 +8,9 @@ import {
   Bell as LucideBell,
   Check as LucideCheck,
   ChartNoAxesCombined as LucideChartLineUp,
+  ChartColumn as LucideChartBar,
+  MessageCircle as LucideChatCircle,
+  Target as LucideTarget,
   CalendarDays as LucideCalendarDays,
   Car as LucideCar,
   ChevronRight as LucideCaretRight,
@@ -101,3 +104,6 @@ export const UsersThree = withWeight(LucideUsersThree);
 export const Wallet = withWeight(LucideWallet);
 export const X = withWeight(LucideX);
 export const Utensils = withWeight(LucideUtensils);
+export const ChartBar = withWeight(LucideChartBar);
+export const ChatCircle = withWeight(LucideChatCircle);
+export const Target = withWeight(LucideTarget);
