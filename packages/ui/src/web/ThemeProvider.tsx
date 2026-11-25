@@ -71,7 +71,9 @@ function tokenVariables(tokens: ThemeTokens): React.CSSProperties {
     '--finapp-transfer': tokens.transfer,
     '--finapp-split': tokens.split,
     '--finapp-settlement': tokens.settlement,
-    '--finapp-font-sans': "var(--font-space-grotesk, 'Space Grotesk', 'Avenir Next', sans-serif)",
+    '--finapp-font-brand': "var(--font-space-grotesk, 'Space Grotesk', 'Avenir Next', sans-serif)",
+    '--finapp-font-sans': "var(--font-manrope, 'Manrope', system-ui, sans-serif)",
+    '--finapp-font-ai': "var(--font-source-serif, 'Source Serif 4', Georgia, serif)",
     // Tinted surfaces for icon tiles, pills and illustration fills.
     ...Object.fromEntries(
       (

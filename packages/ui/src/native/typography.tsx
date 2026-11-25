@@ -11,7 +11,7 @@ export function Text({ children, style, ...props }: React.ComponentProps<typeof 
       style={[
         {
           color: tokens.foreground,
-          fontFamily: 'SpaceGrotesk_400Regular',
+          fontFamily: 'Manrope_400Regular',
           fontSize: 15,
           lineHeight: 22,
         },

@@ -63,6 +63,8 @@
     "./src/web/styles.css"
   ],
   "peerDependencies": {
+    "@expo-google-fonts/manrope": "^0.4.1",
+    "@expo-google-fonts/source-serif-4": "^0.4.1",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "expo-font": "~57.0.4",
     "expo-sqlite": "~57.0.3",
