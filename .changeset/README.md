@@ -13,5 +13,5 @@ bun run version:bump backend minor
 ```
 
 To cut a release, run `bun run version:release`. It applies the pending changesets (versions and
-CHANGELOGs), copies the new versions into `version.json`, and regenerates `version.txt`,
+CHANGELOGs), copies the new versions into `version.json`, and regenerates
 `app.json`, `convex/shared/version.ts` and `releases/v<product>.json`. See `docs/versioning.md`.

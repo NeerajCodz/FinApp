@@ -21,7 +21,6 @@ describe('version manifest', () => {
     expect(json('apps/mobile/package.json').version).toBe(manifest.components.mobile);
     expect(json('packages/ui/package.json').version).toBe(manifest.components.ui);
     expect(json('apps/mobile/app.json').expo.android.versionCode).toBe(manifest.build.android);
-    expect(readFileSync(join(root, 'version.txt'), 'utf8').trim()).toBe(manifest.version);
     expect(json(`releases/v${manifest.version}.json`).components).toEqual(manifest.components);
   });
 });

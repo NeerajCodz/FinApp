@@ -3,7 +3,6 @@
  * FinApp versioning. `version.json` is the only place versions are written by hand (or by
  * `bump`); everything else is generated from it:
  *
- *   version.txt                       product version, one line
  *   package.json (root)               product version
  *   apps/web/package.json             components.web
  *   apps/mobile/package.json          components.mobile
@@ -178,7 +177,6 @@ export function compareVersions(left: string, right: string): number {
 
 function derivedOutputs(manifest) {
   const outputs = [];
-  writeText('version.txt', `${manifest.version}\n`, outputs);
 
   const rootPackage = readJson('package.json');
   writeJson('package.json', { ...rootPackage, version: manifest.version }, outputs);
