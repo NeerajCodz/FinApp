@@ -1,0 +1,250 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow-y: auto;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  background: var(--finapp-background);
+  color: var(--finapp-foreground);
+}
+
+.glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      60% 45% at 50% 30%,
+      color-mix(in srgb, var(--finapp-primary) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      40% 30% at 85% 90%,
+      color-mix(in srgb, var(--finapp-primary) 8%, transparent),
+      transparent 70%
+    );
+}
+
+.brand {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 0;
+}
+
+.center {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
+.person {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+  padding: 4px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 210deg,
+    var(--finapp-primary),
+    color-mix(in srgb, var(--finapp-primary) 25%, transparent),
+    var(--finapp-primary)
+  );
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--finapp-primary) 22%, transparent);
+}
+
+.ring > :first-child {
+  border: 3px solid var(--finapp-background);
+}
+
+.lockBadge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--finapp-background);
+  border-radius: 50%;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+}
+
+.name {
+  font-family: var(--finapp-font-display, inherit);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.username {
+  font-size: 14px;
+  color: var(--finapp-foreground-muted);
+}
+
+.card {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  padding: 22px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 24px;
+  background: var(--finapp-card);
+  box-shadow: 0 20px 60px #0000002e; /* theme-exempt: soft elevation in both themes */
+}
+
+.title {
+  margin: 0;
+  font-family: var(--finapp-font-display, inherit);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.subtitle {
+  margin: -6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--finapp-foreground-muted);
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+}
+
+.actions > button,
+.actions form > button {
+  width: 100%;
+  justify-content: center;
+}
+
+.note {
+  max-width: 340px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--finapp-foreground-subtle);
+}
+
+.footer {
+  position: relative;
+  padding: 8px 0 4px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--finapp-foreground-muted);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--finapp-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--finapp-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- PIN ---------- */
+
+.pin {
+  position: relative;
+  display: block;
+  cursor: text;
+}
+
+.pin[data-disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pinInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  font-size: 16px;
+  caret-color: transparent;
+}
+
+.boxes {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.box {
+  position: relative;
+  aspect-ratio: 1 / 1.15;
+  border: 1.5px solid var(--finapp-border-subtle);
+  border-radius: 14px;
+  background: var(--finapp-surface-subtle);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.box[data-filled]::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--finapp-foreground);
+  transform: translate(-50%, -50%);
+}
+
+.pinInput:focus + .boxes .box[data-active] {
+  border-color: var(--finapp-primary);
+  background: color-mix(in srgb, var(--finapp-primary) 8%, var(--finapp-surface-subtle));
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .box {
+    transition: none;
+  }
+}
