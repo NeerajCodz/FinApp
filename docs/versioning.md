@@ -14,7 +14,7 @@ components that shipped together.
 `version.json` is the **only** file edited by hand (or by the scripts). Everything else is
 generated and checked in CI (`bun run version:check`):
 
-- `version.txt` (product version), root and package `package.json` versions
+- root and package `package.json` versions
 - `apps/mobile/app.json` version, `android.versionCode`, `ios.buildNumber` (and `app.config.js`
   reads `version.json` directly at build time)
 - `convex/shared/version.ts` — `PRODUCT_VERSION`, `COMPONENT_VERSIONS`, `BUILD_NUMBERS`,
