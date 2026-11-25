@@ -9,7 +9,6 @@
  *   apps/mobile/app.json              expo.version, android.versionCode, ios.buildNumber
  *   packages/ui/package.json          components.ui
  *   convex/shared/version.ts          BACKEND_INFO + product/component versions (generated)
- *   releases/v<product>.json          archived manifest of what shipped together
  *
  * Usage:
  *   node scripts/version.mjs sync                 write every derived file
@@ -19,6 +18,10 @@
  *   node scripts/version.mjs build <android|ios>  increment a store build number
  *   node scripts/version.mjs show                 print the manifest
  *   node scripts/version.mjs tags                 print the git tags for this release
+ *
+ * Release history is not kept in the repo: the Release workflow attaches the root version.json
+ * to each GitHub release, so every shipped manifest is at
+ *   https://github.com/NeerajCodz/FinApp/releases/download/finapp-v<product>/version.json
  *   node scripts/version.mjs adopt                take web/mobile/ui versions written by
  *                                                 `changeset version` into version.json
  */
@@ -197,23 +200,6 @@ function derivedOutputs(manifest) {
 
   writeText('convex/shared/version.ts', generatedVersionModule(manifest), outputs);
 
-  // The archive for a product version is written once: a release that has shipped (or been
-  // tagged) never changes. Bump the product version to record a new component set.
-  const releaseFile = `releases/v${manifest.version}.json`;
-  if (!existsSync(path(releaseFile)))
-    writeJson(
-      releaseFile,
-      {
-        version: manifest.version,
-        channel: manifest.channel,
-        date: new Date().toISOString().slice(0, 10),
-        components: manifest.components,
-        build: manifest.build,
-        compatibility: manifest.compatibility,
-        tags: releaseTags(manifest),
-      },
-      outputs,
-    );
   return outputs;
 }
 

@@ -19,7 +19,6 @@ generated and checked in CI (`bun run version:check`):
   reads `version.json` directly at build time)
 - `convex/shared/version.ts` — `PRODUCT_VERSION`, `COMPONENT_VERSIONS`, `BUILD_NUMBERS`,
   `BACKEND_INFO`
-- `releases/v<product>.json` — archive of what shipped together, with its tags
 
 ## Day to day
 
@@ -37,7 +36,19 @@ bun run version:build android        # only when shipping a new store build with
 ```
 
 Merge to `main`. The **Release** workflow tags `finapp-v…`, `web-v…`, `mobile-v…`, `ui-v…`,
-`backend-v…` and publishes a GitHub release from the `CHANGELOG.md` section.
+`backend-v…` and publishes a GitHub release from the `CHANGELOG.md` section, with the root
+`version.json` (as committed at the tag) attached as an asset.
+
+## Release history
+
+Shipped manifests aren't kept in the repo. Every product release carries its `version.json`:
+
+```
+https://github.com/NeerajCodz/FinApp/releases/download/finapp-v<product>/version.json
+```
+
+List them all with `gh release list` or the releases API, then fetch
+`finapp-v*/version.json`.
 
 ## SemVer rules
 

@@ -34,14 +34,21 @@ jobs:
               git tag -a "$tag" -m "$tag" && git push origin "$tag"
             fi
           done
-      - name: Publish the product release
+      - name: Publish the product release with its version.json
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./version.json').version")
           tag="finapp-v$version"
+          # The release's manifest is the root version.json exactly as committed at the tag:
+          # https://github.com/<repo>/releases/download/finapp-v<version>/version.json
+          git show "$tag:version.json" > version.release.json
+          mkdir -p dist && cp version.release.json dist/version.json
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag exists."
+            echo "Release $tag exists; making sure version.json is attached."
+            if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -qx version.json; then
+              gh release upload "$tag" dist/version.json
+            fi
             exit 0
           fi
           # Notes: this version's section of CHANGELOG.md, plus the component manifest.
@@ -50,7 +57,7 @@ jobs:
             echo
             echo '### Components'
             echo '```json'
-            cat "releases/v$version.json"
+            cat dist/version.json
             echo '```'
           } >> notes.md
-          gh release create "$tag" --title "FinApp $version" --notes-file notes.md
+          gh release create "$tag" --title "FinApp $version" --notes-file notes.md dist/version.json
