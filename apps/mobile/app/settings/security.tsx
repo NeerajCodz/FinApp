@@ -32,6 +32,7 @@ import { useAppLock } from '@/lib/security/AppLockProvider';
 import { canUseDeviceLock } from '@/lib/security/app-lock';
 import { PasscodeInput } from '@/lib/security/PasscodeInput';
 import { toast } from '@/lib/toast';
+import { MfaSettings } from '@/components/security/MfaSettings';
 
 function ago(timestamp: number, now = Date.now()) {
   const minutes = Math.round((now - timestamp) / 60_000);
@@ -55,6 +56,7 @@ export default function SecuritySettingsScreen() {
   const preferences = useQuery(api.users.queries.securityPreferences, isConnected ? {} : 'skip');
   const privacy = useQuery(api.security.privacy, isConnected ? {} : 'skip');
   const sessions = useQuery(api.security.sessions, isConnected ? {} : 'skip');
+  const mfa = useQuery(api.mfa.status, isConnected ? {} : 'skip');
   const setTwoFactor = useMutation(api.users.mutations.setTwoFactorEnabled);
   const updatePrivacy = useMutation(api.security.updatePrivacy);
   const signOutSession = useMutation(api.security.signOutSession);
@@ -88,7 +90,8 @@ export default function SecuritySettingsScreen() {
     }
   };
 
-  const twoFactor = preferences?.twoFactorEnabled ?? false;
+  const emailCodes = preferences?.twoFactorEnabled ?? false;
+  const twoFactor = emailCodes || (mfa?.totp ?? false);
   const others = (sessions ?? []).filter((session) => !session.current);
   const score = [twoFactor, !!lock, privacy?.signInAlerts !== false].filter(Boolean).length;
   const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
@@ -115,9 +118,9 @@ export default function SecuritySettingsScreen() {
         <SettingsSwitch
           icon={<MailCheck size={19} color={tone('positive')} />}
           tone="positive"
-          title="Two-factor sign-in"
+          title="Email codes"
           description="Ask for an email code after your password"
-          checked={twoFactor}
+          checked={emailCodes}
           disabled={!isConnected || preferences == null || busy === '2fa'}
           onChange={(enabled) =>
             void run(
@@ -127,6 +130,7 @@ export default function SecuritySettingsScreen() {
             )
           }
         />
+        <MfaSettings live={isConnected} />
         <SettingsLink
           icon={<KeyRound size={19} color={tone('info')} />}
           tone="info"

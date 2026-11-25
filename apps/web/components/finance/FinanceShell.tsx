@@ -114,13 +114,15 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const unreadNotifications = useUnreadNotificationCount();
   const unreadChats = useUnreadChatCount();
-  const { isAuthenticated } = useConvexAuth();
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   useSessionLabel(isAuthenticated);
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
   useEffect(() => {
-    if (identityReady && !userId) router.replace('/sign-in');
-  }, [identityReady, router, userId]);
+    // Only a signed-out session goes to sign-in. Right after signing in (e.g. after the two-factor
+    // code) the profile may still be loading; wait for it instead of bouncing back.
+    if (identityReady && !userId && !authLoading && !isAuthenticated) router.replace('/sign-in');
+  }, [authLoading, identityReady, isAuthenticated, router, userId]);
   if (!identityReady || !userId) return null;
   const profile = profiles[0];
   const profileName = profile?.displayName?.trim() || profile?.username?.trim() || 'Your profile';

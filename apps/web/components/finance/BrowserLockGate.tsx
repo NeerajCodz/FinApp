@@ -4,7 +4,12 @@ import * as React from 'react';
 import { useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { formatAuthError } from '@convex/shared/authErrors';
-import { Button, Card, Input, Label } from '@finapp/ui/web';
+import { Fingerprint } from 'lucide-react';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { Button } from '@finapp/ui/web';
+import { LockPinInput, LockScreen } from '@finapp/ui/finance';
+import { useLocalRecords } from '@/lib/offline/hooks';
+import type { LocalRecord } from '@/lib/offline/repository';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import {
   disableWebAuthnLock,
@@ -16,6 +21,13 @@ import {
   verifyPasscodeLock,
   webAuthnLockChangedEvent,
 } from '@/lib/security/webauthn-lock';
+
+type LockProfile = LocalRecord & {
+  displayName?: string;
+  username?: string;
+  avatarId?: string;
+  avatarUrl?: string | null;
+};
 
 const emptyPasscodeStatus: PasscodeLockStatus = {
   configured: false,
@@ -38,6 +50,9 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
   const [challengeId, setChallengeId] = React.useState('');
   const [code, setCode] = React.useState('');
   const [passcode, setPasscode] = React.useState('');
+  const passcodeForm = React.useRef<HTMLFormElement>(null);
+  const { signOut } = useAuthActions();
+  const profile = useLocalRecords<LockProfile>('profile').records[0];
 
   React.useEffect(() => {
     let active = true;
@@ -203,110 +218,155 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
   }
 
   if (!userId || (phase === 'open' && checkedUser === userId)) return children;
-  if (phase === 'checking' || checkedUser !== userId) {
-    return (
-      <main className="finance-welcome" role="status" aria-live="polite">
-        <p className="finance-kicker">PRIVATE WORKSPACE</p>
-        <h1>Checking this browser.</h1>
-      </main>
-    );
-  }
-  if (phase === 'storage-error') {
-    return (
-      <main className="finance-welcome" role="alert">
-        <p className="finance-kicker">PRIVATE WORKSPACE</p>
-        <h1>Browser storage is unavailable.</h1>
-        <p>Finapp cannot safely read this device’s local lock state.</p>
-      </main>
-    );
-  }
 
+  const displayName = profile?.displayName?.trim() || profile?.username?.trim() || 'Your account';
+  const person = {
+    name: displayName,
+    ...(profile?.username?.trim() ? { username: profile.username.trim() } : {}),
+    initials:
+      displayName
+        .split(/\s+/)
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || 'F',
+    imageUrl: profile?.avatarUrl ?? null,
+    ...(profile?.avatarId ? { avatarId: profile.avatarId } : {}),
+  };
+  const signOutHere = async () => {
+    try {
+      await signOut();
+    } finally {
+      window.location.assign('/sign-in');
+    }
+  };
+
+  if (phase === 'checking' || checkedUser !== userId)
+    return <LockScreen person={person} title="Checking this browser…" />;
+  if (phase === 'storage-error')
+    return (
+      <LockScreen
+        person={person}
+        title="Can’t read this browser’s lock"
+        subtitle="Browser storage is unavailable, so Finapp can’t safely check the lock. Allow site data for Finapp and reload."
+        onSignOut={() => void signOutHere()}
+      >
+        <Button onPress={() => window.location.reload()}>Reload</Button>
+      </LockScreen>
+    );
+
+  const lockedOut = passcodeStatus.retryAt > Date.now();
   return (
-    <main className="finance-welcome">
-      <Card className="finance-settings-card">
-        <p className="finance-kicker">PRIVATE WORKSPACE</p>
-        <h1>Unlock Finapp.</h1>
-        <p>Verify with this browser’s passkey or six-digit passcode.</p>
-        <p>
-          This screen lock does not encrypt browser data. Anyone with browser-profile or developer
-          tools access may still inspect the offline copy.
-        </p>
-        {passkeyEnabled && (
-          <Button
-            onPress={unlockWithPasskey}
-            disabled={pending || passcodeStatus.retryAt > Date.now()}
-          >
-            {pending ? 'Waiting for passkey…' : 'Unlock with passkey'}
-          </Button>
-        )}
-        {passcodeStatus.configured && (
-          <form onSubmit={unlockWithPasscode} className="auth-form">
-            <div className="auth-field">
-              <Label htmlFor="lock-passcode">Six-digit passcode</Label>
-              <Input
-                id="lock-passcode"
-                type="password"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={passcode}
-                onChangeText={setPasscode}
-                required
-              />
-            </div>
-            {passcodeStatus.retryAt > Date.now() ? (
-              <p className="finance-muted" role="status">
-                Too many attempts. Try again in 30 seconds.
-              </p>
-            ) : (
-              <p className="finance-muted" role="status">
-                {passcodeStatus.attemptsRemaining} attempts remaining before a 30-second lockout.
-              </p>
-            )}
-            <Button
-              type="submit"
-              disabled={pending || !/^\d{6}$/.test(passcode) || passcodeStatus.retryAt > Date.now()}
-              aria-busy={pending}
+    <LockScreen
+      person={person}
+      title={challengeId ? 'Recover access' : 'Finapp is locked'}
+      subtitle={
+        challengeId
+          ? 'Enter the six-digit code we emailed you. It removes this browser’s lock.'
+          : passkeyEnabled && passcodeStatus.configured
+            ? 'Use your passkey or enter your passcode'
+            : passkeyEnabled
+              ? 'Use your passkey to continue'
+              : 'Enter your six-digit passcode'
+      }
+      note="The lock hides Finapp on this browser. It doesn’t encrypt the offline copy."
+      onSignOut={() => void signOutHere()}
+    >
+      {!challengeId ? (
+        <>
+          {passkeyEnabled ? (
+            <Button onPress={unlockWithPasskey} disabled={pending || lockedOut}>
+              <Fingerprint size={18} aria-hidden />{' '}
+              {pending ? 'Waiting for passkey…' : 'Unlock with passkey'}
+            </Button>
+          ) : null}
+          {passcodeStatus.configured ? (
+            <form
+              ref={passcodeForm}
+              onSubmit={unlockWithPasscode}
+              style={{ display: 'grid', gap: 10 }}
             >
-              Unlock with passcode
-            </Button>
-          </form>
-        )}
-        {!challengeId ? (
-          <Button variant="secondary" onPress={sendRecoveryCode} disabled={pending}>
-            Recover with email
-          </Button>
-        ) : (
-          <>
-            <p role="status">A recovery code was sent to the signed-in account email.</p>
-            <Button type="button" variant="secondary" onPress={sendRecoveryCode} disabled={pending}>
-              Send a new recovery code
-            </Button>
-            <form onSubmit={recover} className="auth-form">
-              <div className="auth-field">
-                <Label htmlFor="lock-recovery-code">Six-digit email code</Label>
-                <Input
-                  id="lock-recovery-code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={code}
-                  onChangeText={setCode}
-                  required
-                />
-              </div>
-              <Button type="submit" disabled={pending || !/^\d{6}$/.test(code)} aria-busy={pending}>
-                Verify and remove browser lock
+              <LockPinInput
+                id="lock-passcode"
+                label="Six-digit passcode"
+                value={passcode}
+                onChange={setPasscode}
+                onComplete={() =>
+                  requestAnimationFrame(() => passcodeForm.current?.requestSubmit())
+                }
+                disabled={pending || lockedOut}
+                autoFocus={!passkeyEnabled}
+              />
+              <p
+                role="status"
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  textAlign: 'center',
+                  color: 'var(--finapp-foreground-muted)',
+                }}
+              >
+                {lockedOut
+                  ? 'Too many attempts. Try again in 30 seconds.'
+                  : passcodeStatus.attemptsRemaining < 5
+                    ? `${passcodeStatus.attemptsRemaining} attempts left before a 30-second pause`
+                    : ' '}
+              </p>
+              <Button
+                type="submit"
+                variant={passkeyEnabled ? 'outline' : 'primary'}
+                disabled={pending || !/^\d{6}$/.test(passcode) || lockedOut}
+                aria-busy={pending}
+              >
+                Unlock
               </Button>
             </form>
-          </>
-        )}
-        {error && (
-          <p className="auth-error" role="alert">
-            {error}
-          </p>
-        )}
-      </Card>
-    </main>
+          ) : null}
+          <Button variant="ghost" onPress={sendRecoveryCode} disabled={pending}>
+            Forgot it? Recover with email
+          </Button>
+        </>
+      ) : (
+        <form onSubmit={recover} style={{ display: 'grid', gap: 10 }}>
+          <LockPinInput
+            id="lock-recovery-code"
+            label="Six-digit email code"
+            value={code}
+            onChange={setCode}
+            disabled={pending}
+            autoFocus
+          />
+          <Button type="submit" disabled={pending || !/^\d{6}$/.test(code)} aria-busy={pending}>
+            Verify and unlock
+          </Button>
+          <Button type="button" variant="ghost" onPress={sendRecoveryCode} disabled={pending}>
+            Send a new code
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onPress={() => {
+              setChallengeId('');
+              setCode('');
+            }}
+          >
+            Back
+          </Button>
+        </form>
+      )}
+      {error ? (
+        <p
+          role="alert"
+          style={{
+            margin: 0,
+            fontSize: 13,
+            textAlign: 'center',
+            color: 'var(--finapp-destructive)',
+          }}
+        >
+          {error}
+        </p>
+      ) : null}
+    </LockScreen>
   );
 }

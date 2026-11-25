@@ -15,6 +15,7 @@ import { normalizeUsername } from './users/domain';
 import { action, internalMutation, internalQuery } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
 import { createNotification } from './notifications/mutations';
+import { verifySecondFactor, type Factors } from './mfa';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -46,9 +47,20 @@ function randomChallengeId(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+type TwoFactorMethods = { totp: boolean; email: boolean; recovery: boolean };
+type TwoFactorStart =
+  | { status: 'verification-required'; email: string }
+  | { status: 'two-factor-disabled'; email: string }
+  | {
+      status: 'code-sent' | 'code-required';
+      challengeId: string;
+      methods: TwoFactorMethods;
+      preferred: 'totp' | 'email';
+    };
+
 export const requestEmailTwoFactor = action({
   args: { identifier: v.string(), password: v.string() },
-  handler: async (ctx, { identifier, password }) => {
+  handler: async (ctx, { identifier, password }): Promise<TwoFactorStart> => {
     const normalizedParams = await normalizedPasswordParams(
       { email: identifier, password, flow: 'signIn' },
       ctx as unknown as Parameters<PasswordOptions['authorize']>[1],
@@ -80,9 +92,22 @@ export const requestEmailTwoFactor = action({
     ) {
       return { status: 'two-factor-disabled' as const, email: normalizedParams.email as string };
     }
+    const factors: Factors = await ctx.runQuery(internal.mfa.factorsFor, { userId: user._id });
+    const methods = { totp: factors.totp, email: true, recovery: factors.recoveryRemaining > 0 };
     const challengeId = randomChallengeId();
-    const code = generateOtp();
     const challengeIdHash = await sha256(challengeId);
+    if (factors.totp) {
+      // Authenticator app first: no email unless the person asks for one.
+      await ctx.runMutation(internal.authEmailChallenges.create, {
+        userId: user._id,
+        challengeIdHash,
+        codeHash: await sha256(`${challengeId}:${randomChallengeId()}`),
+        now: Date.now(),
+        emailSent: false,
+      });
+      return { status: 'code-required' as const, challengeId, methods, preferred: 'totp' as const };
+    }
+    const code = generateOtp();
     const codeHash = await sha256(`${challengeId}:${code}`);
     const { email } = await ctx.runMutation(internal.authEmailChallenges.create, {
       userId: user._id,
@@ -96,7 +121,25 @@ export const requestEmailTwoFactor = action({
       await ctx.runMutation(internal.authEmailChallenges.revoke, { challengeIdHash });
       throw error;
     }
-    return { status: 'code-sent' as const, challengeId };
+    return { status: 'code-sent' as const, challengeId, methods, preferred: 'email' as const };
+  },
+});
+
+/** Sends (or re-sends) the email code for a sign-in challenge. */
+export const sendTwoFactorEmailCode = action({
+  args: { challengeId: v.string() },
+  handler: async (ctx, { challengeId }) => {
+    if (!/^[0-9a-f]{64}$/.test(challengeId)) throw new ConvexError({ code: 'CHALLENGE_EXPIRED' });
+    const code = generateOtp();
+    const challengeIdHash = await sha256(challengeId);
+    const target = await ctx.runMutation(internal.authEmailChallenges.rotateCode, {
+      challengeIdHash,
+      codeHash: await sha256(`${challengeId}:${code}`),
+      now: Date.now(),
+    });
+    if (!target) throw new ConvexError({ code: 'CHALLENGE_EXPIRED' });
+    await sendTwoFactorEmail(target.email, code);
+    return null;
   },
 });
 async function normalizedPasswordParams(
@@ -186,6 +229,23 @@ const usernameAuthorize: PasswordOptions['authorize'] = async (params, ctx) => {
   if (params.flow === 'twoFactorVerification') {
     if (typeof params.challengeId !== 'string' || typeof params.code !== 'string') {
       return null;
+    }
+    const method =
+      params.method === 'totp' || params.method === 'recovery' ? params.method : 'email';
+    if (method !== 'email') {
+      const challengeIdHash = await sha256(params.challengeId);
+      const now = Date.now();
+      const active = await ctx.runQuery(internal.authEmailChallenges.activeUser, {
+        challengeIdHash,
+        now,
+      });
+      if (!active) return null;
+      const ok = await verifySecondFactor(ctx, active.userId, method, params.code);
+      const settled: { userId: Id<'users'> } | null = await ctx.runMutation(
+        internal.authEmailChallenges.settle,
+        { challengeIdHash, ok, now },
+      );
+      return settled;
     }
     return ctx.runMutation(internal.authEmailChallenges.consume, {
       challengeIdHash: await sha256(params.challengeId),

@@ -2,6 +2,10 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.1
+
+- `LockScreen` (web and native) and `LockPinInput` (web)
+
 ## 1.10.0
 
 - Category delete sheet (keep or trash transactions); compact profile tiles

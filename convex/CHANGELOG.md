@@ -2,6 +2,15 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.1
+
+- `mfa`: TOTP authenticator apps (secret encrypted with the key vault, replay protection) and
+  hashed single-use recovery codes; enrollment actions; security notifications
+- Sign-in: `requestEmailTwoFactor` returns the available methods and skips the email when an
+  authenticator app is on; `sendTwoFactorEmailCode`; `twoFactorVerification` accepts
+  `method: totp | email | recovery`
+- QR codes as SVG paths from qrcode's core encoder
+
 ## 1.10.0
 
 - Trash: list, restore with companions, purge with cascades, empty, daily retention purge;

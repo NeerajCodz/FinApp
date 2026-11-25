@@ -5,6 +5,7 @@ export {
 } from '../groupInvitationExpiry';
 export { DEFAULT_GROUP_COLOR } from '../groupColor';
 export { FinanceBrand } from './FinanceBrand';
+export { LockScreen, type LockScreenPerson } from './LockScreen';
 export {
   FinanceEmptyState,
   type FinanceEmptyKind,

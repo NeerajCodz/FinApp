@@ -3,48 +3,132 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAction } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { ArrowLeft } from 'lucide-react';
-import { Button, InputOTP } from '@finapp/ui/web';
+import { api } from '@convex/_generated/api';
+import { formatAuthError } from '@convex/shared/authErrors';
+import { ArrowLeft, KeyRound, Mail, Smartphone } from 'lucide-react';
+import { Button, Input, InputOTP } from '@finapp/ui/web';
 import { pendingGroupInvitationPath } from '@/lib/authRoutes';
+
+type Method = 'totp' | 'email' | 'recovery';
+
+const COPY: Record<Method, { label: string; title: string; description: string }> = {
+  totp: {
+    label: 'Authenticator app',
+    title: 'Enter your app code.',
+    description:
+      'Open your authenticator app (Google Authenticator, 1Password, Authy…) and enter the six-digit code for Finapp.',
+  },
+  email: {
+    label: 'Email code',
+    title: 'Check your email.',
+    description:
+      'Enter the six-digit code we sent to the email on your account. It expires in 10 minutes.',
+  },
+  recovery: {
+    label: 'Recovery code',
+    title: 'Use a recovery code.',
+    description:
+      'Enter one of the recovery codes you saved when you set up two-factor sign-in. Each code works once.',
+  },
+};
+
+const ICONS: Record<Method, React.ReactNode> = {
+  totp: <Smartphone size={16} aria-hidden />,
+  email: <Mail size={16} aria-hidden />,
+  recovery: <KeyRound size={16} aria-hidden />,
+};
 
 export default function TwoFactorPage() {
   const router = useRouter();
+  const { signIn } = useAuthActions();
+  const sendEmailCode = useAction(api.auth.sendTwoFactorEmailCode);
   const [challengeId, setChallengeId] = React.useState('');
   const [nextPath, setNextPath] = React.useState<string | null>(null);
+  const [methods, setMethods] = React.useState<Method[]>(['email']);
+  const [method, setMethod] = React.useState<Method>('email');
+  const [emailSent, setEmailSent] = React.useState(false);
   const [code, setCode] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [notice, setNotice] = React.useState('');
+  const [pending, setPending] = React.useState(false);
+
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('challengeId') ?? '';
-    const next = params.get('next');
-    if (!id) router.replace('/sign-in');
+    if (!id) {
+      router.replace('/sign-in');
+      return;
+    }
+    const listed = (params.get('m') ?? 'email')
+      .split(',')
+      .filter(
+        (value): value is Method => value === 'totp' || value === 'email' || value === 'recovery',
+      );
+    const available: Method[] = listed.length ? listed : ['email'];
+    const preferred = params.get('p') === 'totp' && available.includes('totp') ? 'totp' : 'email';
     setChallengeId(id);
+    setMethods(available);
+    setMethod(preferred);
+    // Without an authenticator app the email code was sent with the password check.
+    setEmailSent(preferred === 'email');
+    const next = params.get('next');
     setNextPath(next?.startsWith('/mcp/') && !next.startsWith('//') ? next : null);
   }, [router]);
-  const [error, setError] = React.useState('');
-  const [pending, setPending] = React.useState(false);
-  const { signIn } = useAuthActions();
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending || code.length !== 6 || !challengeId) return;
+  function choose(next: Method) {
+    setMethod(next);
+    setCode('');
+    setError('');
+    setNotice('');
+  }
+
+  async function requestEmail() {
+    if (!challengeId || pending) return;
     setPending(true);
     setError('');
-    const form = new FormData();
-    form.set('challengeId', challengeId);
-    form.set('code', code);
-    form.set('flow', 'twoFactorVerification');
     try {
-      const result = await signIn('password', form);
-      if (!result.signingIn) throw new Error('That code could not be verified.');
-      router.replace(nextPath ?? pendingGroupInvitationPath() ?? '/dashboard');
+      await sendEmailCode({ challengeId });
+      setEmailSent(true);
+      setNotice('We sent a code to your email.');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not verify this code.');
+      setError(formatAuthError(cause, 'verification'));
     } finally {
       setPending(false);
     }
   }
 
+  const ready =
+    method === 'recovery' ? code.replace(/[^a-z0-9]/gi, '').length === 12 : code.length === 6;
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending || !ready || !challengeId) return;
+    setPending(true);
+    setError('');
+    const form = new FormData();
+    form.set('challengeId', challengeId);
+    form.set('code', code.trim());
+    form.set('method', method);
+    form.set('flow', 'twoFactorVerification');
+    try {
+      const result = await signIn('password', form);
+      if (!result.signingIn) throw new Error('That code didn’t work. Check it and try again.');
+      router.replace(nextPath ?? pendingGroupInvitationPath() ?? '/dashboard');
+    } catch (cause) {
+      setError(
+        cause instanceof Error && cause.message.startsWith('That code')
+          ? cause.message
+          : 'That code didn’t work. Check it and try again.',
+      );
+      setCode('');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const copy = COPY[method];
   return (
     <main className="auth-layout">
       <section className="auth-content" aria-labelledby="auth-title">
@@ -60,40 +144,104 @@ export default function TwoFactorPage() {
           </Link>
         </div>
         <div className="auth-card">
-          <span className="auth-eyebrow">SIGN-IN VERIFICATION</span>
-          <h1 id="auth-title">One last step.</h1>
-          <p className="auth-description">
-            Enter the six-digit sign-in code sent to the email on your account. It expires in 10
-            minutes.
-          </p>
-          <div className="auth-form">
-            <form method="post" onSubmit={submit} noValidate className="auth-form">
+          <span className="auth-eyebrow">TWO-FACTOR SIGN-IN</span>
+          <h1 id="auth-title">{copy.title}</h1>
+          <p className="auth-description">{copy.description}</p>
+          {methods.length > 1 ? (
+            <div
+              role="tablist"
+              aria-label="Verification method"
+              style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}
+            >
+              {methods.map((value) => (
+                <Button
+                  key={value}
+                  role="tab"
+                  aria-selected={method === value}
+                  size="sm"
+                  variant={method === value ? 'primary' : 'outline'}
+                  onPress={() => choose(value)}
+                >
+                  {ICONS[value]} {COPY[value].label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <form method="post" onSubmit={submit} noValidate className="auth-form">
+            {method === 'email' && !emailSent ? (
               <div className="auth-field">
-                <span className="auth-label">Six-digit code</span>
-                <InputOTP value={code} onChangeText={setCode} />
-              </div>
-              {error && (
-                <p className="auth-error" role="alert" aria-live="polite">
-                  {error}
+                <p className="auth-helper">
+                  We’ll email a six-digit code to the address on your account.
                 </p>
-              )}
-              <div className="auth-field">
-                <span className="auth-label">Didn’t get a code?</span>
-                <p className="auth-helper">Return to sign in and request another code.</p>
+                <Button
+                  type="button"
+                  size="lg"
+                  onPress={() => void requestEmail()}
+                  disabled={pending}
+                >
+                  {pending ? 'Sending…' : 'Email me a code'}
+                </Button>
               </div>
-              <Button
-                type="submit"
-                size="lg"
-                disabled={pending || code.length !== 6 || !challengeId}
-                aria-busy={pending}
-              >
-                {pending ? 'Verifying…' : 'Verify and sign in'}
-              </Button>
-              <Link className="auth-back-link" href="/sign-in">
-                <ArrowLeft size={15} /> Return to sign in
-              </Link>
-            </form>
-          </div>
+            ) : (
+              <>
+                <div className="auth-field">
+                  <span className="auth-label">
+                    {method === 'recovery' ? 'Recovery code' : 'Six-digit code'}
+                  </span>
+                  {method === 'recovery' ? (
+                    <Input
+                      aria-label="Recovery code"
+                      autoComplete="one-time-code"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      placeholder="xxxx-xxxx-xxxx"
+                      maxLength={16}
+                      value={code}
+                      onChangeText={setCode}
+                    />
+                  ) : (
+                    <InputOTP value={code} onChangeText={setCode} />
+                  )}
+                </div>
+                {notice ? (
+                  <p className="auth-helper" role="status">
+                    {notice}
+                  </p>
+                ) : null}
+                {error ? (
+                  <p className="auth-error" role="alert" aria-live="polite">
+                    {error}
+                  </p>
+                ) : null}
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={pending || !ready || !challengeId}
+                  aria-busy={pending}
+                >
+                  {pending ? 'Verifying…' : 'Verify and sign in'}
+                </Button>
+                {method === 'email' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onPress={() => void requestEmail()}
+                    disabled={pending}
+                  >
+                    Send a new code
+                  </Button>
+                ) : null}
+              </>
+            )}
+            {method === 'email' && !emailSent && error ? (
+              <p className="auth-error" role="alert" aria-live="polite">
+                {error}
+              </p>
+            ) : null}
+            <Link className="auth-back-link" href="/sign-in">
+              <ArrowLeft size={15} /> Return to sign in
+            </Link>
+          </form>
         </div>
         <span className="auth-legal">
           Your account stays yours. <Link href="/privacy">Read our privacy notes</Link>

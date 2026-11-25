@@ -109,4 +109,4 @@ out.push(
   `The full manifest is attached as [\`version.json\`](https://github.com/NeerajCodz/FinApp/releases/download/finapp-v${manifest.version}/version.json).`,
 );
 
-process.stdout.write(`${out.join('\n\n')}\n`);
+process.stdout.write(`${escapeMentions(out.join('\n\n'))}\n`);

@@ -127,6 +127,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     localUserId,
     router,
   ]);
+  // Signed in already: the welcome and sign-in screens aren't for you.
+  const entryRoute =
+    isAuthRoute &&
+    ['welcome', 'sign-in', 'sign-up'].includes(String((segments as string[])[1] ?? ''));
+  React.useEffect(() => {
+    if (!isLoading && isAuthenticated && entryRoute) router.replace('/(tabs)');
+  }, [entryRoute, isAuthenticated, isLoading, router]);
   React.useEffect(() => {
     if (!privateRoute) {
       setAuthTimedOut(false);

@@ -1,9 +1,14 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
 import { AppState, Platform, View } from 'react-native';
-import { useAction, useConvexAuth } from 'convex/react';
+import { useAction, useConvex, useConvexAuth } from 'convex/react';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { LockScreen } from '@finapp/ui/finance';
+import { useLocalRecords } from '@/hooks/useLocalRecords';
+import type { LocalRecord } from '@/local/repository';
+import { clearValidatedLocalUserId } from '@/local/identity';
+import { unregisterPush } from '@/lib/push';
 import { api } from '@convex/_generated/api';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, InputOTP, Text, Typography } from '@finapp/ui/native';
 import { useTheme } from '@finapp/ui/native';
 import { PasscodeInput } from './PasscodeInput';
@@ -56,6 +61,9 @@ export function AppLockProvider({
     lock: null,
     phase: 'checking',
   });
+  const convex = useConvex();
+  const { signOut } = useAuthActions();
+  const profile = useLocalRecords<LocalRecord>(userId, 'profile').data?.[0];
   const [code, setCode] = React.useState('');
   const [newCode, setNewCode] = React.useState('');
   const [confirmCode, setConfirmCode] = React.useState('');
@@ -74,7 +82,6 @@ export function AppLockProvider({
   const requestReset = useAction(api.auth.requestAppLockReset);
   const verifyReset = useAction(api.auth.verifyAppLockReset);
   const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
   const scoped =
     state.userId === userId ? state : { userId, lock: null, phase: 'checking' as const };
   const locked = !!userId && !authRoute && scoped.phase !== 'unlocked';
@@ -303,6 +310,32 @@ export function AppLockProvider({
     [scoped.lock, scoped.phase, changeLock],
   );
 
+  const displayName =
+    (typeof profile?.displayName === 'string' && profile.displayName.trim()) ||
+    (typeof profile?.username === 'string' && profile.username.trim()) ||
+    'Your account';
+  const person = {
+    name: displayName,
+    ...(typeof profile?.username === 'string' && profile.username.trim()
+      ? { username: profile.username.trim() }
+      : {}),
+    initials:
+      displayName
+        .split(/\s+/)
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || 'F',
+    imageUrl: typeof profile?.avatarUrl === 'string' ? profile.avatarUrl : null,
+    ...(typeof profile?.avatarId === 'string' ? { avatarId: profile.avatarId } : {}),
+  };
+  async function signOutHere() {
+    await unregisterPush(convex).catch(() => undefined);
+    await clearValidatedLocalUserId().catch(() => undefined);
+    await signOut().catch(() => undefined);
+    router.replace('/(auth)/sign-in');
+  }
+
   return (
     <LockContext.Provider value={value}>
       <View
@@ -323,117 +356,124 @@ export function AppLockProvider({
             zIndex: 2000,
             elevation: 20,
             backgroundColor: tokens.background,
-            paddingHorizontal: 24,
-            paddingTop: insets.top + 32,
-            paddingBottom: insets.bottom + 32,
-            justifyContent: 'center',
-            gap: 18,
           }}
         >
-          <Typography variant="title">Finapp is locked</Typography>
-          {scoped.phase === 'checking' && <Text>Checking your app lock…</Text>}
-          {scoped.phase === 'error' && (
-            <Button onPress={() => void reload(userId!)}>Retry secure storage</Button>
-          )}
-          {scoped.phase === 'locked' && scoped.lock?.method === 'device' && (
-            <>
-              <Text style={{ color: tokens.foregroundMuted }}>
-                Unlock with device biometrics or your device credential.
-              </Text>
+          <LockScreen
+            person={person}
+            title={
+              scoped.phase === 'checking'
+                ? 'Checking your app lock…'
+                : scoped.phase === 'error'
+                  ? 'Can’t read the app lock'
+                  : resetStep === 'email'
+                    ? 'Check your email'
+                    : resetStep === 'new-code'
+                      ? 'Choose a new passcode'
+                      : 'Finapp is locked'
+            }
+            subtitle={
+              scoped.phase === 'error'
+                ? 'Secure storage didn’t respond. Try again.'
+                : scoped.phase !== 'locked'
+                  ? undefined
+                  : scoped.lock?.method === 'device'
+                    ? 'Unlock with your fingerprint, face or device PIN'
+                    : resetStep === 'email'
+                      ? 'Enter the code we sent to your email. It expires in 10 minutes.'
+                      : resetStep === 'new-code'
+                        ? 'Pick six digits you’ll remember'
+                        : 'Enter your six-digit passcode'
+            }
+            {...(isAuthenticated ? { onSignOut: () => void signOutHere() } : {})}
+          >
+            {scoped.phase === 'error' && (
+              <Button onPress={() => void reload(userId!)}>Try again</Button>
+            )}
+            {scoped.phase === 'locked' && scoped.lock?.method === 'device' && (
               <Button disabled={busy} onPress={() => void unlockDevice()}>
-                {busy ? 'Checking…' : 'Unlock with device'}
+                {busy ? 'Checking…' : 'Unlock'}
               </Button>
-            </>
-          )}
-          {scoped.phase === 'locked' && scoped.lock?.method === 'passcode' && (
-            <>
-              {resetStep === 'none' && (
-                <>
-                  <Text style={{ color: tokens.foregroundMuted }}>
-                    Enter your six-digit app passcode.
-                  </Text>
-                  <PasscodeInput value={code} onChangeText={setCode} label="App passcode" />
-                  <Button
-                    disabled={busy || code.length !== 6 || retryAt > now}
-                    onPress={() => void unlockPasscode()}
-                  >
-                    {retryAt > now
-                      ? `Try again in ${Math.ceil((retryAt - now) / 1000)}s`
-                      : 'Unlock'}
-                  </Button>
-                  <Button variant="ghost" disabled={busy} onPress={() => void sendReset()}>
-                    Forgot app passcode?
-                  </Button>
-                </>
-              )}
-              {resetStep === 'email' && (
-                <>
-                  <Text style={{ color: tokens.foregroundMuted }}>
-                    Enter the code sent to your verified account email. It expires in 10 minutes.
-                  </Text>
-                  <InputOTP value={code} onChangeText={setCode} />
-                  <Button disabled={busy || code.length !== 6} onPress={() => void checkReset()}>
-                    {busy ? 'Verifying…' : 'Verify email code'}
-                  </Button>
-                  <Button variant="ghost" disabled={busy} onPress={() => void sendReset()}>
-                    Request another code
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onPress={() => {
-                      setResetStep('none');
-                      setCode('');
-                    }}
-                  >
-                    Back to unlock
-                  </Button>
-                </>
-              )}
-              {resetStep === 'new-code' && (
-                <>
-                  <Text style={{ color: tokens.foregroundMuted }}>
-                    Choose a new six-digit app passcode.
-                  </Text>
-                  <PasscodeInput
-                    value={newCode}
-                    onChangeText={setNewCode}
-                    label="New app passcode"
-                  />
-                  <Text>Confirm passcode</Text>
-                  <PasscodeInput
-                    value={confirmCode}
-                    onChangeText={setConfirmCode}
-                    label="Confirm app passcode"
-                  />
-                  <Button
-                    disabled={busy || newCode.length !== 6 || confirmCode.length !== 6}
-                    onPress={() => void finishReset()}
-                  >
-                    {busy ? 'Saving…' : 'Save new passcode'}
-                  </Button>
-                </>
-              )}
-              {!isAuthenticated && resetStep !== 'new-code' && (
-                <>
-                  <Text style={{ color: tokens.foregroundMuted }}>
-                    Email recovery needs an online, signed-in account.
-                  </Text>
+            )}
+            {scoped.phase === 'locked' && scoped.lock?.method === 'passcode' && (
+              <>
+                {resetStep === 'none' && (
+                  <>
+                    <PasscodeInput value={code} onChangeText={setCode} label="App passcode" />
+                    <Button
+                      disabled={busy || code.length !== 6 || retryAt > now}
+                      onPress={() => void unlockPasscode()}
+                    >
+                      {retryAt > now
+                        ? `Try again in ${Math.ceil((retryAt - now) / 1000)}s`
+                        : busy
+                          ? 'Checking…'
+                          : 'Unlock'}
+                    </Button>
+                    {isAuthenticated ? (
+                      <Button variant="ghost" disabled={busy} onPress={() => void sendReset()}>
+                        Forgot passcode?
+                      </Button>
+                    ) : null}
+                  </>
+                )}
+                {resetStep === 'email' && (
+                  <>
+                    <InputOTP value={code} onChangeText={setCode} />
+                    <Button disabled={busy || code.length !== 6} onPress={() => void checkReset()}>
+                      {busy ? 'Verifying…' : 'Verify code'}
+                    </Button>
+                    <Button variant="ghost" disabled={busy} onPress={() => void sendReset()}>
+                      Send a new code
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onPress={() => {
+                        setResetStep('none');
+                        setCode('');
+                      }}
+                    >
+                      Back
+                    </Button>
+                  </>
+                )}
+                {resetStep === 'new-code' && (
+                  <>
+                    <PasscodeInput
+                      value={newCode}
+                      onChangeText={setNewCode}
+                      label="New app passcode"
+                    />
+                    <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>Repeat it</Text>
+                    <PasscodeInput
+                      value={confirmCode}
+                      onChangeText={setConfirmCode}
+                      label="Repeat app passcode"
+                    />
+                    <Button
+                      disabled={busy || newCode.length !== 6 || confirmCode.length !== 6}
+                      onPress={() => void finishReset()}
+                    >
+                      {busy ? 'Saving…' : 'Save and unlock'}
+                    </Button>
+                  </>
+                )}
+                {!isAuthenticated && resetStep !== 'new-code' && (
                   <Button variant="outline" onPress={() => router.push('/(auth)/sign-in')}>
-                    Sign in to recover
+                    Sign in to reset your passcode
                   </Button>
-                </>
-              )}
-            </>
-          )}
-          {!!scoped.error && (
-            <Typography
-              variant="small"
-              accessibilityLiveRegion="polite"
-              style={{ color: tokens.destructive }}
-            >
-              {scoped.error}
-            </Typography>
-          )}
+                )}
+              </>
+            )}
+            {!!scoped.error && (
+              <Typography
+                variant="small"
+                accessibilityLiveRegion="polite"
+                style={{ color: tokens.destructive, textAlign: 'center' }}
+              >
+                {scoped.error}
+              </Typography>
+            )}
+          </LockScreen>
         </View>
       )}
     </LockContext.Provider>

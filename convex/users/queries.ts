@@ -1,3 +1,4 @@
+import { hasTotp } from '../mfa';
 import { privacyFor } from '../security';
 import { internalQuery, query } from '../_generated/server';
 import { v } from 'convex/values';
@@ -35,7 +36,11 @@ export const twoFactorEnabledForUser = internalQuery({
       .query('userSettings')
       .withIndex('by_user', (query) => query.eq('userId', userId))
       .unique();
-    return settings?.twoFactorEnabled ?? user.signupTwoFactorEnabled ?? false;
+    // An authenticator app always means a second step at sign-in.
+    return (
+      (settings?.twoFactorEnabled ?? user.signupTwoFactorEnabled ?? false) ||
+      (await hasTotp(ctx, userId))
+    );
   },
 });
 
@@ -51,7 +56,10 @@ export const twoFactorEnabledForEmail = internalQuery({
       .query('userSettings')
       .withIndex('by_user', (query) => query.eq('userId', user._id))
       .unique();
-    return settings?.twoFactorEnabled ?? user.signupTwoFactorEnabled ?? false;
+    return (
+      (settings?.twoFactorEnabled ?? user.signupTwoFactorEnabled ?? false) ||
+      (await hasTotp(ctx, user._id))
+    );
   },
 });
 

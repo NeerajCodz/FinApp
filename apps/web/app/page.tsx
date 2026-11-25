@@ -19,6 +19,7 @@ import {
 import appIcon from '../../mobile/assets/icon.png';
 import { ProductPreview } from '@/components/landing/ProductPreview';
 import { CoinLogo } from '@/components/brand/CoinLogo';
+import { LandingSessionRedirect } from '@/components/auth/LandingSessionRedirect';
 
 export const metadata: Metadata = {
   title: 'Finapp | Your money. Your people. One clear place.',
@@ -70,6 +71,7 @@ function Brand() {
 export default function HomePage() {
   return (
     <div className="marketing">
+      <LandingSessionRedirect />
       <a className="landing-skip" href="#main">
         Skip to content
       </a>

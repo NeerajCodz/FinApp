@@ -67,7 +67,12 @@ export function SignInForm({
         router.replace(nextPath ?? pendingGroupInvitationPath() ?? '/dashboard');
       } else {
         const next = nextPath ? `&next=${encodeURIComponent(nextPath)}` : '';
-        router.replace(`/two-factor?challengeId=${encodeURIComponent(result.challengeId)}${next}`);
+        const methods = (['totp', 'email', 'recovery'] as const)
+          .filter((method) => result.methods[method])
+          .join(',');
+        router.replace(
+          `/two-factor?challengeId=${encodeURIComponent(result.challengeId)}&m=${methods}&p=${result.preferred}${next}`,
+        );
       }
     } catch (cause) {
       setError(formatAuthError(cause, 'sign-in'));
@@ -154,9 +159,7 @@ export function SignInForm({
           ↗
         </span>
       </Button>
-      <p className="auth-form-note">
-        If you use email two-factor sign-in, we’ll ask for your code next.
-      </p>
+      <p className="auth-form-note">If you use two-factor sign-in, we’ll ask for your code next.</p>
     </form>
   );
 

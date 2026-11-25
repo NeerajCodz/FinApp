@@ -11,6 +11,7 @@ export {
 export { SocialPersonCard, SocialSection, SocialStat } from './SocialComponents';
 export type { SocialProfileSummary, SocialRelationshipStatus } from '../social';
 export { FinanceBrand } from './FinanceBrand';
+export { LockPinInput, LockScreen, type LockScreenPerson } from './LockScreen';
 export { FinanceWorkspace } from './FinanceWorkspace';
 export { resolveDefaultCurrency, type CurrencyPreferenceRecord } from '../defaultCurrency';
 export {
