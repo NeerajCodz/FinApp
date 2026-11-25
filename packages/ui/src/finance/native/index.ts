@@ -286,3 +286,15 @@ export {
   type PersonAnalyticsData,
 } from './PeopleAnalyticsScreens';
 export * from '../peopleHub';
+export {
+  SettingsScreen,
+  SettingsIconButton,
+  SettingsGroup,
+  SettingsLink,
+  SettingsSwitch,
+  SettingsChoice,
+  SettingsChips,
+  SettingsTextArea,
+  SettingsHero,
+  useSettingsToneColor,
+} from './SettingsKit';

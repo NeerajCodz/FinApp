@@ -15,8 +15,11 @@ import { chatTools } from './chatTools';
 import { FINAI_HANDLE, finaiAgent } from './config';
 import { aiErrorCode, type AiErrorCode } from './errors';
 import { isGeminiConfigured } from './gemini';
+import { chatForUser } from './keys';
+import { isVaultConfigured } from './keyVault';
 import type { GeminiContent } from './geminiChat';
 import { chatSystemPrompt } from './prompts';
+import { finaiPreferencePrompt, finaiToolAllowed } from '../shared/finaiSettings';
 import { consumeAiQuota } from './usage';
 import { finaiReplyStatus, finaiStage, finaiStep } from './validators';
 
@@ -121,7 +124,15 @@ export async function maybeScheduleFinaiReply(
   if (!mentionsFinai(text)) return null;
   if (await replyInProgress(ctx, scope, createdAt)) return null;
   const replyAt = createdAt + 1;
-  if (!isGeminiConfigured())
+  const hasOwnKey =
+    isVaultConfigured() &&
+    (
+      await ctx.db
+        .query('aiProviderKeys')
+        .withIndex('by_user', (q) => q.eq('userId', requesterId))
+        .collect()
+    ).some((row) => row.active);
+  if (!isGeminiConfigured() && !hasOwnKey)
     return insertReply(ctx, scope, requesterId, promptMessageId, replyAt, {
       status: 'error',
       errorCode: 'AI_NOT_CONFIGURED',
@@ -221,6 +232,7 @@ export const runReply = internalAction({
           ...fields,
         }),
       );
+    let byok: Awaited<ReturnType<typeof chatForUser>> = { markInvalid: async () => undefined };
     try {
       const snapshot = await ctx.runQuery(internal.ai.chatContext.threadSnapshot, {
         scopeType: args.scopeType,
@@ -233,10 +245,21 @@ export const runReply = internalAction({
         await patch({ status: 'error', errorCode: 'NOT_MEMBER' });
         return;
       }
+      // The person who asked decides whether FinAI answers for them in chats.
+      const settings = await ctx.runQuery(internal.ai.settings.forUser, {
+        userId: args.requesterId,
+      });
+      if (!settings.enabled || !settings.allowChatMentions) {
+        await patch({
+          status: 'done',
+          text: `FinAI is turned off for ${snapshot.requesterName} in chats. They can turn it on in Settings → AI → FinAI.`,
+        });
+        return;
+      }
       const groups = snapshot.group
         ? [snapshot.group]
         : snapshot.sharedGroups.map((g) => ({ ...g, id: String(g.id) }));
-      const system = chatSystemPrompt({
+      const baseSystem = chatSystemPrompt({
         scope: args.scopeType,
         title: snapshot.title,
         today: new Date().toISOString().slice(0, 10),
@@ -244,6 +267,9 @@ export const runReply = internalAction({
         participants: snapshot.participants,
         groups,
       });
+      const system = `${baseSystem}
+
+${finaiPreferencePrompt(settings)}`;
       const promptMessage = snapshot.messages[snapshot.messages.length - 1];
       const promptId =
         promptMessage && promptMessage.createdAt === args.promptCreatedAt ? promptMessage.id : null;
@@ -260,7 +286,9 @@ export const runReply = internalAction({
       ];
       let lastFlush = 0;
       let steps: AgentStep[] = [];
+      byok = await chatForUser(ctx, args.requesterId);
       const result = await runAgent({
+        ...(byok.chat ? { chat: byok.chat } : {}),
         ctx: {
           run: ctx,
           userId: args.requesterId,
@@ -275,7 +303,7 @@ export const runReply = internalAction({
           viewerIds: snapshot.participants.map((p) => p.id as Id<'users'>),
           groupId: snapshot.group?.id ?? null,
           sharedGroupIds: snapshot.sharedGroups.map((g) => String(g.id)),
-        }),
+        }).filter((tool) => finaiToolAllowed(settings, tool.name)),
         onProgress: async (step) => {
           const next = applyStep(steps, step);
           if (next) steps = next;
@@ -305,6 +333,7 @@ export const runReply = internalAction({
       });
     } catch (error) {
       const errorCode = aiErrorCode(error) ?? 'AI_UNAVAILABLE';
+      if (errorCode === 'AI_KEY_INVALID') await byok.markInvalid();
       console.warn('[ai] @finai reply failed', errorCode, String(error));
       await patch({ status: 'error', errorCode });
     }

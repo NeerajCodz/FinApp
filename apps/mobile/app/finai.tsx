@@ -1,6 +1,8 @@
 import React from 'react';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { FinaiAssistantScreen } from '@finapp/ui/ai';
 import { useFinaiAssistant } from '@/hooks/useFinaiAssistant';
 import { useFinaiDecide } from '@/hooks/useFinaiDecide';
@@ -12,6 +14,7 @@ export default function FinaiScreen() {
   const live = Boolean(userId && isConnected);
   const assistant = useFinaiAssistant(live);
   const decide = useFinaiDecide();
+  const finaiSettings = useQuery(api.ai.settings.get, live ? {} : 'skip');
   return (
     <FinaiAssistantScreen
       available={assistant.available && live}
@@ -35,6 +38,7 @@ export default function FinaiScreen() {
             : 'You’re offline. Reconnect to chat with FinAI.'
       }
       onDecide={decide}
+      showSteps={finaiSettings?.showSteps !== false}
       onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
       topInset={insets.top}
       bottomInset={insets.bottom}

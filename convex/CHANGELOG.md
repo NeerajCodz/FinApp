@@ -2,6 +2,13 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.9.0
+
+- `finaiSettings` (`ai.settings.get/update/clearHistory`) applied to prompts, tools, mentions and
+  receipt categorisation
+- BYOK: `aiProviderKeys` (AES-256-GCM, `AI_KEYS_SECRET`), `ai.keys.*`, provider adapters for
+  OpenAI-compatible, Anthropic and Gemini APIs with tool calling
+
 ## 1.8.0
 
 - MCP OAuth: client registration kinds (`dcr` / `static` / `cimd`), token endpoint auth methods,

@@ -19,6 +19,8 @@ import { aiError, aiErrorCode } from './errors';
 import { generateText, isGeminiConfigured } from './gemini';
 import type { GeminiContent } from './geminiChat';
 import { assistantSystemPrompt } from './prompts';
+import { finaiPreferencePrompt, finaiToolAllowed } from '../shared/finaiSettings';
+import { chatForUser } from './keys';
 import { finaiStage, finaiStep } from './validators';
 import { consumeAiQuota } from './usage';
 
@@ -345,7 +347,11 @@ export const send = action({
     ctx,
     args,
   ): Promise<{ conversationId: Id<'finaiConversations'>; replyId: Id<'finaiMessages'> }> => {
-    if (!isGeminiConfigured()) throw aiError('AI_NOT_CONFIGURED');
+    const settings = await ctx.runQuery(api.ai.settings.get, {});
+    if (!settings.enabled) throw aiError('AI_DISABLED');
+    const myId = await ctx.runQuery(internal.ai.keys.me, {});
+    const byok = myId ? await chatForUser(ctx, myId) : { markInvalid: async () => undefined };
+    if (!isGeminiConfigured() && !byok.chat) throw aiError('AI_NOT_CONFIGURED');
     const started = await ctx.runMutation(internal.ai.assistant.begin, args);
     const { conversationId, replyId } = started;
     try {
@@ -356,7 +362,7 @@ export const send = action({
       ]);
       const defaultCurrency = me?.defaultCurrency ?? 'INR';
       const timezone = me?.timezone ?? 'UTC';
-      const system = assistantSystemPrompt({
+      const baseSystem = assistantSystemPrompt({
         name: me?.displayName ?? me?.name ?? 'the user',
         today: new Date().toLocaleDateString('en-CA', { timeZone: timezone }),
         timezone,
@@ -372,6 +378,9 @@ export const send = action({
           currency: row.currency,
         })),
       });
+      const system = `${baseSystem}
+
+${finaiPreferencePrompt(settings)}`;
       let lastFlush = 0;
       let pendingText = '';
       let steps: AgentStep[] = [];
@@ -389,8 +398,9 @@ export const send = action({
           timeZone: timezone,
         },
         system,
+        ...(byok.chat ? { chat: byok.chat } : {}),
         contents: historyContents(started.history, args.text.trim()),
-        tools: assistantTools,
+        tools: assistantTools.filter((tool) => finaiToolAllowed(settings, tool.name)),
         onProgress: async (step: AgentProgress) => {
           const next = applyStep(steps, step);
           if (next) steps = next;
@@ -431,6 +441,7 @@ export const send = action({
       }
     } catch (error) {
       const errorCode = aiErrorCode(error) ?? 'AI_UNAVAILABLE';
+      if (errorCode === 'AI_KEY_INVALID') await byok.markInvalid();
       console.warn('[ai] FinAI reply failed', errorCode, String(error));
       await ctx.runMutation(internal.ai.assistant.fail, { replyId, errorCode });
     }

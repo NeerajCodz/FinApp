@@ -253,6 +253,8 @@ export function parseFinaiSurface(json: string | undefined | null): FinaiSurface
 
 const errorCopy: Record<string, string> = {
   AI_NOT_CONFIGURED: 'FinAI isn’t set up on this server yet.',
+  AI_DISABLED: 'FinAI is turned off. Turn it on in Settings → AI → FinAI.',
+  AI_KEY_INVALID: 'Your API key was rejected. Check it in Settings → AI → API keys.',
   AI_RATE_LIMITED: 'You’ve reached today’s FinAI limit. Try again tomorrow.',
   AI_BUSY: 'FinAI is busy right now. Try again in a moment.',
   AI_UNAVAILABLE: 'FinAI is unavailable right now. Try again in a moment.',

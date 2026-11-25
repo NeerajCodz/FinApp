@@ -209,6 +209,8 @@ async function suggestCategory(
   draft: ReceiptDraft,
 ): Promise<{ categoryId?: string }> {
   try {
+    const settings = await ctx.runQuery(internal.ai.settings.forUser, { userId });
+    if (!settings.autoCategorizeReceipts) return {};
     const categories = await ctx.runQuery(api.categories.queries.list, {});
     if (!categories.length) return {};
     await ctx.runMutation(internal.ai.receipts.consumeDecision, { userId });

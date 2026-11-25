@@ -286,3 +286,14 @@ export {
   type PersonAnalyticsScreenProps,
   type PersonAnalyticsData,
 } from './PeopleAnalyticsScreens';
+export {
+  SettingsShell,
+  SettingsIconButton,
+  SettingsGroup,
+  SettingsLink,
+  SettingsSwitch,
+  SettingsChoice,
+  SettingsSelect,
+  SettingsTextArea,
+  SettingsHero,
+} from './SettingsKit';

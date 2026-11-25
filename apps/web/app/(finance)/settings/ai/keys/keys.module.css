@@ -1,0 +1,205 @@
+.keyRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.keyIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--finapp-surface-subtle);
+  color: var(--finapp-foreground-muted);
+}
+
+.keyIcon[data-status='ok'] {
+  background: color-mix(in srgb, var(--finapp-positive) 16%, transparent);
+  color: var(--finapp-positive);
+}
+
+.keyIcon[data-status='invalid'] {
+  background: color-mix(in srgb, var(--finapp-expense) 16%, transparent);
+  color: var(--finapp-expense);
+}
+
+.keyText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.keyText strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.keyText em {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--finapp-primary) 18%, transparent);
+  color: var(--finapp-primary);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.keyText small {
+  overflow: hidden;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.keyActions {
+  display: flex;
+  gap: 6px;
+}
+
+.keyActions button {
+  display: inline-grid;
+  min-width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.keyActions button[data-danger] {
+  color: var(--finapp-expense);
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+}
+
+.form label {
+  display: grid;
+  gap: 6px;
+}
+
+.form label > span {
+  color: var(--finapp-foreground-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.form input {
+  padding: 11px 12px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 12px;
+  background: var(--finapp-surface-subtle);
+  color: inherit;
+  font: inherit;
+}
+
+.form input:focus {
+  border-color: var(--finapp-primary);
+  outline: none;
+}
+
+.form small {
+  color: var(--finapp-foreground-muted);
+  font-size: 0.76rem;
+}
+
+.form a {
+  color: var(--finapp-primary);
+}
+
+.providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.providers button {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--finapp-border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--finapp-foreground-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.providers button[data-active] {
+  border-color: var(--finapp-primary);
+  background: color-mix(in srgb, var(--finapp-primary) 14%, transparent);
+  color: var(--finapp-foreground);
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  justify-self: start;
+  border: 0;
+  background: var(--finapp-primary);
+  color: var(--finapp-primary-foreground);
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.secondary {
+  border: 1px solid var(--finapp-border-subtle);
+  background: transparent;
+  color: inherit;
+}
+
+.error {
+  margin: 0;
+  color: var(--finapp-expense);
+  font-size: 0.85rem;
+}
+
+.notice {
+  margin: 0;
+  color: var(--finapp-foreground-muted);
+  font-size: 0.85rem;
+}
+
+.providers button:focus-visible,
+.keyActions button:focus-visible,
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid var(--finapp-ring);
+  outline-offset: 2px;
+}

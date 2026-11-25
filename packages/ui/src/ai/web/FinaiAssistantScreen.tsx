@@ -42,6 +42,8 @@ export type FinaiConversationSummary = {
 
 export type FinaiAssistantScreenProps = {
   available: boolean;
+  /** Show the tool steps under replies (FinAI setting; default on). */
+  showSteps?: boolean;
   conversations: readonly FinaiConversationSummary[];
   activeId: string | null;
   onSelect: (id: string | null) => void;
@@ -295,7 +297,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
                       )}
                     </span>
                     <div className={styles.reply}>
-                      {message.steps?.length ? (
+                      {p.showSteps !== false && message.steps?.length ? (
                         <FinaiSteps steps={message.steps} busy={isFinaiBusy(message)} />
                       ) : null}
                       {message.status === 'error' ? (
