@@ -6,6 +6,50 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 its manifest as `version.json`
 (`https://github.com/NeerajCodz/FinApp/releases/download/finapp-v<version>/version.json`).
 
+## 1.10.0
+
+Web 1.10.0 · Mobile 1.10.0 · UI 1.10.0 · Backend 1.10.0 · API 1 · Schema 7
+
+Trash for everything, FinAI that can do everything (with live replies and attachments), MCP
+access control, and redesigned settings on web and mobile.
+
+- **Trash**: deleting a transaction, account, category, budget, goal or recurring payment moves
+  it to Trash. Restore it (a category or account brings back what went with it) or delete it for
+  good. Trash empties itself after the time you choose in Settings → Trash. Deleting a category
+  asks whether to keep its transactions or move them to Trash too.
+- **Navigation**: the mobile tab bar is Home, Activity, +, People, Profile. Home has sync and
+  notifications (with a badge) at the top right. Profile tiles are a compact grid with Trash in
+  place of Budgets. The web sidebar shows notification and unread-chat badges.
+- **Notifications**: friend requests and accepted requests notify you; titles and messages follow
+  one format everywhere.
+- **FinAI can do everything**: edit transactions; create and edit budgets, goals, categories,
+  accounts and recurring payments; delete anything; restore from or empty the Trash. Deleting a
+  transaction happens right away (it goes to Trash). Deleting anything else, and deleting for
+  good, asks you to confirm first.
+- **Live FinAI replies**: text streams in smoothly as it's written, and Markdown renders correctly
+  while it streams.
+- **Fewer "FinAI took too long" errors**: overloaded models are skipped quickly, FinAI shows when
+  it's thinking, and a stalled reply retries on another model.
+- **Replies in the background**: close FinAI while it works. The launcher shows the thinking orb,
+  then a badge, and a toast with **Open** appears when the reply lands. Chats with new replies are
+  marked.
+- **Attachments**: attach images, PDFs, Excel (.xlsx), CSV and text files up to 10 MB (5 per
+  message). FinAI reads receipts, bills and statements, and can **import a whole spreadsheet** as
+  transactions behind one confirmation. Attachments are deleted after 24 hours by default
+  (1 hour, 7 days, 30 days or never in FinAI settings).
+- **MCP**: an access-control section with a master switch, read-only mode, deletes on or off and
+  per-tool blocking, plus per-app permissions you can change after connecting. Changes apply on
+  the app's next request. New tools: Trash and recurring delete. Shortcuts to the MCP dashboard
+  from Settings, the AI hub and Profile.
+- **Security**: see every device signed in to your account and sign out any of them, or all
+  others at once. Get an alert when a new device signs in. Two-factor, change password and the
+  screen or app lock are on one redesigned page.
+- **Privacy**: choose whether you show up in search and who can send you friend requests, control
+  your activity status, export your data, and request account deletion (cancellable).
+- **Redesigned settings**: Appearance, Currency (now searchable), Notifications (grouped, with a
+  new Friends switch) and Sync (live status and Sync now) match the rest of Settings on web and
+  mobile.
+
 ## 1.9.0
 
 Web 1.9.0 · Mobile 1.9.0 · UI 1.9.0 · Backend 1.9.0 · API 1 · Schema 6

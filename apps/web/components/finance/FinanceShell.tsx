@@ -33,6 +33,8 @@ import { useUnreadNotificationCount } from '@/lib/notifications';
 import { NotificationToasts } from './NotificationToasts';
 import { HeaderStatusActions } from './HeaderStatusActions';
 import { useUnreadChatCount } from '@/lib/notifications';
+import { useConvexAuth } from 'convex/react';
+import { useSessionLabel } from '@/lib/security/useSessionLabel';
 import type { LocalRecord } from '@/lib/offline/repository';
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -112,6 +114,8 @@ export function FinanceShell({ children }: { children: ReactNode }) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const unreadNotifications = useUnreadNotificationCount();
   const unreadChats = useUnreadChatCount();
+  const { isAuthenticated } = useConvexAuth();
+  useSessionLabel(isAuthenticated);
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
   useEffect(() => {

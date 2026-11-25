@@ -1,3 +1,4 @@
+import { privacyFor } from '../security';
 import { mutation } from '../_generated/server';
 import type { MutationCtx } from '../_generated/server';
 import { v } from 'convex/values';
@@ -81,6 +82,8 @@ export const sendRequest = mutation({
     const recipient = await ctx.db.get(recipientId);
     if (!recipient || recipient.deletedAt !== undefined) throw new Error('USER_UNAVAILABLE');
     assertVerified(recipient);
+    if ((await privacyFor(ctx, recipientId)).friendRequests === 'nobody')
+      throw new Error('FRIEND_REQUESTS_OFF');
     const [low, high] =
       String(actor._id) < String(recipientId) ? [actor._id, recipientId] : [recipientId, actor._id];
     const friendship = await ctx.db

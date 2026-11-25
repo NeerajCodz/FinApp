@@ -296,4 +296,6 @@ export {
   SettingsSelect,
   SettingsTextArea,
   SettingsHero,
+  SettingsItem,
+  SettingsField,
 } from './SettingsKit';

@@ -2,6 +2,18 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.0
+
+- Trash page and settings; category delete with keep or trash transactions
+- Sync and notifications in the header and sidebar; sidebar notification and People badges;
+  phone nav with Profile; compact profile tiles with Trash
+- FinAI: live text with smooth reveal; launcher orb and unread badge while replies run in the
+  background; toast with Open; `/finai?c=` opens a chat
+- FinAI attachments: paperclip, drag and drop, paste, upload progress; attachment settings
+- MCP access control, per-app permissions, dashboard shortcuts
+- Redesigned Security (devices, sign-in alerts), Privacy (discoverability, friend requests,
+  deletion request), Appearance, Currency, Notifications and Sync settings
+
 ## 1.9.0
 
 - Settings hub and Profile redesigned; AI settings: FinAI, API keys (BYOK), MCP connections

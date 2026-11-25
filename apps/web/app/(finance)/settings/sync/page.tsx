@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check } from 'lucide-react';
-import { Button, IconButton, Text, Typography } from '@finapp/ui/web';
+import { Cloud, CloudOff, History, TriangleAlert } from 'lucide-react';
+import { Button } from '@finapp/ui/web';
+import { SettingsGroup, SettingsHero, SettingsLink, SettingsShell } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import type { LocalSyncWindow } from '@/lib/offline/repository';
@@ -14,12 +15,22 @@ const syncWindowOptions: { value: LocalSyncWindow; label: string }[] = [
   { value: 90, label: '90 days' },
   { value: 180, label: '180 days' },
   { value: 365, label: '365 days' },
-  { value: 'all', label: 'All history' },
+  { value: 'all', label: 'Everything' },
 ];
 
 export default function SyncSettingsPage() {
   const router = useRouter();
-  const { userId, syncWindow, setSyncWindow } = useBrowserSync();
+  const {
+    userId,
+    syncWindow,
+    setSyncWindow,
+    isConnected,
+    isSyncing,
+    syncError,
+    failedEntries,
+    conflicts,
+    retryNow,
+  } = useBrowserSync();
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
 
@@ -45,46 +56,89 @@ export default function SyncSettingsPage() {
       />
     );
 
+  const problems = failedEntries.length + conflicts.length;
   return (
-    <div className="finance-page finance-page--narrow">
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
-          <ArrowLeft size={21} aria-hidden="true" />
-        </IconButton>
-        <Typography variant="title">Local sync</Typography>
-      </header>
-      <section style={{ display: 'grid', gap: 8 }}>
-        <Typography variant="label">Initial download window</Typography>
-        <Text style={{ maxWidth: 340 }}>
-          Choose how much recent history syncs automatically. Changing this setting backfills cloud
-          data; it never removes older history already downloaded to this device.
-        </Text>
-      </section>
-      <div
-        style={{ display: 'grid', gap: 8 }}
-        role="radiogroup"
-        aria-label="Initial download window"
+    <SettingsShell
+      title="Sync"
+      subtitle="Offline copy and syncing"
+      onBack={() => router.push('/settings')}
+    >
+      <SettingsHero
+        icon={
+          !isConnected ? (
+            <CloudOff size={22} />
+          ) : problems ? (
+            <TriangleAlert size={22} />
+          ) : (
+            <Cloud size={22} />
+          )
+        }
+        title={
+          !isConnected
+            ? 'Offline'
+            : isSyncing
+              ? 'Syncing…'
+              : problems
+                ? `${problems} change${problems === 1 ? '' : 's'} need attention`
+                : 'Everything is synced'
+        }
+        description={
+          !isConnected
+            ? 'Changes save in this browser and sync when you reconnect.'
+            : (syncError ??
+              'Finapp keeps a copy in this browser so it opens fast and works offline.')
+        }
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!isConnected || isSyncing}
+            onPress={() => void retryNow()}
+          >
+            {isSyncing ? 'Syncing…' : 'Sync now'}
+          </Button>
+        }
+      />
+      {problems ? (
+        <SettingsGroup title="Needs attention">
+          <SettingsLink
+            icon={<TriangleAlert size={19} />}
+            tone="warning"
+            title={`${failedEntries.length} failed, ${conflicts.length} conflicting`}
+            description="Review and retry or choose which version to keep"
+            onPress={() => router.push('/notifications')}
+          />
+        </SettingsGroup>
+      ) : null}
+      <SettingsGroup
+        title="History in this browser"
+        description="How far back to download automatically. Older items load when you open them; nothing already here is removed."
       >
-        {syncWindowOptions.map((option) => {
-          const selected = syncWindow === option.value;
-          return (
-            <Button
+        <div role="radiogroup" aria-label="History in this browser" style={{ display: 'grid' }}>
+          {syncWindowOptions.map((option) => (
+            <SettingsLink
               key={String(option.value)}
-              variant={selected ? 'primary' : 'outline'}
-              disabled={saving}
-              role="radio"
-              aria-checked={selected}
-              onPress={() => void selectWindow(option.value)}
-              style={{ minHeight: 54, justifyContent: 'space-between' }}
-            >
-              <span>{option.label}</span>
-              {selected && <Check size={18} aria-hidden="true" />}
-            </Button>
-          );
-        })}
-      </div>
-      {!!error && <Text role="alert">{error}</Text>}
-      {saving && <Text role="status">Saving and scheduling backfill…</Text>}
-    </div>
+              icon={<History size={19} />}
+              tone={syncWindow === option.value ? 'primary' : undefined}
+              title={option.label}
+              badge={syncWindow === option.value ? 'Selected' : undefined}
+              onPress={
+                saving || syncWindow === option.value
+                  ? undefined
+                  : () => void selectWindow(option.value)
+              }
+            />
+          ))}
+        </div>
+      </SettingsGroup>
+      {error ? (
+        <p
+          role="alert"
+          style={{ margin: 0, gridColumn: '1 / -1', color: 'var(--finapp-destructive)' }}
+        >
+          {error}
+        </p>
+      ) : null}
+    </SettingsShell>
   );
 }

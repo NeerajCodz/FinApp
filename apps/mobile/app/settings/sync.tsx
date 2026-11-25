@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Check } from '@finapp/ui/icons/native';
-import { Button, IconButton, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import { Cloud, CloudOff, History, TriangleAlert } from 'lucide-react-native';
+import { Button } from '@finapp/ui/native';
+import {
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsLink,
+  SettingsScreen,
+  useSettingsToneColor,
+} from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import type { LocalSyncWindow } from '@/local/repository';
 
@@ -14,13 +19,21 @@ const options: { value: LocalSyncWindow; label: string }[] = [
   { value: 90, label: '90 days' },
   { value: 180, label: '180 days' },
   { value: 365, label: '365 days' },
-  { value: 'all', label: 'All history' },
+  { value: 'all', label: 'Everything' },
 ];
 
 export default function SyncSettingsScreen() {
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { syncWindow, setSyncWindow } = useLocalSync();
+  const tone = useSettingsToneColor();
+  const {
+    syncWindow,
+    setSyncWindow,
+    isConnected,
+    isSyncing,
+    syncError,
+    failedEntries,
+    conflicts,
+    retryNow,
+  } = useLocalSync();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,55 +50,75 @@ export default function SyncSettingsScreen() {
     }
   }
 
+  const problems = failedEntries.length + conflicts.length;
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 24,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="title">Local sync</Typography>
-      </View>
-      <View style={{ gap: 8 }}>
-        <Typography variant="label">Initial download window</Typography>
-        <Text style={{ color: tokens.foregroundMuted, maxWidth: 340 }}>
-          Choose how much recent history syncs automatically. Changing this setting backfills cloud
-          data; it never removes older history already downloaded to this device.
-        </Text>
-      </View>
-      <View style={{ gap: 8 }}>
-        {options.map((option) => {
-          const selected = syncWindow === option.value;
-          return (
-            <Button
-              key={String(option.value)}
-              variant={selected ? 'primary' : 'outline'}
-              disabled={saving}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selected, disabled: saving }}
-              onPress={() => void selectWindow(option.value)}
-              style={{ minHeight: 54, justifyContent: 'space-between' }}
-            >
-              <Typography
-                variant="bodyLarge"
-                style={{ color: selected ? tokens.primaryForeground : tokens.foreground }}
-              >
-                {option.label}
-              </Typography>
-              {!!selected && <Check size={18} color={tokens.primaryForeground} />}
-            </Button>
-          );
-        })}
-      </View>
-      {!!error && <Typography style={{ color: tokens.destructive }}>{error}</Typography>}
-      {!!saving && <Typography variant="caption">Saving and scheduling backfill…</Typography>}
-    </ScrollView>
+    <SettingsScreen title="Sync" subtitle="Offline copy and syncing" onBack={back}>
+      <SettingsHero
+        icon={
+          !isConnected ? (
+            <CloudOff size={22} color={tone()} />
+          ) : problems ? (
+            <TriangleAlert size={22} color={tone('warning')} />
+          ) : (
+            <Cloud size={22} color={tone('positive')} />
+          )
+        }
+        title={
+          !isConnected
+            ? 'Offline'
+            : isSyncing
+              ? 'Syncing…'
+              : problems
+                ? `${problems} change${problems === 1 ? '' : 's'} need attention`
+                : 'Everything is synced'
+        }
+        description={
+          !isConnected
+            ? 'Changes save on this phone and sync when you reconnect.'
+            : (syncError ?? 'Finapp keeps an encrypted copy on this phone so it works offline.')
+        }
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!isConnected || isSyncing}
+            onPress={() => void retryNow()}
+          >
+            Sync now
+          </Button>
+        }
+      />
+      <SettingsGroup title="History on this phone">
+        {options.map((option) => (
+          <SettingsLink
+            key={String(option.value)}
+            icon={
+              <History
+                size={19}
+                color={tone(syncWindow === option.value ? 'primary' : undefined)}
+              />
+            }
+            tone={syncWindow === option.value ? 'primary' : undefined}
+            title={option.label}
+            value={syncWindow === option.value ? 'Selected' : undefined}
+            onPress={
+              saving || syncWindow === option.value
+                ? undefined
+                : () => void selectWindow(option.value)
+            }
+          />
+        ))}
+        <SettingsItem
+          title="How this works"
+          description="Items older than this load when you open them. Nothing already on this phone is removed."
+        />
+      </SettingsGroup>
+      {error ? (
+        <SettingsGroup>
+          <SettingsItem title="Couldn’t change it" description={error} />
+        </SettingsGroup>
+      ) : null}
+    </SettingsScreen>
   );
 }

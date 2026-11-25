@@ -75,6 +75,14 @@ export default defineSchema({
     updatedAt: timestamp,
     showActive: v.optional(v.boolean()),
     showLastSeen: v.optional(v.boolean()),
+    /** Appear in people search (exact username/email still finds you). Default true. */
+    discoverable: v.optional(v.boolean()),
+    /** Who may send you friend requests. Default everyone. */
+    friendRequests: v.optional(v.union(v.literal('everyone'), v.literal('nobody'))),
+    /** Notify on sign-in from a new device. Default true. */
+    signInAlerts: v.optional(v.boolean()),
+    /** When the user asked for their account to be deleted (processed by the team; cancellable). */
+    deletionRequestedAt: optionalTime,
     /** Days items stay in Trash before they're deleted for good (default 30; 0 = never). */
     trashRetentionDays: v.optional(v.number()),
   }).index('by_user', ['userId']),
@@ -748,6 +756,17 @@ export default defineSchema({
     createdAt: timestamp,
   }).index('by_user', ['userId']),
   /** FinAI preferences, one row per user (see convex/shared/finaiSettings.ts). */
+  /** A label and last-active time for each Convex Auth session (Settings → Security → Devices). */
+  sessionDevices: defineTable({
+    sessionId: v.id('authSessions'),
+    userId: v.id('users'),
+    platform: v.union(v.literal('web'), v.literal('ios'), v.literal('android')),
+    label: v.string(),
+    createdAt: timestamp,
+    lastSeenAt: timestamp,
+  })
+    .index('by_session', ['sessionId'])
+    .index('by_user', ['userId']),
   finaiSettings: defineTable({
     userId: v.id('users'),
     /** Partial FinaiSettings; resolved over the defaults on read. */

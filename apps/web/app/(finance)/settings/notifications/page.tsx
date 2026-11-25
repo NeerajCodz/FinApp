@@ -2,8 +2,29 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Bell } from 'lucide-react';
-import { Button, IconButton, Separator, Switch, Text, Typography, useTheme } from '@finapp/ui/web';
+import {
+  Bell,
+  BellRing,
+  CalendarClock,
+  Gauge,
+  HandCoins,
+  ReceiptText,
+  RefreshCw,
+  ShieldCheck,
+  Split,
+  Target,
+  UserPlus,
+  UsersRound,
+} from 'lucide-react';
+import { Button } from '@finapp/ui/web';
+import {
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsLink,
+  SettingsShell,
+  SettingsSwitch,
+} from '@finapp/ui/finance';
 import {
   defaultNotificationPreferences,
   normalizeNotificationPreferences,
@@ -16,35 +37,97 @@ import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
 type SettingsRecord = LocalRecord & { notificationPreferences?: unknown };
-const options: { type: NotificationType; label: string; detail: string }[] = [
-  { type: 'transaction', label: 'Transactions', detail: 'Recorded transactions.' },
-  { type: 'budget', label: 'Budget limits', detail: 'When spending crosses 80% or 100%.' },
-  { type: 'goal', label: 'Goals', detail: 'When a savings target is reached.' },
-  { type: 'recurring', label: 'Recurring reminders', detail: 'Due dates for reminder-only rules.' },
+type Option = {
+  type: NotificationType;
+  label: string;
+  detail: string;
+  icon: React.ReactNode;
+  tone?: string;
+};
+
+const sections: { title: string; options: Option[] }[] = [
   {
-    type: 'split',
-    label: 'Shared expenses',
-    detail: 'When a group expense you share is added, edited, or removed.',
+    title: 'Your money',
+    options: [
+      {
+        type: 'transaction',
+        label: 'Transactions',
+        detail: 'Each transaction you record',
+        icon: <ReceiptText size={19} />,
+      },
+      {
+        type: 'budget',
+        label: 'Budget limits',
+        detail: 'When spending crosses 80% or 100%',
+        icon: <Gauge size={19} />,
+        tone: 'warning',
+      },
+      {
+        type: 'goal',
+        label: 'Goals',
+        detail: 'When a savings target is reached',
+        icon: <Target size={19} />,
+        tone: 'positive',
+      },
+      {
+        type: 'recurring',
+        label: 'Recurring payments',
+        detail: 'Due dates for reminder-only rules',
+        icon: <CalendarClock size={19} />,
+        tone: 'info',
+      },
+    ],
   },
   {
-    type: 'settlement',
-    label: 'Settlements & reminders',
-    detail: 'Payments recorded or undone, and reminders to settle up.',
+    title: 'Shared with others',
+    options: [
+      {
+        type: 'split',
+        label: 'Shared expenses',
+        detail: 'Group expenses you’re in: added, edited or removed',
+        icon: <Split size={19} />,
+        tone: 'violet',
+      },
+      {
+        type: 'settlement',
+        label: 'Settlements',
+        detail: 'Payments recorded or undone, and settle-up reminders',
+        icon: <HandCoins size={19} />,
+        tone: 'positive',
+      },
+      {
+        type: 'group',
+        label: 'Groups',
+        detail: 'Invitations, and members joining or leaving',
+        icon: <UsersRound size={19} />,
+        tone: 'info',
+      },
+      {
+        type: 'social',
+        label: 'Friends',
+        detail: 'Friend requests and accepted requests',
+        icon: <UserPlus size={19} />,
+        tone: 'primary',
+      },
+    ],
   },
   {
-    type: 'group',
-    label: 'Group membership',
-    detail: 'Invitations, and members joining or leaving your groups.',
-  },
-  {
-    type: 'security',
-    label: 'Security',
-    detail: 'When a verified email recovery code is used for this device’s app passcode.',
-  },
-  {
-    type: 'sync',
-    label: 'Sync problems',
-    detail: 'Changes that need your attention on this device.',
+    title: 'Account',
+    options: [
+      {
+        type: 'security',
+        label: 'Security',
+        detail: 'New sign-ins, apps connected over MCP, and account changes',
+        icon: <ShieldCheck size={19} />,
+        tone: 'danger',
+      },
+      {
+        type: 'sync',
+        label: 'Sync problems',
+        detail: 'Changes that need your attention',
+        icon: <RefreshCw size={19} />,
+      },
+    ],
   },
 ];
 
@@ -52,7 +135,6 @@ export default function NotificationSettingsPage() {
   const router = useRouter();
   const { userId, isConnected } = useBrowserSync();
   const { records, loading, error } = useLocalRecords<SettingsRecord>('settings');
-  const { tokens } = useTheme();
   const setting = records[0];
   const [preferences, setPreferences] = React.useState<NotificationPreferences>(
     defaultNotificationPreferences,
@@ -131,95 +213,89 @@ export default function NotificationSettingsPage() {
   }
 
   const selectedPreferences = preferences ?? defaultNotificationPreferences;
+  const enabledCount = sections
+    .flatMap((section) => section.options)
+    .filter((option) => selectedPreferences[option.type]).length;
+  const total = sections.flatMap((section) => section.options).length;
   return (
-    <div className="finance-page finance-page--narrow" style={{ gap: 24 }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.push('/settings')}>
-          <ArrowLeft size={21} aria-hidden="true" />
-        </IconButton>
-        <Typography variant="title">Notifications</Typography>
-      </header>
-
-      <section style={{ display: 'grid', gap: 8 }}>
-        <Typography variant="heading">In-app activity</Typography>
-        <Text>
-          Choose what enters your inbox. Changes save on this device first and sync when connected.
-        </Text>
-      </section>
-
-      {loading && <Typography variant="small">Loading preferences…</Typography>}
-      {error && (
-        <Button variant="outline" onPress={() => window.location.reload()}>
-          Retry loading preferences
-        </Button>
-      )}
-      {!loading && !error && (
-        <div>
-          {options.map((option, index) => (
-            <div key={option.type}>
-              {index > 0 && <Separator />}
-              <Switch
-                label={option.label}
-                value={selectedPreferences[option.type]}
-                disabled={saving}
-                onValueChange={(value) => void change(option.type, value)}
-              />
-              <Typography
-                variant="small"
-                style={{ display: 'block', marginTop: -4, marginBottom: 12 }}
-              >
-                {option.detail}
-              </Typography>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <section
-        style={{
-          display: 'grid',
-          gap: 10,
-          paddingTop: 12,
-          borderTop: `1px solid ${tokens.border}`,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Bell size={19} color={tokens.primary} aria-hidden="true" />
-          <Typography variant="heading">Device reminders</Typography>
-        </div>
-        <Text>
-          Only recurring due dates can alert this device. Other activity stays in the in-app inbox;
-          push delivery is not configured.
-        </Text>
-        {permission === null && (
-          <Typography variant="small">Checking device permission…</Typography>
-        )}
-        {permission === 'granted' && (
-          <Typography variant="small">Device reminders allowed.</Typography>
-        )}
-        {permission === 'default' && (
-          <Button variant="outline" onPress={() => void requestPermission()}>
-            Allow device reminders
+    <SettingsShell
+      title="Notifications"
+      subtitle="What reaches your inbox"
+      onBack={() => router.push('/settings')}
+    >
+      <SettingsHero
+        icon={<Bell size={22} />}
+        title={`${enabledCount} of ${total} kinds on`}
+        description="Notifications appear in your inbox and the bell badge. Changes save right away and follow you to your other devices."
+        action={
+          <Button size="sm" variant="outline" onPress={() => router.push('/notifications')}>
+            Open inbox
           </Button>
-        )}
-        {permission === 'denied' && (
-          <Text>
-            Permission is blocked. Change it in this site’s browser settings to allow delivery.
-          </Text>
-        )}
-        {permission === 'unsupported' && (
-          <Text>
-            This browser does not support the Notification API. Your in-app inbox remains available.
-          </Text>
-        )}
-        {!isConnected && (
-          <Typography variant="small">
-            Offline: your inbox and preferences remain available.
-          </Typography>
-        )}
-      </section>
-      {saving && <Typography variant="small">Saving…</Typography>}
-      {message && <Text role="status">{message}</Text>}
-    </div>
+        }
+      />
+      {loading ? (
+        <SettingsGroup>
+          <SettingsItem title="Loading preferences…" />
+        </SettingsGroup>
+      ) : error ? (
+        <SettingsGroup>
+          <SettingsLink
+            title="Couldn’t load preferences"
+            description="Tap to retry"
+            onPress={() => window.location.reload()}
+          />
+        </SettingsGroup>
+      ) : (
+        sections.map((section) => (
+          <SettingsGroup key={section.title} title={section.title}>
+            {section.options.map((option) => (
+              <SettingsSwitch
+                key={option.type}
+                icon={option.icon}
+                tone={option.tone}
+                title={option.label}
+                description={option.detail}
+                checked={selectedPreferences[option.type]}
+                disabled={saving}
+                onChange={(value) => void change(option.type, value)}
+              />
+            ))}
+          </SettingsGroup>
+        ))
+      )}
+      <SettingsGroup title="This browser" description="Alerts outside the app">
+        <SettingsItem
+          icon={<BellRing size={19} />}
+          tone="warning"
+          title="Browser reminders"
+          description={
+            permission === null
+              ? 'Checking permission…'
+              : permission === 'granted'
+                ? 'Allowed: recurring due dates can alert you while Finapp is open'
+                : permission === 'denied'
+                  ? 'Blocked. Allow notifications for this site in your browser settings.'
+                  : permission === 'unsupported'
+                    ? 'This browser doesn’t support notifications. Your inbox still works.'
+                    : 'Get recurring due-date reminders while Finapp is open'
+          }
+          trailing={
+            permission === 'default' ? (
+              <Button size="sm" onPress={() => void requestPermission()}>
+                Allow
+              </Button>
+            ) : null
+          }
+        />
+      </SettingsGroup>
+      {message || !isConnected ? (
+        <p
+          role="status"
+          style={{ margin: 0, gridColumn: '1 / -1', color: 'var(--finapp-foreground-muted)' }}
+        >
+          {message || 'Offline: changes save here and sync when you reconnect.'}
+        </p>
+      ) : null}
+    </SettingsShell>
   );
 }

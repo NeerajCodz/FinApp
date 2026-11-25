@@ -2,6 +2,16 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.0
+
+- Tab bar: Home, Activity, +, People, Profile; sync and notifications on Home; Trash screen and
+  settings; compact profile tiles with Trash
+- FinAI: live text with smooth reveal; launcher orb and unread badge; toast with Open on any
+  screen; attachments from Photos, Camera or Files; attachment settings
+- MCP access control, per-app permissions, dashboard shortcuts
+- Redesigned Security (devices, sign-in alerts, app lock), Privacy, Appearance, Currency,
+  Notifications and Sync settings
+
 ## 1.9.0
 
 - Settings hub and Profile AI section; FinAI, API keys and MCP connections screens

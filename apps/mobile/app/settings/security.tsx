@@ -1,240 +1,309 @@
 import React from 'react';
-import { Platform, ScrollView, View } from 'react-native';
-import { useMutation, useQuery } from 'convex/react';
-import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { api } from '@convex/_generated/api';
-import * as Haptics from 'expo-haptics';
-import { ArrowLeft } from '@finapp/ui/icons/native';
+import { Alert, Platform, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, IconButton, Separator, Text, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
+import * as Haptics from 'expo-haptics';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import {
+  BellRing,
+  Fingerprint,
+  KeyRound,
+  LaptopMinimal,
+  LockKeyhole,
+  LogOut,
+  MailCheck,
+  ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react-native';
+import { Button, useTheme } from '@finapp/ui/native';
+import {
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsLink,
+  SettingsScreen,
+  SettingsSwitch,
+  useSettingsToneColor,
+} from '@finapp/ui/finance';
+import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useAppLock } from '@/lib/security/AppLockProvider';
 import { canUseDeviceLock } from '@/lib/security/app-lock';
 import { PasscodeInput } from '@/lib/security/PasscodeInput';
+import { toast } from '@/lib/toast';
 
+function ago(timestamp: number, now = Date.now()) {
+  const minutes = Math.round((now - timestamp) / 60_000);
+  if (minutes < 5) return 'Active now';
+  if (minutes < 60) return `Active ${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `Active ${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return `Active ${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+const errorText = (cause: unknown, fallback: string) =>
+  cause instanceof Error ? cause.message.replace(/^.*Uncaught Error:\s*/, '') : fallback;
+
+/** Sign-in protection, devices on the account, alerts, and this phone's app lock. */
 export default function SecuritySettingsScreen() {
-  const { lock, ready, changeLock } = useAppLock();
+  const { tokens } = useTheme();
+  const tone = useSettingsToneColor();
   const { isConnected } = useLocalSync();
-  const securityPreferences = useQuery(
-    api.users.queries.securityPreferences,
-    isConnected ? {} : 'skip',
-  );
-  const setTwoFactorEnabled = useMutation(api.users.mutations.setTwoFactorEnabled);
-  const [available, setAvailable] = React.useState(false);
-  const [pending, setPending] = React.useState(false);
+  const { lock, ready, changeLock } = useAppLock();
+  const preferences = useQuery(api.users.queries.securityPreferences, isConnected ? {} : 'skip');
+  const privacy = useQuery(api.security.privacy, isConnected ? {} : 'skip');
+  const sessions = useQuery(api.security.sessions, isConnected ? {} : 'skip');
+  const setTwoFactor = useMutation(api.users.mutations.setTwoFactorEnabled);
+  const updatePrivacy = useMutation(api.security.updatePrivacy);
+  const signOutSession = useMutation(api.security.signOutSession);
+  const signOutOthers = useMutation(api.security.signOutOtherSessions);
+  const [deviceLockAvailable, setDeviceLockAvailable] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [code, setCode] = React.useState('');
   const [confirmation, setConfirmation] = React.useState('');
-  const [error, setError] = React.useState('');
-  const [twoFactorPending, setTwoFactorPending] = React.useState(false);
-  const [twoFactorMessage, setTwoFactorMessage] = React.useState('');
-  const { tokens } = useTheme();
-  const insets = useSafeAreaInsets();
-
-  async function toggleTwoFactor() {
-    if (!isConnected) {
-      setTwoFactorMessage('You are offline. Reconnect to change two-factor sign-in.');
-      return;
-    }
-    if (!securityPreferences || twoFactorPending) return;
-    const next = !securityPreferences.twoFactorEnabled;
-    setTwoFactorPending(true);
-    setTwoFactorMessage('');
-    try {
-      await setTwoFactorEnabled({ enabled: next });
-      void Haptics.selectionAsync();
-      setTwoFactorMessage(
-        next
-          ? 'Email verification is required after password sign-in.'
-          : 'Password sign-in no longer sends a verification email.',
-      );
-    } catch (cause) {
-      setTwoFactorMessage(
-        cause instanceof Error ? cause.message : 'Could not update two-factor sign-in.',
-      );
-    } finally {
-      setTwoFactorPending(false);
-    }
-  }
 
   React.useEffect(() => {
     let active = true;
-    void canUseDeviceLock()
-      .then((supported) => {
-        if (active) setAvailable(supported);
-      })
-      .catch(() => {
-        if (active) setAvailable(false);
-      });
+    canUseDeviceLock()
+      .then((supported) => active && setDeviceLockAvailable(supported))
+      .catch(() => active && setDeviceLockAvailable(false));
     return () => {
       active = false;
     };
   }, []);
 
-  async function change(next: 'device' | 'passcode' | null) {
-    if (pending) return;
-    if (next === 'passcode' && (code.length !== 6 || code !== confirmation)) {
-      setError('Enter matching six-digit passcodes.');
-      return;
-    }
-    setPending(true);
-    setError('');
+  const run = async (key: string, task: () => Promise<unknown>, done?: string) => {
+    setBusy(key);
     try {
-      await changeLock(next, next === 'passcode' ? code : undefined);
+      await task();
       void Haptics.selectionAsync();
-      setCreating(false);
-      setCode('');
-      setConfirmation('');
+      if (done) toast.success(done);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not change app lock.');
+      toast.error(errorText(cause, 'Something went wrong. Try again.'));
     } finally {
-      setPending(false);
+      setBusy(null);
     }
-  }
+  };
+
+  const twoFactor = preferences?.twoFactorEnabled ?? false;
+  const others = (sessions ?? []).filter((session) => !session.current);
+  const score = [twoFactor, !!lock, privacy?.signInAlerts !== false].filter(Boolean).length;
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 32,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="title">Security</Typography>
-      </View>
-      <View style={{ gap: 16 }}>
-        <Typography variant="label">App access</Typography>
-        <Text style={{ color: tokens.foregroundMuted }}>
-          {lock?.method === 'device'
-            ? 'Device unlock is on.'
-            : lock?.method === 'passcode'
-              ? 'App passcode is on.'
-              : 'App lock is off.'}
-        </Text>
-        <Separator />
-        <View style={{ gap: 10 }}>
-          <Typography variant="label">Two-factor sign-in</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>
-            {securityPreferences?.twoFactorEnabled
-              ? 'A six-digit email code is required after your password.'
-              : 'Password sign-in is used by default. No extra email code is sent.'}
-          </Text>
-          <Button
-            variant={securityPreferences?.twoFactorEnabled ? 'outline' : 'primary'}
-            disabled={
-              securityPreferences === undefined || securityPreferences === null || twoFactorPending
-            }
-            onPress={() => void toggleTwoFactor()}
-          >
-            {twoFactorPending
-              ? 'Saving…'
-              : securityPreferences?.twoFactorEnabled
-                ? 'Turn off two-factor sign-in'
-                : 'Enable two-factor sign-in'}
-          </Button>
-          {!!(twoFactorMessage || !isConnected) && (
-            <Text style={{ color: tokens.foregroundMuted }}>
-              {twoFactorMessage || 'Offline. Reconnect to view or change server security settings.'}
-            </Text>
-          )}
-        </View>
-        <Separator />
-        <View style={{ gap: 10 }}>
-          <Typography variant="label">Device biometrics</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>
-            Uses your enrolled biometrics, with the device passcode or credential offered by the
-            operating system. This cannot be reset by email.
-          </Text>
-          <Button
-            variant={lock?.method === 'device' ? 'outline' : 'primary'}
-            disabled={!ready || pending || !available || lock?.method === 'device'}
-            onPress={() => void change('device')}
-          >
-            {lock?.method === 'device' ? 'Device unlock enabled' : 'Use device unlock'}
-          </Button>
-          {!available && (
-            <Text style={{ color: tokens.foregroundMuted }}>
-              {Platform.OS === 'web'
-                ? 'Available only on a mobile device.'
-                : 'Enroll biometrics in your device settings to enable this option.'}
-            </Text>
-          )}
-        </View>
-        <Separator />
-        <View style={{ gap: 10 }}>
-          <Typography variant="label">In-app passcode</Typography>
-          <Text style={{ color: tokens.foregroundMuted }}>
-            A separate six-digit code for this device. If you forget it, reset it using a code sent
-            to your verified account email while signed in online.
-          </Text>
-          {!creating ? (
-            <Button
-              variant={lock?.method === 'passcode' ? 'outline' : 'primary'}
-              disabled={!ready || pending || Platform.OS === 'web'}
-              onPress={() => setCreating(true)}
-            >
-              {lock?.method === 'passcode' ? 'Change app passcode' : 'Set app passcode'}
-            </Button>
+    <SettingsScreen title="Security" subtitle="Sign-in, devices and app lock" onBack={back}>
+      <SettingsHero
+        icon={
+          score === 3 ? (
+            <ShieldCheck size={22} color={tone('positive')} />
           ) : (
-            <View style={{ gap: 12 }}>
-              <Text>New six-digit passcode</Text>
+            <ShieldAlert size={22} color={tone('warning')} />
+          )
+        }
+        title={score === 3 ? 'Your account is well protected' : `${score} of 3 protections on`}
+        description={[
+          twoFactor ? 'Two-factor on' : 'Two-factor off',
+          lock ? 'app lock on' : 'app lock off',
+          `${sessions?.length ?? 0} signed-in device${sessions?.length === 1 ? '' : 's'}`,
+        ].join(' · ')}
+      />
+
+      <SettingsGroup title="Sign-in">
+        <SettingsSwitch
+          icon={<MailCheck size={19} color={tone('positive')} />}
+          tone="positive"
+          title="Two-factor sign-in"
+          description="Ask for an email code after your password"
+          checked={twoFactor}
+          disabled={!isConnected || preferences == null || busy === '2fa'}
+          onChange={(enabled) =>
+            void run(
+              '2fa',
+              () => setTwoFactor({ enabled }),
+              enabled ? 'Two-factor sign-in is on' : 'Two-factor sign-in is off',
+            )
+          }
+        />
+        <SettingsLink
+          icon={<KeyRound size={19} color={tone('info')} />}
+          tone="info"
+          title="Change password"
+          description="We’ll email you a link to set a new one"
+          onPress={() => router.push('/forgot-password' as never)}
+        />
+        <SettingsSwitch
+          icon={<BellRing size={19} color={tone('warning')} />}
+          tone="warning"
+          title="New sign-in alerts"
+          description="Notify me when a new device signs in"
+          checked={privacy?.signInAlerts ?? true}
+          disabled={!isConnected || !privacy || busy === 'alerts'}
+          onChange={(signInAlerts) => void run('alerts', () => updatePrivacy({ signInAlerts }))}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Devices">
+        {(sessions ?? []).map((session) => (
+          <SettingsItem
+            key={session.id}
+            icon={
+              session.platform === 'web' ? (
+                <LaptopMinimal size={19} color={tone(session.current ? 'positive' : undefined)} />
+              ) : (
+                <Smartphone size={19} color={tone(session.current ? 'positive' : undefined)} />
+              )
+            }
+            tone={session.current ? 'positive' : undefined}
+            title={session.label}
+            description={session.current ? 'This device' : ago(session.lastSeenAt)}
+            trailing={
+              session.current ? null : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy !== null}
+                  onPress={() =>
+                    void run(
+                      `session:${session.id}`,
+                      () => signOutSession({ sessionId: session.id as Id<'authSessions'> }),
+                      `Signed out ${session.label}`,
+                    )
+                  }
+                >
+                  Sign out
+                </Button>
+              )
+            }
+          />
+        ))}
+        {others.length > 0 ? (
+          <SettingsLink
+            icon={<LogOut size={19} color={tone('danger')} />}
+            danger
+            title="Sign out of all other devices"
+            description={`${others.length} other device${others.length === 1 ? '' : 's'}`}
+            onPress={
+              busy
+                ? undefined
+                : () =>
+                    Alert.alert('Sign out other devices?', 'They’ll need to sign in again.', [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Sign out',
+                        style: 'destructive',
+                        onPress: () =>
+                          void run('others', async () => {
+                            const count = await signOutOthers({});
+                            toast.success(`Signed out ${count} device${count === 1 ? '' : 's'}`);
+                          }),
+                      },
+                    ])
+            }
+          />
+        ) : null}
+      </SettingsGroup>
+
+      <SettingsGroup title="App lock">
+        <SettingsSwitch
+          icon={<Fingerprint size={19} color={tone('violet')} />}
+          tone="violet"
+          title={Platform.OS === 'ios' ? 'Face ID or Touch ID' : 'Fingerprint or face unlock'}
+          description={
+            deviceLockAvailable
+              ? 'Unlock Finapp with your device biometrics'
+              : 'Set up biometrics in your phone’s settings first'
+          }
+          checked={lock?.method === 'device'}
+          disabled={!ready || busy !== null || (!deviceLockAvailable && lock?.method !== 'device')}
+          onChange={(on) =>
+            void run(
+              'lock',
+              () => changeLock(on ? 'device' : null),
+              on ? 'App lock is on' : 'App lock is off',
+            )
+          }
+        />
+        <SettingsItem
+          icon={<LockKeyhole size={19} color={tone('primary')} />}
+          tone="primary"
+          title="Six-digit passcode"
+          description={
+            lock?.method === 'passcode'
+              ? 'On. Forgot it? Reset with an email code while online.'
+              : 'A code just for this phone'
+          }
+          trailing={
+            creating ? null : (
+              <Button
+                size="sm"
+                variant={lock?.method === 'passcode' ? 'outline' : 'primary'}
+                disabled={!ready || busy !== null}
+                onPress={() => setCreating(true)}
+              >
+                {lock?.method === 'passcode' ? 'Change' : 'Set up'}
+              </Button>
+            )
+          }
+        >
+          {creating ? (
+            <View style={{ gap: 10 }}>
+              <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>New passcode</Text>
               <PasscodeInput value={code} onChangeText={setCode} label="New app passcode" />
-              <Text>Confirm passcode</Text>
+              <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>Repeat passcode</Text>
               <PasscodeInput
                 value={confirmation}
                 onChangeText={setConfirmation}
-                label="Confirm app passcode"
+                label="Repeat app passcode"
               />
-              <Button
-                disabled={!ready || pending || code.length !== 6 || confirmation.length !== 6}
-                onPress={() => void change('passcode')}
-              >
-                {pending ? 'Saving…' : 'Save passcode'}
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={pending}
-                onPress={() => {
-                  setCreating(false);
-                  setCode('');
-                  setConfirmation('');
-                  setError('');
-                }}
-              >
-                Cancel
-              </Button>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Button
+                  size="sm"
+                  disabled={busy !== null || code.length !== 6 || confirmation.length !== 6}
+                  onPress={() =>
+                    void run(
+                      'passcode',
+                      async () => {
+                        if (code !== confirmation) throw new Error('The passcodes don’t match.');
+                        await changeLock('passcode', code);
+                        setCreating(false);
+                        setCode('');
+                        setConfirmation('');
+                      },
+                      'Passcode saved',
+                    )
+                  }
+                >
+                  Save
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => {
+                    setCreating(false);
+                    setCode('');
+                    setConfirmation('');
+                  }}
+                >
+                  Cancel
+                </Button>
+              </View>
             </View>
-          )}
-        </View>
-        {!!lock && (
-          <>
-            <Separator />
-            <Button
-              variant="outline"
-              disabled={!ready || pending}
-              onPress={() => void change(null)}
-            >
-              Turn off app lock
-            </Button>
-          </>
-        )}
-        {!!error && (
-          <Typography
-            variant="small"
-            accessibilityLiveRegion="polite"
-            style={{ color: tokens.destructive }}
-          >
-            {error}
-          </Typography>
-        )}
-      </View>
-    </ScrollView>
+          ) : null}
+        </SettingsItem>
+        {lock ? (
+          <SettingsLink
+            icon={<LockKeyhole size={19} color={tone('danger')} />}
+            danger
+            title="Turn off app lock"
+            onPress={
+              busy ? undefined : () => void run('off', () => changeLock(null), 'App lock is off')
+            }
+          />
+        ) : null}
+      </SettingsGroup>
+    </SettingsScreen>
   );
 }

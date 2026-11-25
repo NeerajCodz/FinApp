@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { ArrowLeft, Check } from '@finapp/ui/icons/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, Text, View } from 'react-native';
+import { Check, Palette, Pipette } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { Button, IconButton, Text, Typography } from '@finapp/ui/native';
-import { EntityColorPicker } from '@finapp/ui/finance';
+import {
+  EntityColorPicker,
+  SettingsChoice,
+  SettingsGroup,
+  SettingsHero,
+  SettingsItem,
+  SettingsScreen,
+  useSettingsToneColor,
+} from '@finapp/ui/finance';
 import { accentPalette, isAccentColor, type AccentName } from '@finapp/ui/tokens';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -20,7 +26,7 @@ const accents: { value: AccentName; label: string; color: string }[] = [
 
 export default function AppearanceSettingsScreen() {
   const { appearance, setAppearance, accent, setAccent, tokens } = useTheme();
-  const insets = useSafeAreaInsets();
+  const tone = useSettingsToneColor();
   const { userId } = useLocalSync();
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const profile = profileState.data?.[0];
@@ -48,109 +54,113 @@ export default function AppearanceSettingsScreen() {
       setAccentError('Could not save this accent on this device.');
     }
   }
+  const swatch = isAccentColor(accent)
+    ? accent
+    : (accents.find((option) => option.value === accent)?.color ?? accentPalette.volt);
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
   return (
-    <>
-      <ScrollView
-        style={{ flex: 1, backgroundColor: tokens.background }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 32,
-          gap: 32,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-            <ArrowLeft size={21} color={tokens.foreground} />
-          </IconButton>
-          <Typography variant="title">Appearance</Typography>
-        </View>
-
-        <View style={{ gap: 12 }}>
-          <Typography variant="label">Theme</Typography>
-          <Text style={{ color: tokens.foregroundMuted, maxWidth: 300 }}>
-            Choose the app theme. System follows your device setting.
-          </Text>
-          <View style={{ gap: 8 }}>
-            {(['dark', 'system', 'light'] as const).map((option) => {
-              const selected = appearance === option;
-              const label = option.charAt(0).toUpperCase() + option.slice(1);
-              return (
-                <Button
-                  key={option}
-                  variant={selected ? 'primary' : 'outline'}
-                  onPress={() => setAppearance(option)}
-                  style={{ justifyContent: 'space-between', minHeight: 56 }}
-                >
-                  <Text
-                    style={{
-                      color: selected ? tokens.primaryForeground : tokens.foreground,
-                      fontFamily: 'SpaceGrotesk_500Medium',
-                    }}
-                  >
-                    {label}
-                  </Text>
-                  {!!selected && <Check size={18} color={tokens.primaryForeground} />}
-                </Button>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={{ gap: 12 }}>
-          <Typography variant="label">Accent color</Typography>
-          {accentError ? (
-            <Text accessibilityRole="alert" style={{ color: tokens.destructive }}>
-              {accentError}
-            </Text>
-          ) : null}
-          <Text style={{ color: tokens.foregroundMuted, maxWidth: 320 }}>
-            Choose the color used for primary actions and highlights.
-          </Text>
-          <View style={{ gap: 8 }}>
+    <SettingsScreen title="Appearance" subtitle="Theme and accent colour" onBack={back}>
+      <SettingsHero
+        icon={
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              backgroundColor: swatch,
+              borderWidth: 1,
+              borderColor: tokens.border,
+            }}
+          />
+        }
+        title={`${appearance === 'dark' ? 'Dark' : appearance === 'light' ? 'Light' : 'System'} theme`}
+        description="Changes apply right away and follow you to your other devices."
+      />
+      <SettingsGroup title="Theme">
+        <SettingsChoice
+          title="Mode"
+          description="System follows your phone’s setting"
+          value={appearance}
+          options={[
+            { value: 'dark', label: 'Dark' },
+            { value: 'system', label: 'System' },
+            { value: 'light', label: 'Light' },
+          ]}
+          onChange={(next) => setAppearance(next)}
+        />
+      </SettingsGroup>
+      <SettingsGroup title="Accent colour">
+        <SettingsItem
+          icon={<Palette size={19} color={tone('primary')} />}
+          tone="primary"
+          title="Presets"
+        >
+          <View
+            accessibilityRole="radiogroup"
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+          >
             {accents.map((option) => {
               const selected = accent === option.value;
+              // theme-exempt: a dark check stays readable on the white swatch
+              const checkColor = option.value === 'white' ? '#000000' : tokens.primaryForeground;
               return (
-                <Button
+                <Pressable
                   key={option.value}
-                  variant={selected ? 'primary' : 'outline'}
-                  accessibilityState={{ selected }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  accessibilityLabel={option.label}
                   onPress={() => void chooseAccent(option.value)}
-                  style={{ justifyContent: 'space-between', minHeight: 56 }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingVertical: 6,
+                    paddingLeft: 6,
+                    paddingRight: 12,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: selected ? tokens.primary : tokens.borderSubtle,
+                    backgroundColor: selected ? tokens.surfaceSubtle : 'transparent',
+                  }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        backgroundColor: option.color,
-                        borderWidth: option.value === 'white' ? 1 : 0,
-                        borderColor: tokens.border,
-                      }}
-                    />
-                    <Text
-                      style={{ color: selected ? tokens.primaryForeground : tokens.foreground }}
-                    >
-                      {option.label}
-                    </Text>
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: option.color,
+                      borderWidth: option.value === 'white' ? 1 : 0,
+                      borderColor: tokens.border,
+                    }}
+                  >
+                    {selected ? <Check size={13} strokeWidth={3} color={checkColor} /> : null}
                   </View>
-                  {!!selected && <Check size={18} color={tokens.primaryForeground} />}
-                </Button>
+                  <Text style={{ color: tokens.foreground, fontSize: 13 }}>{option.label}</Text>
+                </Pressable>
               );
             })}
-            <EntityColorPicker
-              value={
-                isAccentColor(accent)
-                  ? accent
-                  : accents.find((option) => option.value === accent)?.color
-              }
-              onChange={(color) => void chooseAccent(color ?? accentPalette.volt)}
-              label={isAccentColor(accent) ? 'Change custom accent' : 'Choose custom accent'}
-            />
           </View>
-        </View>
-      </ScrollView>
-    </>
+        </SettingsItem>
+        <SettingsItem
+          icon={<Pipette size={19} color={tone('violet')} />}
+          tone="violet"
+          title="Custom colour"
+          description={isAccentColor(accent) ? `Using ${accent}` : 'Pick any colour'}
+        >
+          <EntityColorPicker
+            value={swatch}
+            onChange={(color) => void chooseAccent(color ?? accentPalette.volt)}
+            label={isAccentColor(accent) ? 'Change custom accent' : 'Choose custom accent'}
+          />
+        </SettingsItem>
+      </SettingsGroup>
+      {accentError ? (
+        <SettingsGroup>
+          <SettingsItem title="Couldn’t save" description={accentError} />
+        </SettingsGroup>
+      ) : null}
+    </SettingsScreen>
   );
 }

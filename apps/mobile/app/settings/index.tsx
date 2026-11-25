@@ -57,7 +57,7 @@ export default function SettingsHubScreen() {
           icon={<ShieldCheck size={19} color={tone('positive')} />}
           tone="positive"
           title="Security"
-          description="Password, two-factor and app lock"
+          description="Two-factor, devices, sign-in alerts and app lock"
           onPress={go('/settings/security')}
         />
       </SettingsGroup>
@@ -122,7 +122,7 @@ export default function SettingsHubScreen() {
         <SettingsLink
           icon={<RefreshCw size={19} color={tone('positive')} />}
           tone="positive"
-          title="Local sync"
+          title="Sync"
           value={syncWindow === 'all' ? 'All history' : `${syncWindow} days`}
           onPress={go('/settings/sync')}
         />
@@ -136,7 +136,8 @@ export default function SettingsHubScreen() {
         <SettingsLink
           icon={<Eye size={19} color={tone('primary')} />}
           tone="primary"
-          title="Privacy and export"
+          title="Privacy"
+          description="Who can find you, export and account"
           onPress={go('/settings/privacy')}
         />
         <SettingsLink

@@ -14,6 +14,7 @@ import type { AccentValue } from '@finapp/ui/tokens';
 import Storage from 'expo-sqlite/kv-store';
 import { api } from '@convex/_generated/api';
 import { FinaiLauncher } from '@/components/FinaiLauncher';
+import { useSessionLabel } from '@/hooks/useSessionLabel';
 import { TAB_BAR_HEIGHT } from '@/lib/tabBar';
 import { UpdateRequiredNotice } from '@/components/UpdateRequiredNotice';
 import { secureTokenStorage } from '@/lib/auth/session';
@@ -76,6 +77,7 @@ function AccentSync({ children }: { children: React.ReactNode }) {
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
+  useSessionLabel(isAuthenticated);
   const { userId: localUserId } = useLocalSync();
   const connection = useConvexConnectionState();
   const router = useRouter();
