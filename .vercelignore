@@ -1,3 +1,21 @@
-# Local agent worktrees and tooling are never part of a deploy.
+# Vercel reads only this file when it exists, so it mirrors .gitignore plus local agent folders.
 .claude/
+.agents/
+
+node_modules/
+apps/mobile/node_modules/
+apps/mobile/.expo/
+apps/mobile/dist/
+.expo/
+.env
+.env.*
+!.env.example
+*.key
+.tmp-*
+artifacts/
+apps/web/.next/
+apps/web/out/
+apps/web/node_modules/
+
+# Local agent skills (skills-lock.json stays tracked)
 .agents/
