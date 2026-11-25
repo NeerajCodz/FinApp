@@ -1,4 +1,5 @@
 import { api } from '@convex/_generated/api';
+import { isTokenEndpointAuthMethod } from '@convex/shared/mcpClients';
 import { convexClient } from '@/lib/mcp/oauth';
 
 export const runtime = 'nodejs';
@@ -43,11 +44,15 @@ export async function POST(request: Request) {
     !Array.isArray(metadata.redirect_uris) ||
     metadata.redirect_uris.some((uri) => typeof uri !== 'string') ||
     (metadata.token_endpoint_auth_method !== undefined &&
-      metadata.token_endpoint_auth_method !== 'none') ||
+      !isTokenEndpointAuthMethod(metadata.token_endpoint_auth_method)) ||
+    (metadata.token_endpoint_auth_method === 'private_key_jwt' &&
+      typeof metadata.jwks_uri !== 'string') ||
     (metadata.grant_types !== undefined &&
       (!Array.isArray(metadata.grant_types) ||
         !metadata.grant_types.includes('authorization_code') ||
-        metadata.grant_types.some((grant) => grant !== 'authorization_code'))) ||
+        metadata.grant_types.some(
+          (grant) => grant !== 'authorization_code' && grant !== 'refresh_token',
+        ))) ||
     (metadata.response_types !== undefined &&
       (!Array.isArray(metadata.response_types) ||
         !metadata.response_types.includes('code') ||
@@ -59,6 +64,10 @@ export async function POST(request: Request) {
     const client = await convexClient().mutation(api.mcpOAuth.registerClient, {
       clientName,
       redirectUris: metadata.redirect_uris,
+      ...(isTokenEndpointAuthMethod(metadata.token_endpoint_auth_method)
+        ? { tokenEndpointAuthMethod: metadata.token_endpoint_auth_method }
+        : {}),
+      ...(typeof metadata.jwks_uri === 'string' ? { jwksUri: metadata.jwks_uri } : {}),
     });
     return Response.json(client, {
       status: 201,

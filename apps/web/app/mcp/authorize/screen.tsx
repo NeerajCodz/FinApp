@@ -6,7 +6,7 @@ import { useConvexAuth, useAuthToken } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Button, ThemeProvider } from '@finapp/ui/web';
-import { authorizationDenialUrl } from '@/lib/mcp/authorizationCallback';
+import { authorizationDenialUrl, currentIssuer } from '@/lib/mcp/authorizationCallback';
 
 type AuthorizationRequest = {
   clientId: string;
@@ -115,6 +115,7 @@ export function McpAuthorizeScreen() {
       const callback = new URL(request.redirectUri);
       callback.searchParams.set('code', code);
       callback.searchParams.set('state', request.state);
+      callback.searchParams.set('iss', currentIssuer());
       window.location.assign(callback.toString());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not authorize this connection.');
