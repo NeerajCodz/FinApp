@@ -59,7 +59,7 @@ jobs:
           args=(-f tag_name="$tag")
           [ -n "$previous" ] && args+=(-f previous_tag_name="$previous")
           if prs=$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" "${args[@]}" --jq .body); then
-            { echo; echo '## Pull requests'; echo; echo "$prs" | sed '1{/^## /d}'; } >> notes.md
+            { echo; echo '## Pull requests'; echo; echo "$prs" | sed '1{/^## /d}' | node scripts/release-notes.mjs --escape; } >> notes.md
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then

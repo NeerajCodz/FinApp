@@ -17,6 +17,32 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = process.argv[2] ?? join(root, 'version.json');
+/**
+ * Wraps `@name` in backticks outside code spans so release notes never mention (link, notify or
+ * credit) a GitHub account by accident — e.g. the `@finai` chat mention. Emails are left alone,
+ * and GitHub's own "by @author in #123" credits are kept.
+ */
+export function escapeMentions(markdown) {
+  return markdown
+    .split(/(`[^`\n]*`)/)
+    .map((part, index) =>
+      index % 2 === 1
+        ? part
+        : part.replace(/(^|[^\w`])@([A-Za-z0-9][\w-]*)/g, (match, before, name, offset, text) =>
+            /\bby $/.test(text.slice(0, offset + before.length)) &&
+            /^ in /.test(text.slice(offset + match.length))
+              ? match
+              : `${before}\`@${name}\``,
+          ),
+    )
+    .join('');
+}
+
+if (process.argv[2] === '--escape') {
+  process.stdout.write(escapeMentions(readFileSync(0, 'utf8')));
+  process.exit(0);
+}
+
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 
 /** The body of `## <version>` in a changelog, without the heading ('' when missing). */

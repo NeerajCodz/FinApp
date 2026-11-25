@@ -62,7 +62,7 @@ and mobile.
   - "About you" and custom instructions FinAI keeps in mind.
   - What FinAI can read (money, budgets and goals, groups, people). Turning one off removes those
     tools.
-  - Whether it may prepare changes, answer @finai in chats and auto-categorise receipts.
+  - Whether it may prepare changes, answer `@finai` in chats and auto-categorise receipts.
   - Whether to show the floating button and the step list.
   - A button to clear all FinAI history.
 - **API keys (bring your own key)**: run FinAI on your own OpenAI, Anthropic, Google Gemini,
