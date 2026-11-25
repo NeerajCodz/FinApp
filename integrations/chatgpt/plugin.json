@@ -1,0 +1,33 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "finapp",
+  "version": "1.8.0",
+  "description": "Track spending, budgets, goals and shared group expenses in Finapp from ChatGPT.",
+  "homepage": "https://fin.neeraj.fyi",
+  "license": "UNLICENSED",
+  "keywords": ["finance", "budgets", "expenses", "split", "goals"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Finapp",
+        "shortDescription": "Your money, budgets and splits",
+        "longDescription": "Finapp keeps your personal finances and shared expenses in one place. From ChatGPT you can review balances and recent activity, see how budgets and goals are tracking, record transactions, and check or settle what friends and groups owe. Every write is limited to the permissions you approve when you connect, and you can revoke access at any time from the Finapp MCP dashboard.",
+        "developerName": "Finapp",
+        "category": "Finance",
+        "logo": "./assets/logo.png",
+        "composerIcon": "./assets/composer-icon.png",
+        "brandColor": "#3D7A00",
+        "brandColorDark": "#B7FF4A",
+        "websiteURL": "https://fin.neeraj.fyi",
+        "supportURL": "https://fin.neeraj.fyi/about",
+        "privacyPolicyURL": "https://fin.neeraj.fyi/privacy",
+        "termsOfServiceURL": "https://fin.neeraj.fyi/privacy",
+        "defaultPrompt": [
+          "How much did I spend this month?",
+          "Am I on track with my budgets?",
+          "Who owes me money in my groups?"
+        ]
+      }
+    }
+  }
+}
