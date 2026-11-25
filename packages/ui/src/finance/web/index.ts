@@ -300,3 +300,12 @@ export {
   SettingsItem,
   SettingsField,
 } from './SettingsKit';
+export {
+  DEFAULT_LOCK_TIMEOUT,
+  LOCK_TIMEOUT_OPTIONS,
+  lockLastActiveKey,
+  lockTimedOut,
+  lockTimeoutKey,
+  parseLockTimeout,
+  type LockTimeoutMinutes,
+} from '../lockTimeout';

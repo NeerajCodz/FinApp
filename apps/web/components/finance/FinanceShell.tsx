@@ -208,7 +208,6 @@ export function FinanceShell({ children }: { children: ReactNode }) {
           </>
         }
         mobileHeaderAction={<HeaderStatusActions unread={unreadNotifications} />}
-        brandAction={<HeaderStatusActions unread={unreadNotifications} />}
         mobileNavigation={
           <MobileFinanceNav
             onAdd={openQuickAdd}

@@ -426,7 +426,6 @@ export default function ActivityPage() {
         onQueryChange={setQuery}
         onClearQuery={() => setQuery('')}
         onOpenAnalytics={() => router.push('/analytics')}
-        onAddTransaction={() => router.push('/transaction/new')}
       />
       <ActivityFilters
         rangeLabel={rangeLabel}
@@ -521,7 +520,6 @@ export default function ActivityPage() {
         />
         <aside className="activity-sidebar">
           <ActivityActions
-            onAddTransaction={() => router.push('/transaction/new')}
             onOpenTransactions={() => router.push('/transactions')}
             onOpenAnalytics={() => router.push('/analytics')}
           />
