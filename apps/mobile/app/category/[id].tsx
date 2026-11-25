@@ -248,7 +248,7 @@ export default function CategoryDetailScreen() {
     }
   }
 
-  async function archive() {
+  async function archive(deleteTransactions = false) {
     if (!userId || !category || !categoryLocalId || !categoryPayloadId) return;
     setPending(true);
     setError('');
@@ -264,7 +264,10 @@ export default function CategoryDetailScreen() {
         'category',
         'category.archive',
         { ...category, archivedAt: Date.now() },
-        { categoryId: categoryPayloadId },
+        {
+          categoryId: categoryPayloadId,
+          ...(deleteTransactions ? { deleteTransactions: true } : {}),
+        },
         {
           recordId: categoryLocalId,
           dependencies:
@@ -383,7 +386,7 @@ export default function CategoryDetailScreen() {
       onClearLimit={() => void clearLimit()}
       onToggleDefault={(type) => void toggleDefault(type)}
       onRequestArchive={() => setConfirmingArchive(true)}
-      onConfirmArchive={() => void archive()}
+      onConfirmArchive={(deleteTransactions) => void archive(deleteTransactions)}
       onCancelArchive={() => setConfirmingArchive(false)}
     />
   );

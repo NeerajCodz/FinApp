@@ -26,7 +26,7 @@ export type HomeDashboardProps = {
   onSearchChange: (value: string) => void;
   onAccountChange: (id: string) => void;
   onChooseDate: () => void;
-  onOpenSync: () => void;
+  onOpenSync?: () => void;
   syncLabel?: string;
   syncIcon?: ReactNode;
   notificationCount?: number;

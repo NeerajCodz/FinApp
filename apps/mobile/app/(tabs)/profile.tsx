@@ -6,14 +6,14 @@ import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvex, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Bot, KeyRound, PlugZap } from 'lucide-react-native';
+import { Bot, KeyRound, PlugZap, Trash2 as Trash } from 'lucide-react-native';
 import { unregisterPush } from '@/lib/push';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
 import { type LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Avatar, Button, IconButton, Sheet, Text, Typography } from '@finapp/ui/native';
+import { Avatar, Button, Sheet, Text, Typography } from '@finapp/ui/native';
 import {
   resolveDefaultCurrency,
   SettingsGroup,
@@ -23,11 +23,9 @@ import {
 } from '@finapp/ui/finance';
 import {
   Info,
-  ArrowLeft,
   Bell,
   CaretRight,
   ChartLineUp,
-  Coins,
   CurrencyDollar,
   Gear,
   NotePencil,
@@ -75,10 +73,13 @@ function ProfileTile({
       onPress={onPress}
       style={{
         width: '48.5%',
-        minHeight: 126,
-        padding: 16,
-        borderRadius: 18,
-        justifyContent: 'space-between',
+        minHeight: 58,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
         backgroundColor: tokens.surfaceSubtle,
         borderWidth: 1,
         borderColor: tokens.borderSubtle,
@@ -86,22 +87,19 @@ function ProfileTile({
     >
       <View
         style={{
-          width: 38,
-          height: 38,
-          borderRadius: 12,
+          width: 36,
+          height: 36,
+          borderRadius: 11,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: tokens.controlDisabledBackground,
+          backgroundColor: `${tokens.primary}1F`,
         }}
       >
-        <Icon size={19} color={tokens.primary} />
+        <Icon size={18} color={tokens.primary} />
       </View>
-      <View style={{ gap: 2 }}>
-        <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
-          {label}
-        </Typography>
-        <Typography variant="caption">{description}</Typography>
-      </View>
+      <Typography variant="bodyLarge" numberOfLines={1} style={{ flex: 1, fontSize: 15 }}>
+        {label}
+      </Typography>
     </TouchableOpacity>
   );
 }
@@ -211,15 +209,6 @@ export default function ProfileScreen() {
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <IconButton
-              label="Go back"
-              variant="ghost"
-              onPress={() =>
-                router.canGoBack() ? router.back() : router.replace('/(tabs)' as never)
-              }
-            >
-              <ArrowLeft size={21} color={tokens.foreground} />
-            </IconButton>
             <Typography variant="title">Profile</Typography>
           </View>
           <SettingsIconButton label="Settings" onPress={() => router.push('/settings' as never)}>
@@ -313,10 +302,10 @@ export default function ProfileScreen() {
               onPress={() => router.push('/categories' as never)}
             />
             <ProfileTile
-              icon={Coins}
-              label="Budget"
-              description="Limits and progress"
-              onPress={() => router.push('/budgets' as never)}
+              icon={Trash}
+              label="Trash"
+              description="Deleted items you can restore"
+              onPress={() => router.push('/trash' as never)}
             />
             <ProfileTile
               icon={ChartLineUp}

@@ -122,3 +122,41 @@ export const setEnabled = mutation({
     return rule._id;
   },
 });
+
+/** Moves a recurring rule to Trash: it stops running until it's restored. */
+export const remove = mutation({
+  args: { ruleId: v.id('recurringRules'), clientMutationId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'recurring.remove',
+    );
+    if (replay.found) return replay.result;
+    const rule = await ctx.db.get(args.ruleId);
+    if (!rule || rule.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
+    const now = Date.now();
+    const patch = {
+      archivedAt: now,
+      enabled: false,
+      enabledBeforeTrash: rule.archivedAt === undefined ? rule.enabled : rule.enabledBeforeTrash,
+      updatedAt: now,
+    };
+    await ctx.db.patch(rule._id, patch);
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'recurring.remove',
+      rule._id,
+      'recurringRules',
+      String(rule._id),
+      now,
+      { ...rule, ...patch },
+    );
+    return rule._id;
+  },
+});

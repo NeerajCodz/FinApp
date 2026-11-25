@@ -38,7 +38,8 @@ export default function RecurringScreen() {
   const accountsState = useLocalRecords<Account>(userId, 'account');
   const [pending, setPending] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
-  const rules = rulesState.data ?? [];
+  // Rules in Trash are hidden here (restore them from Trash).
+  const rules = (rulesState.data ?? []).filter((rule) => rule.archivedAt === undefined);
   const accounts = accountsState.data ?? [];
 
   async function create(values: RecurringCreateValues): Promise<boolean> {

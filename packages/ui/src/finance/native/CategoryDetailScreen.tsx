@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, TouchableOpacity, View, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import {
   ArrowLeft,
@@ -80,7 +80,8 @@ export type CategoryDetailScreenProps = {
   onClearLimit: () => void;
   onToggleDefault: (type: 'expense' | 'income') => void;
   onRequestArchive: () => void;
-  onConfirmArchive: () => void;
+  /** `deleteTransactions`: also move the category's transactions to Trash. */
+  onConfirmArchive: (deleteTransactions: boolean) => void;
   onCancelArchive: () => void;
 };
 type DetailPeriod = 'week' | 'month' | 'year';
@@ -112,6 +113,7 @@ export function CategoryDetailScreen({
   onConfirmArchive,
   onCancelArchive,
 }: CategoryDetailScreenProps) {
+  const [deleteWithTransactions, setDeleteWithTransactions] = React.useState(false);
   const { tokens } = useTheme();
   const [period, setPeriod] = useState<DetailPeriod>('month');
   const [chartType, setChartType] = useState<'expense' | 'income'>('expense');
@@ -756,18 +758,82 @@ export function CategoryDetailScreen({
           </View>
           {category.archivedAt === undefined && !category.isSystem && (
             <Button variant="destructive" onPress={onRequestArchive}>
-              Archive category
+              Delete category
             </Button>
           )}
         </>
       )}
-      <Sheet visible={confirmingArchive} title="Archive category?" onClose={onCancelArchive}>
+      <Sheet visible={confirmingArchive} title="Delete category?" onClose={onCancelArchive}>
         <Typography variant="small" style={{ marginBottom: 12, color: tokens.foregroundMuted }}>
-          Past transactions remain in your history. This category will no longer appear in new
-          transactions.
+          {category?.name ?? 'This category'} moves to Trash, where you can restore it.
         </Typography>
-        <Button variant="destructive" disabled={pending} onPress={onConfirmArchive}>
-          Archive {category?.name ?? 'category'}
+        {[
+          {
+            value: false,
+            label: 'Keep its transactions',
+            note: 'They stay in your history, uncategorised',
+          },
+          {
+            value: true,
+            label: 'Move its transactions to Trash',
+            note: 'Restored with the category',
+          },
+        ].map((option) => {
+          const selected = deleteWithTransactions === option.value;
+          return (
+            <Pressable
+              key={String(option.value)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected }}
+              onPress={() => setDeleteWithTransactions(option.value)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                padding: 12,
+                marginBottom: 8,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: selected ? tokens.primary : tokens.borderSubtle,
+              }}
+            >
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: selected ? tokens.primary : tokens.foregroundSubtle,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {selected ? (
+                  <View
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: tokens.primary,
+                    }}
+                  />
+                ) : null}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Typography variant="bodyLarge" style={{ fontSize: 15 }}>
+                  {option.label}
+                </Typography>
+                <Typography variant="caption">{option.note}</Typography>
+              </View>
+            </Pressable>
+          );
+        })}
+        <Button
+          variant="destructive"
+          disabled={pending}
+          onPress={() => onConfirmArchive(deleteWithTransactions)}
+        >
+          Delete {category?.name ?? 'category'}
         </Button>
         <Button variant="outline" onPress={onCancelArchive}>
           Keep category

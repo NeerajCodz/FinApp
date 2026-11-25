@@ -228,7 +228,7 @@ export default function PersonalCategoryDetailPage() {
       { amountMinor: null },
     );
   }
-  async function archive() {
+  async function archive(deleteTransactions = false) {
     if (!userId || !category || !categoryMutationId || pending || category.isSystem) return;
     setFormError(null);
     try {
@@ -243,7 +243,10 @@ export default function PersonalCategoryDetailPage() {
         'category',
         'category.archive',
         { ...category, archivedAt: Date.now() },
-        { categoryId: categoryMutationId },
+        {
+          categoryId: categoryMutationId,
+          ...(deleteTransactions ? { deleteTransactions: true } : {}),
+        },
         {
           recordId: idOf(category),
           dependencies: categoryDependency ? [categoryDependency] : [],
@@ -362,7 +365,7 @@ export default function PersonalCategoryDetailPage() {
       onClearLimit={() => void clearLimit()}
       onToggleDefault={(type) => void toggleDefault(type)}
       onRequestArchive={() => setConfirmingArchive(true)}
-      onConfirmArchive={() => void archive()}
+      onConfirmArchive={(deleteTransactions) => void archive(deleteTransactions)}
       onCancelArchive={() => setConfirmingArchive(false)}
     />
   );

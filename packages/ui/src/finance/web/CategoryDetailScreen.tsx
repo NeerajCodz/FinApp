@@ -65,7 +65,8 @@ export type CategoryDetailScreenProps = {
   onClearLimit: () => void;
   onToggleDefault: (type: 'expense' | 'income') => void;
   onRequestArchive: () => void;
-  onConfirmArchive: () => void;
+  /** `deleteTransactions`: also move the category's transactions to Trash. */
+  onConfirmArchive: (deleteTransactions: boolean) => void;
   onCancelArchive: () => void;
 };
 
@@ -124,6 +125,7 @@ export function CategoryDetailScreen({
   onConfirmArchive,
   onCancelArchive,
 }: CategoryDetailScreenProps) {
+  const [deleteWithTransactions, setDeleteWithTransactions] = React.useState(false);
   const [period, setPeriod] = useState<DetailPeriod>('month');
   const [chartType, setChartType] = useState<'expense' | 'income'>('expense');
   const now = new Date();
@@ -629,18 +631,43 @@ export function CategoryDetailScreen({
           </section>
           {category.archivedAt === undefined && !category.isSystem && (
             <Button variant="destructive" onPress={onRequestArchive}>
-              Archive category
+              Delete category
             </Button>
           )}
         </>
       )}
-      <Sheet visible={confirmingArchive} title="Archive category?" onClose={onCancelArchive}>
+      <Sheet visible={confirmingArchive} title="Delete category?" onClose={onCancelArchive}>
         <p className={styles.archiveCopy}>
-          Past transactions remain in your history. This category will no longer appear in new
-          transactions.
+          {category?.name ?? 'This category'} moves to Trash, where you can restore it. It won’t be
+          offered for new transactions.
         </p>
-        <Button variant="destructive" disabled={pending} onPress={onConfirmArchive}>
-          Archive {category?.name ?? 'category'}
+        <fieldset className={styles.archiveChoice}>
+          <legend>Its {transactions.length ? `${transactions.length} ` : ''}transactions</legend>
+          <label>
+            <input
+              type="radio"
+              name="category-delete-mode"
+              checked={!deleteWithTransactions}
+              onChange={() => setDeleteWithTransactions(false)}
+            />
+            <span>Keep them (they stay in your history, uncategorised)</span>
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="category-delete-mode"
+              checked={deleteWithTransactions}
+              onChange={() => setDeleteWithTransactions(true)}
+            />
+            <span>Move them to Trash too (restored with the category)</span>
+          </label>
+        </fieldset>
+        <Button
+          variant="destructive"
+          disabled={pending}
+          onPress={() => onConfirmArchive(deleteWithTransactions)}
+        >
+          Delete {category?.name ?? 'category'}
         </Button>
         <Button variant="outline" onPress={onCancelArchive}>
           Keep category

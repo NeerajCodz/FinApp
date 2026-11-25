@@ -8,6 +8,7 @@ export const notificationTypes = [
   'settlement',
   'security',
   'sync',
+  'social',
 ] as const;
 export type NotificationType = (typeof notificationTypes)[number];
 export type NotificationPreferences = Record<NotificationType, boolean>;
@@ -22,6 +23,7 @@ export const defaultNotificationPreferences: NotificationPreferences = {
   settlement: true,
   security: true,
   sync: true,
+  social: true,
 };
 
 /**
@@ -62,6 +64,7 @@ export const notificationTypeLabels: Record<NotificationType, string> = {
   settlement: 'Settlements & reminders',
   security: 'Security',
   sync: 'Sync problems',
+  social: 'Friends & people',
 };
 
 export type NotificationRoute = { type: string; entityType?: string; entityId?: string };
@@ -73,6 +76,10 @@ export function paymentReminderEntityId(groupId: string, creditorId: string): st
 
 export function notificationRoute(notification: NotificationRoute): string {
   if (notification.entityType === 'groupInvitation') return '/groups?invitations=1';
+  if (notification.entityType === 'friendRequest') return '/people';
+  if (notification.entityType === 'person' && notification.entityId)
+    return `/network/person/${encodeURIComponent(notification.entityId)}`;
+  if (notification.entityType === 'mcpConnection') return '/settings/ai/mcp';
   if (notification.entityType === 'recurring') return '/recurring';
   if (notification.entityType === 'sync') return '/settings/sync';
   if (notification.entityType === 'security') return '/settings/security';

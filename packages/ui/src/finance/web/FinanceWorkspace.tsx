@@ -11,6 +11,7 @@ export function FinanceWorkspace({
   brandLink,
   mobileNavigation,
   mobileHeaderAction,
+  brandAction,
   onAdd,
 }: {
   children: ReactNode;
@@ -19,12 +20,17 @@ export function FinanceWorkspace({
   mobileNavigation?: ReactNode;
   /** Top-right of the phone header (e.g. the profile avatar). */
   mobileHeaderAction?: ReactNode;
+  /** Next to the brand in the desktop sidebar (e.g. sync and notifications). */
+  brandAction?: ReactNode;
   onAdd?: () => void;
 }) {
   return (
     <div className={styles.workspace}>
       <aside className={styles.sidebar} aria-label="Finapp">
-        <div className={styles.brand}>{brandLink ?? <FinanceBrand />}</div>
+        <div className={styles.brand}>
+          {brandLink ?? <FinanceBrand />}
+          {brandAction ? <span className={styles.brandAction}>{brandAction}</span> : null}
+        </div>
         <p className={styles.navigationLabel}>YOUR MONEY</p>
         <nav className={styles.navigation} aria-label="Main navigation">
           {navigation}

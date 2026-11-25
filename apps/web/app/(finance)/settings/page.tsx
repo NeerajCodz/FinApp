@@ -15,6 +15,7 @@ import {
   PlugZap,
   RefreshCw,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react';
 import { useTheme } from '@finapp/ui/web';
 import { SettingsGroup, SettingsLink, SettingsShell } from '@finapp/ui/finance';
@@ -128,6 +129,13 @@ export default function SettingsPage() {
           description="How much history this browser keeps offline"
           value={syncWindow === 'all' ? 'All history' : `${syncWindow} days`}
           onPress={() => router.push('/settings/sync')}
+        />
+        <SettingsLink
+          icon={<Trash2 size={19} />}
+          tone="danger"
+          title="Trash"
+          description="Restore deleted items and choose when they’re cleared"
+          onPress={() => router.push('/trash')}
         />
         <SettingsLink
           icon={<Eye size={19} />}
