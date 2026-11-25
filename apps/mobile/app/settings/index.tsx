@@ -1,115 +1,134 @@
 import React from 'react';
-import { ScrollView, View } from 'react-native';
-import {
-  ArrowLeft,
-  Bell,
-  ClockCounterClockwise,
-  CurrencyDollar,
-  Eye,
-  LockKey,
-  Palette,
-  Info,
-  UserCircle,
-} from '@finapp/ui/icons/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import {
+  Bell,
+  Bot,
+  CircleUserRound,
+  Coins,
+  Eye,
+  Info,
+  KeyRound,
+  Palette,
+  PlugZap,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react-native';
+import {
+  SettingsGroup,
+  SettingsLink,
+  SettingsScreen,
+  useSettingsToneColor,
+} from '@finapp/ui/finance';
+import { useTheme } from '@finapp/ui/native';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
-import { SettingsRow } from '@finapp/ui/finance';
-import { IconButton, Separator, Typography } from '@finapp/ui/native';
-import { useTheme } from '@finapp/ui/native';
 
-export default function SettingsScreen() {
-  const { userId, syncWindow } = useLocalSync();
+const back = () =>
+  router.canGoBack() ? router.back() : router.navigate('/(tabs)/profile' as never);
+
+export default function SettingsHubScreen() {
+  const { userId, isConnected, syncWindow } = useLocalSync();
+  const live = Boolean(userId && isConnected);
   const { data: profiles } = useLocalRecords<Record<string, unknown>>(userId, 'profile');
   const profile = profiles?.[0];
-  const syncWindowLabel = syncWindow === 'all' ? 'All history' : `${syncWindow} days`;
+  const { appearance } = useTheme();
+  const tone = useSettingsToneColor();
+  const finai = useQuery(api.ai.settings.get, live ? {} : 'skip');
+  const grants = useQuery(api.mcpOAuth.listGrants, live ? { limit: 50 } : 'skip');
+  const active = grants?.filter((grant) => grant.revokedAt === undefined).length ?? 0;
   const currency = typeof profile?.defaultCurrency === 'string' ? profile.defaultCurrency : 'INR';
-  const { tokens, appearance } = useTheme();
-  const insets = useSafeAreaInsets();
+  const go = (path: string) => () => router.push(path as never);
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 32,
-        gap: 32,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <IconButton label="Go back" variant="ghost" onPress={() => router.back()}>
-          <ArrowLeft size={21} color={tokens.foreground} />
-        </IconButton>
-        <Typography variant="title">Settings</Typography>
-      </View>
+    <SettingsScreen title="Settings" subtitle="Account, preferences, AI and privacy" onBack={back}>
+      <SettingsGroup title="Account">
+        <SettingsLink
+          icon={<CircleUserRound size={19} color={tone('primary')} />}
+          tone="primary"
+          title="Edit profile"
+          description="Name, username, photo and contact details"
+          onPress={go('/profile/edit')}
+        />
+        <SettingsLink
+          icon={<ShieldCheck size={19} color={tone('positive')} />}
+          tone="positive"
+          title="Security"
+          description="Password, two-factor and app lock"
+          onPress={go('/settings/security')}
+        />
+      </SettingsGroup>
 
-      <View>
-        <Typography variant="label" style={{ marginBottom: 8 }}>
-          General
-        </Typography>
-        <SettingsRow
-          label="Appearance"
+      <SettingsGroup title="AI">
+        <SettingsLink
+          icon={<Bot size={19} color={tone('violet')} />}
+          tone="violet"
+          title="FinAI"
+          description="Tone, language, data access, actions and chat mentions"
+          value={finai ? (finai.enabled ? 'On' : 'Off') : undefined}
+          onPress={go('/settings/ai/finai')}
+        />
+        <SettingsLink
+          icon={<KeyRound size={19} color={tone('warning')} />}
+          tone="warning"
+          title="API keys"
+          description="Bring your own model key"
+          onPress={go('/settings/ai/keys')}
+        />
+        <SettingsLink
+          icon={<PlugZap size={19} color={tone('info')} />}
+          tone="info"
+          title="MCP connections"
+          description="ChatGPT, Claude and other AI apps"
+          value={grants ? `${active} active` : undefined}
+          onPress={go('/settings/ai/mcp')}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Preferences">
+        <SettingsLink
+          icon={<Palette size={19} color={tone('violet')} />}
+          tone="violet"
+          title="Appearance"
           value={`${appearance.charAt(0).toUpperCase()}${appearance.slice(1)}`}
-          leadingIcon={<Palette size={19} color={tokens.primary} />}
-          onPress={() => router.push('/settings/appearance' as never)}
+          onPress={go('/settings/appearance')}
         />
-        <Separator />
-        <SettingsRow
-          label="Edit profile"
-          leadingIcon={<UserCircle size={19} color={tokens.primary} />}
-          onPress={() => router.push('/profile/edit' as never)}
-        />
-        <Separator />
-        <SettingsRow
-          label="Currency"
+        <SettingsLink
+          icon={<Coins size={19} color={tone('warning')} />}
+          tone="warning"
+          title="Currency"
           value={currency}
-          leadingIcon={<CurrencyDollar size={19} color={tokens.primary} />}
-          onPress={() => router.push('/settings/currency' as never)}
+          onPress={go('/settings/currency')}
         />
-      </View>
+        <SettingsLink
+          icon={<Bell size={19} color={tone('info')} />}
+          tone="info"
+          title="Notifications"
+          onPress={go('/settings/notifications')}
+        />
+      </SettingsGroup>
 
-      <View>
-        <Typography variant="label" style={{ marginBottom: 8 }}>
-          Preferences
-        </Typography>
-        <SettingsRow
-          label="Notifications"
-          leadingIcon={<Bell size={19} color={tokens.primary} />}
-          onPress={() => router.push('/settings/notifications' as never)}
+      <SettingsGroup title="Data and privacy">
+        <SettingsLink
+          icon={<RefreshCw size={19} color={tone('positive')} />}
+          tone="positive"
+          title="Local sync"
+          value={syncWindow === 'all' ? 'All history' : `${syncWindow} days`}
+          onPress={go('/settings/sync')}
         />
-        <Separator />
-        <SettingsRow
-          label="Security"
-          leadingIcon={<LockKey size={19} color={tokens.primary} />}
-          onPress={() => router.push('/settings/security' as never)}
+        <SettingsLink
+          icon={<Eye size={19} color={tone('primary')} />}
+          tone="primary"
+          title="Privacy and export"
+          onPress={go('/settings/privacy')}
         />
-      </View>
-
-      <View>
-        <Typography variant="label" style={{ marginBottom: 8 }}>
-          Data
-        </Typography>
-        <SettingsRow
-          label="Local sync"
-          value={syncWindowLabel}
-          leadingIcon={<ClockCounterClockwise size={19} color={tokens.primary} />}
-          onPress={() => router.push('/settings/sync' as never)}
+        <SettingsLink
+          icon={<Info size={19} color={tone()} />}
+          title="About"
+          description="Version, updates and diagnostics"
+          onPress={go('/about')}
         />
-        <Separator />
-        <SettingsRow
-          label="Privacy and export"
-          leadingIcon={<Eye size={19} color={tokens.primary} />}
-          onPress={() => router.push('/settings/privacy' as never)}
-        />
-      </View>
-      <View>
-        <SettingsRow
-          label="About"
-          leadingIcon={<Info size={19} color={tokens.primary} />}
-          onPress={() => router.push('/about' as never)}
-        />
-      </View>
-    </ScrollView>
+      </SettingsGroup>
+    </SettingsScreen>
   );
 }

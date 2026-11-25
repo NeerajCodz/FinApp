@@ -4,7 +4,9 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useConvex } from 'convex/react';
+import { useConvex, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { Bot, KeyRound, PlugZap } from 'lucide-react-native';
 import { unregisterPush } from '@/lib/push';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import { commitLocalWrite } from '@/local/commands';
@@ -12,7 +14,13 @@ import { type LocalRecord } from '@/local/repository';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar, Button, IconButton, Sheet, Text, Typography } from '@finapp/ui/native';
-import { resolveDefaultCurrency } from '@finapp/ui/finance';
+import {
+  resolveDefaultCurrency,
+  SettingsGroup,
+  SettingsIconButton,
+  SettingsLink,
+  useSettingsToneColor,
+} from '@finapp/ui/finance';
 import {
   Info,
   ArrowLeft,
@@ -153,13 +161,18 @@ function ProfileActionRow({
 export default function ProfileScreen() {
   const { signOut } = useAuthActions();
   const convex = useConvex();
-  const { userId } = useLocalSync();
+  const { userId, isConnected } = useLocalSync();
+  const live = Boolean(userId && isConnected);
+  const finai = useQuery(api.ai.settings.get, live ? {} : 'skip');
+  const grants = useQuery(api.mcpOAuth.listGrants, live ? { limit: 50 } : 'skip');
+  const activeConnections = grants?.filter((grant) => grant.revokedAt === undefined).length ?? 0;
+  const tone = useSettingsToneColor();
   const profileState = useLocalRecords<ProfileRecord>(userId, 'profile');
   const settingsState = useLocalRecords<LocalRecord>(userId, 'settings');
   const defaultCurrency =
     resolveDefaultCurrency(profileState.data ?? [], settingsState.data ?? []) ?? 'INR';
   const profile = profileState.data?.[0];
-  const { tokens } = useTheme();
+  const { tokens, appearance } = useTheme();
   const insets = useSafeAreaInsets();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const currencyOptions = useMemo(() => [...currencies], []);
@@ -209,13 +222,9 @@ export default function ProfileScreen() {
             </IconButton>
             <Typography variant="title">Profile</Typography>
           </View>
-          <IconButton
-            label="Open settings"
-            variant="ghost"
-            onPress={() => router.push('/settings' as never)}
-          >
-            <Gear size={21} color={tokens.foreground} />
-          </IconButton>
+          <SettingsIconButton label="Settings" onPress={() => router.push('/settings' as never)}>
+            <Gear size={20} color={tokens.foreground} />
+          </SettingsIconButton>
         </View>
 
         <View
@@ -318,6 +327,32 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <SettingsGroup title="AI">
+          <SettingsLink
+            icon={<Bot size={19} color={tone('violet')} />}
+            tone="violet"
+            title="FinAI"
+            description="Personality, data access, actions and chats"
+            value={finai ? (finai.enabled ? 'On' : 'Off') : undefined}
+            onPress={() => router.push('/settings/ai/finai' as never)}
+          />
+          <SettingsLink
+            icon={<KeyRound size={19} color={tone('warning')} />}
+            tone="warning"
+            title="API keys"
+            description="Bring your own model key"
+            onPress={() => router.push('/settings/ai/keys' as never)}
+          />
+          <SettingsLink
+            icon={<PlugZap size={19} color={tone('info')} />}
+            tone="info"
+            title="MCP connections"
+            description="ChatGPT, Claude and other AI apps"
+            value={grants ? `${activeConnections} active` : undefined}
+            onPress={() => router.push('/settings/ai/mcp' as never)}
+          />
+        </SettingsGroup>
+
         <View>
           <Typography variant="label" style={{ marginBottom: 4 }}>
             Profile details
@@ -338,7 +373,7 @@ export default function ProfileScreen() {
           <ProfileActionRow
             icon={Palette}
             label="Appearance"
-            value="Dark"
+            value={`${appearance.charAt(0).toUpperCase()}${appearance.slice(1)}`}
             onPress={() => router.push('/settings/appearance' as never)}
           />
           <ProfileActionRow

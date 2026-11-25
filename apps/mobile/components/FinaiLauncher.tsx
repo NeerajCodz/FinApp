@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useSegments } from 'expo-router';
-import { useConvexAuth } from 'convex/react';
+import { useConvexAuth, useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_HEIGHT } from '@/lib/tabBar';
 import { useTheme } from '@finapp/ui/native';
@@ -16,8 +17,10 @@ export function FinaiLauncher() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const { isAuthenticated } = useConvexAuth();
+  const finaiSettings = useQuery(api.ai.settings.get, isAuthenticated ? {} : 'skip');
   // Only on the tab screens themselves (not nested routes such as profile settings).
   if (!isAuthenticated || segments[0] !== '(tabs)' || segments.length > 2) return null;
+  if (finaiSettings && (!finaiSettings.enabled || !finaiSettings.showLauncher)) return null;
   return (
     <View
       pointerEvents="box-none"
