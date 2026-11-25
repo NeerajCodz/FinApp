@@ -16,6 +16,7 @@ import {
   ListTree,
   MessagesSquare,
   MousePointerClick,
+  Paperclip,
   ReceiptText,
   Smile,
   Sparkles,
@@ -237,6 +238,35 @@ export default function FinaiSettingsPage() {
           checked={settings.autoCategorizeReceipts}
           disabled={disabled || off}
           onChange={(autoCategorizeReceipts) => void save({ autoCategorizeReceipts })}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="Attachments"
+        description="Images, PDFs, spreadsheets (.xlsx, .csv) and text files up to 10 MB"
+      >
+        <SettingsSwitch
+          icon={<Paperclip size={19} />}
+          tone="info"
+          title="Attach files"
+          description="Let FinAI read receipts, statements and sheets you attach, and import their rows"
+          checked={settings.allowAttachments}
+          disabled={disabled || off}
+          onChange={(allowAttachments) => void save({ allowAttachments })}
+        />
+        <SettingsSelect
+          title="Delete attachments after"
+          description="Files are removed from storage after this; chats keep their names. Applies to new attachments."
+          value={settings.attachmentRetention}
+          disabled={disabled || off || !settings.allowAttachments}
+          options={[
+            { value: '1h', label: '1 hour' },
+            { value: '24h', label: '24 hours' },
+            { value: '7d', label: '7 days' },
+            { value: '30d', label: '30 days' },
+            { value: 'never', label: 'Never' },
+          ]}
+          onChange={(attachmentRetention) => void save({ attachmentRetention })}
         />
       </SettingsGroup>
 

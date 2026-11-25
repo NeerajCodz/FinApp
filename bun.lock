@@ -8,6 +8,7 @@
         "@auth/core": "^0.41.3",
         "@convex-dev/auth": "^0.0.95",
         "convex": "^1.46.0",
+        "fflate": "^0.8.3",
       },
       "devDependencies": {
         "@changesets/cli": "^2.29.7",
@@ -24,7 +25,7 @@
     },
     "apps/mobile": {
       "name": "@finapp/mobile",
-      "version": "1.5.2",
+      "version": "1.8.0",
       "dependencies": {
         "@convex-dev/auth": "^0.0.95",
         "@expo-google-fonts/manrope": "^0.4.1",
@@ -76,7 +77,7 @@
     },
     "apps/web": {
       "name": "@finapp/web",
-      "version": "1.5.1",
+      "version": "1.9.0",
       "dependencies": {
         "@convex-dev/auth": "^0.0.95",
         "@finapp/ui": "workspace:*",
@@ -104,7 +105,7 @@
     },
     "packages/ui": {
       "name": "@finapp/ui",
-      "version": "1.5.2",
+      "version": "1.8.0",
       "dependencies": {
         "@a2ui/react": "0.16.1",
         "@a2ui/web_core": "0.16.1",
@@ -122,6 +123,7 @@
         "@expo-google-fonts/manrope": "^0.4.1",
         "@expo-google-fonts/source-serif-4": "^0.4.1",
         "@expo-google-fonts/space-grotesk": "^0.4.1",
+        "expo-audio": "~57.0.5",
         "expo-font": "~57.0.4",
         "expo-sqlite": "~57.0.3",
         "lucide-react": "^0.468.0",

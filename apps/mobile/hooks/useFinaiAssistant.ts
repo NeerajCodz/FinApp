@@ -3,11 +3,13 @@ import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/reac
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import {
+  finaiAttachmentError,
   finaiErrorMessage,
   finaiViewing,
   setFinaiViewing,
   type FinaiAssistantMessage,
 } from '@finapp/ui/ai/finai';
+import { useComposerFiles, type PickedFile } from '@finapp/ui/ai/composer-files';
 
 const PAGE_SIZE = 30;
 
@@ -37,6 +39,30 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
   const remove = useMutation(api.ai.assistant.deleteConversation);
   const createConversation = useMutation(api.ai.assistant.createConversation);
   const markRead = useMutation(api.ai.assistant.markRead);
+  const uploadUrl = useMutation(api.ai.attachments.generateUploadUrl);
+  const register = useMutation(api.ai.attachments.register);
+  const discard = useMutation(api.ai.attachments.discard);
+  const composer = useComposerFiles<{ uri: string; mimeType?: string }>({
+    upload: async (file: PickedFile<{ uri: string; mimeType?: string }>) => {
+      const { uploadUrl: url } = await uploadUrl({});
+      const blob = await (await fetch(file.source.uri)).blob();
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.source.mimeType || blob.type || 'application/octet-stream',
+        },
+        body: blob,
+      });
+      if (!response.ok) return { error: 'UPLOAD_FAILED' };
+      const { storageId } = (await response.json()) as { storageId: string };
+      const result = await register({ storageId: storageId as Id<'_storage'>, name: file.name });
+      return 'attachment' in result && result.attachment
+        ? { id: String(result.attachment.id) }
+        : { error: 'error' in result ? String(result.error) : 'UPLOAD_FAILED' };
+    },
+    discard: (id) => discard({ attachmentId: id as Id<'finaiAttachments'> }),
+    onNotice: setError,
+  });
 
   // The open chat is "on screen": its replies are marked read and never toast.
   React.useEffect(() => {
@@ -71,6 +97,7 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
         (row) =>
           row.role === 'user' &&
           row.text === pending.text &&
+          (row.attachments?.length ?? 0) === (pending.attachments?.length ?? 0) &&
           row.createdAt >= pending.createdAt - 5_000,
       )
     )
@@ -89,13 +116,34 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
   const send = React.useCallback(
     async (override?: string) => {
       const text = (override ?? draft).trim();
-      if (!text || sending) return;
+      if (sending || composer.files.some((file) => file.status === 'uploading')) return;
+      // Suggestions (`override`) never carry the composer's files.
+      const files = override === undefined ? composer.take() : [];
+      if (!text && !files.length) return;
       setSending(true);
       setError(null);
-      setDraft('');
+      if (override === undefined) setDraft('');
       setOptimistic({
         conversationId: activeId,
-        message: { id: 'pending-user', role: 'user', text, status: 'done', createdAt: Date.now() },
+        message: {
+          id: 'pending-user',
+          role: 'user',
+          text,
+          status: 'done',
+          createdAt: Date.now(),
+          ...(files.length
+            ? {
+                attachments: files.map((file) => ({
+                  id: file.id!,
+                  name: file.name,
+                  kind: file.kind,
+                  size: file.size,
+                  available: true,
+                  ...(file.previewUrl ? { url: file.previewUrl } : {}),
+                })),
+              }
+            : {}),
+        },
       });
       try {
         let conversationId = activeId as Id<'finaiConversations'> | null;
@@ -106,16 +154,26 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
           // Open it unless the user has already moved to another conversation.
           setActiveId((current) => current ?? String(created));
         }
-        await sendAction({ text, conversationId });
+        await sendAction({
+          text,
+          conversationId,
+          ...(files.length
+            ? { attachmentIds: files.map((file) => file.id as Id<'finaiAttachments'>) }
+            : {}),
+        });
       } catch (cause) {
-        setError(finaiErrorMessage(errorCode(cause)));
-        setDraft(text);
+        const code = errorCode(cause);
+        setError(
+          /ATTACHMENT|FILE/.test(code) ? finaiAttachmentError(code) : finaiErrorMessage(code),
+        );
+        if (override === undefined) setDraft(text);
+        composer.restore(files);
       } finally {
         setOptimistic(null);
         setSending(false);
       }
     },
-    [activeId, createConversation, draft, sendAction, sending],
+    [activeId, composer, createConversation, draft, sendAction, sending],
   );
 
   const select = React.useCallback((id: string | null) => {
@@ -141,5 +199,8 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
     send,
     sending,
     error,
+    attachments: composer.files,
+    attach: composer.add,
+    removeAttachment: composer.remove,
   };
 }

@@ -6,6 +6,8 @@ import { api } from '@convex/_generated/api';
 import { FinaiAssistantScreen } from '@finapp/ui/ai';
 import { useFinaiAssistant } from '@/hooks/useFinaiAssistant';
 import { useFinaiDecide } from '@/hooks/useFinaiDecide';
+import { pickFinaiFiles } from '@/hooks/finaiFiles';
+import { toast } from '@/lib/toast';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 
 export default function FinaiScreen() {
@@ -45,6 +47,23 @@ export default function FinaiScreen() {
       }
       onDecide={decide}
       showSteps={finaiSettings?.showSteps !== false}
+      attachments={assistant.attachments}
+      onAttach={
+        finaiSettings?.allowAttachments === false
+          ? undefined
+          : (source) => {
+              pickFinaiFiles(source)
+                .then((picked) => picked.length && assistant.attach(picked))
+                .catch((cause: unknown) =>
+                  toast.error(
+                    cause instanceof Error && cause.message === 'CAMERA_PERMISSION'
+                      ? 'Allow camera access in Settings to take a photo.'
+                      : 'Couldn’t open the picker.',
+                  ),
+                );
+            }
+      }
+      onRemoveAttachment={assistant.removeAttachment}
       onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
       topInset={insets.top}
       bottomInset={insets.bottom}

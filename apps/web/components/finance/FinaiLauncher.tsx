@@ -10,6 +10,7 @@ import { ThinkingOrb } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useFinaiAssistant } from '@/lib/finai/useFinaiAssistant';
 import { useFinaiDecide } from '@/lib/finai/useFinaiDecide';
+import { toPicked } from '@/lib/finai/files';
 import { useFinaiActivity } from '@/lib/finai/useFinaiActivity';
 
 /**
@@ -127,6 +128,13 @@ export function FinaiLauncher() {
             error={isConnected ? assistant.error : 'You’re offline. Reconnect to chat with FinAI.'}
             onDecide={decide}
             showSteps={finaiSettings?.showSteps !== false}
+            attachments={assistant.attachments}
+            onAttach={
+              finaiSettings?.allowAttachments === false
+                ? undefined
+                : (files) => assistant.attach(toPicked(files))
+            }
+            onRemoveAttachment={assistant.removeAttachment}
           />
         </div>
       ) : null}

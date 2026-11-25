@@ -18,6 +18,7 @@ import { requireUser } from '../shared/auth';
 import { allocateParticipants } from '../splits/domain';
 import { toolErrorCode } from './agent';
 import { executeManageAction, isManageKind } from './manageActions';
+import { executeImport } from './importTools';
 import { finaiAgent } from './config';
 import { finaiActionKind, finaiActionStatus, finaiScopeType } from './validators';
 
@@ -203,6 +204,7 @@ export async function executeAction(
   clientMutationId: string,
   userId?: Id<'users'>,
 ): Promise<string | undefined> {
+  if (kind === 'transaction.import') return executeImport(ctx, payload, clientMutationId);
   if (isManageKind(kind)) {
     if (!userId) throw new Error('AUTH_REQUIRED');
     return executeManageAction(ctx, userId, kind, payload, clientMutationId);

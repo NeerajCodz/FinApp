@@ -3,7 +3,9 @@ import { v } from 'convex/values';
 import { internalQuery, mutation, query, type QueryCtx } from '../_generated/server';
 import type { Id } from '../_generated/dataModel';
 import { getOptionalUser, requireUser } from '../shared/auth';
+import { deleteConversationAttachments } from './attachments';
 import {
+  FINAI_ATTACHMENT_RETENTIONS,
   FINAI_DATA_SCOPES,
   FINAI_LANGUAGES,
   FINAI_LENGTHS,
@@ -66,6 +68,8 @@ export const update = mutation({
     autoCategorizeReceipts: v.optional(v.boolean()),
     showSteps: v.optional(v.boolean()),
     showLauncher: v.optional(v.boolean()),
+    allowAttachments: v.optional(v.boolean()),
+    attachmentRetention: v.optional(literalUnion(FINAI_ATTACHMENT_RETENTIONS)),
   },
   handler: async (ctx, patch) => {
     const user = await requireUser(ctx);
@@ -120,6 +124,7 @@ export const clearHistory = mutation({
         for (const action of actions) await ctx.db.delete(action._id);
         await ctx.db.delete(row._id);
       }
+      await deleteConversationAttachments(ctx, conversation._id);
       await ctx.db.delete(conversation._id);
       deleted += 1;
     }

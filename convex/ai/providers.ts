@@ -236,7 +236,23 @@ export function openAiMessages(system: string | undefined, contents: GeminiConte
       .filter((part) => part.text)
       .map((part) => part.text)
       .join('\n');
-    if (text) messages.push({ role: 'user', content: text });
+    // Attachments: images as data URLs, PDFs as files (OpenAI-compatible content parts).
+    const media = content.parts.filter((part) => part.inlineData);
+    if (media.length)
+      messages.push({
+        role: 'user',
+        content: [
+          ...(text ? [{ type: 'text', text }] : []),
+          ...media.map((part, index) => {
+            const { mimeType, data } = part.inlineData!;
+            const url = `data:${mimeType};base64,${data}`;
+            return mimeType === 'application/pdf'
+              ? { type: 'file', file: { filename: `attachment-${index + 1}.pdf`, file_data: url } }
+              : { type: 'image_url', image_url: { url } };
+          }),
+        ],
+      });
+    else if (text) messages.push({ role: 'user', content: text });
     for (const part of content.parts)
       if (part.functionResponse)
         messages.push({
@@ -372,6 +388,15 @@ export function anthropicMessages(contents: GeminiContent[]) {
           type: 'tool_result',
           tool_use_id: part.functionResponse.id,
           content: JSON.stringify(part.functionResponse.response),
+        });
+      else if (part.inlineData)
+        blocks.push({
+          type: part.inlineData.mimeType === 'application/pdf' ? 'document' : 'image',
+          source: {
+            type: 'base64',
+            media_type: part.inlineData.mimeType,
+            data: part.inlineData.data,
+          },
         });
       else if (part.text) blocks.push({ type: 'text', text: part.text });
     }
