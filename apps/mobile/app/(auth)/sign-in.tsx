@@ -70,6 +70,10 @@ export default function SignInScreen() {
           pathname: '/(auth)/two-factor',
           params: {
             challengeId: result.challengeId,
+            methods: (['totp', 'email', 'recovery'] as const)
+              .filter((method) => result.methods[method])
+              .join(','),
+            preferred: result.preferred,
             ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}),
           },
         });

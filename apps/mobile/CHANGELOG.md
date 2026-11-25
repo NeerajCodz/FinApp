@@ -2,6 +2,13 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.10.1
+
+- Redesigned app lock screen (brand, avatar in accent ring, name, @username, sign out)
+- Two-factor step with authenticator, email and recovery codes; authenticator app (QR, key,
+  open-in-app link) and recovery code settings in Security
+- Signed-in users are sent from the welcome and sign-in screens to the app
+
 ## 1.10.0
 
 - Tab bar: Home, Activity, +, People, Profile; sync and notifications on Home; Trash screen and
