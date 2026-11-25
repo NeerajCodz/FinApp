@@ -1,0 +1,22 @@
+{
+  "version": "1.5.0",
+  "channel": "stable",
+  "date": "2026-11-25",
+  "components": {
+    "web": "1.5.0",
+    "mobile": "1.5.0",
+    "ui": "1.5.0",
+    "backend": "1.5.0"
+  },
+  "build": {
+    "android": 11,
+    "ios": 11
+  },
+  "compatibility": {
+    "minimumMobileVersion": "1.3.0",
+    "minimumWebVersion": "1.3.0",
+    "apiVersion": 1,
+    "schemaVersion": 5
+  },
+  "tags": ["finapp-v1.5.0", "web-v1.5.0", "mobile-v1.5.0", "ui-v1.5.0", "backend-v1.5.0"]
+}

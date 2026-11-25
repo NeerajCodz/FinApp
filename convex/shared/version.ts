@@ -4,28 +4,28 @@
  */
 
 /** The FinApp product release these components shipped in. */
-export const PRODUCT_VERSION = '1.4.0';
+export const PRODUCT_VERSION = '1.5.0';
 export const RELEASE_CHANNEL = 'stable';
 
 /** Independent component versions (SemVer). */
 export const COMPONENT_VERSIONS = {
-  web: '1.4.0',
-  mobile: '1.4.0',
-  ui: '1.4.0',
-  backend: '1.4.0',
+  web: '1.5.0',
+  mobile: '1.5.0',
+  ui: '1.5.0',
+  backend: '1.5.0',
 } as const;
 
 /** Store build numbers for the current mobile version. */
-export const BUILD_NUMBERS = { android: 10, ios: 10 } as const;
+export const BUILD_NUMBERS = { android: 11, ios: 11 } as const;
 
 /**
  * What the running backend speaks. Clients compare their own version with the minimums and
  * ask to update (mobile) or reload (web) when they are older.
  */
 export const BACKEND_INFO = {
-  version: '1.4.0',
+  version: '1.5.0',
   apiVersion: 1,
-  schemaVersion: 4,
+  schemaVersion: 5,
   minimumMobileVersion: '1.3.0',
   minimumWebVersion: '1.3.0',
 } as const;
