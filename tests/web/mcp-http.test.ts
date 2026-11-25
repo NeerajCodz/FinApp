@@ -15,7 +15,18 @@ vi.mock('@/lib/mcp/oauth', () => ({
     query: async (reference: Parameters<typeof getFunctionName>[0]) => {
       const name = getFunctionName(reference);
       if (name === 'mcpOAuth:currentUser') return { id: 'user-one', displayName: 'Test account' };
-      if (name === 'mcpOAuth:activeGrant') return authorization.active;
+      if (name === 'mcpOAuth:accessPolicy')
+        return authorization.active
+          ? {
+              scopes: ['finapp:read'],
+              settings: {
+                enabled: true,
+                readOnly: false,
+                allowDestructive: true,
+                blockedTools: [],
+              },
+            }
+          : null;
       throw new Error(`Unexpected database read: ${name}`);
     },
     mutation: async () => undefined,

@@ -8,6 +8,7 @@ type Call = { kind: 'query' | 'mutation'; name: string; args: Record<string, unk
 
 const backend = vi.hoisted(() => ({
   scopes: ['finapp:read'] as string[],
+  access: { enabled: true, readOnly: false, allowDestructive: true, blockedTools: [] as string[] },
   calls: [] as Call[],
   queries: {} as Record<string, (args: Record<string, unknown>) => unknown>,
   mutations: {} as Record<string, (args: Record<string, unknown>) => unknown>,
@@ -32,7 +33,8 @@ vi.mock('@/lib/mcp/oauth', () => ({
     ) => {
       const name = getFunctionName(reference);
       if (name === 'mcpOAuth:currentUser') return { id: 'user-one', displayName: 'Test account' };
-      if (name === 'mcpOAuth:activeGrant') return true;
+      if (name === 'mcpOAuth:accessPolicy')
+        return { scopes: backend.scopes, settings: backend.access };
       backend.calls.push({ kind: 'query', name, args });
       const handler = backend.queries[name];
       if (!handler) throw new Error(`Unexpected database read: ${name}`);
@@ -90,6 +92,7 @@ const expenseArgs = {
 
 beforeEach(() => {
   backend.scopes = ['finapp:read'];
+  backend.access = { enabled: true, readOnly: false, allowDestructive: true, blockedTools: [] };
   backend.calls = [];
   backend.queries = {};
   backend.mutations = {};
@@ -176,6 +179,44 @@ describe('MCP plugin tools', () => {
       });
       expect(result.isError).toBe(true);
       expect(backend.calls).toEqual([]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('hides tools the user turned off in access-control settings', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:groups'];
+    backend.access = {
+      enabled: true,
+      readOnly: false,
+      allowDestructive: false,
+      blockedTools: ['finapp.groups.balances'],
+    };
+    let client = await connect();
+    try {
+      const names = (await client.listTools()).tools.map((tool) => tool.name);
+      expect(names).not.toContain('finapp.groups.leave');
+      expect(names).not.toContain('finapp.groups.balances');
+      expect(names).toContain('finapp.groups.list');
+    } finally {
+      await client.close();
+    }
+
+    backend.access = { enabled: true, readOnly: true, allowDestructive: true, blockedTools: [] };
+    client = await connect();
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.length).toBeGreaterThan(0);
+      expect(tools.every((tool) => tool.annotations?.readOnlyHint !== false)).toBe(true);
+    } finally {
+      await client.close();
+    }
+
+    backend.access = { enabled: false, readOnly: false, allowDestructive: true, blockedTools: [] };
+    client = await connect();
+    try {
+      const names = (await client.listTools()).tools.map((tool) => tool.name);
+      expect(names.filter((name) => name !== 'finapp.catalog')).toEqual([]);
     } finally {
       await client.close();
     }

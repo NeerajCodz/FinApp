@@ -93,14 +93,17 @@ export async function POST(request: Request) {
   const client = await mcpBackendClient(principal);
   const profile = await client.query(api.mcpOAuth.currentUser, {}).catch(() => null);
   if (!profile || profile.id !== principal.userId) return withCors(unauthorized(), request);
-  const activeGrant = await client
-    .query(api.mcpOAuth.activeGrant, {
-      grantId: principal.grantId as never,
-    })
-    .catch(() => false);
-  if (!activeGrant) return withCors(unauthorized(), request);
+  // The grant's current scopes and the user's access-control settings (both editable in
+  // Settings → AI → MCP connections) apply immediately, even to an older access token.
+  const policy = await client
+    .query(api.mcpOAuth.accessPolicy, { grantId: principal.grantId as never })
+    .catch(() => null);
+  if (!policy) return withCors(unauthorized(), request);
+  const scopes = policy.scopes.filter(
+    (scope) => principal.scopes.includes(scope) || scope === 'finapp:read',
+  );
 
-  const server = createMcpServer(client, principal.scopes, principal.grantId);
+  const server = createMcpServer(client, scopes, principal.grantId, policy.settings);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
