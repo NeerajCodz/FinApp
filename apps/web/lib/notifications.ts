@@ -22,6 +22,8 @@ export type NotificationRecord = LocalRecord & {
   entityType?: string;
   entityId?: string;
   readAt?: number;
+  /** Set when deleted on this device; the record goes away once the server confirms. */
+  deletedAt?: number;
 };
 type SettingsRecord = LocalRecord & { notificationPreferences?: unknown };
 
@@ -42,6 +44,7 @@ export function useVisibleNotifications() {
         (record) =>
           isNotificationType(record.type) &&
           preferences[record.type] &&
+          record.deletedAt === undefined &&
           notificationRecordId(record) !== '',
       )
       .sort((left, right) => Number(right.createdAt ?? 0) - Number(left.createdAt ?? 0));
@@ -89,6 +92,33 @@ export async function markNotificationRead(userId: string, record: NotificationR
     'notification',
     'notification.markRead',
     { ...record, readAt: Date.now() },
+    { notificationId: String(record.cloudId ?? record._id ?? id) },
+    { recordId: id },
+  );
+}
+
+export async function markNotificationUnread(userId: string, record: NotificationRecord) {
+  if (record.readAt === undefined) return;
+  const id = notificationRecordId(record);
+  const { readAt: _readAt, ...unread } = record;
+  await commitLocalWrite(
+    userId,
+    'notification',
+    'notification.markUnread',
+    unread,
+    { notificationId: String(record.cloudId ?? record._id ?? id) },
+    { recordId: id },
+  );
+}
+
+/** Hides the notification at once and queues its deletion on the server. */
+export async function deleteNotification(userId: string, record: NotificationRecord) {
+  const id = notificationRecordId(record);
+  await commitLocalWrite(
+    userId,
+    'notification',
+    'notification.remove',
+    { ...record, deletedAt: Date.now() },
     { notificationId: String(record.cloudId ?? record._id ?? id) },
     { recordId: id },
   );
