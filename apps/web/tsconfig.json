@@ -20,7 +20,8 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@convex/*": ["../../convex/*"]
+      "@convex/*": ["../../convex/*"],
+      "@finapp/widgets": ["../../packages/widgets/src/index.ts"]
     },
     "ignoreDeprecations": "6.0"
   },

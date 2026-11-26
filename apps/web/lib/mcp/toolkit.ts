@@ -12,7 +12,9 @@ export const WRITE_SCOPES = [
 ] as const;
 export type McpScope = typeof READ_SCOPE | (typeof WRITE_SCOPES)[number];
 export type ToolDomain = 'finance' | 'social' | 'groups' | 'personal';
-export type WidgetId = 'overview' | 'transactions' | 'groupBalances' | 'expense' | 'settleUp';
+/** A widget id from `@finapp/widgets` (prefer mapping tools in its `widgetForTool`). */
+import type { WidgetId } from '@finapp/widgets';
+export type { WidgetId };
 
 type Shape = Record<string, z.ZodType>;
 

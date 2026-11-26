@@ -6,7 +6,7 @@ import {
   verifyMcpAccessToken,
 } from '@/lib/mcp/oauth';
 import { MCP_SERVER_VERSION, toolCatalog } from '@/lib/mcp/server';
-import { widgets } from '@/lib/mcp/widgets';
+import { listWidgets } from '@/lib/mcp/widgets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,7 +73,7 @@ export async function GET() {
         : null,
       // Discovery tools (catalog + four domain parents) are registered alongside these.
       toolCount: tools.length + 5,
-      widgetCount: Object.keys(widgets).length,
+      widgetCount: listWidgets().length,
       checkedAt: Date.now(),
     },
     { status: healthy ? 200 : 503, headers: { 'Cache-Control': 'no-store' } },

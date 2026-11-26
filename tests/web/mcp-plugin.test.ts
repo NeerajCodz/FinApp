@@ -58,6 +58,7 @@ import { GET, POST } from '../../apps/web/app/mcp/route';
 import { GET as statusGet } from '../../apps/web/app/mcp/status/route';
 import { formatMinor, presentMoney } from '../../apps/web/lib/mcp/money';
 import { toolCatalog } from '../../apps/web/lib/mcp/server';
+import { listWidgets } from '@finapp/widgets';
 
 async function connect() {
   const client = new Client({ name: 'plugin-test', version: '1.0.0' });
@@ -233,7 +234,17 @@ describe('MCP plugin tools', () => {
       });
       const { resources } = await client.listResources();
       const widgets = resources.filter((resource) => resource.uri.startsWith('ui://finapp/'));
-      expect(widgets).toHaveLength(5);
+      expect(widgets).toHaveLength(listWidgets().length);
+      expect(widgets.length).toBeGreaterThanOrEqual(150);
+      // The original widget URIs keep working.
+      for (const uri of [
+        'ui://finapp/overview.v1.html',
+        'ui://finapp/transactions.v1.html',
+        'ui://finapp/group-balances.v1.html',
+        'ui://finapp/expense.v1.html',
+        'ui://finapp/settle-up.v1.html',
+      ])
+        expect(widgets.map((widget) => widget.uri)).toContain(uri);
       for (const widget of widgets) expect(widget.mimeType).toBe('text/html;profile=mcp-app');
       const read = await client.readResource({ uri: 'ui://finapp/settle-up.v1.html' });
       const content = read.contents[0] as { text: string; mimeType: string; _meta: unknown };
@@ -875,7 +886,11 @@ describe('MCP endpoint browser UX', () => {
     const response = await statusGet();
     const body = (await response.json()) as Record<string, unknown>;
     expect(response.headers.get('Cache-Control')).toBe('no-store');
-    expect(body).toMatchObject({ name: 'finapp', widgetCount: 5, transport: 'streamable-http' });
+    expect(body).toMatchObject({
+      name: 'finapp',
+      widgetCount: listWidgets().length,
+      transport: 'streamable-http',
+    });
     expect(body.toolCount).toBe(toolCatalog().length + 5);
     // No signing key in the test env: never advertised as online.
     expect(response.status).toBe(503);
