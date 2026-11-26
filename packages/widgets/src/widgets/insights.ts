@@ -1155,37 +1155,46 @@ export const appearance = defineWidget<Appearance>({
   ],
   empty: {
     theme: 'system',
-    accent: 'Volt',
+    accent: '',
     currencyFormat: '',
     weekStartsOn: 'Monday',
     language: 'English',
   },
   render: (d, k) =>
-    k.page(
-      k.header('Settings', 'App preferences'),
-      k.card(
-        k.kv([
-          ['Theme', k.esc(d.theme)],
-          [
-            'Accent',
-            '<span style="display:inline-flex;gap:6px;align-items:center"><i style="width:12px;height:12px;border-radius:50%;background:var(--volt);display:inline-block"></i>' +
-              k.esc(d.accent) +
-              '</span>',
-          ],
-          d.currencyFormat ? ['Numbers', k.esc(d.currencyFormat)] : null,
-          ['Week starts', k.esc(d.weekStartsOn)],
-          ['Language', k.esc(d.language)],
-        ]),
-      ),
-      d.haptics !== undefined || d.sounds !== undefined
-        ? k.list(
-            [
-              d.haptics !== undefined ? k.toggle(d.haptics, 'Haptics') : '',
-              d.sounds !== undefined ? k.toggle(d.sounds, 'Sounds') : '',
-            ].filter(Boolean),
-          )
-        : '',
-    ),
+    !d.accent
+      ? k.page(
+          k.header('Settings', 'App preferences'),
+          k.empty(
+            'Default preferences',
+            'Theme follows your device; nothing customised yet.',
+            'gear',
+          ),
+        )
+      : k.page(
+          k.header('Settings', 'App preferences'),
+          k.card(
+            k.kv([
+              ['Theme', k.esc(d.theme)],
+              [
+                'Accent',
+                '<span style="display:inline-flex;gap:6px;align-items:center"><i style="width:12px;height:12px;border-radius:50%;background:var(--volt);display:inline-block"></i>' +
+                  k.esc(d.accent) +
+                  '</span>',
+              ],
+              d.currencyFormat ? ['Numbers', k.esc(d.currencyFormat)] : null,
+              ['Week starts', k.esc(d.weekStartsOn)],
+              ['Language', k.esc(d.language)],
+            ]),
+          ),
+          d.haptics !== undefined || d.sounds !== undefined
+            ? k.list(
+                [
+                  d.haptics !== undefined ? k.toggle(d.haptics, 'Haptics') : '',
+                  d.sounds !== undefined ? k.toggle(d.sounds, 'Sounds') : '',
+                ].filter(Boolean),
+              )
+            : '',
+        ),
 });
 
 type Defaults = { currency: string; items: Array<{ label: string; value: string; hint?: string }> };
@@ -1403,15 +1412,13 @@ export const loginActivity = defineWidget<Logins>({
           )
         : '',
       k.list(
-        k
-          .arr(d.events)
-          .map((e) =>
-            k.row({
-              lead: k.tile(k.icon(e.ok ? 'check' : 'alert', 16), e.ok ? 'income' : 'expense'),
-              title: e.ok ? 'Signed in' : 'Failed sign-in',
-              sub: e.place + ' · ' + e.method + ' · ' + k.date(e.at, 'datetime'),
-            }),
-          ),
+        k.arr(d.events).map((e) =>
+          k.row({
+            lead: k.tile(k.icon(e.ok ? 'check' : 'alert', 16), e.ok ? 'income' : 'expense'),
+            title: e.ok ? 'Signed in' : 'Failed sign-in',
+            sub: e.place + ' · ' + e.method + ' · ' + k.date(e.at, 'datetime'),
+          }),
+        ),
       ),
     );
   },

@@ -91,7 +91,7 @@ const html = `<!doctype html>
   article header { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
   article h3 { margin: 0; font-size: 15px; } article p { margin: 0; color: var(--muted); font-size: 13px; }
   code { font-size: 11.5px; color: var(--accent); }
-  iframe { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  iframe { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color-scheme: normal; }
   .frames { display: grid; gap: 8px; }
   body.only-dark .t-light, body.only-light .t-dark { display: none; }
   details summary { cursor: pointer; color: var(--muted); font-size: 13px; }

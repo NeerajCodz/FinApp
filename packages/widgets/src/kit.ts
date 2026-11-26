@@ -182,7 +182,7 @@ export function createKit() {
     const c = code(currency);
     if (!c) return 2;
     if (digitCache[c] !== undefined) return digitCache[c]!;
-    let d = 2;
+    let d: number;
     try {
       d =
         new Intl.NumberFormat('en', { style: 'currency', currency: c }).resolvedOptions()

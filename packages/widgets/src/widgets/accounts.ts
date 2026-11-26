@@ -444,11 +444,12 @@ export const accountTypes = defineWidget<{ items?: Account[] }>({
     const items = k.arr(d.items);
     if (!items.length)
       return k.page(k.header('Accounts', 'Types'), k.empty('No accounts yet', undefined, 'wallet'));
-    const by: Record<string, { count: number; value: number }> = {};
+    const by: Record<string, { count: number; value: number; names: string[] }> = {};
     items.forEach((a) => {
       const t = a.customType || a.type;
-      by[t] = by[t] || { count: 0, value: 0 };
+      by[t] = by[t] || { count: 0, value: 0, names: [] };
       by[t]!.count += 1;
+      by[t]!.names.push(a.name);
       by[t]!.value += Math.max(0, k.num(a.balanceMinor));
     });
     const types = Object.keys(by).sort((a, b) => by[b]!.value - by[a]!.value);
@@ -468,7 +469,11 @@ export const accountTypes = defineWidget<{ items?: Account[] }>({
           { label: 'Accounts', align: 'right' },
           { label: 'Balance', align: 'right' },
         ],
-        types.map((t) => [k.esc(t), String(by[t]!.count), k.esc(k.money(by[t]!.value, cur))]),
+        types.map((t) => [
+          k.esc(t) + '<div class="sub">' + k.esc(by[t]!.names.join(', ')) + '</div>',
+          String(by[t]!.count),
+          k.esc(k.money(by[t]!.value, cur)),
+        ]),
         'Accounts by type',
       ),
     );
