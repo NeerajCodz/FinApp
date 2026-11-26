@@ -254,16 +254,36 @@ export {
   type SettlePerson,
   type TimelineExpense,
 } from './GroupSettleParts';
-export { NotificationsScreen, type NotificationsScreenProps } from './NotificationsScreen';
 export {
+  NotificationsScreen,
+  type FriendRequestStatus,
+  type NotificationsScreenProps,
+} from './NotificationsScreen';
+export {
+  filterNotifications,
+  matchesNotificationFilter,
+  notificationAction,
+  notificationBadge,
+  notificationDayKey,
+  notificationEmptyCopy,
+  notificationFilterCounts,
+  notificationFilters,
   notificationIconKind,
+  notificationKindLabel,
   notificationSections,
   notificationTime,
+  notificationTimestamp,
   notificationTone,
   unreadCount,
+  visibleNotificationFilters,
+  type NotificationAction,
+  type NotificationDayKey,
+  type NotificationFilter,
+  type NotificationFilterKey,
   type NotificationListItem,
   type NotificationSection,
 } from '../notifications';
+export { useNotificationInbox } from '../useNotificationInbox';
 export {
   LineItemsEditor,
   LineItemsReceipt,

@@ -19,7 +19,12 @@ export function useVisibleNotifications(userId: string | null) {
     if (!notifications.data || !settings.data) return undefined;
     const preferences = normalizeNotificationPreferences(settings.data[0]?.notificationPreferences);
     return notifications.data
-      .filter((record) => isNotificationType(record.type) && preferences[record.type])
+      .filter(
+        (record) =>
+          isNotificationType(record.type) &&
+          preferences[record.type] &&
+          record.deletedAt === undefined,
+      )
       .sort((left, right) => right.createdAt - left.createdAt);
   }, [notifications.data, settings.data]);
   return {
