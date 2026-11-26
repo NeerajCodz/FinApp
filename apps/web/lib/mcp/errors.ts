@@ -33,6 +33,16 @@ const hints: Record<string, string> = {
   DUPLICATE_MUTATION: 'This change was already applied.',
   DEFAULT_CURRENCY_REQUIRED: 'Set a default currency in your profile first.',
   MISSING_SCOPE: 'This connection was not granted the permission this tool needs.',
+  NOT_FRIENDS: 'You are not friends with that person.',
+  CANNOT_FRIEND_SELF: 'That is your own account.',
+  ALREADY_FRIENDS: 'You are already friends with that person.',
+  FRIEND_REQUESTS_OFF: 'That person is not accepting friend requests.',
+  REQUEST_UNAVAILABLE: 'That friend request is no longer pending.',
+  OWNER_CANNOT_LEAVE:
+    'Group owners cannot leave. Transfer ownership first with finapp.groups.transfer_ownership.',
+  INVALID_OWNER: 'Choose another current member as the new owner.',
+  INVALID_RETENTION: 'Use one of 1, 7, 14, 30, 60, 90 or 0 days.',
+  NOTHING_TO_UPDATE: 'Pass at least one field to change.',
 };
 
 function codeFromMessage(message: string): string | undefined {

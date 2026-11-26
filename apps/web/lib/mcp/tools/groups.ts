@@ -271,6 +271,27 @@ export const groupTools: ToolFactory = (client) => [
     run: (args) =>
       client.mutation(api.groups.mutations.leaveGroup, { groupId: id<'groups'>(args.groupId) }),
   }),
+  defineTool({
+    name: 'finapp.groups.transfer_ownership',
+    title: 'Transfer group ownership',
+    description:
+      'Make another current member the owner of a group you own, after explicit user confirmation. You become an admin and can no longer undo this yourself. Owners must transfer ownership before they can leave.',
+    scope: 'finapp:write:groups',
+    destructive: true,
+    input: {
+      groupId: docId('Group'),
+      newOwnerId: docId('New owner user (a current member)'),
+      confirm: confirm('hand ownership of this group to that member'),
+      clientMutationId: mutationId,
+    },
+    run: async (args) => ({
+      groupId: await client.mutation(api.groups.mutations.transferOwnership, {
+        groupId: id<'groups'>(args.groupId),
+        newOwnerId: id<'users'>(args.newOwnerId),
+        clientMutationId: idempotencyKey(args.clientMutationId),
+      }),
+    }),
+  }),
 
   // ---------- Invitations ----------
   defineTool({
@@ -704,6 +725,24 @@ export const groupTools: ToolFactory = (client) => [
       client.mutation(api.groups.mutations.toggleChatReaction, {
         messageId: id<'groupMessages'>(args.messageId),
         emoji: args.emoji,
+      }),
+  }),
+  defineTool({
+    name: 'finapp.groups.messages.mark_read',
+    title: 'Mark group chat read',
+    description:
+      'Mark a group chat read up to readAt (default now), clearing its unread count. Use after showing the user messages they asked about.',
+    scope: 'finapp:write:groups',
+    idempotent: true,
+    input: {
+      groupId: docId('Group'),
+      readAt: timestamp.optional().describe('Mark messages up to this time read. Default: now.'),
+    },
+    run: (args) =>
+      client.mutation(api.presence.mutations.markRead, {
+        scopeType: 'group',
+        scopeId: args.groupId,
+        readAt: args.readAt ?? Date.now(),
       }),
   }),
   defineTool({
