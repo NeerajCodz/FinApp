@@ -1,4 +1,4 @@
-import { protectedResourceMetadata } from '@/lib/mcp/metadata';
+import { protectedResourceMetadata } from '@finapp/mcp/metadata';
 
 export const dynamic = 'force-dynamic';
 

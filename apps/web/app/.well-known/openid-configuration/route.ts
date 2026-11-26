@@ -1,4 +1,4 @@
-import { authorizationServerMetadata } from '@/lib/mcp/metadata';
+import { authorizationServerMetadata } from '@finapp/mcp/metadata';
 
 export const dynamic = 'force-dynamic';
 
