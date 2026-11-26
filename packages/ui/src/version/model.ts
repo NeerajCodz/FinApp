@@ -116,6 +116,32 @@ export type ReleaseNotes = {
  */
 export const RELEASE_NOTES: readonly ReleaseNotes[] = [
   {
+    version: '1.11.0',
+    summary: 'Budgets fold into categories, new charts and a new notifications inbox.',
+    highlights: [
+      {
+        title: 'Category limits',
+        detail: 'A category’s monthly limit is its budget, with an alert level you choose.',
+      },
+      {
+        title: 'New charts',
+        detail: 'Real amounts, tap or hover for details, on web and mobile.',
+      },
+      {
+        title: 'Notifications inbox',
+        detail: 'Grouped by day, with filters and actions right in the list.',
+      },
+      {
+        title: 'Profile and About',
+        detail: 'Upload a photo, add a bio, and see what’s new in each version.',
+      },
+      {
+        title: 'Lock after',
+        detail: 'Choose how long Finapp can be away before it locks (default 5 minutes).',
+      },
+    ],
+  },
+  {
     version: '1.10.1',
     summary: 'A new lock screen, authenticator apps and recovery codes, and smoother sign-in.',
     highlights: [

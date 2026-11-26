@@ -6,6 +6,36 @@ changelogs: [web](apps/web/CHANGELOG.md), [mobile](apps/mobile/CHANGELOG.md),
 its manifest as `version.json`
 (`https://github.com/NeerajCodz/FinApp/releases/download/finapp-v<version>/version.json`).
 
+## 1.11.0
+
+Web 1.11.0 · Mobile 1.11.0 · UI 1.11.0 · Backend 1.11.0 · API 1 · Schema 9
+
+Budgets fold into categories, new charts everywhere, a new notifications inbox, and an MCP
+server that can do everything the app can.
+
+- **Category limits replace Budgets**: a category's monthly limit is its budget. Set a limit and
+  an alert level (default 80%) on any category and see a usage ring, meter and what's left or
+  over. Alerts fire at the alert level and at 100%. The separate Budgets pages are gone (old
+  links open Categories), and existing budgets move onto their categories. Home shows the three
+  categories closest to their limit.
+- **New charts**: cash flow, spending, category breakdowns, limits and goals use one chart set
+  on web and mobile, with real amounts on the axes, hover and tap details, and no scroll boxes.
+- **Notifications inbox**: grouped by day with filters (Unread, Money, Shared, Friends,
+  Security), accept or decline friend requests and invites right in the list, mark read or
+  unread, delete with undo, and mark all read. Swipe on mobile, hover on web.
+- **Profile edit**: upload a photo or pick an avatar, a username with a live availability check,
+  a short bio, phone and a searchable time zone, with a save bar for unsaved changes.
+- **About**: version and update status, what's new, versions with copyable diagnostics, and
+  links.
+- **Lock after**: choose how long Finapp can be away before the lock asks again, from
+  immediately to an hour (default 5 minutes), on web and mobile.
+- **MCP**: tools for everything the app can do, including Trash, transferring group ownership,
+  removing friends, your inbox and activity with a person, signed-in devices and FinAI settings,
+  and 183 widgets with charts in Claude and ChatGPT.
+- **Fixes**: Activity has one add button, and the status icons next to the logo show only on
+  phones.
+- **Update required**: the mobile app needs 1.11.0 or later.
+
 ## 1.10.1
 
 Web 1.10.1 · Mobile 1.10.1 · UI 1.10.1 · Backend 1.10.1 · API 1 · Schema 8

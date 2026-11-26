@@ -2,6 +2,16 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.11.0
+
+- Category limits replace budgets: `limitAlertPercent`, limit alerts at the alert level and 100%,
+  `categories.queries.limits`; `migrations:foldBudgetsIntoCategoryLimits` (idempotent; overall
+  budgets are retired with a notice); public `budgets/*` functions removed
+- FinAI: `list_category_limits` and `propose_category_limit` replace the budget tools
+- Notifications: `markUnread`, `remove`
+- Profile: `bio`, `usernameAvailability`, avatar photo upload and removal, reserved usernames
+- Social: `removeFriend`; `mcp.notificationState`
+
 ## 1.10.1
 
 - `mfa`: TOTP authenticator apps (secret encrypted with the key vault, replay protection) and

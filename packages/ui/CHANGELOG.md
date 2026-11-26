@@ -2,6 +2,15 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.11.0
+
+- `@finapp/ui/charts`: line/area, columns (grouped, stacked, diverging with a line), ranked bars,
+  donut, sparklines, spark bars, meter (`warnAt`), ring, segmented bar and heatmap for web and
+  native, on a validated colour-blind-safe palette
+- Analytics charts rebuilt on it; category and goal screens use it; `GoalsBudgetsParts` →
+  `GoalsParts`; budget screens removed
+- Notifications inbox (web and native), profile edit, About; lock timeout helpers
+
 ## 1.10.1
 
 - `LockScreen` (web and native) and `LockPinInput` (web)

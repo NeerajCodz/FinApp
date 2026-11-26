@@ -2,6 +2,16 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.11.0
+
+- Budgets pages removed (`/budgets` and `/budget/*` redirect to `/categories`); category limits
+  with alert levels on the category list, detail, form and analytics; home "Category limits"
+- Charts from `@finapp/ui/charts` across analytics, home, categories and goals
+- Notifications inbox, profile edit and About redesigned
+- "Lock after" setting for the browser lock (default 5 minutes)
+- One add-transaction button on Activity; logo status icons only on phones
+- MCP server moved to `@finapp/mcp`; widgets from `@finapp/widgets`
+
 ## 1.10.1
 
 - Redesigned browser lock screen (brand, avatar in accent ring, name, @username, PIN boxes, sign
