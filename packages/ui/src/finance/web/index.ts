@@ -239,16 +239,64 @@ export {
   type SettlePerson,
   type TimelineExpense,
 } from './GroupSettleParts';
-export { NotificationsScreen, type NotificationsScreenProps } from './NotificationsScreen';
 export {
+  NotificationsScreen,
+  type FriendRequestStatus,
+  type NotificationsScreenProps,
+} from './NotificationsScreen';
+export {
+  filterNotifications,
+  matchesNotificationFilter,
+  notificationAction,
+  notificationBadge,
+  notificationDayKey,
+  notificationEmptyCopy,
+  notificationFilterCounts,
+  notificationFilters,
   notificationIconKind,
+  notificationKindLabel,
   notificationSections,
   notificationTime,
+  notificationTimestamp,
   notificationTone,
   unreadCount,
+  visibleNotificationFilters,
+  type NotificationAction,
+  type NotificationDayKey,
+  type NotificationFilter,
+  type NotificationFilterKey,
   type NotificationListItem,
   type NotificationSection,
 } from '../notifications';
+export { useNotificationInbox } from '../useNotificationInbox';
+export {
+  ProfileEditScreen,
+  type ProfileEditScreenProps,
+  type ProfileSaveResult,
+} from './ProfileEditScreen';
+export {
+  AVATAR_PHOTO_MAX_BYTES,
+  avatarPhotoProblem,
+  deviceTimezone,
+  isValidTimezone,
+  phoneProblem,
+  profileChanges,
+  profileDraftFrom,
+  profileSaveErrorText,
+  searchTimezones,
+  timezoneLabel,
+  timezoneList,
+  timezoneOffset,
+  validateProfileDraft,
+  type AvatarChange,
+  type ProfileAvatarDraft,
+  type ProfileChanges,
+  type ProfileDraft,
+  type ProfileErrors,
+  type ProfileSource,
+  type UsernameStatus,
+} from '../profileForm';
+export { useProfileEditor } from '../useProfileEditor';
 export {
   LineItemsEditor,
   LineItemsReceipt,
@@ -294,3 +342,4 @@ export {
   parseLockTimeout,
   type LockTimeoutMinutes,
 } from '../lockTimeout';
+export { AboutScreen, type AboutScreenProps } from './AboutScreen';

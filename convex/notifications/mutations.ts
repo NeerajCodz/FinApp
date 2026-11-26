@@ -154,6 +154,95 @@ export const markRead = mutation({
   },
 });
 
+/** Puts a read notification back in the unread state (the inbox "Mark unread" action). */
+export const markUnread = mutation({
+  args: { notificationId: v.id('notifications'), clientMutationId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'notification.markUnread',
+    );
+    if (replay.found) return replay.result;
+    const notification = await ctx.db.get(args.notificationId);
+    if (!notification || notification.recipientId !== user._id)
+      throw new Error('INSUFFICIENT_PERMISSION');
+    const now = Date.now();
+    if (notification.readAt !== undefined)
+      await ctx.db.patch(notification._id, { readAt: undefined });
+    const { readAt: _readAt, ...unread } = notification;
+    await publishMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'notification.markUnread',
+      notification._id,
+      'notifications',
+      String(notification._id),
+      now,
+      unread,
+    );
+    return notification._id;
+  },
+});
+
+/**
+ * Deletes one of the caller's notifications. Clients drop it through the sync feed (a change with
+ * `deletedAt`); deleting an already-deleted notification is a no-op so queued retries settle.
+ */
+export const remove = mutation({
+  args: { notificationId: v.string(), clientMutationId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    const replay = await replayMutationResult(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'notification.remove',
+    );
+    if (replay.found) return replay.result;
+    const notificationId = ctx.db.normalizeId('notifications', args.notificationId);
+    const notification = notificationId ? await ctx.db.get(notificationId) : null;
+    if (notification && notification.recipientId !== user._id)
+      throw new Error('INSUFFICIENT_PERMISSION');
+    const now = Date.now();
+    let revision: bigint | undefined;
+    if (notification) {
+      await ctx.db.delete(notification._id);
+      revision = await recordSyncChange(
+        ctx,
+        user._id,
+        'notifications',
+        String(notification._id),
+        now,
+        undefined,
+        now,
+        args.clientMutationId,
+      );
+    }
+    const state = await ctx.db
+      .query('userSyncState')
+      .withIndex('by_user', (query) => query.eq('userId', user._id))
+      .unique();
+    const result = { deleted: Boolean(notification) };
+    await storeMutationReceipt(
+      ctx,
+      user._id,
+      args.clientMutationId,
+      'notification.remove',
+      result,
+      args.notificationId,
+      revision ?? state?.revision ?? 1n,
+      now,
+    );
+    return result;
+  },
+});
+
 /** Upper bound per call so one request stays well inside transaction limits. */
 export const MARK_ALL_READ_LIMIT = 500;
 

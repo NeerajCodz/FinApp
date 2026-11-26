@@ -1338,6 +1338,39 @@ export async function putLocalNotification(
   if (result.changes > 0) notify(userId);
 }
 
+/**
+ * Changes a device-only reminder in place: `readAt: null` marks it unread, `deletedAt` hides it.
+ * Deleted reminders keep their row so reconciliation (INSERT OR IGNORE) never brings them back.
+ */
+export async function updateDeviceNotification(
+  userId: string,
+  id: string,
+  patch: { readAt?: number | null; deletedAt?: number },
+): Promise<void> {
+  requireUser(userId);
+  if (!id.startsWith('local:')) throw new Error('NOT_DEVICE_NOTIFICATION');
+  await initializeLocalDatabase();
+  const db = await getLocalDatabase();
+  const row = db.getFirstSync<{ payload: string }>(
+    'SELECT payload FROM notifications WHERE userId = ? AND id = ?',
+    userId,
+    id,
+  );
+  if (!row) throw new Error('NOTIFICATION_NOT_FOUND');
+  const record = { ...decode<LocalRecord>(row.payload) };
+  if (patch.readAt === null) delete record.readAt;
+  else if (patch.readAt !== undefined) record.readAt = patch.readAt;
+  if (patch.deletedAt !== undefined) record.deletedAt = patch.deletedAt;
+  db.runSync(
+    'UPDATE notifications SET payload = ? WHERE userId = ? AND id = ?',
+    encode(record),
+    userId,
+    id,
+  );
+  await persistLocalDatabase();
+  notify(userId);
+}
+
 export async function markDeviceNotificationRead(userId: string, id: string): Promise<void> {
   requireUser(userId);
   if (!id.startsWith('local:')) throw new Error('NOT_DEVICE_NOTIFICATION');

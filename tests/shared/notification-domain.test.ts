@@ -42,6 +42,18 @@ describe('notification preferences', () => {
 });
 
 describe('notification routes', () => {
+  it('opens security settings for account and session alerts only when they are security events', () => {
+    expect(notificationRoute({ type: 'security', entityType: 'account', entityId: 'u1' })).toBe(
+      '/settings/security',
+    );
+    expect(notificationRoute({ type: 'security', entityType: 'session' })).toBe(
+      '/settings/security',
+    );
+    expect(notificationRoute({ type: 'transaction', entityType: 'account' })).toBe(
+      '/notifications',
+    );
+  });
+
   it('deep-links split edits to the expense', () => {
     expect(notificationRoute({ type: 'split', entityType: 'transaction', entityId: 'tx 1' })).toBe(
       '/transaction/tx%201',
