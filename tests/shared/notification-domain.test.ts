@@ -73,7 +73,7 @@ describe('notification routes', () => {
     );
     expect(notificationRoute({ type: 'recurring', entityType: 'recurring' })).toBe('/recurring');
     expect(notificationRoute({ type: 'budget', entityType: 'budget', entityId: 'b1' })).toBe(
-      '/budget/b1',
+      '/categories',
     );
     expect(notificationRoute({ type: 'goal' })).toBe('/notifications');
   });

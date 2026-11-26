@@ -42,7 +42,7 @@ through sign-in, verification, and onboarding.
 
 Finance screens are shared from `packages/ui/src/finance`, with separate web and
 native presentations. Account and category editors, transaction forms and details,
-recurring-payment views, goal editors and analytics, budget views, and group
+recurring-payment views, goal editors and analytics, category limits, and group
 experiences use the apps' live Convex/offline-first records.
 Shared entity pickers provide popup color palettes with custom hue and hex controls,
 emoji skin-tone choices, and compact Lucide/Phosphor icon grids across web and native.
@@ -71,11 +71,11 @@ a transfer, with an account-creation action on both web and native.
 On narrow screens, analytics charts with long ranges scroll within their panel,
 and category creation stays inside the viewport.
 
-Budgets use `/budgets` and `/budgets/new`; an individual budget uses
-`/budget/:id`, `/budget/:id/edit`, and `/budget/:id/analytics`. Budget details
-and analytics derive merchant, account, category, daily, and forecast summaries
-from posted expenses. Forecasts use only transactions dated through the current
-time; future-dated expenses remain visible in full-period totals. Groups use
+Budgets are category limits: a category's monthly limit (with an alert level,
+default 80%) is its budget, set from the category page or form, and spending
+alerts fire at the alert level and at 100%. Old `/budgets` and `/budget/*` links
+redirect to `/categories`; `migrations:foldBudgetsIntoCategoryLimits` folds
+existing budgets into category limits. Groups use
 `/groups`, `/groups/new`, `/group/:id`, `/group/:id/edit`, `/group/:id/chat`,
 and `/group/:id/new`. Incoming invitations can be accepted or declined from the
 Groups inbox or directly from their notification. Group metadata, settings,
