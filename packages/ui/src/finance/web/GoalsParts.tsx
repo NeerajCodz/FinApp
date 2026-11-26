@@ -3,7 +3,9 @@ import React from 'react';
 import { Target, Wallet, TrendingUp, Calendar, Flag, PieChart, Check } from 'lucide-react';
 import { formatMinor } from '../money';
 import { FinanceEmptyState } from './FinanceEmptyState';
-import s from './GoalsBudgets.module.css';
+import s from './Goals.module.css';
+import { ColumnChart, DonutChart, LineChart, compactMoney, fullMoney } from '../../charts/web';
+import { toMajor } from '../../analytics/chart-utils';
 export const chartColors = [
   'var(--finapp-primary)',
   'var(--finapp-chart-blue)',
@@ -98,13 +100,14 @@ export function Bar({
     </div>
   );
 }
+/** A donut of parts (bigint amounts) with a value and label in the middle. */
 export function Ring({
   segments,
   value,
   label,
   detail,
 }: {
-  segments: readonly { amount: bigint; color?: string }[];
+  segments: readonly { amount: bigint; color?: string; name?: string }[];
   value: React.ReactNode;
   label: string;
   detail?: React.ReactNode;
@@ -123,44 +126,27 @@ export function Ring({
       />
     );
   }
-
-  let offset = 0;
   return (
     <div className={s.ring}>
-      <svg viewBox="0 0 120 120" role="img" aria-label={label}>
-        <circle
-          cx="60"
-          cy="60"
-          r="49"
-          fill="none"
-          stroke="var(--finapp-surface-raised)"
-          strokeWidth="14"
-        />
-        {segments.map((segment, index) => {
-          const share = Number((segment.amount * 10000n) / total) / 100;
-          const start = offset;
-          offset += share;
-          return (
-            <circle
-              key={index}
-              cx="60"
-              cy="60"
-              r="49"
-              fill="none"
-              stroke={segment.color ?? chartColors[index % chartColors.length]}
-              strokeWidth="14"
-              pathLength="100"
-              strokeDasharray={`${share} ${100 - share}`}
-              strokeDashoffset={-start}
-            />
-          );
+      <DonutChart
+        caption={label}
+        size={150}
+        legend={false}
+        centerValue={typeof value === 'string' ? value : undefined}
+        centerLabel={[label, typeof detail === 'string' ? detail : null]
+          .filter(Boolean)
+          .join(' · ')}
+        items={segments.map((segment, index) => {
+          const share = segment.amount > 0n ? Number((segment.amount * 1000n) / total) / 10 : 0;
+          return {
+            id: String(index),
+            label: segment.name ?? label,
+            value: share,
+            display: `${share}%`,
+            color: segment.color ?? chartColors[index % chartColors.length],
+          };
         })}
-      </svg>
-      <div className={s.ringCenter}>
-        <strong>{value}</strong>
-        <span className={s.muted}>{label}</span>
-        {detail && <span className={s.positive}>{detail}</span>}
-      </div>
+      />
     </div>
   );
 }
@@ -199,6 +185,7 @@ export function Legend({
     />
   );
 }
+/** Monthly columns (stacked when rows carry segments), with an optional target line. */
 export function Bars({
   rows,
   currency,
@@ -207,122 +194,101 @@ export function Bars({
   rows: readonly {
     label: string;
     amount: bigint;
-    segments?: readonly { amount: bigint; color?: string }[];
+    segments?: readonly { amount: bigint; color?: string; name?: string }[];
   }[];
   currency: string;
   target?: bigint;
 }) {
-  const max = rows.reduce((m, r) => (r.amount > m ? r.amount : m), target ?? 0n) || 1n;
+  if (!rows.some((r) => r.amount > 0n))
+    return (
+      <FinanceEmptyState
+        kind="analytics"
+        compact
+        title="No spending to chart"
+        description="Posted expenses will build this chart over time."
+      />
+    );
+  const parts = Math.max(1, ...rows.map((r) => r.segments?.length ?? 1));
+  const series = Array.from({ length: parts }, (_, index) => {
+    const sample = rows.find((r) => r.segments?.[index])?.segments?.[index];
+    return {
+      id: String(index),
+      label: sample?.name ?? (parts === 1 ? 'Amount' : `Part ${index + 1}`),
+      color: sample?.color ?? chartColors[index % chartColors.length],
+      values: rows.map((r) =>
+        toMajor(
+          r.segments ? (r.segments[index]?.amount ?? 0n) : index === 0 ? r.amount : 0n,
+          currency,
+        ),
+      ),
+    };
+  });
   return (
-    <>
-      {rows.some((r) => r.amount > 0n) ? (
-        <>
-          <div className={s.chart}>
-            <div className={s.bars}>
-              {rows.map((r) => (
-                <div
-                  key={r.label}
-                  className={s.barColumn}
-                  title={`${r.label}: ${formatMinor(r.amount, currency)}`}
-                >
-                  {(r.segments ?? [{ amount: r.amount }]).map((v, i) => (
-                    <div
-                      key={i}
-                      className={s.barSegment}
-                      style={{
-                        height: `${Number((v.amount * 10000n) / max) / 100}%`,
-                        background: v.color ?? chartColors[i % chartColors.length],
-                      }}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className={s.axis}>
-            {rows.map((r) => (
-              <span key={r.label}>{r.label}</span>
-            ))}
-          </div>
-        </>
-      ) : (
-        <FinanceEmptyState
-          kind="analytics"
-          compact
-          title="No spending to chart"
-          description="Posted expenses will build this chart over time."
-        />
-      )}
-    </>
+    <ColumnChart
+      caption={`Monthly amounts in ${currency}`}
+      mode={parts > 1 ? 'stacked' : 'grouped'}
+      height={200}
+      labels={rows.map((r) => r.label)}
+      series={series}
+      line={
+        target !== undefined
+          ? {
+              id: 'target',
+              label: 'Required',
+              values: rows.map(() => toMajor(target, currency)),
+            }
+          : undefined
+      }
+      format={(value) => fullMoney(value, currency)}
+      axisFormat={(value) => compactMoney(value, currency)}
+    />
   );
 }
+/** Savings over time as an area line, with an optional target line. */
 export function Trend({
   rows,
   target,
+  currency = 'INR',
 }: {
   rows: readonly { label: string; amount: bigint }[];
   target?: bigint;
+  currency?: string;
 }) {
-  const max = rows.reduce((m, r) => (r.amount > m ? r.amount : m), target ?? 0n) || 1n;
-  const points = rows.map(
-    (r, i) =>
-      `${rows.length > 1 ? (i * 100) / (rows.length - 1) : 0},${95 - Number((r.amount * 9000n) / max) / 100}`,
-  );
+  if (!rows.some((r) => r.amount > 0n))
+    return (
+      <FinanceEmptyState
+        kind="analytics"
+        compact
+        title="No progress history yet"
+        description="Recorded contributions will shape your savings trend."
+      />
+    );
   return (
-    <>
-      {rows.some((r) => r.amount > 0n) ? (
-        <>
-          <div className={s.chart}>
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Savings and spending trend"
-            >
-              {target !== undefined && (
-                <line
-                  x1="0"
-                  x2="100"
-                  y1={95 - Number((target * 9000n) / max) / 100}
-                  y2={95 - Number((target * 9000n) / max) / 100}
-                  stroke="var(--finapp-foreground-muted)"
-                  strokeDasharray="2 2"
-                  strokeWidth=".6"
-                />
-              )}
-              <polygon
-                points={`0,100 ${points.join(' ')} 100,100`}
-                fill="var(--finapp-primary)"
-                opacity=".13"
-              />
-              <polyline
-                points={points.join(' ')}
-                fill="none"
-                stroke="var(--finapp-primary)"
-                strokeWidth="1.1"
-                vectorEffect="non-scaling-stroke"
-              />
-              {points.map((p, i) => {
-                const [x, y] = p.split(',');
-                return <circle key={i} cx={x} cy={y} r="1" fill="var(--finapp-primary)" />;
-              })}
-            </svg>
-          </div>
-          <div className={s.axis}>
-            {rows.map((r, i) => (
-              <span key={i}>{r.label}</span>
-            ))}
-          </div>
-        </>
-      ) : (
-        <FinanceEmptyState
-          kind="analytics"
-          compact
-          title="No progress history yet"
-          description="Recorded contributions will shape your savings trend."
-        />
-      )}
-    </>
+    <LineChart
+      caption={`Savings trend in ${currency}`}
+      height={200}
+      labels={rows.map((r) => r.label)}
+      series={[
+        {
+          id: 'saved',
+          label: 'Saved',
+          values: rows.map((r) => toMajor(r.amount, currency)),
+          color: 'var(--finapp-primary)',
+        },
+        ...(target !== undefined
+          ? [
+              {
+                id: 'target',
+                label: 'Target',
+                values: rows.map(() => toMajor(target, currency)),
+                color: 'var(--finapp-foreground-muted)',
+              },
+            ]
+          : []),
+      ]}
+      format={(value) => fullMoney(value, currency)}
+      axisFormat={(value) => compactMoney(value, currency)}
+    />
   );
 }
 export function Milestones({
@@ -407,38 +373,6 @@ export function ContributionTable({
       compact
       title="No contributions yet"
       description="Every deposit toward this goal will be recorded here."
-    />
-  );
-}
-export function Rankings({
-  rows,
-  currency,
-}: {
-  rows: readonly { name: string; amount: bigint }[];
-  currency: string;
-}) {
-  const total = rows.reduce((n, r) => n + r.amount, 0n);
-  return rows.length ? (
-    <>
-      {rows.slice(0, 5).map((r, i) => (
-        <div key={r.name} className={s.ranking}>
-          <span>
-            {i + 1}. {r.name}
-          </span>
-          <Bar
-            value={total > 0n ? Number((r.amount * 100n) / total) : 0}
-            tone={chartColors[i % chartColors.length]}
-          />
-          <span>{formatMinor(r.amount, currency)}</span>
-        </div>
-      ))}
-    </>
-  ) : (
-    <FinanceEmptyState
-      kind="analytics"
-      compact
-      title="No spending recorded"
-      description="Category rankings will appear when expenses are posted."
     />
   );
 }

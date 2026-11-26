@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, ScrollView, Pressable, useWindowDimensions } from 'react-native';
-import Svg, { Circle, Polyline, Polygon, Line } from 'react-native-svg';
+import { View, ScrollView, useWindowDimensions } from 'react-native';
 import { Text, Typography, useTheme } from '@finapp/ui/native';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatMinor } from '../money';
 import { chartPalette } from '../../tokens';
+import { ColumnChart, DonutChart, LineChart, compactMoney, fullMoney } from '../../charts/native';
+import { toMajor } from '../../analytics/chart-utils';
 export const colors = [
   chartPalette.blue,
   chartPalette.violet,
@@ -154,12 +155,13 @@ export function Bar({
     </View>
   );
 }
+/** A donut of parts (bigint amounts) with a value and label in the middle. */
 export function Ring({
   segments,
   value,
   label,
 }: {
-  segments: readonly { amount: bigint; color?: string }[];
+  segments: readonly { amount: bigint; color?: string; name?: string }[];
   value: string;
   label: string;
 }) {
@@ -178,51 +180,26 @@ export function Ring({
       />
     );
   }
-  let offset = 0;
   return (
-    <View style={{ width: 164, height: 164, alignSelf: 'center' }}>
-      <Svg viewBox="0 0 120 120" width="100%" height="100%">
-        <Circle cx={60} cy={60} r={49} stroke={tokens.surfaceRaised} strokeWidth={14} fill="none" />
-        {segments.map((segment, index) => {
-          const share = Number((segment.amount * 10000n) / total) / 100;
-          const start = offset;
-          offset += share;
-          return (
-            <Circle
-              key={index}
-              cx={60}
-              cy={60}
-              r={49}
-              stroke={
-                segment.color ??
-                (index === 0 ? tokens.primary : colors[(index - 1) % colors.length])
-              }
-              strokeWidth={14}
-              fill="none"
-              strokeDasharray={`${share * 3.079} ${(100 - share) * 3.079}`}
-              strokeDashoffset={-start * 3.079}
-              rotation={-90}
-              origin="60,60"
-            />
-          );
+    <View style={{ alignSelf: 'center' }}>
+      <DonutChart
+        caption={label}
+        size={164}
+        legend={false}
+        centerValue={value}
+        centerLabel={label}
+        items={segments.map((segment, index) => {
+          const share = segment.amount > 0n ? Number((segment.amount * 1000n) / total) / 10 : 0;
+          return {
+            id: String(index),
+            label: segment.name ?? label,
+            value: share,
+            display: `${share}%`,
+            color:
+              segment.color ?? (index === 0 ? tokens.primary : colors[(index - 1) % colors.length]),
+          };
         })}
-      </Svg>
-      <View
-        style={{
-          position: 'absolute',
-          inset: 28,
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: 5,
-        }}
-      >
-        <Typography variant="heading" style={{ fontSize: 21, textAlign: 'center' }}>
-          {value}
-        </Typography>
-        <Text style={{ fontSize: 11, color: tokens.foregroundMuted, textAlign: 'center' }}>
-          {label}
-        </Text>
-      </View>
+      />
     </View>
   );
 }
@@ -254,6 +231,7 @@ export function Legend({
     </View>
   );
 }
+/** Monthly columns (stacked when rows carry segments), with an optional target line. */
 export function Bars({
   rows,
   currency,
@@ -262,7 +240,7 @@ export function Bars({
   rows: readonly {
     label: string;
     amount: bigint;
-    segments?: readonly { amount: bigint; color?: string }[];
+    segments?: readonly { amount: bigint; color?: string; name?: string }[];
   }[];
   currency: string;
   target?: bigint;
@@ -278,59 +256,47 @@ export function Bars({
       />
     );
   }
-  const max =
-    rows.reduce((highest, row) => (row.amount > highest ? row.amount : highest), target ?? 0n) ||
-    1n;
+  const parts = Math.max(1, ...rows.map((row) => row.segments?.length ?? 1));
+  const series = Array.from({ length: parts }, (_, index) => {
+    const sample = rows.find((row) => row.segments?.[index])?.segments?.[index];
+    return {
+      id: String(index),
+      label: sample?.name ?? (parts === 1 ? 'Amount' : `Part ${index + 1}`),
+      color: sample?.color ?? (index === 0 ? tokens.primary : colors[(index - 1) % colors.length]),
+      values: rows.map((row) =>
+        toMajor(
+          row.segments ? (row.segments[index]?.amount ?? 0n) : index === 0 ? row.amount : 0n,
+          currency,
+        ),
+      ),
+    };
+  });
   return (
-    <View>
-      <View
-        style={{
-          height: 150,
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          gap: 5,
-          borderBottomWidth: 1,
-          borderColor: tokens.borderSubtle,
-        }}
-      >
-        {rows.map((row) => (
-          <View
-            key={row.label}
-            accessibilityLabel={`${row.label}: ${formatMinor(row.amount, currency)}`}
-            style={{ flex: 1, height: '100%', justifyContent: 'flex-end', gap: 1 }}
-          >
-            {(row.segments ?? [{ amount: row.amount }]).map((segment, index) => (
-              <View
-                key={index}
-                style={{
-                  height: `${Number((segment.amount * 10000n) / max) / 100}%`,
-                  backgroundColor:
-                    segment.color ??
-                    (index === 0 ? tokens.primary : colors[(index - 1) % colors.length]),
-                }}
-              />
-            ))}
-          </View>
-        ))}
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 7 }}>
-        {rows
-          .filter((_, index) => rows.length < 10 || index % 5 === 0)
-          .map((row) => (
-            <Text key={row.label} style={{ fontSize: 10, color: tokens.foregroundMuted }}>
-              {row.label}
-            </Text>
-          ))}
-      </View>
-    </View>
+    <ColumnChart
+      caption={`Monthly amounts in ${currency}`}
+      mode={parts > 1 ? 'stacked' : 'grouped'}
+      height={180}
+      labels={rows.map((row) => row.label)}
+      series={series}
+      line={
+        target !== undefined
+          ? { id: 'target', label: 'Required', values: rows.map(() => toMajor(target, currency)) }
+          : undefined
+      }
+      format={(value) => fullMoney(value, currency)}
+      axisFormat={(value) => compactMoney(value, currency)}
+    />
   );
 }
+/** Savings over time as an area line, with an optional target line. */
 export function Trend({
   rows,
   target,
+  currency = 'INR',
 }: {
   rows: readonly { label: string; amount: bigint }[];
   target?: bigint;
+  currency?: string;
 }) {
   const { tokens } = useTheme();
   if (!rows.some((row) => row.amount > 0n)) {
@@ -343,53 +309,32 @@ export function Trend({
       />
     );
   }
-  const max =
-    rows.reduce((highest, row) => (row.amount > highest ? row.amount : highest), target ?? 0n) ||
-    1n;
-  const points = rows.map(
-    (row, index) =>
-      `${rows.length > 1 ? (index * 100) / (rows.length - 1) : 0},${95 - Number((row.amount * 9000n) / max) / 100}`,
-  );
   return (
-    <View>
-      <Svg width="100%" height={150} viewBox="0 0 100 100" preserveAspectRatio="none">
-        {[20, 40, 60, 80].map((y) => (
-          <Line
-            key={y}
-            x1={0}
-            x2={100}
-            y1={y}
-            y2={y}
-            stroke={tokens.borderSubtle}
-            strokeWidth={0.3}
-          />
-        ))}
-        <Polygon
-          points={`0,100 ${points.join(' ')} 100,100`}
-          fill={tokens.primary}
-          opacity={0.12}
-        />
-        <Polyline points={points.join(' ')} stroke={tokens.primary} fill="none" strokeWidth={1} />
-        {target !== undefined && (
-          <Line
-            x1={0}
-            x2={100}
-            y1={95 - Number((target * 9000n) / max) / 100}
-            y2={95 - Number((target * 9000n) / max) / 100}
-            stroke={tokens.foregroundMuted}
-            strokeDasharray="2 2"
-            strokeWidth={0.5}
-          />
-        )}
-      </Svg>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        {rows.map((row, index) => (
-          <Text key={index} style={{ fontSize: 10, color: tokens.foregroundMuted }}>
-            {row.label}
-          </Text>
-        ))}
-      </View>
-    </View>
+    <LineChart
+      caption={`Savings trend in ${currency}`}
+      height={180}
+      labels={rows.map((row) => row.label)}
+      series={[
+        {
+          id: 'saved',
+          label: 'Saved',
+          values: rows.map((row) => toMajor(row.amount, currency)),
+          color: tokens.primary,
+        },
+        ...(target !== undefined
+          ? [
+              {
+                id: 'target',
+                label: 'Target',
+                values: rows.map(() => toMajor(target, currency)),
+                color: tokens.foregroundMuted,
+              },
+            ]
+          : []),
+      ]}
+      format={(value) => fullMoney(value, currency)}
+      axisFormat={(value) => compactMoney(value, currency)}
+    />
   );
 }
 export function Milestones({
@@ -480,99 +425,6 @@ export function ContributionTable({
           kind="contribution"
           title="No contributions recorded yet."
           description="Contributions toward this goal will appear here."
-          compact
-        />
-      )}
-    </View>
-  );
-}
-export function BudgetTable({
-  rows,
-  onOpen,
-}: {
-  rows: readonly {
-    id: string;
-    title: string;
-    amountMinor: bigint;
-    currency: string;
-    date?: string;
-    occurredAt?: number;
-    accountName?: string;
-  }[];
-  onOpen?: (id: string) => void;
-}) {
-  const { tokens } = useTheme();
-  return (
-    <View>
-      {rows.length ? (
-        rows.slice(0, 8).map((r) => (
-          <Pressable
-            accessibilityRole={onOpen ? 'button' : undefined}
-            key={r.id}
-            onPress={onOpen ? () => onOpen(r.id) : undefined}
-            style={{
-              flexDirection: 'row',
-              gap: 10,
-              paddingVertical: 11,
-              borderBottomWidth: 1,
-              borderColor: tokens.borderSubtle,
-            }}
-          >
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={{ fontSize: 13 }}>{r.title}</Text>
-              <Text style={{ fontSize: 11, color: tokens.foregroundMuted }}>
-                {r.accountName ?? 'Unavailable account'} ·{' '}
-                {r.date ??
-                  (r.occurredAt ? new Date(r.occurredAt).toLocaleDateString() : 'Date unavailable')}
-              </Text>
-            </View>
-            <Text style={{ color: tokens.destructive, fontSize: 13 }}>
-              −{formatMinor(r.amountMinor, r.currency)}
-            </Text>
-          </Pressable>
-        ))
-      ) : (
-        <FinanceEmptyState
-          kind="budget"
-          title="No posted expenses in this date range."
-          description="Choose a period with activity to review budget transactions."
-          compact
-        />
-      )}
-    </View>
-  );
-}
-export function Rankings({
-  rows,
-  currency,
-}: {
-  rows: readonly { name: string; amount: bigint }[];
-  currency: string;
-}) {
-  const { tokens } = useTheme();
-  const total = rows.reduce((n, r) => n + r.amount, 0n);
-  return (
-    <View style={{ gap: 12 }}>
-      {rows.length ? (
-        rows.slice(0, 5).map((r, i) => (
-          <View key={r.name} style={{ gap: 7 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 12 }}>
-                {i + 1}. {r.name}
-              </Text>
-              <Text style={{ fontSize: 12 }}>{formatMinor(r.amount, currency)}</Text>
-            </View>
-            <Bar
-              value={total > 0n ? Number((r.amount * 100n) / total) : 0}
-              tone={i === 0 ? tokens.primary : colors[(i - 1) % colors.length]}
-            />
-          </View>
-        ))
-      ) : (
-        <FinanceEmptyState
-          kind="analytics"
-          title="No spending recorded."
-          description="Spending rankings will appear when transactions are recorded."
           compact
         />
       )}

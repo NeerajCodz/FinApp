@@ -4,7 +4,7 @@ import { Button, Text, Typography, useTheme } from '@finapp/ui/native';
 import { EntityIcon } from './EntityIconPicker';
 import { formatMinor } from '../money';
 import type { GoalsOverviewScreenProps } from '../web/GoalsOverviewScreen';
-import { Page, Columns, Panel, Metrics, Bar, Ring, Legend } from './GoalsBudgetsParts';
+import { Page, Columns, Panel, Metrics, Bar, Ring, Legend } from './GoalsParts';
 import { FinanceEmptyState } from './FinanceEmptyState';
 export type { GoalOverviewItem, GoalsOverviewScreenProps } from '../web/GoalsOverviewScreen';
 export function GoalsOverviewScreen(p: GoalsOverviewScreenProps) {
