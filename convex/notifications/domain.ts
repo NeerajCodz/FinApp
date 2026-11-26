@@ -82,7 +82,12 @@ export function notificationRoute(notification: NotificationRoute): string {
   if (notification.entityType === 'mcpConnection') return '/settings/ai/mcp';
   if (notification.entityType === 'recurring') return '/recurring';
   if (notification.entityType === 'sync') return '/settings/sync';
-  if (notification.entityType === 'security') return '/settings/security';
+  if (
+    notification.entityType === 'security' ||
+    (notification.type === 'security' &&
+      (notification.entityType === 'account' || notification.entityType === 'session'))
+  )
+    return '/settings/security';
   if (!notification.entityId) return '/notifications';
   const id = encodeURIComponent(notification.entityId);
   if (notification.entityType === 'transaction') return `/transaction/${id}`;

@@ -43,6 +43,8 @@ export default defineSchema({
     identityId: v.optional(v.string()),
     displayName: v.optional(v.string()),
     username: optionalText,
+    /** Short public "about me" line (max 160 characters). */
+    bio: optionalText,
     accent: optionalText,
     avatarId: optionalText,
     gender: v.optional(v.union(v.literal('neutral'), v.literal('male'), v.literal('female'))),

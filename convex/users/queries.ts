@@ -3,7 +3,7 @@ import { privacyFor } from '../security';
 import { internalQuery, query } from '../_generated/server';
 import { v } from 'convex/values';
 import { getOptionalUser } from '../shared/auth';
-import { normalizeUsername } from './domain';
+import { normalizeUsername, usernameProblem, type UsernameProblem } from './domain';
 import { avatarUrlForUser } from '../avatars/helpers';
 
 export const loginEmailForUsername = internalQuery({
@@ -24,6 +24,27 @@ export const current = query({
     const user = await getOptionalUser(ctx);
     if (!user) return null;
     return { ...user, avatarUrl: await avatarUrlForUser(ctx, user) };
+  },
+});
+
+export type UsernameAvailability =
+  { status: 'available' | 'current' | 'taken' } | { status: 'invalid'; problem: UsernameProblem };
+
+/** Live check for the profile editor: whether the signed-in user can take this username. */
+export const usernameAvailability = query({
+  args: { username: v.string() },
+  handler: async (ctx, { username }): Promise<UsernameAvailability | null> => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return null;
+    const problem = usernameProblem(username);
+    if (problem) return { status: 'invalid', problem };
+    const normalized = normalizeUsername(username);
+    if (normalized === user.username) return { status: 'current' };
+    const owner = await ctx.db
+      .query('users')
+      .withIndex('by_username', (query) => query.eq('username', normalized))
+      .first();
+    return { status: owner && owner._id !== user._id ? 'taken' : 'available' };
   },
 });
 
@@ -155,6 +176,7 @@ export const publicProfile = query({
       username: user.username,
       displayName: user.displayName ?? user.name ?? 'Finapp user',
       ...(user.avatarId === undefined ? {} : { avatarId: user.avatarId }),
+      ...(user.bio ? { bio: user.bio } : {}),
       avatarUrl: await avatarUrlForUser(ctx, user),
     };
   },

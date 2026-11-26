@@ -431,6 +431,18 @@ async function sendMutation(
     case 'notification.markAllRead':
       await convex.mutation(api.notifications.mutations.markAllRead, payload as never);
       return;
+    case 'notification.markUnread':
+      await convex.mutation(api.notifications.mutations.markUnread, {
+        ...payload,
+        notificationId: await mapId('notification', payload.notificationId),
+      } as never);
+      return;
+    case 'notification.remove':
+      await convex.mutation(api.notifications.mutations.remove, {
+        ...payload,
+        notificationId: await mapId('notification', payload.notificationId),
+      } as never);
+      return;
     case 'user.update':
       await convex.mutation(api.users.mutations.update, payload as never);
       return;

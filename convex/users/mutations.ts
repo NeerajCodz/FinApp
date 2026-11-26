@@ -1,8 +1,9 @@
-import { mutation } from '../_generated/server';
+import { mutation, type MutationCtx } from '../_generated/server';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
 import { assertCurrency } from '../shared/validators';
 import {
+  RESERVED_USERNAMES,
   normalizePhone,
   normalizeUsername,
   validateProfileUpdate,
@@ -12,12 +13,15 @@ import {
 } from './domain';
 import type { AvatarGender } from '../avatars/domain';
 import { publishMutationResult, replayMutationResult, recordSyncChange } from '../sync/common';
+import { avatarUrlForUser } from '../avatars/helpers';
+import type { Doc } from '../_generated/dataModel';
 
 type UserMutationContext = Parameters<typeof requireUser>[0];
 
 type ProfileUpdateArgs = {
   displayName?: string;
   username?: string;
+  bio?: string;
   phone?: string;
   defaultCurrency?: string;
   timezone?: string;
@@ -31,6 +35,7 @@ function normalizeProfileUpdate(update: ProfileUpdate): ProfileUpdate {
   const normalized: ProfileUpdate = {};
   if (update.displayName !== undefined) normalized.displayName = update.displayName.trim();
   if (update.username !== undefined) normalized.username = normalizeUsername(update.username);
+  if (update.bio !== undefined) normalized.bio = update.bio.trim().replace(/\s+/g, ' ');
   if (update.phone !== undefined) normalized.phone = normalizePhone(update.phone);
   if (update.defaultCurrency !== undefined)
     normalized.defaultCurrency = update.defaultCurrency.toUpperCase();
@@ -86,6 +91,7 @@ export const update = mutation({
   args: {
     displayName: v.optional(v.string()),
     username: v.optional(v.string()),
+    bio: v.optional(v.string()),
     phone: v.optional(v.string()),
     defaultCurrency: v.optional(v.string()),
     timezone: v.optional(v.string()),
@@ -105,6 +111,7 @@ export const update = mutation({
     const profileUpdate = await validateAvatarSelection(ctx, user, normalized);
     if (profileUpdate.defaultCurrency !== undefined) assertCurrency(profileUpdate.defaultCurrency);
     if (profileUpdate.username !== undefined && profileUpdate.username !== user.username) {
+      if (RESERVED_USERNAMES.includes(profileUpdate.username)) throw new Error('USERNAME_RESERVED');
       const taken = await ctx.db
         .query('users')
         .withIndex('by_username', (query) => query.eq('username', profileUpdate.username))
@@ -136,16 +143,18 @@ export const update = mutation({
       }
     }
     const updated = { ...user, ...patch };
+    // The synced profile carries the resolved photo URL, so a profile edit never drops it.
+    const avatarUrl = await avatarUrlForUser(ctx, updated);
     await publishMutationResult(
       ctx,
       user._id,
       args.clientMutationId,
       'user.update',
-      updated,
+      { ...updated, avatarUrl },
       'users',
       String(user._id),
       updatedAt,
-      { ...updated, _id: user._id },
+      { ...updated, _id: user._id, avatarUrl },
     );
     if (settingsSyncChange) {
       await recordSyncChange(
@@ -157,7 +166,100 @@ export const update = mutation({
         settingsSyncChange.document,
       );
     }
-    return updated;
+    return { ...updated, avatarUrl };
+  },
+});
+
+/** Largest profile photo accepted (clients resize before uploading). */
+export const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const AVATAR_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+/** Upload URL for a profile photo; the client POSTs the image, then calls `setUploadedAvatar`. */
+export const generateAvatarUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    if (user.emailVerificationTime === undefined) throw new Error('EMAIL_NOT_VERIFIED');
+    return ctx.storage.generateUploadUrl();
+  },
+});
+
+/** Patches the profile and publishes it (with its resolved photo URL) to the sync feed. */
+async function publishProfilePatch(
+  ctx: MutationCtx,
+  user: Doc<'users'>,
+  patch: Partial<Doc<'users'>>,
+) {
+  const updatedAt = Date.now();
+  await ctx.db.patch(user._id, { ...patch, updatedAt });
+  const next = { ...user, ...patch, updatedAt };
+  const avatarUrl = await avatarUrlForUser(ctx, next);
+  const document = { ...next, _id: user._id, avatarUrl };
+  await recordSyncChange(ctx, user._id, 'users', String(user._id), updatedAt, document);
+  return document;
+}
+
+async function deleteStoredAvatar(ctx: MutationCtx, storageId: string | undefined) {
+  const id = storageId ? ctx.db.system.normalizeId('_storage', storageId) : null;
+  if (id && (await ctx.db.system.get('_storage', id))) await ctx.storage.delete(id);
+}
+
+/**
+ * Uses an uploaded image as the profile photo. The photo replaces the preset avatar (a preset
+ * wins when both are set) and the previously uploaded photo is deleted.
+ */
+export const setUploadedAvatar = mutation({
+  args: { storageId: v.id('_storage') },
+  handler: async (ctx, { storageId }) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    if (user.emailVerificationTime === undefined) throw new Error('EMAIL_NOT_VERIFIED');
+    const file = await ctx.db.system.get('_storage', storageId);
+    if (!file) throw new Error('AVATAR_UPLOAD_MISSING');
+    const contentType = (file.contentType ?? '').toLowerCase();
+    // Clients check type and size before uploading; a rejected file is left for storage cleanup
+    // (a delete here would be rolled back with the failed mutation).
+    if (file.size > AVATAR_UPLOAD_MAX_BYTES) throw new Error('AVATAR_TOO_LARGE');
+    // Uploads without a recorded type are accepted (the client already checked the file).
+    if (contentType && !AVATAR_CONTENT_TYPES.has(contentType))
+      throw new Error('AVATAR_UNSUPPORTED_TYPE');
+    if (user.avatarStorageId !== String(storageId))
+      await deleteStoredAvatar(ctx, user.avatarStorageId);
+    return publishProfilePatch(ctx, user, {
+      avatarStorageId: String(storageId),
+      avatarId: undefined,
+      image: undefined,
+    });
+  },
+});
+
+/**
+ * Removes the uploaded profile photo. `avatarId` switches to a preset in the same call, so the
+ * profile shows the picture the user chose instead of initials.
+ */
+export const removeUploadedAvatar = mutation({
+  args: { avatarId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (!user) throw new Error('AUTH_REQUIRED');
+    if (user.emailVerificationTime === undefined) throw new Error('EMAIL_NOT_VERIFIED');
+    let preset: { avatarId: string; gender: AvatarGender } | undefined;
+    if (args.avatarId !== undefined) {
+      const avatarId = args.avatarId.trim().toUpperCase();
+      const avatar = await ctx.db
+        .query('avatars')
+        .withIndex('by_avatarId', (query) => query.eq('avatarId', avatarId))
+        .unique();
+      if (!avatar) throw new Error('INVALID_AVATAR');
+      preset = { avatarId: avatar.avatarId, gender: avatar.gender };
+    }
+    await deleteStoredAvatar(ctx, user.avatarStorageId);
+    return publishProfilePatch(ctx, user, {
+      avatarStorageId: undefined,
+      image: undefined,
+      ...(preset ?? {}),
+    });
   },
 });
 
