@@ -1,6 +1,7 @@
 import { api } from '@convex/_generated/api';
 import { z } from 'zod';
 import {
+  confirm,
   cursor,
   defineTool,
   docId,
@@ -125,6 +126,57 @@ export const socialTools: ToolFactory = (client) => [
       }),
   }),
   defineTool({
+    name: 'finapp.social.friends.remove',
+    title: 'Remove friend',
+    description:
+      'Unfriend someone after explicit user confirmation. Shared groups, balances and your direct message history stay; either of you can send a new friend request later.',
+    scope: 'finapp:write:social',
+    destructive: true,
+    input: {
+      userId: docId('Friend user'),
+      confirm: confirm('remove this person from your friends'),
+    },
+    run: (args) =>
+      client.mutation(api.social.mutations.removeFriend, { userId: id<'users'>(args.userId) }),
+  }),
+  defineTool({
+    name: 'finapp.social.inbox',
+    title: 'People inbox',
+    description:
+      'Your friends and people you message, each with their direct conversationId (null if none yet), last message time, unread count and presence (when they share it). Unread conversations come first. Use this to see who messaged you, then read with finapp.social.direct_messages.list.',
+    scope: 'finapp:read',
+    input: {},
+    run: async () => ({ items: await client.query(api.social.queries.peopleHub, {}) }),
+    summarize: (data) => {
+      const items = (data as { items?: Array<{ unreadCount?: number }> } | null)?.items;
+      if (!Array.isArray(items)) return undefined;
+      const unread = items.filter((item) => (item.unreadCount ?? 0) > 0).length;
+      return `${items.length} people; ${unread} with unread messages.`;
+    },
+  }),
+  defineTool({
+    name: 'finapp.social.people.analytics',
+    title: 'Activity with a person',
+    description:
+      'Your last 30 days with one person: direct messages per day (sent and received), message mix, shared groups and friendship status. Only for people you share a conversation, friendship or group with; returns null otherwise.',
+    scope: 'finapp:read',
+    input: {
+      userId: docId('User'),
+      tzOffsetMinutes: z
+        .number()
+        .int()
+        .min(-840)
+        .max(840)
+        .optional()
+        .describe('Minutes east of UTC used for day buckets, e.g. 330 for India. Default 0.'),
+    },
+    run: (args) =>
+      client.query(api.social.queries.personAnalytics, {
+        userId: id<'users'>(args.userId),
+        tzOffsetMinutes: args.tzOffsetMinutes,
+      }),
+  }),
+  defineTool({
     name: 'finapp.social.direct_messages.conversations.list',
     title: 'List conversations',
     description:
@@ -224,6 +276,24 @@ export const socialTools: ToolFactory = (client) => [
       client.mutation(api.directMessages.mutations.setPinned, {
         messageId: id<'directMessages'>(args.messageId),
         pinned: args.pinned,
+      }),
+  }),
+  defineTool({
+    name: 'finapp.social.direct_messages.mark_read',
+    title: 'Mark conversation read',
+    description:
+      'Mark a direct conversation read up to readAt (default now), clearing its unread count. Use after showing the user messages they asked about.',
+    scope: 'finapp:write:social',
+    idempotent: true,
+    input: {
+      conversationId: docId('Conversation'),
+      readAt: timestamp.optional().describe('Mark messages up to this time read. Default: now.'),
+    },
+    run: (args) =>
+      client.mutation(api.presence.mutations.markRead, {
+        scopeType: 'direct',
+        scopeId: args.conversationId,
+        readAt: args.readAt ?? Date.now(),
       }),
   }),
 ];

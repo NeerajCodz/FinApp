@@ -16,6 +16,7 @@ import {
   page,
   prepareItems,
   timestamp,
+  ToolInputError,
   type ToolFactory,
 } from '../toolkit';
 
@@ -382,6 +383,43 @@ export const financeTools: ToolFactory = (client) => [
         provider: args.provider,
         clientMutationId: idempotencyKey(args.clientMutationId),
       }),
+  }),
+  defineTool({
+    name: 'finapp.finance.accounts.set_appearance',
+    title: 'Set account icon or colour',
+    description:
+      'Change just an account’s icon and/or colour (null resets to the default) without resending its other details.',
+    scope: 'finapp:write:finance',
+    input: {
+      accountId: docId('Account'),
+      icon: z.string().min(1).max(80).nullable().optional().describe('Icon name; null to reset.'),
+      color: z
+        .string()
+        .max(32)
+        .nullable()
+        .optional()
+        .describe('Colour name or hex like "#4F7CFF"; null to reset.'),
+      clientMutationId: mutationId,
+    },
+    run: async (args) => {
+      if (args.icon === undefined && args.color === undefined)
+        throw new ToolInputError('NOTHING_TO_UPDATE');
+      const key = idempotencyKey(args.clientMutationId);
+      const accountId = id<'accounts'>(args.accountId);
+      if (args.icon !== undefined)
+        await client.mutation(api.accounts.mutations.setIcon, {
+          accountId,
+          icon: args.icon,
+          clientMutationId: `${key}:icon`,
+        });
+      if (args.color !== undefined)
+        await client.mutation(api.accounts.mutations.setColor, {
+          accountId,
+          color: args.color,
+          clientMutationId: `${key}:color`,
+        });
+      return { accountId };
+    },
   }),
   defineTool({
     name: 'finapp.finance.accounts.archive',
@@ -903,6 +941,45 @@ export const financeTools: ToolFactory = (client) => [
       confirm: confirm('permanently delete this item'),
     },
     run: (args) => client.mutation(api.trash.purge, { kind: args.kind, id: args.id }),
+  }),
+  defineTool({
+    name: 'finapp.finance.trash.empty',
+    title: 'Empty Trash',
+    description:
+      'Permanently delete everything in Trash after explicit user confirmation (up to 100 items per call; when `more` is true, ask before calling again). Cannot be undone. Group expenses are never in Trash.',
+    scope: 'finapp:write:finance',
+    destructive: true,
+    input: { confirm: confirm('permanently delete everything in Trash') },
+    run: () => client.mutation(api.trash.empty, {}),
+    summarize: (data) => {
+      const result = data as { purged?: number; more?: boolean } | null;
+      if (typeof result?.purged !== 'number') return undefined;
+      return `Deleted ${result.purged} item(s) for good${result.more ? '; more remain in Trash' : ''}.`;
+    },
+  }),
+  defineTool({
+    name: 'finapp.finance.trash.set_retention',
+    title: 'Set Trash retention',
+    description:
+      'How many days deleted items stay in Trash before being deleted for good (0 = keep until emptied). Read the current value from finapp.finance.trash.list (retentionDays).',
+    scope: 'finapp:write:finance',
+    idempotent: true,
+    input: {
+      days: z
+        .union([
+          z.literal(1),
+          z.literal(7),
+          z.literal(14),
+          z.literal(30),
+          z.literal(60),
+          z.literal(90),
+          z.literal(0),
+        ])
+        .describe('One of 1, 7, 14, 30, 60, 90, or 0 (never auto-delete).'),
+    },
+    run: async (args) => ({
+      retentionDays: await client.mutation(api.trash.setRetention, { days: args.days }),
+    }),
   }),
 
   // ---------- Analytics ----------

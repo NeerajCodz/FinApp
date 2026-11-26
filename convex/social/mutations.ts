@@ -163,3 +163,40 @@ export const cancelRequest = mutation({
     return null;
   },
 });
+
+/**
+ * Ends a friendship from either side. Any accepted request between the pair is marked canceled
+ * so the relationship reads as "none" and either person can send a fresh request later. Shared
+ * groups, balances and the direct conversation history are left untouched.
+ */
+export const removeFriend = mutation({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    const actor = await requireUser(ctx);
+    if (!actor) throw new Error('AUTH_REQUIRED');
+    if (actor._id === userId) throw new Error('CANNOT_FRIEND_SELF');
+    const [userLowId, userHighId] =
+      String(actor._id) < String(userId) ? [actor._id, userId] : [userId, actor._id];
+    const friendship = await ctx.db
+      .query('friendships')
+      .withIndex('by_pair', (q) => q.eq('userLowId', userLowId).eq('userHighId', userHighId))
+      .unique();
+    if (!friendship) throw new Error('NOT_FRIENDS');
+    await ctx.db.delete(friendship._id);
+    const now = Date.now();
+    for (const [requesterId, recipientId] of [
+      [actor._id, userId],
+      [userId, actor._id],
+    ] as const) {
+      const request = await ctx.db
+        .query('friendRequests')
+        .withIndex('by_pair', (q) =>
+          q.eq('requesterId', requesterId).eq('recipientId', recipientId),
+        )
+        .unique();
+      if (request?.status === 'accepted')
+        await ctx.db.patch(request._id, { status: 'canceled', updatedAt: now });
+    }
+    return null;
+  },
+});

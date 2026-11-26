@@ -504,6 +504,353 @@ describe('MCP plugin tools', () => {
   });
 });
 
+describe('MCP coverage tools', () => {
+  const newTools = [
+    'finapp.finance.accounts.set_appearance',
+    'finapp.finance.trash.empty',
+    'finapp.finance.trash.set_retention',
+    'finapp.groups.transfer_ownership',
+    'finapp.groups.messages.mark_read',
+    'finapp.social.friends.remove',
+    'finapp.social.inbox',
+    'finapp.social.people.analytics',
+    'finapp.social.direct_messages.mark_read',
+    'finapp.personal.notifications.summary',
+    'finapp.personal.sessions.list',
+    'finapp.personal.finai_settings.get',
+    'finapp.personal.avatars.list',
+  ];
+
+  it('registers every new tool with the right scope and destructive flag', () => {
+    const catalog = new Map(toolCatalog().map((entry) => [entry.name, entry]));
+    for (const name of newTools) expect(catalog.has(name), name).toBe(true);
+    expect(catalog.get('finapp.social.friends.remove')).toMatchObject({
+      scope: 'finapp:write:social',
+      destructive: true,
+    });
+    expect(catalog.get('finapp.social.direct_messages.mark_read')).toMatchObject({
+      scope: 'finapp:write:social',
+      destructive: false,
+    });
+    expect(catalog.get('finapp.groups.transfer_ownership')).toMatchObject({
+      scope: 'finapp:write:groups',
+      destructive: true,
+    });
+    expect(catalog.get('finapp.groups.messages.mark_read')?.scope).toBe('finapp:write:groups');
+    expect(catalog.get('finapp.finance.trash.empty')).toMatchObject({
+      scope: 'finapp:write:finance',
+      destructive: true,
+    });
+    expect(catalog.get('finapp.finance.trash.set_retention')?.destructive).toBe(false);
+    for (const name of [
+      'finapp.social.inbox',
+      'finapp.social.people.analytics',
+      'finapp.personal.notifications.summary',
+      'finapp.personal.sessions.list',
+      'finapp.personal.finai_settings.get',
+      'finapp.personal.avatars.list',
+    ])
+      expect(catalog.get(name)?.readOnly, name).toBe(true);
+  });
+
+  it('removes a friend only with confirmation and the social write scope', async () => {
+    backend.mutations = { 'social/mutations:removeFriend': () => null };
+    let client = await connect();
+    try {
+      const missing = await client.callTool({
+        name: 'finapp.social.friends.remove',
+        arguments: { userId: 'user-two', confirm: true },
+      });
+      expect(text(missing)).toContain('finapp:write:social');
+      expect(backend.calls).toEqual([]);
+    } finally {
+      await client.close();
+    }
+
+    backend.scopes = ['finapp:read', 'finapp:write:social'];
+    client = await connect();
+    try {
+      const unconfirmed = await client.callTool({
+        name: 'finapp.social.friends.remove',
+        arguments: { userId: 'user-two' },
+      });
+      expect(unconfirmed.isError).toBe(true);
+      expect(backend.calls).toEqual([]);
+      const result = await client.callTool({
+        name: 'finapp.social.friends.remove',
+        arguments: { userId: 'user-two', confirm: true },
+      });
+      expect(result.isError).not.toBe(true);
+      expect(backend.calls).toEqual([
+        { kind: 'mutation', name: 'social/mutations:removeFriend', args: { userId: 'user-two' } },
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('hides the new destructive tools when deletes are off and writes in read-only mode', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:social', 'finapp:write:groups'];
+    backend.access = { enabled: true, readOnly: false, allowDestructive: false, blockedTools: [] };
+    let client = await connect();
+    try {
+      const names = (await client.listTools()).tools.map((tool) => tool.name);
+      expect(names).not.toContain('finapp.social.friends.remove');
+      expect(names).not.toContain('finapp.groups.transfer_ownership');
+      expect(names).not.toContain('finapp.finance.trash.empty');
+      expect(names).toContain('finapp.social.direct_messages.mark_read');
+    } finally {
+      await client.close();
+    }
+    backend.access = { enabled: true, readOnly: true, allowDestructive: true, blockedTools: [] };
+    client = await connect();
+    try {
+      const names = (await client.listTools()).tools.map((tool) => tool.name);
+      expect(names).not.toContain('finapp.social.direct_messages.mark_read');
+      expect(names).toContain('finapp.social.inbox');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('marks direct and group chats read through presence.markRead', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:social', 'finapp:write:groups'];
+    backend.mutations = { 'presence/mutations:markRead': () => ({ lastReadAt: 1234 }) };
+    const client = await connect();
+    try {
+      await client.callTool({
+        name: 'finapp.social.direct_messages.mark_read',
+        arguments: { conversationId: 'conversation-1', readAt: 1234 },
+      });
+      await client.callTool({
+        name: 'finapp.groups.messages.mark_read',
+        arguments: { groupId: 'group-1' },
+      });
+      expect(backend.calls[0]).toEqual({
+        kind: 'mutation',
+        name: 'presence/mutations:markRead',
+        args: { scopeType: 'direct', scopeId: 'conversation-1', readAt: 1234 },
+      });
+      expect(backend.calls[1]).toMatchObject({
+        name: 'presence/mutations:markRead',
+        args: { scopeType: 'group', scopeId: 'group-1' },
+      });
+      expect(typeof backend.calls[1]!.args.readAt).toBe('number');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('transfers group ownership with confirmation and an idempotency key', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:groups'];
+    backend.mutations = { 'groups/mutations:transferOwnership': () => 'group-1' };
+    const client = await connect();
+    try {
+      const unconfirmed = await client.callTool({
+        name: 'finapp.groups.transfer_ownership',
+        arguments: { groupId: 'group-1', newOwnerId: 'user-two' },
+      });
+      expect(unconfirmed.isError).toBe(true);
+      expect(backend.calls).toEqual([]);
+      const key = '7d9f2b8e-4c1a-4f3e-9b2d-1a2b3c4d5e6f';
+      const result = await client.callTool({
+        name: 'finapp.groups.transfer_ownership',
+        arguments: {
+          groupId: 'group-1',
+          newOwnerId: 'user-two',
+          confirm: true,
+          clientMutationId: key,
+        },
+      });
+      expect(data(result)).toEqual({ groupId: 'group-1' });
+      expect(backend.calls[0]).toEqual({
+        kind: 'mutation',
+        name: 'groups/mutations:transferOwnership',
+        args: { groupId: 'group-1', newOwnerId: 'user-two', clientMutationId: key },
+      });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('empties Trash only when confirmed and validates the retention options', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:finance'];
+    backend.mutations = {
+      'trash:empty': () => ({ purged: 3, more: true }),
+      'trash:setRetention': (args) => args.days,
+    };
+    const client = await connect();
+    try {
+      const unconfirmed = await client.callTool({
+        name: 'finapp.finance.trash.empty',
+        arguments: {},
+      });
+      expect(unconfirmed.isError).toBe(true);
+      expect(backend.calls).toEqual([]);
+      const emptied = await client.callTool({
+        name: 'finapp.finance.trash.empty',
+        arguments: { confirm: true },
+      });
+      expect(text(emptied)).toMatch(/^Deleted 3 item\(s\) for good; more remain in Trash\./);
+      expect(backend.calls).toEqual([{ kind: 'mutation', name: 'trash:empty', args: {} }]);
+
+      const invalid = await client.callTool({
+        name: 'finapp.finance.trash.set_retention',
+        arguments: { days: 5 },
+      });
+      expect(invalid.isError).toBe(true);
+      expect(backend.calls).toHaveLength(1);
+      const retention = await client.callTool({
+        name: 'finapp.finance.trash.set_retention',
+        arguments: { days: 0 },
+      });
+      expect(data(retention)).toEqual({ retentionDays: 0 });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('sets account icon and colour with separate idempotency keys and rejects empty updates', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:finance'];
+    backend.mutations = {
+      'accounts/mutations:setIcon': () => 'account-1',
+      'accounts/mutations:setColor': () => 'account-1',
+    };
+    const client = await connect();
+    try {
+      const empty = await client.callTool({
+        name: 'finapp.finance.accounts.set_appearance',
+        arguments: { accountId: 'account-1' },
+      });
+      expect(text(empty)).toContain('NOTHING_TO_UPDATE');
+      expect(backend.calls).toEqual([]);
+      await client.callTool({
+        name: 'finapp.finance.accounts.set_appearance',
+        arguments: { accountId: 'account-1', icon: 'wallet', color: null },
+      });
+      expect(backend.calls.map((call) => call.name)).toEqual([
+        'accounts/mutations:setIcon',
+        'accounts/mutations:setColor',
+      ]);
+      expect(backend.calls[0]!.args).toMatchObject({ accountId: 'account-1', icon: 'wallet' });
+      expect(backend.calls[1]!.args).toMatchObject({ accountId: 'account-1', color: null });
+      expect(backend.calls[0]!.args.clientMutationId).not.toBe(
+        backend.calls[1]!.args.clientMutationId,
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('reads the inbox, person analytics and notification status', async () => {
+    backend.queries = {
+      'social/queries:peopleHub': () => [
+        { id: 'user-two', displayName: 'Sam', conversationId: 'c-1', unreadCount: 2 },
+        { id: 'user-three', displayName: 'Ana', conversationId: null, unreadCount: 0 },
+      ],
+      'social/queries:personAnalytics': () => ({ messagesPerDay: [] }),
+      'mcp:notificationState': () => ({
+        unreadCount: 4,
+        unreadCapped: false,
+        preferences: { goal: true },
+      }),
+    };
+    const client = await connect();
+    try {
+      const inbox = await client.callTool({ name: 'finapp.social.inbox', arguments: {} });
+      expect(text(inbox)).toMatch(/^2 people; 1 with unread messages\./);
+      await client.callTool({
+        name: 'finapp.social.people.analytics',
+        arguments: { userId: 'user-two', tzOffsetMinutes: 330 },
+      });
+      expect(backend.calls[1]).toEqual({
+        kind: 'query',
+        name: 'social/queries:personAnalytics',
+        args: { userId: 'user-two', tzOffsetMinutes: 330 },
+      });
+      const status = await client.callTool({
+        name: 'finapp.personal.notifications.summary',
+        arguments: {},
+      });
+      expect(text(status)).toMatch(/^4 unread notification\(s\)\./);
+      expect(data(status)).toMatchObject({ unreadCount: 4, preferences: { goal: true } });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('reads and partially updates privacy settings through convex/security', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:personal'];
+    backend.queries = {
+      'security:privacy': () => ({ showActive: true, discoverable: true }),
+      'security:sessions': () => [{ id: 's-1', label: 'Chrome', platform: 'web' }],
+      'users/queries:securityPreferences': () => ({ twoFactorEnabled: true }),
+      'mfa:status': () => ({ totp: false, recoveryRemaining: 0 }),
+    };
+    backend.mutations = { 'security:updatePrivacy': () => ({ discoverable: false }) };
+    const client = await connect();
+    try {
+      await client.callTool({ name: 'finapp.personal.privacy.get', arguments: {} });
+      await client.callTool({
+        name: 'finapp.personal.privacy.update',
+        arguments: { discoverable: false, friendRequests: 'nobody' },
+      });
+      expect(backend.calls[1]).toEqual({
+        kind: 'mutation',
+        name: 'security:updatePrivacy',
+        args: { discoverable: false, friendRequests: 'nobody' },
+      });
+      const invalid = await client.callTool({
+        name: 'finapp.personal.privacy.update',
+        arguments: { friendRequests: 'friends' },
+      });
+      expect(invalid.isError).toBe(true);
+      const sessions = await client.callTool({
+        name: 'finapp.personal.sessions.list',
+        arguments: {},
+      });
+      expect(data(sessions)).toEqual({ items: [{ id: 's-1', label: 'Chrome', platform: 'web' }] });
+      const security = await client.callTool({
+        name: 'finapp.personal.security.get',
+        arguments: {},
+      });
+      expect(data(security)).toEqual({
+        twoFactorEnabled: true,
+        authenticator: { totp: false, recoveryRemaining: 0 },
+      });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('pages direct messages with the cursor and a bounded default window', async () => {
+    backend.queries = {
+      'mcp:listDirectMessages': () => ({ items: [], nextCursor: 'next', isDone: false }),
+    };
+    const client = await connect();
+    try {
+      const result = await client.callTool({
+        name: 'finapp.social.direct_messages.list',
+        arguments: { conversationId: 'conversation-1', limit: 10, cursor: 'abc' },
+      });
+      expect(data(result)).toMatchObject({ nextCursor: 'next', isDone: false });
+      const args = backend.calls[0]!.args;
+      expect(args).toMatchObject({
+        conversationId: 'conversation-1',
+        paginationOpts: { numItems: 10, cursor: 'abc' },
+      });
+      expect((args.endAt as number) - (args.startAt as number)).toBe(30 * 86_400_000);
+      const tooMany = await client.callTool({
+        name: 'finapp.social.direct_messages.list',
+        arguments: { conversationId: 'conversation-1', limit: 500 },
+      });
+      expect(tooMany.isError).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
 describe('MCP endpoint browser UX', () => {
   it('redirects a browser opening /mcp to the dashboard', async () => {
     const response = await GET(
