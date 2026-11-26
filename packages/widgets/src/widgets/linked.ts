@@ -441,11 +441,7 @@ export const finaiSettings = defineWidget<FinaiSettings>({
     if (!d || !d.tone)
       return k.page(
         k.header('FinAI', 'Settings'),
-        k.empty(
-          'Settings unavailable',
-          'Sign in to Finapp to see your FinAI settings.',
-          'spark',
-        ),
+        k.empty('Settings unavailable', 'Sign in to Finapp to see your FinAI settings.', 'spark'),
       );
     const cap = (s: unknown) => {
       const t = k.str(s);
