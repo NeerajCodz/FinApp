@@ -7,6 +7,7 @@ import { coreWidgets } from './core';
 import { goalWidgets } from './goals';
 import { groupWidgets } from './groups';
 import { incomeWidgets } from './income';
+import { finaiWidgets, insightWidgets, securityWidgets, settingsWidgets } from './insights';
 import { recurringWidgets } from './recurring';
 import { chatWidgets, notificationWidgets, peopleWidgets, trashWidgets } from './social';
 import { spendingWidgets } from './spending';
@@ -29,4 +30,8 @@ export const allWidgets: WidgetDefinition[] = [
   ...chatWidgets,
   ...notificationWidgets,
   ...trashWidgets,
+  ...insightWidgets,
+  ...finaiWidgets,
+  ...settingsWidgets,
+  ...securityWidgets,
 ];
