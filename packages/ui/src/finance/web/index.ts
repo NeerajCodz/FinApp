@@ -357,3 +357,4 @@ export {
   parseLockTimeout,
   type LockTimeoutMinutes,
 } from '../lockTimeout';
+export { AboutScreen, type AboutScreenProps } from './AboutScreen';
