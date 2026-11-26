@@ -1041,15 +1041,13 @@ export function createKit() {
     let items: BarItem[] = all;
     if (all.length > limit) {
       const rest = all.slice(limit - 1);
-      items = all
-        .slice(0, limit - 1)
-        .concat([
-          {
-            label: 'Other (' + rest.length + ')',
-            value: sum(rest.map((r) => r.value)),
-            tone: 'neutral',
-          },
-        ]);
+      items = all.slice(0, limit - 1).concat([
+        {
+          label: 'Other (' + rest.length + ')',
+          value: sum(rest.map((r) => r.value)),
+          tone: 'neutral',
+        },
+      ]);
     }
     if (!items.length) return '';
     const top = max(
@@ -1423,7 +1421,7 @@ export function createKit() {
     const s = stride(labels.length, maxLabels);
     return labels
       .map((l, i) =>
-        i % s === 0
+        i === labels.length - 1 || (i % s === 0 && labels.length - 1 - i >= Math.ceil(s / 2))
           ? '<text class="ax" x="' +
             round(x(i)) +
             '" y="' +
@@ -1943,27 +1941,23 @@ export function createKit() {
     const y = scale(lo, hi === lo ? lo + 1 : hi, h - 3, 3);
     const c = color(o.tone === undefined ? 'accent' : o.tone);
     if (o.bars) {
-      const step = w / vals.length;
-      const bw = Math.min(24, Math.max(2, step - 2));
+      // HTML bars keep their 24px cap at any width (an SVG stretched to fit would widen them).
+      const top = Math.max(...vals, 1);
       return (
-        '<svg class="spark" viewBox="0 0 ' +
-        w +
-        ' ' +
+        '<div class="sparkb" style="--h:' +
         h +
-        '" width="100%" height="' +
-        h +
-        '" preserveAspectRatio="none" aria-hidden="true">' +
+        'px" aria-hidden="true">' +
         vals
           .map(
-            (v, i) =>
-              '<path d="' +
-              barPath(i * step + (step - bw) / 2, bw, h, y(v), 2) +
-              '" style="fill:' +
+            (v) =>
+              '<i style="height:' +
+              Math.max(4, Math.round((v / top) * 100)) +
+              '%;background:' +
               c +
-              '"/>',
+              '"></i>',
           )
           .join('') +
-        '</svg>'
+        '</div>'
       );
     }
     const pts = vals.map(

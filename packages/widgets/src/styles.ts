@@ -110,6 +110,8 @@ h2 { font-size: 17px; } h3 { font-size: 13px; color: var(--muted); font-weight: 
 .chart .hit:hover { fill: var(--text); fill-opacity: 0.04; }
 .chart path[data-tip]:hover, .chart rect[data-tip]:not(.hit):hover { opacity: 0.8; }
 .spark { display: block; }
+.sparkb { display: flex; align-items: flex-end; justify-content: space-between; gap: 4px; height: var(--h); }
+.sparkb i { flex: 1; max-width: 24px; border-radius: 4px 4px 0 0; min-height: 2px; }
 .donut { margin: 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .donut-c { position: relative; width: var(--sz); height: var(--sz); flex: none; }
 .donut-c svg { display: block; }

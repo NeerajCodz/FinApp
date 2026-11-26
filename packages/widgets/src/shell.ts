@@ -56,6 +56,8 @@ export type DocumentOptions = {
   theme?: 'light' | 'dark';
   /** Server-rendered body (skips waiting for the runtime). */
   body?: string;
+  /** Static snapshot: no kit or runtime, only this extra script (e.g. tooltips for a gallery). */
+  staticScript?: string;
 };
 
 export function widgetDocument(
@@ -78,7 +80,7 @@ export function widgetDocument(
 </head>
 <body data-widget="${escapeHtml(widget.id)}">
 <main id="app" aria-live="polite">${options.body ?? ''}</main>
-${sample}<script>${widgetScript(widget, lookup)}</script>
+${options.staticScript !== undefined ? `<script>${options.staticScript}</script>` : `${sample}<script>${widgetScript(widget, lookup)}</script>`}
 </body>
 </html>`;
 }
