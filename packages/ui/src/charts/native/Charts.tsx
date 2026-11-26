@@ -1017,7 +1017,7 @@ export function SegmentedBar({
           >
             {tall && part.value / (total || 1) >= 0.12 ? (
               <Text
-                style={{ color: '#0b0b0b', fontSize: 11, fontWeight: '700' }}
+                style={{ color: '#0b0b0b', fontSize: 11, fontWeight: '700' }} // theme-exempt: label inside a coloured fill
               >{`${Math.round((part.value / (total || 1)) * 100)}%`}</Text>
             ) : null}
           </View>
