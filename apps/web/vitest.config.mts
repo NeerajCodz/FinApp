@@ -9,6 +9,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('../../convex/', import.meta.url)),
       },
       {
+        find: /^@finapp\/widgets$/,
+        replacement: fileURLToPath(new URL('../../packages/widgets/src/index.ts', import.meta.url)),
+      },
+      {
         find: /^@\//,
         replacement: fileURLToPath(new URL('./', import.meta.url)),
       },
@@ -16,7 +20,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['../../tests/web/**/*.test.ts'],
+    include: ['../../tests/web/**/*.test.ts', '../../tests/widgets/**/*.test.ts'],
     setupFiles: ['../../tests/web/setup.ts'],
     clearMocks: true,
     restoreMocks: true,

@@ -17,7 +17,7 @@ import { financeTools } from './tools/finance';
 import { groupTools } from './tools/groups';
 import { personalTools } from './tools/personal';
 import { socialTools } from './tools/social';
-import { registerWidgets, widgetToolMeta, widgets } from './widgets';
+import { listWidgets, registerWidgets, resolveToolWidget, widgetToolMeta } from './widgets';
 
 export const MCP_SERVER_VERSION = '2.0.0';
 
@@ -70,24 +70,19 @@ export type ToolCatalogEntry = {
 
 /** Static description of every tool (no backend access), used by catalog tools and the dashboard. */
 export function toolCatalog(): ToolCatalogEntry[] {
-  return allTools(null as unknown as ConvexHttpClient).map((tool) => ({
-    name: tool.name,
-    title: tool.title,
-    description: tool.description,
-    domain: domainOf(tool.name),
-    scope: tool.scope,
-    readOnly: tool.scope === READ_SCOPE,
-    destructive: Boolean(tool.destructive),
-    ...(tool.widget
-      ? {
-          widget: {
-            id: tool.widget,
-            uri: widgets[tool.widget].uri,
-            title: widgets[tool.widget].title,
-          },
-        }
-      : {}),
-  }));
+  return allTools(null as unknown as ConvexHttpClient).map((tool) => {
+    const widget = resolveToolWidget(tool);
+    return {
+      name: tool.name,
+      title: tool.title,
+      description: tool.description,
+      domain: domainOf(tool.name),
+      scope: tool.scope,
+      readOnly: tool.scope === READ_SCOPE,
+      destructive: Boolean(tool.destructive),
+      ...(widget ? { widget: { id: widget.id, uri: widget.uri, title: widget.title } } : {}),
+    };
+  });
 }
 
 function catalogDocument(entries: ToolCatalogEntry[]) {
@@ -107,11 +102,13 @@ function catalogDocument(entries: ToolCatalogEntry[]) {
       readOnly: entry.readOnly,
       widget: entry.widget?.uri,
     })),
-    widgets: Object.values(widgets).map((widget) => ({
-      uri: widget.uri,
-      title: widget.title,
-      description: widget.description,
-    })),
+    // Widgets render tool results; only the ones linked to a visible tool are useful here.
+    widgetCount: listWidgets().length,
+    widgets: [
+      ...new Map(
+        entries.flatMap((entry) => (entry.widget ? [[entry.widget.uri, entry.widget]] : [])),
+      ).values(),
+    ].map((widget) => ({ uri: widget.uri, title: widget.title })),
     pagination: {
       defaultLimit: 25,
       maximumLimit: 100,
@@ -308,6 +305,7 @@ export function createMcpServer(
     // Tools the user turned off aren't offered at all.
     if (blockedReason(tool, access)) continue;
     const readOnly = tool.scope === READ_SCOPE;
+    const widget = resolveToolWidget(tool);
     server.registerTool(
       tool.name,
       {
@@ -321,7 +319,7 @@ export function createMcpServer(
           idempotentHint: readOnly || Boolean(tool.idempotent),
           openWorldHint: false,
         },
-        ...(tool.widget ? { _meta: widgetToolMeta(tool.widget) } : {}),
+        ...(widget ? { _meta: widgetToolMeta(widget.id) } : {}),
       },
       async (args: Record<string, unknown>) => {
         if (!scopes.includes(READ_SCOPE) || !scopes.includes(tool.scope)) {

@@ -6,12 +6,14 @@
   "workspaces": [
     "apps/mobile",
     "apps/web",
-    "packages/ui"
+    "packages/ui",
+    "packages/widgets"
   ],
   "scripts": {
     "dev": "bun run compose:up",
     "dev:web": "bun run --cwd apps/web dev",
     "build:web": "bun run --cwd apps/web build",
+    "widgets:preview": "bun run --cwd packages/widgets preview",
     "dev:mobile": "docker compose up mobileexpo",
     "dev:convex": "docker compose up convex convex-dashboard",
     "compose:up": "docker compose up --build",
@@ -19,10 +21,11 @@
     "compose:config": "docker compose config",
     "typecheck:mobile": "bun run --cwd apps/mobile typecheck",
     "typecheck:web": "bun run --cwd apps/web typecheck",
-    "typecheck": "bun run typecheck:mobile && bun run typecheck:web",
+    "typecheck:widgets": "bun run --cwd packages/widgets typecheck",
+    "typecheck": "bun run typecheck:mobile && bun run typecheck:web && bun run typecheck:widgets",
     "test": "bun run --cwd apps/mobile test && bun run test:web",
     "test:web": "bun run --cwd apps/web test",
-    "lint": "bun run --cwd apps/mobile lint && bun run --cwd apps/web lint && bunx eslint packages/ui/src --max-warnings=0",
+    "lint": "bun run --cwd apps/mobile lint && bun run --cwd apps/web lint && bunx eslint packages/ui/src packages/widgets --max-warnings=0",
     "format:check": "bunx prettier --check .",
     "expo:doctor": "bun run --cwd apps/mobile expo:doctor",
     "validate": "bun run version:check && bun run typecheck && bun run test && bun run lint && bun run format:check && bun run expo:doctor",

@@ -13,6 +13,7 @@
   "dependencies": {
     "@convex-dev/auth": "^0.0.95",
     "@finapp/ui": "workspace:*",
+    "@finapp/widgets": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@vercel/analytics": "^2.0.1",
     "convex": "^1.46.0",
