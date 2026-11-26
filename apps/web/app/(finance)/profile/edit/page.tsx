@@ -3,20 +3,20 @@
 import * as React from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { api } from '@convex/_generated/api';
-import { normalizeUsername, type ProfileUpdate } from '@convex/users/domain';
+import type { Id } from '@convex/_generated/dataModel';
+import { normalizeUsername, usernameProblem } from '@convex/users/domain';
 import {
-  Avatar,
-  Button,
-  Card,
-  IconButton,
-  Input,
-  Label,
-  Text,
-  Typography,
-  useTheme,
-} from '@finapp/ui/web';
+  ProfileEditScreen,
+  deviceTimezone,
+  profileDraftFrom,
+  profileSaveErrorText,
+  resolveDefaultCurrency,
+  timezoneList,
+  type ProfileChanges,
+  type ProfileSaveResult,
+  type UsernameStatus,
+} from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -24,44 +24,76 @@ import { commitLocalWrite, upsertCloudPage, type LocalRecord } from '@/lib/offli
 
 type Profile = LocalRecord & {
   displayName?: string;
+  name?: string;
   username?: string;
+  bio?: string;
+  email?: string;
   phone?: string;
   phoneVerificationTime?: number;
   avatarId?: string;
   gender?: 'neutral' | 'male' | 'female';
   avatarUrl?: string | null;
+  timezone?: string;
+  defaultCurrency?: string;
 };
-const usernamePattern = /^[a-z0-9_]{3,32}$/;
+type Settings = LocalRecord & { timezone?: string; currency?: string };
+
+/** Debounces the typed username before asking the server whether it is free. */
+function useUsernameStatus(saved: string | undefined, live: boolean) {
+  const [typed, setTyped] = React.useState<string | null>(null);
+  const [debounced, setDebounced] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebounced(typed), 350);
+    return () => clearTimeout(timer);
+  }, [typed]);
+  const candidate =
+    debounced !== null &&
+    !usernameProblem(debounced) &&
+    normalizeUsername(debounced) !== normalizeUsername(saved ?? '')
+      ? normalizeUsername(debounced)
+      : null;
+  const result = useQuery(
+    api.users.queries.usernameAvailability,
+    live && candidate ? { username: candidate } : 'skip',
+  );
+  let status: UsernameStatus = 'idle';
+  if (typed !== null && normalizeUsername(typed) !== normalizeUsername(saved ?? '')) {
+    if (!live) status = 'offline';
+    else if (usernameProblem(typed)) status = 'idle';
+    else if (typed !== debounced || result === undefined) status = 'checking';
+    else if (result?.status === 'taken') status = 'taken';
+    else if (result?.status === 'available' || result?.status === 'current') status = 'available';
+  }
+  return { status, onChange: setTyped };
+}
 
 export default function EditProfilePage() {
   const router = useRouter();
   const { userId, isConnected } = useBrowserSync();
-  const { tokens } = useTheme();
-  const { records, loading, error } = useLocalRecords<Profile>('profile');
-  const profile = records[0];
+  const profileState = useLocalRecords<Profile>('profile');
+  const settingsState = useLocalRecords<Settings>('settings');
+  const profile = profileState.records[0];
+  const settings = settingsState.records[0];
+  const current = useQuery(api.users.queries.current, userId && isConnected ? {} : 'skip');
   const avatarCatalog = useQuery(api.avatars.queries.list, {});
   const updateUser = useMutation(api.users.mutations.update);
-  const [displayName, setDisplayName] = React.useState('');
-  const [username, setUsername] = React.useState('');
-  const [phone, setPhone] = React.useState('');
-  const [gender, setGender] = React.useState<'neutral' | 'male' | 'female'>('neutral');
-  const [avatarId, setAvatarId] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [message, setMessage] = React.useState('');
-  React.useEffect(() => {
-    if (profile) {
-      setDisplayName(profile.displayName ?? '');
-      setUsername(profile.username ?? '');
-      setPhone(profile.phone ?? '');
-      setGender(profile.gender ?? 'neutral');
-      setAvatarId(profile.avatarId ?? '');
-    }
-  }, [profile]);
-  const normalizedUsername = normalizeUsername(username);
-  const usernameError =
-    username.trim() && !usernamePattern.test(normalizedUsername)
-      ? 'Use 3–32 letters, numbers, or underscores.'
-      : '';
+  const generateUploadUrl = useMutation(api.users.mutations.generateAvatarUploadUrl);
+  const setUploadedAvatar = useMutation(api.users.mutations.setUploadedAvatar);
+  const removeUploadedAvatar = useMutation(api.users.mutations.removeUploadedAvatar);
+  const username = useUsernameStatus(profile?.username, Boolean(userId && isConnected));
+  const timezones = React.useMemo(() => timezoneList(), []);
+  const initial = React.useMemo(
+    () =>
+      profile
+        ? profileDraftFrom(
+            { ...profile, timezone: profile.timezone ?? settings?.timezone },
+            deviceTimezone(),
+          )
+        : undefined,
+    // The editor keeps its own draft once loaded; only the first snapshot matters.
+    [Boolean(profile)],
+  );
+
   if (!userId)
     return (
       <FinanceSignedOut
@@ -70,199 +102,112 @@ export default function EditProfilePage() {
         description="Sign in to view and edit your profile."
       />
     );
-  const choices = (avatarCatalog ?? []).filter((item) => item.gender === gender);
-  async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!userId || busy || loading || error || !profile) {
-      if (!profile && !loading) setMessage('Your profile is not available yet. Please try again.');
-      return;
-    }
-    if (!usernamePattern.test(normalizedUsername)) {
-      setMessage('Use 3–32 letters, numbers, or underscores.');
-      return;
-    }
-    setBusy(true);
-    setMessage('');
-    try {
-      const selectedAvatar = (avatarCatalog ?? []).find((item) => item.avatarId === avatarId);
-      const usernameChanged = normalizedUsername !== normalizeUsername(profile.username ?? '');
-      const identity: ProfileUpdate = {
-        displayName: displayName.trim(),
-        phone: phone.trim() || undefined,
-        ...(selectedAvatar
-          ? { avatarId: selectedAvatar.avatarId, gender: selectedAvatar.gender }
-          : {}),
-      };
-      const next: Profile = { ...profile, ...identity };
-      if (phone !== profile.phone) next.phoneVerificationTime = undefined;
-      await commitLocalWrite(userId, 'profile', 'user.update', next, identity, {
-        recordId: String(profile.id ?? profile._id ?? userId),
-      });
+  const signedInUserId = userId;
 
-      if (usernameChanged && isConnected) {
-        try {
-          const savedProfile = await updateUser({ ...identity, username: normalizedUsername });
-          await upsertCloudPage(userId, 'profile', [savedProfile as unknown as LocalRecord]);
-          setMessage('Profile saved to your account.');
-        } catch (cause) {
-          setMessage(
-            `Your profile details were saved on this device, but the username was not changed: ${
-              cause instanceof Error ? cause.message : 'the server could not update it.'
-            }`,
-          );
-        }
-      } else if (usernameChanged) {
-        setMessage('Profile details saved on this device. Reconnect to change your username.');
-      } else {
-        setMessage(
-          isConnected
-            ? 'Profile saved to your account.'
-            : 'Saved on this device. It will sync when connected.',
-        );
-      }
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'Could not save profile changes.');
-    } finally {
-      setBusy(false);
+  async function save(changes: ProfileChanges): Promise<ProfileSaveResult> {
+    if (!profile) throw new Error('Your profile is not available yet.');
+    const recordId = String(profile.id ?? profile._id ?? signedInUserId);
+    const warnings: string[] = [];
+    const identity = { ...changes.identity };
+    if (changes.avatar?.kind === 'preset') {
+      identity.avatarId = changes.avatar.avatarId;
+      identity.gender = changes.avatar.gender;
     }
-  }
-  return (
-    <div className="finance-page finance-page--narrow">
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <IconButton
-          label="Go back to profile"
-          variant="ghost"
-          onPress={() => router.push('/profile')}
-        >
-          <ArrowLeft size={21} aria-hidden="true" />
-        </IconButton>
-        <Typography variant="title">Edit profile</Typography>
-      </header>
-      {loading && <Text role="status">Loading your profile…</Text>}
-      {error && <Text role="alert">Profile could not be loaded from this browser.</Text>}
-      {!loading && !error && !profile && (
-        <Text role="status">Setting up your profile… Try again once it is ready.</Text>
-      )}
-      {profile && (
-        <form className="finance-form" onSubmit={save}>
-          <Card
-            variant="subtle"
-            style={{ display: 'grid', gap: 14, padding: 18, borderRadius: 20 }}
-          >
-            <Label htmlFor="profile-display-name">Display name</Label>
-            <Input
-              id="profile-display-name"
-              aria-label="Display name"
-              autoComplete="name"
-              maxLength={80}
-              value={displayName}
-              onChangeText={setDisplayName}
-              required
-            />
-            <Label htmlFor="profile-username">Username</Label>
-            <Input
-              id="profile-username"
-              aria-label="Username"
-              autoComplete="username"
-              maxLength={64}
-              value={username}
-              onChangeText={setUsername}
-              aria-invalid={Boolean(usernameError)}
-              disabled={!isConnected}
-              required
-            />
-            {!isConnected && (
-              <Text role="status">Username changes require a live Convex connection.</Text>
-            )}
-            {usernameError && <Text role="alert">{usernameError}</Text>}
-            <Text>3–32 letters, numbers, or underscores.</Text>
-            <Label htmlFor="profile-phone">Phone number</Label>
-            <Input
-              id="profile-phone"
-              aria-label="Phone number"
-              autoComplete="tel"
-              maxLength={24}
-              value={phone}
-              onChangeText={setPhone}
-            />
-            <Text>
-              {profile.phone
-                ? `Current number: ${profile.phone} · ${profile.phoneVerificationTime ? 'Verified' : 'Unverified'}.`
-                : 'Use an international format. Contacts require a manually verified number.'}
-            </Text>
-          </Card>
-          <Card
-            variant="subtle"
-            style={{ display: 'grid', gap: 14, padding: 18, borderRadius: 20 }}
-          >
-            <Typography variant="heading">Avatar</Typography>
-            <div
-              role="group"
-              aria-label="Choose avatar gender"
-              style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
-            >
-              {(['neutral', 'male', 'female'] as const).map((value) => (
-                <Button
-                  key={value}
-                  type="button"
-                  variant={gender === value ? 'primary' : 'outline'}
-                  aria-pressed={gender === value}
-                  onPress={() => {
-                    setGender(value);
-                    const first = (avatarCatalog ?? []).find((item) => item.gender === value);
-                    if (first) setAvatarId(first.avatarId);
-                  }}
-                >
-                  {value[0].toUpperCase() + value.slice(1)}
-                </Button>
-              ))}
-            </div>
-            {!avatarCatalog && <Text role="status">Loading avatar choices…</Text>}
-            <div
-              role="group"
-              aria-label={`${gender} avatar choices`}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
-                gap: 8,
-              }}
-            >
-              {choices.map((item) => (
-                <button
-                  key={item.avatarId}
-                  type="button"
-                  aria-label={`Select avatar ${item.avatarId}`}
-                  aria-pressed={avatarId === item.avatarId}
-                  onClick={() => setAvatarId(item.avatarId)}
-                  style={{
-                    display: 'grid',
-                    placeItems: 'center',
-                    padding: 4,
-                    borderRadius: '50%',
-                    border:
-                      avatarId === item.avatarId
-                        ? `2px solid ${tokens.primary}`
-                        : '2px solid transparent',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Avatar initials="" label={item.avatarId} avatarId={item.avatarId} size={48} />
-                </button>
-              ))}
-            </div>
-          </Card>
-          {!!message && <Text role="status">{message}</Text>}
-          <Button
-            type="submit"
-            disabled={
-              busy || loading || Boolean(error) || !profile || Boolean(usernameError) || !avatarId
+    const needsServer =
+      Boolean(changes.username || changes.avatar?.kind === 'upload') ||
+      changes.avatar?.kind === 'remove';
+
+    if (Object.keys(identity).length > 0) {
+      const next: Profile = { ...profile, ...identity };
+      if (identity.phone !== undefined && identity.phone !== profile.phone)
+        next.phoneVerificationTime = undefined;
+      await commitLocalWrite(signedInUserId, 'profile', 'user.update', next, identity, {
+        recordId,
+        ...(identity.timezone && settings
+          ? {
+              relatedRecords: [
+                {
+                  entityType: 'settings' as const,
+                  record: { ...settings, timezone: identity.timezone },
+                },
+              ],
             }
-          >
-            {busy ? 'Saving…' : 'Save changes'}
-          </Button>
-        </form>
-      )}
-    </div>
+          : {}),
+      });
+    }
+
+    if (needsServer && !isConnected) {
+      warnings.push('Reconnect to change your username or photo.');
+    } else {
+      if (changes.username) {
+        try {
+          const saved = await updateUser({ username: changes.username });
+          await upsertCloudPage(signedInUserId, 'profile', [saved as unknown as LocalRecord]);
+        } catch (cause) {
+          warnings.push(`Username not changed: ${profileSaveErrorText(cause)}`);
+        }
+      }
+      try {
+        let saved: unknown = null;
+        if (changes.avatar?.kind === 'upload') {
+          const file = changes.avatar.file as File;
+          const uploadUrl = await generateUploadUrl({});
+          const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': file.type || 'image/jpeg' },
+            body: file,
+          });
+          if (!response.ok) throw new Error('UPLOAD_FAILED');
+          const { storageId } = (await response.json()) as { storageId: string };
+          saved = await setUploadedAvatar({ storageId: storageId as Id<'_storage'> });
+        } else if (changes.avatar?.kind === 'remove') {
+          saved = await removeUploadedAvatar({});
+        } else if (
+          changes.avatar?.kind === 'preset' &&
+          isConnected &&
+          profile.avatarUrl &&
+          !profile.avatarId
+        ) {
+          // Switching from an uploaded photo to a preset also deletes the stored photo.
+          saved = await removeUploadedAvatar({ avatarId: changes.avatar.avatarId });
+        }
+        if (saved)
+          await upsertCloudPage(signedInUserId, 'profile', [saved as unknown as LocalRecord]);
+      } catch (cause) {
+        warnings.push(`Photo not updated: ${profileSaveErrorText(cause)}`);
+      }
+    }
+
+    if (warnings.length > 0) return { message: warnings.join(' '), tone: 'warning' };
+    return {
+      message: isConnected
+        ? 'Profile saved.'
+        : 'Saved on this device. It syncs when you’re back online.',
+    };
+  }
+
+  return (
+    <ProfileEditScreen
+      initial={initial}
+      loadError={
+        profileState.error
+          ? 'Your profile could not be loaded from this browser.'
+          : !profileState.loading && !profile
+            ? 'Your profile is still being set up. Try again in a moment.'
+            : null
+      }
+      email={profile?.email ?? current?.email}
+      emailVerified={current ? current.emailVerificationTime !== undefined : undefined}
+      phoneVerified={Boolean(current?.phoneVerificationTime ?? profile?.phoneVerificationTime)}
+      defaultCurrency={resolveDefaultCurrency(profileState.records, settingsState.records)}
+      avatars={avatarCatalog}
+      offline={!isConnected}
+      usernameStatus={username.status}
+      onUsernameChange={username.onChange}
+      timezones={timezones}
+      onSave={(_draft, changes) => save(changes)}
+      onBack={() => (window.history.length > 1 ? router.back() : router.push('/profile'))}
+      onOpenCurrency={() => router.push('/settings/currency')}
+    />
   );
 }
