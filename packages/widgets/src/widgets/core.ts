@@ -568,15 +568,13 @@ export const expense = defineWidget<Expense>({
         ? k.section(
             'Split',
             k.list(
-              k
-                .arr(g.participants)
-                .map((p) =>
-                  k.person({
-                    name: p.displayName,
-                    sub: [p.method, p.basisValue].filter(Boolean).join(' · '),
-                    value: k.money(p.amountMinor, d.currency),
-                  }),
-                ),
+              k.arr(g.participants).map((p) =>
+                k.person({
+                  name: p.displayName,
+                  sub: [p.method, p.basisValue].filter(Boolean).join(' · '),
+                  value: k.money(p.amountMinor, d.currency),
+                }),
+              ),
             ),
           )
         : '',

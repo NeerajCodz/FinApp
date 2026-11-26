@@ -384,16 +384,14 @@ export const contributionChart = defineWidget<ContribChart>({
       k.card(
         k.columns({
           labels: months.map((m) => m.label),
-          series: names
-            .slice(0, 8)
-            .map((n) => ({
-              name: n,
-              values: months.map((m) =>
-                k.num(
-                  (k.arr(m.goals).filter((g) => g.name === n)[0] || { amountMinor: 0 }).amountMinor,
-                ),
+          series: names.slice(0, 8).map((n) => ({
+            name: n,
+            values: months.map((m) =>
+              k.num(
+                (k.arr(m.goals).filter((g) => g.name === n)[0] || { amountMinor: 0 }).amountMinor,
               ),
-            })),
+            ),
+          })),
           mode: 'stacked',
           currency: d.currency,
           title: 'Goal contributions by month',
@@ -703,18 +701,16 @@ export const milestones = defineWidget<Milestones>({
         k.progress(k.num(d.savedMinor) / k.num(d.targetMinor)) +
           '<div style="margin-top:12px">' +
           k.steps(
-            k
-              .arr(d.milestones)
-              .map((m) => ({
-                label: k.percent(m.pct) + ' · ' + k.money(k.num(d.targetMinor) * m.pct, d.currency),
-                done: !!m.reachedAt,
-                sub: m.reachedAt
-                  ? 'Reached ' + k.date(m.reachedAt)
-                  : k.money(
-                      Math.max(0, k.num(d.targetMinor) * m.pct - k.num(d.savedMinor)),
-                      d.currency,
-                    ) + ' to go',
-              })),
+            k.arr(d.milestones).map((m) => ({
+              label: k.percent(m.pct) + ' · ' + k.money(k.num(d.targetMinor) * m.pct, d.currency),
+              done: !!m.reachedAt,
+              sub: m.reachedAt
+                ? 'Reached ' + k.date(m.reachedAt)
+                : k.money(
+                    Math.max(0, k.num(d.targetMinor) * m.pct - k.num(d.savedMinor)),
+                    d.currency,
+                  ) + ' to go',
+            })),
           ) +
           '</div>',
       ),

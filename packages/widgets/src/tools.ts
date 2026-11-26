@@ -15,6 +15,7 @@ export const widgetForTool: Record<string, string> = {
   'finapp.finance.recurring.list': 'recurring.rules',
   'finapp.finance.trash.list': 'trash.list',
   'finapp.finance.dashboard.summary': 'cashflow.periodSummary',
+  'finapp.finance.category_limits.list': 'categories.limitUsage',
   // Groups
   'finapp.groups.list': 'groups.list',
   'finapp.groups.detail.get': 'groups.detail',
@@ -33,7 +34,12 @@ export const widgetForTool: Record<string, string> = {
   'finapp.social.people.search': 'people.search',
   'finapp.social.direct_messages.conversations.list': 'chats.conversations',
   'finapp.social.direct_messages.list': 'chats.thread',
+  'finapp.social.inbox': 'chats.inbox',
+  'finapp.social.people.analytics': 'people.analytics',
   // Personal
   'finapp.personal.notifications.list': 'notifications.list',
   'finapp.personal.profile.get': 'settings.profile',
+  'finapp.personal.notifications.summary': 'notifications.status',
+  'finapp.personal.sessions.list': 'security.sessions',
+  'finapp.personal.finai_settings.get': 'finai.settings',
 };

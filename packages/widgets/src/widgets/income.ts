@@ -52,17 +52,15 @@ export const incomeSummary = defineWidget<Summary>({
             : '',
       }),
       k.list(
-        k
-          .arr(d.sources)
-          .map((s) =>
-            k.row({
-              lead: k.glyph(s.name, undefined, 'income'),
-              title: s.name,
-              value: '+' + k.money(s.amountMinor, d.currency),
-              valueTone: 'income',
-              valueSub: k.percent(k.num(s.amountMinor) / k.num(d.totalMinor)),
-            }),
-          ),
+        k.arr(d.sources).map((s) =>
+          k.row({
+            lead: k.glyph(s.name, undefined, 'income'),
+            title: s.name,
+            value: '+' + k.money(s.amountMinor, d.currency),
+            valueTone: 'income',
+            valueSub: k.percent(k.num(s.amountMinor) / k.num(d.totalMinor)),
+          }),
+        ),
       ),
     );
   },
@@ -433,14 +431,12 @@ export const salaryHistory = defineWidget<Salary>({
       ),
       k.arr(d.raises).length
         ? k.timeline(
-            k
-              .arr(d.raises)
-              .map((r) => ({
-                title: 'Raise of ' + k.percent(r.pct, 1),
-                sub: r.at,
-                tone: 'income' as const,
-                icon: 'up',
-              })),
+            k.arr(d.raises).map((r) => ({
+              title: 'Raise of ' + k.percent(r.pct, 1),
+              sub: r.at,
+              tone: 'income' as const,
+              icon: 'up',
+            })),
           )
         : '',
     );

@@ -606,16 +606,14 @@ export const stackedCategories = defineWidget<Stacked>({
       );
     const shown =
       cats.length > 8
-        ? cats
-            .slice(0, 7)
-            .concat([
-              {
-                name: 'Other',
-                valuesMinor: d.months.map((_, i) =>
-                  k.sum(cats.slice(7).map((c) => c.valuesMinor[i] || 0)),
-                ),
-              },
-            ])
+        ? cats.slice(0, 7).concat([
+            {
+              name: 'Other',
+              valuesMinor: d.months.map((_, i) =>
+                k.sum(cats.slice(7).map((c) => c.valuesMinor[i] || 0)),
+              ),
+            },
+          ])
         : cats;
     return k.page(
       k.header('Spending', 'Category mix by month'),
