@@ -26,7 +26,7 @@
     },
     "apps/mobile": {
       "name": "@finapp/mobile",
-      "version": "1.10.0",
+      "version": "1.10.1",
       "dependencies": {
         "@convex-dev/auth": "^0.0.95",
         "@expo-google-fonts/manrope": "^0.4.1",
@@ -78,10 +78,11 @@
     },
     "apps/web": {
       "name": "@finapp/web",
-      "version": "1.10.0",
+      "version": "1.10.1",
       "dependencies": {
         "@convex-dev/auth": "^0.0.95",
         "@finapp/ui": "workspace:*",
+        "@finapp/widgets": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.32.1",
         "@vercel/analytics": "^2.0.1",
         "convex": "^1.46.0",
@@ -106,7 +107,7 @@
     },
     "packages/ui": {
       "name": "@finapp/ui",
-      "version": "1.10.0",
+      "version": "1.10.1",
       "dependencies": {
         "@a2ui/react": "0.16.1",
         "@a2ui/web_core": "0.16.1",
@@ -132,6 +133,13 @@
         "react": ">=19.0.0",
         "react-dom": ">=19.0.0",
         "react-native": ">=0.86.0",
+      },
+    },
+    "packages/widgets": {
+      "name": "@finapp/widgets",
+      "version": "1.10.1",
+      "dependencies": {
+        "@finapp/ui": "workspace:*",
       },
     },
   },
@@ -477,6 +485,8 @@
     "@finapp/ui": ["@finapp/ui@workspace:packages/ui"],
 
     "@finapp/web": ["@finapp/web@workspace:apps/web"],
+
+    "@finapp/widgets": ["@finapp/widgets@workspace:packages/widgets"],
 
     "@hono/node-server": ["@hono/node-server@2.1.5", "", { "peerDependencies": { "hono": "^4 || ^5.0.0-0" } }, "sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q=="],
 

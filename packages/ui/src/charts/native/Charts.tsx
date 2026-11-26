@@ -873,16 +873,19 @@ export function Meter({
   label,
   detail,
   thin,
+  warnAt = 0.8,
 }: {
   value: number;
   max: number;
   label?: string;
   detail?: string;
   thin?: boolean;
+  /** Share of `max` (0–1) where the fill turns to the warning colour. Default 0.8. */
+  warnAt?: number;
 }) {
   const colors = useColors();
   const ratio = max > 0 ? value / max : 0;
-  const color = ratio > 1 ? colors.expense : ratio >= 0.8 ? colors.warning : colors.income;
+  const color = ratio > 1 ? colors.expense : ratio >= warnAt ? colors.warning : colors.income;
   return (
     <View
       style={{ gap: 6 }}
@@ -1017,7 +1020,11 @@ export function SegmentedBar({
           >
             {tall && part.value / (total || 1) >= 0.12 ? (
               <Text
-                style={{ color: '#0b0b0b', fontSize: 11, fontWeight: '700' }} // theme-exempt: label inside a coloured fill
+                style={{
+                  color: '#0b0b0b', // theme-exempt: label inside a coloured fill
+                  fontSize: 11,
+                  fontWeight: '700',
+                }}
               >{`${Math.round((part.value / (total || 1)) * 100)}%`}</Text>
             ) : null}
           </View>
