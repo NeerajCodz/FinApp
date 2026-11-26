@@ -64,8 +64,8 @@ const sections: { title: string; options: Option[] }[] = [
       },
       {
         type: 'budget',
-        label: 'Budget limits',
-        detail: 'When spending crosses 80% or 100%',
+        label: 'Category limits',
+        detail: 'When a category’s spending crosses its alert level or limit',
         Icon: Gauge,
         tone: 'warning',
       },

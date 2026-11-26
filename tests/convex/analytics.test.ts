@@ -379,17 +379,17 @@ describe('analytics domains', () => {
     expect(months[1]?.endAt - months[1]!.startAt).toBe(29 * day);
   });
 
-  it('returns deterministic budget and recurring insights from supplied records', () => {
+  it('returns deterministic category-limit and recurring insights from supplied records', () => {
     expect(
       deterministicInsights({
         currentFood: 120n,
         previousFood: 100n,
-        budgetUsedPercent: 91,
+        limitUsedPercent: 91,
         recurringDue: 2,
       }),
     ).toEqual([
       'Food spending is up 20% versus the prior period.',
-      'Budget is near its limit.',
+      'A category limit is nearly used up.',
       '2 recurring payments are due soon.',
     ]);
   });

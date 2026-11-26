@@ -14,7 +14,7 @@ type Category = LocalRecord & {
   kind?: 'expense' | 'income';
   color?: string;
   notes?: string;
-  includeInBudgets?: boolean;
+  limitAlertPercent?: number;
   monthlyLimitMinor?: bigint;
   limitCurrency?: string;
   isSystem?: boolean;
@@ -43,7 +43,7 @@ export default function EditCategoryScreen() {
   const [kind, setKind] = React.useState<'expense' | 'income'>('expense');
   const [color, setColor] = React.useState<string>();
   const [notes, setNotes] = React.useState('');
-  const [includeInBudgets, setIncludeInBudgets] = React.useState(true);
+  const [alertValue, setAlertValue] = React.useState('');
   const [limitValue, setLimitValue] = React.useState('');
   const [defaultDraft, setDefaultDraft] = React.useState<boolean>();
   const [pending, setPending] = React.useState(false);
@@ -54,7 +54,9 @@ export default function EditCategoryScreen() {
     setKind(category?.kind === 'income' ? 'income' : 'expense');
     setColor(category?.color);
     setNotes(category?.notes ?? '');
-    setIncludeInBudgets(category?.includeInBudgets !== false);
+    setAlertValue(
+      typeof category?.limitAlertPercent === 'number' ? String(category.limitAlertPercent) : '',
+    );
     const digits =
       new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
         .maximumFractionDigits ?? 2;
@@ -101,6 +103,13 @@ export default function EditCategoryScreen() {
       const amountMinor = limitValue.trim() ? parseMinor(limitValue, currency) : null;
       if (amountMinor !== null && amountMinor <= 0n)
         throw new Error('Enter a positive monthly limit.');
+      const alertText = alertValue.trim();
+      const alertPercent = alertText ? Number(alertText) : null;
+      if (
+        alertPercent !== null &&
+        (!Number.isFinite(alertPercent) || alertPercent < 1 || alertPercent > 100)
+      )
+        throw new Error('Enter an alert level from 1 to 100%.');
       const categoryId = String(category._id ?? category.cloudId ?? category.id ?? '');
       const recordId = String(category.id ?? category._id ?? categoryId);
       const dependencies = !category._id && !category.cloudId ? [`category:${categoryId}`] : [];
@@ -128,30 +137,36 @@ export default function EditCategoryScreen() {
           options,
         );
       }
-      updated = { ...updated, kind, color, notes: notes.trim() || undefined, includeInBudgets };
+      updated = { ...updated, kind, color, notes: notes.trim() || undefined };
       await commitLocalWrite(
         userId,
         'category',
         'category.setPreferences',
         updated,
-        { categoryId, kind, color: color ?? null, notes: notes.trim() || null, includeInBudgets },
+        { categoryId, kind, color: color ?? null, notes: notes.trim() || null },
         options,
       );
       if (
         amountMinor !==
-        (category.monthlyLimitMinor === undefined ? null : BigInt(category.monthlyLimitMinor))
+          (category.monthlyLimitMinor === undefined ? null : BigInt(category.monthlyLimitMinor)) ||
+        (amountMinor !== null && alertPercent !== (category.limitAlertPercent ?? null))
       ) {
         updated = {
           ...updated,
           monthlyLimitMinor: amountMinor ?? undefined,
           limitCurrency: amountMinor === null ? undefined : currency,
+          limitAlertPercent: amountMinor === null ? undefined : (alertPercent ?? undefined),
         };
         await commitLocalWrite(
           userId,
           'category',
           'category.setLimit',
           updated,
-          { categoryId, amountMinor, ...(amountMinor === null ? {} : { currency }) },
+          {
+            categoryId,
+            amountMinor,
+            ...(amountMinor === null ? {} : { currency, alertPercent }),
+          },
           options,
         );
       }
@@ -215,8 +230,9 @@ export default function EditCategoryScreen() {
       onNotesChange={setNotes}
       limitValue={limitValue}
       onLimitChange={setLimitValue}
-      includeInBudgets={includeInBudgets}
-      onIncludeInBudgetsChange={setIncludeInBudgets}
+      alertValue={alertValue}
+      onAlertChange={setAlertValue}
+      limitAlertPercent={category.limitAlertPercent}
       isDefault={defaultDraft ?? aliases.includes(profile?.[defaultField] as string)}
       onDefaultChange={profile ? setDefaultDraft : undefined}
       spentMinor={spentMinor}

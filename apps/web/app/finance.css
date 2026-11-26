@@ -4080,6 +4080,13 @@
   gap: 5px;
   overflow-wrap: anywhere;
 }
+.me-identity p.me-bio {
+  display: block;
+  max-width: 52ch;
+  color: var(--finance-text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
 .me-actions {
   display: flex;
   flex-wrap: wrap;

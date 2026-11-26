@@ -1,12 +1,12 @@
 /**
- * FinAI tools for managing everything: edit transactions; create / edit budgets, goals,
- * categories, accounts and recurring payments; move things to Trash; restore or delete Trash
- * items for good.
+ * FinAI tools for managing everything: edit transactions; create / edit goals, categories
+ * (including their monthly limits — budgets are category limits), accounts and recurring
+ * payments; move things to Trash; restore or delete Trash items for good.
  *
  * Confirmation policy:
  * - Deleting a transaction runs immediately (it goes to Trash and can be restored).
  * - Restoring from Trash runs immediately (nothing is lost).
- * - Everything else — creates, edits, moving budgets / goals / categories / accounts / recurring
+ * - Everything else — creates, edits, category limits, moving goals / categories / accounts / recurring
  *   to Trash, and deleting for good — becomes a confirmation card the user must press.
  */
 import { api, internal } from '../_generated/api';
@@ -15,7 +15,7 @@ import { formatMinor, shortDate } from './present';
 import { amountMinor, date, oneOf, requiredStr, s, str, ToolArgError } from './toolArgs';
 import { propose, type FinaiTool, type FinaiToolCtx } from './toolContext';
 
-const KINDS = ['budget', 'goal', 'category', 'account', 'recurring'] as const;
+const KINDS = ['goal', 'category', 'account', 'recurring'] as const;
 const TRASH_KINDS = ['transaction', 'account', 'category', 'budget', 'goal', 'recurring'] as const;
 type Kind = (typeof TRASH_KINDS)[number];
 const DAY = 86_400_000;
@@ -27,12 +27,6 @@ async function owned(ctx: FinaiToolCtx, kind: Kind, id: string) {
 }
 
 const nameOf = (doc: Record<string, unknown>) => String(doc.name ?? doc.title ?? 'Untitled');
-const monthBounds = (now: number) => {
-  const d = new Date(now);
-  const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-  const end = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) - 1;
-  return { start, end };
-};
 
 export const manageTools: FinaiTool[] = [
   {
@@ -176,85 +170,64 @@ export const manageTools: FinaiTool[] = [
     },
   },
   {
-    name: 'propose_budget',
+    name: 'propose_category_limit',
     description:
-      'Prepare a new monthly budget (spending limit), usually for one category. The user must press Confirm.',
+      'Prepare setting, changing or removing a category’s monthly limit (its budget) and alert level. Budgets are category limits: use this whenever the user asks for a budget. The user must press Confirm.',
     parameters: s.object(
       {
-        name: s.string('Budget name, e.g. "Food".'),
-        amount: s.amount('Monthly limit.'),
-        categoryId: s.string('Category id from list_categories.'),
-        currency: s.string('ISO code. Default: the user’s default currency.'),
-        alertAt: s.integer('Alert when this % is used (1-100). Default 80.', 1, 100),
+        categoryId: s.string('Category id from list_categories or list_category_limits.'),
+        amount: s.amount('Monthly limit. "0" removes the limit.'),
+        currency: s.string(
+          'ISO code. Default: the category’s limit currency or the user’s default.',
+        ),
+        alertAt: s.integer('Alert when this % of the limit is used (1-100). Default 80.', 1, 100),
       },
-      ['name', 'amount'],
+      ['categoryId'],
     ),
-    progress: { stage: 'working', label: 'Preparing the budget…' },
+    progress: { stage: 'working', label: 'Preparing the category limit…' },
     run: async (ctx, args) => {
-      const currency = (str(args, 'currency', 3) ?? ctx.defaultCurrency).toUpperCase();
-      const amount = amountMinor(args, 'amount', currency);
-      if (amount === undefined) throw new ToolArgError('MISSING_AMOUNT');
-      const { start, end } = monthBounds(Date.now());
-      const name = requiredStr(args, 'name', 80);
-      const categoryId = str(args, 'categoryId', 64);
-      if (categoryId) await owned(ctx, 'category', categoryId);
-      const alert = typeof args.alertAt === 'number' ? Math.round(args.alertAt) : 80;
-      return propose(ctx, {
-        kind: 'budget.create',
-        title: `New budget: ${name}`,
-        payload: {
-          name,
-          amountMinor: amount,
-          currency,
-          startAt: start,
-          endAt: end,
-          alertThreshold: alert,
-          ...(categoryId ? { categoryId } : {}),
+      const id = requiredStr(args, 'categoryId', 64);
+      const doc = await owned(ctx, 'category', id);
+      if (doc.archivedAt !== undefined) throw new ToolArgError('IN_TRASH');
+      const currency = (
+        str(args, 'currency', 3) ??
+        (typeof doc.limitCurrency === 'string' ? doc.limitCurrency : ctx.defaultCurrency)
+      ).toUpperCase();
+      const removing =
+        args.amount !== undefined && /^0+(\.0+)?$/.test(String(args.amount).replace(/[,\s]/g, ''));
+      const amount = removing ? 0n : amountMinor(args, 'amount', currency);
+      const hasLimit = doc.monthlyLimitMinor !== undefined && doc.monthlyLimitMinor !== null;
+      const alert = typeof args.alertAt === 'number' ? Math.round(args.alertAt) : undefined;
+      if (amount === undefined && alert === undefined) throw new ToolArgError('NOTHING_TO_CHANGE');
+      if (amount === undefined && !hasLimit) throw new ToolArgError('MISSING_AMOUNT');
+      const name = nameOf(doc);
+      if (amount === 0n)
+        return propose(ctx, {
+          kind: 'category.limit',
+          title: `Remove the limit on “${name}”`,
+          payload: { categoryId: id, monthlyLimitMinor: null },
+          lines: [{ label: 'Monthly limit', value: 'None' }],
+        });
+      const limitCurrency =
+        amount !== undefined ? currency : String(doc.limitCurrency ?? ctx.defaultCurrency);
+      const payload: Record<string, unknown> = {
+        categoryId: id,
+        monthlyLimitMinor: amount ?? doc.monthlyLimitMinor,
+        limitCurrency,
+        ...(alert !== undefined ? { alertPercent: alert } : {}),
+      };
+      const lines = [
+        ...(amount !== undefined
+          ? [{ label: 'Monthly limit', value: formatMinor(amount, limitCurrency) }]
+          : []),
+        {
+          label: 'Alert at',
+          value: `${alert ?? (typeof doc.limitAlertPercent === 'number' ? doc.limitAlertPercent : 80)}%`,
         },
-        lines: [
-          { label: 'Monthly limit', value: formatMinor(amount, currency) },
-          { label: 'Alert at', value: `${alert}%` },
-        ],
-      });
-    },
-  },
-  {
-    name: 'propose_budget_update',
-    description:
-      'Prepare a change to a budget’s name, limit or alert level. The user must press Confirm.',
-    parameters: s.object(
-      {
-        budgetId: s.string('Budget id from list_budgets.'),
-        name: s.string('New name.'),
-        amount: s.amount('New limit.'),
-        alertAt: s.integer('New alert %.', 1, 100),
-      },
-      ['budgetId'],
-    ),
-    progress: { stage: 'working', label: 'Preparing the budget change…' },
-    run: async (ctx, args) => {
-      const id = requiredStr(args, 'budgetId', 64);
-      const doc = await owned(ctx, 'budget', id);
-      const currency = String(doc.currency);
-      const amount = amountMinor(args, 'amount', currency);
-      const payload: Record<string, unknown> = { budgetId: id };
-      const lines: { label: string; value: string }[] = [];
-      if (str(args, 'name', 80)) {
-        payload.name = str(args, 'name', 80);
-        lines.push({ label: 'Name', value: String(payload.name) });
-      }
-      if (amount !== undefined) {
-        payload.amountMinor = amount;
-        lines.push({ label: 'Limit', value: formatMinor(amount, currency) });
-      }
-      if (typeof args.alertAt === 'number') {
-        payload.alertThreshold = Math.round(args.alertAt);
-        lines.push({ label: 'Alert at', value: `${payload.alertThreshold}%` });
-      }
-      if (!lines.length) throw new ToolArgError('NOTHING_TO_CHANGE');
+      ];
       return propose(ctx, {
-        kind: 'budget.update',
-        title: `Update budget “${nameOf(doc)}”`,
+        kind: 'category.limit',
+        title: hasLimit ? `Change the limit on “${name}”` : `Set a limit on “${name}”`,
         payload,
         lines,
       });
@@ -581,7 +554,7 @@ export const manageTools: FinaiTool[] = [
   {
     name: 'propose_delete',
     description:
-      'Prepare moving a budget, goal, category, account or recurring payment to Trash. For a category, set deleteTransactions true to also move its transactions to Trash (ask the user which they want). The user must press Confirm. (Transactions: use delete_transaction.)',
+      'Prepare moving a goal, category, account or recurring payment to Trash. (To drop a budget, remove the category’s limit with propose_category_limit.) For a category, set deleteTransactions true to also move its transactions to Trash (ask the user which they want). The user must press Confirm. (Transactions: use delete_transaction.)',
     parameters: s.object(
       {
         kind: s.enumOf('What to delete.', [...KINDS]),

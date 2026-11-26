@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { widgetPreviews } from '@/lib/mcp/previews';
-import { toolCatalog } from '@/lib/mcp/server';
+import { widgetPreviews } from '@finapp/mcp/previews';
+import { toolCatalog } from '@finapp/mcp/server';
 import { McpDashboardClient } from './client';
 
 export const metadata: Metadata = {

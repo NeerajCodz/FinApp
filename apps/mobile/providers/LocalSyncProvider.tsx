@@ -126,7 +126,6 @@ const cloudEntity: Record<string, LocalEntity> = {
 const bootstrapSections = [
   'accounts',
   'categories',
-  'budgets',
   'goals',
   'goalContributions',
   'recurringRules',
@@ -262,44 +261,11 @@ async function sendMutation(
         ...payload,
         categoryId: await mapId('category', payload.categoryId),
       } as never);
-    case 'budget.create': {
-      return convex.mutation(api.budgets.mutations.create, {
-        ...payload,
-        ...(typeof payload.categoryId === 'string'
-          ? { categoryId: await mapId('category', payload.categoryId) }
-          : {}),
-        ...(typeof payload.accountId === 'string'
-          ? { accountId: await mapId('account', payload.accountId) }
-          : {}),
-        ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
-          : {}),
-      } as never);
-    }
-    case 'budget.update': {
-      const budgetId = String(payload.budgetId);
-      const categoryId = String(payload.categoryId);
-      const [mappedBudgetId, mappedCategoryId] = await Promise.all([
-        getMappedCloudId(userId, 'budget', budgetId),
-        getMappedCloudId(userId, 'category', categoryId),
-      ]);
-      return convex.mutation(api.budgets.mutations.update, {
-        ...payload,
-        budgetId: mappedBudgetId ?? budgetId,
-        categoryId: mappedCategoryId ?? categoryId,
-        ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
-          : {}),
-      } as never);
-    }
-    case 'budget.archive': {
-      const budgetId = String(payload.budgetId);
-      const mappedBudgetId = await getMappedCloudId(userId, 'budget', budgetId);
-      return convex.mutation(api.budgets.mutations.archive, {
-        ...payload,
-        budgetId: mappedBudgetId ?? budgetId,
-      } as never);
-    }
+    // Budgets became category limits: budget changes queued by an older version are dropped.
+    case 'budget.create':
+    case 'budget.update':
+    case 'budget.archive':
+      return null;
     case 'transaction.create': {
       const accountId = String(payload.accountId);
       const categoryId = typeof payload.categoryId === 'string' ? payload.categoryId : null;
@@ -486,6 +452,16 @@ async function sendMutation(
     }
     case 'notification.markAllRead':
       return convex.mutation(api.notifications.mutations.markAllRead, payload as never);
+    case 'notification.markUnread':
+      return convex.mutation(api.notifications.mutations.markUnread, {
+        ...payload,
+        notificationId: await mapId('notification', payload.notificationId),
+      } as never);
+    case 'notification.remove':
+      return convex.mutation(api.notifications.mutations.remove, {
+        ...payload,
+        notificationId: await mapId('notification', payload.notificationId),
+      } as never);
     case 'user.update':
       return convex.mutation(api.users.mutations.update, payload as never);
     case 'user.defaultAccount': {
@@ -818,6 +794,14 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
         return {
           serverId: targetUserId,
           revision,
+          updatedAt: Date.now(),
+        };
+      }
+      if (entry.operation.startsWith('budget.')) {
+        // Budgets became category limits: an older version's queued budget change is dropped.
+        return {
+          serverId: targetUserId,
+          revision: await getSyncRevision(targetUserId),
           updatedAt: Date.now(),
         };
       }

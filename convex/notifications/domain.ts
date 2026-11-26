@@ -56,7 +56,8 @@ export function isNotificationType(value: unknown): value is NotificationType {
 
 export const notificationTypeLabels: Record<NotificationType, string> = {
   transaction: 'Transactions',
-  budget: 'Budget limits',
+  // Spending alerts from category limits (the type keeps its stored `budget` value).
+  budget: 'Category limits',
   goal: 'Goals',
   recurring: 'Recurring',
   group: 'Group membership',
@@ -82,11 +83,18 @@ export function notificationRoute(notification: NotificationRoute): string {
   if (notification.entityType === 'mcpConnection') return '/settings/ai/mcp';
   if (notification.entityType === 'recurring') return '/recurring';
   if (notification.entityType === 'sync') return '/settings/sync';
-  if (notification.entityType === 'security') return '/settings/security';
+  if (
+    notification.entityType === 'security' ||
+    (notification.type === 'security' &&
+      (notification.entityType === 'account' || notification.entityType === 'session'))
+  )
+    return '/settings/security';
   if (!notification.entityId) return '/notifications';
   const id = encodeURIComponent(notification.entityId);
   if (notification.entityType === 'transaction') return `/transaction/${id}`;
-  if (notification.entityType === 'budget') return `/budget/${id}`;
+  // Budgets became category limits: old budget alerts open Categories.
+  if (notification.entityType === 'budget') return '/categories';
+  if (notification.entityType === 'category') return `/category/${id}`;
   if (notification.entityType === 'group') return `/group/${id}`;
   if (notification.entityType === 'goal') return `/goals/${id}`;
   // Settlement events carry the group id: open that group's balances to review or settle up.

@@ -27,7 +27,6 @@ export default function DashboardPage() {
   const { records: groups } = useLocalRecords<HomeRecord>('group');
   const { records: groupMembers } = useLocalRecords<HomeRecord>('groupMember');
   const { records: profiles } = useLocalRecords<HomeRecord>('profile');
-  const { records: budgets } = useLocalRecords<HomeRecord>('budget');
   const { records: recurringRules } = useLocalRecords<HomeRecord>('recurringRule');
   const { records: goals } = useLocalRecords<HomeRecord>('goal');
   const { records: goalContributions } = useLocalRecords<HomeRecord>('goalContribution');
@@ -100,14 +99,12 @@ export default function DashboardPage() {
         categories,
         groups,
         groupMembers,
-        budgets,
         recurringRules,
         goals,
         goalContributions,
       }),
     [
       accounts,
-      budgets,
       categories,
       currency,
       timeZone,
@@ -154,8 +151,6 @@ export default function DashboardPage() {
         onChooseDate={() => setPeriodOpen(true)}
         onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
         onSeeAllTransactions={() => router.push('/activity')}
-        onOpenBudget={(id) => router.push(`/budget/${encodeURIComponent(id)}`)}
-        onSeeAllBudgets={() => router.push('/budgets')}
         onOpenGoal={(id) => router.push(`/goals/${encodeURIComponent(id)}`)}
         onSeeAllGoals={() => router.push('/goals')}
         onOpenCategory={(id) => router.push(`/category/${encodeURIComponent(id)}`)}

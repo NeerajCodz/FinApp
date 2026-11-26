@@ -5,8 +5,8 @@ import { Button, CustomSelect } from '@finapp/ui/web';
 import { EntityIcon } from './EntityIconPicker';
 import { formatMinor } from '../money';
 import { formatTransactionDate } from '../datetime';
-import { Bar, Ring, Legend, Metrics, Panel } from './GoalsBudgetsParts';
-import s from './GoalsBudgets.module.css';
+import { Bar, Ring, Legend, Metrics, Panel } from './GoalsParts';
+import s from './Goals.module.css';
 import { FinanceEmptyState } from './FinanceEmptyState';
 export type GoalOverviewItem = {
   id: string;

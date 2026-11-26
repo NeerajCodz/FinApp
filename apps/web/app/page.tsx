@@ -36,7 +36,7 @@ const questions = [
   {
     question: 'What can I do with Finapp?',
     answer:
-      'Keep track of accounts and transactions, organise spending by category, set budgets and savings goals, and manage shared expenses with groups.',
+      'Keep track of accounts and transactions, organise spending by category, set monthly limits on categories and savings goals, and manage shared expenses with groups.',
   },
   {
     question: 'How do shared expenses work?',
@@ -202,8 +202,8 @@ export default function HomePage() {
               <div>
                 <h3>A plan, not a restriction.</h3>
                 <p>
-                  Set category budgets and track your spending against them. Keep the things you
-                  love in the picture.
+                  Set a monthly limit on any category and track your spending against it. Keep the
+                  things you love in the picture.
                 </p>
               </div>
               <span className="landing-budget-art" aria-hidden="true">

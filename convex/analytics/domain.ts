@@ -291,7 +291,8 @@ export function aggregateAnalytics(
 export function deterministicInsights(input: {
   currentFood: bigint;
   previousFood: bigint;
-  budgetUsedPercent: number;
+  /** Highest category-limit usage this month, in percent. */
+  limitUsedPercent: number;
   recurringDue: number;
 }): string[] {
   const insights: string[] = [];
@@ -302,9 +303,9 @@ export function deterministicInsights(input: {
     if (percentage >= 10)
       insights.push(`Food spending is up ${percentage}% versus the prior period.`);
   }
-  if (input.budgetUsedPercent >= 100) insights.push('Budget is exceeded.');
-  else if (input.budgetUsedPercent >= 90) insights.push('Budget is near its limit.');
-  else if (input.budgetUsedPercent >= 75) insights.push('Budget is in its warning range.');
+  if (input.limitUsedPercent >= 100) insights.push('A category limit is exceeded.');
+  else if (input.limitUsedPercent >= 90) insights.push('A category limit is nearly used up.');
+  else if (input.limitUsedPercent >= 75) insights.push('A category limit is in its warning range.');
   if (input.recurringDue > 0)
     insights.push(`${input.recurringDue} recurring payments are due soon.`);
   return insights;

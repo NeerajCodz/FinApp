@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
-import { authorizationRedirect } from '@/lib/mcp/metadata';
-import { convexClient, mcpResourceUrl } from '@/lib/mcp/oauth';
+import { authorizationRedirect } from '@finapp/mcp/metadata';
+import { convexClient, mcpResourceUrl } from '@finapp/mcp/oauth';
 
 export const runtime = 'nodejs';
 

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, TouchableOpacity, View, StyleSheet } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import {
   ArrowLeft,
   CalendarDays,
@@ -22,7 +21,8 @@ import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import { CategoryEmojiPicker } from './CategoryEmojiPicker';
-import { BudgetProgress } from './BudgetProgress';
+import { ColumnChart, Meter, RingProgress, compactMoney, fullMoney } from '../../charts/native';
+import { toMajor } from '../../analytics/chart-utils';
 import { TransactionRow } from './TransactionRow';
 import { formatTransactionDate } from '../datetime';
 import { withAlpha } from '../../tokens';
@@ -36,6 +36,8 @@ export type CategoryDetailRecord = {
   archivedAt?: number;
   monthlyLimitMinor?: bigint;
   limitCurrency?: string;
+  /** Spending alert level for the limit, in percent (default 80). */
+  limitAlertPercent?: number;
   updatedAt?: number;
 };
 export type CategoryDetailTransaction = {
@@ -67,6 +69,8 @@ export type CategoryDetailScreenProps = {
   pending?: boolean;
   formError?: string | null;
   limitValue: string;
+  /** Alert level input (percent); shown with the limit form when `onAlertChange` is given. */
+  alertValue?: string;
   isDefaultExpense: boolean;
   isDefaultIncome: boolean;
   confirmingArchive: boolean;
@@ -76,6 +80,7 @@ export type CategoryDetailScreenProps = {
   onEditName: () => void;
   onIconChange: (value?: string) => void;
   onLimitChange: (value: string) => void;
+  onAlertChange?: (value: string) => void;
   onSaveLimit: () => void;
   onClearLimit: () => void;
   onToggleDefault: (type: 'expense' | 'income') => void;
@@ -97,6 +102,7 @@ export function CategoryDetailScreen({
   pending = false,
   formError,
   limitValue,
+  alertValue = '',
   isDefaultExpense,
   isDefaultIncome,
   confirmingArchive,
@@ -106,6 +112,7 @@ export function CategoryDetailScreen({
   onEditName,
   onIconChange,
   onLimitChange,
+  onAlertChange,
   onSaveLimit,
   onClearLimit,
   onToggleDefault,
@@ -169,6 +176,13 @@ export function CategoryDetailScreen({
           ? 'Limit reached'
           : `${Number((remaining * 100n) / limit!)}% left`;
   const limitUsed = limit && limit > 0n ? Math.min(100, Number((monthlySpent * 100n) / limit)) : 0;
+  const alertPercent = category?.limitAlertPercent ?? 80;
+  const limitTone =
+    limit !== undefined && monthlySpent > limit
+      ? tokens.expense
+      : limitUsed >= alertPercent
+        ? tokens.warning
+        : tokens.income;
   const buckets = Array.from({ length: period === 'week' ? 7 : 12 }, (_, index) => {
     if (period === 'year') {
       const from = Date.UTC(y, index, 1);
@@ -214,7 +228,6 @@ export function CategoryDetailScreen({
         .reduce((sum, row) => sum + row.amountMinor, 0n),
     };
   });
-  const maxBucket = buckets.reduce((max, item) => (item.value > max ? item.value : max), 0n);
   const merchantTotals = new Map<string, { amount: bigint; count: number }>();
   for (const transaction of inPeriod) {
     if (transaction.type !== 'expense') continue;
@@ -338,7 +351,11 @@ export function CategoryDetailScreen({
                   ? 'Not set'
                   : formatMinor(limit, category.limitCurrency ?? currency)
               }
-              note={limit === undefined ? 'Set a limit below' : `${limitUsed}% used this month`}
+              note={
+                limit === undefined
+                  ? 'Set a limit below'
+                  : `${limitUsed}% used · alert at ${alertPercent}%`
+              }
               color={tokens.warning}
             />
             <Metric
@@ -411,47 +428,21 @@ export function CategoryDetailScreen({
               ))}
             </View>
             {inPeriod.length ? (
-              <View
-                style={[styles.chart, { borderBottomColor: tokens.borderSubtle }]}
-                accessibilityLabel={`${chartType} category activity`}
-              >
-                <View
-                  style={[
-                    styles.chartGridline,
-                    { borderColor: tokens.borderSubtle },
-                    { top: '0%' },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.chartGridline,
-                    { borderColor: tokens.borderSubtle },
-                    { top: '50%' },
-                  ]}
-                />
-                {buckets.map((bucket) => (
-                  <View key={bucket.key} style={styles.barColumn}>
-                    <View style={styles.barSpace}>
-                      <View
-                        style={{
-                          width: '54%',
-                          minHeight: bucket.value > 0n ? 3 : 0,
-                          height: `${maxBucket > 0n ? Math.max(2, Number((bucket.value * 10000n) / maxBucket) / 100) : 0}%`,
-                          borderTopLeftRadius: 4,
-                          borderTopRightRadius: 4,
-                          backgroundColor: chartType === 'income' ? tokens.income : tokens.expense,
-                        }}
-                      />
-                    </View>
-                    <Typography
-                      variant="caption"
-                      style={{ fontSize: 9, color: tokens.foregroundMuted }}
-                    >
-                      {bucket.label}
-                    </Typography>
-                  </View>
-                ))}
-              </View>
+              <ColumnChart
+                caption={`${chartType} category activity in ${currency}`}
+                height={190}
+                labels={buckets.map((bucket) => bucket.label)}
+                series={[
+                  {
+                    id: chartType,
+                    label: chartType === 'income' ? 'Income' : 'Expenses',
+                    values: buckets.map((bucket) => toMajor(bucket.value, currency)),
+                    color: chartType === 'income' ? tokens.income : tokens.expense,
+                  },
+                ]}
+                format={(value) => fullMoney(value, currency)}
+                axisFormat={(value) => compactMoney(value, currency)}
+              />
             ) : (
               <FinanceEmptyState
                 kind="analytics"
@@ -497,35 +488,14 @@ export function CategoryDetailScreen({
             ) : (
               <>
                 <View style={styles.limitSummary}>
-                  <View style={styles.limitRing}>
-                    <Svg width="100%" height="100%" viewBox="0 0 120 120">
-                      <Circle
-                        cx="60"
-                        cy="60"
-                        r="48"
-                        fill="none"
-                        stroke={tokens.borderSubtle}
-                        strokeWidth="12"
-                      />
-                      <Circle
-                        cx="60"
-                        cy="60"
-                        r="48"
-                        fill="none"
-                        stroke={tokens.warning}
-                        strokeWidth="12"
-                        strokeDasharray={`${(2 * Math.PI * 48 * limitUsed) / 100} ${2 * Math.PI * 48}`}
-                        rotation={-90}
-                        origin="60, 60"
-                      />
-                    </Svg>
+                  <RingProgress value={limitUsed / 100} size={86} stroke={9} color={limitTone}>
                     <View style={styles.ringText}>
                       <Typography variant="bodyLarge">{limitUsed}%</Typography>
                       <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
                         used
                       </Typography>
                     </View>
-                  </View>
+                  </RingProgress>
                   <View style={{ flex: 1, gap: 4 }}>
                     <Typography variant="bodyLarge">
                       {formatMinor(monthlySpent, category.limitCurrency ?? currency)}
@@ -535,12 +505,16 @@ export function CategoryDetailScreen({
                     </Typography>
                   </View>
                 </View>
-                <BudgetProgress
-                  spentMinor={monthlySpent}
-                  limitMinor={limit}
-                  currency={category.limitCurrency ?? currency}
-                  title="This month"
-                  primary
+                <Meter
+                  value={Number(monthlySpent)}
+                  max={Number(limit)}
+                  warnAt={alertPercent / 100}
+                  label={`Alert at ${alertPercent}%`}
+                  detail={
+                    remaining !== undefined && remaining < 0n
+                      ? `${formatMinor(-remaining, category.limitCurrency ?? currency)} over`
+                      : `${formatMinor(remaining ?? 0n, category.limitCurrency ?? currency)} left`
+                  }
                 />
               </>
             )}
@@ -589,13 +563,22 @@ export function CategoryDetailScreen({
                   onChangeText={onLimitChange}
                   placeholder="Amount"
                 />
+                {onAlertChange && (
+                  <Input
+                    accessibilityLabel="Alert when this percent of the limit is spent"
+                    keyboardType="number-pad"
+                    value={alertValue}
+                    onChangeText={onAlertChange}
+                    placeholder={`Alert at % (now ${alertPercent}%)`}
+                  />
+                )}
                 <View style={styles.inlineButtons}>
                   <Button size="sm" disabled={pending || !limitValue.trim()} onPress={onSaveLimit}>
                     Save limit
                   </Button>
                   {limit !== undefined && (
                     <Button size="sm" variant="outline" disabled={pending} onPress={onClearLimit}>
-                      Clear limit
+                      Remove limit
                     </Button>
                   )}
                 </View>
@@ -944,23 +927,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
   },
-  chart: {
-    height: 140,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    justifyContent: 'space-around',
-    gap: 3,
-    borderBottomWidth: 1,
-    paddingTop: 4,
-  },
-  chartGridline: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  barColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
-  barSpace: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'flex-end' },
   chartFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -968,7 +934,6 @@ const styles = StyleSheet.create({
     paddingTop: 5,
   },
   limitSummary: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 3 },
-  limitRing: { width: 94, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
   ringText: { position: 'absolute', alignItems: 'center' },
   noLimit: { alignItems: 'center', paddingVertical: 12, gap: 4 },
   limitForm: {

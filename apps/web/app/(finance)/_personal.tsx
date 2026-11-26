@@ -31,7 +31,7 @@ export function belongsToUser(record: LocalRecord, userId: string): boolean {
   return typeof record.ownerId !== 'string' || record.ownerId === userId;
 }
 
-export function localDependency(entity: 'account' | 'category' | 'budget', record: LocalRecord) {
+export function localDependency(entity: 'account' | 'category', record: LocalRecord) {
   const id = idOf(record);
   return record.cloudId || record._id || !id ? null : `${entity}:${id}`;
 }

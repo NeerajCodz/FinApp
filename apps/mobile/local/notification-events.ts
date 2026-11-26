@@ -10,6 +10,7 @@ import {
   markDeviceNotificationRead,
   putLocalNotification,
   readLocal,
+  updateDeviceNotification,
   type LocalRecord,
 } from './repository';
 import { isExpoGo } from './runtime';
@@ -26,6 +27,8 @@ export type NotificationRecord = LocalRecord & {
   entityType?: string;
   entityId?: string;
   readAt?: number;
+  /** Set when deleted on this device; cloud records go away once the server confirms. */
+  deletedAt?: number;
 };
 
 export type RecurringRecord = LocalRecord & {
@@ -64,6 +67,40 @@ export async function markNotificationAsRead(userId: string, record: Notificatio
     'notification',
     'notification.markRead',
     { ...record, readAt: Date.now() },
+    { notificationId: String(record.cloudId ?? record._id ?? record.id) },
+    { recordId: record.id },
+  );
+}
+
+export async function markNotificationAsUnread(userId: string, record: NotificationRecord) {
+  if (record.readAt === undefined) return;
+  if (record.id.startsWith('local:')) {
+    await updateDeviceNotification(userId, record.id, { readAt: null });
+    return;
+  }
+  const { readAt: _readAt, ...unread } = record;
+  await commitLocalWrite(
+    userId,
+    'notification',
+    'notification.markUnread',
+    unread,
+    { notificationId: String(record.cloudId ?? record._id ?? record.id) },
+    { recordId: record.id },
+  );
+}
+
+/** Hides the notification at once; cloud notifications are also deleted on the server. */
+export async function deleteNotification(userId: string, record: NotificationRecord) {
+  const deletedAt = Date.now();
+  if (record.id.startsWith('local:')) {
+    await updateDeviceNotification(userId, record.id, { deletedAt });
+    return;
+  }
+  await commitLocalWrite(
+    userId,
+    'notification',
+    'notification.remove',
+    { ...record, deletedAt },
     { notificationId: String(record.cloudId ?? record._id ?? record.id) },
     { recordId: record.id },
   );

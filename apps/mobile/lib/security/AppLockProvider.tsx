@@ -3,7 +3,14 @@ import { useRouter } from 'expo-router';
 import { AppState, Platform, View } from 'react-native';
 import { useAction, useConvex, useConvexAuth } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { LockScreen } from '@finapp/ui/finance';
+import {
+  LockScreen,
+  lockTimedOut,
+  lockTimeoutKey,
+  parseLockTimeout,
+  type LockTimeoutMinutes,
+} from '@finapp/ui/finance';
+import Storage from 'expo-sqlite/kv-store';
 import { useLocalRecords } from '@/hooks/useLocalRecords';
 import type { LocalRecord } from '@/local/repository';
 import { clearValidatedLocalUserId } from '@/local/identity';
@@ -34,6 +41,9 @@ type LockContextValue = {
   lock: AppLock | null;
   ready: boolean;
   changeLock: (next: 'device' | 'passcode' | null, code?: string) => Promise<void>;
+  /** Minutes in the background before the lock asks again (Settings → Security). */
+  timeoutMinutes: LockTimeoutMinutes;
+  setTimeoutMinutes: (minutes: LockTimeoutMinutes) => void;
 };
 const LockContext = React.createContext<LockContextValue | null>(null);
 
@@ -75,6 +85,33 @@ export function AppLockProvider({
   const [now, setNow] = React.useState(Date.now());
   const generation = React.useRef(0);
   const activeState = React.useRef(AppState.currentState);
+  const backgroundAt = React.useRef<number | null>(null);
+  const [timeoutMinutes, setTimeoutState] = React.useState<LockTimeoutMinutes>(
+    parseLockTimeout(null),
+  );
+  React.useEffect(() => {
+    if (!userId) return;
+    try {
+      setTimeoutState(parseLockTimeout(Storage.getItemSync(lockTimeoutKey(userId))));
+    } catch {
+      setTimeoutState(parseLockTimeout(null));
+    }
+  }, [userId]);
+  const timeoutRef = React.useRef(timeoutMinutes);
+  timeoutRef.current = timeoutMinutes;
+  const setTimeoutMinutes = React.useCallback(
+    (minutes: LockTimeoutMinutes) => {
+      setTimeoutState(minutes);
+      if (userId) {
+        try {
+          Storage.setItemSync(lockTimeoutKey(userId), String(minutes));
+        } catch {
+          // Kept for this session only.
+        }
+      }
+    },
+    [userId],
+  );
   const lastPrompt = React.useRef(-1);
   const devicePromptInFlight = React.useRef(false);
   const suppressNextPrompt = React.useRef(false);
@@ -128,15 +165,20 @@ export function AppLockProvider({
       const previous = activeState.current;
       activeState.current = next;
       if (next === 'background' && previous !== 'background') {
-        ++generation.current;
+        // Remember when we left; the lock decides on return (after the timeout).
+        backgroundAt.current = Date.now();
         if (devicePromptInFlight.current) suppressNextPrompt.current = true;
+      } else if (next === 'active' && previous === 'background' && userId) {
+        const away = backgroundAt.current === null ? Infinity : Date.now() - backgroundAt.current;
+        backgroundAt.current = null;
+        if (!lockTimedOut(away, timeoutRef.current)) return;
+        ++generation.current;
         lastPrompt.current = -1;
         setState((old) => (old.lock ? { ...old, phase: 'locked', error: undefined } : old));
         setCode('');
         setResetStep('none');
         setNewCode('');
         setConfirmCode('');
-      } else if (next === 'active' && previous === 'background' && userId) {
         void reload(userId);
       }
     });
@@ -306,8 +348,10 @@ export function AppLockProvider({
       lock: scoped.lock,
       ready: scoped.phase === 'unlocked',
       changeLock,
+      timeoutMinutes,
+      setTimeoutMinutes,
     }),
-    [scoped.lock, scoped.phase, changeLock],
+    [scoped.lock, scoped.phase, changeLock, timeoutMinutes, setTimeoutMinutes],
   );
 
   const displayName =

@@ -1,7 +1,7 @@
 import { api } from '@convex/_generated/api';
 import { decodeJwt } from 'jose';
 import { readClientCredentials } from '@convex/shared/mcpClients';
-import { convexClient, mcpResourceUrl, prepareMcpAccessTokenSigner } from '@/lib/mcp/oauth';
+import { convexClient, mcpResourceUrl, prepareMcpAccessTokenSigner } from '@finapp/mcp/oauth';
 
 export const runtime = 'nodejs';
 

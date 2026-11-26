@@ -9,7 +9,7 @@ import { assertAccountCanReceiveTransaction, type AccountDraft } from '../accoun
 import { assertMutationAvailable, transactionSignedAmount } from './domain';
 import { getMutationReceipt, recordSyncChange, storeMutationReceipt } from '../sync/common';
 import { createNotification } from '../notifications/mutations';
-import { aggregateBudgetSpending, budgetAlertThresholdCrossed } from '../budgets/domain';
+import { notifyCategoryLimit } from '../categories/alerts';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 import { lineItemValidator } from '../schema';
 import { keptLineItems, normalizeLineItems, type LineItem } from '../splits/domain';
@@ -199,71 +199,13 @@ export const create = mutation({
       revision,
       updatedAt,
     );
-    if (args.type === 'expense') {
-      const budgets = await ctx.db
-        .query('budgets')
-        .withIndex('by_owner_period', (query) => query.eq('ownerId', user._id))
-        .collect();
-      const categories = await ctx.db
-        .query('categories')
-        .withIndex('by_owner', (query) => query.eq('ownerId', user._id))
-        .collect();
-      const excludedCategoryIds = new Set(
-        categories
-          .filter((entry) => entry.includeInBudgets === false)
-          .map((entry) => String(entry._id)),
-      );
-      const active = budgets.filter(
-        (budget) =>
-          budget.archivedAt === undefined &&
-          budget.currency === args.currency &&
-          args.occurredAt >= budget.startAt &&
-          args.occurredAt < budget.endAt &&
-          (budget.period !== 'category' || budget.categoryId === args.categoryId) &&
-          (budget.period !== 'account' || budget.accountId === args.accountId) &&
-          (!budget.accountIds?.length || budget.accountIds.includes(String(args.accountId))) &&
-          (args.categoryId === undefined || !excludedCategoryIds.has(String(args.categoryId))),
-      );
-      if (active.length) {
-        const startAt = Math.min(...active.map((budget) => budget.startAt));
-        const endAt = Math.max(...active.map((budget) => budget.endAt));
-        const spending = await ctx.db
-          .query('transactions')
-          .withIndex('by_owner_occurredAt', (query) =>
-            query.eq('ownerId', user._id).gte('occurredAt', startAt).lt('occurredAt', endAt),
-          )
-          .collect();
-        for (const budget of active) {
-          const current = aggregateBudgetSpending(spending, budget, excludedCategoryIds);
-          const previous = current - args.amountMinor;
-          const configuredThreshold = budget.alertThreshold ?? 80;
-          const threshold =
-            previous < budget.amountMinor && current >= budget.amountMinor
-              ? 100
-              : budgetAlertThresholdCrossed(
-                    previous,
-                    current,
-                    budget.amountMinor,
-                    configuredThreshold,
-                  )
-                ? configuredThreshold
-                : null;
-          if (threshold !== null)
-            await createNotification(
-              ctx,
-              user._id,
-              `budget:${budget._id}:${budget.startAt}:${threshold}`,
-              'budget',
-              'budget',
-              String(budget._id),
-              `${budget.name}: ${threshold}% used`,
-              threshold === 100
-                ? 'You reached this budget limit.'
-                : 'You are nearing this budget limit.',
-            );
-        }
-      }
-    }
+    if (args.type === 'expense')
+      await notifyCategoryLimit(ctx, user._id, {
+        categoryId: args.categoryId,
+        currency: args.currency,
+        occurredAt: args.occurredAt,
+        amountMinor: args.amountMinor,
+      });
     await createNotification(
       ctx,
       user._id,

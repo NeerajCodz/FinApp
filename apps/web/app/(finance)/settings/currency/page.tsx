@@ -112,7 +112,7 @@ export default function CurrencySettingsPage() {
       <SettingsHero
         icon={<Coins size={22} />}
         title={`${currencyLabel(selected)} (${selected})`}
-        description={`${currencySymbol(selected)} is used for new accounts, budgets, groups and transactions. Past entries keep their own currency.`}
+        description={`${currencySymbol(selected)} is used for new accounts, category limits, groups and transactions. Past entries keep their own currency.`}
       />
       <SettingsGroup title="Choose a currency">
         <SettingsItem icon={<Search size={19} />} title="Search">

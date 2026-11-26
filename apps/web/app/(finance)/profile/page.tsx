@@ -44,6 +44,7 @@ type Profile = LocalRecord & {
   defaultCurrency?: string;
   avatarId?: string;
   avatarUrl?: string | null;
+  bio?: string;
 };
 const links = [
   { label: 'Accounts', description: 'Balances and activity', href: '/accounts', icon: Wallet },
@@ -151,6 +152,7 @@ export default function ProfilePage() {
                   </span>
                 ) : null}
               </p>
+              {profile?.bio ? <p className="me-bio">{profile.bio}</p> : null}
             </div>
             <div className="me-actions">
               <Button variant="outline" onPress={() => router.push('/profile/edit')}>

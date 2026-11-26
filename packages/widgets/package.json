@@ -1,0 +1,16 @@
+{
+  "name": "@finapp/widgets",
+  "version": "1.11.0",
+  "private": true,
+  "description": "FinApp MCP Apps widgets: self-contained HTML resources rendered from tool results.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "preview": "bun scripts/preview.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@finapp/ui": "workspace:*"
+  }
+}

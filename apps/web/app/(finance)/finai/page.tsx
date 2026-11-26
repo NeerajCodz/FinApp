@@ -37,7 +37,7 @@ function FinaiPageContent() {
       <FinanceSignedOut
         section="FINAI"
         title="Your money, answered."
-        description="Sign in to ask FinAI about your spending, budgets, groups and balances."
+        description="Sign in to ask FinAI about your spending, category limits, groups and balances."
       />
     );
   return (

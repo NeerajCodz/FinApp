@@ -185,7 +185,7 @@ export default function FinaiSettingsPage() {
         <SettingsSwitch
           icon={<CalendarCheck2 size={19} />}
           tone="positive"
-          title="Budgets and goals"
+          title="Category limits and goals"
           description="Limits, progress and savings goals"
           checked={settings.dataScopes.planning}
           disabled={disabled || off}

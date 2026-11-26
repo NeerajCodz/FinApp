@@ -30,7 +30,7 @@ export default function TrashSettingsPage() {
   return (
     <SettingsShell
       title="Trash"
-      subtitle="Deleted transactions, accounts, categories, budgets, goals and recurring items"
+      subtitle="Deleted transactions, accounts, categories, goals and recurring items"
       onBack={() => router.push('/settings')}
     >
       <SettingsGroup title="Automatic cleanup">

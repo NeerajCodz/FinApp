@@ -7,6 +7,7 @@ import { formatMinor } from '../money';
 import { formatTransactionDate } from '../datetime';
 import { CategoryIcon } from './CategoryIcon';
 import styles from './CategoriesOverview.module.css';
+import { Meter } from '../../charts/web';
 import { FinanceEmptyState } from './FinanceEmptyState';
 
 export type CategoryOverviewItem = {
@@ -19,6 +20,8 @@ export type CategoryOverviewItem = {
   monthReceivedMinor: bigint;
   recentSpendMinor: bigint;
   monthlyLimitMinor?: bigint;
+  /** Alert level for the limit, in percent (default 80). */
+  limitAlertPercent?: number;
   transactionCount: number;
   lastActivityAt?: number;
 };
@@ -232,20 +235,13 @@ export function CategoriesOverview({
                       {item.monthlyLimitMinor === undefined ? (
                         <span className={styles.muted}>No limit</span>
                       ) : (
-                        <>
-                          <span>
-                            {activePercent}% of {formatMinor(item.monthlyLimitMinor, item.currency)}
-                          </span>
-                          <span
-                            className={styles.track}
-                            aria-label={`${activePercent}% of limit used`}
-                          >
-                            <span
-                              className={isOver ? styles.overTrack : undefined}
-                              style={{ width: `${activePercent}%` }}
-                            />
-                          </span>
-                        </>
+                        <Meter
+                          value={Number(item.monthSpentMinor)}
+                          max={Number(item.monthlyLimitMinor)}
+                          warnAt={(item.limitAlertPercent ?? 80) / 100}
+                          label={`${isOver ? 'Over · ' : ''}${activePercent}% of ${formatMinor(item.monthlyLimitMinor, item.currency)}`}
+                          thin
+                        />
                       )}
                     </span>
                     <span className={styles.activity}>{dateLabel(item.lastActivityAt)}</span>

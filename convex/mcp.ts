@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 import { getOptionalUser } from './shared/auth';
 import { query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
+import { normalizeNotificationPreferences } from './notifications/domain';
 
 /** Line items for output; an empty list reads as "no items". */
 function lineItems(transaction: Doc<'transactions'>) {
@@ -12,7 +13,6 @@ function lineItems(transaction: Doc<'transactions'>) {
 const resourceValidator = v.union(
   v.literal('accounts'),
   v.literal('categories'),
-  v.literal('budgets'),
   v.literal('goals'),
   v.literal('goalContributions'),
   v.literal('recurringRules'),
@@ -165,32 +165,9 @@ export const listOwnedRecords = query({
             kind: row.kind,
             icon: row.icon,
             color: row.color,
-            includeInBudgets: row.includeInBudgets,
             monthlyLimitMinor: row.monthlyLimitMinor,
-          })),
-        nextCursor: page.isDone ? null : page.continueCursor,
-        isDone: page.isDone,
-      };
-    }
-    if (args.resource === 'budgets') {
-      page = await ctx.db
-        .query('budgets')
-        .withIndex('by_owner_period', (index) => index.eq('ownerId', user._id))
-        .order('desc')
-        .paginate(args.paginationOpts);
-      return {
-        items: page.page
-          .filter((row) => row.archivedAt === undefined)
-          .map((row) => ({
-            id: row._id,
-            name: row.name,
-            amountMinor: row.amountMinor,
-            currency: row.currency,
-            period: row.period,
-            categoryId: row.categoryId,
-            accountId: row.accountId,
-            startAt: row.startAt,
-            endAt: row.endAt,
+            limitCurrency: row.limitCurrency,
+            limitAlertPercent: row.limitAlertPercent,
           })),
         nextCursor: page.isDone ? null : page.continueCursor,
         isDone: page.isDone,
@@ -1100,6 +1077,35 @@ export const listDirectMessages = query({
       })),
       nextCursor: page.isDone ? null : page.continueCursor,
       isDone: page.isDone,
+    };
+  },
+});
+
+/** Unread notifications are counted among this many of the newest; more reads as "500+". */
+const NOTIFICATION_UNREAD_SCAN = 500;
+
+/** The caller's unread notification count and per-type notification preferences. */
+export const notificationState = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
+    const [recent, settings] = await Promise.all([
+      ctx.db
+        .query('notifications')
+        .withIndex('by_recipient_createdAt', (index) => index.eq('recipientId', user._id))
+        .order('desc')
+        .take(NOTIFICATION_UNREAD_SCAN + 1),
+      ctx.db
+        .query('userSettings')
+        .withIndex('by_user', (index) => index.eq('userId', user._id))
+        .unique(),
+    ]);
+    const scanned = recent.slice(0, NOTIFICATION_UNREAD_SCAN);
+    return {
+      unreadCount: scanned.filter((row) => row.readAt === undefined).length,
+      unreadCapped: recent.length > NOTIFICATION_UNREAD_SCAN,
+      preferences: normalizeNotificationPreferences(settings?.notificationPreferences),
     };
   },
 });

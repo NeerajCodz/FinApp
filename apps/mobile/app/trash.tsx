@@ -29,7 +29,8 @@ const LABEL: Record<Kind, string> = {
   transaction: 'Transactions',
   account: 'Accounts',
   category: 'Categories',
-  budget: 'Budgets',
+  // Budgets trashed before they became category limits; restoring sets the category's limit.
+  budget: 'Old budgets',
   goal: 'Goals',
   recurring: 'Recurring',
 };
@@ -143,43 +144,43 @@ export default function TrashScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 6 }}
       >
-        {(
-          ['all', 'transaction', 'account', 'category', 'budget', 'goal', 'recurring'] as const
-        ).map((kind) => {
-          const active = filter === kind;
-          const count =
-            kind === 'all' ? items.length : items.filter((item) => item.kind === kind).length;
-          return (
-            <Pressable
-              key={kind}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => setFilter(kind)}
-              style={{
-                height: 34,
-                paddingHorizontal: 12,
-                borderRadius: 17,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                borderWidth: 1,
-                borderColor: active ? tokens.primary : tokens.borderSubtle,
-                backgroundColor: active ? `${tokens.primary}22` : 'transparent',
-              }}
-            >
-              <Text
+        {(['all', 'transaction', 'account', 'category', 'goal', 'recurring'] as const).map(
+          (kind) => {
+            const active = filter === kind;
+            const count =
+              kind === 'all' ? items.length : items.filter((item) => item.kind === kind).length;
+            return (
+              <Pressable
+                key={kind}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setFilter(kind)}
                 style={{
-                  color: active ? tokens.foreground : tokens.foregroundMuted,
-                  fontWeight: '600',
-                  fontSize: 13,
+                  height: 34,
+                  paddingHorizontal: 12,
+                  borderRadius: 17,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderWidth: 1,
+                  borderColor: active ? tokens.primary : tokens.borderSubtle,
+                  backgroundColor: active ? `${tokens.primary}22` : 'transparent',
                 }}
               >
-                {kind === 'all' ? 'All' : LABEL[kind]}
-              </Text>
-              <Text style={{ color: tokens.foregroundMuted, fontSize: 11 }}>{count}</Text>
-            </Pressable>
-          );
-        })}
+                <Text
+                  style={{
+                    color: active ? tokens.foreground : tokens.foregroundMuted,
+                    fontWeight: '600',
+                    fontSize: 13,
+                  }}
+                >
+                  {kind === 'all' ? 'All' : LABEL[kind]}
+                </Text>
+                <Text style={{ color: tokens.foregroundMuted, fontSize: 11 }}>{count}</Text>
+              </Pressable>
+            );
+          },
+        )}
       </ScrollView>
       <SettingsGroup>
         {data === undefined ? (

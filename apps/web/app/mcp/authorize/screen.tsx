@@ -6,7 +6,7 @@ import { useConvexAuth, useAuthToken } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Button, ThemeProvider } from '@finapp/ui/web';
-import { authorizationDenialUrl, currentIssuer } from '@/lib/mcp/authorizationCallback';
+import { authorizationDenialUrl, currentIssuer } from '@finapp/mcp/authorizationCallback';
 
 type AuthorizationRequest = {
   clientId: string;
@@ -21,22 +21,22 @@ const scopeCopy: Record<string, { title: string; description: string }> = {
   'finapp:read': {
     title: 'Read your Finapp data',
     description:
-      'View bounded finance, planning, groups, social, profile, notification, and privacy results.',
+      'View bounded finance, planning, groups, social, profile, notification, privacy, signed-in device, and FinAI settings results.',
   },
   'finapp:write:finance': {
     title: 'Change your finance data',
     description:
-      'Create transactions, accounts, categories, budgets, goals, and recurring rules, or add contributions.',
+      'Create, change, or delete transactions, accounts, categories (and their monthly limits), goals, and recurring rules, add contributions, and restore or permanently delete Trash items.',
   },
   'finapp:write:social': {
     title: 'Manage social connections',
     description:
-      'Send or respond to friend requests, start direct conversations, and send direct messages.',
+      'Send or respond to friend requests, remove friends, start direct conversations, and send, react to, pin, or mark direct messages read.',
   },
   'finapp:write:groups': {
     title: 'Manage shared groups',
     description:
-      'Create groups and expenses, invite members, respond to invitations, record settlements, and send group messages.',
+      'Create groups and expenses, invite or remove members, change roles or transfer ownership, respond to invitations, record settlements, and send group messages.',
   },
   'finapp:write:personal': {
     title: 'Manage personal settings',

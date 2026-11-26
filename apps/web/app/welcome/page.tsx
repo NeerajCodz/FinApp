@@ -107,7 +107,7 @@ export default function WelcomePage() {
               02
             </span>
             <p>
-              Give your plans a place.<span>Budgets and savings goals you can follow.</span>
+              Give your plans a place.<span>Category limits and savings goals you can follow.</span>
             </p>
           </div>
           <div>

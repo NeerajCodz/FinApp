@@ -77,7 +77,6 @@ const cloudEntity: Record<string, LocalEntity> = {
 const bootstrapSections = [
   'accounts',
   'categories',
-  'budgets',
   'goals',
   'goalContributions',
   'recurringRules',
@@ -251,38 +250,11 @@ async function sendMutation(
         categoryId: await mapId('category', payload.categoryId),
       } as never);
       return;
-    case 'budget.create': {
-      const categoryId = typeof payload.categoryId === 'string' ? payload.categoryId : null;
-      const accountId = typeof payload.accountId === 'string' ? payload.accountId : null;
-      await convex.mutation(api.budgets.mutations.create, {
-        ...payload,
-        ...(categoryId ? { categoryId: await mapId('category', categoryId) } : {}),
-        ...(accountId ? { accountId: await mapId('account', accountId) } : {}),
-        ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
-          : {}),
-      } as never);
+    // Budgets became category limits: budget changes queued by an older version are dropped.
+    case 'budget.create':
+    case 'budget.update':
+    case 'budget.archive':
       return;
-    }
-    case 'budget.update': {
-      const categoryId = String(payload.categoryId);
-      await convex.mutation(api.budgets.mutations.update, {
-        ...payload,
-        budgetId: await mapId('budget', String(payload.budgetId)),
-        categoryId: await mapId('category', categoryId),
-        ...(Array.isArray(payload.accountIds)
-          ? { accountIds: await Promise.all(payload.accountIds.map((id) => mapId('account', id))) }
-          : {}),
-      } as never);
-      return;
-    }
-    case 'budget.archive': {
-      await convex.mutation(api.budgets.mutations.archive, {
-        ...payload,
-        budgetId: await mapId('budget', String(payload.budgetId)),
-      } as never);
-      return;
-    }
     case 'transaction.create': {
       const categoryId = typeof payload.categoryId === 'string' ? payload.categoryId : null;
       const transferAccountId =
@@ -430,6 +402,18 @@ async function sendMutation(
       return;
     case 'notification.markAllRead':
       await convex.mutation(api.notifications.mutations.markAllRead, payload as never);
+      return;
+    case 'notification.markUnread':
+      await convex.mutation(api.notifications.mutations.markUnread, {
+        ...payload,
+        notificationId: await mapId('notification', payload.notificationId),
+      } as never);
+      return;
+    case 'notification.remove':
+      await convex.mutation(api.notifications.mutations.remove, {
+        ...payload,
+        notificationId: await mapId('notification', payload.notificationId),
+      } as never);
       return;
     case 'user.update':
       await convex.mutation(api.users.mutations.update, payload as never);
@@ -769,15 +753,13 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
             const entityType =
               section === 'categories'
                 ? 'category'
-                : section === 'budgets'
-                  ? 'budget'
-                  : section === 'goals'
-                    ? 'goal'
-                    : section === 'goalContributions'
-                      ? 'goalContribution'
-                      : section === 'recurringRules'
-                        ? 'recurringRule'
-                        : 'notification';
+                : section === 'goals'
+                  ? 'goal'
+                  : section === 'goalContributions'
+                    ? 'goalContribution'
+                    : section === 'recurringRules'
+                      ? 'recurringRule'
+                      : 'notification';
             await upsert(targetUserId, entityType, page.page as LocalRecord[]);
           }
           if (page.isDone) break;
@@ -811,6 +793,10 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
 
   const runOutboxEntry = React.useCallback(
     async (targetUserId: string, entry: OutboxEntry): Promise<SyncReceipt> => {
+      if (entry.operation.startsWith('budget.')) {
+        // Budgets became category limits: an older version's queued budget change is dropped.
+        return { serverId: entry.recordId ?? targetUserId, revision: '1', updatedAt: Date.now() };
+      }
       await sendMutation(convex, targetUserId, entry);
       const receipt = await convex.query(api.sync.queries.mutationReceipt, {
         clientMutationId: entry.clientMutationId,

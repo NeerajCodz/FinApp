@@ -43,6 +43,8 @@ export default defineSchema({
     identityId: v.optional(v.string()),
     displayName: v.optional(v.string()),
     username: optionalText,
+    /** Short public "about me" line (max 160 characters). */
+    bio: optionalText,
     accent: optionalText,
     avatarId: optionalText,
     gender: v.optional(v.union(v.literal('neutral'), v.literal('male'), v.literal('female'))),
@@ -181,6 +183,8 @@ export default defineSchema({
     archivedAt: optionalTime,
     monthlyLimitMinor: v.optional(v.int64()),
     limitCurrency: v.optional(currency),
+    /** Notify when this % of the monthly limit is spent (1-100). Default 80. */
+    limitAlertPercent: v.optional(v.number()),
     sortOrder: v.number(),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -570,6 +574,11 @@ export default defineSchema({
     startAt: timestamp,
     endAt: timestamp,
     archivedAt: optionalTime,
+    /**
+     * Budgets were folded into category limits (migrations.foldBudgetsIntoCategoryLimits).
+     * Set once a budget has been converted or retired; the app no longer reads this table.
+     */
+    migratedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
   })

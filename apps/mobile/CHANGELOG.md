@@ -2,6 +2,14 @@
 
 Versions are tracked in the root `version.json`; see `docs/versioning.md`.
 
+## 1.11.0
+
+- Budget screens removed (old routes open Categories); category limits with alert levels
+- Charts from `@finapp/ui/charts` across analytics, home, categories and goals
+- Notifications inbox (swipe actions, pull to refresh), profile edit (photo upload) and About
+  redesigned
+- "Lock after" setting for the app lock (default 5 minutes)
+
 ## 1.10.1
 
 - Redesigned app lock screen (brand, avatar in accent ring, name, @username, sign out)

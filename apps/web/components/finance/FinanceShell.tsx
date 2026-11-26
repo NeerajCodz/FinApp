@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Activity,
   Bell,
   ArrowDownLeft,
   ArrowLeftRight,
@@ -48,7 +47,6 @@ const navigation: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: House },
   { href: '/activity', label: 'Activity', icon: History },
   { href: '/accounts', label: 'Accounts', icon: Landmark },
-  { href: '/budgets', label: 'Budgets', icon: Activity },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/categories', label: 'Categories', icon: Tags },
   { href: '/network', label: 'People', icon: UsersRound },
@@ -208,7 +206,6 @@ export function FinanceShell({ children }: { children: ReactNode }) {
           </>
         }
         mobileHeaderAction={<HeaderStatusActions unread={unreadNotifications} />}
-        brandAction={<HeaderStatusActions unread={unreadNotifications} />}
         mobileNavigation={
           <MobileFinanceNav
             onAdd={openQuickAdd}

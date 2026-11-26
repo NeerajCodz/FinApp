@@ -4,7 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { getFunctionName } from 'convex/server';
 
 const authorization = vi.hoisted(() => ({ active: true }));
-vi.mock('@/lib/mcp/oauth', () => ({
+vi.mock('@finapp/mcp/oauth', () => ({
   mcpResourceUrl: () => 'https://finapp.test/mcp',
   verifyMcpAccessToken: async () => ({
     userId: 'user-one',

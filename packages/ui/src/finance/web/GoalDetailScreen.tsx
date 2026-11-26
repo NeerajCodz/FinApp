@@ -7,8 +7,8 @@ import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
 import { formatMinor } from '../money';
 import { buildGoalAnalyticsModel } from '../goalAnalytics';
 import type { GoalOverviewItem } from './GoalsOverviewScreen';
-import { Panel, Metrics, Bar, Trend, Milestones, ContributionTable } from './GoalsBudgetsParts';
-import s from './GoalsBudgets.module.css';
+import { Panel, Metrics, Bar, Trend, Milestones, ContributionTable } from './GoalsParts';
+import s from './Goals.module.css';
 export type GoalHistoryItem = {
   id: string;
   occurredAt: number;
@@ -202,7 +202,7 @@ export function GoalDetailScreen(p: GoalDetailScreenProps) {
                 title="Savings trend"
                 description="Recorded contributions over the last six months."
               >
-                <Trend rows={m.months} />
+                <Trend rows={m.months} currency={g.currency} />
                 <div className={`${s.between} ${s.divider}`}>
                   <span className={s.muted}>Monthly average</span>
                   <strong>

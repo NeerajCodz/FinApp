@@ -4,7 +4,7 @@ import { api } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
 import { defaultNotificationPreferences } from '../../convex/notifications/domain';
 import { finaiToolAllowed, resolveFinaiSettings } from '../../convex/shared/finaiSettings';
-import { blockedReason } from '../../apps/web/lib/mcp/server';
+import { blockedReason } from '@finapp/mcp/server';
 
 const modules = import.meta.glob('../../convex/**/*.ts');
 

@@ -7,6 +7,8 @@ import type { ThemeTokens } from '../../tokens';
 import { formatMinor } from '@convex/shared/money';
 import { EntityIcon } from './EntityIconPicker';
 import { Money } from './Money';
+import { ColumnChart, compactMoney, fullMoney } from '../../charts/native';
+import { toMajor } from '../../analytics/chart-utils';
 import type { GoalAnalyticsPanelProps } from '../goalAnalytics';
 
 export type { GoalAnalyticsPanelProps, GoalTrendMonth } from '../goalAnalytics';
@@ -30,10 +32,6 @@ export function GoalAnalyticsPanel({
   onRetry,
 }: GoalAnalyticsPanelProps) {
   const { tokens } = useTheme();
-  const maxMonthlyAmount = months.reduce(
-    (maximum, month) => (month.amount > maximum ? month.amount : maximum),
-    0n,
-  );
   const surface = tokens.surfaceRaised;
   const accent = color ?? tokens.primary;
   if (loading || error || !available)
@@ -225,48 +223,21 @@ export function GoalAnalyticsPanel({
       )}
       <View style={{ gap: 14, padding: 16, borderRadius: 16, backgroundColor: surface }}>
         <Typography variant="heading">Monthly contributions · last 6 months</Typography>
-        <View
-          accessibilityLabel="Monthly contribution totals"
-          style={{
-            height: 140,
-            flexDirection: 'row',
-            alignItems: 'flex-end',
-            justifyContent: 'space-around',
-            gap: 8,
-          }}
-        >
-          {months.map((month) => {
-            const height =
-              maxMonthlyAmount > 0n
-                ? Math.max(4, Number((month.amount * 100n) / maxMonthlyAmount))
-                : 4;
-            return (
-              <View
-                key={month.label}
-                style={{
-                  flex: 1,
-                  height: '100%',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: 6,
-                }}
-              >
-                <View
-                  accessibilityLabel={`${month.label}: ${formatMinor(month.amount, currency)}`}
-                  style={{
-                    width: '70%',
-                    height: `${height}%`,
-                    minHeight: 4,
-                    borderTopLeftRadius: 5,
-                    borderTopRightRadius: 5,
-                    backgroundColor: accent,
-                  }}
-                />
-                <Typography variant="caption">{month.label}</Typography>
-              </View>
-            );
-          })}
-        </View>
+        <ColumnChart
+          caption={`Monthly contribution totals in ${currency}`}
+          height={170}
+          labels={months.map((month) => month.label)}
+          series={[
+            {
+              id: 'contributions',
+              label: 'Contributed',
+              values: months.map((month) => toMajor(month.amount, currency)),
+              color: accent,
+            },
+          ]}
+          format={(value) => fullMoney(value, currency)}
+          axisFormat={(value) => compactMoney(value, currency)}
+        />
       </View>
       <View style={{ gap: 8 }}>
         <Typography variant="heading">Recent contributions</Typography>

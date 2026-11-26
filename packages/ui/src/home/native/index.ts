@@ -1,7 +1,7 @@
 export { HomeDashboard } from './HomeDashboard';
 export { HomeHeader } from './HomeHeader';
 export { HomeMetrics } from './HomeMetrics';
-export { HomeFlowBudgets } from './HomeFlowBudgets';
+export { HomeFlowLimits } from './HomeFlowLimits';
 export { HomePeople } from './HomePeople';
 export { HomeRecent } from './HomeRecent';
 export { HomeGroupsBills } from './HomeGroupsBills';

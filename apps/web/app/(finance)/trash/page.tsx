@@ -25,7 +25,8 @@ const KIND_LABEL: Record<Kind, string> = {
   transaction: 'Transactions',
   account: 'Accounts',
   category: 'Categories',
-  budget: 'Budgets',
+  // Budgets trashed before they became category limits; restoring sets the category's limit.
+  budget: 'Old budgets',
   goal: 'Goals',
   recurring: 'Recurring',
 };
@@ -54,7 +55,7 @@ function remaining(purgeAt: number | null, now: number) {
   return days <= 1 ? 'Deleted for good within a day' : `Deleted for good in ${days} days`;
 }
 
-/** Trash: restore or permanently delete transactions, accounts, categories, budgets, goals. */
+/** Trash: restore or permanently delete transactions, accounts, categories, goals, recurring. */
 export default function TrashPage() {
   const router = useRouter();
   const { userId, isConnected } = useBrowserSync();
@@ -149,21 +150,21 @@ export default function TrashPage() {
       />
 
       <div className={styles.filters} role="tablist" aria-label="Filter Trash" data-span>
-        {(
-          ['all', 'transaction', 'account', 'category', 'budget', 'goal', 'recurring'] as const
-        ).map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            role="tab"
-            aria-selected={filter === kind}
-            data-active={filter === kind || undefined}
-            onClick={() => setFilter(kind)}
-          >
-            {kind === 'all' ? 'All' : KIND_LABEL[kind]}
-            <span>{kind === 'all' ? items.length : (counts[kind] ?? 0)}</span>
-          </button>
-        ))}
+        {(['all', 'transaction', 'account', 'category', 'goal', 'recurring'] as const).map(
+          (kind) => (
+            <button
+              key={kind}
+              type="button"
+              role="tab"
+              aria-selected={filter === kind}
+              data-active={filter === kind || undefined}
+              onClick={() => setFilter(kind)}
+            >
+              {kind === 'all' ? 'All' : KIND_LABEL[kind]}
+              <span>{kind === 'all' ? items.length : (counts[kind] ?? 0)}</span>
+            </button>
+          ),
+        )}
       </div>
 
       {message ? (

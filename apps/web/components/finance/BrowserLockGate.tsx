@@ -7,7 +7,14 @@ import { formatAuthError } from '@convex/shared/authErrors';
 import { Fingerprint } from 'lucide-react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Button } from '@finapp/ui/web';
-import { LockPinInput, LockScreen } from '@finapp/ui/finance';
+import {
+  lockLastActiveKey,
+  lockTimedOut,
+  lockTimeoutKey,
+  LockPinInput,
+  LockScreen,
+  parseLockTimeout,
+} from '@finapp/ui/finance';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import type { LocalRecord } from '@/lib/offline/repository';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -42,6 +49,7 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = React.useState<'checking' | 'open' | 'locked' | 'storage-error'>(
     'checking',
   );
+  const phaseRef = React.useRef<string>('checking');
   const [checkedUser, setCheckedUser] = React.useState<string | null>(null);
   const [passkeyEnabled, setPasskeyEnabled] = React.useState(false);
   const [passcodeStatus, setPasscodeStatus] = React.useState(emptyPasscodeStatus);
@@ -53,6 +61,16 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
   const passcodeForm = React.useRef<HTMLFormElement>(null);
   const { signOut } = useAuthActions();
   const profile = useLocalRecords<LockProfile>('profile').records[0];
+
+  React.useEffect(() => {
+    phaseRef.current = phase;
+    if (phase !== 'open' || !userId) return;
+    try {
+      window.localStorage.setItem(lockLastActiveKey(userId), String(Date.now()));
+    } catch {
+      // Without storage the lock simply asks again on the next visit.
+    }
+  }, [phase, userId]);
 
   React.useEffect(() => {
     let active = true;
@@ -68,32 +86,66 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
         active = false;
       };
     }
-    const refreshLock = (relock = true) => {
+    // Time away decides whether to lock: Settings → Security → "Lock after" (default 5 min).
+    const timeout = () => {
+      try {
+        return parseLockTimeout(window.localStorage.getItem(lockTimeoutKey(userId)));
+      } catch {
+        return parseLockTimeout(null);
+      }
+    };
+    const markActive = () => {
+      // Only time spent unlocked counts; a visible lock screen is not activity.
+      if (phaseRef.current !== 'open') return;
+      try {
+        window.localStorage.setItem(lockLastActiveKey(userId), String(Date.now()));
+      } catch {
+        // Without storage the lock simply asks again on the next visit.
+      }
+    };
+    const awayTooLong = () => {
+      try {
+        const last = Number(window.localStorage.getItem(lockLastActiveKey(userId)));
+        return !last || lockTimedOut(Date.now() - last, timeout());
+      } catch {
+        return true;
+      }
+    };
+    const refreshLock = (lockIfAway: boolean) => {
       if (!active) return;
       try {
         setPasskeyEnabled(hasWebAuthnLock(userId));
         setPasscodeStatus(getPasscodeLockStatus(userId));
-        if (hasBrowserLock(userId))
-          setPhase((previous) => (relock || previous !== 'open' ? 'locked' : 'open'));
-        else setPhase('open');
+        if (!hasBrowserLock(userId)) setPhase('open');
+        else
+          setPhase((previous) =>
+            previous === 'open' && !(lockIfAway && awayTooLong()) ? 'open' : 'locked',
+          );
       } catch {
         setPhase('storage-error');
       }
     };
     const refreshAfterConfiguration = () => refreshLock(false);
-    const refreshFromExternalChange = () => refreshLock();
-    const relock = () => {
-      if (!active) return;
-      try {
-        if (hasBrowserLock(userId)) setPhase('locked');
-      } catch {
-        setPhase('storage-error');
-      }
-    };
+    const refreshFromExternalChange = () => refreshLock(false);
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') relock();
+      if (document.visibilityState === 'hidden') markActive();
+      else refreshLock(true);
     };
-    refreshLock();
+    // A fresh load opens only if this browser was active within the timeout.
+    try {
+      if (!hasBrowserLock(userId)) setPhase('open');
+      else {
+        setPasskeyEnabled(hasWebAuthnLock(userId));
+        setPasscodeStatus(getPasscodeLockStatus(userId));
+        setPhase(awayTooLong() ? 'locked' : 'open');
+      }
+    } catch {
+      setPhase('storage-error');
+    }
+    const heartbeat = window.setInterval(() => {
+      if (document.visibilityState === 'visible') markActive();
+    }, 30_000);
+    window.addEventListener('beforeunload', markActive);
     window.addEventListener(webAuthnLockChangedEvent, refreshAfterConfiguration);
     window.addEventListener('storage', refreshFromExternalChange);
     window.addEventListener('focus', refreshFromExternalChange);
@@ -103,7 +155,8 @@ export function BrowserLockGate({ children }: { children: React.ReactNode }) {
       window.removeEventListener(webAuthnLockChangedEvent, refreshAfterConfiguration);
       window.removeEventListener('storage', refreshFromExternalChange);
       window.removeEventListener('focus', refreshFromExternalChange);
-      window.removeEventListener('blur', relock);
+      window.clearInterval(heartbeat);
+      window.removeEventListener('beforeunload', markActive);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [userId]);

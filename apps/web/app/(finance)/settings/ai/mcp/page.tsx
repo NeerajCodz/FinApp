@@ -1,4 +1,4 @@
-import { toolCatalog } from '@/lib/mcp/server';
+import { toolCatalog } from '@finapp/mcp/server';
 import { McpConnectionsClient } from './McpConnectionsClient';
 
 /** MCP connections and access control; the tool list comes from the server's registry. */

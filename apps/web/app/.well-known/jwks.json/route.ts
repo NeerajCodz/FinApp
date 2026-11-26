@@ -1,4 +1,4 @@
-import { mcpJwks } from '@/lib/mcp/oauth';
+import { mcpJwks } from '@finapp/mcp/oauth';
 
 export const dynamic = 'force-dynamic';
 

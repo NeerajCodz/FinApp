@@ -12,8 +12,8 @@ import {
   Milestones,
   ContributionTable,
   chartColors,
-} from './GoalsBudgetsParts';
-import s from './GoalsBudgets.module.css';
+} from './GoalsParts';
+import s from './Goals.module.css';
 export type { GoalAnalyticsPanelProps, GoalTrendMonth } from '../goalAnalytics';
 export function GoalAnalyticsPanel(p: GoalAnalyticsPanelProps) {
   const m = p.insights;
@@ -47,11 +47,13 @@ export function GoalAnalyticsPanel(p: GoalAnalyticsPanelProps) {
     const segments = sources.map((r, j) => ({
       amount: entries.filter((e) => e.accountId === r.id).reduce((n, e) => n + e.amount, 0n),
       color: r.color ?? chartColors[j % chartColors.length],
+      name: r.name,
     }));
     const mapped = segments.reduce((n, r) => n + r.amount, 0n);
     segments.push({
       amount: month.amount > mapped ? month.amount - mapped : 0n,
       color: chartColors[3]!,
+      name: 'Manual / unavailable account',
     });
     return { ...month, segments };
   });
@@ -133,8 +135,12 @@ export function GoalAnalyticsPanel(p: GoalAnalyticsPanelProps) {
               <div className={s.ringLayout}>
                 <Ring
                   segments={[
-                    { amount: p.saved },
-                    { amount: p.remaining, color: 'var(--finapp-surface-raised)' },
+                    { amount: p.saved, name: 'Saved' },
+                    {
+                      amount: p.remaining,
+                      color: 'var(--finapp-surface-raised)',
+                      name: 'Remaining',
+                    },
                   ]}
                   value={`${p.percent}%`}
                   label="Completed"
@@ -196,7 +202,11 @@ export function GoalAnalyticsPanel(p: GoalAnalyticsPanelProps) {
               title="Projected completion"
               description="Based on your current contribution trend"
             >
-              <Trend rows={forecast ? [...cumulative, forecast] : cumulative} target={p.target} />
+              <Trend
+                rows={forecast ? [...cumulative, forecast] : cumulative}
+                target={p.target}
+                currency={p.currency}
+              />
               <p className={s.muted}>
                 {forecast
                   ? 'Last point is a projection; earlier points are recorded savings.'

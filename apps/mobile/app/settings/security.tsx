@@ -19,6 +19,7 @@ import {
 } from 'lucide-react-native';
 import { Button, useTheme } from '@finapp/ui/native';
 import {
+  SettingsChips,
   SettingsGroup,
   SettingsHero,
   SettingsItem,
@@ -26,6 +27,8 @@ import {
   SettingsScreen,
   SettingsSwitch,
   useSettingsToneColor,
+  LOCK_TIMEOUT_OPTIONS,
+  parseLockTimeout,
 } from '@finapp/ui/finance';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
 import { useAppLock } from '@/lib/security/AppLockProvider';
@@ -52,7 +55,7 @@ export default function SecuritySettingsScreen() {
   const { tokens } = useTheme();
   const tone = useSettingsToneColor();
   const { isConnected } = useLocalSync();
-  const { lock, ready, changeLock } = useAppLock();
+  const { lock, ready, changeLock, timeoutMinutes, setTimeoutMinutes } = useAppLock();
   const preferences = useQuery(api.users.queries.securityPreferences, isConnected ? {} : 'skip');
   const privacy = useQuery(api.security.privacy, isConnected ? {} : 'skip');
   const sessions = useQuery(api.security.sessions, isConnected ? {} : 'skip');
@@ -297,6 +300,17 @@ export default function SecuritySettingsScreen() {
             </View>
           ) : null}
         </SettingsItem>
+        <SettingsChips
+          title="Lock after"
+          description="Time in the background before Finapp asks again"
+          value={String(timeoutMinutes)}
+          disabled={!lock}
+          options={LOCK_TIMEOUT_OPTIONS.map((option) => ({
+            value: String(option.minutes),
+            label: option.label,
+          }))}
+          onChange={(value) => setTimeoutMinutes(parseLockTimeout(value))}
+        />
         {lock ? (
           <SettingsLink
             icon={<LockKeyhole size={19} color={tone('danger')} />}

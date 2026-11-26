@@ -24,8 +24,13 @@ import {
   SettingsHero,
   SettingsItem,
   SettingsLink,
+  SettingsSelect,
   SettingsShell,
   SettingsSwitch,
+  LOCK_TIMEOUT_OPTIONS,
+  lockTimeoutKey,
+  parseLockTimeout,
+  type LockTimeoutMinutes,
 } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { MfaSettings } from '@/components/security/MfaSettings';
@@ -80,6 +85,15 @@ export default function SecuritySettingsPage() {
   const [passcodeForm, setPasscodeForm] = React.useState<'set' | 'remove' | null>(null);
   const [passcode, setPasscode] = React.useState('');
   const [confirmation, setConfirmation] = React.useState('');
+  const [lockAfter, setLockAfter] = React.useState<LockTimeoutMinutes>(parseLockTimeout(null));
+  React.useEffect(() => {
+    if (!userId) return;
+    try {
+      setLockAfter(parseLockTimeout(window.localStorage.getItem(lockTimeoutKey(userId))));
+    } catch {
+      // Storage blocked: keep the default.
+    }
+  }, [userId]);
 
   const refreshLocks = React.useCallback(() => {
     if (!userId) return;
@@ -407,6 +421,28 @@ export default function SecuritySettingsPage() {
             </form>
           ) : null}
         </SettingsItem>
+        <SettingsSelect
+          title="Lock after"
+          description="How long Finapp can be in the background or closed before asking again"
+          value={String(lockAfter)}
+          disabled={!lockOn}
+          options={LOCK_TIMEOUT_OPTIONS.map((option) => ({
+            value: String(option.minutes),
+            label: option.label,
+          }))}
+          onChange={(value) => {
+            const minutes = parseLockTimeout(value);
+            setLockAfter(minutes);
+            try {
+              window.localStorage.setItem(lockTimeoutKey(userId), String(minutes));
+              setMessage(
+                `Finapp locks after ${LOCK_TIMEOUT_OPTIONS.find((option) => option.minutes === minutes)?.label.toLowerCase()} away.`,
+              );
+            } catch {
+              setMessage('This browser blocks storage, so the lock asks every time.');
+            }
+          }}
+        />
       </SettingsGroup>
 
       {message || !isConnected ? (
