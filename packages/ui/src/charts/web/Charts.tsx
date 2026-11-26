@@ -13,7 +13,6 @@ import {
   bands,
   barPath,
   donutSegments,
-  hbarPath,
   labelStride,
   linear,
   linePath,
