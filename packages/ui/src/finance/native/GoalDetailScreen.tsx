@@ -14,7 +14,7 @@ import {
   Trend,
   Milestones,
   ContributionTable,
-} from './GoalsBudgetsParts';
+} from './GoalsParts';
 export type { GoalHistoryItem } from '../web/GoalDetailScreen';
 export type GoalDetailScreenProps = WebProps & { onBack: () => void };
 export function GoalDetailScreen(p: GoalDetailScreenProps) {
@@ -169,7 +169,7 @@ export function GoalDetailScreen(p: GoalDetailScreenProps) {
                 title="Savings trend"
                 description="Actual contributions over the last six months."
               >
-                <Trend rows={m.months} />
+                <Trend rows={m.months} currency={g.currency} />
               </Panel>
               <Panel title="Goal details">
                 <EntityIconPicker

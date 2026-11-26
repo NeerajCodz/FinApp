@@ -36,12 +36,15 @@ export type HomeDashboardData = {
   upcomingBillsCount: number;
   cashFlow: HomeBucket[];
   cashFlowRanges: { week: HomeBucket[]; month: HomeBucket[]; year: HomeBucket[] };
-  budgets: Array<{
+  /** Categories with a monthly limit (their budget), most used first: this month's usage. */
+  categoryLimits: Array<{
     id: string;
     name: string;
+    icon?: string;
     spentMinor: bigint;
-    amountMinor: bigint;
+    limitMinor: bigint;
     currency: string;
+    alertPercent: number;
   }>;
   upcomingBills: Array<{
     id: string;
@@ -82,7 +85,6 @@ export type HomeDashboardInput = {
   categories: readonly HomeRecord[];
   groups: readonly HomeRecord[];
   groupMembers: readonly HomeRecord[];
-  budgets: readonly HomeRecord[];
   recurringRules: readonly HomeRecord[];
   goals: readonly HomeRecord[];
   goalContributions: readonly HomeRecord[];
@@ -239,71 +241,55 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
       addCashFlowTransaction(monthCashFlow[date.getDate() - 1], transaction);
   }
 
-  const accountByAlias = new Map<string, HomeRecord>();
-  for (const account of input.accounts)
-    for (const key of aliases(account)) accountByAlias.set(key, account);
-  const budgetRecords = input.budgets
-    .filter((budget) => {
-      if (
-        budget.archivedAt !== undefined ||
-        (budget.currency ?? input.currency) !== input.currency ||
-        Number(budget.startAt ?? 0) > input.now ||
-        Number(budget.endAt ?? 0) <= input.now
-      )
-        return false;
-      if (!input.accountId || !budget.accountId) return true;
-      const budgetAccount = accountByAlias.get(String(budget.accountId));
-      return Boolean(budgetAccount && hasAlias(budgetAccount, input.accountId));
-    })
-    .map((budget) => {
-      const spent = transactions.reduce((total, transaction) => {
+  // Category limits use the calendar month in UTC, like the server's limit queries and alerts.
+  const limitStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const limitEnd = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+  const categoryLimits = input.categories
+    .filter(
+      (category) =>
+        category.archivedAt === undefined &&
+        category.monthlyLimitMinor !== undefined &&
+        category.monthlyLimitMinor !== null &&
+        amount(category.monthlyLimitMinor) > 0n,
+    )
+    .map((category) => {
+      const currency =
+        typeof category.limitCurrency === 'string' ? category.limitCurrency : input.currency;
+      const keys = aliases(category);
+      const spent = input.transactions.reduce((total, transaction) => {
         const occurredAt = Number(transaction.occurredAt ?? 0);
         if (
           !isPosted(transaction) ||
           transaction.type !== 'expense' ||
-          occurredAt < Number(budget.startAt ?? 0) ||
-          occurredAt >= Number(budget.endAt ?? Number.MAX_SAFE_INTEGER)
+          transaction.currency !== currency ||
+          occurredAt < limitStart ||
+          occurredAt >= limitEnd ||
+          !keys.includes(String(transaction.categoryId ?? ''))
         )
           return total;
-        if (budget.period === 'category') {
-          const budgetCategory = categoryByAlias.get(String(budget.categoryId ?? ''));
-          const transactionCategory = categoryByAlias.get(String(transaction.categoryId ?? ''));
-          if (
-            !budgetCategory ||
-            !transactionCategory ||
-            recordId(budgetCategory) !== recordId(transactionCategory)
-          )
-            return total;
-        }
-        if (budget.period === 'account') {
-          const budgetAccount = accountByAlias.get(String(budget.accountId ?? ''));
-          const transactionAccount = accountByAlias.get(String(transaction.accountId ?? ''));
-          if (
-            !budgetAccount ||
-            !transactionAccount ||
-            recordId(budgetAccount) !== recordId(transactionAccount)
-          )
-            return total;
-        }
         return total + amount(transaction.amountMinor);
       }, 0n);
       return {
-        id: recordId(budget),
-        name: typeof budget.name === 'string' ? budget.name : 'Budget',
+        id: recordId(category),
+        name: typeof category.name === 'string' ? category.name : 'Category',
+        icon: typeof category.icon === 'string' ? category.icon : undefined,
         spentMinor: spent,
-        amountMinor: amount(budget.amountMinor),
-        currency: typeof budget.currency === 'string' ? budget.currency : input.currency,
+        limitMinor: amount(category.monthlyLimitMinor),
+        currency,
+        alertPercent:
+          typeof category.limitAlertPercent === 'number' ? category.limitAlertPercent : 80,
       };
     })
-    .sort((left, right) => {
-      const leftPercent =
-        left.amountMinor > 0n ? Number((left.spentMinor * 100n) / left.amountMinor) : 0;
-      const rightPercent =
-        right.amountMinor > 0n ? Number((right.spentMinor * 100n) / right.amountMinor) : 0;
-      return rightPercent - leftPercent;
-    })
+    .sort(
+      (left, right) =>
+        Number((right.spentMinor * 10_000n) / right.limitMinor) -
+        Number((left.spentMinor * 10_000n) / left.limitMinor),
+    )
     .slice(0, 3);
 
+  const accountByAlias = new Map<string, HomeRecord>();
+  for (const account of input.accounts)
+    for (const key of aliases(account)) accountByAlias.set(key, account);
   const upcomingRules = input.recurringRules
     .filter((rule) => {
       const template =
@@ -470,7 +456,7 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
     upcomingBillsCount: upcomingRules.length,
     cashFlow,
     cashFlowRanges: { week: weekCashFlow, month: monthCashFlow, year: cashFlow },
-    budgets: budgetRecords,
+    categoryLimits,
     upcomingBills,
     goals,
     categories,

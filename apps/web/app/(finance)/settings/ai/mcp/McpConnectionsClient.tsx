@@ -36,7 +36,11 @@ export type McpToolSummary = {
 };
 
 const SCOPES = [
-  { scope: 'finapp:write:finance', label: 'Money', note: 'Transactions, accounts, budgets, goals' },
+  {
+    scope: 'finapp:write:finance',
+    label: 'Money',
+    note: 'Transactions, accounts, categories, goals',
+  },
   { scope: 'finapp:write:groups', label: 'Groups', note: 'Shared expenses, settlements, members' },
   { scope: 'finapp:write:social', label: 'Social', note: 'Friends and messages' },
   { scope: 'finapp:write:personal', label: 'Personal', note: 'Profile, privacy, notifications' },

@@ -9,6 +9,7 @@ import { CategoryIcon } from './CategoryIcon';
 import { CurrencyInput } from './CurrencyInput';
 import { TransactionRow } from './TransactionRow';
 import { formatMinor } from '../money';
+import { Meter } from '../../charts/native';
 type EntityActivity = {
   id: string;
   title: string;
@@ -41,8 +42,10 @@ export type CategoryFormScreenProps = {
   onLimitChange?: (value: string) => void;
   notes?: string;
   onNotesChange?: (value: string) => void;
-  includeInBudgets?: boolean;
-  onIncludeInBudgetsChange?: (value: boolean) => void;
+  /** Spending alert level for the monthly limit, in percent (default 80). */
+  alertValue?: string;
+  onAlertChange?: (value: string) => void;
+  limitAlertPercent?: number;
   isDefault?: boolean;
   onDefaultChange?: (value: boolean) => void;
   spentMinor?: bigint;
@@ -71,8 +74,9 @@ export function CategoryFormScreen({
   onLimitChange,
   notes = '',
   onNotesChange,
-  includeInBudgets = true,
-  onIncludeInBudgetsChange,
+  alertValue = '',
+  onAlertChange,
+  limitAlertPercent,
   isDefault = false,
   onDefaultChange,
   spentMinor = 0n,
@@ -181,10 +185,23 @@ export function CategoryFormScreen({
               <Label>Monthly limit (optional)</Label>
               <CurrencyInput currency={currency} value={limitValue} onChangeText={onLimitChange} />
               {!edit && (
-                <Typography variant="caption">
-                  Set a monthly limit to keep track of your spending.
-                </Typography>
+                <Typography variant="caption">A category’s monthly limit is its budget.</Typography>
               )}
+            </View>
+          )}
+          {!!onAlertChange && !!onLimitChange && (
+            <View style={field}>
+              <Label>Alert at (% of the limit, default 80)</Label>
+              <Input
+                accessibilityLabel="Alert when this percent of the limit is spent"
+                keyboardType="number-pad"
+                value={alertValue}
+                onChangeText={onAlertChange}
+                placeholder="80"
+              />
+              <Typography variant="caption">
+                We notify you when spending reaches this share of the limit, and at 100%.
+              </Typography>
             </View>
           )}
           {!edit && (
@@ -240,22 +257,12 @@ export function CategoryFormScreen({
                     <Text style={{ fontSize: 22, fontWeight: '600' }}>{used}%</Text> of{' '}
                     {formatMinor(monthlyLimitMinor, currency)}
                   </Text>
-                  <View
-                    style={{
-                      height: 10,
-                      borderRadius: 8,
-                      backgroundColor: tokens.surfaceRaised,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <View
-                      style={{
-                        height: '100%',
-                        width: `${Math.min(100, used)}%`,
-                        backgroundColor: used >= 80 ? tokens.warning : tokens.income,
-                      }}
-                    />
-                  </View>
+                  <Meter
+                    value={Number(spentMinor)}
+                    max={Number(monthlyLimitMinor)}
+                    warnAt={(limitAlertPercent ?? 80) / 100}
+                    label={`Alert at ${limitAlertPercent ?? 80}%`}
+                  />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <View>
                       <Text style={{ fontWeight: '600' }}>{formatMinor(spentMinor, currency)}</Text>
@@ -298,22 +305,6 @@ export function CategoryFormScreen({
                     accessibilityLabel="Set as default category"
                     value={isDefault}
                     onValueChange={onDefaultChange}
-                    trackColor={{ true: tokens.primary, false: tokens.border }}
-                  />
-                </View>
-              )}
-              {!!onIncludeInBudgetsChange && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text>Include in budgets</Text>
-                    <Typography variant="caption">
-                      Show in budget planning and summaries.
-                    </Typography>
-                  </View>
-                  <Switch
-                    accessibilityLabel="Include in budgets"
-                    value={includeInBudgets}
-                    onValueChange={onIncludeInBudgetsChange}
                     trackColor={{ true: tokens.primary, false: tokens.border }}
                   />
                 </View>

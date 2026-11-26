@@ -26,7 +26,7 @@ const scopeCopy: Record<string, { title: string; description: string }> = {
   'finapp:write:finance': {
     title: 'Change your finance data',
     description:
-      'Create, change, or delete transactions, accounts, categories, budgets, goals, and recurring rules, add contributions, and restore or permanently delete Trash items.',
+      'Create, change, or delete transactions, accounts, categories (and their monthly limits), goals, and recurring rules, add contributions, and restore or permanently delete Trash items.',
   },
   'finapp:write:social': {
     title: 'Manage social connections',

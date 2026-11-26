@@ -38,7 +38,7 @@ function currencySymbol(currency: string) {
   }
 }
 
-/** The default currency for new accounts, budgets, groups and transactions. */
+/** The default currency for new accounts, category limits, groups and transactions. */
 export default function CurrencySettingsScreen() {
   const { tokens } = useTheme();
   const tone = useSettingsToneColor();
@@ -89,7 +89,7 @@ export default function CurrencySettingsScreen() {
       <SettingsHero
         icon={<Coins size={22} color={tone('primary')} />}
         title={`${currencyLabel(selected)} (${selected})`}
-        description="Used for new accounts, budgets, groups and transactions. Past entries keep their own currency."
+        description="Used for new accounts, category limits, groups and transactions. Past entries keep their own currency."
       />
       <SettingsGroup title="Choose a currency">
         <SettingsItem icon={<Search size={19} color={tone()} />} title="Search">

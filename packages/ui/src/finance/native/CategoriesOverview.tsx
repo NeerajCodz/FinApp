@@ -11,6 +11,7 @@ import { Button, Input, Typography, useTheme } from '@finapp/ui/native';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
+import { Meter } from '../../charts/native';
 
 export type CategoryOverviewItem = {
   id: string;
@@ -22,6 +23,8 @@ export type CategoryOverviewItem = {
   monthReceivedMinor: bigint;
   recentSpendMinor: bigint;
   monthlyLimitMinor?: bigint;
+  /** Alert level for the limit, in percent (default 80). */
+  limitAlertPercent?: number;
   transactionCount: number;
   lastActivityAt?: number;
 };
@@ -253,16 +256,12 @@ export function CategoriesOverview({
                           >
                             {used}% of {formatMinor(item.monthlyLimitMinor, item.currency)}
                           </Typography>
-                          <View style={[styles.track, { backgroundColor: tokens.borderSubtle }]}>
-                            <View
-                              style={{
-                                width: `${used}%`,
-                                height: 5,
-                                borderRadius: 4,
-                                backgroundColor: used >= 80 ? tokens.warning : tokens.primary,
-                              }}
-                            />
-                          </View>
+                          <Meter
+                            value={Number(item.monthSpentMinor)}
+                            max={Number(item.monthlyLimitMinor)}
+                            warnAt={(item.limitAlertPercent ?? 80) / 100}
+                            thin
+                          />
                         </View>
                       )}
                     </View>
@@ -408,7 +407,6 @@ const styles = StyleSheet.create({
   },
   row: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 9 },
   rowValue: { alignItems: 'flex-end', gap: 5 },
-  track: { height: 5, overflow: 'hidden', borderRadius: 4 },
   separator: { height: StyleSheet.hairlineWidth, marginVertical: 3 },
   note: {
     flexDirection: 'row',

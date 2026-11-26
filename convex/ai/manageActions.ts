@@ -40,12 +40,11 @@ async function record(ctx: ActionCtx, userId: Id<'users'>, kind: string, id: str
 
 export const MANAGE_KINDS = [
   'transaction.update',
-  'budget.create',
-  'budget.update',
   'goal.create',
   'goal.update',
   'category.create',
   'category.update',
+  'category.limit',
   'account.create',
   'account.update',
   'recurring.create',
@@ -87,39 +86,6 @@ export async function executeManageAction(
         transferAccountId: current.transferAccountId as Id<'accounts'> | undefined,
         occurredAt: num(payload, 'occurredAt') ?? Number(current.occurredAt),
         hasTime: current.hasTime as boolean | undefined,
-        clientMutationId,
-      });
-      return id;
-    }
-    case 'budget.create': {
-      const id = await ctx.runMutation(api.budgets.mutations.create, {
-        name: text(payload, 'name')!,
-        amountMinor: big(payload, 'amountMinor')!,
-        currency: text(payload, 'currency')!,
-        period: 'monthly',
-        categoryId: text(payload, 'categoryId') as Id<'categories'> | undefined,
-        startAt: num(payload, 'startAt')!,
-        endAt: num(payload, 'endAt')!,
-        alertThreshold: num(payload, 'alertThreshold'),
-        clientMutationId,
-      });
-      return String(id);
-    }
-    case 'budget.update': {
-      const id = text(payload, 'budgetId')!;
-      const current = await record(ctx, userId, 'budget', id);
-      const categoryId = text(payload, 'categoryId') ?? (current.categoryId as string | undefined);
-      if (!categoryId) throw new Error('BUDGET_NEEDS_CATEGORY');
-      await ctx.runMutation(api.budgets.mutations.update, {
-        budgetId: id as Id<'budgets'>,
-        name: text(payload, 'name') ?? String(current.name),
-        amountMinor: big(payload, 'amountMinor') ?? asBig(current.amountMinor),
-        currency: String(current.currency),
-        categoryId: categoryId as Id<'categories'>,
-        startAt: num(payload, 'startAt') ?? Number(current.startAt),
-        endAt: num(payload, 'endAt') ?? Number(current.endAt),
-        alertThreshold:
-          num(payload, 'alertThreshold') ?? (current.alertThreshold as number | undefined),
         clientMutationId,
       });
       return id;
@@ -191,6 +157,24 @@ export async function executeManageAction(
         });
       return id;
     }
+    case 'category.limit': {
+      const id = text(payload, 'categoryId')!;
+      await record(ctx, userId, 'category', id);
+      const limit = payload.monthlyLimitMinor === null ? null : big(payload, 'monthlyLimitMinor');
+      if (limit === undefined) throw new Error('MISSING_AMOUNT');
+      await ctx.runMutation(api.categories.mutations.setLimit, {
+        categoryId: id as Id<'categories'>,
+        amountMinor: limit,
+        ...(limit !== null && text(payload, 'limitCurrency')
+          ? { currency: text(payload, 'limitCurrency') }
+          : {}),
+        ...(limit !== null && num(payload, 'alertPercent') !== undefined
+          ? { alertPercent: num(payload, 'alertPercent') }
+          : {}),
+        clientMutationId,
+      });
+      return id;
+    }
     case 'account.create': {
       const type = text(payload, 'type') as Doc<'accounts'>['type'] | undefined;
       const id = await ctx.runMutation(api.accounts.mutations.create, {
@@ -234,12 +218,7 @@ export async function executeManageAction(
       const target = text(payload, 'kind');
       const id = text(payload, 'id')!;
       await record(ctx, userId, target ?? '', id);
-      if (target === 'budget')
-        await ctx.runMutation(api.budgets.mutations.archive, {
-          budgetId: id as Id<'budgets'>,
-          clientMutationId,
-        });
-      else if (target === 'goal')
+      if (target === 'goal')
         await ctx.runMutation(api.goals.mutations.archive, {
           goalId: id as Id<'goals'>,
           clientMutationId,

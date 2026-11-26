@@ -205,22 +205,6 @@
   color: var(--finapp-foreground);
   margin-right: 5px;
 }
-.track {
-  height: 12px;
-  background: var(--finapp-surface-raised);
-  border-radius: 10px;
-  overflow: hidden;
-  margin: 7px 0 12px;
-}
-.track span {
-  display: block;
-  height: 100%;
-  background: var(--finapp-income);
-  border-radius: inherit;
-}
-.track span[data-risk='true'] {
-  background: var(--finapp-warning, #ffd44f);
-}
 .usageTotals {
   display: flex;
   justify-content: space-between;

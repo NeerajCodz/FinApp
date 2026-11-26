@@ -62,7 +62,7 @@ describe('FinAI settings', () => {
     expect(prompt).toContain('access to: money');
     expect(prompt).toContain('Compare with last month.');
     expect(finaiToolAllowed(settings, 'search_transactions')).toBe(false);
-    expect(finaiToolAllowed(settings, 'list_budgets')).toBe(true);
+    expect(finaiToolAllowed(settings, 'list_category_limits')).toBe(true);
     expect(finaiToolAllowed(settings, 'propose_transaction')).toBe(false);
   });
 

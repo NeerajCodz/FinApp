@@ -145,7 +145,7 @@ export const personalTools: ToolFactory = (client) => [
     input: {
       preferences: z.object({
         transaction: z.boolean(),
-        budget: z.boolean(),
+        budget: z.boolean().describe('Category limit alerts.'),
         goal: z.boolean(),
         recurring: z.boolean(),
         group: z.boolean(),

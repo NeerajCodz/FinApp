@@ -802,7 +802,7 @@ describe('Convex public runtime functions', () => {
     await owner.mutation(api.accounts.mutations.archive, { accountId });
     expect(await owner.query(api.accounts.queries.list, {})).toEqual([]);
   });
-  it('creates and isolates database-backed budget totals and lifecycle', async () => {
+  it('tracks category limit usage per owner and clears the limit', async () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
       await ctx.db.insert('users', {
@@ -834,17 +834,10 @@ describe('Convex public runtime functions', () => {
     const categoryId = await owner.mutation(api.categories.mutations.create, {
       name: 'Groceries',
     });
-    const now = new Date();
-    const startAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-    const endAt = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
-    const budgetId = await owner.mutation(api.budgets.mutations.create, {
-      name: 'Groceries',
+    await owner.mutation(api.categories.mutations.setLimit, {
+      categoryId,
       amountMinor: 30000n,
       currency: 'INR',
-      period: 'category',
-      categoryId,
-      startAt,
-      endAt,
     });
     await owner.mutation(api.transactions.mutations.create, {
       accountId,
@@ -866,13 +859,20 @@ describe('Convex public runtime functions', () => {
       occurredAt: Date.now(),
       clientMutationId: 'budget-category-income',
     });
-    expect(await owner.query(api.budgets.queries.detail, { budgetId })).toMatchObject({
-      spentMinor: 7500n,
-      remainingMinor: 22500n,
-    });
-    await expect(other.query(api.budgets.queries.detail, { budgetId })).resolves.toBeNull();
-    await owner.mutation(api.budgets.mutations.archive, { budgetId });
-    expect(await owner.query(api.budgets.queries.list, {})).toEqual([]);
+    expect(await owner.query(api.categories.queries.limits, {})).toMatchObject([
+      {
+        categoryId,
+        limitMinor: 30000n,
+        spentMinor: 7500n,
+        remainingMinor: 22500n,
+        percentUsed: 25,
+        alertPercent: 80,
+        status: 'normal',
+      },
+    ]);
+    expect(await other.query(api.categories.queries.limits, {})).toEqual([]);
+    await owner.mutation(api.categories.mutations.setLimit, { categoryId, amountMinor: null });
+    expect(await owner.query(api.categories.queries.limits, {})).toEqual([]);
   });
 
   it('persists a transaction and rejects replayed client mutation IDs', async () => {

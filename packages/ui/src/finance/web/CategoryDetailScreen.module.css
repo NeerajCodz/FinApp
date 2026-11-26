@@ -221,56 +221,6 @@
   outline: 2px solid var(--finance-lime, var(--finapp-primary));
   outline-offset: 1px;
 }
-.chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 5px;
-  height: 155px;
-  padding: 8px 3px 0;
-  border-bottom: 1px solid var(--finance-line, #282b28);
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 42px,
-    color-mix(in srgb, var(--finance-line, #282b28) 48%, transparent) 43px
-  );
-}
-.barColumn {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  min-width: 0;
-  height: 100%;
-}
-.barTrack {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  width: 100%;
-  flex: 1;
-}
-.barTrack span {
-  display: block;
-  width: min(26px, 70%);
-  min-height: 2px;
-  border-radius: 5px 5px 0 0;
-  background: var(--finance-expense, #ff6877);
-  transition: height 160ms ease;
-}
-.barTrack span[data-type='income'] {
-  background: var(--finance-positive, #58dc82);
-}
-.barColumn small {
-  overflow: hidden;
-  max-width: 100%;
-  color: var(--finance-muted, #9da19c);
-  font-size: 0.62rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .chartFoot {
   display: flex;
   justify-content: space-between;
@@ -325,6 +275,19 @@
   display: grid;
   justify-items: center;
   gap: 2px;
+}
+.ringText {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.ringText strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.ringText small {
+  color: var(--finance-muted, #9da19c);
+  font-size: 0.65rem;
 }
 .ring > span strong {
   font-size: 1.15rem;
@@ -409,6 +372,10 @@
 .limitForm > div input {
   min-width: 80px;
   flex: 1;
+}
+.limitForm > div input#category-limit-alert {
+  max-width: 92px;
+  flex: 0 1 92px;
 }
 .limitForm > label {
   font-size: 0.72rem;
@@ -558,13 +525,6 @@
   .controls {
     justify-content: flex-start;
     width: 100%;
-  }
-  .chart {
-    gap: 3px;
-    height: 148px;
-  }
-  .barTrack span {
-    width: min(18px, 82%);
   }
   .limitContent {
     grid-template-columns: 90px minmax(0, 1fr);

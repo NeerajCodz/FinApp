@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
         destination: '/split/new?groupId=:id',
         permanent: false,
       },
+      // Budgets are category limits now: old budget pages open Categories.
+      { source: '/budgets', destination: '/categories', permanent: false },
+      { source: '/budgets/:path*', destination: '/categories', permanent: false },
+      { source: '/budget/:path*', destination: '/categories', permanent: false },
     ];
   },
 };

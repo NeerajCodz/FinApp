@@ -30,7 +30,6 @@ export type Currency = (typeof currencies)[number];
 export const transactionTypes = ['expense', 'income', 'transfer', 'refund', 'adjustment'] as const;
 export type TransactionType = (typeof transactionTypes)[number];
 export const accountTypes = ['cash', 'bank', 'card', 'wallet', 'loan', 'other'] as const;
-export const budgetPeriods = ['monthly', 'category', 'account', 'custom'] as const;
 export const splitMethods = ['equal', 'exact', 'percentage', 'shares', 'adjustment'] as const;
 export const recurrenceFrequencies = ['daily', 'weekly', 'monthly', 'yearly', 'custom'] as const;
 export const roles = ['owner', 'admin', 'member'] as const;

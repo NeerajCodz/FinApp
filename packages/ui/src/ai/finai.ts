@@ -390,7 +390,7 @@ export const actionStatusLabel: Record<FinaiActionStatus, string> = {
 export const FINAI_SUGGESTIONS = [
   'How much did I spend this month?',
   'Who owes me money?',
-  'Show my budgets',
+  'Show my category limits',
   'Add ₹250 lunch today',
 ] as const;
 

@@ -14,13 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { BarChart, BreakdownDonut, CashFlowChart, SpendingLineChart } from '@finapp/ui/analytics';
 import { DateRangePopover } from '@finapp/ui/activity';
-import {
-  BudgetProgress,
-  InfoDescription,
-  Metric,
-  MetricPair,
-  TransactionRow,
-} from '@finapp/ui/finance';
+import { Meter } from '@finapp/ui/charts';
+import { InfoDescription, Metric, MetricPair, TransactionRow } from '@finapp/ui/finance';
 import { FinanceEmptyState } from '@finapp/ui/finance';
 import {
   Button,
@@ -56,17 +51,6 @@ const periodOptions = [
 
 type AnalyticsProps = { children: React.ReactNode };
 type AnalyticsState = { hasError: boolean };
-type BudgetRecord = LocalRecord & {
-  name: string;
-  amountMinor: bigint;
-  currency: string;
-  startAt: number;
-  endAt: number;
-  categoryId?: string;
-  accountId?: string;
-  accountIds?: string[];
-  archivedAt?: number;
-};
 type AnalyticsType = 'all' | 'expense' | 'income' | 'transfer' | 'refund' | 'adjustment';
 
 type FilterOption = { id: string; label: string };
@@ -200,7 +184,6 @@ function AnalyticsContent() {
   const profileState = useLocalRecords<LocalRecord>(userId, 'profile');
   const categoryState = useLocalRecords<LocalRecord>(userId, 'category');
   const accountState = useLocalRecords<LocalRecord>(userId, 'account');
-  const budgetState = useLocalRecords<BudgetRecord>(userId, 'budget');
   const recurringState = useLocalRecords<LocalRecord>(userId, 'recurringRule');
   const groupState = useLocalRecords<LocalRecord>(userId, 'group');
   const settlementState = useLocalRecords<LocalRecord>(userId, 'settlement');
@@ -235,7 +218,6 @@ function AnalyticsContent() {
       addCurrency(ledgerTransaction(record)?.currency);
     }
     for (const record of accountState.data ?? []) addCurrency(record.currency);
-    for (const record of budgetState.data ?? []) addCurrency(record.currency);
     for (const record of recurringState.data ?? []) {
       addCurrency(localRecord(record.template)?.currency);
     }
@@ -244,7 +226,6 @@ function AnalyticsContent() {
     return [...currencies].sort().map((code) => ({ id: code, label: code }));
   }, [
     accountState.data,
-    budgetState.data,
     defaultCurrency,
     currency,
     groupState.data,
@@ -253,47 +234,6 @@ function AnalyticsContent() {
     recurringState.data,
     settlementState.data,
   ]);
-  const activeBudgets = useMemo(
-    () =>
-      (budgetState.data ?? []).filter(
-        (budget) =>
-          budget.archivedAt === undefined &&
-          budget.includeInAnalytics !== false &&
-          typeof budget.name === 'string' &&
-          typeof budget.amountMinor === 'bigint' &&
-          typeof budget.currency === 'string' &&
-          typeof budget.startAt === 'number' &&
-          typeof budget.endAt === 'number' &&
-          budget.startAt < budget.endAt,
-      ),
-    [budgetState.data],
-  );
-  const relevantBudgets = useMemo(
-    () =>
-      activeBudgets.filter(
-        (budget) =>
-          budget.currency === currency &&
-          budget.startAt < range.endAt &&
-          budget.endAt > range.startAt,
-      ),
-    [activeBudgets, currency, range.startAt, range.endAt],
-  );
-  const budgetWindow = useMemo(
-    () =>
-      relevantBudgets.length
-        ? {
-            startAt: Math.min(...relevantBudgets.map((budget) => budget.startAt)),
-            endAt: Math.max(...relevantBudgets.map((budget) => budget.endAt)),
-          }
-        : { startAt: range.startAt, endAt: range.endAt },
-    [relevantBudgets, range.startAt, range.endAt],
-  );
-  const budgetRangeState = useLocalTransactionRange<LocalRecord>(
-    userId,
-    budgetWindow.startAt,
-    budgetWindow.endAt,
-    fetchTransactionRange,
-  );
   const accounts = useMemo(() => recordIndex(accountState.data ?? []), [accountState.data]);
   const categories = useMemo(() => recordIndex(categoryState.data ?? []), [categoryState.data]);
   const accountOptions = useMemo<FilterOption[]>(
@@ -552,80 +492,55 @@ function AnalyticsContent() {
     (group) => group.archivedAt === undefined && (group.currency ?? defaultCurrency) === currency,
   );
   const groupIndex = useMemo(() => recordIndex(groups), [groups]);
-  const budgetProgress = useMemo(() => {
-    const records = budgetRangeState.data ?? [];
-    return relevantBudgets.map((budget) => {
-      const spentMinor = records.reduce((sum, record) => {
-        const transaction = ledgerTransaction(record);
-        if (
-          !transaction ||
-          transaction.type !== 'expense' ||
-          (typeFilter !== 'all' && typeFilter !== 'expense') ||
-          transaction.status !== 'posted' ||
-          transaction.deletedAt !== undefined ||
-          transaction.currency !== budget.currency ||
-          transaction.occurredAt < range.startAt ||
-          transaction.occurredAt >= range.endAt ||
-          (accountFilter !== 'all' &&
-            recordId(accounts.get(transaction.accountId ?? '') ?? {}) !== accountFilter) ||
-          (categoryFilter !== 'all' &&
-            recordId(categories.get(transaction.categoryId ?? '') ?? {}) !== categoryFilter) ||
-          transaction.occurredAt < budget.startAt ||
-          transaction.occurredAt >= budget.endAt
-        )
-          return sum;
-        if (
-          accounts.get(transaction.accountId ?? '')?.includeInAnalytics === false ||
-          categories.get(transaction.categoryId ?? '')?.includeInBudgets === false
-        )
-          return sum;
-        if (budget.categoryId) {
-          const transactionCategory = categories.get(transaction.categoryId ?? '');
-          const budgetCategory = categories.get(budget.categoryId);
-          const matches =
-            transactionCategory && budgetCategory
-              ? recordId(transactionCategory) === recordId(budgetCategory)
-              : transaction.categoryId === budget.categoryId;
-          if (!matches) return sum;
-        }
-        if (budget.accountId) {
-          const transactionAccount = accounts.get(transaction.accountId ?? '');
-          const budgetAccount = accounts.get(budget.accountId);
-          const matches =
-            transactionAccount && budgetAccount
-              ? recordId(transactionAccount) === recordId(budgetAccount)
-              : transaction.accountId === budget.accountId;
-          if (!matches) return sum;
-        }
-        if (
-          Array.isArray(budget.accountIds) &&
-          budget.accountIds.length &&
-          !budget.accountIds.some((id) => {
-            const scopedAccount = typeof id === 'string' ? accounts.get(id) : undefined;
-            return (
-              typeof id === 'string' &&
-              (scopedAccount ? recordIds(scopedAccount) : [id]).includes(
-                transaction.accountId ?? '',
-              )
-            );
-          })
-        )
-          return sum;
-        return sum + transaction.amountMinor;
-      }, 0n);
-      return { budget, spentMinor };
-    });
-  }, [
-    relevantBudgets,
-    budgetRangeState.data,
-    categories,
-    accounts,
-    typeFilter,
-    accountFilter,
-    categoryFilter,
-    range.startAt,
-    range.endAt,
-  ]);
+  // Category limits are monthly: usage is this calendar month's (UTC, like the server).
+  const limitProgress = useMemo(() => {
+    const at = new Date(referenceAt);
+    const startAt = Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1);
+    const endAt = Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1);
+    return (categoryState.data ?? [])
+      .filter(
+        (category) =>
+          category.archivedAt === undefined &&
+          typeof category.monthlyLimitMinor === 'bigint' &&
+          category.monthlyLimitMinor > 0n &&
+          (typeof category.limitCurrency === 'string'
+            ? category.limitCurrency
+            : defaultCurrency) === currency,
+      )
+      .map((category) => {
+        const keys = recordIds(category);
+        const limitMinor = category.monthlyLimitMinor as bigint;
+        const spentMinor = (transactionState.data ?? []).reduce((sum, record) => {
+          const transaction = ledgerTransaction(record);
+          if (
+            !transaction ||
+            transaction.type !== 'expense' ||
+            transaction.status !== 'posted' ||
+            transaction.deletedAt !== undefined ||
+            transaction.currency !== currency ||
+            transaction.occurredAt < startAt ||
+            transaction.occurredAt >= endAt ||
+            !keys.includes(transaction.categoryId ?? '')
+          )
+            return sum;
+          return sum + transaction.amountMinor;
+        }, 0n);
+        return {
+          category,
+          name: typeof category.name === 'string' ? category.name : 'Category',
+          icon: typeof category.icon === 'string' ? category.icon : undefined,
+          spentMinor,
+          limitMinor,
+          alertPercent:
+            typeof category.limitAlertPercent === 'number' ? category.limitAlertPercent : 80,
+        };
+      })
+      .sort(
+        (left, right) =>
+          Number((right.spentMinor * 1000n) / right.limitMinor) -
+          Number((left.spentMinor * 1000n) / left.limitMinor),
+      );
+  }, [categoryState.data, currency, defaultCurrency, referenceAt, transactionState.data]);
   const recurringRules = (recurringState.data ?? [])
     .filter((rule) => rule.enabled === true && rule.deletedAt === undefined)
     .slice()
@@ -658,8 +573,6 @@ function AnalyticsContent() {
     accountState.error ||
     transactionState.error ||
     rangeState.error ||
-    budgetState.error ||
-    budgetRangeState.error ||
     recurringState.error ||
     groupState.error ||
     settlementState.error;
@@ -672,8 +585,6 @@ function AnalyticsContent() {
     accountState.retry();
     transactionState.retry();
     rangeState.retry();
-    budgetState.retry();
-    budgetRangeState.retry();
     recurringState.retry();
     groupState.retry();
     settlementState.retry();
@@ -1250,58 +1161,52 @@ function AnalyticsContent() {
               </Text>
             </Panel>
             <Panel
-              title="Budgets"
+              title="Category limits"
               action={
-                <Button size="sm" variant="ghost" onPress={() => router.push('/budgets' as never)}>
+                <Button size="sm" variant="ghost" onPress={() => router.push('/categories')}>
                   View all
                 </Button>
               }
             >
-              {budgetState.loading || (relevantBudgets.length > 0 && budgetRangeState.loading) ? (
-                <Typography variant="small">Loading saved budgets…</Typography>
-              ) : budgetProgress.length ? (
+              {categoryState.loading ? (
+                <Typography variant="small">Loading categories…</Typography>
+              ) : limitProgress.length ? (
                 <View style={{ gap: 18 }}>
-                  {budgetProgress.slice(0, 4).map(({ budget, spentMinor }) => {
-                    const id = recordId(budget);
+                  {limitProgress.slice(0, 4).map((item) => {
+                    const id = recordId(item.category);
                     return (
                       <TouchableOpacity
-                        key={id || budget.name}
+                        key={id || item.name}
                         accessibilityRole="button"
-                        accessibilityLabel={`Open ${budget.name} budget`}
+                        accessibilityLabel={`Open ${item.name}`}
                         onPress={() =>
-                          id && router.push({ pathname: '/budget/[id]', params: { id } } as never)
+                          id && router.push({ pathname: '/category/[id]', params: { id } } as never)
                         }
                         activeOpacity={0.75}
                       >
-                        <BudgetProgress
-                          title={budget.name}
-                          spentMinor={spentMinor}
-                          limitMinor={budget.amountMinor}
-                          currency={budget.currency}
-                          primary
+                        <Meter
+                          value={Number(item.spentMinor)}
+                          max={Number(item.limitMinor)}
+                          warnAt={item.alertPercent / 100}
+                          label={`${item.icon ? `${item.icon} ` : ''}${item.name}`}
+                          detail={`${formatMinor(item.spentMinor, currency)} of ${formatMinor(item.limitMinor, currency)}`}
                         />
                       </TouchableOpacity>
                     );
                   })}
                 </View>
-              ) : budgetState.data ? (
+              ) : (
                 <FinanceEmptyState
                   kind="budget"
-                  title="No active budgets."
-                  description="Saved budget progress will appear here."
+                  title="No category limits yet."
+                  description="Set a monthly limit on a category to see its usage here."
                   compact
                   action={
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onPress={() => router.push('/budgets/new' as never)}
-                    >
-                      Create budget
+                    <Button size="sm" variant="outline" onPress={() => router.push('/categories')}>
+                      Set a category limit
                     </Button>
                   }
                 />
-              ) : (
-                <Typography variant="small">Saved budget data is unavailable.</Typography>
               )}
             </Panel>
             <Panel

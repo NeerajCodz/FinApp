@@ -242,23 +242,12 @@ export const updateDetails = mutation({
         .withIndex('by_transferAccountId', (q) => q.eq('transferAccountId', String(args.accountId)))
         .first();
       if (sourceTransaction || destinationTransaction) throw new Error('ACCOUNT_CURRENCY_IN_USE');
-      const [goals, budgets] = await Promise.all([
-        ctx.db
-          .query('goals')
-          .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
-          .collect(),
-        ctx.db
-          .query('budgets')
-          .withIndex('by_owner_period', (q) => q.eq('ownerId', user._id))
-          .collect(),
-      ]);
+      const goals = await ctx.db
+        .query('goals')
+        .withIndex('by_owner', (q) => q.eq('ownerId', user._id))
+        .collect();
       const accountId = String(args.accountId);
-      if (
-        goals.some((goal) => goal.accountId === accountId) ||
-        budgets.some(
-          (budget) => budget.accountId === accountId || budget.accountIds?.includes(accountId),
-        )
-      )
+      if (goals.some((goal) => goal.accountId === accountId))
         throw new Error('ACCOUNT_CURRENCY_IN_USE');
     }
     const updatedAt = Date.now();

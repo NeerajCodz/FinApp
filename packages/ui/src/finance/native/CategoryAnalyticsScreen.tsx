@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, TouchableOpacity, View, StyleSheet } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import {
   ArrowDownRight,
   ArrowRight,
@@ -15,6 +14,15 @@ import { FinanceEmptyState } from './FinanceEmptyState';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import { chartPalette } from '../../tokens';
+import {
+  ColumnChart,
+  DonutChart,
+  Meter,
+  RankedBars,
+  compactMoney,
+  fullMoney,
+} from '../../charts/native';
+import { toMajor } from '../../analytics/chart-utils';
 
 export type AnalyticsCategory = {
   id: string;
@@ -23,6 +31,8 @@ export type AnalyticsCategory = {
   kind: 'expense' | 'income';
   currency: string;
   monthlyLimitMinor?: bigint;
+  /** Alert level for the limit, in percent (default 80). */
+  limitAlertPercent?: number;
 };
 export type AnalyticsAccount = { id: string; name: string; currency?: string };
 export type AnalyticsTransaction = {
@@ -38,21 +48,10 @@ export type AnalyticsTransaction = {
   status: string;
   deletedAt?: number;
 };
-export type AnalyticsBudget = {
-  id: string;
-  categoryId?: string;
-  amountMinor: bigint;
-  currency: string;
-  period: string;
-  startAt: number;
-  endAt: number;
-  archivedAt?: number;
-};
 export type CategoryAnalyticsScreenProps = {
   categories: readonly AnalyticsCategory[];
   accounts: readonly AnalyticsAccount[];
   transactions: readonly AnalyticsTransaction[];
-  budgets: readonly AnalyticsBudget[];
   defaultCurrency: string;
   loading?: boolean;
   error?: string;
@@ -78,7 +77,6 @@ export function CategoryAnalyticsScreen({
   categories,
   accounts,
   transactions,
-  budgets,
   defaultCurrency,
   loading = false,
   error,
@@ -125,18 +123,8 @@ export function CategoryAnalyticsScreen({
       ].filter(Boolean),
     [categories, defaultCurrency, transactions],
   );
-  const limitFor = (category: AnalyticsCategory, at = Date.now()) => {
-    if (category.monthlyLimitMinor !== undefined) return category.monthlyLimitMinor;
-    return budgets.find(
-      (item) =>
-        item.period === 'category' &&
-        item.categoryId === category.id &&
-        item.archivedAt === undefined &&
-        item.startAt <= at &&
-        item.endAt > at &&
-        item.currency === category.currency,
-    )?.amountMinor;
-  };
+  // A category's monthly limit is its budget.
+  const limitFor = (category: AnalyticsCategory) => category.monthlyLimitMinor;
   const scopedCategories = categories.filter(
     (item) =>
       (categoryId === 'all' || item.id === categoryId) &&
@@ -225,27 +213,12 @@ export function CategoryAnalyticsScreen({
     (item) =>
       item.limitMinor !== undefined &&
       item.limitMinor > 0n &&
-      Number((item.monthSpent * 100n) / item.limitMinor) >= 80,
+      Number((item.monthSpent * 100n) / item.limitMinor) >= (item.limitAlertPercent ?? 80),
   ).length;
   const expenseCount = rows.filter((item) => item.kind === 'expense').length;
   const average = expenseCount > 0 ? current.spent / BigInt(expenseCount) : 0n;
-  const donutRows = expenseRows;
   const donutTotal = expenseRows.reduce((sum, item) => sum + item.spent, 0n);
-  const circumference = 2 * Math.PI * 51;
-  let offset = 0;
-  const donutSegments = donutRows.map((item, index) => {
-    const length =
-      donutTotal > 0n ? (circumference * Number((item.spent * 10000n) / donutTotal)) / 10000 : 0;
-    const segment = {
-      id: item.id,
-      value: item.spent,
-      color: categoryColor(index, tokens.primary),
-      length,
-      offset,
-    };
-    offset += length;
-    return segment;
-  });
+  const donutOther = expenseRows.slice(8).reduce((sum, item) => sum + item.spent, 0n);
   const monthly = Array.from({ length: 6 }, (_, index) => {
     const from = Date.UTC(y, m - 5 + index, 1);
     const until = Date.UTC(y, m - 4 + index, 1);
@@ -276,7 +249,11 @@ export function CategoryAnalyticsScreen({
       total: values.reduce((sum, item) => sum + item.amount, 0n),
     };
   });
-  const maxMonth = monthly.reduce((max, item) => (item.total > max ? item.total : max), 0n);
+  const monthlyCategories = scopedCategories
+    .filter((category) =>
+      monthly.some((bucket) => bucket.values.some((value) => value.category.id === category.id)),
+    )
+    .slice(0, 6);
   const growing = [...rows]
     .filter((item) => item.change !== null && item.change > 0)
     .sort((a, b) => (b.change ?? 0) - (a.change ?? 0))[0];
@@ -410,7 +387,7 @@ export function CategoryAnalyticsScreen({
             <Metric
               label="Limits at risk"
               value={String(limitsAtRisk)}
-              note="At least 80% used"
+              note="At or past their alert level"
               tone={tone.warning}
             />
           </View>
@@ -421,68 +398,34 @@ export function CategoryAnalyticsScreen({
             ]}
           >
             <Section title="Expense distribution" note={periodLabel} />
-            {donutRows.length ? (
-              <View style={styles.donutLayout}>
-                <View style={styles.donut}>
-                  <Svg width="100%" height="100%" viewBox="0 0 140 140">
-                    <Circle
-                      cx="70"
-                      cy="70"
-                      r="51"
-                      fill="none"
-                      stroke={tokens.borderSubtle}
-                      strokeWidth="15"
-                    />
-                    {donutSegments.map((segment) => (
-                      <Circle
-                        key={segment.id}
-                        cx="70"
-                        cy="70"
-                        r="51"
-                        fill="none"
-                        stroke={segment.color}
-                        strokeWidth="15"
-                        strokeDasharray={`${segment.length} ${circumference - segment.length}`}
-                        strokeDashoffset={-segment.offset}
-                        rotation={-90}
-                        origin="70, 70"
-                      />
-                    ))}
-                  </Svg>
-                  <View style={styles.donutText}>
-                    <Typography variant="bodyLarge" numberOfLines={1} style={{ fontSize: 12 }}>
-                      {formatMinor(donutTotal, currency)}
-                    </Typography>
-                    <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-                      Total spend
-                    </Typography>
-                  </View>
-                </View>
-                <View style={styles.legend}>
-                  {donutRows.map((item, index) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      accessibilityRole="button"
-                      onPress={() => onOpenCategory(item.id)}
-                      style={styles.legendItem}
-                    >
-                      <View
-                        style={[
-                          styles.dot,
-                          { backgroundColor: categoryColor(index, tokens.primary) },
-                        ]}
-                      />
-                      <Typography variant="caption" numberOfLines={1} style={{ flex: 1 }}>
-                        {item.name}
-                      </Typography>
-                      <Typography variant="caption" style={{ color: tokens.foregroundMuted }}>
-                        {donutTotal > 0n ? Number((item.spent * 100n) / donutTotal) : 0}%
-                      </Typography>
-                      <Typography variant="caption">{formatMinor(item.spent, currency)}</Typography>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+            {expenseRows.length ? (
+              <DonutChart
+                caption={`Expense distribution totaling ${formatMinor(donutTotal, currency)}`}
+                centerValue={formatMinor(donutTotal, currency)}
+                centerLabel="Total spend"
+                size={160}
+                items={[
+                  ...expenseRows.slice(0, 8).map((item, index) => ({
+                    id: item.id,
+                    label: item.name,
+                    value: toMajor(item.spent, currency),
+                    display: formatMinor(item.spent, currency),
+                    color: categoryColor(index, tokens.primary),
+                  })),
+                  ...(donutOther > 0n
+                    ? [
+                        {
+                          id: '__other__',
+                          label: 'Other categories',
+                          value: toMajor(donutOther, currency),
+                          display: formatMinor(donutOther, currency),
+                          color: tokens.foregroundSubtle,
+                        },
+                      ]
+                    : []),
+                ]}
+                onSelect={(item) => item.id !== '__other__' && onOpenCategory(item.id)}
+              />
             ) : (
               <FinanceEmptyState
                 kind="analytics"
@@ -499,30 +442,17 @@ export function CategoryAnalyticsScreen({
             ]}
           >
             <Section title="Top categories by spend" note="Highest posted expenses" />
-            {expenseRows.slice(0, 6).map((item, index) => (
-              <TouchableOpacity
-                key={item.id}
-                accessibilityRole="button"
-                onPress={() => onOpenCategory(item.id)}
-                style={styles.ranked}
-              >
-                <CategoryIcon label={item.name} icon={item.icon} />
-                <Typography variant="caption" numberOfLines={1} style={{ width: 83 }}>
-                  {item.name}
-                </Typography>
-                <View style={[styles.rankTrack, { backgroundColor: tokens.borderSubtle }]}>
-                  <View
-                    style={{
-                      width: `${Math.max(5, Number((item.spent * 100n) / (expenseRows[0]?.spent || 1n)))}%`,
-                      height: 8,
-                      borderRadius: 6,
-                      backgroundColor: categoryColor(index, tokens.primary),
-                    }}
-                  />
-                </View>
-                <Typography variant="caption">{formatMinor(item.spent, currency)}</Typography>
-              </TouchableOpacity>
-            ))}
+            <RankedBars
+              items={expenseRows.slice(0, 6).map((item, index) => ({
+                id: item.id,
+                label: item.name,
+                value: toMajor(item.spent, currency),
+                display: formatMinor(item.spent, currency),
+                color: categoryColor(index, tokens.primary),
+                icon: <CategoryIcon label={item.name} icon={item.icon} />,
+              }))}
+              onSelect={(item) => onOpenCategory(item.id)}
+            />
             {expenseRows.length === 0 && (
               <FinanceEmptyState
                 kind="analytics"
@@ -539,37 +469,30 @@ export function CategoryAnalyticsScreen({
             ]}
           >
             <Section title="Monthly category spending" note="Last six months" />
-            <View style={[styles.monthChart, { borderBottomColor: tokens.borderSubtle }]}>
-              {monthly.map((item) => (
-                <View key={item.start} style={styles.monthColumn}>
-                  <View style={styles.stackedBar}>
-                    {item.values
-                      .slice()
-                      .reverse()
-                      .map((value) => (
-                        <View
-                          key={value.category.id}
-                          style={{
-                            height: `${maxMonth > 0n ? Math.max(2, Number((value.amount * 10000n) / maxMonth) / 100) : 0}%`,
-                            backgroundColor: categoryColor(
-                              scopedCategories.findIndex(
-                                (category) => category.id === value.category.id,
-                              ),
-                              tokens.primary,
-                            ),
-                          }}
-                        />
-                      ))}
-                  </View>
-                  <Typography
-                    variant="caption"
-                    style={{ color: tokens.foregroundMuted, fontSize: 10 }}
-                  >
-                    {item.label}
-                  </Typography>
-                </View>
-              ))}
-            </View>
+            <ColumnChart
+              caption={`Posted monthly expenses by category for the last six months in ${currency}`}
+              mode="stacked"
+              height={200}
+              labels={monthly.map((bucket) => bucket.label)}
+              titles={monthly.map((bucket) => bucket.label)}
+              series={monthlyCategories.map((category) => ({
+                id: category.id,
+                label: category.name,
+                color: categoryColor(
+                  scopedCategories.findIndex((item) => item.id === category.id),
+                  tokens.primary,
+                ),
+                values: monthly.map((bucket) =>
+                  toMajor(
+                    bucket.values.find((value) => value.category.id === category.id)?.amount ?? 0n,
+                    currency,
+                  ),
+                ),
+              }))}
+              format={(value) => fullMoney(value, currency)}
+              axisFormat={(value) => compactMoney(value, currency)}
+              showLegend
+            />
           </View>
           <View
             style={[
@@ -601,16 +524,12 @@ export function CategoryAnalyticsScreen({
                           {used}% of {formatMinor(item.limitMinor!, item.currency)}
                         </Typography>
                       </View>
-                      <View style={[styles.rankTrack, { backgroundColor: tokens.borderSubtle }]}>
-                        <View
-                          style={{
-                            width: `${Math.min(100, used)}%`,
-                            height: 6,
-                            borderRadius: 5,
-                            backgroundColor: used >= 80 ? tokens.warning : tokens.primary,
-                          }}
-                        />
-                      </View>
+                      <Meter
+                        value={Number(item.monthSpent)}
+                        max={Number(item.limitMinor ?? 0n)}
+                        warnAt={(item.limitAlertPercent ?? 80) / 100}
+                        thin
+                      />
                     </View>
                   </TouchableOpacity>
                 );
@@ -722,16 +641,13 @@ export function CategoryAnalyticsScreen({
                         </Typography>
                       </View>
                       {limitUse !== null && (
-                        <View style={[styles.rankTrack, { backgroundColor: tokens.borderSubtle }]}>
-                          <View
-                            style={{
-                              width: `${Math.min(100, limitUse)}%`,
-                              height: 4,
-                              borderRadius: 3,
-                              backgroundColor: limitUse >= 80 ? tokens.warning : tokens.primary,
-                            }}
-                          />
-                        </View>
+                        <Meter
+                          value={Number(item.monthSpent)}
+                          max={Number(item.limitMinor ?? 0n)}
+                          warnAt={(item.limitAlertPercent ?? 80) / 100}
+                          detail={`${limitUse}% of ${formatMinor(item.limitMinor!, item.currency)}`}
+                          thin
+                        />
                       )}
                     </View>
                     <ArrowRight size={16} color={tokens.foregroundSubtle} />
@@ -944,32 +860,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 14,
     gap: 8,
-  },
-  donutLayout: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  donut: { width: 126, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
-  donutText: { position: 'absolute', alignItems: 'center', width: 75 },
-  legend: { flex: 1, gap: 5 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  ranked: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  rankTrack: { flex: 1, height: 8, overflow: 'hidden', borderRadius: 6 },
-  monthChart: {
-    height: 132,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    justifyContent: 'space-around',
-    gap: 8,
-    borderBottomWidth: 1,
-  },
-  monthColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 5 },
-  stackedBar: {
-    width: 27,
-    flex: 1,
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
   },
   usageRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4 },
   usageLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },

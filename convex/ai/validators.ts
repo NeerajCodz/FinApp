@@ -50,16 +50,19 @@ export const finaiActionKind = v.union(
   v.literal('goal.contribute'),
   v.literal('group.nudge'),
   v.literal('transaction.update'),
+  /** Retired (budgets are category limits); kept so stored actions still validate. */
   v.literal('budget.create'),
   v.literal('budget.update'),
   v.literal('goal.create'),
   v.literal('goal.update'),
   v.literal('category.create'),
   v.literal('category.update'),
+  /** Sets, changes or removes a category's monthly limit (its budget) and alert level. */
+  v.literal('category.limit'),
   v.literal('account.create'),
   v.literal('account.update'),
   v.literal('recurring.create'),
-  /** Moves a budget, goal, category, account or recurring rule to Trash. */
+  /** Moves a goal, category, account or recurring rule to Trash. */
   v.literal('entity.delete'),
   /** Deletes a Trash item for good. */
   v.literal('trash.purge'),

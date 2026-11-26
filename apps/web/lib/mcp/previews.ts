@@ -52,21 +52,21 @@ function samples(now: number): Record<WidgetId, { toolName: string; data: unknow
             isIncludedInTotal: true,
           },
         ],
-        budgets: [
+        categoryLimits: [
           {
-            id: 'b1',
+            categoryId: 'c1',
             name: 'Food & dining',
             currency: 'INR',
-            amountMinor: 1_200_000n,
+            limitMinor: 1_200_000n,
             spentMinor: 845_000n,
             remainingMinor: 355_000n,
             progress: 0.704,
           },
           {
-            id: 'b2',
+            categoryId: 'c2',
             name: 'Transport',
             currency: 'INR',
-            amountMinor: 400_000n,
+            limitMinor: 400_000n,
             spentMinor: 436_500n,
             remainingMinor: -36_500n,
             progress: 1.091,

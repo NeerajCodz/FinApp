@@ -902,23 +902,26 @@ export function SparkBars({
 
 // ---------- Meters ----------
 
-/** Limit usage: fill colour carries severity (under 80% · 80–100% · over). */
+/** Limit usage: fill colour carries severity (under `warnAt` · `warnAt`–100% · over). */
 export function Meter({
   value,
   max,
   label,
   detail,
   thin,
+  warnAt = 0.8,
 }: {
   value: number;
   max: number;
   label?: string;
   detail?: string;
   thin?: boolean;
+  /** Share of `max` (0–1) where the fill turns to the warning colour. Default 0.8. */
+  warnAt?: number;
 }) {
   const { tokens } = useTheme();
   const ratio = max > 0 ? value / max : 0;
-  const color = ratio > 1 ? tokens.expense : ratio >= 0.8 ? tokens.warning : tokens.income;
+  const color = ratio > 1 ? tokens.expense : ratio >= warnAt ? tokens.warning : tokens.income;
   return (
     <div className={styles.meter}>
       {label || detail ? (

@@ -7,8 +7,8 @@ import { formatMinor } from '../money';
 import { buildGoalAnalyticsModel } from '../goalAnalytics';
 import { EntityColorPicker } from './EntityColorPicker';
 import { EntityIcon, EntityIconPicker } from './EntityIconPicker';
-import { Panel, Ring, Trend, ContributionTable } from './GoalsBudgetsParts';
-import s from './GoalsBudgets.module.css';
+import { Panel, Ring, Trend, ContributionTable } from './GoalsParts';
+import s from './Goals.module.css';
 export type GoalEditorValues = {
   name: string;
   target: string;
@@ -373,7 +373,7 @@ export function GoalEditor(p: GoalEditorProps) {
                     </div>
                   </Panel>
                   <Panel title="Savings trend" description="Actual recorded monthly contributions.">
-                    <Trend rows={model.months} />
+                    <Trend rows={model.months} currency={p.currency || 'INR'} />
                   </Panel>
                 </>
               ) : (

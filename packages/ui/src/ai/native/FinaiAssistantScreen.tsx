@@ -382,7 +382,7 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
             What do you want to know?
           </Typography>
           <Typography variant="small" style={{ color: tokens.foregroundMuted }}>
-            Ask about spending, budgets, groups or friends, or tell me what to add.
+            Ask about spending, category limits, groups or friends, or tell me what to add.
           </Typography>
           {!p.available ? (
             <Typography variant="caption" style={{ color: tokens.warning }}>

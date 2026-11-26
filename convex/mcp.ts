@@ -13,7 +13,6 @@ function lineItems(transaction: Doc<'transactions'>) {
 const resourceValidator = v.union(
   v.literal('accounts'),
   v.literal('categories'),
-  v.literal('budgets'),
   v.literal('goals'),
   v.literal('goalContributions'),
   v.literal('recurringRules'),
@@ -166,32 +165,9 @@ export const listOwnedRecords = query({
             kind: row.kind,
             icon: row.icon,
             color: row.color,
-            includeInBudgets: row.includeInBudgets,
             monthlyLimitMinor: row.monthlyLimitMinor,
-          })),
-        nextCursor: page.isDone ? null : page.continueCursor,
-        isDone: page.isDone,
-      };
-    }
-    if (args.resource === 'budgets') {
-      page = await ctx.db
-        .query('budgets')
-        .withIndex('by_owner_period', (index) => index.eq('ownerId', user._id))
-        .order('desc')
-        .paginate(args.paginationOpts);
-      return {
-        items: page.page
-          .filter((row) => row.archivedAt === undefined)
-          .map((row) => ({
-            id: row._id,
-            name: row.name,
-            amountMinor: row.amountMinor,
-            currency: row.currency,
-            period: row.period,
-            categoryId: row.categoryId,
-            accountId: row.accountId,
-            startAt: row.startAt,
-            endAt: row.endAt,
+            limitCurrency: row.limitCurrency,
+            limitAlertPercent: row.limitAlertPercent,
           })),
         nextCursor: page.isDone ? null : page.continueCursor,
         isDone: page.isDone,

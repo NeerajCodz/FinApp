@@ -286,22 +286,6 @@
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
 }
-.track {
-  display: block;
-  height: 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--finance-muted, #9da19c) 18%, transparent);
-}
-.track > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--finance-lime, var(--finapp-primary));
-}
-.track > .overTrack {
-  background: var(--finance-expense, #ff6877);
-}
 .muted,
 .activity {
   color: var(--finance-muted, #9da19c);

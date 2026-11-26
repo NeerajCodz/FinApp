@@ -25,7 +25,7 @@ export default function AiSettingsPage() {
       <SettingsHero
         icon={<FinaiLogo size={28} />}
         title={finai?.enabled === false ? 'FinAI is off' : 'FinAI is on'}
-        description="Your assistant for spending, budgets, goals and splits. Every change it prepares waits for your confirmation."
+        description="Your assistant for spending, category limits, goals and splits. Every change it prepares waits for your confirmation."
       />
       <SettingsGroup>
         <SettingsLink

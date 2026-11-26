@@ -51,23 +51,22 @@ export const financeTools: ToolFactory = (client) => [
     name: 'finapp.finance.overview',
     title: 'Financial overview',
     description:
-      'Dashboard snapshot: income, spending and net for a window (default last 30 days, in the default currency), every active account balance with per-currency totals, budget progress and recent transactions. Renders an overview card in supporting clients.',
+      'Dashboard snapshot: income, spending and net for a window (default last 30 days, in the default currency), every active account balance with per-currency totals, category limit usage this month and recent transactions. Renders an overview card in supporting clients.',
     scope: 'finapp:read',
     input: optionalWindow,
     widget: 'overview',
     run: async (args) => {
       const range = window(args);
-      const [summary, accounts, budgets] = await Promise.all([
+      const [summary, accounts, limits] = await Promise.all([
         client.query(api.dashboard.queries.summary, range),
         client.query(api.accounts.queries.list, {}),
-        client.query(api.budgets.queries.list, {}),
+        client.query(api.categories.queries.limits, {}),
       ]);
       const totals = new Map<string, bigint>();
       for (const account of accounts) {
         if (!account.isIncludedInTotal) continue;
         totals.set(account.currency, (totals.get(account.currency) ?? 0n) + account.balanceMinor);
       }
-      const now = Date.now();
       return {
         period: range,
         currency: summary?.currency ?? 'INR',
@@ -84,21 +83,15 @@ export const financeTools: ToolFactory = (client) => [
           balanceMinor: account.balanceMinor,
           isIncludedInTotal: account.isIncludedInTotal,
         })),
-        budgets: budgets
-          .filter((budget) => budget.startAt <= now && budget.endAt > now)
-          .slice(0, 6)
-          .map((budget) => ({
-            id: budget._id,
-            name: budget.name,
-            currency: budget.currency,
-            amountMinor: budget.amountMinor,
-            spentMinor: budget.spentMinor,
-            remainingMinor: budget.remainingMinor,
-            progress:
-              budget.amountMinor > 0n
-                ? Number((budget.spentMinor * 1000n) / budget.amountMinor) / 1000
-                : 0,
-          })),
+        categoryLimits: limits.slice(0, 6).map((limit) => ({
+          categoryId: limit.categoryId,
+          name: limit.name,
+          currency: limit.currency,
+          limitMinor: limit.limitMinor,
+          spentMinor: limit.spentMinor,
+          remainingMinor: limit.remainingMinor,
+          progress: limit.percentUsed / 100,
+        })),
         recent: (summary?.recent ?? []).map((transaction) => ({
           id: transaction._id,
           title: transaction.title,
@@ -444,7 +437,7 @@ export const financeTools: ToolFactory = (client) => [
     name: 'finapp.finance.categories.list',
     title: 'List categories',
     description:
-      'Active categories with this month’s spent/received totals and any monthly limit. Use the ids for transaction and budget tools.',
+      'Active categories with this month’s spent/received totals and any monthly limit (a category’s limit is its budget). Use the ids for transaction and category-limit tools.',
     scope: 'finapp:read',
     input: {},
     run: async () => ({ items: await client.query(api.categories.queries.overview, {}) }),
@@ -475,9 +468,14 @@ export const financeTools: ToolFactory = (client) => [
       icon: z.string().max(80).optional().describe('Emoji or icon name, e.g. "🍔".'),
       color: z.string().max(32).optional(),
       notes: z.string().max(2000).optional(),
-      includeInBudgets: z.boolean().optional(),
       monthlyLimitMinor: minorUnits.optional(),
       limitCurrency: currency.optional(),
+      limitAlertPercent: z
+        .number()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('Alert when this % of the monthly limit is spent. Default 80.'),
       clientMutationId: mutationId,
     },
     run: (args) =>
@@ -487,9 +485,9 @@ export const financeTools: ToolFactory = (client) => [
         icon: args.icon,
         color: args.color,
         notes: args.notes,
-        includeInBudgets: args.includeInBudgets,
         monthlyLimitMinor: args.monthlyLimitMinor,
         limitCurrency: args.limitCurrency,
+        limitAlertPercent: args.limitAlertPercent,
         clientMutationId: idempotencyKey(args.clientMutationId),
       }),
   }),
@@ -513,8 +511,7 @@ export const financeTools: ToolFactory = (client) => [
   defineTool({
     name: 'finapp.finance.categories.update',
     title: 'Update category preferences',
-    description:
-      'Change a category’s kind, colour, icon, notes, or whether it counts toward budgets.',
+    description: 'Change a category’s kind, colour, icon or notes.',
     scope: 'finapp:write:finance',
     input: {
       categoryId: docId('Category'),
@@ -523,7 +520,6 @@ export const financeTools: ToolFactory = (client) => [
       // Same limit as categories.setIcon, so a bad icon fails before anything changes.
       icon: z.string().min(1).max(32).nullable().optional(),
       notes: z.string().max(2000).nullable().optional(),
-      includeInBudgets: z.boolean().optional(),
       clientMutationId: mutationId,
     },
     run: async (args) => {
@@ -536,7 +532,6 @@ export const financeTools: ToolFactory = (client) => [
         kind: args.kind,
         color: args.color,
         notes: args.notes,
-        includeInBudgets: args.includeInBudgets,
         clientMutationId: key,
       });
       if (args.icon !== undefined) {
@@ -552,12 +547,20 @@ export const financeTools: ToolFactory = (client) => [
   defineTool({
     name: 'finapp.finance.categories.set_limit',
     title: 'Set category monthly limit',
-    description: 'Set or clear (amountMinor null) a category’s monthly spending limit.',
+    description:
+      'Set, change or clear (amountMinor null) a category’s monthly spending limit — its budget — and the alert level. Budgets are category limits.',
     scope: 'finapp:write:finance',
     input: {
       categoryId: docId('Category'),
       amountMinor: minorUnits.nullable(),
       currency: currency.optional(),
+      alertPercent: z
+        .number()
+        .min(1)
+        .max(100)
+        .nullable()
+        .optional()
+        .describe('Alert when this % is spent (null resets to 80). Omit to keep the current one.'),
       clientMutationId: mutationId,
     },
     run: (args) =>
@@ -565,6 +568,7 @@ export const financeTools: ToolFactory = (client) => [
         categoryId: id<'categories'>(args.categoryId),
         amountMinor: args.amountMinor,
         currency: args.currency,
+        alertPercent: args.alertPercent,
         clientMutationId: idempotencyKey(args.clientMutationId),
       }),
   }),
@@ -592,106 +596,16 @@ export const financeTools: ToolFactory = (client) => [
       }),
   }),
 
-  // ---------- Budgets ----------
+  // ---------- Category limits (budgets) ----------
   defineTool({
-    name: 'finapp.finance.budgets.list',
-    title: 'List budgets with progress',
-    description: 'Active budgets with spent and remaining amounts for their period.',
+    name: 'finapp.finance.category_limits.list',
+    title: 'List category limits with usage',
+    description:
+      'Categories that have a monthly limit (their budget), with this month’s spent, remaining, percent used, alert level and status (normal, warning, near-limit, exceeded). Set or clear one with finapp.finance.categories.set_limit.',
     scope: 'finapp:read',
     input: {},
-    run: async () => ({ items: await client.query(api.budgets.queries.list, {}) }),
-    summarize: countSummary('budgets'),
-  }),
-  defineTool({
-    name: 'finapp.finance.budgets.get',
-    title: 'Get budget',
-    description: 'One budget with spent and remaining amounts.',
-    scope: 'finapp:read',
-    input: { budgetId: docId('Budget') },
-    run: (args) =>
-      client.query(api.budgets.queries.detail, { budgetId: id<'budgets'>(args.budgetId) }),
-  }),
-  defineTool({
-    name: 'finapp.finance.budgets.create',
-    title: 'Create budget',
-    description:
-      'Create a budget for a date window, optionally limited to a category or account(s).',
-    scope: 'finapp:write:finance',
-    input: {
-      name: z.string().min(1).max(120),
-      amountMinor: minorUnits,
-      currency,
-      period: z.enum(['monthly', 'category', 'account', 'custom']),
-      categoryId: docId('Category').optional(),
-      accountId: docId('Account').optional(),
-      startAt: timestamp,
-      endAt: timestamp,
-      alertThreshold: z.number().min(0).max(100).optional().describe('Alert at this % spent.'),
-      notes: z.string().max(2000).optional(),
-      clientMutationId: mutationId,
-    },
-    run: (args) =>
-      client.mutation(api.budgets.mutations.create, {
-        name: args.name,
-        amountMinor: args.amountMinor,
-        currency: args.currency,
-        period: args.period,
-        categoryId: id<'categories'>(args.categoryId),
-        accountId: id<'accounts'>(args.accountId),
-        startAt: args.startAt,
-        endAt: args.endAt,
-        alertThreshold: args.alertThreshold,
-        notes: args.notes,
-        clientMutationId: idempotencyKey(args.clientMutationId),
-      }),
-  }),
-  defineTool({
-    name: 'finapp.finance.budgets.update',
-    title: 'Update budget',
-    description: 'Replace a category budget’s amount, window, alert threshold and notes.',
-    scope: 'finapp:write:finance',
-    input: {
-      budgetId: docId('Budget'),
-      name: z.string().min(1).max(120),
-      amountMinor: minorUnits,
-      currency,
-      categoryId: docId('Category'),
-      startAt: timestamp,
-      endAt: timestamp,
-      alertThreshold: z.number().min(0).max(100).nullable().optional(),
-      notes: z.string().max(2000).nullable().optional(),
-      clientMutationId: mutationId,
-    },
-    run: (args) =>
-      client.mutation(api.budgets.mutations.update, {
-        budgetId: id<'budgets'>(args.budgetId),
-        name: args.name,
-        amountMinor: args.amountMinor,
-        currency: args.currency,
-        categoryId: id<'categories'>(args.categoryId),
-        startAt: args.startAt,
-        endAt: args.endAt,
-        alertThreshold: args.alertThreshold,
-        notes: args.notes,
-        clientMutationId: idempotencyKey(args.clientMutationId),
-      }),
-  }),
-  defineTool({
-    name: 'finapp.finance.budgets.archive',
-    title: 'Archive budget',
-    description: 'Archive a budget after explicit user confirmation.',
-    scope: 'finapp:write:finance',
-    destructive: true,
-    input: {
-      budgetId: docId('Budget'),
-      confirm: confirm('archive this budget'),
-      clientMutationId: mutationId,
-    },
-    run: (args) =>
-      client.mutation(api.budgets.mutations.archive, {
-        budgetId: id<'budgets'>(args.budgetId),
-        clientMutationId: idempotencyKey(args.clientMutationId),
-      }),
+    run: async () => ({ items: await client.query(api.categories.queries.limits, {}) }),
+    summarize: countSummary('category limits'),
   }),
 
   // ---------- Goals ----------
@@ -907,7 +821,7 @@ export const financeTools: ToolFactory = (client) => [
     name: 'finapp.finance.trash.list',
     title: 'List Trash',
     description:
-      'Deleted transactions, accounts, categories, budgets, goals and recurring rules in Trash, with when each will be deleted for good.',
+      'Deleted transactions, accounts, categories, goals and recurring rules in Trash (plus budgets trashed before budgets became category limits; restoring one sets its category’s limit), with when each will be deleted for good.',
     scope: 'finapp:read',
     input: {
       kind: z

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { HomeFlowBudgets } from './HomeFlowBudgets';
+import { HomeFlowLimits } from './HomeFlowLimits';
 import { HomeGoalsCategories } from './HomeGoalsCategories';
 import { HomeGroupsBills } from './HomeGroupsBills';
 import { HomeHeader } from './HomeHeader';
@@ -14,11 +14,11 @@ export function HomeDashboard(props: HomeDashboardProps) {
     <View style={{ gap: 22 }}>
       <HomeHeader {...props} />
       <HomeMetrics data={props.data} currency={props.currency} />
-      <HomeFlowBudgets
+      <HomeFlowLimits
         data={props.data}
         currency={props.currency}
-        onOpenBudget={props.onOpenBudget}
-        onSeeAllBudgets={props.onSeeAllBudgets}
+        onOpenCategory={props.onOpenCategory}
+        onSeeAllCategories={props.onSeeAllCategories}
       />
       <HomePeople
         people={props.people}
