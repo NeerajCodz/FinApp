@@ -103,17 +103,17 @@ export const assistantTools: FinaiTool[] = [
   {
     name: 'get_overview',
     description:
-      'Snapshot of the user’s money: income, spending and net over the last N days (default 30) in their default currency, total balance per currency across accounts, active budget progress and the latest transactions.',
+      'Snapshot of the user’s money: income, spending and net over the last N days (default 30) in their default currency, total balance per currency across accounts, category limit usage this month and the latest transactions.',
     parameters: s.object({ days: s.integer('Window length in days (1-366). Default 30.', 1, 366) }),
     progress: { stage: 'searching', label: 'Reading your overview…' },
     run: async (ctx, args) => {
       const days = int(args, 'days', 30, 1, 366);
       const endAt = Date.now();
       const range = { startAt: endAt - days * DAY, endAt };
-      const [summary, accountRows, budgets] = await Promise.all([
+      const [summary, accountRows, limits] = await Promise.all([
         ctx.run.runQuery(api.dashboard.queries.summary, range),
         accounts(ctx),
-        ctx.run.runQuery(api.budgets.queries.list, {}),
+        ctx.run.runQuery(api.categories.queries.limits, {}),
       ]);
       const currency = summary?.currency ?? ctx.defaultCurrency;
       const income = summary?.incomeMinor ?? 0n;
@@ -122,8 +122,6 @@ export const assistantTools: FinaiTool[] = [
       for (const account of accountRows)
         if (account.isIncludedInTotal)
           totals.set(account.currency, (totals.get(account.currency) ?? 0n) + account.balanceMinor);
-      const now = Date.now();
-      const active = budgets.filter((budget) => budget.startAt <= now && budget.endAt > now);
       const views: FinView[] = [
         {
           kind: 'summary',
@@ -142,18 +140,15 @@ export const assistantTools: FinaiTool[] = [
           ],
         },
       ];
-      if (active.length)
+      if (limits.length)
         views.push({
           kind: 'progress',
-          title: 'Budgets',
-          items: active.slice(0, 6).map((budget) => ({
-            label: budget.name,
-            progress:
-              budget.amountMinor > 0n
-                ? Number((budget.spentMinor * 1000n) / budget.amountMinor) / 1000
-                : 0,
-            detail: `${formatMinor(budget.spentMinor, budget.currency)} of ${formatMinor(budget.amountMinor, budget.currency)}`,
-            tone: budget.spentMinor > budget.amountMinor ? 'negative' : 'accent',
+          title: 'Category limits',
+          items: limits.slice(0, 6).map((limit) => ({
+            label: limit.name,
+            progress: limit.percentUsed / 100,
+            detail: `${formatMinor(limit.spentMinor, limit.currency)} of ${formatMinor(limit.limitMinor, limit.currency)}`,
+            tone: limit.spentMinor > limit.limitMinor ? 'negative' : 'accent',
           })),
         });
       return {
@@ -171,13 +166,13 @@ export const assistantTools: FinaiTool[] = [
             currency: account.currency,
             balanceMinor: account.balanceMinor,
           })),
-          budgets: active.map((budget) => ({
-            id: budget._id,
-            name: budget.name,
-            currency: budget.currency,
-            amountMinor: budget.amountMinor,
-            spentMinor: budget.spentMinor,
-            remainingMinor: budget.remainingMinor,
+          categoryLimits: limits.map((limit) => ({
+            categoryId: limit.categoryId,
+            name: limit.name,
+            currency: limit.currency,
+            limitMinor: limit.limitMinor,
+            spentMinor: limit.spentMinor,
+            remainingMinor: limit.remainingMinor,
           })),
           recent: (summary?.recent ?? []).map((row) => ({
             id: row._id,
@@ -382,37 +377,36 @@ export const assistantTools: FinaiTool[] = [
     },
   },
   {
-    name: 'list_budgets',
-    description: 'Active budgets with amount, spent and remaining.',
-    progress: { stage: 'searching', label: 'Checking budgets…' },
+    name: 'list_category_limits',
+    description:
+      'Category limits (each category’s monthly budget) with this month’s spent, remaining, percent used and alert level. Budgets are category limits.',
+    progress: { stage: 'searching', label: 'Checking category limits…' },
     run: async (ctx) => {
-      const rows = await ctx.run.runQuery(api.budgets.queries.list, {});
+      const rows = await ctx.run.runQuery(api.categories.queries.limits, {});
       return {
         data: {
-          items: rows.map((budget) => ({
-            id: budget._id,
-            name: budget.name,
-            currency: budget.currency,
-            amountMinor: budget.amountMinor,
-            spentMinor: budget.spentMinor,
-            remainingMinor: budget.remainingMinor,
-            startAt: budget.startAt,
-            endAt: budget.endAt,
+          items: rows.map((limit) => ({
+            categoryId: limit.categoryId,
+            name: limit.name,
+            currency: limit.currency,
+            limitMinor: limit.limitMinor,
+            spentMinor: limit.spentMinor,
+            remainingMinor: limit.remainingMinor,
+            percentUsed: limit.percentUsed,
+            alertPercent: limit.alertPercent,
+            status: limit.status,
           })),
         },
         views: rows.length
           ? [
               {
                 kind: 'progress',
-                title: 'Budgets',
-                items: rows.slice(0, 8).map((budget) => ({
-                  label: budget.name,
-                  progress:
-                    budget.amountMinor > 0n
-                      ? Number((budget.spentMinor * 1000n) / budget.amountMinor) / 1000
-                      : 0,
-                  detail: `${formatMinor(budget.remainingMinor, budget.currency)} left`,
-                  tone: budget.remainingMinor < 0n ? 'negative' : 'accent',
+                title: 'Category limits',
+                items: rows.slice(0, 8).map((limit) => ({
+                  label: limit.name,
+                  progress: limit.percentUsed / 100,
+                  detail: `${formatMinor(limit.remainingMinor, limit.currency)} left`,
+                  tone: limit.remainingMinor < 0n ? 'negative' : 'accent',
                 })),
               },
             ]

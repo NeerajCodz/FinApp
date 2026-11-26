@@ -23,7 +23,7 @@ export const MCP_SERVER_VERSION = '2.0.0';
 
 const domainDescriptions: Record<ToolDomain, string> = {
   finance:
-    'Transactions (search, detail, line items), accounts, categories, budgets, goals, recurring rules, overview and analytics.',
+    'Transactions (search, detail, line items), accounts, categories and their monthly limits (budgets), goals, recurring rules, overview and analytics.',
   groups:
     'Shared groups: members, invitations, expenses (create/edit/delete/history), balances, settle-up, settlements, reminders and chat.',
   social: 'Friends, friend requests, people search and profiles, and direct messages.',
@@ -180,7 +180,7 @@ export function createMcpServer(
         'Good starting points: finapp.finance.overview, finapp.finance.transactions.list, finapp.groups.list then finapp.groups.balances.',
         'Money is always integer minor units as strings (amountMinor) plus a *Formatted display string; never send floats.',
         'Fetch one bounded page at a time with explicit windows; use nextCursor to continue.',
-        'Writes need the matching granted scope. Confirm with the user before any write. Destructive tools (deleting goals, budgets, categories, accounts, groups, or purging Trash) require confirm: true; deleted records go to the Trash and can be restored.',
+        'Writes need the matching granted scope. Confirm with the user before any write. Destructive tools (deleting goals, categories, accounts, groups, or purging Trash) require confirm: true; deleted records go to the Trash and can be restored.',
       ].join(' '),
     },
   );

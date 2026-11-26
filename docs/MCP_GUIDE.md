@@ -170,8 +170,8 @@ registered client redirect URI with `error=access_denied` and the original
 
 | Scope                   | Access through MCP                                                                                                                                                                                    |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `finapp:read`           | Every read tool: overview, transaction search/detail, accounts, categories, budgets, goals, analytics, groups, balances, history, people, messages, profile. Required.                                |
-| `finapp:write:finance`  | Create/update/delete personal transactions (with line items), accounts, categories and limits, budgets, goals and contributions, recurring rules.                                                     |
+| `finapp:read`           | Every read tool: overview, transaction search/detail, accounts, categories and their limits, goals, analytics, groups, balances, history, people, messages, profile. Required.                        |
+| `finapp:write:finance`  | Create/update/delete personal transactions (with line items), accounts, categories and their monthly limits (budgets), goals and contributions, recurring rules.                                      |
 | `finapp:write:social`   | Send/answer/cancel friend requests, start conversations, send direct messages, reactions and pins.                                                                                                    |
 | `finapp:write:groups`   | Create/update groups, invitations and links, member roles/removal, leave, add/edit/delete expenses, late joiners, record/undo settlements, payment reminders, group chat (messages, pins, reactions). |
 | `finapp:write:personal` | Profile, default account/category, notification preferences, mark one/all notifications read, privacy.                                                                                                |
@@ -221,11 +221,7 @@ Good starting points: `finapp.finance.overview`,
 | `finapp.finance.categories.update`       | Update category preferences        | write:finance |                            |
 | `finapp.finance.categories.set_limit`    | Set category monthly limit         | write:finance |                            |
 | `finapp.finance.categories.archive`      | Archive category                   | write:finance | confirm: true              |
-| `finapp.finance.budgets.list`            | List budgets with progress         | read          |                            |
-| `finapp.finance.budgets.get`             | Get budget                         | read          |                            |
-| `finapp.finance.budgets.create`          | Create budget                      | write:finance |                            |
-| `finapp.finance.budgets.update`          | Update budget                      | write:finance |                            |
-| `finapp.finance.budgets.archive`         | Archive budget                     | write:finance | confirm: true              |
+| `finapp.finance.category_limits.list`    | List category limits with usage    | read          |                            |
 | `finapp.finance.goals.list`              | List savings goals                 | read          |                            |
 | `finapp.finance.goals.create`            | Create savings goal                | write:finance |                            |
 | `finapp.finance.goals.update`            | Update savings goal                | write:finance |                            |

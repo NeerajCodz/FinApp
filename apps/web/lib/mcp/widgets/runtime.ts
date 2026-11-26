@@ -327,10 +327,10 @@ export const widgetRuntime = String.raw`
           h('div', { class: 'grow' }, h('div', { class: 'title', text: a.name }), h('div', { class: 'sub', text: a.type + (a.isIncludedInTotal ? '' : ' · excluded from total') })),
           h('span', { class: 'amount ' + (sign(a.balanceMinor) < 0 ? 'neg' : ''), text: money(a, 'balance') }));
       }))) : null,
-      (data.budgets || []).length ? h('section', null, h('h3', { text: 'Budgets', style: 'margin-bottom:6px' }), h('div', { class: 'card' }, data.budgets.map(function (b) {
+      (data.categoryLimits || []).length ? h('section', null, h('h3', { text: 'Category limits', style: 'margin-bottom:6px' }), h('div', { class: 'card' }, data.categoryLimits.map(function (b) {
         var pct = Math.min(100, Math.round((b.progress || 0) * 100));
         return h('div', { class: 'row', style: 'display:grid;gap:6px' },
-          h('div', { class: 'actions', style: 'justify-content:space-between' }, h('span', { class: 'title', text: b.name }), h('span', { class: 'sub', text: money(b, 'spent') + ' of ' + money(b, 'amount') })),
+          h('div', { class: 'actions', style: 'justify-content:space-between' }, h('span', { class: 'title', text: b.name }), h('span', { class: 'sub', text: money(b, 'spent') + ' of ' + money(b, 'limit') })),
           h('div', { class: 'bar' + ((b.progress || 0) > 1 ? ' over' : ''), role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': b.name }, h('i', { style: 'width:' + pct + '%' })));
       }))) : null,
       (data.recent || []).length ? h('section', null, h('h3', { text: 'Recent', style: 'margin-bottom:6px' }), h('div', { class: 'card' }, data.recent.map(transactionRow))) : null);

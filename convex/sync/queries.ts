@@ -118,11 +118,12 @@ export const bootstrapSection = query({
       return { section, ...page };
     }
     if (section === 'budgets') {
+      // Kept for older clients. Budgets are now category limits: migrated ones are left out.
       const page = await ctx.db
         .query('budgets')
         .withIndex('by_owner_period', (index) => index.eq('ownerId', user._id))
         .paginate(paginationOpts);
-      return { section, ...page };
+      return { section, ...page, page: page.page.filter((row) => row.migratedAt === undefined) };
     }
     if (section === 'goals') {
       const page = await ctx.db

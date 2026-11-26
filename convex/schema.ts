@@ -181,6 +181,8 @@ export default defineSchema({
     archivedAt: optionalTime,
     monthlyLimitMinor: v.optional(v.int64()),
     limitCurrency: v.optional(currency),
+    /** Notify when this % of the monthly limit is spent (1-100). Default 80. */
+    limitAlertPercent: v.optional(v.number()),
     sortOrder: v.number(),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -570,6 +572,11 @@ export default defineSchema({
     startAt: timestamp,
     endAt: timestamp,
     archivedAt: optionalTime,
+    /**
+     * Budgets were folded into category limits (migrations.foldBudgetsIntoCategoryLimits).
+     * Set once a budget has been converted or retired; the app no longer reads this table.
+     */
+    migratedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
   })

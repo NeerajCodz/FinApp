@@ -28,14 +28,6 @@ const accountDraft = {
   isIncludedInTotal: true,
 };
 const goalDraft = { name: 'Trip', targetAmountMinor: 100000n, currency: 'USD' };
-const budgetDraft = {
-  name: 'Food',
-  amountMinor: 10000n,
-  currency: 'USD',
-  period: 'category' as const,
-  startAt: 100,
-  endAt: 200,
-};
 
 describe('reference form persistence', () => {
   it('preserves omitted account/category metadata and explicitly clears optional fields', async () => {
@@ -159,7 +151,6 @@ describe('reference form persistence', () => {
     });
     const archived = await owner.mutation(api.accounts.mutations.create, accountDraft);
     await owner.mutation(api.accounts.mutations.archive, { accountId: archived });
-    const categoryId = await owner.mutation(api.categories.mutations.create, { name: 'Food' });
     for (const [accountId, error] of [
       [foreign, 'INSUFFICIENT_PERMISSION'],
       [euro, 'CURRENCY_MISMATCH'],
@@ -170,13 +161,6 @@ describe('reference form persistence', () => {
           ...goalDraft,
           accountId,
           clientMutationId: `goal-invalid-${accountId}`,
-        }),
-      ).rejects.toThrow(error);
-      await expect(
-        owner.mutation(api.budgets.mutations.create, {
-          ...budgetDraft,
-          categoryId,
-          accountIds: [accountId],
         }),
       ).rejects.toThrow(error);
     }
@@ -203,94 +187,6 @@ describe('reference form persistence', () => {
       }),
     ).rejects.toThrow('INVALID_GOAL');
     expect((await t.run((ctx) => ctx.db.get(goalId)))?.accountId).toBe(accountId);
-  });
-
-  it('consumes budget account scope and category exclusions, preserving/clearing metadata', async () => {
-    const { t, owner } = await setup();
-    const accountId = await owner.mutation(api.accounts.mutations.create, accountDraft);
-    const otherAccount = await owner.mutation(api.accounts.mutations.create, {
-      ...accountDraft,
-      name: 'Cash',
-    });
-    const categoryId = await owner.mutation(api.categories.mutations.create, { name: 'Food' });
-    const excludedCategory = await owner.mutation(api.categories.mutations.create, {
-      name: 'Excluded',
-      includeInBudgets: false,
-    });
-    for (const [source, category, amountMinor] of [
-      [accountId, categoryId, 500n],
-      [otherAccount, categoryId, 700n],
-      [accountId, excludedCategory, 900n],
-    ] as const) {
-      await owner.mutation(api.transactions.mutations.create, {
-        accountId: source,
-        categoryId: category,
-        type: 'expense',
-        title: 'Meal',
-        amountMinor,
-        currency: 'USD',
-        occurredAt: 150,
-        clientMutationId: `spend-${source}-${category}`,
-      });
-    }
-    const budgetId = await owner.mutation(api.budgets.mutations.create, {
-      ...budgetDraft,
-      period: 'monthly',
-      accountIds: [accountId],
-      icon: 'wallet',
-      alertThreshold: 0,
-      notes: 'Selected accounts',
-      includeInAnalytics: false,
-    });
-    expect(await owner.query(api.budgets.queries.detail, { budgetId })).toMatchObject({
-      spentMinor: 500n,
-      accountIds: [accountId],
-      alertThreshold: 0,
-      includeInAnalytics: false,
-    });
-    const update = {
-      budgetId,
-      name: budgetDraft.name,
-      amountMinor: budgetDraft.amountMinor,
-      currency: budgetDraft.currency,
-      categoryId,
-      startAt: budgetDraft.startAt,
-      endAt: budgetDraft.endAt,
-    };
-    await owner.mutation(api.budgets.mutations.update, update);
-    expect(await t.run((ctx) => ctx.db.get(budgetId))).toMatchObject({
-      accountIds: [accountId],
-      icon: 'wallet',
-      notes: 'Selected accounts',
-      alertThreshold: 0,
-    });
-    await expect(
-      owner.mutation(api.budgets.mutations.update, {
-        ...update,
-        currency: 'EUR',
-      }),
-    ).rejects.toThrow('CURRENCY_MISMATCH');
-    for (const alertThreshold of [-1, 101, Number.NaN, Infinity]) {
-      await expect(
-        owner.mutation(api.budgets.mutations.update, {
-          ...update,
-          alertThreshold,
-        }),
-      ).rejects.toThrow('INVALID_BUDGET');
-    }
-    await owner.mutation(api.budgets.mutations.update, {
-      ...update,
-      icon: null,
-      notes: null,
-      alertThreshold: null,
-      accountIds: null,
-    });
-    const cleared = await owner.query(api.budgets.queries.detail, { budgetId });
-    expect(cleared?.spentMinor).toBe(1200n);
-    expect(cleared?.icon).toBeUndefined();
-    expect(cleared?.notes).toBeUndefined();
-    expect(cleared?.alertThreshold).toBeUndefined();
-    expect(cleared?.accountIds).toBeUndefined();
   });
 
   it('excludes account analytics transactions in both periods while legacy accounts remain included', async () => {
@@ -326,63 +222,6 @@ describe('reference form persistence', () => {
     });
     expect(summary?.spentMinor).toBe(300n);
     expect(summary?.previousSpentMinor).toBe(300n);
-  });
-
-  it('uses configured budget notifications without counting excluded categories or other accounts', async () => {
-    const { t, owner } = await setup();
-    const accountId = await owner.mutation(api.accounts.mutations.create, accountDraft);
-    const otherAccount = await owner.mutation(api.accounts.mutations.create, accountDraft);
-    const categoryId = await owner.mutation(api.categories.mutations.create, { name: 'Included' });
-    const excluded = await owner.mutation(api.categories.mutations.create, {
-      name: 'Excluded',
-      includeInBudgets: false,
-    });
-    const budgetId = await owner.mutation(api.budgets.mutations.create, {
-      ...budgetDraft,
-      period: 'monthly',
-      amountMinor: 1000n,
-      accountIds: [accountId],
-      alertThreshold: 25.5,
-    });
-    for (const [source, category, amountMinor, clientMutationId] of [
-      [otherAccount, categoryId, 900n, 'outside-account'],
-      [accountId, excluded, 900n, 'outside-category'],
-      [accountId, categoryId, 254n, 'before-threshold'],
-    ] as const) {
-      await owner.mutation(api.transactions.mutations.create, {
-        accountId: source,
-        categoryId: category,
-        amountMinor,
-        clientMutationId,
-        type: 'expense',
-        title: 'Meal',
-        currency: 'USD',
-        occurredAt: 150,
-      });
-    }
-    expect(
-      (await t.run((ctx) => ctx.db.query('notifications').collect())).filter((notification) =>
-        notification.eventKey?.startsWith(`budget:${budgetId}:`),
-      ),
-    ).toEqual([]);
-    const crossing = {
-      accountId,
-      categoryId,
-      amountMinor: 1n,
-      clientMutationId: 'cross-threshold',
-      type: 'expense' as const,
-      title: 'Meal',
-      currency: 'USD',
-      occurredAt: 150,
-    };
-    await owner.mutation(api.transactions.mutations.create, crossing);
-    await owner.mutation(api.transactions.mutations.create, crossing);
-    const alerts = (await t.run((ctx) => ctx.db.query('notifications').collect())).filter(
-      (notification) => notification.eventKey?.startsWith(`budget:${budgetId}:`),
-    );
-    expect(alerts.map((notification) => notification.eventKey)).toEqual([
-      `budget:${budgetId}:100:25.5`,
-    ]);
   });
 
   it('preserves and clears group metadata, and validates expense category ownership', async () => {

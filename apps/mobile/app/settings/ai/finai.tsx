@@ -187,7 +187,7 @@ export default function FinaiSettingsScreen() {
         <SettingsSwitch
           icon={<CalendarCheck2 size={19} color={tone('positive')} />}
           tone="positive"
-          title="Budgets and goals"
+          title="Category limits and goals"
           checked={settings.dataScopes.planning}
           disabled={off}
           onChange={(planning) => void save({ dataScopes: { planning } })}

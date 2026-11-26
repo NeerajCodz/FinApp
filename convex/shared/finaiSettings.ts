@@ -113,7 +113,7 @@ export const FINAI_SCOPE_TOOLS: Record<FinaiDataScope, readonly string[]> = {
     'list_recurring',
     'list_trash',
   ],
-  planning: ['list_budgets', 'list_goals'],
+  planning: ['list_category_limits', 'list_goals'],
   groups: ['list_groups', 'group_balances', 'group_expenses'],
   people: ['list_friends'],
 };

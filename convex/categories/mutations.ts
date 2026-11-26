@@ -5,6 +5,13 @@ import { requireUser } from '../shared/auth';
 import { assertCurrency, assertPositiveAmount } from '../shared/validators';
 import { publishMutationResult, recordSyncChange, replayMutationResult } from '../sync/common';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
+import { isValidAlertPercent } from './limits';
+
+function assertAlertPercent(value: number | null | undefined) {
+  if (value !== undefined && value !== null && !isValidAlertPercent(value))
+    throw new Error('INVALID_CATEGORY');
+}
+
 export const create = mutation({
   args: {
     name: v.string(),
@@ -16,6 +23,8 @@ export const create = mutation({
     includeInBudgets: v.optional(v.boolean()),
     monthlyLimitMinor: v.optional(v.int64()),
     limitCurrency: v.optional(v.string()),
+    /** Alert when this % of the monthly limit is spent (1-100, default 80). */
+    limitAlertPercent: v.optional(v.number()),
     clientMutationId: v.optional(v.string()),
     clientId: v.optional(v.string()),
   },
@@ -54,12 +63,14 @@ export const create = mutation({
     if (limitCurrency !== undefined) assertCurrency(limitCurrency);
     if (args.monthlyLimitMinor !== undefined && limitCurrency === undefined)
       throw new Error('INVALID_CURRENCY');
+    assertAlertPercent(args.limitAlertPercent);
     const now = Date.now();
     const { clientMutationId, clientId, ...categoryFields } = args;
     const categoryId = await ctx.db.insert('categories', {
       ...categoryFields,
       name,
       limitCurrency,
+      limitAlertPercent: args.monthlyLimitMinor === undefined ? undefined : args.limitAlertPercent,
       ownerId: user._id,
       clientId,
       isSystem: false,
@@ -210,14 +221,20 @@ export const setPreferences = mutation({
   },
 });
 
+/**
+ * Sets, changes or removes (`amountMinor: null`) a category's monthly limit — its budget.
+ * `alertPercent` sets the spending alert level (null resets it to the default 80%);
+ * omitted keeps the current one. Removing the limit also clears the alert level.
+ */
 export const setLimit = mutation({
   args: {
     categoryId: v.id('categories'),
     amountMinor: v.union(v.int64(), v.null()),
     currency: v.optional(v.string()),
+    alertPercent: v.optional(v.union(v.number(), v.null())),
     clientMutationId: v.optional(v.string()),
   },
-  handler: async (ctx, { categoryId, amountMinor, currency, clientMutationId }) => {
+  handler: async (ctx, { categoryId, amountMinor, currency, alertPercent, clientMutationId }) => {
     const user = await requireUser(ctx);
     if (!user) throw new Error('AUTH_REQUIRED');
     const replay = await replayMutationResult(ctx, user._id, clientMutationId, 'category.setLimit');
@@ -235,10 +252,17 @@ export const setLimit = mutation({
       if (!limitCurrency) throw new Error('INVALID_CURRENCY');
       assertCurrency(limitCurrency);
     }
+    assertAlertPercent(alertPercent);
     const updatedAt = Date.now();
     await ctx.db.patch(categoryId, {
       monthlyLimitMinor: amountMinor === null ? undefined : amountMinor,
       limitCurrency,
+      limitAlertPercent:
+        amountMinor === null
+          ? undefined
+          : alertPercent === undefined
+            ? category.limitAlertPercent
+            : (alertPercent ?? undefined),
       updatedAt,
     });
     const updated = await ctx.db.get(categoryId);

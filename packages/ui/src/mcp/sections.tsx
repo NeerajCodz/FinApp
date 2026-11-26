@@ -396,7 +396,7 @@ export function ToolCatalog({ catalog }: { catalog: McpCatalogEntry[] }) {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search tools — balances, line items, budgets…"
+          placeholder="Search tools — balances, line items, category limits…"
         />
       </label>
       <div className="mcp-catalog-filters" role="group" aria-label="Filter tools">

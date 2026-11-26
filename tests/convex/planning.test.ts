@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { budgetStatus } from '../../convex/budgets/domain';
+import { limitStatus } from '../../convex/categories/limits';
 import { nextOccurrence } from '../../convex/recurring/domain';
 import { applyContribution } from '../../convex/goals/domain';
 
 describe('planning rules', () => {
-  it('uses fixed budget threshold boundaries', () => {
-    expect(budgetStatus(74n, 100n)).toBe('normal');
-    expect(budgetStatus(75n, 100n)).toBe('warning');
-    expect(budgetStatus(90n, 100n)).toBe('near-limit');
-    expect(budgetStatus(100n, 100n)).toBe('exceeded');
+  it('grades category-limit usage from the alert level, 90% and 100%', () => {
+    expect(limitStatus(79n, 100n)).toBe('normal');
+    expect(limitStatus(80n, 100n)).toBe('warning');
+    expect(limitStatus(60n, 100n, 60)).toBe('warning');
+    expect(limitStatus(90n, 100n)).toBe('near-limit');
+    expect(limitStatus(100n, 100n)).toBe('exceeded');
   });
 
   it('advances recurring occurrences by calendar frequency', () => {

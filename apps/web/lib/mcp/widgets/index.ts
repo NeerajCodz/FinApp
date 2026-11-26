@@ -20,7 +20,8 @@ export const widgets: Record<WidgetId, WidgetDefinition> = {
     id: 'overview',
     uri: 'ui://finapp/overview.v1.html',
     title: 'Financial overview',
-    description: 'Net, income and spending for the period, account balances and budget progress.',
+    description:
+      'Net, income and spending for the period, account balances and category limit usage.',
     invoking: 'Gathering your accounts…',
     invoked: 'Overview ready',
   },

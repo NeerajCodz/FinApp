@@ -342,7 +342,9 @@ export function FinaiAssistantScreen(p: FinaiAssistantScreenProps) {
               <div className={styles.welcome}>
                 <FinaiLogo size={44} />
                 <h2>What do you want to know?</h2>
-                <p>Ask about spending, budgets, groups or friends, or tell me what to add.</p>
+                <p>
+                  Ask about spending, category limits, groups or friends, or tell me what to add.
+                </p>
                 {!p.available && (
                   <p className={styles.notice}>{finaiErrorMessage('AI_NOT_CONFIGURED')}</p>
                 )}

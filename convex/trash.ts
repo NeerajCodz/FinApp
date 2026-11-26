@@ -1,8 +1,9 @@
 /**
- * Trash: deleting a transaction, account, category, budget, goal or recurring rule moves it here
+ * Trash: deleting a transaction, account, category, goal or recurring rule moves it here
  * (the record keeps `deletedAt` / `archivedAt`). Items can be restored or deleted for good;
  * a daily job deletes items older than the user's retention (Settings → Trash, default 30 days).
- * Chat messages are not part of Trash.
+ * Budgets trashed before budgets became category limits stay listed; restoring one sets its
+ * category's limit instead of bringing the budget back. Chat messages are not part of Trash.
  */
 import { v } from 'convex/values';
 import {
@@ -17,6 +18,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { getOptionalUser, requireUser } from './shared/auth';
 import { recordSyncChange } from './sync/common';
 import { formatMinor } from './shared/money';
+import { foldBudgets } from './categories/fromBudgets';
 
 export const TRASH_KINDS = [
   'transaction',
@@ -107,7 +109,11 @@ function describe(
         subtitle: `Category · ${String(doc.kind ?? 'expense')}`,
       };
     case 'budget':
-      return { title: String(doc.name ?? 'Budget'), subtitle: 'Budget' };
+      // Budgets are now category limits: restoring one sets its category's limit.
+      return {
+        title: String(doc.name ?? 'Budget'),
+        subtitle: 'Budget · restores as a category limit',
+      };
     case 'goal': {
       const target =
         typeof doc.targetAmountMinor === 'bigint' && typeof doc.currency === 'string'
@@ -212,6 +218,11 @@ export async function restoreItem(
   if (!doc) throw new Error('NOT_FOUND');
   const record = doc as unknown as Record<string, unknown>;
   if (!deletedAtOf(kind, record)) return { restored: 0 };
+  if (kind === 'budget') {
+    // Budgets were folded into category limits: bring it back as its category's limit.
+    await foldBudgets(ctx, userId, [doc as Doc<'budgets'>], { includeTrashed: true });
+    return { restored: 1 };
+  }
   const now = Date.now();
   if (kind === 'transaction') {
     const account = await ctx.db.get(record.accountId as Id<'accounts'>);
