@@ -8,6 +8,7 @@ import { goalWidgets } from './goals';
 import { groupWidgets } from './groups';
 import { incomeWidgets } from './income';
 import { recurringWidgets } from './recurring';
+import { chatWidgets, notificationWidgets, peopleWidgets, trashWidgets } from './social';
 import { spendingWidgets } from './spending';
 import { transactionWidgets } from './transactions';
 
@@ -24,4 +25,8 @@ export const allWidgets: WidgetDefinition[] = [
   ...goalWidgets,
   ...recurringWidgets,
   ...groupWidgets,
+  ...peopleWidgets,
+  ...chatWidgets,
+  ...notificationWidgets,
+  ...trashWidgets,
 ];
