@@ -29,7 +29,7 @@ export default function WelcomeScreen() {
           </Text>
         </>
       }
-      description="Spending, accounts, budgets and shared expenses. One clear place to make sense of it all."
+      description="Spending, accounts, category limits and shared expenses. One clear place to make sense of it all."
       footer={
         <>
           <AuthSubmit label="Create your account" onPress={() => router.push('/(auth)/sign-up')} />

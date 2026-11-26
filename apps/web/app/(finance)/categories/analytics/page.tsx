@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
   CategoryAnalyticsScreen,
   type AnalyticsAccount,
-  type AnalyticsBudget,
   type AnalyticsCategory,
   type AnalyticsTransaction,
 } from '@finapp/ui/finance';
@@ -21,6 +20,7 @@ type Category = LocalRecord & {
   archivedAt?: number;
   monthlyLimitMinor?: bigint | number | string;
   limitCurrency?: string;
+  limitAlertPercent?: number;
   sortOrder?: number;
 };
 type Account = LocalRecord & { name?: string; currency?: string; archivedAt?: number };
@@ -37,15 +37,6 @@ type Transaction = LocalRecord & {
   status?: string;
   deletedAt?: number;
 };
-type Budget = LocalRecord & {
-  amountMinor?: bigint | number | string;
-  currency?: string;
-  period?: string;
-  categoryId?: string;
-  startAt?: number;
-  endAt?: number;
-  archivedAt?: number;
-};
 
 export default function CategoryAnalyticsPage() {
   const router = useRouter();
@@ -54,7 +45,6 @@ export default function CategoryAnalyticsPage() {
   const accountState = useLocalRecords<Account>('account');
   const profileState = useLocalRecords<Profile>('profile');
   const transactionState = useLocalRecords<Transaction>('transaction');
-  const budgetState = useLocalRecords<Budget>('budget');
   const [rangeError, setRangeError] = React.useState('');
   const range = React.useMemo(() => {
     const now = new Date();
@@ -84,9 +74,6 @@ export default function CategoryAnalyticsPage() {
         idOf(left).localeCompare(idOf(right)),
     );
   const accounts = accountState.records.filter(
-    (item) => userId && belongsToUser(item, userId) && item.archivedAt === undefined,
-  );
-  const budgets = budgetState.records.filter(
     (item) => userId && belongsToUser(item, userId) && item.archivedAt === undefined,
   );
   const profile = profileState.records.find((item) => userId && belongsToUser(item, userId));
@@ -130,6 +117,7 @@ export default function CategoryAnalyticsPage() {
       currency: item.limitCurrency ?? profile?.defaultCurrency ?? 'INR',
       monthlyLimitMinor:
         item.monthlyLimitMinor === undefined ? undefined : asMinor(item.monthlyLimitMinor),
+      limitAlertPercent: item.limitAlertPercent,
     };
   });
   const analyticsTransactions: AnalyticsTransaction[] = ownedTransactions.flatMap((item) => {
@@ -157,40 +145,13 @@ export default function CategoryAnalyticsPage() {
     name: item.name ?? 'Account',
     currency: item.currency,
   }));
-  const analyticsBudgets: AnalyticsBudget[] = budgets.flatMap((item) => {
-    const category = item.categoryId ? categoryByAlias.get(item.categoryId) : undefined;
-    if (
-      !item.currency ||
-      item.period !== 'category' ||
-      !Number.isFinite(Number(item.startAt)) ||
-      !Number.isFinite(Number(item.endAt))
-    )
-      return [];
-    return [
-      {
-        id: idOf(item),
-        categoryId: category ? idOf(category) : item.categoryId,
-        amountMinor: asMinor(item.amountMinor),
-        currency: item.currency,
-        period: item.period,
-        startAt: Number(item.startAt),
-        endAt: Number(item.endAt),
-        archivedAt: item.archivedAt,
-      },
-    ];
-  });
   const loading =
     categoryState.loading ||
     accountState.loading ||
     profileState.loading ||
-    transactionState.loading ||
-    budgetState.loading;
+    transactionState.loading;
   const error =
-    categoryState.error ??
-    accountState.error ??
-    profileState.error ??
-    transactionState.error ??
-    budgetState.error;
+    categoryState.error ?? accountState.error ?? profileState.error ?? transactionState.error;
 
   if (!userId)
     return (
@@ -203,7 +164,6 @@ export default function CategoryAnalyticsPage() {
       categories={categoryOptions}
       accounts={analyticsAccounts}
       transactions={analyticsTransactions}
-      budgets={analyticsBudgets}
       defaultCurrency={profile?.defaultCurrency ?? 'INR'}
       loading={loading}
       error={

@@ -251,7 +251,7 @@ export function NotificationsScreen({
           description={
             filtered
               ? 'No updates match this filter. New ones will show up here.'
-              : 'Shared expenses, settlements, reminders, and budget alerts will appear here.'
+              : 'Shared expenses, settlements, reminders, and category limit alerts will appear here.'
           }
           action={
             filtered ? (

@@ -16,6 +16,7 @@ type CategoryRecord = LocalRecord & {
   sortOrder?: number;
   archivedAt?: number;
   monthlyLimitMinor?: bigint | number | string;
+  limitAlertPercent?: number;
   limitCurrency?: string;
 };
 type ProfileRecord = LocalRecord & { defaultCurrency?: string; defaultIncomeCategoryId?: string };
@@ -128,6 +129,7 @@ export default function CategoriesIndexScreen() {
       recentSpendMinor: recentTotals?.spent ?? 0n,
       monthlyLimitMinor:
         item.monthlyLimitMinor === undefined ? undefined : minor(item.monthlyLimitMinor),
+      limitAlertPercent: item.limitAlertPercent,
       transactionCount: monthTotals.count,
       lastActivityAt: recentTotals?.lastActivityAt,
     };

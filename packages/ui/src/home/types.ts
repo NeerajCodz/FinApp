@@ -34,8 +34,6 @@ export type HomeDashboardProps = {
   /** Opens the FinAI assistant. */
   onOpenTransaction: (id: string) => void;
   onSeeAllTransactions: () => void;
-  onOpenBudget: (id: string) => void;
-  onSeeAllBudgets: () => void;
   onOpenGoal: (id: string) => void;
   onSeeAllGoals: () => void;
   onOpenCategory: (id: string) => void;

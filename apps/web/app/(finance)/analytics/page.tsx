@@ -15,12 +15,8 @@ import {
   CashFlowChart,
   SpendingLineChart,
 } from '@finapp/ui/analytics';
-import {
-  BudgetProgress,
-  FinanceEmptyState,
-  TransactionRow,
-  formatTransactionDate,
-} from '@finapp/ui/finance';
+import { Meter } from '@finapp/ui/charts';
+import { FinanceEmptyState, TransactionRow, formatTransactionDate } from '@finapp/ui/finance';
 import {
   aggregateAnalytics,
   getAnalyticsCalendarDate,
@@ -36,7 +32,14 @@ import type { LocalRecord } from '@/lib/offline/repository';
 import { routeIdFor } from '../_personal';
 
 type Profile = LocalRecord & { defaultCurrency?: string; timezone?: string };
-type Category = LocalRecord & { name?: string; icon?: string; archivedAt?: number };
+type Category = LocalRecord & {
+  name?: string;
+  icon?: string;
+  archivedAt?: number;
+  monthlyLimitMinor?: bigint | number | string;
+  limitCurrency?: string;
+  limitAlertPercent?: number;
+};
 type Account = LocalRecord & {
   name?: string;
   currency?: string;
@@ -55,18 +58,6 @@ type Transaction = LocalRecord & {
   occurredAt?: number;
   hasTime?: boolean;
   deletedAt?: number;
-};
-type Budget = LocalRecord & {
-  name?: string;
-  amountMinor?: bigint | number | string;
-  currency?: string;
-  period?: string;
-  categoryId?: string;
-  accountId?: string;
-  accountIds?: string[];
-  startAt?: number;
-  endAt?: number;
-  archivedAt?: number;
 };
 type RecurringRule = LocalRecord & {
   name?: string;
@@ -162,7 +153,6 @@ export default function AnalyticsPage() {
   const categoryState = useLocalRecords<Category>('category');
   const accountState = useLocalRecords<Account>('account');
   const profileState = useLocalRecords<Profile>('profile');
-  const budgetState = useLocalRecords<Budget>('budget');
   const recurringState = useLocalRecords<RecurringRule>('recurringRule');
   const groupState = useLocalRecords<Group>('group');
   const settlementState = useLocalRecords<Settlement>('settlement');
@@ -194,7 +184,6 @@ export default function AnalyticsPage() {
         ...new Set([
           ...transactionState.records.map((item) => String(item.currency ?? '')).filter(Boolean),
           ...accountState.records.map((item) => String(item.currency ?? '')).filter(Boolean),
-          ...budgetState.records.map((item) => String(item.currency ?? '')).filter(Boolean),
           ...recurringState.records
             .map((item) => String(item.template?.currency ?? ''))
             .filter(Boolean),
@@ -205,7 +194,6 @@ export default function AnalyticsPage() {
       ].sort(),
     [
       accountState.records,
-      budgetState.records,
       groupState.records,
       profile?.defaultCurrency,
       recurringState.records,
@@ -533,21 +521,49 @@ export default function AnalyticsPage() {
     0n,
   );
 
-  const budgetItems = budgetState.records
+  // Category limits are monthly: usage is this calendar month's (UTC, like the server).
+  const limitMonth = (() => {
+    const at = new Date(referenceAt ?? 0);
+    return {
+      startAt: Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1),
+      endAt: Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1),
+    };
+  })();
+  const limitItems = categoryState.records
     .filter(
-      (budget) =>
-        !budget.archivedAt &&
-        budget.includeInAnalytics !== false &&
-        (budget.currency ??
-          accountById.get(String(budget.accountId ?? ''))?.currency ??
-          profile?.defaultCurrency ??
-          'INR') === currency,
+      (category) =>
+        !category.archivedAt &&
+        category.monthlyLimitMinor !== undefined &&
+        category.monthlyLimitMinor !== null &&
+        amountAsBigInt(category.monthlyLimitMinor) > 0n &&
+        (category.limitCurrency ?? profile?.defaultCurrency ?? 'INR') === currency,
     )
-    .filter(
-      (budget) =>
-        !range ||
-        (Number(budget.startAt ?? range.startAt) < range.endAt &&
-          Number(budget.endAt ?? range.endAt) > range.startAt),
+    .map((category) => {
+      const keys = idAliases(category);
+      const spentMinor = transactionState.records.reduce((sum, record) => {
+        const at = Number(record.occurredAt ?? 0);
+        if (
+          record.type !== 'expense' ||
+          record.deletedAt !== undefined ||
+          record.currency !== currency ||
+          at < limitMonth.startAt ||
+          at >= limitMonth.endAt ||
+          !keys.includes(String(record.categoryId ?? ''))
+        )
+          return sum;
+        return sum + amountAsBigInt(record.amountMinor);
+      }, 0n);
+      return {
+        category,
+        spentMinor,
+        limitMinor: amountAsBigInt(category.monthlyLimitMinor),
+        alertPercent: category.limitAlertPercent ?? 80,
+      };
+    })
+    .sort(
+      (left, right) =>
+        Number((right.spentMinor * 1000n) / right.limitMinor) -
+        Number((left.spentMinor * 1000n) / left.limitMinor),
     )
     .slice(0, 4);
   const recurringItems = recurringState.records
@@ -560,41 +576,6 @@ export default function AnalyticsPage() {
           'INR') === currency,
     )
     .slice(0, 4);
-  const budgetSpent = (budget: Budget) =>
-    rangeRecords.reduce((sum, record) => {
-      const at = Number(record.occurredAt ?? 0);
-      if (
-        record.type !== 'expense' ||
-        at < Number(budget.startAt ?? range?.startAt ?? 0) ||
-        at >= Number(budget.endAt ?? range?.endAt ?? 0)
-      )
-        return sum;
-      if (categoryById.get(String(record.categoryId ?? ''))?.includeInBudgets === false) return sum;
-      const budgetCategory = budget.categoryId ? categoryById.get(budget.categoryId) : undefined;
-      if (
-        budget.categoryId &&
-        (!budgetCategory || !idAliases(budgetCategory).includes(String(record.categoryId ?? '')))
-      )
-        return sum;
-      const budgetAccount = budget.accountId ? accountById.get(budget.accountId) : undefined;
-      if (
-        budget.accountId &&
-        (!budgetAccount || !idAliases(budgetAccount).includes(String(record.accountId ?? '')))
-      )
-        return sum;
-      if (
-        budget.accountIds?.length &&
-        !budget.accountIds.some((id) => {
-          const scopedAccount = accountById.get(id);
-          return (scopedAccount ? idAliases(scopedAccount) : [id]).includes(
-            String(record.accountId ?? ''),
-          );
-        })
-      )
-        return sum;
-      return sum + amountAsBigInt(record.amountMinor);
-    }, 0n);
-
   const largestExpenses = rangeRecords
     .filter((record) => record.type === 'expense')
     .sort((a, b) =>
@@ -621,8 +602,7 @@ export default function AnalyticsPage() {
   };
   const coreError =
     transactionState.error ?? categoryState.error ?? accountState.error ?? profileState.error;
-  const auxiliaryError =
-    budgetState.error ?? recurringState.error ?? groupState.error ?? settlementState.error;
+  const auxiliaryError = recurringState.error ?? groupState.error ?? settlementState.error;
   const loading =
     referenceAt === null ||
     transactionState.loading ||
@@ -1032,43 +1012,40 @@ export default function AnalyticsPage() {
             <Card style={{ display: 'grid', alignContent: 'start', gap: 12, padding: 15 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <div>
-                  <Typography variant="bodyLarge">Budget progress</Typography>
-                  <Typography variant="caption">Spend within the selected range</Typography>
+                  <Typography variant="bodyLarge">Category limits</Typography>
+                  <Typography variant="caption">Spent this month against each limit</Typography>
                 </div>
-                <Link className="finance-inline-link" href="/budgets">
+                <Link className="finance-inline-link" href="/categories">
                   View all
                 </Link>
               </div>
-              {budgetState.loading ? (
-                <Typography variant="small">Loading budgets…</Typography>
-              ) : budgetState.error ? (
-                <Typography variant="small" role="alert">
-                  Budgets could not be loaded.
-                </Typography>
-              ) : budgetItems.length ? (
-                budgetItems.map((budget) => (
-                  <BudgetProgress
-                    key={idOf(budget)}
-                    title={budget.name ?? 'Budget'}
-                    spentMinor={budgetSpent(budget)}
-                    limitMinor={amountAsBigInt(budget.amountMinor)}
-                    currency={
-                      budget.currency ??
-                      accountById.get(String(budget.accountId ?? ''))?.currency ??
-                      profile?.defaultCurrency ??
-                      'INR'
-                    }
-                  />
+              {categoryState.loading ? (
+                <Typography variant="small">Loading categories…</Typography>
+              ) : limitItems.length ? (
+                limitItems.map((item) => (
+                  <Link
+                    key={idOf(item.category)}
+                    href={`/category/${encodeURIComponent(routeIdFor(idOf(item.category)))}`}
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                  >
+                    <Meter
+                      value={Number(item.spentMinor)}
+                      max={Number(item.limitMinor)}
+                      warnAt={item.alertPercent / 100}
+                      label={`${item.category.icon ? `${item.category.icon} ` : ''}${item.category.name ?? 'Category'}`}
+                      detail={`${formatMinor(item.spentMinor, currency)} of ${formatMinor(item.limitMinor, currency)}`}
+                    />
+                  </Link>
                 ))
               ) : (
                 <FinanceEmptyState
                   kind="budget"
                   compact
-                  title="No budgets yet"
-                  description="Create a budget to keep an eye on your plan."
+                  title="No category limits yet"
+                  description="Set a monthly limit on a category to keep an eye on your plan."
                   action={
-                    <Link className="finance-inline-link" href="/budgets/new">
-                      Create a budget
+                    <Link className="finance-inline-link" href="/categories">
+                      Set a category limit
                     </Link>
                   }
                 />

@@ -30,6 +30,7 @@ type Category = LocalRecord & {
   archivedAt?: number;
   limitCurrency?: string;
   monthlyLimitMinor?: bigint | number | string;
+  limitAlertPercent?: number;
   updatedAt?: number;
 };
 type Profile = LocalRecord & {
@@ -87,6 +88,7 @@ export default function PersonalCategoryDetailPage() {
   const currency = category?.limitCurrency ?? profile?.defaultCurrency ?? 'INR';
   const [icon, setIcon] = React.useState('');
   const [limitInput, setLimitInput] = React.useState('');
+  const [alertInput, setAlertInput] = React.useState('');
   const [pending, setPending] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [confirmingArchive, setConfirmingArchive] = React.useState(false);
@@ -105,7 +107,17 @@ export default function PersonalCategoryDetailPage() {
         ? ''
         : minorToInput(category.monthlyLimitMinor, currency),
     );
-  }, [category?.id, category?._id, category?.icon, category?.monthlyLimitMinor, currency]);
+    setAlertInput(
+      typeof category?.limitAlertPercent === 'number' ? String(category.limitAlertPercent) : '',
+    );
+  }, [
+    category?.limitAlertPercent,
+    category?.id,
+    category?._id,
+    category?.icon,
+    category?.monthlyLimitMinor,
+    currency,
+  ]);
   React.useEffect(() => {
     if (!userId || !isConnected) return;
     let active = true;
@@ -212,10 +224,21 @@ export default function PersonalCategoryDetailPage() {
       const amountMinor = parseMinor(limitInput, currency);
       if (amountMinor > maxInt64) throw new Error('Enter a valid monthly limit.');
       if (amountMinor <= 0n) throw new Error('Enter a positive monthly limit.');
+      const alertText = alertInput.trim();
+      const alertPercent = alertText ? Number(alertText) : null;
+      if (
+        alertPercent !== null &&
+        (!Number.isFinite(alertPercent) || alertPercent < 1 || alertPercent > 100)
+      )
+        throw new Error('Enter an alert level from 1 to 100%.');
       await mutate(
         'category.setLimit',
-        { monthlyLimitMinor: amountMinor, limitCurrency: currency },
-        { amountMinor, currency },
+        {
+          monthlyLimitMinor: amountMinor,
+          limitCurrency: currency,
+          limitAlertPercent: alertPercent ?? undefined,
+        },
+        { amountMinor, currency, alertPercent },
       );
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Enter a valid limit.');
@@ -224,7 +247,7 @@ export default function PersonalCategoryDetailPage() {
   async function clearLimit() {
     await mutate(
       'category.setLimit',
-      { monthlyLimitMinor: undefined, limitCurrency: undefined },
+      { monthlyLimitMinor: undefined, limitCurrency: undefined, limitAlertPercent: undefined },
       { amountMinor: null },
     );
   }
@@ -330,6 +353,7 @@ export default function PersonalCategoryDetailPage() {
             ? undefined
             : asMinor(category.monthlyLimitMinor),
         limitCurrency: category.limitCurrency,
+        limitAlertPercent: category.limitAlertPercent,
         updatedAt: category.updatedAt,
       }
     : null;
@@ -347,6 +371,8 @@ export default function PersonalCategoryDetailPage() {
       pending={pending}
       formError={formError ?? (rangeError ? `Activity refresh unavailable: ${rangeError}` : null)}
       limitValue={limitInput}
+      alertValue={alertInput}
+      onAlertChange={setAlertInput}
       isDefaultExpense={isDefaultExpense}
       isDefaultIncome={isDefaultIncome}
       confirmingArchive={confirmingArchive}

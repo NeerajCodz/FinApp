@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
-import { Button, Card, SectionHeader, Tabs, Typography, useTheme } from '@finapp/ui/native';
+import { Button, Card, SectionHeader, Tabs, Typography } from '@finapp/ui/native';
 import { formatMinor } from '@finapp/ui/finance/money';
+import { Meter } from '../../charts/native';
 import { FinanceEmptyState } from '../../finance/native/FinanceEmptyState';
 import { CashFlowChart } from '../../analytics/native/CashFlowChart';
 import type { HomeDashboardData } from '../model';
@@ -13,18 +14,18 @@ const cashFlowTabs = [
   { label: 'Year', value: 'year' },
 ];
 
-export function HomeFlowBudgets({
+/** Cash flow and "Category limits": the categories closest to their monthly limit. */
+export function HomeFlowLimits({
   data,
   currency,
-  onOpenBudget,
-  onSeeAllBudgets,
+  onOpenCategory,
+  onSeeAllCategories,
 }: {
   data: HomeDashboardData;
   currency: string;
-  onOpenBudget: (id: string) => void;
-  onSeeAllBudgets: () => void;
+  onOpenCategory: (id: string) => void;
+  onSeeAllCategories: () => void;
 }) {
-  const { tokens } = useTheme();
   const [cashFlowRange, setCashFlowRange] = useState<CashFlowRange>('month');
   const rangeLabel = `THIS ${cashFlowRange.toUpperCase()}`;
   return (
@@ -43,53 +44,41 @@ export function HomeFlowBudgets({
       </Card>
       <Card style={{ gap: 8 }}>
         <SectionHeader
-          title="Budgets"
+          title="Category limits"
           action={
-            <Button variant="ghost" size="sm" onPress={onSeeAllBudgets}>
+            <Button variant="ghost" size="sm" onPress={onSeeAllCategories}>
               See all
             </Button>
           }
         />
-        {data.budgets.length ? (
-          data.budgets.map((budget) => {
+        {data.categoryLimits.length ? (
+          data.categoryLimits.map((limit) => {
             const percent =
-              budget.amountMinor > 0n
-                ? Math.min(100, Number((budget.spentMinor * 100n) / budget.amountMinor))
-                : 0;
+              limit.limitMinor > 0n ? Number((limit.spentMinor * 100n) / limit.limitMinor) : 0;
             return (
               <TouchableOpacity
-                key={budget.id}
+                key={limit.id}
                 accessibilityRole="button"
-                onPress={() => onOpenBudget(budget.id)}
+                onPress={() => onOpenCategory(limit.id)}
                 activeOpacity={0.75}
                 style={{ paddingVertical: 8, gap: 7 }}
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
                   <Typography variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                    {budget.name}
+                    {limit.icon ? `${limit.icon} ` : ''}
+                    {limit.name}
                   </Typography>
                   <Typography variant="caption">{Math.round(percent)}%</Typography>
                 </View>
-                <View
-                  style={{
-                    height: 5,
-                    borderRadius: 4,
-                    backgroundColor: tokens.surfaceSubtle,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <View
-                    style={{
-                      height: '100%',
-                      width: `${percent}%`,
-                      borderRadius: 4,
-                      backgroundColor: percent >= 100 ? tokens.expense : tokens.primary,
-                    }}
-                  />
-                </View>
+                <Meter
+                  value={Number(limit.spentMinor)}
+                  max={Number(limit.limitMinor)}
+                  warnAt={limit.alertPercent / 100}
+                  thin
+                />
                 <Typography variant="caption">
-                  {formatMinor(budget.spentMinor, budget.currency)} of{' '}
-                  {formatMinor(budget.amountMinor, budget.currency)}
+                  {formatMinor(limit.spentMinor, limit.currency)} of{' '}
+                  {formatMinor(limit.limitMinor, limit.currency)}
                 </Typography>
               </TouchableOpacity>
             );
@@ -97,12 +86,12 @@ export function HomeFlowBudgets({
         ) : (
           <FinanceEmptyState
             kind="budget"
-            title="No active budgets this period."
-            description="Set a limit on a category to give your spending a plan."
+            title="No category limits yet."
+            description="Set a monthly limit on a category to give your spending a plan."
             compact
             action={
-              <Button size="sm" variant="outline" onPress={onSeeAllBudgets}>
-                Create a budget
+              <Button size="sm" variant="outline" onPress={onSeeAllCategories}>
+                Set a category limit
               </Button>
             }
           />

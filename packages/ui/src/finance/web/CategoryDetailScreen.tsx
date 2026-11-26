@@ -2,11 +2,12 @@
 
 import React, { useState } from 'react';
 import { ArrowLeft, CalendarDays, Clock3, ReceiptText, TrendingUp } from 'lucide-react';
-import { Button, Empty, Input, Label, Sheet, Typography } from '@finapp/ui/web';
+import { Button, Empty, Input, Label, Sheet, Typography, useTheme } from '@finapp/ui/web';
 import { formatMinor } from '../money';
 import { CategoryIcon } from './CategoryIcon';
 import { CategoryEmojiPicker } from './CategoryEmojiPicker';
-import { BudgetProgress } from './BudgetProgress';
+import { ColumnChart, Meter, RingProgress, compactMoney, fullMoney } from '../../charts/web';
+import { toMajor } from '../../analytics/chart-utils';
 import { TransactionRow } from './TransactionRow';
 import { formatTransactionDate } from '../datetime';
 import styles from './CategoryDetailScreen.module.css';
@@ -21,6 +22,8 @@ export type CategoryDetailRecord = {
   archivedAt?: number;
   monthlyLimitMinor?: bigint;
   limitCurrency?: string;
+  /** Spending alert level for the limit, in percent (default 80). */
+  limitAlertPercent?: number;
   updatedAt?: number;
 };
 export type CategoryDetailTransaction = {
@@ -52,6 +55,8 @@ export type CategoryDetailScreenProps = {
   pending?: boolean;
   formError?: string | null;
   limitValue: string;
+  /** Alert level input (percent); shown with the limit form when `onAlertChange` is given. */
+  alertValue?: string;
   isDefaultExpense: boolean;
   isDefaultIncome: boolean;
   confirmingArchive: boolean;
@@ -61,6 +66,7 @@ export type CategoryDetailScreenProps = {
   onEditName: () => void;
   onIconChange: (value?: string) => void;
   onLimitChange: (value: string) => void;
+  onAlertChange?: (value: string) => void;
   onSaveLimit: () => void;
   onClearLimit: () => void;
   onToggleDefault: (type: 'expense' | 'income') => void;
@@ -109,6 +115,7 @@ export function CategoryDetailScreen({
   pending = false,
   formError,
   limitValue,
+  alertValue = '',
   isDefaultExpense,
   isDefaultIncome,
   confirmingArchive,
@@ -118,6 +125,7 @@ export function CategoryDetailScreen({
   onEditName,
   onIconChange,
   onLimitChange,
+  onAlertChange,
   onSaveLimit,
   onClearLimit,
   onToggleDefault,
@@ -125,6 +133,7 @@ export function CategoryDetailScreen({
   onConfirmArchive,
   onCancelArchive,
 }: CategoryDetailScreenProps) {
+  const { tokens } = useTheme();
   const [deleteWithTransactions, setDeleteWithTransactions] = React.useState(false);
   const [period, setPeriod] = useState<DetailPeriod>('month');
   const [chartType, setChartType] = useState<'expense' | 'income'>('expense');
@@ -167,6 +176,13 @@ export function CategoryDetailScreen({
     monthlyLimit && monthlyLimit > 0n
       ? Math.min(100, Number((monthlySpent * 100n) / monthlyLimit))
       : 0;
+  const alertPercent = category?.limitAlertPercent ?? 80;
+  const limitTone =
+    monthlyLimit !== undefined && monthlySpent > monthlyLimit
+      ? tokens.expense
+      : limitUsed >= alertPercent
+        ? tokens.warning
+        : tokens.income;
   const buckets = Array.from({ length: period === 'week' ? 7 : 12 }, (_, index) => {
     if (period === 'year') {
       const start = Date.UTC(now.getUTCFullYear(), index, 1);
@@ -209,7 +225,6 @@ export function CategoryDetailScreen({
       .reduce((sum, row) => sum + row.amountMinor, 0n);
     return { label: String(fromDay), value, key: start };
   });
-  const maxBucket = buckets.reduce((max, bucket) => (bucket.value > max ? bucket.value : max), 0n);
   const merchants = new Map<string, { total: bigint; count: number }>();
   for (const row of inPeriod) {
     if (row.type !== 'expense') continue;
@@ -314,7 +329,9 @@ export function CategoryDetailScreen({
                   : formatMinor(monthlyLimit, category.limitCurrency ?? currency)
               }
               note={
-                monthlyLimit === undefined ? 'Add a limit below' : `${limitUsed}% used this month`
+                monthlyLimit === undefined
+                  ? 'Add a limit below'
+                  : `${limitUsed}% used · alert at ${alertPercent}%`
               }
               tone="warning"
             />
@@ -373,26 +390,21 @@ export function CategoryDetailScreen({
                   description="Category activity will appear when transactions are assigned here."
                 />
               ) : (
-                <div
-                  className={styles.chart}
-                  role="img"
-                  aria-label={`${chartType} activity over ${periodLabel.toLowerCase()}`}
-                >
-                  {buckets.map((bucket) => (
-                    <div className={styles.barColumn} key={bucket.key}>
-                      <div className={styles.barTrack}>
-                        <span
-                          data-type={chartType}
-                          style={{
-                            height: `${maxBucket > 0n ? Math.max(2, Number((bucket.value * 10000n) / maxBucket) / 100) : 0}%`,
-                          }}
-                          title={formatMinor(bucket.value, currency)}
-                        />
-                      </div>
-                      <small>{bucket.label}</small>
-                    </div>
-                  ))}
-                </div>
+                <ColumnChart
+                  caption={`${chartType} activity over ${periodLabel.toLowerCase()} in ${currency}`}
+                  height={220}
+                  labels={buckets.map((bucket) => bucket.label)}
+                  series={[
+                    {
+                      id: chartType,
+                      label: chartType === 'income' ? 'Income' : 'Expenses',
+                      values: buckets.map((bucket) => toMajor(bucket.value, currency)),
+                      color: chartType === 'income' ? tokens.income : tokens.expense,
+                    },
+                  ]}
+                  format={(value) => fullMoney(value, currency)}
+                  axisFormat={(value) => compactMoney(value, currency)}
+                />
               )}
               <div className={styles.chartFoot}>
                 <span>{periodLabel}</span>
@@ -419,28 +431,35 @@ export function CategoryDetailScreen({
                 </div>
               ) : (
                 <div className={styles.limitContent}>
-                  <div
-                    className={styles.ring}
-                    style={{ '--used': `${Math.min(100, limitUsed)}%` } as React.CSSProperties}
+                  <RingProgress
+                    value={limitUsed / 100}
+                    size={86}
+                    stroke={9}
+                    color={limitTone}
+                    label={`${limitUsed}% of the monthly limit used`}
                   >
-                    <span>
+                    <span className={styles.ringText}>
                       <strong>{limitUsed}%</strong>
                       <small>used</small>
                     </span>
-                  </div>
+                  </RingProgress>
                   <div>
                     <strong>{formatMinor(monthlySpent, category.limitCurrency ?? currency)}</strong>
                     <small>
                       of {formatMinor(monthlyLimit, category.limitCurrency ?? currency)}
                     </small>
                   </div>
-                  <BudgetProgress
-                    spentMinor={monthlySpent}
-                    limitMinor={monthlyLimit}
-                    currency={category.limitCurrency ?? currency}
-                    title="This month"
-                    primary
-                  />{' '}
+                  <Meter
+                    value={Number(monthlySpent)}
+                    max={Number(monthlyLimit)}
+                    warnAt={alertPercent / 100}
+                    label={`Alert at ${alertPercent}%`}
+                    detail={
+                      remaining !== undefined && remaining < 0n
+                        ? `${formatMinor(-remaining, category.limitCurrency ?? currency)} over`
+                        : `${formatMinor(remaining ?? 0n, category.limitCurrency ?? currency)} left`
+                    }
+                  />
                 </div>
               )}
               <div className={styles.limitStats}>
@@ -482,13 +501,26 @@ export function CategoryDetailScreen({
                       onChangeText={onLimitChange}
                       placeholder="Amount"
                     />
+                    {onAlertChange && (
+                      <Input
+                        id="category-limit-alert"
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={alertValue}
+                        onChangeText={onAlertChange}
+                        placeholder="Alert %"
+                        accessibilityLabel="Alert when this % of the limit is spent"
+                      />
+                    )}
                     <Button type="submit" disabled={pending || !limitValue.trim()}>
                       {pending ? 'Saving…' : 'Save limit'}
                     </Button>
                   </div>
                   {monthlyLimit !== undefined && (
                     <Button type="button" variant="ghost" disabled={pending} onPress={onClearLimit}>
-                      Clear limit
+                      Remove limit
                     </Button>
                   )}
                 </form>
@@ -512,6 +544,9 @@ export function CategoryDetailScreen({
                       : formatMinor(monthlyLimit, category.limitCurrency ?? currency)
                   }
                 />
+                {monthlyLimit !== undefined && (
+                  <Detail label="Limit alert" value={`At ${alertPercent}% used`} />
+                )}
                 <Detail
                   label="Default for expenses"
                   value={profile ? (isDefaultExpense ? 'Yes' : 'No') : 'Unavailable'}

@@ -21,6 +21,7 @@ export default function NewCategoryScreen() {
   const { data: profiles = [] } = useLocalRecords<LocalRecord>(userId, 'profile');
   const currency = String(profiles[0]?.defaultCurrency ?? 'INR');
   const [limitValue, setLimitValue] = useState('');
+  const [alertValue, setAlertValue] = useState('');
   const [notes, setNotes] = useState('');
 
   async function save() {
@@ -41,6 +42,13 @@ export default function NewCategoryScreen() {
       const monthlyLimitMinor = limitValue.trim() ? parseMinor(limitValue, currency) : undefined;
       if (monthlyLimitMinor !== undefined && monthlyLimitMinor <= 0n)
         throw new Error('Enter a positive monthly limit.');
+      const alertText = alertValue.trim();
+      const alertPercent = alertText ? Number(alertText) : null;
+      if (
+        alertPercent !== null &&
+        (!Number.isFinite(alertPercent) || alertPercent < 1 || alertPercent > 100)
+      )
+        throw new Error('Enter an alert level from 1 to 100%.');
       const record = {
         ownerId: userId,
         name: trimmedName,
@@ -48,7 +56,13 @@ export default function NewCategoryScreen() {
         kind,
         ...(color ? { color } : {}),
         notes: notes.trim() || undefined,
-        ...(monthlyLimitMinor !== undefined ? { monthlyLimitMinor, limitCurrency: currency } : {}),
+        ...(monthlyLimitMinor !== undefined
+          ? {
+              monthlyLimitMinor,
+              limitCurrency: currency,
+              ...(alertPercent !== null ? { limitAlertPercent: alertPercent } : {}),
+            }
+          : {}),
         isSystem: false,
         sortOrder: now,
         createdAt: now,
@@ -60,7 +74,13 @@ export default function NewCategoryScreen() {
         kind,
         ...(color ? { color } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
-        ...(monthlyLimitMinor !== undefined ? { monthlyLimitMinor, limitCurrency: currency } : {}),
+        ...(monthlyLimitMinor !== undefined
+          ? {
+              monthlyLimitMinor,
+              limitCurrency: currency,
+              ...(alertPercent !== null ? { limitAlertPercent: alertPercent } : {}),
+            }
+          : {}),
       });
       router.replace(`/category/${id}` as never);
     } catch (cause) {
@@ -81,6 +101,8 @@ export default function NewCategoryScreen() {
         currency={currency}
         limitValue={limitValue}
         onLimitChange={setLimitValue}
+        alertValue={alertValue}
+        onAlertChange={setAlertValue}
         notes={notes}
         onNotesChange={setNotes}
         pending={pending}

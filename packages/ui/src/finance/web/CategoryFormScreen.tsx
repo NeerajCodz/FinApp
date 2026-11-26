@@ -10,6 +10,7 @@ import { formatMinor } from '../money';
 import { EntityActivityTable, type EntityActivity } from './EntityActivityTable';
 import { FinanceEmptyState } from './FinanceEmptyState';
 import styles from './CategoryFormScreen.module.css';
+import { Meter } from '../../charts/web';
 export type CategoryFormScreenProps = {
   mode: 'create' | 'edit';
   name: string;
@@ -29,8 +30,10 @@ export type CategoryFormScreenProps = {
   onLimitChange?: (value: string) => void;
   notes?: string;
   onNotesChange?: (value: string) => void;
-  includeInBudgets?: boolean;
-  onIncludeInBudgetsChange?: (value: boolean) => void;
+  /** Spending alert level for the monthly limit, in percent (default 80). */
+  alertValue?: string;
+  onAlertChange?: (value: string) => void;
+  limitAlertPercent?: number;
   isDefault?: boolean;
   onDefaultChange?: (value: boolean) => void;
   spentMinor?: bigint;
@@ -59,8 +62,9 @@ export function CategoryFormScreen({
   onLimitChange,
   notes = '',
   onNotesChange,
-  includeInBudgets = true,
-  onIncludeInBudgetsChange,
+  alertValue = '',
+  onAlertChange,
+  limitAlertPercent,
   isDefault = false,
   onDefaultChange,
   spentMinor = 0n,
@@ -88,19 +92,6 @@ export function CategoryFormScreen({
           <span>
             Set as default category
             <small>This category will be pre-selected for new {kind} transactions.</small>
-          </span>
-        </label>
-      )}
-      {onIncludeInBudgetsChange && (
-        <label className={styles.setting}>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={includeInBudgets}
-            onChange={(event) => onIncludeInBudgetsChange(event.target.checked)}
-          />
-          <span>
-            Include in budgets<small>Show this category in budget planning and summaries.</small>
           </span>
         </label>
       )}
@@ -181,7 +172,27 @@ export function CategoryFormScreen({
                 Monthly limit <span>(optional)</span>
               </Label>
               <CurrencyInput currency={currency} value={limitValue} onChangeText={onLimitChange} />
-              {!edit && <small>Set a monthly limit to keep track of your spending.</small>}
+              {!edit && <small>A category’s monthly limit is its budget.</small>}
+            </div>
+          )}
+          {onAlertChange && onLimitChange && (
+            <div className={styles.field}>
+              <Label htmlFor="category-limit-alert">
+                Alert at <span>(% of the limit, default 80)</span>
+              </Label>
+              <Input
+                id="category-limit-alert"
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                value={alertValue}
+                onChangeText={onAlertChange}
+                placeholder="80"
+              />
+              <small>
+                We notify you when spending reaches this share of the limit, and at 100%.
+              </small>
             </div>
           )}
           {!edit && (
@@ -247,9 +258,12 @@ export function CategoryFormScreen({
                   <div className={styles.usage}>
                     <strong>{used}%</strong> of {formatMinor(monthlyLimitMinor, currency)}
                   </div>
-                  <div className={styles.track}>
-                    <span style={{ width: `${Math.min(100, used)}%` }} data-risk={used >= 80} />
-                  </div>
+                  <Meter
+                    value={Number(spentMinor)}
+                    max={Number(monthlyLimitMinor)}
+                    warnAt={(limitAlertPercent ?? 80) / 100}
+                    label={`Alert at ${limitAlertPercent ?? 80}%`}
+                  />
                   <div className={styles.usageTotals}>
                     <div>
                       <strong>{formatMinor(spentMinor, currency)}</strong>

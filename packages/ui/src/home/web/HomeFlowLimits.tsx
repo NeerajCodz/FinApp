@@ -2,19 +2,21 @@ import React from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { formatMinor } from '@convex/shared/money';
 import { CashFlowChart } from '../../analytics/web/CashFlowChart';
+import { Meter } from '../../charts/web';
 import { FinanceEmptyState } from '../../finance/web/FinanceEmptyState';
 import type { HomeDashboardData } from '../model';
 
-export function HomeFlowBudgets({
+/** Cash flow beside "Category limits": the categories closest to their monthly limit. */
+export function HomeFlowLimits({
   data,
   currency,
-  onOpenBudget,
-  onSeeAllBudgets,
+  onOpenCategory,
+  onSeeAllCategories,
 }: {
   data: HomeDashboardData;
   currency: string;
-  onOpenBudget: (id: string) => void;
-  onSeeAllBudgets: () => void;
+  onOpenCategory: (id: string) => void;
+  onSeeAllCategories: () => void;
 }) {
   return (
     <div className="finance-home-pair finance-home-flow-pair">
@@ -33,37 +35,41 @@ export function HomeFlowBudgets({
       <section className="finance-home-panel finance-home-budget-panel">
         <div className="finance-home-section-heading">
           <div>
-            <span className="finance-eyebrow">SPENDING LIMITS</span>
-            <h2>Budgets</h2>
+            <span className="finance-eyebrow">THIS MONTH</span>
+            <h2>Category limits</h2>
           </div>
-          <button type="button" onClick={onSeeAllBudgets}>
+          <button type="button" onClick={onSeeAllCategories}>
             See all
           </button>
         </div>
-        {data.budgets.length ? (
+        {data.categoryLimits.length ? (
           <div className="finance-home-budget-list">
-            {data.budgets.map((budget) => {
+            {data.categoryLimits.map((limit) => {
               const percent =
-                budget.amountMinor > 0n
-                  ? Math.min(100, Number((budget.spentMinor * 100n) / budget.amountMinor))
-                  : 0;
+                limit.limitMinor > 0n ? Number((limit.spentMinor * 100n) / limit.limitMinor) : 0;
               return (
                 <button
                   className="finance-home-budget"
-                  key={budget.id}
+                  key={limit.id}
                   type="button"
-                  onClick={() => onOpenBudget(budget.id)}
+                  onClick={() => onOpenCategory(limit.id)}
                 >
                   <span className="finance-home-budget-row">
-                    <span>{budget.name}</span>
+                    <span>
+                      {limit.icon ? `${limit.icon} ` : ''}
+                      {limit.name}
+                    </span>
                     <span>{Math.round(percent)}%</span>
                   </span>
-                  <span className="finance-home-progress">
-                    <span style={{ width: `${percent}%` }} />
-                  </span>
+                  <Meter
+                    value={Number(limit.spentMinor)}
+                    max={Number(limit.limitMinor)}
+                    warnAt={limit.alertPercent / 100}
+                    thin
+                  />
                   <small>
-                    {formatMinor(budget.spentMinor, budget.currency)} of{' '}
-                    {formatMinor(budget.amountMinor, budget.currency)}
+                    {formatMinor(limit.spentMinor, limit.currency)} of{' '}
+                    {formatMinor(limit.limitMinor, limit.currency)}
                   </small>
                 </button>
               );
@@ -73,9 +79,9 @@ export function HomeFlowBudgets({
           <FinanceEmptyState
             kind="budget"
             compact
-            title="No active budgets for this period"
-            description="Create a spending limit to track category expenses."
-            action={<a href="/budgets/new">Create a budget</a>}
+            title="No category limits yet"
+            description="Set a monthly limit on a category to track spending against it."
+            action={<a href="/categories">Set a category limit</a>}
           />
         )}
       </section>

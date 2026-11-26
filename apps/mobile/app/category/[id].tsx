@@ -26,6 +26,7 @@ type CategoryRecord = LocalRecord & {
   archivedAt?: number;
   limitCurrency?: string;
   monthlyLimitMinor?: bigint;
+  limitAlertPercent?: number;
 };
 type ProfileRecord = LocalRecord & {
   defaultCurrency?: string;
@@ -83,6 +84,7 @@ export default function CategoryDetailScreen() {
     fetchTransactionRange,
   );
   const [limitInput, setLimitInput] = useState('');
+  const [alertInput, setAlertInput] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [confirmingArchive, setConfirmingArchive] = useState(false);
@@ -164,14 +166,33 @@ export default function CategoryDetailScreen() {
       setError('Enter a valid amount greater than zero.');
       return;
     }
+    const alertText = alertInput.trim();
+    const alertPercent = alertText ? Number(alertText) : undefined;
+    if (
+      alertPercent !== undefined &&
+      (!Number.isFinite(alertPercent) || alertPercent < 1 || alertPercent > 100)
+    ) {
+      setError('Enter an alert level from 1 to 100%.');
+      return;
+    }
     setPending(true);
     try {
       await commitLocalWrite(
         userId,
         'category',
         'category.setLimit',
-        { ...category, monthlyLimitMinor: amountMinor, limitCurrency: currency },
-        { categoryId: categoryPayloadId, amountMinor, currency },
+        {
+          ...category,
+          monthlyLimitMinor: amountMinor,
+          limitCurrency: currency,
+          ...(alertPercent !== undefined ? { limitAlertPercent: alertPercent } : {}),
+        },
+        {
+          categoryId: categoryPayloadId,
+          amountMinor,
+          currency,
+          ...(alertPercent !== undefined ? { alertPercent } : {}),
+        },
         {
           recordId: categoryLocalId,
           dependencies:
@@ -179,6 +200,7 @@ export default function CategoryDetailScreen() {
         },
       );
       setLimitInput('');
+      setAlertInput('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save the limit.');
     } finally {
@@ -195,7 +217,12 @@ export default function CategoryDetailScreen() {
         userId,
         'category',
         'category.setLimit',
-        { ...category, monthlyLimitMinor: undefined, limitCurrency: undefined },
+        {
+          ...category,
+          monthlyLimitMinor: undefined,
+          limitCurrency: undefined,
+          limitAlertPercent: undefined,
+        },
         { categoryId: categoryPayloadId, amountMinor: null },
         {
           recordId: categoryLocalId,
@@ -335,6 +362,7 @@ export default function CategoryDetailScreen() {
         archivedAt: category.archivedAt,
         monthlyLimitMinor: category.monthlyLimitMinor,
         limitCurrency: category.limitCurrency,
+        limitAlertPercent: category.limitAlertPercent,
         updatedAt: typeof category.updatedAt === 'number' ? category.updatedAt : undefined,
       }
     : null;
@@ -369,6 +397,8 @@ export default function CategoryDetailScreen() {
       pending={pending}
       formError={error}
       limitValue={limitInput}
+      alertValue={alertInput}
+      onAlertChange={setAlertInput}
       isDefaultExpense={isDefaultExpense}
       isDefaultIncome={isDefaultIncome}
       confirmingArchive={confirmingArchive}

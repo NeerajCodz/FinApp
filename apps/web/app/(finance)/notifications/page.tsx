@@ -48,7 +48,7 @@ export default function NotificationsPage() {
       <FinanceSignedOut
         section="INBOX"
         title="Important updates, in one place."
-        description="Sign in to see account, budget, goal, group, and sync updates saved to your local inbox."
+        description="Sign in to see account, category limit, goal, group, and sync updates saved to your local inbox."
       />
     );
   const signedInUserId = userId;
