@@ -4,9 +4,9 @@ import {
   mcpResourceUrl,
   prepareMcpAccessTokenSigner,
   verifyMcpAccessToken,
-} from '@/lib/mcp/oauth';
-import { MCP_SERVER_VERSION, toolCatalog } from '@/lib/mcp/server';
-import { listWidgets } from '@/lib/mcp/widgets';
+} from '@finapp/mcp/oauth';
+import { MCP_SERVER_VERSION, toolCatalog } from '@finapp/mcp/server';
+import { listWidgets } from '@finapp/mcp/widgets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

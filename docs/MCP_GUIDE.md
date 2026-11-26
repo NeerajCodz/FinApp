@@ -188,7 +188,7 @@ token and grant.
 
 ## Tool discovery and feature coverage
 
-The registry (`apps/web/lib/mcp/tools/*`) is the single source of truth:
+The registry (`packages/mcp/src/tools/*`) is the single source of truth:
 `finapp.catalog`, the four `finapp.<domain>.parent` tools, the
 `finapp://catalog` resource, `/mcp/status` and the dashboard catalog are all
 generated from it. It currently holds `finapp.catalog`, 4 parents and 114 domain
@@ -398,7 +398,7 @@ spec 2026-01-26), which both Claude and ChatGPT implement:
 - Theme follows the host's `hostContext.theme` (or `window.openai.theme`,
   falling back to `prefers-color-scheme`); the palette is FinApp's (volt
   `#B7FF4A` accent on dark, Space Grotesk fallback stack), defined once as CSS
-  variables in `apps/web/lib/mcp/widgets/runtime.ts`.
+  variables in `packages/mcp/src/widgets/runtime.ts`.
 - Bump the `vN` in a URI after breaking template changes; hosts cache by URI.
 
 ### Bounded reads
@@ -491,13 +491,13 @@ production credentials or database records.
 ## Implementation map and references
 
 - `apps/web/app/mcp/route.ts`: protected Streamable HTTP transport.
-- `apps/web/lib/mcp/server.ts`: registration, catalog/parents, scope checks, errors.
-- `apps/web/lib/mcp/tools/`: tool definitions per domain (zod schemas, Convex calls).
-- `apps/web/lib/mcp/toolkit.ts`, `money.ts`, `errors.ts`: shared schemas, line
+- `packages/mcp/src/server.ts`: registration, catalog/parents, scope checks, errors.
+- `packages/mcp/src/tools/`: tool definitions per domain (zod schemas, Convex calls).
+- `packages/mcp/src/toolkit.ts`, `money.ts`, `errors.ts`: shared schemas, line
   items, money formatting, error mapping.
-- `apps/web/lib/mcp/widgets/`: MCP Apps widget HTML/runtime and resources.
+- `packages/mcp/src/widgets/`: MCP Apps widget HTML/runtime and resources.
 - `apps/web/app/mcp/status/route.ts`: public status JSON.
-- `apps/web/lib/mcp/oauth.ts`: issuer/resource helpers, JWTs, JWKS, Convex client.
+- `packages/mcp/src/oauth.ts`: issuer/resource helpers, JWTs, JWKS, Convex client.
 - `apps/web/app/oauth/` and `apps/web/app/.well-known/`: OAuth/discovery endpoints.
 - `convex/mcp.ts`: authenticated, bounded read projections (incl. transaction detail).
 - `convex/mcpOAuth.ts`: client registration, authorization codes, grants, activity.

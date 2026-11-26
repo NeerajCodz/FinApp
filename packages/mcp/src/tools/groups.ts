@@ -1,4 +1,4 @@
-import { api } from '@convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 import type { ConvexHttpClient } from 'convex/browser';
 import { z } from 'zod';
 import { formatMinor } from '../money';

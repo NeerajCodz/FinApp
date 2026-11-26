@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
 import { isTokenEndpointAuthMethod } from '@convex/shared/mcpClients';
-import { convexClient } from '@/lib/mcp/oauth';
+import { convexClient } from '@finapp/mcp/oauth';
 
 export const runtime = 'nodejs';
 

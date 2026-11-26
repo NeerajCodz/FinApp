@@ -1,0 +1,19 @@
+{
+  "name": "@finapp/mcp",
+  "version": "1.11.0",
+  "private": true,
+  "description": "FinApp MCP server: tools, OAuth, metadata and widget wiring, served by the web app's /mcp routes.",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@finapp/widgets": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "convex": "^1.46.0",
+    "jose": "^6.2.13",
+    "zod": "^4.6.7"
+  }
+}

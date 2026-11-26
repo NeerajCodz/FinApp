@@ -1,8 +1,8 @@
 import { api } from '@convex/_generated/api';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { mcpBackendClient, mcpResourceUrl, verifyMcpAccessToken } from '@/lib/mcp/oauth';
-import type { McpPrincipal } from '@/lib/mcp/oauth';
-import { createMcpServer } from '@/lib/mcp/server';
+import { mcpBackendClient, mcpResourceUrl, verifyMcpAccessToken } from '@finapp/mcp/oauth';
+import type { McpPrincipal } from '@finapp/mcp/oauth';
+import { createMcpServer } from '@finapp/mcp/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

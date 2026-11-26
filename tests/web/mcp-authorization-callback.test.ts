@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authorizationDenialUrl } from '../../apps/web/lib/mcp/authorizationCallback';
+import { authorizationDenialUrl } from '@finapp/mcp/authorizationCallback';
 
 const redirectUri = 'https://client.example/callback?workspace=personal&error=old&state=old';
 const request = {

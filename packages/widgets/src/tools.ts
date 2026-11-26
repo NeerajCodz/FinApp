@@ -1,6 +1,6 @@
 /**
  * Tool → widget links, in one place so new tools can be mapped as they land. Only tools that exist
- * in `apps/web/lib/mcp/tools/*.ts` are listed; each widget's data contract matches that tool's
+ * in `packages/mcp/src/tools/*.ts` are listed; each widget's data contract matches that tool's
  * result shape. The server prefers this map over a tool's own `widget` field.
  */
 export const widgetForTool: Record<string, string> = {

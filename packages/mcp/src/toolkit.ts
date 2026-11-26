@@ -1,5 +1,5 @@
 import type { ConvexHttpClient } from 'convex/browser';
-import type { Id, TableNames } from '@convex/_generated/dataModel';
+import type { Id, TableNames } from '../../../convex/_generated/dataModel';
 import { z } from 'zod';
 import { presentMoney } from './money';
 

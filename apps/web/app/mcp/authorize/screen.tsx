@@ -6,7 +6,7 @@ import { useConvexAuth, useAuthToken } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Button, ThemeProvider } from '@finapp/ui/web';
-import { authorizationDenialUrl, currentIssuer } from '@/lib/mcp/authorizationCallback';
+import { authorizationDenialUrl, currentIssuer } from '@finapp/mcp/authorizationCallback';
 
 type AuthorizationRequest = {
   clientId: string;

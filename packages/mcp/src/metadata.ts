@@ -1,4 +1,4 @@
-import { TOKEN_ENDPOINT_AUTH_METHODS } from '@convex/shared/mcpClients';
+import { TOKEN_ENDPOINT_AUTH_METHODS } from '../../../convex/shared/mcpClients';
 import { mcpIssuer, mcpResourceUrl } from './oauth';
 
 export const MCP_SCOPES = [

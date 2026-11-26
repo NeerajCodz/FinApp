@@ -1,7 +1,7 @@
 import { ConvexHttpClient } from 'convex/browser';
 import { exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT } from 'jose';
 import type { JWTPayload } from 'jose';
-import { MCP_CONVEX_AUDIENCE } from '@convex/shared/mcpAuth';
+import { MCP_CONVEX_AUDIENCE } from '../../../convex/shared/mcpAuth';
 
 export type McpPrincipal = { userId: string; grantId: string; scopes: string[] };
 const signingAlgorithm = 'RS256' as const;

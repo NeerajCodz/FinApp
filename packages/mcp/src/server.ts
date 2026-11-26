@@ -1,4 +1,4 @@
-import { api } from '@convex/_generated/api';
+import { api } from '../../../convex/_generated/api';
 import type { ConvexHttpClient } from 'convex/browser';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { errorText, toToolError, type McpToolError } from './errors';

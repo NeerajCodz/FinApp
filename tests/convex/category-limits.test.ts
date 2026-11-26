@@ -16,7 +16,7 @@ import {
 import { assistantTools } from '../../convex/ai/assistantTools';
 import { manageTools } from '../../convex/ai/manageTools';
 import { FINAI_SCOPE_TOOLS } from '../../convex/shared/finaiSettings';
-import { financeTools } from '../../apps/web/lib/mcp/tools/finance';
+import { financeTools } from '@finapp/mcp/tools/finance';
 
 const modules = import.meta.glob('../../convex/**/*.ts');
 

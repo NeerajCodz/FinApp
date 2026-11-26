@@ -6,7 +6,7 @@ import {
   mcpBackendClient,
   prepareMcpAccessTokenSigner,
   verifyMcpAccessToken,
-} from '../../apps/web/lib/mcp/oauth';
+} from '@finapp/mcp/oauth';
 import { POST as tokenPost } from '../../apps/web/app/oauth/token/route';
 
 let keys: Awaited<ReturnType<typeof generateKeyPair>>;

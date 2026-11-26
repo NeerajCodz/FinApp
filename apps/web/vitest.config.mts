@@ -13,6 +13,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('../../packages/widgets/src/index.ts', import.meta.url)),
       },
       {
+        find: /^@finapp\/mcp\/(.*)$/,
+        replacement: fileURLToPath(new URL('../../packages/mcp/src/$1', import.meta.url)),
+      },
+      {
         find: /^@\//,
         replacement: fileURLToPath(new URL('./', import.meta.url)),
       },

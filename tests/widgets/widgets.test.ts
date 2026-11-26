@@ -14,7 +14,7 @@ import {
   widgetScript,
   widgetToolMeta,
 } from '@finapp/widgets';
-import { toolCatalog } from '../../apps/web/lib/mcp/server';
+import { toolCatalog } from '@finapp/mcp/server';
 
 const widgets = listWidgets();
 const LEGACY_URIS: Record<string, string> = {

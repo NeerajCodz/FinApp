@@ -14,7 +14,7 @@ const backend = vi.hoisted(() => ({
   mutations: {} as Record<string, (args: Record<string, unknown>) => unknown>,
 }));
 
-vi.mock('@/lib/mcp/oauth', () => ({
+vi.mock('@finapp/mcp/oauth', () => ({
   mcpResourceUrl: () => 'https://finapp.test/mcp',
   mcpIssuer: () => 'https://finapp.test',
   mcpConvexUrl: () => 'https://convex.invalid',
@@ -56,8 +56,8 @@ vi.mock('@/lib/mcp/oauth', () => ({
 
 import { GET, POST } from '../../apps/web/app/mcp/route';
 import { GET as statusGet } from '../../apps/web/app/mcp/status/route';
-import { formatMinor, presentMoney } from '../../apps/web/lib/mcp/money';
-import { toolCatalog } from '../../apps/web/lib/mcp/server';
+import { formatMinor, presentMoney } from '@finapp/mcp/money';
+import { toolCatalog } from '@finapp/mcp/server';
 import { listWidgets } from '@finapp/widgets';
 
 async function connect() {
