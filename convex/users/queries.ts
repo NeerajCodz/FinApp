@@ -134,7 +134,7 @@ export const search = query({
   },
 });
 
-const GROUP_PROFILE_SEARCH_PAGE_SIZE = 50;
+const GROUP_PROFILE_SEARCH_MAX_CANDIDATES = 1_000;
 
 export const searchGroupProfiles = query({
   args: { query: v.string() },
@@ -143,26 +143,20 @@ export const searchGroupProfiles = query({
     if (!current) return [];
     const searchTerm = normalizeUsername(args.query);
     if (!/^[a-z0-9_]{2,32}$/.test(searchTerm)) return [];
+    const candidates = await ctx.db
+      .query('users')
+      .withIndex('by_username', (q) =>
+        q.gte('username', searchTerm).lte('username', `${searchTerm}\uffff`),
+      )
+      .filter((q) =>
+        q.and(q.neq(q.field('_id'), current._id), q.eq(q.field('deletedAt'), undefined)),
+      )
+      .take(GROUP_PROFILE_SEARCH_MAX_CANDIDATES);
     const visible: Doc<'users'>[] = [];
-    let cursor: string | null = null;
-    let isDone = false;
-    while (visible.length < 20 && !isDone) {
-      const page = await ctx.db
-        .query('users')
-        .withIndex('by_username', (q) =>
-          q.gte('username', searchTerm).lte('username', `${searchTerm}\uffff`),
-        )
-        .filter((q) =>
-          q.and(q.neq(q.field('_id'), current._id), q.eq(q.field('deletedAt'), undefined)),
-        )
-        .paginate({ numItems: GROUP_PROFILE_SEARCH_PAGE_SIZE, cursor });
-      for (const user of page.page) {
-        if (user.username === searchTerm || (await privacyFor(ctx, user._id)).discoverable)
-          visible.push(user);
-        if (visible.length === 20) break;
-      }
-      cursor = page.continueCursor;
-      isDone = page.isDone;
+    for (const user of candidates) {
+      if (user.username === searchTerm || (await privacyFor(ctx, user._id)).discoverable)
+        visible.push(user);
+      if (visible.length === 20) break;
     }
     return Promise.all(
       visible.map(async (user) => ({

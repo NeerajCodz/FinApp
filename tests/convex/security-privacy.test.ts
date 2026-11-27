@@ -197,6 +197,11 @@ describe('devices', () => {
       ['Chrome on Windows', 'web', true],
       ['Pixel 8', 'android', false],
     ]);
+    const alerts = await t.run(async (ctx) =>
+      (await ctx.db.query('notifications').collect()).filter(
+        (row) => row.recipientId === ids.alice,
+      ),
+    );
     expect(alerts.map((row) => [row.type, row.title])).toEqual([
       ['security', 'New sign-in to your account'],
     ]);
