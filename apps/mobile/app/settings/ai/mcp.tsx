@@ -49,6 +49,9 @@ export default function McpConnectionsScreen() {
   const stored = useQuery(api.mcpOAuth.getSettings, live ? {} : 'skip');
   const updateSettings = useMutation(api.mcpOAuth.updateSettings);
   const updateScopes = useMutation(api.mcpOAuth.updateGrantScopes);
+  const scopeUpdates = React.useRef(
+    new Map<string, { scopes: string[]; pending: Promise<unknown> }>(),
+  );
   const [settings, setSettings] = React.useState(stored);
   const [open, setOpen] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -146,14 +149,28 @@ export default function McpConnectionsScreen() {
                           title={`Change ${SCOPES[scope]!.toLowerCase()}`}
                           checked={grant.scopes.includes(scope)}
                           disabled={!live}
-                          onChange={(next) =>
-                            void updateScopes({
-                              grantId: grant.id as Id<'mcpOAuthGrants'>,
-                              scopes: next
-                                ? [...grant.scopes, scope]
-                                : grant.scopes.filter((item) => item !== scope),
-                            })
-                          }
+                          onChange={(next) => {
+                            const grantId = String(grant.id);
+                            let update = scopeUpdates.current.get(grantId);
+                            if (!update) {
+                              update = { scopes: [...grant.scopes], pending: Promise.resolve() };
+                              scopeUpdates.current.set(grantId, update);
+                            }
+                            const scopes = next
+                              ? [...new Set([...update.scopes, scope])]
+                              : update.scopes.filter((item) => item !== scope);
+                            update.scopes = scopes;
+                            const pending = update.pending
+                              .catch(() => undefined)
+                              .then(() =>
+                                updateScopes({
+                                  grantId: grant.id as Id<'mcpOAuthGrants'>,
+                                  scopes,
+                                }),
+                              );
+                            update.pending = pending;
+                            void pending.catch(() => {});
+                          }}
                         />
                       )),
                       <SettingsLink

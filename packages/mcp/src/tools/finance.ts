@@ -230,10 +230,12 @@ export const financeTools: ToolFactory = (client) => [
     name: 'finapp.finance.transactions.delete',
     title: 'Delete transaction (to Trash)',
     description:
-      'Delete one personal transaction. It moves to Trash and can be restored with finapp.finance.trash.restore, so no confirmation is needed. Group expenses use finapp.groups.expenses.delete.',
+      'Delete one personal transaction after explicit user confirmation. It moves to Trash and can be restored with finapp.finance.trash.restore. Group expenses use finapp.groups.expenses.delete.',
     scope: 'finapp:write:finance',
+    destructive: true,
     input: {
       transactionId: docId('Transaction'),
+      confirm: confirm('delete this transaction'),
       clientMutationId: mutationId,
     },
     run: (args) =>

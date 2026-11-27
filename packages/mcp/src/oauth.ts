@@ -38,6 +38,15 @@ export function convexClient(): ConvexHttpClient {
   return new ConvexHttpClient(mcpConvexUrl());
 }
 
+/** Admin-authenticated client for trusted server-only operations. */
+export function convexAdminClient(): ConvexHttpClient {
+  const deployKey = process.env.CONVEX_DEPLOY_KEY?.trim();
+  if (!deployKey) throw new Error('CONVEX_DEPLOY_KEY is required');
+  const client = new ConvexHttpClient(mcpConvexUrl());
+  client.setAdminAuth(deployKey);
+  return client;
+}
+
 export async function mcpBackendClient(principal: McpPrincipal): Promise<ConvexHttpClient> {
   const client = convexClient();
   const context = await signingContext();

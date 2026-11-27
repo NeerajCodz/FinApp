@@ -8,7 +8,7 @@ const oauth = vi.hoisted(() => ({
 
 vi.mock('@finapp/mcp/oauth', () => ({
   mcpResourceUrl: () => 'https://finapp.test/mcp',
-  convexClient: () => ({ mutation: oauth.mutation }),
+  convexAdminClient: () => ({ mutation: oauth.mutation }),
   prepareMcpAccessTokenSigner: oauth.prepareSigner,
 }));
 

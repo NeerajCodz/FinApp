@@ -71,6 +71,9 @@ export function McpConnectionsClient({ tools }: { tools: readonly McpToolSummary
   const removeClient = useMutation(api.mcpOAuth.deleteMyClient);
   const updateSettings = useMutation(api.mcpOAuth.updateSettings);
   const updateScopes = useMutation(api.mcpOAuth.updateGrantScopes);
+  const scopeUpdates = React.useRef(
+    new Map<string, { scopes: string[]; pending: Promise<unknown> }>(),
+  );
   const [settings, setSettings] = React.useState(stored);
   const [open, setOpen] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState('');
@@ -213,14 +216,27 @@ export function McpConnectionsClient({ tools }: { tools: readonly McpToolSummary
                           checked={on}
                           disabled={!live}
                           onChange={async (next) => {
+                            const grantId = String(grant.id);
+                            let update = scopeUpdates.current.get(grantId);
+                            if (!update) {
+                              update = { scopes: [...grant.scopes], pending: Promise.resolve() };
+                              scopeUpdates.current.set(grantId, update);
+                            }
                             const scopes = next
-                              ? [...grant.scopes, item.scope]
-                              : grant.scopes.filter((scope) => scope !== item.scope);
+                              ? [...new Set([...update.scopes, item.scope])]
+                              : update.scopes.filter((scope) => scope !== item.scope);
+                            update.scopes = scopes;
+                            const pending = update.pending
+                              .catch(() => undefined)
+                              .then(() =>
+                                updateScopes({
+                                  grantId: grant.id as Id<'mcpOAuthGrants'>,
+                                  scopes,
+                                }),
+                              );
+                            update.pending = pending;
                             try {
-                              await updateScopes({
-                                grantId: grant.id as Id<'mcpOAuthGrants'>,
-                                scopes,
-                              });
+                              await pending;
                             } catch {
                               setMessage('Could not update permissions.');
                             }

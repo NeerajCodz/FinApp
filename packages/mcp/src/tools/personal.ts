@@ -167,14 +167,16 @@ export const personalTools: ToolFactory = (client) => [
     name: 'finapp.personal.notifications.summary',
     title: 'Notification status',
     description:
-      'Your unread notification count and which notification categories are on. unreadCapped=true means only the newest 500 notifications were counted.',
+      'Your unread notification count and which notification categories are on. When unreadCapped is true, the count covers the newest 500 notifications; older notifications were not scanned.',
     scope: 'finapp:read',
     input: {},
     run: () => client.query(api.mcp.notificationState, {}),
     summarize: (data) => {
       const state = data as { unreadCount?: number; unreadCapped?: boolean } | null;
       if (typeof state?.unreadCount !== 'number') return undefined;
-      return `${state.unreadCount}${state.unreadCapped ? '+' : ''} unread notification(s).`;
+      return state.unreadCapped
+        ? `${state.unreadCount} unread notification(s) among the newest 500; older notifications were not scanned.`
+        : `${state.unreadCount} unread notification(s).`;
     },
   }),
   defineTool({

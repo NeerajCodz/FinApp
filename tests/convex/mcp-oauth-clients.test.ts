@@ -56,17 +56,41 @@ describe('confidential clients', () => {
       clientId: registration.client_id,
       redirectUri,
       codeVerifier: verifier,
+      authTransport: 'post' as const,
     };
-    await expect(t.mutation(api.mcpOAuth.exchangeAuthorizationCode, exchange)).rejects.toThrow(
+    await expect(t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, exchange)).rejects.toThrow(
       'INVALID_CLIENT',
     );
     await expect(
-      t.mutation(api.mcpOAuth.exchangeAuthorizationCode, { ...exchange, clientSecret: 'wrong' }),
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, { ...exchange, clientSecret: 'wrong' }),
     ).rejects.toThrow('INVALID_CLIENT');
-    const grant = await t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+    await expect(
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
+        code,
+        clientId: registration.client_id,
+        redirectUri,
+        codeVerifier: verifier,
+        clientSecret: registration.client_secret!,
+      }),
+    ).rejects.toThrow('INVALID_CLIENT');
+    const grant = await t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
       ...exchange,
       clientSecret: registration.client_secret!,
     });
+    await expect(
+      t.mutation(internal.mcpOAuth.refreshAccessGrant, {
+        refreshToken: grant.refreshToken,
+        clientId: registration.client_id,
+        clientSecret: registration.client_secret!,
+      }),
+    ).rejects.toThrow('INVALID_CLIENT');
+    const refreshed = await t.mutation(internal.mcpOAuth.refreshAccessGrant, {
+      refreshToken: grant.refreshToken,
+      clientId: registration.client_id,
+      clientSecret: registration.client_secret!,
+      authTransport: 'post',
+    });
+    expect(refreshed.refreshToken).toEqual(expect.any(String));
     expect(grant.refreshToken).toEqual(expect.any(String));
   });
 
@@ -81,12 +105,13 @@ describe('confidential clients', () => {
     });
     expect(await owner.query(api.mcpOAuth.listMyClients, {})).toHaveLength(1);
     const code = await authorize(created.clientId);
-    const grant = await t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+    const grant = await t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
       code,
       clientId: created.clientId,
       redirectUri,
       codeVerifier: verifier,
       clientSecret: created.clientSecret,
+      authTransport: 'basic',
     });
     await owner.mutation(api.mcpOAuth.deleteMyClient, { clientId: created.clientId });
     const stored = await t.run((ctx) => ctx.db.get(grant.grantId));
@@ -102,12 +127,13 @@ describe('confidential clients', () => {
     });
     const code = await authorize(registration.client_id);
     await expect(
-      t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
         code,
         clientId: registration.client_id,
         redirectUri,
         codeVerifier: verifier,
         clientSecret: 'x',
+        authTransport: 'none',
       }),
     ).rejects.toThrow('INVALID_CLIENT');
   });
@@ -121,29 +147,33 @@ describe('refresh tokens', () => {
       redirectUris: [redirectUri],
     });
     const code = await authorize(registration.client_id);
-    const first = await t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+    const first = await t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
       code,
       clientId: registration.client_id,
       redirectUri,
       codeVerifier: verifier,
+      authTransport: 'none',
     });
-    const second = await t.mutation(api.mcpOAuth.refreshAccessGrant, {
+    const second = await t.mutation(internal.mcpOAuth.refreshAccessGrant, {
       refreshToken: first.refreshToken,
       clientId: registration.client_id,
+      authTransport: 'none',
     });
     expect(second.grantId).toBe(first.grantId);
     expect(second.refreshToken).not.toBe(first.refreshToken);
     await expect(
-      t.mutation(api.mcpOAuth.refreshAccessGrant, {
+      t.mutation(internal.mcpOAuth.refreshAccessGrant, {
         refreshToken: first.refreshToken,
         clientId: registration.client_id,
+        authTransport: 'none',
       }),
     ).rejects.toThrow('INVALID_GRANT');
     await owner.mutation(api.mcpOAuth.revokeGrant, { grantId: second.grantId });
     await expect(
-      t.mutation(api.mcpOAuth.refreshAccessGrant, {
+      t.mutation(internal.mcpOAuth.refreshAccessGrant, {
         refreshToken: second.refreshToken,
         clientId: registration.client_id,
+        authTransport: 'none',
       }),
     ).rejects.toThrow('INVALID_GRANT');
   });
@@ -218,7 +248,7 @@ describe('client ID metadata documents', () => {
     });
     const code = await authorize(clientId);
     await expect(
-      t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
         code,
         clientId,
         redirectUri,

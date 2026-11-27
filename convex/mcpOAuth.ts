@@ -37,6 +37,17 @@ function base64url(bytes: Uint8Array): string {
 function isAllowedScope(scope: string): boolean {
   return Object.hasOwn(allowedScopes, scope);
 }
+function validateRefreshScopes(scopes: string[], grantScopes: string[]): string[] {
+  const uniqueScopes = [...new Set(scopes)];
+  if (
+    uniqueScopes.length < 1 ||
+    uniqueScopes.length > 5 ||
+    !uniqueScopes.includes('finapp:read') ||
+    uniqueScopes.some((scope) => !isAllowedScope(scope) || !grantScopes.includes(scope))
+  )
+    throw new Error('INVALID_SCOPE');
+  return uniqueScopes;
+}
 
 function randomCode(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -79,6 +90,11 @@ async function findClient(ctx: { db: QueryCtx['db'] }, clientId: string) {
     .withIndex('by_client_id', (index) => index.eq('clientId', clientId))
     .unique();
 }
+// Client transport detected by the OAuth token endpoint.
+const clientAuthTransport = v.union(v.literal('none'), v.literal('basic'), v.literal('post'));
+
+const refreshScopes = v.optional(v.array(v.string()));
+
 
 const tokenAuthMethod = v.union(
   v.literal('none'),
@@ -206,7 +222,7 @@ export const deleteMyClient = mutation({
     const grants = await ctx.db
       .query('mcpOAuthGrants')
       .withIndex('by_client', (index) => index.eq('clientId', clientId))
-      .take(500);
+      .collect();
     const now = Date.now();
     for (const grant of grants)
       if (grant.revokedAt === undefined) await ctx.db.patch(grant._id, { revokedAt: now });
@@ -337,11 +353,20 @@ export const createAuthorizationCode = mutation({
 async function authenticateClient(
   ctx: MutationCtx,
   clientId: string,
-  credentials: { clientSecret?: string; assertionVerified: boolean },
+  credentials: {
+    clientSecret?: string;
+    assertionVerified: boolean;
+    authTransport?: 'none' | 'basic' | 'post';
+  },
 ) {
   const client = await findClient(ctx, clientId);
   if (!client) throw new Error('INVALID_CLIENT');
   const method = clientMethod(client);
+  const transportMatches =
+    (method === 'none' && credentials.authTransport === 'none') ||
+    (method === 'client_secret_basic' && credentials.authTransport === 'basic') ||
+    (method === 'client_secret_post' && credentials.authTransport === 'post');
+  if (method !== 'private_key_jwt' && !transportMatches) throw new Error('INVALID_CLIENT');
   if (method === 'private_key_jwt') {
     if (!credentials.assertionVerified) throw new Error('INVALID_CLIENT');
   } else if (isConfidentialSecretMethod(method)) {
@@ -374,7 +399,11 @@ const exchangeArgs = {
 async function exchangeCode(
   ctx: MutationCtx,
   args: { code: string; clientId: string; redirectUri: string; codeVerifier: string },
-  credentials: { clientSecret?: string; assertionVerified: boolean },
+  credentials: {
+    clientSecret?: string;
+    assertionVerified: boolean;
+    authTransport?: 'none' | 'basic' | 'post';
+  },
 ) {
   if (
     !/^[a-f\d]{64}$/.test(args.code) ||
@@ -428,11 +457,15 @@ async function exchangeCode(
   return { userId: code.userId, scopes: code.scopes, grantId, refreshToken };
 }
 
-/** Code exchange for public (`none`) and secret (`client_secret_*`) clients. */
-export const exchangeAuthorizationCode = mutation({
-  args: { ...exchangeArgs, clientSecret: v.optional(v.string()) },
-  handler: async (ctx, { clientSecret, ...args }) =>
-    exchangeCode(ctx, args, { clientSecret, assertionVerified: false }),
+/** Code exchange for public and secret clients after token-route authentication. */
+export const exchangeAuthorizationCode = internalMutation({
+  args: {
+    ...exchangeArgs,
+    clientSecret: v.optional(v.string()),
+    authTransport: v.optional(clientAuthTransport),
+  },
+  handler: async (ctx, { clientSecret, authTransport, ...args }) =>
+    exchangeCode(ctx, args, { clientSecret, authTransport, assertionVerified: false }),
 });
 
 /** Code exchange after the action verified a `private_key_jwt` client assertion. */
@@ -446,8 +479,12 @@ export const exchangeAuthorizationCodeWithAssertion = internalMutation({
 
 async function refreshGrant(
   ctx: MutationCtx,
-  args: { refreshToken: string; clientId: string },
-  credentials: { clientSecret?: string; assertionVerified: boolean },
+  args: { refreshToken: string; clientId: string; requestedScopes?: string[] },
+  credentials: {
+    clientSecret?: string;
+    assertionVerified: boolean;
+    authTransport?: 'none' | 'basic' | 'post';
+  },
 ) {
   if (!args.refreshToken || args.refreshToken.length > 256 || !isValidClientId(args.clientId))
     throw new Error('INVALID_GRANT');
@@ -466,15 +503,79 @@ async function refreshGrant(
     throw new Error('INVALID_GRANT');
   const user = await ctx.db.get(grant.userId);
   if (!user || user.deletedAt !== undefined) throw new Error('INVALID_GRANT');
+  const scopes = validateRefreshScopes(args.requestedScopes ?? grant.scopes, grant.scopes);
+  if (args.requestedScopes) await ctx.db.patch(grant._id, { scopes });
   const refreshToken = await issueRefreshToken(ctx, grant._id);
-  return { userId: grant.userId, scopes: grant.scopes, grantId: grant._id, refreshToken };
+  return { userId: grant.userId, scopes, grantId: grant._id, refreshToken };
 }
 
-/** Refresh-token grant (rotating) for public and secret clients. */
-export const refreshAccessGrant = mutation({
-  args: { refreshToken: v.string(), clientId: v.string(), clientSecret: v.optional(v.string()) },
-  handler: async (ctx, { clientSecret, ...args }) =>
-    refreshGrant(ctx, args, { clientSecret, assertionVerified: false }),
+/** Refresh-token grant after token-route authentication. */
+export const refreshAccessGrant = internalMutation({
+  args: {
+    refreshToken: v.string(),
+    clientId: v.string(),
+    clientSecret: v.optional(v.string()),
+    authTransport: v.optional(clientAuthTransport),
+    requestedScopes: refreshScopes,
+  },
+  handler: async (ctx, { clientSecret, authTransport, ...args }) =>
+    refreshGrant(ctx, args, { clientSecret, authTransport, assertionVerified: false }),
+});
+/** Looks up the current scope ceiling for a refresh token without rotating it. */
+export const refreshTokenScopes = query({
+  args: { refreshToken: v.string(), clientId: v.string() },
+  handler: async (ctx, { refreshToken, clientId }) => {
+    if (!refreshToken || refreshToken.length > 256 || !isValidClientId(clientId))
+      throw new Error('INVALID_GRANT');
+    const refreshTokenHash = await hash(refreshToken);
+    const grant = await ctx.db
+      .query('mcpOAuthGrants')
+      .withIndex('by_refresh_hash', (index) => index.eq('refreshTokenHash', refreshTokenHash))
+      .unique();
+    if (
+      !grant ||
+      grant.clientId !== clientId ||
+      grant.revokedAt !== undefined ||
+      (grant.refreshExpiresAt ?? 0) <= Date.now()
+    )
+      throw new Error('INVALID_GRANT');
+    const user = await ctx.db.get(grant.userId);
+    if (!user || user.deletedAt !== undefined) throw new Error('INVALID_GRANT');
+    return grant.scopes;
+  },
+});
+
+/** Applies a validated scope subset to a private-key client's live grant after rotation. */
+export const restrictRefreshGrantScopes = mutation({
+  args: {
+    refreshToken: v.string(),
+    clientId: v.string(),
+    requestedScopes: v.array(v.string()),
+  },
+  handler: async (ctx, { refreshToken, clientId, requestedScopes }) => {
+    if (!refreshToken || refreshToken.length > 256 || !isValidClientId(clientId))
+      throw new Error('INVALID_GRANT');
+    const refreshTokenHash = await hash(refreshToken);
+    const grant = await ctx.db
+      .query('mcpOAuthGrants')
+      .withIndex('by_refresh_hash', (index) => index.eq('refreshTokenHash', refreshTokenHash))
+      .unique();
+    if (
+      !grant ||
+      grant.clientId !== clientId ||
+      grant.revokedAt !== undefined ||
+      (grant.refreshExpiresAt ?? 0) <= Date.now()
+    )
+      throw new Error('INVALID_GRANT');
+    const user = await ctx.db.get(grant.userId);
+    if (!user || user.deletedAt !== undefined) throw new Error('INVALID_GRANT');
+    const currentSubset = [...new Set(requestedScopes)].filter((scope) =>
+      grant.scopes.includes(scope),
+    );
+    const scopes = validateRefreshScopes(currentSubset, grant.scopes);
+    await ctx.db.patch(grant._id, { scopes });
+    return scopes;
+  },
 });
 
 export const refreshAccessGrantWithAssertion = internalMutation({

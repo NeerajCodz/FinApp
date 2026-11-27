@@ -1,7 +1,7 @@
-import { api } from '@convex/_generated/api';
+import { api, internal } from '@convex/_generated/api';
 import { decodeJwt } from 'jose';
 import { readClientCredentials } from '@convex/shared/mcpClients';
-import { convexClient, mcpResourceUrl, prepareMcpAccessTokenSigner } from '@finapp/mcp/oauth';
+import { convexAdminClient, mcpResourceUrl, prepareMcpAccessTokenSigner } from '@finapp/mcp/oauth';
 
 export const runtime = 'nodejs';
 
@@ -41,7 +41,10 @@ export async function POST(request: Request) {
   }
   const form = new URLSearchParams(new TextDecoder().decode(bytes.subarray(0, byteLength)));
   const grantType = form.get('grant_type');
-  const credentials = readClientCredentials(request.headers.get('authorization'), form);
+  const authorization = request.headers.get('authorization');
+  const credentials = readClientCredentials(authorization, form);
+  if (authorization && !/^Basic /i.test(authorization))
+    return Response.json({ error: 'invalid_request' }, { status: 400 });
   if ('error' in credentials)
     return Response.json(
       { error: credentials.error },
@@ -68,6 +71,17 @@ export async function POST(request: Request) {
   if (!clientId) return Response.json({ error: 'invalid_request' }, { status: 400 });
   if (grantType !== 'authorization_code' && grantType !== 'refresh_token')
     return Response.json({ error: 'unsupported_grant_type' }, { status: 400 });
+  const rawScope = grantType === 'refresh_token' ? form.get('scope') : null;
+  const requestedScopes =
+    rawScope === null ? undefined : [...new Set(rawScope.split(/\s+/).filter(Boolean))];
+  if (
+    requestedScopes &&
+    (requestedScopes.length === 0 ||
+      requestedScopes.length > 5 ||
+      !requestedScopes.includes('finapp:read'))
+  ) {
+    return Response.json({ error: 'invalid_scope' }, { status: 400 });
+  }
   const resource = form.get('resource');
   let signAccessToken: Awaited<ReturnType<typeof prepareMcpAccessTokenSigner>>;
   try {
@@ -81,8 +95,8 @@ export async function POST(request: Request) {
 
   type Grant = { userId: string; grantId: string; scopes: string[]; refreshToken: string };
   let grant: Grant;
-  const client = convexClient();
   try {
+    const client = convexAdminClient();
     if (grantType === 'authorization_code') {
       const code = form.get('code');
       const redirectUri = form.get('redirect_uri');
@@ -95,29 +109,54 @@ export async function POST(request: Request) {
             ...args,
             clientAssertion: credentials.clientAssertion,
           })
-        : await client.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+        : await client.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
             ...args,
             ...(credentials.clientSecret ? { clientSecret: credentials.clientSecret } : {}),
+            authTransport:
+              credentials.via === 'basic' ? 'basic' : credentials.via === 'post' ? 'post' : 'none',
           });
     } else {
       const refreshToken = form.get('refresh_token');
       if (!refreshToken) return Response.json({ error: 'invalid_request' }, { status: 400 });
+      if (credentials.clientAssertion && requestedScopes) {
+        const scopes = await client.query(api.mcpOAuth.refreshTokenScopes, {
+          refreshToken,
+          clientId,
+        });
+        if (requestedScopes.some((scope) => !scopes.includes(scope)))
+          return Response.json({ error: 'invalid_scope' }, { status: 400 });
+      }
       grant = credentials.clientAssertion
         ? await client.action(api.mcpOAuthActions.refreshWithClientAssertion, {
             refreshToken,
             clientId,
             clientAssertion: credentials.clientAssertion,
           })
-        : await client.mutation(api.mcpOAuth.refreshAccessGrant, {
+        : await client.mutation(internal.mcpOAuth.refreshAccessGrant, {
             refreshToken,
             clientId,
             ...(credentials.clientSecret ? { clientSecret: credentials.clientSecret } : {}),
+            authTransport:
+              credentials.via === 'basic' ? 'basic' : credentials.via === 'post' ? 'post' : 'none',
+            ...(requestedScopes ? { requestedScopes } : {}),
           });
+      if (credentials.clientAssertion && requestedScopes) {
+        const scopes = await client.mutation(api.mcpOAuth.restrictRefreshGrantScopes, {
+          refreshToken: grant.refreshToken,
+          clientId,
+          requestedScopes,
+        });
+        grant = { ...grant, scopes };
+      }
     }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : '';
     if (message.includes('INVALID_CLIENT')) return invalidClient();
-    return Response.json({ error: 'invalid_grant' }, { status: 400 });
+    if (message.includes('INVALID_SCOPE'))
+      return Response.json({ error: 'invalid_scope' }, { status: 400 });
+    if (message.includes('INVALID_GRANT'))
+      return Response.json({ error: 'invalid_grant' }, { status: 400 });
+    return Response.json({ error: 'server_error' }, { status: 503 });
   }
 
   try {
