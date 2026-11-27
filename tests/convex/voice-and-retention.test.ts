@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
-import { internal } from '../../convex/_generated/api';
+import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
 import { chatHeaderSubtitle, recordTime } from '../../packages/ui/src/chat/model';
 
