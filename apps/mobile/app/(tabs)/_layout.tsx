@@ -100,6 +100,8 @@ function BottomBar({ onAdd }: { onAdd: () => void }) {
         backgroundColor: tokens.background,
         borderTopWidth: 1,
         borderTopColor: tokens.borderSubtle,
+        zIndex: 10,
+        elevation: 10,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 }}>

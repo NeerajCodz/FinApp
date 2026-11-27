@@ -3,6 +3,7 @@
  * versions come from version.json (through convex/shared/version.ts); the backend's live
  * values come from `api.system.info`.
  */
+import { Platform } from 'react-native';
 import {
   BUILD_NUMBERS,
   COMPONENT_VERSIONS,
@@ -27,6 +28,7 @@ export function versionRows(input: {
   backend: LiveBackendInfo | null | undefined;
   commit?: string;
   environment?: string;
+  nativePlatform?: 'android' | 'ios';
 }): VersionRow[] {
   const backend = input.backend;
   const rows: VersionRow[] = [
@@ -43,11 +45,14 @@ export function versionRows(input: {
     { label: 'API version', value: backend ? String(backend.apiVersion) : '—' },
     { label: 'Schema version', value: backend ? String(backend.schemaVersion) : '—' },
   ];
-  if (input.platform === 'mobile')
+  if (input.platform === 'mobile') {
+    const nativePlatform = input.nativePlatform ?? Platform.OS;
+    const platform = nativePlatform === 'ios' ? 'ios' : 'android';
     rows.push({
       label: 'Build',
-      value: `${BUILD_NUMBERS.android} (Android) · ${BUILD_NUMBERS.ios} (iOS)`,
+      value: `${BUILD_NUMBERS[platform]} (${platform === 'ios' ? 'iOS' : 'Android'})`,
     });
+  }
   if (input.commit) rows.push({ label: 'Commit', value: input.commit });
   if (input.environment) rows.push({ label: 'Environment', value: input.environment });
   return rows;

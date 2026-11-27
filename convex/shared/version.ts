@@ -27,7 +27,7 @@ export const BACKEND_INFO = {
   apiVersion: 1,
   schemaVersion: 9,
   minimumMobileVersion: '1.11.0',
-  minimumWebVersion: '1.3.0',
+  minimumWebVersion: '1.11.0',
 } as const;
 
 /** Display string kept for existing callers ("v1.4.0"). */
@@ -45,5 +45,22 @@ export function compareVersions(left: string, right: string): number {
   }
   if (a[4] && !b[4]) return -1;
   if (!a[4] && b[4]) return 1;
-  return (a[4] ?? '').localeCompare(b[4] ?? '');
+  if (!a[4] || !b[4]) return 0;
+  const leftIds = a[4].split('.');
+  const rightIds = b[4].split('.');
+  for (let index = 0; index < Math.min(leftIds.length, rightIds.length); index++) {
+    const leftId = leftIds[index];
+    const rightId = rightIds[index];
+    const leftNumeric = /^\d+$/.test(leftId);
+    const rightNumeric = /^\d+$/.test(rightId);
+    if (leftNumeric && rightNumeric) {
+      if (leftId.length !== rightId.length) return leftId.length < rightId.length ? -1 : 1;
+      if (leftId !== rightId) return leftId < rightId ? -1 : 1;
+    } else if (leftNumeric !== rightNumeric) {
+      return leftNumeric ? -1 : 1;
+    } else if (leftId !== rightId) {
+      return leftId < rightId ? -1 : 1;
+    }
+  }
+  return Math.sign(leftIds.length - rightIds.length);
 }

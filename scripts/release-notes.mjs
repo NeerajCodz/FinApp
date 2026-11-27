@@ -18,24 +18,50 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = process.argv[2] ?? join(root, 'version.json');
 /**
- * Wraps `@name` in backticks outside code spans so release notes never mention (link, notify or
- * credit) a GitHub account by accident — e.g. the `@finai` chat mention. Emails are left alone,
- * and GitHub's own "by @author in #123" credits are kept.
+ * Escapes user-authored mentions while leaving GitHub's generated PR author suffixes and
+ * first-contribution credits intact.
  */
 export function escapeMentions(markdown) {
+  const escapeText = (text) =>
+    text
+      .split(/(`[^`\n]*`)/)
+      .map((part, index) =>
+        index % 2 === 1
+          ? part
+          : part.replace(/(^|[^\w`])@([A-Za-z0-9][\w-]*)/g, '$1`@$2`'),
+      )
+      .join('');
+
+  let inNewContributors = false;
   return markdown
-    .split(/(`[^`\n]*`)/)
-    .map((part, index) =>
-      index % 2 === 1
-        ? part
-        : part.replace(/(^|[^\w`])@([A-Za-z0-9][\w-]*)/g, (match, before, name, offset, text) =>
-            /\bby $/.test(text.slice(0, offset + before.length)) &&
-            /^ in /.test(text.slice(offset + match.length))
-              ? match
-              : `${before}\`@${name}\``,
-          ),
-    )
-    .join('');
+    .split('\n')
+    .map((line) => {
+      if (/^##\s+New Contributors\s*$/i.test(line)) {
+        inNewContributors = true;
+        return line;
+      }
+      if (/^##\s+/.test(line)) inNewContributors = false;
+
+      const credit = inNewContributors
+        ? /^(\s*[*-]\s+)(@[A-Za-z0-9][\w-]*)( made their first contribution in https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+.*)$/.exec(
+            line,
+          )
+        : null;
+      if (credit) {
+        return `${escapeText(credit[1])}${credit[2]}${escapeText(credit[3])}`;
+      }
+
+      const author =
+        /(\s+by )(@[A-Za-z0-9][\w-]*)( in https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+)\s*$/.exec(
+          line,
+        );
+      if (author) {
+        const start = author.index;
+        return `${escapeText(line.slice(0, start))}${escapeText(author[1])}${author[2]}${escapeText(author[3])}`;
+      }
+      return escapeText(line);
+    })
+    .join('\n');
 }
 
 if (process.argv[2] === '--escape') {
