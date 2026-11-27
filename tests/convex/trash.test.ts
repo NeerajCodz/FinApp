@@ -133,10 +133,11 @@ describe('Trash', () => {
   });
 
   it('purging an account deletes its transactions too', async () => {
+    vi.useFakeTimers();
     const { t, owner, ids } = await setup();
     await t.run((ctx) => ctx.db.patch(ids.accountId, { archivedAt: Date.now() }));
     await owner.as.mutation(api.trash.purge, { kind: 'account', id: String(ids.accountId) });
-    await t.finishAllScheduledFunctions();
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
     expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(0);
     expect(await t.run((ctx) => ctx.db.get(ids.accountId))).toBeNull();
   });
@@ -479,6 +480,7 @@ describe('Trash', () => {
   });
 
   it('purges inbound and self transfers only once when deleting an account', async () => {
+    vi.useFakeTimers();
     const { t, owner, ids } = await setup();
     const sourceAccount = await t.run((ctx) =>
       ctx.db.insert('accounts', {
@@ -518,7 +520,7 @@ describe('Trash', () => {
       kind: 'account',
       id: String(ids.accountId),
     });
-    await t.finishAllScheduledFunctions();
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
     expect(await t.run((ctx) => ctx.db.get(transfers.inbound))).toBeNull();
     expect(await t.run((ctx) => ctx.db.get(transfers.self))).toBeNull();
     const deletionChanges = await t.run(async (ctx) =>
