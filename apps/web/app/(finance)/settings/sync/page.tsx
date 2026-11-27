@@ -99,6 +99,7 @@ export default function SyncSettingsPage() {
                   ? `${problems} change${problems === 1 ? '' : 's'} need attention`
                   : 'Sync needs attention'
                 : 'Everything is synced'
+        }
         description={
           syncError ??
           (!isConnected

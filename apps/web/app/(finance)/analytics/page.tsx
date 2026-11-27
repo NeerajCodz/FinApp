@@ -555,8 +555,8 @@ export default function AnalyticsPage() {
             !(accountById.get(accountFilter)
               ? idAliases(accountById.get(accountFilter)!)
               : [accountFilter]
-            ).includes(String(record.accountId ?? ''))
-        )
+            ).includes(String(record.accountId ?? '')))
+          )
           return sum;
         return (
           sum +
