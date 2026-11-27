@@ -28,6 +28,8 @@ export default function AboutRoute() {
     backend: live,
     commit: extra.gitSha,
     environment: __DEV__ ? 'development' : 'production',
+    nativeBuildNumber: Constants.nativeBuildVersion,
+    nativePlatform: Platform.OS === 'ios' ? 'ios' : 'android',
   });
   const storeUrl =
     Platform.OS === 'ios'

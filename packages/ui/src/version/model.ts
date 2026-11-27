@@ -3,9 +3,7 @@
  * versions come from version.json (through convex/shared/version.ts); the backend's live
  * values come from `api.system.info`.
  */
-import { Platform } from 'react-native';
 import {
-  BUILD_NUMBERS,
   COMPONENT_VERSIONS,
   PRODUCT_VERSION,
   RELEASE_CHANNEL,
@@ -28,6 +26,7 @@ export function versionRows(input: {
   backend: LiveBackendInfo | null | undefined;
   commit?: string;
   environment?: string;
+  nativeBuildNumber?: string | null;
   nativePlatform?: 'android' | 'ios';
 }): VersionRow[] {
   const backend = input.backend;
@@ -46,11 +45,11 @@ export function versionRows(input: {
     { label: 'Schema version', value: backend ? String(backend.schemaVersion) : '—' },
   ];
   if (input.platform === 'mobile') {
-    const nativePlatform = input.nativePlatform ?? Platform.OS;
-    const platform = nativePlatform === 'ios' ? 'ios' : 'android';
+    const platformName =
+      input.nativePlatform === 'ios' ? 'iOS' : input.nativePlatform === 'android' ? 'Android' : '';
     rows.push({
       label: 'Build',
-      value: `${BUILD_NUMBERS[platform]} (${platform === 'ios' ? 'iOS' : 'Android'})`,
+      value: `${input.nativeBuildNumber ?? 'Unavailable'}${platformName ? ` (${platformName})` : ''}`,
     });
   }
   if (input.commit) rows.push({ label: 'Commit', value: input.commit });

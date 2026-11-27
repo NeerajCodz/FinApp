@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   BACKEND_INFO,
-  BUILD_NUMBERS,
   COMPONENT_VERSIONS,
   PRODUCT_VERSION,
   compareVersions,
@@ -84,14 +83,28 @@ describe('client compatibility', () => {
 
   it('reports the installed build number for the current native platform', () => {
     expect(
-      versionRows({ platform: 'mobile', backend, nativePlatform: 'android' }).find(
-        (row) => row.label === 'Build',
-      )?.value,
-    ).toBe(`${BUILD_NUMBERS.android} (Android)`);
+      versionRows({
+        platform: 'mobile',
+        backend,
+        nativeBuildNumber: '4200',
+        nativePlatform: 'android',
+      }).find((row) => row.label === 'Build')?.value,
+    ).toBe('4200 (Android)');
     expect(
-      versionRows({ platform: 'mobile', backend, nativePlatform: 'ios' }).find(
-        (row) => row.label === 'Build',
-      )?.value,
-    ).toBe(`${BUILD_NUMBERS.ios} (iOS)`);
+      versionRows({
+        platform: 'mobile',
+        backend,
+        nativeBuildNumber: '17',
+        nativePlatform: 'ios',
+      }).find((row) => row.label === 'Build')?.value,
+    ).toBe('17 (iOS)');
+    expect(
+      versionRows({
+        platform: 'mobile',
+        backend,
+        nativeBuildNumber: null,
+        nativePlatform: 'ios',
+      }).find((row) => row.label === 'Build')?.value,
+    ).toBe('Unavailable (iOS)');
   });
 });
