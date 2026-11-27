@@ -395,13 +395,10 @@ export const peopleHub = query({
           while (!done && !unreadCapped) {
             const page = await messageQuery.paginate({ numItems: 50, cursor });
             for (const message of page.page) {
+              const expiresAt = 'expiresAt' in message ? message.expiresAt : undefined;
               if (
                 message.senderId !== actor._id &&
-                !(
-                  'expiresAt' in message &&
-                  message.expiresAt !== undefined &&
-                  message.expiresAt <= now
-                )
+                !(typeof expiresAt === 'number' && expiresAt <= now)
               ) {
                 unreadCount += 1;
                 if (unreadCount > PEOPLE_HUB_UNREAD_CAP) {
@@ -488,10 +485,14 @@ export const peopleHubUnreadTotal = query({
         for (const message of messages) {
           if (
             message.senderId !== actor._id &&
-            !('expiresAt' in message && message.expiresAt !== undefined && message.expiresAt <= now)
-          )
+            !(
+              'expiresAt' in message &&
+              typeof message.expiresAt === 'number' &&
+              message.expiresAt <= now
+            )
+          ) {
             unread += 1;
-        }
+          }
         return unread;
       }),
     );
