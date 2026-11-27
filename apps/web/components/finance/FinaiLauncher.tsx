@@ -44,22 +44,26 @@ export function FinaiLauncher() {
   const router = useRouter();
   const { select } = assistant;
   // Replies keep going after the chat is closed: say when one lands somewhere off screen.
-  const activity = useFinaiActivity(Boolean(userId && isConnected), (reply) => {
-    toast(reply.failed ? 'FinAI couldn’t finish a reply' : 'FinAI replied', {
-      description: reply.failed ? reply.title : reply.preview || reply.title,
-      action: {
-        label: 'Open',
-        onClick: () => {
-          if (onFinaiPage) {
-            router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}`);
-            return;
-          }
-          select(reply.conversationId);
-          setOpen(true);
+  const activity = useFinaiActivity(
+    Boolean(userId && isConnected),
+    (reply) => {
+      toast(reply.failed ? 'FinAI couldn’t finish a reply' : 'FinAI replied', {
+        description: reply.failed ? reply.title : reply.preview || reply.title,
+        action: {
+          label: 'Open',
+          onClick: () => {
+            if (onFinaiPage) {
+              router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}`);
+              return;
+            }
+            select(reply.conversationId);
+            setOpen(true);
+          },
         },
-      },
-    });
-  });
+      });
+    },
+    userId ? String(userId) : null,
+  );
 
   React.useEffect(() => {
     if (!open || onFinaiPage) return;

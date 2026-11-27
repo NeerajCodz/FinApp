@@ -321,6 +321,15 @@ describe('FinAI management actions', () => {
       type: 'other',
       customType: 'Brokerage',
     });
+    const relabeled = await confirm('account.update', {
+      accountId: String(ids.accountId),
+      customType: 'Investment account',
+    });
+    expect(relabeled.status).toBe('done');
+    expect(await t.run((ctx) => ctx.db.get(ids.accountId))).toMatchObject({
+      type: 'other',
+      customType: 'Investment account',
+    });
     const created = await confirm('account.create', {
       name: 'Investment',
       type: 'other',

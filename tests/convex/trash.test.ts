@@ -146,7 +146,7 @@ describe('Trash', () => {
       cursor = nextCursor ?? undefined;
     }
     expect(nextCursor).toBeNull();
-    expect(seen).toHaveLength(count);
+    expect(seen.size).toBe(count);
   });
 
   it('deletes a category with its transactions and restores them together', async () => {

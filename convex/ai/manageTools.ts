@@ -537,13 +537,16 @@ export const manageTools: FinaiTool[] = [
       ] as const);
       if (type) {
         payload.type = type;
-        const customType = str(args, 'customType', 40);
-        if (type === 'other') {
-          if (!customType && doc.type !== 'other')
-            throw new ToolArgError('CUSTOM_TYPE_REQUIRED');
-          if (customType) payload.customType = customType;
-        }
         lines.push({ label: 'Type', value: type });
+      }
+      const customType = str(args, 'customType', 40);
+      const effectiveType = type ?? doc.type;
+      if (customType) {
+        if (effectiveType !== 'other') throw new ToolArgError('CUSTOM_TYPE_REQUIRES_OTHER');
+        payload.customType = customType;
+        lines.push({ label: 'Custom type', value: customType });
+      } else if (type === 'other' && doc.type !== 'other') {
+        throw new ToolArgError('CUSTOM_TYPE_REQUIRED');
       }
       const balance = amountMinor(args, 'openingBalance', currency);
       if (balance !== undefined) {
