@@ -94,8 +94,21 @@ export const generateUploadUrl = mutation({
     const settings = await loadFinaiSettings(ctx, user._id);
     if (!settings.enabled) throw aiError('AI_DISABLED');
     if (!settings.allowAttachments) throw new Error('ATTACHMENTS_DISABLED');
+    const now = Date.now();
+    const ticket = crypto.randomUUID();
+    const uploadId = await ctx.db.insert('finaiAttachmentUploads', {
+      ticket,
+      userId: user._id,
+      createdAt: now,
+    });
+    await ctx.scheduler.runAt(
+      now + finaiAttachmentLimits.registerWindowMs + 60_000,
+      internal.ai.attachments.expireUpload,
+      { uploadId },
+    );
     return {
       uploadUrl: await ctx.storage.generateUploadUrl(),
+      ticket,
       maxBytes: finaiAttachmentLimits.maxBytes,
       perMessage: finaiAttachmentLimits.perMessage,
       extensions: Object.keys(BY_EXTENSION),
@@ -103,24 +116,29 @@ export const generateUploadUrl = mutation({
   },
 });
 
-/**
- * Records an uploaded file for the signed-in user. Files that are too big, empty or of an
- * unsupported type are deleted and reported as `{ error }` (returned, not thrown, so the
- * deletion commits). Uploads that are too old or already used elsewhere are refused untouched.
- */
+/** Registers a ticket's uploaded file or deletes a known invalid object. */
 export const register = mutation({
-  args: { storageId: v.id('_storage'), name: v.string() },
-  handler: async (ctx, { storageId, name }) => {
+  args: { ticket: v.string(), storageId: v.id('_storage'), name: v.string() },
+  handler: async (ctx, { ticket, storageId, name }) => {
     const user = await requireUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
+    const upload = await ctx.db
+      .query('finaiAttachmentUploads')
+      .withIndex('by_ticket', (q) => q.eq('ticket', ticket))
+      .unique();
     const file = await ctx.db.system.get('_storage', storageId);
-    if (!file) throw new Error('UPLOAD_NOT_FOUND');
     const now = Date.now();
     if (
-      now - file._creationTime > finaiAttachmentLimits.registerWindowMs ||
+      !upload ||
+      upload.userId !== user._id ||
+      upload.storageId !== undefined ||
+      now - upload.createdAt > finaiAttachmentLimits.registerWindowMs ||
+      !file ||
+      file._creationTime < upload.createdAt - 1000 ||
       (await storageInUse(ctx, storageId))
     )
       throw new Error('INVALID_UPLOAD');
+    await ctx.db.patch(upload._id, { storageId });
     const fileName = cleanFileName(name);
     const type = attachmentKind(fileName, file.contentType);
     const error =
@@ -133,6 +151,7 @@ export const register = mutation({
             : null;
     if (error || !type) {
       await ctx.storage.delete(storageId);
+      await ctx.db.delete(upload._id);
       return { error: error ?? 'UNSUPPORTED_FILE' } as const;
     }
     const id = await ctx.db.insert('finaiAttachments', {
@@ -145,9 +164,27 @@ export const register = mutation({
       createdAt: now,
       expiresAt: now + finaiAttachmentLimits.pendingTtlMs,
     });
+    await ctx.db.delete(upload._id);
     return { attachment: await presentAttachment(ctx, (await ctx.db.get(id))!) } as const;
   },
 });
+
+/** Deletes an expired ticket and its known uploaded object if it is not in use. */
+export const expireUpload = internalMutation({
+  args: { uploadId: v.id('finaiAttachmentUploads') },
+  handler: async (ctx, { uploadId }) => {
+    const upload = await ctx.db.get(uploadId);
+    if (!upload) return;
+    if (
+      upload.storageId &&
+      !(await storageInUse(ctx, upload.storageId)) &&
+      (await ctx.db.system.get('_storage', upload.storageId))
+    )
+      await ctx.storage.delete(upload.storageId);
+    await ctx.db.delete(uploadId);
+  },
+});
+
 
 async function deleteFile(ctx: MutationCtx, row: Doc<'finaiAttachments'>) {
   if (row.storageId && (await ctx.db.system.get('_storage', row.storageId)))

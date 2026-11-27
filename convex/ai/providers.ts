@@ -363,6 +363,20 @@ async function openAiChat(
   return finish(text, functionCalls, finishReason === 'length', usage, config.model, finishReason);
 }
 
+function assertAnthropicImageTypes(contents: GeminiContent[]) {
+  for (const content of contents) {
+    for (const part of content.parts) {
+      const mimeType = part.inlineData?.mimeType.toLowerCase();
+      if (mimeType === 'image/heic' || mimeType === 'image/heif') {
+        throw aiError(
+          'AI_REQUEST_REJECTED',
+          'Anthropic does not support HEIC/HEIF images. Convert the image to JPEG, PNG, or WebP and try again.',
+        );
+      }
+    }
+  }
+}
+
 /** Anthropic Messages API (alternating roles, tool_use / tool_result blocks). */
 export function anthropicMessages(contents: GeminiContent[]) {
   const messages: { role: 'user' | 'assistant'; content: Record<string, unknown>[] }[] = [];
@@ -409,6 +423,7 @@ async function anthropicChat(
   config: ProviderConfig,
   options: ChatStreamOptions,
 ): Promise<ChatStreamResult> {
+  assertAnthropicImageTypes(options.contents);
   const defaults = aiGeneration[options.role];
   const body = {
     model: config.model,

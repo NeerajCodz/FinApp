@@ -20,15 +20,40 @@ export type Sheet = { name: string; rows: string[][]; truncated: boolean };
 
 /** The most likely delimiter in the first lines: comma, semicolon, tab or pipe. */
 function detectDelimiter(text: string): string {
-  const sample = text.split(/\r?\n/, 5).join('\n');
+  const candidates = [',', ';', '\t', '|'];
+  const records = new Map(candidates.map((delimiter) => [delimiter, [] as number[]]));
+  const counts = new Map(candidates.map((delimiter) => [delimiter, 0]));
+  let quoted = false;
+  let fieldStart = true;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]!;
+    if (quoted) {
+      if (char === '"') {
+        if (text[index + 1] === '"') index++;
+        else quoted = false;
+      }
+    } else if (char === '"' && fieldStart) quoted = true;
+    else if (char === '\n' || char === '\r') {
+      for (const delimiter of candidates) records.get(delimiter)!.push(counts.get(delimiter)! + 1);
+      for (const delimiter of candidates) counts.set(delimiter, 0);
+      fieldStart = true;
+      if (char === '\r' && text[index + 1] === '\n') index++;
+    } else if (counts.has(char)) {
+      counts.set(char, counts.get(char)! + 1);
+      fieldStart = true;
+    } else fieldStart = false;
+  }
+  if (candidates.some((delimiter) => counts.get(delimiter)! > 0))
+    for (const delimiter of candidates) records.get(delimiter)!.push(counts.get(delimiter)! + 1);
   let best = ',';
-  let bestCount = 0;
-  for (const candidate of [',', ';', '\t', '|']) {
-    const count = sample.split(candidate).length - 1;
-    if (count > bestCount) {
-      best = candidate;
-      bestCount = count;
+  let bestScore = 0;
+  for (const delimiter of candidates) {
+    const frequencies = new Map<number, number>();
+    for (const width of records.get(delimiter)!) {
+      if (width > 1) frequencies.set(width, (frequencies.get(width) ?? 0) + 1);
     }
+    const score = Math.max(0, ...frequencies.values()) * 100 + [...frequencies.values()].reduce((a, b) => a + b, 0);
+    if (score > bestScore) { best = delimiter; bestScore = score; }
   }
   return best;
 }
@@ -142,15 +167,17 @@ function dateStyles(stylesXml: string | undefined): Set<number> {
 }
 
 /** Excel serial day (1900 system) → `YYYY-MM-DD`. */
-export function excelSerialToIso(serial: number): string | null {
-  if (!Number.isFinite(serial) || serial < 1 || serial > 2_958_465) return null;
-  // Excel counts 1900-02-29 (which didn't exist); serial 60 and earlier are off by one.
-  const days = Math.floor(serial) - (serial > 60 ? 25_569 : 25_568);
-  const date = new Date(days * 86_400_000);
-  return date.toISOString().slice(0, 10);
+export function excelSerialToIso(serial: number, date1904 = false): string | null {
+  if (!Number.isFinite(serial) || serial < 0 || serial > 2_958_465) return null;
+  if (date1904)
+    return new Date(Date.UTC(1904, 0, 1) + Math.floor(serial) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  const days = Math.floor(serial) - (serial >= 60 ? 25_569 : 25_568);
+  return new Date(days * 86_400_000).toISOString().slice(0, 10);
 }
 
-function sheetRows(xml: string, shared: string[], dates: Set<number>) {
+function sheetRows(xml: string, shared: string[], dates: Set<number>, date1904: boolean) {
   const rows: string[][] = [];
   let truncated = false;
   for (const rowMatch of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>|<row\b[^>]*\/>/g)) {
@@ -186,7 +213,7 @@ function sheetRows(xml: string, shared: string[], dates: Set<number>) {
       else if (raw !== undefined) {
         const style = Number(attr(tag, 's') ?? '-1');
         const number = Number(raw);
-        value = dates.has(style) ? (excelSerialToIso(number) ?? raw) : raw;
+        value = dates.has(style) ? (excelSerialToIso(number, date1904) ?? raw) : raw;
       }
       while (cells.length < column) cells.push('');
       cells[column] = value.trim();
@@ -220,7 +247,7 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
   const shared = [...(text('xl/sharedStrings.xml') ?? '').matchAll(/<si>([\s\S]*?)<\/si>/g)].map(
     (match) => itemText(match[1]!),
   );
-  const dates = dateStyles(text('xl/styles.xml'));
+  const date1904 = /<workbookPr\b[^>]*\bdate1904="(?:1|true)"/i.test(workbook);
   const rels = new Map<string, string>();
   for (const match of (text('xl/_rels/workbook.xml.rels') ?? '').matchAll(
     /<Relationship\b[^>]*>/g,
@@ -237,7 +264,7 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
     const path = (relId && rels.get(relId)) || `xl/worksheets/sheet${sheets.length + 1}.xml`;
     const xml = text(path);
     if (!xml) continue;
-    const { rows, truncated } = sheetRows(xml, shared, dates);
+    const { rows, truncated } = sheetRows(xml, shared, dates, date1904);
     sheets.push({ name, rows, truncated });
   }
   if (!sheets.length) throw new Error('INVALID_SPREADSHEET');
@@ -255,17 +282,25 @@ function csvCell(value: string): string {
  * then a note with the total so the model knows to use the import tool for the full data.
  */
 export function sheetForPrompt(sheet: Sheet, maxChars: number): string {
-  const nonEmpty = sheet.rows.filter((row) => row.some((cell) => cell !== ''));
-  const lines: string[] = [];
-  let used = 0;
+  const budget = Math.max(0, maxChars);
+  if (!budget) return '';
+  const rows = sheet.rows.filter((row) => row.some((cell) => cell !== ''));
+  const lines = rows.map((row) => row.map(csvCell).join(','));
+  const disclosure = sheet.truncated
+    ? '… parser limit reached; additional data may be missing'
+    : sheet.omittedSheets
+      ? `… ${sheet.omittedSheets} additional sheets not parsed`
+      : '… rows omitted; use import tool for complete data';
+  let output = '';
   let shown = 0;
-  for (const row of nonEmpty) {
-    const line = row.map(csvCell).join(',');
-    if (used + line.length + 1 > maxChars && shown > 0) break;
-    lines.push(line);
-    used += line.length + 1;
+  for (const line of lines) {
+    const next = output ? `${output}\n${line}` : line;
+    if (next.length + (shown + 1 < lines.length || sheet.truncated || sheet.omittedSheets ? disclosure.length : 0) > budget)
+      break;
+    output = next;
     shown++;
   }
-  const more = nonEmpty.length - shown + (sheet.truncated ? 1 : 0);
-  return `${lines.join('\n')}${more > 0 ? `\n… (${nonEmpty.length}${sheet.truncated ? '+' : ''} rows in total; ${more} not shown)` : ''}`;
+  if (shown === lines.length && !sheet.truncated && !sheet.omittedSheets) return output;
+  if (!output) return disclosure.slice(0, budget);
+  return `${output.slice(0, Math.max(0, budget - disclosure.length))}${disclosure}`.slice(0, budget);
 }

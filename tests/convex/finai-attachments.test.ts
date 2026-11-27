@@ -4,6 +4,7 @@ import { api, internal } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import schema from '../../convex/schema';
 import { aiErrorCode } from '../../convex/ai/errors';
+import { providerChat } from '../../convex/ai/providers';
 
 const modules = import.meta.glob('../../convex/**/*.ts');
 
@@ -189,6 +190,28 @@ describe('FinAI attachments', () => {
     expect(history).not.toContain('inlineData');
   });
 
+  it.each(['image/heic', 'image/heif'])(
+    'rejects %s before sending it to Anthropic',
+    async (mimeType) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const chat = providerChat({
+        provider: 'anthropic',
+        apiKey: 'test-key',
+        model: 'claude-test',
+      });
+
+      await expect(
+        chat({
+          role: 'chat',
+          parts: [],
+          contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: 'aGVpYw==' } }] }],
+        }),
+      ).rejects.toThrow('Anthropic does not support HEIC/HEIF');
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("refuses someone else's or already-sent attachments", async () => {
     const { owner, outsider, upload } = await fixture();
     const sheet = await registered(owner, await upload(CSV, 'text/csv'), 'bank.csv');
@@ -261,6 +284,49 @@ describe('FinAI attachments', () => {
       ['Lunch', 'expense', 1200n, null, ids.accountId],
       ['Salary', 'income', 250_000n, null, ids.accountId],
     ]);
+  });
+  it('retries a partially committed import after stale-running without duplicating its first row', async () => {
+    const { t, owner, upload } = await fixture();
+    const csv = 'Date,Description,Amount\n2026-01-05,First,-4.50\n2026-01-06,Second,-2.00\n';
+    const sheet = await registered(owner, await upload(csv, 'text/csv'), 'retry.csv');
+    mockGemini([
+      {
+        call: {
+          name: 'propose_import_transactions',
+          args: { attachmentId: sheet.id, date: 'Date', description: 'Description', amount: 'Amount' },
+        },
+      },
+      { text: 'Confirm to import.' },
+    ]);
+    const { conversationId, replyId } = await owner.action(api.ai.assistant.send, {
+      text: 'import',
+      attachmentIds: [sheet.id],
+    });
+    const messages = await owner.query(api.ai.assistant.messages, { conversationId, paginationOpts: page });
+    const card = messages.page.find((row) => row.id === replyId)!.actions[0]!;
+    const originalPayload = await t.run(async (ctx) => {
+      const actionRow = await ctx.db.get(card.id as Id<'finaiActions'>);
+      const payload = JSON.parse(actionRow!.payload) as { rows: unknown[][] };
+      payload.rows[1]![2] = 'invalid';
+      await ctx.db.patch(card.id as Id<'finaiActions'>, { payload: JSON.stringify(payload) });
+      return actionRow!.payload;
+    });
+    expect(await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> })).toMatchObject({
+      status: 'failed',
+    });
+    expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(1);
+    await t.run(async (ctx) => {
+      const payload = JSON.parse(originalPayload) as { rows: unknown[][] };
+      payload.rows[1]![2] = '200';
+      await ctx.db.patch(card.id as Id<'finaiActions'>, {
+        payload: JSON.stringify(payload),
+        decidedAt: Date.now() - 3 * 60 * 1000,
+      });
+    });
+    expect(await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> })).toMatchObject({
+      status: 'done',
+    });
+    expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(2);
   });
 
   it('reports wrong column names with the real headers', async () => {

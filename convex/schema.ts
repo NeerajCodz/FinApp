@@ -62,7 +62,7 @@ export default defineSchema({
     .index('email', ['email'])
     .index('by_identityId', ['identityId'])
     .index('by_username', ['username'])
-    .index('by_phone', ['phone']),
+    .index('by_phone', ['phone']).index('by_avatarStorageId', ['avatarStorageId']),
   userSettings: defineTable({
     userId: v.id('users'),
     currency,
@@ -248,7 +248,7 @@ export default defineSchema({
     mimeType: v.string(),
     size: v.number(),
     createdAt: timestamp,
-  }).index('by_transaction', ['transactionId']),
+  }).index('by_transaction', ['transactionId']).index('by_storage', ['storageId']),
   auditEvents: defineTable({
     actorId: v.id('users'),
     entityType: v.string(),
@@ -846,6 +846,16 @@ export default defineSchema({
     .index('by_conversation', ['conversationId'])
     .index('by_storage', ['storageId'])
     .index('by_expiresAt', ['expiresAt']),
+  /** Single-use tickets for FinAI uploads, cleaned up after the registration window. */
+  finaiAttachmentUploads: defineTable({
+    ticket: v.string(),
+    userId: v.id('users'),
+    createdAt: timestamp,
+    storageId: v.optional(v.id('_storage')),
+  })
+    .index('by_ticket', ['ticket'])
+    .index('by_createdAt', ['createdAt'])
+    .index('by_storage', ['storageId']),
   finaiMessages: defineTable({
     conversationId: v.id('finaiConversations'),
     userId: v.id('users'),
@@ -896,7 +906,8 @@ export default defineSchema({
     storageId: v.optional(v.id('_storage')),
   })
     .index('by_ticket', ['ticket'])
-    .index('by_user_createdAt', ['userId', 'createdAt']),
+    .index('by_user_createdAt', ['userId', 'createdAt'])
+    .index('by_storage', ['storageId']),
   avatars: defineTable({
     avatarId: v.string(),
     gender: v.union(v.literal('neutral'), v.literal('male'), v.literal('female')),
@@ -906,5 +917,6 @@ export default defineSchema({
     updatedAt: timestamp,
   })
     .index('by_avatarId', ['avatarId'])
-    .index('by_gender_avatarId', ['gender', 'avatarId']),
+    .index('by_gender_avatarId', ['gender', 'avatarId'])
+    .index('by_storage', ['storageId']),
 });

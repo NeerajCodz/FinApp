@@ -88,11 +88,31 @@ export const generateUploadUrl = mutation({
 });
 
 /**
- * Files already used by chat messages or FinAI attachments; those are never scratch uploads
- * (neither a receipt nor an attachment may claim or delete them).
+ * Storage IDs referenced by any live app record are not scratch uploads and must not be deleted.
  */
-export async function storageInUse(ctx: MutationCtx, storageId: Id<'_storage'>): Promise<boolean> {
-  const [directMessage, groupMessage, attachment] = await Promise.all([
+const ORPHAN_STORAGE_GRACE_MS = 24 * 60 * 60 * 1000;
+const ORPHAN_STORAGE_PAGE_SIZE = 64;
+
+/** Returns whether any live app record still owns this stored file. */
+export async function storageInUse(
+  ctx: MutationCtx,
+  storageId: Id<'_storage'>,
+  ignoredReceiptUploadId?: Id<'aiReceiptUploads'>,
+): Promise<boolean> {
+  const [
+    receipt,
+    directMessage,
+    groupMessage,
+    attachment,
+    attachmentUpload,
+    receiptUploads,
+    avatar,
+    user,
+  ] = await Promise.all([
+    ctx.db
+      .query('receipts')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .first(),
     ctx.db
       .query('directMessages')
       .withIndex('by_storage', (q) => q.eq('storageId', storageId))
@@ -105,9 +125,60 @@ export async function storageInUse(ctx: MutationCtx, storageId: Id<'_storage'>):
       .query('finaiAttachments')
       .withIndex('by_storage', (q) => q.eq('storageId', storageId))
       .first(),
+    ctx.db
+      .query('finaiAttachmentUploads')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .first(),
+    ctx.db
+      .query('aiReceiptUploads')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .take(2),
+    ctx.db
+      .query('avatars')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .first(),
+    ctx.db
+      .query('users')
+      .withIndex('by_avatarStorageId', (q) => q.eq('avatarStorageId', String(storageId)))
+      .first(),
   ]);
-  return Boolean(directMessage || groupMessage || attachment);
+  return Boolean(
+    receipt ||
+      directMessage ||
+      groupMessage ||
+      attachment ||
+      attachmentUpload ||
+      receiptUploads.some((upload) => upload._id !== ignoredReceiptUploadId) ||
+      avatar ||
+      user,
+  );
 }
+
+/** Removes files with no database owner once any issued upload URL has expired. */
+export const purgeOrphanedStorage = internalMutation({
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    olderThan: v.optional(v.number()),
+  },
+  handler: async (ctx, { cursor, olderThan }) => {
+    const cutoff = olderThan ?? Date.now() - ORPHAN_STORAGE_GRACE_MS;
+    const page = await ctx.db.system
+      .query('_storage')
+      .order('asc')
+      .paginate({ cursor: cursor ?? null, numItems: ORPHAN_STORAGE_PAGE_SIZE });
+    for (const file of page.page) {
+      if (file._creationTime >= cutoff) break;
+      if (!(await storageInUse(ctx, file._id))) await ctx.storage.delete(file._id);
+    }
+    const last = page.page[page.page.length - 1];
+    if (!page.isDone && last && last._creationTime < cutoff) {
+      await ctx.scheduler.runAfter(0, internal.ai.receipts.purgeOrphanedStorage, {
+        cursor: page.continueCursor,
+        olderThan: cutoff,
+      });
+    }
+  },
+});
 
 /**
  * Records the uploaded image on its ticket right after the upload, so an image whose parse
@@ -128,6 +199,7 @@ export const registerUpload = mutation({
       upload.userId !== user._id ||
       upload.usedAt !== undefined ||
       upload.storageId !== undefined ||
+      Date.now() - upload.createdAt > receiptUpload.ticketTtlMs ||
       !file ||
       file._creationTime < upload.createdAt - 1000 ||
       (await storageInUse(ctx, storageId))
@@ -147,7 +219,7 @@ export const expireUpload = internalMutation({
     if (
       upload.usedAt === undefined &&
       upload.storageId &&
-      !(await storageInUse(ctx, upload.storageId)) &&
+      !(await storageInUse(ctx, upload.storageId, upload._id)) &&
       (await ctx.db.system.get('_storage', upload.storageId))
     )
       await ctx.storage.delete(upload.storageId);
@@ -188,7 +260,7 @@ export const beginParse = internalMutation({
       throw aiError('INVALID_UPLOAD_TICKET');
     if (
       (upload.storageId !== undefined && upload.storageId !== storageId) ||
-      (await storageInUse(ctx, storageId))
+      (await storageInUse(ctx, storageId, upload._id))
     )
       throw aiError('INVALID_UPLOAD_TICKET');
     await ctx.db.patch(upload._id, { usedAt: now, storageId });

@@ -306,7 +306,11 @@ export const confirm = action({
     } catch (error) {
       const errorCode = toolErrorCode(error);
       console.warn('[ai] FinAI action failed', claimed.kind, errorCode);
-      await ctx.runMutation(internal.ai.actions.finish, { actionId, status: 'failed', errorCode });
+      await ctx.runMutation(internal.ai.actions.finish, {
+        actionId,
+        status: claimed.kind === 'transaction.import' ? 'running' : 'failed',
+        errorCode,
+      });
       return { status: 'failed', errorCode };
     }
   },

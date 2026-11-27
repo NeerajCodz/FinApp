@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
-import { excelSerialToIso, parseCsv, readXlsx, sheetForPrompt } from '../../convex/ai/spreadsheet';
+import { readSheets } from '../../convex/ai/attachmentContent';
 import {
   detectDateFormat,
   mapImportRows,
@@ -57,6 +57,11 @@ describe('spreadsheet readers', () => {
     expect(() => readXlsx(zipSync({ 'hello.txt': strToU8('hi') }))).toThrow('INVALID_SPREADSHEET');
     expect(() => readXlsx(new Uint8Array([1, 2, 3]))).toThrow();
   });
+  it('dispatches ZIP signatures, not arbitrary PK-prefixed CSV', () => {
+    expect(readSheets(strToU8('PK\u0005\u0006,date'), 'fake.csv')[0]!.rows).toEqual([
+      ['PK\u0005\u0006', 'date'],
+    ]);
+  });
 
   it('parses CSV with quotes, embedded newlines, BOM and a detected delimiter', () => {
     expect(parseCsv('﻿a,b\n"x, y","say ""hi"""\n"multi\nline",2\n').rows).toEqual([
@@ -68,6 +73,32 @@ describe('spreadsheet readers', () => {
       ['date', 'amount'],
       ['01/02/2026', '12,50'],
     ]);
+  });
+  it('detects delimiters outside quoted fields and favors consistent widths', () => {
+    expect(parseCsv('"a,;|";b;c\n"x,y;|";2;3\nlast;4\n').rows[0]).toEqual(['a,;|', 'b', 'c']);
+    expect(parseCsv('a;b;c\n1;2;3\n4;5\n').rows[0]).toEqual(['a', 'b', 'c']);
+  });
+
+  it('handles serial zero and the workbook 1904 date epoch', () => {
+    expect(excelSerialToIso(0)).toBe('1899-12-31');
+    expect(excelSerialToIso(0, true)).toBe('1904-01-01');
+    expect(excelSerialToIso(1, true)).toBe('1904-01-02');
+  });
+  it('keeps oversized first rows within the prompt budget and signals omissions', () => {
+    const rendered = sheetForPrompt(
+      { name: 'large', rows: [['x'.repeat(300)], ['later']], truncated: false },
+      24,
+    );
+    expect(rendered.length).toBeLessThanOrEqual(24);
+    expect(rendered).toContain('…');
+  });
+  it('converts date-styled serial zero with the workbook date1904 epoch', () => {
+    const bytes = zipSync({
+      'xl/workbook.xml': strToU8('<workbook><workbookPr date1904="1"/><sheets><sheet name="S" sheetId="1"/></sheets></workbook>'),
+      'xl/worksheets/sheet1.xml': strToU8('<worksheet><sheetData><row r="1"><c r="A1" s="0"><v>0</v></c></row></sheetData></worksheet>'),
+      'xl/styles.xml': strToU8('<styleSheet><cellXfs><xf numFmtId="14"/></cellXfs></styleSheet>'),
+    });
+    expect(readXlsx(bytes)[0]!.rows).toEqual([['1904-01-01']]);
   });
 
   it('converts Excel serials across the 1900 leap-year bug', () => {

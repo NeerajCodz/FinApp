@@ -23,7 +23,10 @@ export type ModelAttachment = {
 
 const isPdf = (bytes: Uint8Array) =>
   bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
-const isZip = (bytes: Uint8Array) => bytes[0] === 0x50 && bytes[1] === 0x4b; // PK
+const isZip = (bytes: Uint8Array) =>
+  (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) ||
+  (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x05 && bytes[3] === 0x06) ||
+  (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x07 && bytes[3] === 0x08);
 
 /** Reads a spreadsheet attachment's sheets (xlsx by bytes; otherwise CSV/TSV text). */
 export function readSheets(bytes: Uint8Array, name: string): Sheet[] {
