@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
+import { createStreamWriter } from '../../convex/ai/streamWriter';
 
 beforeEach(() => {
   vi.useFakeTimers();

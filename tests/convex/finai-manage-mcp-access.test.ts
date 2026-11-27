@@ -370,11 +370,12 @@ describe('FinAI management actions', () => {
         })
       ).status,
     ).toBe('done');
-    expect(await t.run((ctx) => ctx.db.get(transferId))).toMatchObject({
+    const updated = await t.run((ctx) => ctx.db.get(transferId));
+    expect(updated).toMatchObject({
       type: 'expense',
       categoryId: String(ids.categoryId),
-      transferAccountId: undefined,
     });
+    expect(updated?.transferAccountId).toBeUndefined();
   });
 
   it('delete and restore tools follow the "prepare changes" setting', () => {
