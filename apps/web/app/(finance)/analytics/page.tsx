@@ -550,13 +550,14 @@ export default function AnalyticsPage() {
           at < limitMonth.startAt ||
           at >= limitMonth.endAt ||
           !keys.includes(String(record.categoryId ?? '')) ||
-          (accountById.get(String(record.accountId ?? ''))?.includeInAnalytics === false) ||
+          accountById.get(String(record.accountId ?? ''))?.includeInAnalytics === false ||
           (accountFilter !== 'all' &&
-            !(accountById.get(accountFilter)
-              ? idAliases(accountById.get(accountFilter)!)
-              : [accountFilter]
+            !(
+              accountById.get(accountFilter)
+                ? idAliases(accountById.get(accountFilter)!)
+                : [accountFilter]
             ).includes(String(record.accountId ?? '')))
-          )
+        )
           return sum;
         return (
           sum +

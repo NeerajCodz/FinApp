@@ -33,11 +33,7 @@ import { currencies } from '@convex/shared/validators';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
-import {
-  clearLocalData,
-  commitLocalWrite,
-  type LocalRecord,
-} from '@/lib/offline/repository';
+import { clearLocalData, commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 
 type Profile = LocalRecord & {
   displayName?: string;
@@ -118,7 +114,9 @@ export default function ProfilePage() {
       router.replace('/sign-in');
     } catch (cause) {
       setMessage(
-        cause instanceof Error ? cause.message : 'Could not clear this browser’s saved data and sign out.',
+        cause instanceof Error
+          ? cause.message
+          : 'Could not clear this browser’s saved data and sign out.',
       );
     }
   }

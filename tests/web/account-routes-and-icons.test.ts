@@ -60,7 +60,6 @@ describe('suggested transfers', () => {
   });
 });
 
-
 describe('account icons', () => {
   it('renders visible contrasting icons on both account list and detail surfaces', () => {
     const list = renderWithTheme(

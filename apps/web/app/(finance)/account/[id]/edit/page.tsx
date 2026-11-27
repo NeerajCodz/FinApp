@@ -204,14 +204,23 @@ export default function EditAccountPage() {
       <AccountFormScreen
         mode="edit"
         createdAt={account.createdAt}
-        activity={deriveFormActivity(transactions, categories, records, account, 'accountId', userId)}
+        activity={deriveFormActivity(
+          transactions,
+          categories,
+          records,
+          account,
+          'accountId',
+          userId,
+        )}
         onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
         onViewTransactions={() => router.push(`/account/${encodeURIComponent(routeId)}`)}
         isPrimary={
           primaryDraft ??
           Boolean(
             profile &&
-            [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string),
+              [account.id, account._id, account.cloudId].includes(
+                profile.defaultAccountId as string,
+              ),
           )
         }
         onPrimaryChange={profile ? setPrimaryDraft : undefined}

@@ -326,9 +326,7 @@ export function SuggestedTransfers({
           </div>
         );
       })}
-      {hiddenCount > 0 ? (
-        <p className={styles.muted}>+{hiddenCount} more suggested</p>
-      ) : null}
+      {hiddenCount > 0 ? <p className={styles.muted}>+{hiddenCount} more suggested</p> : null}
     </div>
   );
 }

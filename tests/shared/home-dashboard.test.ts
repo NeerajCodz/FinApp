@@ -10,9 +10,7 @@ function dashboard(accountId?: string) {
     endAt: now + 1,
     currency: 'INR',
     ...(accountId ? { accountId } : {}),
-    accounts: [
-      { id: 'wallet', currency: 'INR', balanceMinor: 0n, openingBalanceMinor: 0n },
-    ],
+    accounts: [{ id: 'wallet', currency: 'INR', balanceMinor: 0n, openingBalanceMinor: 0n }],
     transactions: [
       {
         id: 'shared-expense',

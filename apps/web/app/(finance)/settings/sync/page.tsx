@@ -127,7 +127,12 @@ export default function SyncSettingsPage() {
           {failedEntries.map((entry) => (
             <div
               key={entry.localId}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
             >
               <span>{entry.lastError ?? `${entry.operation} could not sync`}</span>
               <Button
@@ -136,7 +141,9 @@ export default function SyncSettingsPage() {
                 disabled={!isConnected || isSyncing}
                 onPress={() =>
                   void retryEntry(entry.localId).catch((cause: unknown) =>
-                    setError(cause instanceof Error ? cause.message : 'Could not retry this change.'),
+                    setError(
+                      cause instanceof Error ? cause.message : 'Could not retry this change.',
+                    ),
                   )
                 }
               >
@@ -147,7 +154,8 @@ export default function SyncSettingsPage() {
           {conflicts.map((conflict) => (
             <div key={conflict.id} style={{ display: 'grid', gap: 8, paddingBlock: 8 }}>
               <p style={{ margin: 0 }}>
-                {conflict.entityType} {conflict.recordId} has a local and cloud version. Choose which to keep.
+                {conflict.entityType} {conflict.recordId} has a local and cloud version. Choose
+                which to keep.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 <Button
