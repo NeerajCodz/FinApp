@@ -260,8 +260,11 @@ export const assistantTools: FinaiTool[] = [
         );
         let consumed = Math.min(offset, result.items.length);
         offset = 0;
-        for (; consumed < result.items.length && items.length < limit; consumed++) {
-          items.push(result.items[consumed]);
+        while (consumed < result.items.length && items.length < limit) {
+          const item = result.items[consumed];
+          if (item === undefined) break;
+          items.push(item);
+          consumed++;
         }
 
         if (consumed < result.items.length) {
