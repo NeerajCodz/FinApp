@@ -30,9 +30,24 @@ export default function SyncSettingsPage() {
     failedEntries,
     conflicts,
     retryNow,
+    retryEntry,
+    resolveConflict,
   } = useBrowserSync();
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [resolvingConflict, setResolvingConflict] = React.useState<string | null>(null);
+
+  async function chooseConflict(conflictId: string, winner: 'local' | 'cloud') {
+    setResolvingConflict(conflictId);
+    setError('');
+    try {
+      await resolveConflict(conflictId, winner);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not resolve this conflict.');
+    } finally {
+      setResolvingConflict(null);
+    }
+  }
 
   async function selectWindow(value: LocalSyncWindow) {
     if (saving || value === syncWindow) return;
@@ -57,6 +72,7 @@ export default function SyncSettingsPage() {
     );
 
   const problems = failedEntries.length + conflicts.length;
+  const needsAttention = problems > 0 || Boolean(syncError);
   return (
     <SettingsShell
       title="Sync"
@@ -67,7 +83,7 @@ export default function SyncSettingsPage() {
         icon={
           !isConnected ? (
             <CloudOff size={22} />
-          ) : problems ? (
+          ) : needsAttention ? (
             <TriangleAlert size={22} />
           ) : (
             <Cloud size={22} />
@@ -78,15 +94,16 @@ export default function SyncSettingsPage() {
             ? 'Offline'
             : isSyncing
               ? 'Syncing…'
-              : problems
-                ? `${problems} change${problems === 1 ? '' : 's'} need attention`
+              : needsAttention
+                ? problems
+                  ? `${problems} change${problems === 1 ? '' : 's'} need attention`
+                  : 'Sync needs attention'
                 : 'Everything is synced'
-        }
         description={
-          !isConnected
+          syncError ??
+          (!isConnected
             ? 'Changes save in this browser and sync when you reconnect.'
-            : (syncError ??
-              'Finapp keeps a copy in this browser so it opens fast and works offline.')
+            : 'Finapp keeps a copy in this browser so it opens fast and works offline.')
         }
         action={
           <Button
@@ -99,15 +116,59 @@ export default function SyncSettingsPage() {
           </Button>
         }
       />
-      {problems ? (
+      {needsAttention ? (
         <SettingsGroup title="Needs attention">
-          <SettingsLink
-            icon={<TriangleAlert size={19} />}
-            tone="warning"
-            title={`${failedEntries.length} failed, ${conflicts.length} conflicting`}
-            description="Review and retry or choose which version to keep"
-            onPress={() => router.push('/notifications')}
-          />
+          {syncError ? (
+            <p role="alert" style={{ margin: 0, color: 'var(--finapp-destructive)' }}>
+              {syncError}
+            </p>
+          ) : null}
+          {failedEntries.map((entry) => (
+            <div
+              key={entry.localId}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+            >
+              <span>{entry.lastError ?? `${entry.operation} could not sync`}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!isConnected || isSyncing}
+                onPress={() =>
+                  void retryEntry(entry.localId).catch((cause: unknown) =>
+                    setError(cause instanceof Error ? cause.message : 'Could not retry this change.'),
+                  )
+                }
+              >
+                Retry
+              </Button>
+            </div>
+          ))}
+          {conflicts.map((conflict) => (
+            <div key={conflict.id} style={{ display: 'grid', gap: 8, paddingBlock: 8 }}>
+              <p style={{ margin: 0 }}>
+                {conflict.entityType} {conflict.recordId} has a local and cloud version. Choose which to keep.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={resolvingConflict !== null}
+                  onPress={() => void chooseConflict(conflict.id, 'local')}
+                >
+                  Keep this device
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={resolvingConflict !== null}
+                  onPress={() => void chooseConflict(conflict.id, 'cloud')}
+                >
+                  Keep cloud
+                </Button>
+              </div>
+            </div>
+          ))}
+          {error ? <p role="alert">{error}</p> : null}
         </SettingsGroup>
       ) : null}
       <SettingsGroup

@@ -290,7 +290,7 @@ export function ProfileEditScreen({
     setSaveError('');
     try {
       const result = await onSave(draft, editor.changes);
-      editor.commit(draft);
+      if (result.tone !== 'warning') editor.commit(draft);
       setToast(result);
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : 'Could not save your profile.');

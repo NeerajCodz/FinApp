@@ -200,30 +200,32 @@ export default function EditAccountPage() {
       </div>
     );
   return (
-    <AccountFormScreen
-      mode="edit"
-      createdAt={account.createdAt}
-      activity={deriveFormActivity(transactions, categories, records, account, 'accountId', userId)}
-      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
-      onViewTransactions={() => router.push(`/account/${encodeURIComponent(routeId)}`)}
-      isPrimary={
-        primaryDraft ??
-        Boolean(
-          profile &&
-          [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string),
-        )
-      }
-      onPrimaryChange={profile ? setPrimaryDraft : undefined}
-      title={form.name.trim() || 'Edit account'}
-      subtitle="Update your account details and settings."
-      value={form}
-      currencies={currencies}
-      saving={saving}
-      error={formError}
-      onChange={setForm}
-      onSubmit={save}
-      onBack={() => router.back()}
-      submitLabel="Save changes"
-    />
+    <div className="finance-page finance-page--narrow">
+      <AccountFormScreen
+        mode="edit"
+        createdAt={account.createdAt}
+        activity={deriveFormActivity(transactions, categories, records, account, 'accountId', userId)}
+        onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+        onViewTransactions={() => router.push(`/account/${encodeURIComponent(routeId)}`)}
+        isPrimary={
+          primaryDraft ??
+          Boolean(
+            profile &&
+            [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string),
+          )
+        }
+        onPrimaryChange={profile ? setPrimaryDraft : undefined}
+        title={form.name.trim() || 'Edit account'}
+        subtitle="Update your account details and settings."
+        value={form}
+        currencies={currencies}
+        saving={saving}
+        error={formError}
+        onChange={setForm}
+        onSubmit={save}
+        onBack={() => router.back()}
+        submitLabel="Save changes"
+      />
+    </div>
   );
 }

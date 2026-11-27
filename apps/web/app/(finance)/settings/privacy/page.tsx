@@ -191,7 +191,7 @@ export default function PrivacySettingsPage() {
         <SettingsItem
           icon={<HardDrive size={19} />}
           title="Copy in this browser"
-          description="Finapp keeps a copy here so it works offline. It isn’t encrypted separately, so anyone using this browser profile could read it. Signing out removes it."
+          description="Finapp keeps a copy here so it works offline. It isn’t encrypted separately, so anyone using this browser profile could read it. Use Profile → Sign out to clear this account’s saved finance records from this browser."
         />
         <SettingsLink
           icon={<Trash2 size={19} />}

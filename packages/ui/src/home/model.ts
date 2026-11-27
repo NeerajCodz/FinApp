@@ -149,13 +149,15 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
       (input.accountId ? hasAlias(account, input.accountId) : account.isIncludedInTotal !== false),
   );
   const selectedAccountAliases = new Set(selectedAccounts.flatMap(aliases));
-  const transactions = input.transactions.filter(
+  const accountTransactions = input.transactions.filter(
     (transaction) =>
-      transaction.currency === input.currency &&
-      (!input.accountId ||
-        selectedAccountAliases.has(String(transaction.accountId ?? '')) ||
-        (transaction.type === 'transfer' &&
-          selectedAccountAliases.has(String(transaction.transferAccountId ?? '')))),
+      !input.accountId ||
+      selectedAccountAliases.has(String(transaction.accountId ?? '')) ||
+      (transaction.type === 'transfer' &&
+        selectedAccountAliases.has(String(transaction.transferAccountId ?? ''))),
+  );
+  const transactions = accountTransactions.filter(
+    (transaction) => transaction.currency === input.currency,
   );
   const periodTransactions = transactions.filter(
     (transaction) =>
@@ -256,7 +258,7 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
       const currency =
         typeof category.limitCurrency === 'string' ? category.limitCurrency : input.currency;
       const keys = aliases(category);
-      const spent = input.transactions.reduce((total, transaction) => {
+      const spent = accountTransactions.reduce((total, transaction) => {
         const occurredAt = Number(transaction.occurredAt ?? 0);
         if (
           !isPosted(transaction) ||
@@ -267,7 +269,14 @@ export function buildHomeDashboard(input: HomeDashboardInput): HomeDashboardData
           !keys.includes(String(transaction.categoryId ?? ''))
         )
           return total;
-        return total + amount(transaction.amountMinor);
+        return (
+          total +
+          amount(
+            input.accountId && transaction.accountAmountMinor !== undefined
+              ? transaction.accountAmountMinor
+              : transaction.amountMinor,
+          )
+        );
       }, 0n);
       return {
         id: recordId(category),

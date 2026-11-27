@@ -141,6 +141,10 @@ export default function PersonalAccountDetailPage() {
       : item.type === 'expense'
         ? -(item.accountAmountMinor === undefined ? amountMinor : asMinor(item.accountAmountMinor))
         : amountMinor;
+    const rowAmountMinor =
+      item.type === 'expense' && item.accountAmountMinor !== undefined
+        ? asMinor(item.accountAmountMinor)
+        : amountMinor;
     const rowType: TransactionType = isTransfer
       ? isOutgoing
         ? 'expense'
@@ -158,7 +162,7 @@ export default function PersonalAccountDetailPage() {
         ? formatTransactionDate(item.occurredAt, item.hasTime, timeZone)
         : 'Date unavailable',
       status: item.status,
-      amountMinor,
+      amountMinor: rowAmountMinor,
       currency: item.currency ?? account?.currency ?? 'INR',
       type: rowType,
       semanticType: item.groupId ? 'split' : isTransfer ? 'transfer' : undefined,
