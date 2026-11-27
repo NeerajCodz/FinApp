@@ -74,6 +74,15 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       });
       setReview(scanReview);
     },
+    onCurrencyChange: (fields) => {
+      const amounts = new Map(fields.rows.map((row) => [row.id, row.amount]));
+      composer.set('amount', fields.amount);
+      composer.setItems(
+        composer.items.map((row) =>
+          amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
+        ),
+      );
+    },
   });
   const saveLock = React.useRef(false);
 

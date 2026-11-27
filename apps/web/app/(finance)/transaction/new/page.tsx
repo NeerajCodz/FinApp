@@ -289,6 +289,15 @@ export default function NewPersonalTransactionPage() {
       if (fields.categoryId) setCategoryId(fields.categoryId);
       setReview(scanReview);
     },
+    onCurrencyChange: (fields) => {
+      const amounts = new Map(fields.rows.map((row) => [row.id, row.amount]));
+      setAmount(fields.amount);
+      setItems((current) =>
+        current.map((row) =>
+          amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
+        ),
+      );
+    },
   });
 
   let amountValid: boolean;
