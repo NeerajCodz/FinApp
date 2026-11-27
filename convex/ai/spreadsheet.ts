@@ -14,7 +14,7 @@ export const MAX_COLUMNS = 60;
 const MAX_UNZIPPED_BYTES = 60 * 1024 * 1024;
 const MAX_SHEETS = 12;
 
-export type Sheet = { name: string; rows: string[][]; truncated: boolean };
+export type Sheet = { name: string; rows: string[][]; truncated: boolean; omittedSheets?: number };
 
 // ---------- CSV ----------
 
@@ -257,8 +257,13 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
     if (id && target) rels.set(id, target.replace(/^\/?(xl\/)?/, 'xl/'));
   }
   const sheets: Sheet[] = [];
+  const dates = dateStyles(text('xl/styles.xml'));
+  let omittedSheets = 0;
   for (const match of workbook.matchAll(/<sheet\b[^>]*>/g)) {
-    if (sheets.length >= MAX_SHEETS) break;
+    if (sheets.length >= MAX_SHEETS) {
+      omittedSheets += 1;
+      continue;
+    }
     const name = decodeXml(attr(match[0], 'name') ?? `Sheet${sheets.length + 1}`);
     const relId = attr(match[0], 'r:id');
     const path = (relId && rels.get(relId)) || `xl/worksheets/sheet${sheets.length + 1}.xml`;
@@ -267,6 +272,11 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
     const { rows, truncated } = sheetRows(xml, shared, dates, date1904);
     sheets.push({ name, rows, truncated });
   }
+  if (omittedSheets > 0) {
+    const lastSheet = sheets[MAX_SHEETS - 1];
+    if (lastSheet) lastSheet.omittedSheets = omittedSheets;
+  }
+
   if (!sheets.length) throw new Error('INVALID_SPREADSHEET');
   return sheets;
 }
