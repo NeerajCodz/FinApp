@@ -98,13 +98,14 @@ type PendingSend = {
  */
 /** Releases a local preview (`blob:` URL) once its pending message is gone. */
 function releasePreview(message: ChatMessage | undefined) {
-  const url = message?.imageUrl;
-  if (
-    typeof url === 'string' &&
-    url.startsWith('blob:') &&
-    typeof URL.revokeObjectURL === 'function'
-  )
-    URL.revokeObjectURL(url);
+  for (const url of [message?.imageUrl, message?.audioUrl]) {
+    if (
+      typeof url === 'string' &&
+      url.startsWith('blob:') &&
+      typeof URL.revokeObjectURL === 'function'
+    )
+      URL.revokeObjectURL(url);
+  }
 }
 
 export function useOptimisticMessages(onError?: (error: unknown) => void) {

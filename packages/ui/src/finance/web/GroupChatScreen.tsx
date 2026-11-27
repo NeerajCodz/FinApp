@@ -24,6 +24,7 @@ import {
   type ChatReactionEmoji,
 } from '../../chat/model';
 import type { VoiceClip } from '../../chat/web/voice';
+import { VoiceBubble } from '../../chat/web/voice';
 
 export type GroupChatItem = {
   id: string;
@@ -299,7 +300,14 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                 <div className={s.bubble}>
                   {item.kind === 'message' ? (
                     <>
-                      {item.text && <p>{item.text}</p>}
+                      {!!item.text && <span>{item.text}</span>}
+                      {item.audioUrl !== undefined && (
+                        <VoiceBubble
+                          src={item.audioUrl}
+                          durationMs={item.durationMs}
+                          mine={item.ownMessage}
+                        />
+                      )}
                       {item.attachmentUrl && (
                         <a href={item.attachmentUrl} target="_blank" rel="noreferrer">
                           <img
@@ -309,9 +317,11 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                           />
                         </a>
                       )}
-                      {!item.text && !item.attachmentUrl && (
-                        <span className={s.muted}>Bill image is no longer available.</span>
-                      )}
+                      {!item.text &&
+                        !item.attachmentUrl &&
+                        item.audioUrl === undefined && (
+                          <span className={s.muted}>Bill image is no longer available.</span>
+                        )}
                     </>
                   ) : item.onPress ? (
                     <button type="button" className={s.expenseBubble} onClick={item.onPress}>

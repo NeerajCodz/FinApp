@@ -31,7 +31,7 @@ export function voiceRecordingSupported(): boolean {
  * Records one clip at a time. `stop()` resolves with the clip (null if it was too short or
  * cancelled). Recording stops by itself at the maximum length.
  */
-export function useVoiceRecorder() {
+export function useVoiceRecorder(onAutoStop?: (clip: VoiceClip) => void) {
   const [state, setState] = React.useState<'idle' | 'recording'>('idle');
   const [elapsedMs, setElapsedMs] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
@@ -41,17 +41,35 @@ export function useVoiceRecorder() {
   const ticker = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const settle = React.useRef<((clip: VoiceClip | null) => void) | null>(null);
   const cancelled = React.useRef(false);
-
+  const autoStopped = React.useRef(false);
+  const mounted = React.useRef(false);
+  const startRequest = React.useRef(0);
+  const onAutoStopRef = React.useRef(onAutoStop);
+  onAutoStopRef.current = onAutoStop;
   const cleanup = React.useCallback(() => {
-    if (ticker.current) clearInterval(ticker.current);
-    ticker.current = null;
+    if (ticker.current !== null) {
+      clearInterval(ticker.current);
+      ticker.current = null;
+    }
     recorder.current?.stream.getTracks().forEach((track) => track.stop());
     recorder.current = null;
-    setState('idle');
-    setElapsedMs(0);
+    if (mounted.current) {
+      setState('idle');
+      setElapsedMs(0);
+    }
   }, []);
 
-  React.useEffect(() => () => cleanup(), [cleanup]);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      startRequest.current += 1;
+      cancelled.current = true;
+      cleanup();
+      settle.current?.(null);
+      settle.current = null;
+    };
+  }, [cleanup]);
 
   const stop = React.useCallback(
     () =>
@@ -73,12 +91,20 @@ export function useVoiceRecorder() {
       setError('Voice messages aren’t supported in this browser.');
       return false;
     }
+    const request = ++startRequest.current;
+    let pendingStream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      pendingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current || request !== startRequest.current) {
+        pendingStream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
       const type = pickRecordingType();
-      const media = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      const media = new MediaRecorder(pendingStream, type ? { mimeType: type } : undefined);
+      pendingStream = null;
       chunks.current = [];
       cancelled.current = false;
+      autoStopped.current = false;
       media.ondataavailable = (event) => {
         if (event.data.size) chunks.current.push(event.data);
       };
@@ -90,9 +116,14 @@ export function useVoiceRecorder() {
           cancelled.current || durationMs < VOICE_MIN_DURATION_MS || !blob.size
             ? null
             : { blob, durationMs: Math.min(durationMs, VOICE_MAX_DURATION_MS), mimeType };
+        const wasAutoStopped = autoStopped.current;
         cleanup();
-        settle.current?.(clip);
-        settle.current = null;
+        if (settle.current) {
+          settle.current(clip);
+          settle.current = null;
+        } else if (wasAutoStopped && clip && mounted.current) {
+          onAutoStopRef.current?.(clip);
+        }
       };
       recorder.current = media;
       startedAt.current = Date.now();
@@ -100,17 +131,22 @@ export function useVoiceRecorder() {
       setState('recording');
       ticker.current = setInterval(() => {
         const elapsed = Date.now() - startedAt.current;
-        setElapsedMs(elapsed);
-        if (elapsed >= VOICE_MAX_DURATION_MS) media.stop();
+        if (mounted.current) setElapsedMs(elapsed);
+        if (elapsed >= VOICE_MAX_DURATION_MS && media.state !== 'inactive') {
+          autoStopped.current = true;
+          media.stop();
+        }
       }, 200);
       return true;
     } catch (cause) {
-      cleanup();
-      setError(
-        cause instanceof DOMException && cause.name === 'NotAllowedError'
-          ? 'Allow microphone access to record a voice message.'
-          : 'Could not start recording.',
-      );
+      pendingStream?.getTracks().forEach((track) => track.stop());
+      if (request === startRequest.current) cleanup();
+      if (mounted.current && request === startRequest.current)
+        setError(
+          cause instanceof DOMException && cause.name === 'NotAllowedError'
+            ? 'Allow microphone access to record a voice message.'
+            : 'Could not start recording.',
+        );
       return false;
     }
   }, [cleanup]);

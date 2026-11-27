@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
-import { api } from '../../convex/_generated/api';
+import { internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
 import { chatHeaderSubtitle, recordTime } from '../../packages/ui/src/chat/model';
 
@@ -176,6 +176,60 @@ describe('disappearing messages', () => {
     );
     expect(messages).toHaveLength(450);
     expect(messages.every((m) => m.expiresAt === m.createdAt + DAY)).toBe(true);
+  });
+
+  it('retimes a stale expiry job when retention is lengthened', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
+    const { t, ids, owner } = await seed(DAY);
+    const createdAt = Date.now() - DAY - 1;
+    const messageId = await t.run((ctx) =>
+      ctx.db.insert('groupMessages', {
+        groupId: ids.groupId,
+        senderId: ids.memberId,
+        kind: 'text',
+        text: 'keep me',
+        createdAt,
+        expiresAt: Date.now() - 1,
+      }),
+    );
+
+    await owner.mutation(api.groups.mutations.updateSettings, {
+      groupId: ids.groupId,
+      messageRetentionMs: 30 * DAY,
+    });
+    await t.mutation(internal.groups.mutations.deleteExpiredMessage, { messageId });
+
+    expect(await t.run((ctx) => ctx.db.get(messageId))).toMatchObject({
+      text: 'keep me',
+      expiresAt: createdAt + 30 * DAY,
+    });
+  });
+
+  it('clears stale expiry metadata when retention is disabled', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
+    const { t, ids, owner } = await seed(DAY);
+    const messageId = await t.run((ctx) =>
+      ctx.db.insert('groupMessages', {
+        groupId: ids.groupId,
+        senderId: ids.memberId,
+        kind: 'text',
+        text: 'keep me',
+        createdAt: Date.now() - DAY - 1,
+        expiresAt: Date.now() - 1,
+      }),
+    );
+
+    await owner.mutation(api.groups.mutations.updateSettings, {
+      groupId: ids.groupId,
+      messageRetentionMs: null,
+    });
+    await t.mutation(internal.groups.mutations.deleteExpiredMessage, { messageId });
+
+    const message = await t.run((ctx) => ctx.db.get(messageId));
+    expect(message).toMatchObject({ text: 'keep me' });
+    expect(message?.expiresAt).toBeUndefined();
   });
 });
 
