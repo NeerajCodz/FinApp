@@ -493,6 +493,7 @@ export const peopleHubUnreadTotal = query({
           ) {
             unread += 1;
           }
+        }
         return unread;
       }),
     );
