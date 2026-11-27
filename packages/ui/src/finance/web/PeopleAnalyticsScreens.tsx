@@ -242,7 +242,7 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
       ['text', 'Text', d.mix.text],
       ['image', 'Photos', d.mix.image],
       ['audio', 'Voice', d.mix.audio],
-      ['ai', 'FinAI', d.mix.ai],
+      ['ai', 'FinAI replies', d.mix.ai],
     ] as const
   )
     .filter(([, , value]) => value > 0)

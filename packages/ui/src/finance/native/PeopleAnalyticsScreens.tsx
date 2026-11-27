@@ -360,7 +360,7 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
       ['Text', d.mix.text],
       ['Photos', d.mix.image],
       ['Voice', d.mix.audio],
-      ['FinAI', d.mix.ai],
+      ['FinAI replies', d.mix.ai],
     ] as const
   ).filter(([, value]) => value > 0);
   return (

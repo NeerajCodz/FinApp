@@ -153,9 +153,6 @@ export async function markAllNotificationsRead(
 export function useUnreadChatCount(): number {
   const { userId, isConnected } = useBrowserSync();
   const live = Boolean(userId && isConnected);
-  const people = useQuery(api.social.queries.peopleHub, live ? {} : 'skip');
-  const groups = useQuery(api.groups.queries.chatUnreadCounts, live ? {} : 'skip');
-  const direct = people?.reduce((sum, person) => sum + person.unreadCount, 0) ?? 0;
-  const grouped = groups ? Object.values(groups).reduce((sum, count) => sum + count, 0) : 0;
-  return direct + grouped;
+  const unread = useQuery(api.social.queries.peopleHubUnreadTotal, live ? {} : 'skip');
+  return unread ?? 0;
 }

@@ -238,7 +238,9 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
               groupIdAliases.has(item.groupId) &&
               item.type === 'expense' &&
               item.status === 'posted' &&
-              item.deletedAt === undefined,
+              item.deletedAt === undefined &&
+              Number(item.occurredAt ?? 0) >= startAt &&
+              Number(item.occurredAt ?? 0) < endAt,
           )
           .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
       : [];
@@ -285,10 +287,22 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
     sharedGroups.length === 1
       ? `/split/new?groupId=${encodeURIComponent(idOf(sharedGroups[0]!))}`
       : '/split/new';
+  const balanceError =
+    rangeState === 'error' ||
+    Boolean(
+      groupsError ||
+        membersError ||
+        transactionsError ||
+        payersError ||
+        participantsError ||
+        settlementsError,
+    );
   const balanceLabel = !balanceAvailable
-    ? sharedGroups.length
-      ? 'Loading balance…'
-      : 'No shared groups'
+    ? balanceError
+      ? 'Balance unavailable'
+      : sharedGroups.length
+        ? 'Loading balance…'
+        : 'No shared groups'
     : bilateralBalance === 0n
       ? 'You’re even'
       : bilateralBalance > 0n
@@ -444,7 +458,10 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
                         </Link>
                       </>
                     ) : null}
-                    {person.id ? (
+                    {person.id &&
+                    (sharedGroups.length > 0 ||
+                      status === 'friends' ||
+                      Boolean(analytics?.conversationId)) ? (
                       <Link
                         className="profile-icon-button"
                         href={`/network/person/${encodeURIComponent(person.id)}`}

@@ -1,7 +1,9 @@
 import { v } from 'convex/values';
 import { query } from '../_generated/server';
 import type { Doc, Id } from '../_generated/dataModel';
+import { getAnalyticsDayRange } from '../analytics/domain';
 import { getOptionalUser } from '../shared/auth';
+import { loadReadPointers, type ChatScope } from '../shared/chat';
 import { avatarUrlForUser } from '../avatars/helpers';
 
 const safeProfile = (user: Doc<'users'>) => ({
@@ -348,12 +350,20 @@ export const peopleHub = query({
       ...friendHigh.map((row) => String(row.userLowId)),
       ...conversationByPeer.keys(),
     ]);
+    const candidates = [...peerIds]
+      .sort(
+        (a, b) =>
+          (conversationByPeer.get(b)?.updatedAt ?? 0) -
+            (conversationByPeer.get(a)?.updatedAt ?? 0) ||
+          a.localeCompare(b),
+      )
+      .slice(0, PEOPLE_HUB_LIMIT * 2);
     const now = Date.now();
     const rows = await Promise.all(
-      [...peerIds].slice(0, PEOPLE_HUB_LIMIT * 2).map(async (rawId) => {
+      candidates.map(async (rawId) => {
         const userId = rawId as Id<'users'>;
         const conversation = conversationByPeer.get(rawId);
-        const [user, settings, presence, pointer] = await Promise.all([
+        const [user, settings, presence] = await Promise.all([
           ctx.db.get(userId),
           ctx.db
             .query('userSettings')
@@ -363,30 +373,46 @@ export const peopleHub = query({
             .query('presence')
             .withIndex('by_user', (q) => q.eq('userId', userId))
             .unique(),
-          conversation
-            ? ctx.db
-                .query('chatReadPointers')
-                .withIndex('by_scope_user', (q) =>
-                  q
-                    .eq('scopeType', 'direct')
-                    .eq('scopeId', conversation._id)
-                    .eq('userId', actor._id),
-                )
-                .unique()
-            : Promise.resolve(null),
         ]);
         if (!user || user.deletedAt !== undefined) return null;
         let unreadCount = 0;
+        let unreadCapped = false;
         if (conversation) {
-          const lastReadAt = pointer?.lastReadAt ?? 0;
-          const recent = await ctx.db
+          const pointers = await loadReadPointers(
+            ctx,
+            { type: 'direct', id: conversation._id },
+            [actor._id],
+          );
+          const lastReadAt = pointers.get(actor._id) ?? 0;
+          const messageQuery = ctx.db
             .query('directMessages')
             .withIndex('by_conversation_createdAt', (q) =>
               q.eq('conversationId', conversation._id).gt('createdAt', lastReadAt),
             )
-            .order('desc')
-            .take(PEOPLE_HUB_UNREAD_CAP + 1);
-          unreadCount = recent.filter((message) => message.senderId !== actor._id).length;
+            .order('desc');
+          let cursor: string | null = null;
+          let done = false;
+          while (!done && !unreadCapped) {
+            const page = await messageQuery.paginate({ numItems: 50, cursor });
+            for (const message of page.page) {
+              if (
+                message.senderId !== actor._id &&
+                !(
+                  'expiresAt' in message &&
+                  message.expiresAt !== undefined &&
+                  message.expiresAt <= now
+                )
+              ) {
+                unreadCount += 1;
+                if (unreadCount > PEOPLE_HUB_UNREAD_CAP) {
+                  unreadCapped = true;
+                  break;
+                }
+              }
+            }
+            cursor = page.continueCursor;
+            done = page.isDone;
+          }
         }
         const showActive = settings?.showActive ?? true;
         const showLastSeen = settings?.showLastSeen ?? true;
@@ -396,7 +422,7 @@ export const peopleHub = query({
           conversationId: conversation?._id ?? null,
           lastMessageAt: conversation?.updatedAt ?? null,
           unreadCount: Math.min(unreadCount, PEOPLE_HUB_UNREAD_CAP),
-          unreadCapped: unreadCount > PEOPLE_HUB_UNREAD_CAP,
+          unreadCapped,
           active: showActive ? (presence?.activeUntil ?? 0) > now : null,
           lastSeenAt: showLastSeen ? (presence?.lastSeenAt ?? null) : null,
         };
@@ -413,11 +439,102 @@ export const peopleHub = query({
       .slice(0, PEOPLE_HUB_LIMIT);
   },
 });
+export const peopleHubUnreadTotal = query({
+  args: {},
+  handler: async (ctx) => {
+    const actor = await getOptionalUser(ctx);
+    if (!actor || actor.deletedAt !== undefined) return 0;
+    const [convLow, convHigh, memberships] = await Promise.all([
+      ctx.db
+        .query('directConversations')
+        .withIndex('by_pair', (q) => q.eq('userLowId', actor._id))
+        .collect(),
+      ctx.db
+        .query('directConversations')
+        .withIndex('by_high', (q) => q.eq('userHighId', actor._id))
+        .collect(),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_user', (q) => q.eq('userId', actor._id))
+        .collect(),
+    ]);
+    const scopes: ChatScope[] = [
+      ...[...convLow, ...convHigh].map((conversation) => ({
+        type: 'direct' as const,
+        id: conversation._id,
+      })),
+      ...memberships.map((membership) => ({ type: 'group' as const, id: membership.groupId })),
+    ];
+    const now = Date.now();
+    const counts = await Promise.all(
+      scopes.map(async (scope) => {
+        const pointers = await loadReadPointers(ctx, scope, [actor._id]);
+        const lastReadAt = pointers.get(actor._id) ?? 0;
+        const messages =
+          scope.type === 'direct'
+            ? await ctx.db
+                .query('directMessages')
+                .withIndex('by_conversation_createdAt', (q) =>
+                  q.eq('conversationId', scope.id).gt('createdAt', lastReadAt),
+                )
+                .collect()
+            : await ctx.db
+                .query('groupMessages')
+                .withIndex('by_group_createdAt', (q) =>
+                  q.eq('groupId', scope.id).gt('createdAt', lastReadAt),
+                )
+                .collect();
+        let unread = 0;
+        for (const message of messages) {
+          if (
+            message.senderId !== actor._id &&
+            !('expiresAt' in message && message.expiresAt !== undefined && message.expiresAt <= now)
+          )
+            unread += 1;
+        }
+        return unread;
+      }),
+    );
+    return counts.reduce((sum, count) => sum + count, 0);
+  },
+});
 
 const ACTIVITY_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Messages read per conversation for analytics at most; older ones fall outside the window. */
 const ACTIVITY_MESSAGE_LIMIT = 2000;
+
+function activityDayStarts(now: number, timeZone: string | undefined, offsetMinutes: number) {
+  if (timeZone) {
+    const current = getAnalyticsDayRange(now, timeZone);
+    const starts = new Array<number>(ACTIVITY_DAYS);
+    starts[ACTIVITY_DAYS - 1] = current.startAt;
+    for (let index = ACTIVITY_DAYS - 2; index >= 0; index -= 1) {
+      starts[index] = getAnalyticsDayRange(starts[index + 1]! - 1, timeZone).startAt;
+    }
+    return { starts, endAt: current.endAt };
+  }
+  const offset = offsetMinutes * 60_000;
+  const todayStart = Math.floor((now - offset) / DAY_MS) * DAY_MS + offset;
+  return {
+    starts: Array.from(
+      { length: ACTIVITY_DAYS },
+      (_, index) => todayStart - (ACTIVITY_DAYS - index - 1) * DAY_MS,
+    ),
+    endAt: todayStart + DAY_MS,
+  };
+}
+
+function activityDayIndex(starts: readonly number[], timestamp: number) {
+  let low = 0;
+  let high = starts.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (starts[middle]! <= timestamp) low = middle + 1;
+    else high = middle;
+  }
+  return low - 1;
+}
 
 /**
  * One person's analytics with you: direct messages per day for the last 30 days (sent and
@@ -425,15 +542,19 @@ const ACTIVITY_MESSAGE_LIMIT = 2000;
  * already share a conversation, friendship or group with.
  */
 export const personAnalytics = query({
-  args: { userId: v.id('users'), tzOffsetMinutes: v.optional(v.number()) },
-  handler: async (ctx, { userId, tzOffsetMinutes = 0 }) => {
+  args: {
+    userId: v.id('users'),
+    tzOffsetMinutes: v.optional(v.number()),
+    timeZone: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, tzOffsetMinutes = 0, timeZone }) => {
     const actor = await getOptionalUser(ctx);
     if (!actor || actor.deletedAt !== undefined || actor._id === userId) return null;
     const person = await ctx.db.get(userId);
     if (!person || person.deletedAt !== undefined) return null;
     const lowId = String(actor._id) < String(userId) ? actor._id : userId;
     const highId = lowId === actor._id ? userId : actor._id;
-    const [friendship, conversation, actorGroups, personGroups, presence, settings] =
+    const [friendship, conversation, actorGroups, personGroups, presence, settings, actorSettings] =
       await Promise.all([
         ctx.db
           .query('friendships')
@@ -459,6 +580,10 @@ export const personAnalytics = query({
           .query('userSettings')
           .withIndex('by_user', (q) => q.eq('userId', userId))
           .unique(),
+        ctx.db
+          .query('userSettings')
+          .withIndex('by_user', (q) => q.eq('userId', actor._id))
+          .unique(),
       ]);
     const viewerGroupIds = new Set(actorGroups.map((row) => String(row.groupId)));
     const sharedGroupIds = personGroups
@@ -467,26 +592,36 @@ export const personAnalytics = query({
     if (!friendship && !conversation && sharedGroupIds.length === 0) return null;
 
     const now = Date.now();
-    const offset = tzOffsetMinutes * 60_000;
-    const todayStart = Math.floor((now - offset) / DAY_MS) * DAY_MS + offset;
-    const windowStart = todayStart - (ACTIVITY_DAYS - 1) * DAY_MS;
-    const days = Array.from({ length: ACTIVITY_DAYS }, (_, index) => ({
-      dayStart: windowStart + index * DAY_MS,
-      sent: 0,
-      received: 0,
-    }));
+    let validZone: string | undefined;
+    for (const candidate of [timeZone, actorSettings?.timezone, actor.timezone]) {
+      if (!candidate) continue;
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: candidate });
+        validZone = candidate;
+        break;
+      } catch {
+        continue;
+      }
+    }
+    const { starts, endAt } = activityDayStarts(now, validZone, tzOffsetMinutes);
+    const windowStart = starts[0]!;
+    const days = starts.map((dayStart) => ({ dayStart, sent: 0, received: 0 }));
     const mix = { text: 0, image: 0, audio: 0, ai: 0 };
     let total = 0;
+    let totalMessagesCapped = false;
     if (conversation) {
       const recent = await ctx.db
         .query('directMessages')
         .withIndex('by_conversation_createdAt', (q) =>
-          q.eq('conversationId', conversation._id).gte('createdAt', windowStart),
+          q.eq('conversationId', conversation._id).gte('createdAt', windowStart).lt('createdAt', endAt),
         )
-        .take(ACTIVITY_MESSAGE_LIMIT);
-      for (const message of recent) {
-        const index = Math.floor((message.createdAt - windowStart) / DAY_MS);
-        const day = days[index];
+        .order('desc')
+        .take(ACTIVITY_MESSAGE_LIMIT + 1);
+      totalMessagesCapped = recent.length > ACTIVITY_MESSAGE_LIMIT;
+      const includedMessages = Math.min(recent.length, ACTIVITY_MESSAGE_LIMIT);
+      for (let index = 0; index < includedMessages; index += 1) {
+        const message = recent[index]!;
+        const day = days[activityDayIndex(starts, message.createdAt)];
         if (!day) continue;
         if (message.senderId === actor._id && message.kind !== 'ai') day.sent += 1;
         else day.received += 1;
@@ -512,6 +647,7 @@ export const personAnalytics = query({
       lastSeenAt: (settings?.showLastSeen ?? true) ? (presence?.lastSeenAt ?? null) : null,
       days,
       totalMessages: total,
+      totalMessagesCapped,
       mix,
       sharedGroups: groups.filter((group) => group !== null),
     };
