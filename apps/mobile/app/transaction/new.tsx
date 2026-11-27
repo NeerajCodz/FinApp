@@ -128,9 +128,9 @@ export default function NewTransactionScreen() {
       const amounts = new Map(fields.rows.map((row) => [row.id, row.amount]));
       setAmount(fields.amount);
       setItems((current) =>
-        current.map((row) =>
+        current?.map((row) =>
           amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
-        ),
+        ) ?? current,
       );
     },
   });

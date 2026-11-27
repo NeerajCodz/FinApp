@@ -194,8 +194,8 @@ export function compareVersions(left: string, right: string): number {
   const leftIds = a[4].split('.');
   const rightIds = b[4].split('.');
   for (let index = 0; index < Math.min(leftIds.length, rightIds.length); index++) {
-    const leftId = leftIds[index];
-    const rightId = rightIds[index];
+    const leftId = leftIds[index]!;
+    const rightId = rightIds[index]!;
     const leftNumeric = /^\\d+$/.test(leftId);
     const rightNumeric = /^\\d+$/.test(rightId);
     if (leftNumeric && rightNumeric) {
