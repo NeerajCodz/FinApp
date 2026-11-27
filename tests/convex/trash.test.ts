@@ -210,6 +210,382 @@ describe('Trash', () => {
     expect(restored?.enabled).toBe(true);
     expect(restored?.archivedAt).toBeUndefined();
   });
+
+  it('pages category transaction trashing and companion restores', async () => {
+    vi.useFakeTimers();
+    const { t, owner, ids } = await setup();
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let index = 0; index < 55; index++)
+        await ctx.db.insert('transactions', {
+          ownerId: owner.userId,
+          accountId: ids.accountId,
+          type: 'expense',
+          amountMinor: 100n,
+          currency: 'INR',
+          categoryId: String(ids.categoryId),
+          title: `Extra ${index}`,
+          occurredAt: now + index,
+          status: 'posted',
+          createdAt: now,
+          updatedAt: now,
+        });
+    });
+    await owner.as.mutation(api.categories.mutations.archive, {
+      categoryId: ids.categoryId,
+      deleteTransactions: true,
+    });
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
+    const trashed = await t.run((ctx) =>
+      ctx.db
+        .query('transactions')
+        .withIndex('by_owner_category_occurredAt', (q) =>
+          q.eq('ownerId', owner.userId).eq('categoryId', String(ids.categoryId)),
+        )
+        .collect(),
+    );
+    expect(trashed).toHaveLength(57);
+    expect(trashed.every((row) => row.deletedAt !== undefined)).toBe(true);
+
+    await owner.as.mutation(api.trash.restore, {
+      kind: 'category',
+      id: String(ids.categoryId),
+    });
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
+    const restored = await t.run((ctx) =>
+      ctx.db
+        .query('transactions')
+        .withIndex('by_owner_category_occurredAt', (q) =>
+          q.eq('ownerId', owner.userId).eq('categoryId', String(ids.categoryId)),
+        )
+        .collect(),
+    );
+    expect(restored.every((row) => row.deletedAt === undefined)).toBe(true);
+  });
+
+  it('restores category defaults only when no replacement was chosen', async () => {
+    const { t, owner, ids } = await setup();
+    const replacement = await t.run((ctx) =>
+      ctx.db.insert('categories', {
+        ownerId: owner.userId,
+        name: 'Other',
+        kind: 'expense',
+        isSystem: false,
+        sortOrder: 2,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.patch(owner.userId, {
+        defaultExpenseCategoryId: ids.categoryId,
+        defaultIncomeCategoryId: ids.categoryId,
+      }),
+    );
+    await owner.as.mutation(api.categories.mutations.archive, { categoryId: ids.categoryId });
+    expect(
+      await t.run(async (ctx) => {
+        const user = await ctx.db.get(owner.userId);
+        return [user?.defaultExpenseCategoryId, user?.defaultIncomeCategoryId];
+      }),
+    ).toEqual([undefined, undefined]);
+    await t.run((ctx) => ctx.db.patch(owner.userId, { defaultExpenseCategoryId: replacement }));
+    await owner.as.mutation(api.trash.restore, {
+      kind: 'category',
+      id: String(ids.categoryId),
+    });
+    expect(
+      await t.run(async (ctx) => {
+        const user = await ctx.db.get(owner.userId);
+        return [user?.defaultExpenseCategoryId, user?.defaultIncomeCategoryId];
+      }),
+    ).toEqual([replacement, ids.categoryId]);
+  });
+
+  it('does not restore category companions while their accounts are trashed', async () => {
+    const { t, owner, ids } = await setup();
+    await owner.as.mutation(api.categories.mutations.archive, {
+      categoryId: ids.categoryId,
+      deleteTransactions: true,
+    });
+    await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
+    await owner.as.mutation(api.trash.restore, {
+      kind: 'category',
+      id: String(ids.categoryId),
+    });
+    expect((await t.run((ctx) => ctx.db.get(ids.lunch)))?.deletedAt).toBeDefined();
+    await owner.as.mutation(api.trash.restore, {
+      kind: 'account',
+      id: String(ids.accountId),
+    });
+    expect((await t.run((ctx) => ctx.db.get(ids.lunch)))?.deletedAt).toBeDefined();
+    await owner.as.mutation(api.trash.restore, {
+      kind: 'transaction',
+      id: String(ids.lunch),
+    });
+    expect((await t.run((ctx) => ctx.db.get(ids.lunch)))?.deletedAt).toBeUndefined();
+  });
+
+  it('fills transaction Trash pages after group tombstones', async () => {
+    const { t, owner, ids } = await setup();
+    const personalId = await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let index = 0; index < 205; index++)
+        await ctx.db.insert('transactions', {
+          ownerId: owner.userId,
+          accountId: ids.accountId,
+          type: 'expense',
+          amountMinor: 1n,
+          currency: 'INR',
+          title: `Group ${index}`,
+          groupId: 'legacy-group',
+          occurredAt: now,
+          status: 'posted',
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: now + 1_000 + index,
+        });
+      return ctx.db.insert('transactions', {
+        ownerId: owner.userId,
+        accountId: ids.accountId,
+        type: 'expense',
+        amountMinor: 1n,
+        currency: 'INR',
+        title: 'Personal',
+        occurredAt: now,
+        status: 'posted',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      });
+    });
+    const items = (await owner.as.query(api.trash.list, { kind: 'transaction' })).items;
+    expect(items).toEqual([
+      expect.objectContaining({ id: String(personalId), title: 'Personal' }),
+    ]);
+  });
+
+  it('continues expiry past a page of never-expiring transactions', async () => {
+    vi.useFakeTimers();
+    const { t, owner, make, ids } = await setup();
+    const other = await make('expiry-target');
+    const targetAccount = await t.run((ctx) =>
+      ctx.db.insert('accounts', {
+        ownerId: other.userId,
+        name: 'Target',
+        type: 'cash',
+        currency: 'INR',
+        openingBalanceMinor: 0n,
+        isIncludedInTotal: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
+    );
+    const target = await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let index = 0; index < 25; index++)
+        await ctx.db.insert('transactions', {
+          ownerId: owner.userId,
+          accountId: ids.accountId,
+          type: 'expense',
+          amountMinor: 1n,
+          currency: 'INR',
+          title: `Never ${index}`,
+          occurredAt: now,
+          status: 'posted',
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: now - 32 * DAY + index * 1_000,
+        });
+      return ctx.db.insert('transactions', {
+        ownerId: other.userId,
+        accountId: targetAccount,
+        type: 'expense',
+        amountMinor: 1n,
+        currency: 'INR',
+        title: 'Expired',
+        occurredAt: now,
+        status: 'posted',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now - 31 * DAY,
+      });
+    });
+    await owner.as.mutation(api.trash.setRetention, { days: 0 });
+    await t.mutation(internal.trash.purgeExpired, {});
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1_000));
+    expect(await t.run((ctx) => ctx.db.get(target))).toBeNull();
+  });
+
+  it('does not automatically expire legacy category archives', async () => {
+    vi.useFakeTimers();
+    const { t, ids } = await setup();
+    await t.run((ctx) =>
+      ctx.db.patch(ids.categoryId, {
+        archivedAt: Date.now() - 31 * DAY,
+        updatedAt: Date.now() - 31 * DAY,
+      }),
+    );
+    await t.mutation(internal.trash.purgeExpired, { kindIndex: 2 });
+    expect(await t.run((ctx) => ctx.db.get(ids.categoryId))).not.toBeNull();
+  });
+
+  it('purges transaction tags, receipt metadata and storage with sync tombstones', async () => {
+    const { t, owner, ids } = await setup();
+    await owner.as.mutation(api.transactions.mutations.softDelete, {
+      transactionId: ids.lunch,
+      clientMutationId: 'purge-with-dependents',
+    });
+    const { tagId, receiptId, storageId } = await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(
+        new Blob([new Uint8Array([1])], { type: 'image/jpeg' }),
+      );
+      const tagId = await ctx.db.insert('transactionTags', {
+        transactionId: ids.lunch,
+        tag: 'receipt',
+      });
+      const receiptId = await ctx.db.insert('receipts', {
+        transactionId: ids.lunch,
+        ownerId: owner.userId,
+        storageId,
+        mimeType: 'image/jpeg',
+        size: 1,
+        createdAt: Date.now(),
+      });
+      return { tagId, receiptId, storageId };
+    });
+    await owner.as.mutation(api.trash.purge, {
+      kind: 'transaction',
+      id: String(ids.lunch),
+    });
+    expect(await t.run((ctx) => ctx.db.get(tagId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(receiptId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.system.get('_storage', storageId))).toBeNull();
+    const changes = await t.run((ctx) => ctx.db.query('syncChanges').collect());
+    expect(
+      changes.filter(
+        (change) =>
+          ['transactions', 'transactionTags', 'receipts'].includes(change.entityType) &&
+          change.deletedAt !== undefined,
+      ).map((change) => change.entityType),
+    ).toEqual(expect.arrayContaining(['transactions', 'transactionTags', 'receipts']));
+  });
+
+  it('purges inbound and self transfers only once when deleting an account', async () => {
+    const { t, owner, ids } = await setup();
+    const sourceAccount = await t.run((ctx) =>
+      ctx.db.insert('accounts', {
+        ownerId: owner.userId,
+        name: 'Source',
+        type: 'cash',
+        currency: 'INR',
+        openingBalanceMinor: 0n,
+        isIncludedInTotal: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
+    );
+    const transfers = await t.run(async (ctx) => {
+      const now = Date.now();
+      const insert = (accountId: typeof sourceAccount, title: string) =>
+        ctx.db.insert('transactions', {
+          ownerId: owner.userId,
+          accountId,
+          type: 'transfer' as const,
+          amountMinor: 500n,
+          currency: 'INR',
+          title,
+          transferAccountId: String(ids.accountId),
+          occurredAt: now,
+          status: 'posted' as const,
+          createdAt: now,
+          updatedAt: now,
+        });
+      return {
+        inbound: await insert(sourceAccount, 'Inbound'),
+        self: await insert(ids.accountId, 'Self'),
+      };
+    });
+    await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
+    await owner.as.mutation(api.trash.purge, {
+      kind: 'account',
+      id: String(ids.accountId),
+    });
+    expect(await t.run((ctx) => ctx.db.get(transfers.inbound))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(transfers.self))).toBeNull();
+    const deletionChanges = await t.run(async (ctx) =>
+      (await ctx.db.query('syncChanges').collect()).filter(
+        (change) =>
+          change.entityType === 'transactions' &&
+          [String(transfers.inbound), String(transfers.self)].includes(change.documentId) &&
+          change.deletedAt !== undefined,
+      ),
+    );
+    expect(deletionChanges).toHaveLength(2);
+  });
+
+  it('keeps group expenses in their ledger deletion path during account purges', async () => {
+    const { t, owner, ids } = await setup();
+    const { groupId, expenseId } = await t.run(async (ctx) => {
+      const now = Date.now();
+      const groupId = await ctx.db.insert('groups', {
+        ownerId: owner.userId,
+        name: 'Trip',
+        currency: 'INR',
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert('groupMembers', {
+        groupId,
+        userId: owner.userId,
+        role: 'owner',
+        joinedAt: now,
+      });
+      const expenseId = await ctx.db.insert('transactions', {
+        ownerId: owner.userId,
+        accountId: ids.accountId,
+        type: 'expense',
+        amountMinor: 500n,
+        currency: 'INR',
+        title: 'Shared lunch',
+        groupId: String(groupId),
+        occurredAt: now,
+        status: 'posted',
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert('expensePayers', {
+        transactionId: expenseId,
+        userId: owner.userId,
+        amountMinor: 500n,
+      });
+      await ctx.db.insert('expenseParticipants', {
+        transactionId: expenseId,
+        userId: owner.userId,
+        amountMinor: 500n,
+        method: 'equal',
+      });
+      return { groupId, expenseId };
+    });
+    await owner.as.mutation(api.groups.mutations.deleteExpense, { transactionId: expenseId });
+    await expect(
+      owner.as.mutation(api.trash.restore, { kind: 'transaction', id: String(expenseId) }),
+    ).rejects.toThrow('NOT_IN_TRASH');
+    await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
+    await owner.as.mutation(api.trash.purge, {
+      kind: 'account',
+      id: String(ids.accountId),
+    });
+    expect((await t.run((ctx) => ctx.db.get(expenseId)))?.deletedAt).toBeDefined();
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query('ledgerEvents')
+          .withIndex('by_group_createdAt', (q) => q.eq('groupId', groupId))
+          .collect(),
+      ),
+    ).toHaveLength(1);
+  });
 });
 
 describe('friend notifications', () => {

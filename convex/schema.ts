@@ -181,6 +181,11 @@ export default defineSchema({
     includeInBudgets: v.optional(v.boolean()),
     isSystem: v.boolean(),
     archivedAt: optionalTime,
+    /** Set only for categories explicitly moved to Trash; older archives are legacy. */
+    trashedAt: optionalTime,
+    /** Defaults cleared by archive and restored only if the user has not chosen another. */
+    restoreDefaultExpense: v.optional(v.boolean()),
+    restoreDefaultIncome: v.optional(v.boolean()),
     monthlyLimitMinor: v.optional(v.int64()),
     limitCurrency: v.optional(currency),
     /** Notify when this % of the monthly limit is spent (1-100). Default 80. */
@@ -233,6 +238,7 @@ export default defineSchema({
     .index('by_owner_deletedAt', ['ownerId', 'deletedAt'])
     .index('by_deletedAt', ['deletedAt'])
     .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
+    .index('by_owner_trashedWith', ['ownerId', 'trashedWith'])
     .index('by_account', ['accountId'])
     .index('by_transferAccountId', ['transferAccountId'])
     .index('by_group_occurredAt', ['groupId', 'occurredAt'])

@@ -440,6 +440,14 @@ async function sendMutation(
         ruleId: mapped ?? ruleId,
       } as never);
     }
+    case 'recurring.delete': {
+      const ruleId = String(payload.ruleId);
+      const mapped = await getMappedCloudId(userId, 'recurringRule', ruleId);
+      return convex.mutation(api.recurring.mutations.remove, {
+        ...payload,
+        ruleId: mapped ?? ruleId,
+      } as never);
+    }
     case 'notification.preferences':
       return convex.mutation(api.notifications.mutations.setPreferences, payload as never);
     case 'notification.markRead': {
@@ -1064,13 +1072,20 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const markOpenedRef = React.useRef<(id: unknown) => Promise<void>>(async () => {});
   React.useEffect(() => {
     if (!userId || !pendingPushReads.current.length) return;
-    const queued = pendingPushReads.current.splice(0);
-    for (const id of queued)
-      void markOpenedRef
-        .current(id)
-        .catch((error: unknown) =>
-          console.warn('[local-sync] Could not mark the opened notification read.', error),
-        );
+    const queued = [...pendingPushReads.current];
+    const markQueued = (id: string) => {
+      void markOpenedRef.current(id).then(
+        () => {
+          const index = pendingPushReads.current.indexOf(id);
+          if (index !== -1) pendingPushReads.current.splice(index, 1);
+        },
+        (error: unknown) => {
+          console.warn('[local-sync] Could not mark the opened notification read.', error);
+          setTimeout(() => markQueued(id), 1_000);
+        },
+      );
+    };
+    for (const id of queued) markQueued(id);
   }, [userId]);
 
   React.useEffect(() => {

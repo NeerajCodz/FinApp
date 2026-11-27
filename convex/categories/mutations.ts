@@ -1,4 +1,5 @@
-import { mutation } from '../_generated/server';
+import { internalMutation, mutation, type MutationCtx } from '../_generated/server';
+import { internal } from '../_generated/api';
 import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
@@ -282,6 +283,67 @@ export const setLimit = mutation({
   },
 });
 
+const CATEGORY_TRANSACTION_PAGE_SIZE = 50;
+
+type CategoryTrashPage = {
+  userId: Id<'users'>;
+  categoryId: Id<'categories'>;
+  keys: string[];
+  keyIndex: number;
+  cursor: string | null;
+  now: number;
+};
+
+async function trashCategoryTransactionPage(ctx: MutationCtx, args: CategoryTrashPage) {
+  const category = await ctx.db.get(args.categoryId);
+  if (!category || category.ownerId !== args.userId || category.archivedAt === undefined) return;
+  const key = args.keys[args.keyIndex];
+  if (key === undefined) return;
+  const page = await ctx.db
+    .query('transactions')
+    .withIndex('by_owner_category_occurredAt', (q) =>
+      q.eq('ownerId', args.userId).eq('categoryId', key),
+    )
+    .paginate({ numItems: CATEGORY_TRANSACTION_PAGE_SIZE, cursor: args.cursor });
+  for (const row of page.page) {
+    if (row.deletedAt !== undefined || row.groupId !== undefined) continue;
+    await ctx.db.patch(row._id, {
+      deletedAt: args.now,
+      trashedWith: `category:${String(args.categoryId)}`,
+      updatedAt: args.now,
+    });
+    await recordSyncChange(
+      ctx,
+      args.userId,
+      'transactions',
+      String(row._id),
+      args.now,
+      await ctx.db.get(row._id),
+    );
+  }
+  const keyIndex = page.isDone ? args.keyIndex + 1 : args.keyIndex;
+  const cursor = page.isDone ? null : page.continueCursor;
+  if (keyIndex < args.keys.length) {
+    await ctx.scheduler.runAfter(0, internal.categories.mutations.continueTrashTransactions, {
+      ...args,
+      keyIndex,
+      cursor,
+    });
+  }
+}
+
+export const continueTrashTransactions = internalMutation({
+  args: {
+    userId: v.id('users'),
+    categoryId: v.id('categories'),
+    keys: v.array(v.string()),
+    keyIndex: v.number(),
+    cursor: v.union(v.string(), v.null()),
+    now: v.number(),
+  },
+  handler: async (ctx, args) => trashCategoryTransactionPage(ctx, args),
+});
+
 export const archive = mutation({
   args: {
     categoryId: v.id('categories'),
@@ -302,35 +364,33 @@ export const archive = mutation({
     const category = await ctx.db.get(args.categoryId);
     if (!category || category.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
     const now = Date.now();
-    await ctx.db.patch(args.categoryId, { archivedAt: now, updatedAt: now });
+    const restoreDefaultExpense =
+      category.restoreDefaultExpense ?? (user.defaultExpenseCategoryId === args.categoryId);
+    const restoreDefaultIncome =
+      category.restoreDefaultIncome ?? (user.defaultIncomeCategoryId === args.categoryId);
+    await ctx.db.patch(args.categoryId, {
+      archivedAt: now,
+      trashedAt: category.trashedAt ?? now,
+      restoreDefaultExpense: restoreDefaultExpense || undefined,
+      restoreDefaultIncome: restoreDefaultIncome || undefined,
+      updatedAt: now,
+    });
     if (args.deleteTransactions) {
-      const keys = [String(args.categoryId), category.clientId].filter(
-        (key): key is string => typeof key === 'string' && key.length > 0,
-      );
-      for (const key of keys) {
-        const rows = await ctx.db
-          .query('transactions')
-          .withIndex('by_owner_category_occurredAt', (q) =>
-            q.eq('ownerId', user._id).eq('categoryId', key),
-          )
-          .collect();
-        for (const row of rows) {
-          if (row.deletedAt !== undefined || row.groupId !== undefined) continue;
-          await ctx.db.patch(row._id, {
-            deletedAt: now,
-            trashedWith: `category:${String(args.categoryId)}`,
-            updatedAt: now,
-          });
-          await recordSyncChange(
-            ctx,
-            user._id,
-            'transactions',
-            String(row._id),
-            now,
-            await ctx.db.get(row._id),
-          );
-        }
-      }
+      const keys = [
+        ...new Set(
+          [String(args.categoryId), category.clientId].filter(
+            (key): key is string => typeof key === 'string' && key.length > 0,
+          ),
+        ),
+      ];
+      await trashCategoryTransactionPage(ctx, {
+        userId: user._id,
+        categoryId: args.categoryId,
+        keys,
+        keyIndex: 0,
+        cursor: null,
+        now,
+      });
     }
     const updated = await ctx.db.get(args.categoryId);
     if (!updated) throw new Error('INSUFFICIENT_PERMISSION');
