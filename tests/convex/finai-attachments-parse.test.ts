@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 import { readSheets } from '../../convex/ai/attachmentContent';
 import {
+  excelSerialToIso,
+  parseCsv,
+  readXlsx,
+  sheetForPrompt,
+} from '../../convex/ai/spreadsheet';
+import {
   detectDateFormat,
   mapImportRows,
   parseAmount,

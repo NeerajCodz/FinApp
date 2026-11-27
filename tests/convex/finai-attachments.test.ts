@@ -96,8 +96,15 @@ async function fixture() {
     return { ownerId, outsiderId, accountId, foodId };
   });
   const as = (id: string) => t.withIdentity({ subject: `${id}|session` });
-  const upload = (body: string | Uint8Array, type: string) =>
-    t.run((ctx) => ctx.storage.store(new Blob([body], { type })));
+  const upload = async (
+    body: string | Uint8Array,
+    type: string,
+    actor = as(ids.ownerId),
+  ) => {
+    const { ticket } = await actor.mutation(api.ai.attachments.generateUploadUrl, {});
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob([body], { type })));
+    return { ticket, storageId };
+  };
   return { t, ids, owner: as(ids.ownerId), outsider: as(ids.outsiderId), upload };
 }
 
@@ -106,12 +113,22 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2
 const CSV =
   'Date,Description,Amount,Category\n2026-01-05,Coffee,-4.50,Food\n2026-01-06,Salary,2500,\n2026-01-07,Lunch,-12,Dining\nbad,Row,1,\n';
 
-async function registered(
+type UploadedFile = { ticket: string; storageId: Id<'_storage'> };
+
+async function register(
   owner: Awaited<ReturnType<typeof fixture>>['owner'],
-  storageId: Id<'_storage'>,
+  file: UploadedFile,
   name: string,
 ) {
-  const result = await owner.mutation(api.ai.attachments.register, { storageId, name });
+  return owner.mutation(api.ai.attachments.register, { ...file, name });
+}
+
+async function registered(
+  owner: Awaited<ReturnType<typeof fixture>>['owner'],
+  file: UploadedFile,
+  name: string,
+) {
+  const result = await register(owner, file, name);
   if (!('attachment' in result) || !result.attachment)
     throw new Error(`register failed: ${JSON.stringify(result)}`);
   return result.attachment;
@@ -125,15 +142,15 @@ describe('FinAI attachments', () => {
 
     const exe = await upload('MZ', 'application/octet-stream');
     expect(
-      await owner.mutation(api.ai.attachments.register, { storageId: exe, name: 'run.exe' }),
+      await register(owner, exe, 'run.exe'),
     ).toEqual({
       error: 'UNSUPPORTED_FILE',
     });
-    expect(await t.run((ctx) => ctx.db.system.get('_storage', exe))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.system.get('_storage', exe.storageId))).toBeNull();
 
     const big = await upload(new Uint8Array(10 * 1024 * 1024 + 1), 'text/csv');
     expect(
-      await owner.mutation(api.ai.attachments.register, { storageId: big, name: 'big.csv' }),
+      await register(owner, big, 'big.csv'),
     ).toEqual({
       error: 'FILE_TOO_LARGE',
     });
@@ -142,7 +159,7 @@ describe('FinAI attachments', () => {
     await registered(owner, csv, 'bank.csv');
     expect(
       await codeOf(
-        owner.mutation(api.ai.attachments.register, { storageId: csv, name: 'again.csv' }),
+        register(owner, csv, 'again.csv'),
       ),
     ).toBe('INVALID_UPLOAD');
   });
