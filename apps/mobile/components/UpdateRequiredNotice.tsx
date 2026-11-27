@@ -1,12 +1,13 @@
 import React from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useConvexAuth, useQuery } from 'convex/react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@convex/_generated/api';
 import { updateRequired } from '@finapp/ui/version';
 import type { ThemeTokens } from '@finapp/ui/tokens';
 
-const STORE_URL = 'https://play.google.com/store/apps/details?id=com.neerajcodz.finapp';
+const IOS_STORE_URL = 'https://apps.apple.com/search?term=Finapp';
+const ANDROID_STORE_URL = 'https://play.google.com/store/apps/details?id=com.neerajcodz.finapp';
 
 /**
  * Asks the user to update when this build is older than the backend's minimum supported
@@ -40,7 +41,11 @@ export function UpdateRequiredNotice({ tokens }: { tokens: ThemeTokens }) {
       </Text>
       <Pressable
         accessibilityRole="link"
-        onPress={() => void Linking.openURL(STORE_URL).catch(() => undefined)}
+        onPress={() =>
+          void Linking.openURL(Platform.OS === 'ios' ? IOS_STORE_URL : ANDROID_STORE_URL).catch(
+            () => undefined,
+          )
+        }
         hitSlop={8}
       >
         <Text style={{ color: tokens.primary, fontWeight: '600' }}>Update</Text>

@@ -148,6 +148,7 @@ export default function NotificationSettingsScreen() {
     null,
   );
   const [saving, setSaving] = React.useState(false);
+  const registrationInFlight = React.useRef(false);
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
@@ -159,15 +160,19 @@ export default function NotificationSettingsScreen() {
     'checking' | 'registered' | 'failed' | 'offline'
   >('checking');
   const register = React.useCallback(async () => {
+    if (registrationInFlight.current) return;
     if (!isConnected) {
       setRegistration('offline');
       return;
     }
+    registrationInFlight.current = true;
     setRegistration('checking');
     try {
       setRegistration((await registerForPush(convex)) === 'registered' ? 'registered' : 'failed');
     } catch {
       setRegistration('failed');
+    } finally {
+      registrationInFlight.current = false;
     }
   }, [convex, isConnected]);
   React.useEffect(() => {
@@ -202,7 +207,6 @@ export default function NotificationSettingsScreen() {
       setPermission(granted ? 'granted' : 'denied');
       if (granted && userId) {
         await reconcileRecurringNotifications(userId);
-        await register();
       }
     } catch {
       setError('Could not request notification permission.');
