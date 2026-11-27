@@ -57,7 +57,9 @@ export function escapeMentions(markdown) {
         );
       if (author) {
         const start = author.index;
-        return `${escapeText(line.slice(0, start))}${escapeText(author[1])}${author[2]}${escapeText(author[3])}`;
+        return `${escapeText(line.slice(0, start))}${escapeText(author[1])}${author[2]}${escapeText(
+          author[3],
+        )}`;
       }
       return escapeText(line);
     })

@@ -30,8 +30,8 @@ describe('release note mention escaping', () => {
   });
 
   it('does not preserve user-authored text that only resembles an author suffix', () => {
-    expect(
-      escapeReleaseMentions('* User wrote by @fake in #12').trim(),
-    ).toBe('* User wrote by `@fake` in #12');
+    expect(escapeReleaseMentions('* User wrote by @fake in #12').trim()).toBe(
+      '* User wrote by `@fake` in #12',
+    );
   });
 });
