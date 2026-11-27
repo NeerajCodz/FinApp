@@ -199,7 +199,7 @@ describe('devices', () => {
     ]);
     const alerts = await t.run(async (ctx) =>
       (await ctx.db.query('notifications').collect()).filter(
-        (row) => row.recipientId === ids.alice,
+        (row) => row.recipientId === ids.aliceId,
       ),
     );
     expect(alerts.map((row) => [row.type, row.title])).toEqual([
