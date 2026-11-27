@@ -248,11 +248,13 @@ describe('MCP OAuth authorization code exchange', () => {
         refreshToken: initial.refreshToken,
         clientId: fixture.registration.client_id,
         requestedScopes: ['finapp:read', 'finapp:write:social'],
+        authTransport: 'none',
       }),
     ).rejects.toThrow('INVALID_SCOPE');
     const narrowed = await fixture.t.mutation(internal.mcpOAuth.refreshAccessGrant, {
       refreshToken: initial.refreshToken,
       clientId: fixture.registration.client_id,
+      authTransport: 'none',
       requestedScopes: ['finapp:read'],
     });
     expect(narrowed.scopes).toEqual(['finapp:read']);
@@ -261,6 +263,7 @@ describe('MCP OAuth authorization code exchange', () => {
       fixture.t.mutation(internal.mcpOAuth.refreshAccessGrant, {
         refreshToken: narrowed.refreshToken,
         clientId: fixture.registration.client_id,
+        authTransport: 'none',
       }),
     ).resolves.toMatchObject({ scopes: ['finapp:read'] });
   });
