@@ -13,7 +13,7 @@ const escapeReleaseMentions = (text: string) =>
 describe('release note mention escaping', () => {
   it('escapes PR-title mentions but preserves GitHub-generated credits', () => {
     const notes = [
-      '## What\'s Changed',
+      "## What's Changed",
       '* Add `@finai` support by @titleauthor in https://github.com/acme/app/pull/12 by @actualauthor in https://github.com/acme/app/pull/12',
       '## New Contributors',
       '* @newauthor made their first contribution in https://github.com/acme/app/pull/13',
@@ -21,7 +21,7 @@ describe('release note mention escaping', () => {
 
     expect(escapeReleaseMentions(notes)).toBe(
       [
-        '## What\'s Changed',
+        "## What's Changed",
         '* Add `@finai` support by `@titleauthor` in https://github.com/acme/app/pull/12 by @actualauthor in https://github.com/acme/app/pull/12',
         '## New Contributors',
         '* @newauthor made their first contribution in https://github.com/acme/app/pull/13',

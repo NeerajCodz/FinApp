@@ -53,7 +53,8 @@ export default function NewTransactionScreen() {
   const [categoryId, setCategoryId] = useState(scalar(params.categoryId) ?? '');
   const [destinationId, setDestinationId] = useState(scalar(params.destinationId) ?? '');
   const [occurredAt, setOccurredAt] = useState(() => {
-    const date = Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date();
+    const date =
+      Number.isFinite(initialDate) && initialDate > 0 ? new Date(initialDate) : new Date();
     if (!Number.isFinite(initialDate) || initialDate <= 0) date.setHours(12, 0, 0, 0);
     return date.getTime();
   });
@@ -94,13 +95,13 @@ export default function NewTransactionScreen() {
   );
   const accountDefault = Boolean(
     account &&
-    profile?.defaultAccountId &&
-    [account.id, account._id, account.cloudId].includes(profile.defaultAccountId),
+      profile?.defaultAccountId &&
+      [account.id, account._id, account.cloudId].includes(profile.defaultAccountId),
   );
   const categoryDefault = Boolean(
     category &&
-    defaultCategoryId &&
-    [category.id, category._id, category.cloudId].includes(defaultCategoryId),
+      defaultCategoryId &&
+      [category.id, category._id, category.cloudId].includes(defaultCategoryId),
   );
   useEffect(() => {
     if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));
@@ -126,10 +127,11 @@ export default function NewTransactionScreen() {
     onCurrencyChange: (fields) => {
       const amounts = new Map(fields.rows.map((row) => [row.id, row.amount]));
       setAmount(fields.amount);
-      setItems((current) =>
-        current?.map((row) =>
-          amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
-        ) ?? current,
+      setItems(
+        (current) =>
+          current?.map((row) =>
+            amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
+          ) ?? current,
       );
     },
   });

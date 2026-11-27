@@ -85,9 +85,9 @@ export default function NewPersonalTransactionPage() {
   );
   const isDefaultCategory = Boolean(
     type !== 'transfer' &&
-    category &&
-    profile?.[defaultCategoryField] &&
-    aliasesOf(category).includes(profile[defaultCategoryField]!),
+      category &&
+      profile?.[defaultCategoryField] &&
+      aliasesOf(category).includes(profile[defaultCategoryField]!),
   );
 
   React.useEffect(() => {
@@ -292,10 +292,11 @@ export default function NewPersonalTransactionPage() {
     onCurrencyChange: (fields) => {
       const amounts = new Map(fields.rows.map((row) => [row.id, row.amount]));
       setAmount(fields.amount);
-      setItems((current) =>
-        current?.map((row) =>
-          amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
-        ) ?? current,
+      setItems(
+        (current) =>
+          current?.map((row) =>
+            amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
+          ) ?? current,
       );
     },
   });

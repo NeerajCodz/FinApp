@@ -26,9 +26,7 @@ export function escapeMentions(markdown) {
     text
       .split(/(`[^`\n]*`)/)
       .map((part, index) =>
-        index % 2 === 1
-          ? part
-          : part.replace(/(^|[^\w`])@([A-Za-z0-9][\w-]*)/g, '$1`@$2`'),
+        index % 2 === 1 ? part : part.replace(/(^|[^\w`])@([A-Za-z0-9][\w-]*)/g, '$1`@$2`'),
       )
       .join('');
 
