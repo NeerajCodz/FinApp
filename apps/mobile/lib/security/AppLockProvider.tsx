@@ -165,11 +165,15 @@ export function AppLockProvider({
       const previous = activeState.current;
       activeState.current = next;
       if (next === 'background' && previous !== 'background') {
-        // Remember when we left; the lock decides on return (after the timeout).
+        // Preserve the start time through iOS's inactive state; evaluate it when active returns.
         backgroundAt.current = Date.now();
         if (devicePromptInFlight.current) suppressNextPrompt.current = true;
-      } else if (next === 'active' && previous === 'background' && userId) {
-        const away = backgroundAt.current === null ? Infinity : Date.now() - backgroundAt.current;
+      } else if (
+        next === 'active' &&
+        userId &&
+        backgroundAt.current !== null
+      ) {
+        const away = Date.now() - backgroundAt.current;
         backgroundAt.current = null;
         if (!lockTimedOut(away, timeoutRef.current)) return;
         ++generation.current;

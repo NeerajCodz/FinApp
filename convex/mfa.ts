@@ -118,13 +118,18 @@ export const savePending = internalMutation({
 export const activateTotp = internalMutation({
   args: {
     userId: v.id('users'),
+    pendingSecret: v.string(),
     step: v.number(),
     recoveryHashes: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { userId, step, recoveryHashes }) => {
+  handler: async (ctx, { userId, pendingSecret, step, recoveryHashes }) => {
     const row = await factorsRow(ctx, userId);
-    if (!row?.totpPendingSecret) throw new Error('TOTP_NOT_STARTED');
+    if (!row?.totpPendingSecret || row.totpPendingSecret !== pendingSecret)
+      throw new Error('TOTP_ENROLLMENT_CHANGED');
     const now = Date.now();
+    const recoveryDetail = recoveryHashes
+      ? ` ${recoveryHashes.length} recovery code${recoveryHashes.length === 1 ? '' : 's'} were created and shown once.`
+      : '';
     await upsert(ctx, userId, {
       totpSecret: row.totpPendingSecret,
       totpPendingSecret: undefined,
@@ -142,7 +147,7 @@ export const activateTotp = internalMutation({
       'account',
       String(userId),
       'Authenticator app turned on',
-      'Sign-in now asks for a code from your authenticator app. If this wasn’t you, change your password and turn it off in Settings → Security.',
+      `Sign-in now asks for a code from your authenticator app.${recoveryDetail} If this wasn’t you, change your password and turn it off in Settings → Security.`,
     );
   },
 });
@@ -173,10 +178,22 @@ export const deactivateTotp = internalMutation({
 export const replaceRecoveryCodes = internalMutation({
   args: { userId: v.id('users'), hashes: v.array(v.string()) },
   handler: async (ctx, { userId, hashes }) => {
+    const now = Date.now();
     await upsert(ctx, userId, {
       recoveryCodes: hashes.map((hash) => ({ hash })),
-      recoveryCreatedAt: Date.now(),
+      recoveryCreatedAt: now,
     });
+    const count = hashes.length;
+    await createNotification(
+      ctx,
+      userId,
+      `security:recovery-codes:${now}:${hashes[0] ?? 'empty'}`,
+      'security',
+      'account',
+      String(userId),
+      'Recovery codes regenerated',
+      `${count} new recovery code${count === 1 ? '' : 's'} were created. Your previous codes no longer work; save the new codes now. They are shown only once.`,
+    );
   },
 });
 
@@ -208,11 +225,11 @@ export const recordFactorUse = internalMutation({
       await createNotification(
         ctx,
         userId,
-        `security:recovery-used:${now}`,
+        `security:recovery-used:${recoveryHash}`,
         'security',
         'account',
         String(userId),
-        'Recovery code used to sign in',
+        'Recovery code used',
         `${left} recovery code${left === 1 ? '' : 's'} left. Make new ones in Settings → Security if you’re running low.`,
       );
       return true;
@@ -312,6 +329,7 @@ export const confirmTotp = action({
     const fresh = factors.recoveryRemaining === 0 ? await hashedCodes(userId) : null;
     await ctx.runMutation(internal.mfa.activateTotp, {
       userId,
+      pendingSecret: factors.totpPendingSecret,
       step,
       ...(fresh ? { recoveryHashes: fresh.hashes } : {}),
     });

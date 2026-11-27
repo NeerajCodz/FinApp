@@ -93,17 +93,23 @@ export const consume = internalMutation({
 });
 
 /**
- * Puts a new email code on an active challenge (when someone with an authenticator app asks for
- * the email code instead). Returns the address to send it to, or null if the challenge is gone.
+ * Reserves an active challenge's email resend slot without replacing its current code. The slot
+ * is rolled back if delivery fails, so the existing code stays usable and a retry can proceed.
  */
-export const rotateCode = internalMutation({
-  args: { challengeIdHash: v.string(), codeHash: v.string(), now: v.number() },
-  handler: async (ctx, { challengeIdHash, codeHash, now }) => {
+export const reserveCodeResend = internalMutation({
+  args: { challengeIdHash: v.string(), now: v.number() },
+  handler: async (ctx, { challengeIdHash, now }) => {
     const challenge = await ctx.db
       .query('authEmailChallenges')
       .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
       .unique();
-    if (!challenge || challenge.consumedAt !== undefined || challenge.expiresAt <= now) return null;
+    if (
+      !challenge ||
+      challenge.consumedAt !== undefined ||
+      challenge.expiresAt <= now ||
+      challenge.attempts >= maxVerificationAttempts
+    )
+      return null;
     if (
       challenge.emailSentAt !== undefined &&
       now - challenge.emailSentAt < minimumResendIntervalMs
@@ -111,12 +117,58 @@ export const rotateCode = internalMutation({
       throw new Error('TWO_FACTOR_RATE_LIMITED');
     const user = await ctx.db.get(challenge.userId);
     if (!user?.email || user.deletedAt !== undefined) return null;
+    const previousEmailSentAt = challenge.emailSentAt ?? null;
+    await ctx.db.patch(challenge._id, { emailSentAt: now });
+    return { email: user.email.toLowerCase(), reservedAt: now, previousEmailSentAt };
+  },
+});
+
+/** Makes a delivered resend code current only while its reservation is still active. */
+export const finishCodeResend = internalMutation({
+  args: {
+    challengeIdHash: v.string(),
+    codeHash: v.string(),
+    reservedAt: v.number(),
+    now: v.number(),
+  },
+  handler: async (ctx, { challengeIdHash, codeHash, reservedAt, now }) => {
+    const challenge = await ctx.db
+      .query('authEmailChallenges')
+      .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
+      .unique();
+    if (
+      !challenge ||
+      challenge.consumedAt !== undefined ||
+      challenge.expiresAt <= now ||
+      challenge.attempts >= maxVerificationAttempts ||
+      challenge.emailSentAt !== reservedAt
+    )
+      return false;
     await ctx.db.patch(challenge._id, {
       codeHash,
-      emailSentAt: now,
       expiresAt: Math.max(challenge.expiresAt, now + challengeLifetimeMs),
     });
-    return { email: user.email.toLowerCase() };
+    return true;
+  },
+});
+
+/** Releases a failed delivery's rate-limit reservation without touching the working code. */
+export const releaseCodeResend = internalMutation({
+  args: {
+    challengeIdHash: v.string(),
+    reservedAt: v.number(),
+    previousEmailSentAt: v.union(v.number(), v.null()),
+  },
+  handler: async (ctx, { challengeIdHash, reservedAt, previousEmailSentAt }) => {
+    const challenge = await ctx.db
+      .query('authEmailChallenges')
+      .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
+      .unique();
+    if (!challenge || challenge.emailSentAt !== reservedAt) return false;
+    await ctx.db.patch(challenge._id, {
+      emailSentAt: previousEmailSentAt === null ? undefined : previousEmailSentAt,
+    });
+    return true;
   },
 });
 

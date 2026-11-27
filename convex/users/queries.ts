@@ -5,6 +5,7 @@ import { v } from 'convex/values';
 import { getOptionalUser } from '../shared/auth';
 import { normalizeUsername, usernameProblem, type UsernameProblem } from './domain';
 import { avatarUrlForUser } from '../avatars/helpers';
+import type { Doc } from '../_generated/dataModel';
 
 export const loginEmailForUsername = internalQuery({
   args: { username: v.string() },
@@ -133,6 +134,8 @@ export const search = query({
   },
 });
 
+const GROUP_PROFILE_SEARCH_PAGE_SIZE = 50;
+
 export const searchGroupProfiles = query({
   args: { query: v.string() },
   handler: async (ctx, args) => {
@@ -140,17 +143,29 @@ export const searchGroupProfiles = query({
     if (!current) return [];
     const searchTerm = normalizeUsername(args.query);
     if (!/^[a-z0-9_]{2,32}$/.test(searchTerm)) return [];
-    const users = await ctx.db
-      .query('users')
-      .withIndex('by_username', (q) =>
-        q.gte('username', searchTerm).lte('username', `${searchTerm}\uffff`),
-      )
-      .filter((q) =>
-        q.and(q.neq(q.field('_id'), current._id), q.eq(q.field('deletedAt'), undefined)),
-      )
-      .take(20);
+    const visible: Doc<'users'>[] = [];
+    let cursor: string | null = null;
+    let isDone = false;
+    while (visible.length < 20 && !isDone) {
+      const page = await ctx.db
+        .query('users')
+        .withIndex('by_username', (q) =>
+          q.gte('username', searchTerm).lte('username', `${searchTerm}\uffff`),
+        )
+        .filter((q) =>
+          q.and(q.neq(q.field('_id'), current._id), q.eq(q.field('deletedAt'), undefined)),
+        )
+        .paginate({ numItems: GROUP_PROFILE_SEARCH_PAGE_SIZE, cursor });
+      for (const user of page.page) {
+        if (user.username === searchTerm || (await privacyFor(ctx, user._id)).discoverable)
+          visible.push(user);
+        if (visible.length === 20) break;
+      }
+      cursor = page.continueCursor;
+      isDone = page.isDone;
+    }
     return Promise.all(
-      users.map(async (user) => ({
+      visible.map(async (user) => ({
         id: user._id,
         displayName: user.displayName ?? user.name ?? 'Finapp user',
         username: user.username,

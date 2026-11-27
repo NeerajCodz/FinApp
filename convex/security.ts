@@ -168,7 +168,7 @@ export const touchSession = mutation({
       .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
       .unique();
     if (existing) {
-      if (now - existing.lastSeenAt > TOUCH_EVERY_MS || existing.label !== clean)
+      if (now - existing.lastSeenAt >= TOUCH_EVERY_MS || existing.label !== clean)
         await ctx.db.patch(existing._id, { lastSeenAt: now, label: clean, platform });
       return null;
     }
@@ -180,15 +180,14 @@ export const touchSession = mutation({
       createdAt: now,
       lastSeenAt: now,
     });
-    // Alert on a new device when another device was already signed in.
-    const others = await ctx.db
-      .query('authSessions')
-      .withIndex('userId', (q) => q.eq('userId', user._id))
-      .collect();
-    const otherActive = others.some(
-      (session) => session._id !== sessionId && session.expirationTime > now,
-    );
-    if (otherActive && (await privacyFor(ctx, user._id)).signInAlerts)
+    // A prior device record distinguishes a returning account from its first-ever sign-in,
+    // even when its session is no longer live.
+    const priorDevice = await ctx.db
+      .query('sessionDevices')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .filter((q) => q.neq(q.field('sessionId'), sessionId))
+      .first();
+    if (priorDevice && (await privacyFor(ctx, user._id)).signInAlerts)
       await createNotification(
         ctx,
         user._id,

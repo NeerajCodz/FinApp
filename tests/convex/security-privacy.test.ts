@@ -64,6 +64,57 @@ describe('privacy preferences', () => {
     expect(await alice().query(api.users.queries.search, { query: 'bob' })).toEqual([]);
     expect((await alice().query(api.users.queries.search, { query: 'bobby' })).length).toBe(1);
   });
+  it('applies discoverability to group profile suggestions but allows an exact username', async () => {
+    const { alice, bob } = await fixture();
+    await bob.mutation(api.security.updatePrivacy, { discoverable: false });
+    expect(await alice().query(api.users.queries.searchGroupProfiles, { query: 'bo' })).toEqual([]);
+    expect(
+      (await alice().query(api.users.queries.searchGroupProfiles, { query: 'bobby' })).map(
+        (user) => user.username,
+      ),
+    ).toEqual(['bobby']);
+  });
+
+
+  it('continues group-profile search past a page of hidden users', async () => {
+    const { t, alice, bob } = await fixture();
+    await bob.mutation(api.security.updatePrivacy, { discoverable: false });
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      const insertUser = async (username: string, email: string, discoverable: boolean) => {
+        const userId = await ctx.db.insert('users', {
+          email,
+          username,
+          displayName: username,
+          emailVerificationTime: now,
+        });
+        if (!discoverable)
+          await ctx.db.insert('userSettings', {
+            userId,
+            currency: 'USD',
+            timezone: 'UTC',
+            firstDayOfWeek: 1,
+            financialMonthStart: 1,
+            language: 'en',
+            appearance: 'system',
+            notificationPreferences: {},
+            appLockPreferences: {},
+            updatedAt: now,
+            discoverable: false,
+          });
+      };
+      for (let index = 0; index < 55; index++) {
+        const username = `bobby_${String(index).padStart(3, '0')}`;
+        await insertUser(username, `${username}@example.com`, false);
+      }
+      await insertUser('bozz', 'bozz@example.com', true);
+    });
+    expect(
+      (await alice().query(api.users.queries.searchGroupProfiles, { query: 'bo' })).map(
+        (user) => user.username,
+      ),
+    ).toEqual(['bozz']);
+  });
 
   it('refuses friend requests when they are turned off', async () => {
     const { ids, alice, bob } = await fixture();
@@ -75,6 +126,62 @@ describe('privacy preferences', () => {
 });
 
 describe('devices', () => {
+  it('alerts for a later sign-in after the prior session expires, but not the first sign-in', async () => {
+    const { t } = await fixture();
+    const first = await t.run(async (ctx) => {
+      const now = Date.now();
+      const userId = await ctx.db.insert('users', {
+        email: 'first-login@example.com',
+        username: 'first_login',
+        emailVerificationTime: now,
+      });
+      const sessionId = await ctx.db.insert('authSessions', {
+        userId,
+        expirationTime: now + 86_400_000,
+      });
+      return { userId, sessionId };
+    });
+    const asSession = (sessionId: typeof first.sessionId) =>
+      t.withIdentity({ subject: `${first.userId}|${sessionId}` });
+
+    await asSession(first.sessionId).mutation(api.security.touchSession, {
+      platform: 'ios',
+      label: 'Safari on iPhone',
+    });
+    expect(
+      await t.run(async (ctx) =>
+        (await ctx.db.query('notifications').collect()).filter(
+          (row) => row.recipientId === first.userId,
+        ),
+      ),
+    ).toEqual([]);
+
+    const nextSession = await t.run(async (ctx) => {
+      await ctx.db.patch(first.sessionId, { expirationTime: Date.now() - 1 });
+      await ctx.db.delete(first.sessionId);
+      return ctx.db.insert('authSessions', {
+        userId: first.userId,
+        expirationTime: Date.now() + 86_400_000,
+      });
+    });
+    await asSession(nextSession).mutation(api.security.touchSession, {
+      platform: 'web',
+      label: 'Chrome on Windows',
+    });
+    await asSession(nextSession).mutation(api.security.touchSession, {
+      platform: 'web',
+      label: 'Chrome on Windows',
+    });
+
+    const alerts = await t.run(async (ctx) =>
+      (await ctx.db.query('notifications').collect()).filter(
+        (row) => row.recipientId === first.userId,
+      ),
+    );
+    expect(alerts.map((row) => row.title)).toEqual(['New sign-in to your account']);
+    expect(alerts[0]?.body).toContain('Chrome on Windows signed in.');
+  });
+
   it('lists active sessions with labels, marks this one, and alerts on a new device', async () => {
     const { t, ids, alice } = await fixture();
     await alice(ids.laptop).mutation(api.security.touchSession, {
@@ -90,9 +197,7 @@ describe('devices', () => {
       ['Chrome on Windows', 'web', true],
       ['Pixel 8', 'android', false],
     ]);
-    const alerts = await t.run((ctx) => ctx.db.query('notifications').collect());
     expect(alerts.map((row) => [row.type, row.title])).toEqual([
-      ['security', 'New sign-in to your account'],
       ['security', 'New sign-in to your account'],
     ]);
     expect(alerts.some((row) => row.body.startsWith('Pixel 8 signed in.'))).toBe(true);
