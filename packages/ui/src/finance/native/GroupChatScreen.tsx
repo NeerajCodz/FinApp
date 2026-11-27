@@ -368,13 +368,11 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                           style={{ width: 210, maxWidth: '100%', height: 170, borderRadius: 6 }}
                         />
                       )}
-                      {!item.text &&
-                        !item.attachmentUrl &&
-                        item.audioUrl === undefined && (
-                          <Typography variant="caption">
-                            Bill image is no longer available.
-                          </Typography>
-                        )}
+                      {!item.text && !item.attachmentUrl && item.audioUrl === undefined && (
+                        <Typography variant="caption">
+                          Bill image is no longer available.
+                        </Typography>
+                      )}
                     </View>
                   ) : (
                     <Pressable

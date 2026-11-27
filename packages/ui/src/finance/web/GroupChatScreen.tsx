@@ -317,11 +317,9 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                           />
                         </a>
                       )}
-                      {!item.text &&
-                        !item.attachmentUrl &&
-                        item.audioUrl === undefined && (
-                          <span className={s.muted}>Bill image is no longer available.</span>
-                        )}
+                      {!item.text && !item.attachmentUrl && item.audioUrl === undefined && (
+                        <span className={s.muted}>Bill image is no longer available.</span>
+                      )}
                     </>
                   ) : item.onPress ? (
                     <button type="button" className={s.expenseBubble} onClick={item.onPress}>
