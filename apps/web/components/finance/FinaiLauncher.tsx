@@ -19,12 +19,17 @@ import { useFinaiActivity } from '@/lib/finai/useFinaiActivity';
  */
 export function FinaiLauncher() {
   const pathname = usePathname();
+  const onFinaiPage = pathname === '/finai' || pathname.startsWith('/finai/');
   const { userId, isConnected } = useBrowserSync();
   const [open, setOpen] = React.useState(false);
   const panelRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   // Phones show the chat full screen: that is a modal and must hold focus.
   const [fullScreen, setFullScreen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (onFinaiPage) setOpen(false);
+  }, [onFinaiPage]);
   React.useEffect(() => {
     const query = window.matchMedia('(max-width: 767px)');
     const update = () => setFullScreen(query.matches);
@@ -32,12 +37,11 @@ export function FinaiLauncher() {
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   }, []);
-  const live = Boolean(userId && isConnected && open);
+  const live = Boolean(userId && isConnected && open && !onFinaiPage);
   const finaiSettings = useQuery(api.ai.settings.get, userId && isConnected ? {} : 'skip');
   const assistant = useFinaiAssistant(live);
   const decide = useFinaiDecide();
   const router = useRouter();
-  const onFinaiPage = pathname === '/finai' || pathname.startsWith('/finai/');
   const { select } = assistant;
   // Replies keep going after the chat is closed: say when one lands somewhere off screen.
   const activity = useFinaiActivity(Boolean(userId && isConnected), (reply) => {
@@ -58,7 +62,7 @@ export function FinaiLauncher() {
   });
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || onFinaiPage) return;
     const button = buttonRef.current;
     const panel = panelRef.current;
     // Move focus into the chat (its message box) when it opens.
@@ -94,7 +98,7 @@ export function FinaiLauncher() {
       // Back to the launcher (visible again once the panel closes).
       requestAnimationFrame(() => button?.focus());
     };
-  }, [fullScreen, open]);
+  }, [fullScreen, onFinaiPage, open]);
 
   if (!userId || onFinaiPage) return null;
   if (finaiSettings && (!finaiSettings.enabled || !finaiSettings.showLauncher)) return null;

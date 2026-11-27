@@ -31,6 +31,35 @@ const toneForType = (type: string): Tone =>
 /** Raw 100-row pages `search_transactions` may scan for matches. */
 const SEARCH_MAX_PAGES = 10;
 
+/** Search cursors retain a raw-page offset so matches beyond the requested limit aren't lost. */
+type SearchCursor = { finaiSearch: 1; pageCursor: string | null; offset: number };
+
+function searchCursor(value: string | undefined): SearchCursor {
+  if (value) {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        'finaiSearch' in parsed &&
+        parsed.finaiSearch === 1 &&
+        'pageCursor' in parsed &&
+        (parsed.pageCursor === null || typeof parsed.pageCursor === 'string') &&
+        'offset' in parsed &&
+        typeof parsed.offset === 'number' &&
+        Number.isSafeInteger(parsed.offset) &&
+        parsed.offset >= 0
+      ) {
+        return parsed as SearchCursor;
+      }
+    } catch {
+      // Native Convex cursors aren't JSON search cursors.
+    }
+    return { finaiSearch: 1, pageCursor: value, offset: 0 };
+  }
+  return { finaiSearch: 1, pageCursor: null, offset: 0 };
+}
+
 function transactionItem(
   row: {
     id: string;
@@ -218,25 +247,37 @@ export const assistantTools: FinaiTool[] = [
       // Filters apply after pagination, so walk raw pages until enough rows match.
       type Row = FunctionReturnType<typeof api.mcp.listTransactions>['items'][number];
       const items: Row[] = [];
-      let cursor: string | null = str(args, 'cursor', 2000) ?? null;
+      let { pageCursor, offset } = searchCursor(str(args, 'cursor', 10_000));
       let isDone = false;
       for (let page = 0; page < SEARCH_MAX_PAGES && items.length < limit && !isDone; page++) {
+        const pageStartCursor = pageCursor;
         const result: FunctionReturnType<typeof api.mcp.listTransactions> = await ctx.run.runQuery(
           api.mcp.listTransactions,
           {
             ...filters,
-            paginationOpts: { numItems: 100, cursor },
+            paginationOpts: { numItems: 100, cursor: pageCursor },
           },
         );
-        items.push(...result.items);
-        cursor = result.nextCursor;
+        let consumed = Math.min(offset, result.items.length);
+        offset = 0;
+        for (; consumed < result.items.length && items.length < limit; consumed++) {
+          items.push(result.items[consumed]);
+        }
+
+        if (consumed < result.items.length) {
+          // Resume within this same raw page, re-reading but skipping rows already consumed.
+          pageCursor = pageStartCursor;
+          offset = consumed;
+          break;
+        }
+        pageCursor = result.nextCursor;
         isDone = result.isDone;
       }
-      // Stopped at the page budget with source left: hand back a cursor to continue from.
+      // A cursor includes the raw-page offset whenever more source rows remain.
       const result = {
-        items: items.slice(0, limit),
-        isDone: isDone && items.length <= limit,
-        cursor: !isDone && items.length < limit ? cursor : null,
+        items,
+        isDone,
+        cursor: !isDone ? JSON.stringify({ finaiSearch: 1, pageCursor, offset }) : null,
       };
       return {
         data: {

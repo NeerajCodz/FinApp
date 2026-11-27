@@ -10,34 +10,33 @@ import { finaiViewing, shouldToastReply, type FinaiLatestReply } from '@finapp/u
  */
 export function useFinaiActivity(enabled: boolean, onReply: (reply: FinaiLatestReply) => void) {
   const activity = useQuery(api.ai.assistant.activity, enabled ? {} : 'skip');
-  const seenAt = React.useRef<number | null>(null);
+  const seenReplyIds = React.useRef<Set<string> | null>(null);
   const onReplyRef = React.useRef(onReply);
   React.useEffect(() => {
     onReplyRef.current = onReply;
   });
 
-  const latest = React.useMemo<FinaiLatestReply | null>(
-    () =>
-      activity?.latest
-        ? {
-            ...activity.latest,
-            conversationId: String(activity.latest.conversationId),
-            replyId: String(activity.latest.replyId),
-          }
-        : null,
-    [activity],
-  );
-  const latestAt = latest?.at ?? 0;
   React.useEffect(() => {
-    if (!activity) return;
-    if (seenAt.current === null) {
-      seenAt.current = Math.max(latestAt, Date.now() - 1_000);
+    if (!activity) {
+      seenReplyIds.current = null;
       return;
     }
-    if (latest && shouldToastReply(latest, seenAt.current, finaiViewing()))
-      onReplyRef.current(latest);
-    seenAt.current = Math.max(seenAt.current, latestAt);
-  }, [activity, latest, latestAt]);
+    if (seenReplyIds.current === null) {
+      seenReplyIds.current = new Set(activity.replies.map((reply) => String(reply.replyId)));
+      return;
+    }
+    for (const reply of activity.replies) {
+      const replyId = String(reply.replyId);
+      if (seenReplyIds.current.has(replyId)) continue;
+      seenReplyIds.current.add(replyId);
+      const latest: FinaiLatestReply = {
+        ...reply,
+        conversationId: String(reply.conversationId),
+        replyId,
+      };
+      if (shouldToastReply(latest, -1, finaiViewing())) onReplyRef.current(latest);
+    }
+  }, [activity]);
 
   return {
     working: activity?.working ?? false,

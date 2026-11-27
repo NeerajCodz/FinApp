@@ -176,6 +176,126 @@ export const list = query({
     return { items: items.slice(0, LIST_LIMIT), retentionDays: days };
   },
 });
+/**
+ * A bounded page across Trash tables. Each source is paged independently, then merged;
+ * cursors advance only through rows included in the response.
+ */
+export const listPage = query({
+  args: { kind: v.optional(kindValidator), cursor: v.optional(v.string()) },
+  handler: async (ctx, { kind, cursor }) => {
+    const user = await getOptionalUser(ctx);
+    if (!user)
+      return {
+        items: [] as TrashItem[],
+        retentionDays: DEFAULT_TRASH_RETENTION_DAYS,
+        cursor: null,
+      };
+    const days = await retentionDays(ctx, user._id);
+    let cursors: Partial<Record<TrashKind, string | null>> = {};
+    if (cursor) {
+      try {
+        const parsed: unknown = JSON.parse(cursor);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          TRASH_KINDS.every((each) => {
+            const value = (parsed as Record<string, unknown>)[each];
+            return value === undefined || value === null || typeof value === 'string';
+          })
+        )
+          cursors = parsed as Partial<Record<TrashKind, string | null>>;
+      } catch {
+        cursors = {};
+      }
+    }
+
+    const kinds = kind ? [kind] : TRASH_KINDS;
+    const pages = await Promise.all(
+      kinds.map(async (each) => {
+        const initialCursor = cursors[each] ?? null;
+        const paginationOpts = { numItems: 40, cursor: initialCursor };
+        const page =
+          each === 'transaction'
+            ? await ctx.db
+                .query('transactions')
+                .withIndex('by_owner_deletedAt', (q) =>
+                  q.eq('ownerId', user._id).gt('deletedAt', 0),
+                )
+                .order('desc')
+                .paginate(paginationOpts)
+            : await ctx.db
+                .query(TABLE[each] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules')
+                .withIndex('by_owner_archivedAt', (q) =>
+                  q.eq('ownerId', user._id).gt('archivedAt', 0),
+                )
+                .order('desc')
+                .paginate(paginationOpts);
+        const entries = page.page.flatMap((row, index) => {
+          const doc = row as unknown as Record<string, unknown>;
+          if (each === 'transaction' && doc.groupId !== undefined) return [];
+          const deletedAt = deletedAtOf(each, doc);
+          return [{
+            item: {
+              kind: each,
+              id: String(row._id),
+              ...describe(each, doc),
+              deletedAt,
+              purgeAt: days > 0 ? deletedAt + days * DAY : null,
+            } satisfies TrashItem,
+            index,
+          }];
+        });
+        return { kind: each, page, entries, initialCursor };
+      }),
+    );
+
+    const entries = pages
+      .flatMap(({ entries }) => entries)
+      .sort((a, b) => b.item.deletedAt - a.item.deletedAt);
+    const selected = entries.slice(0, 40);
+    const items = selected.map(({ item }) => item);
+    const nextCursors: Partial<Record<TrashKind, string | null>> = {};
+    await Promise.all(
+      pages.map(async ({ kind: each, page, entries: sourceEntries, initialCursor }) => {
+        const selectedEntries = selected.filter((entry) => entry.item.kind === each);
+        const consumed = selectedEntries.length
+          ? selectedEntries[selectedEntries.length - 1]!.index + 1
+          : sourceEntries.length === 0
+            ? page.page.length
+            : 0;
+        if (consumed === page.page.length) {
+          nextCursors[each] = page.continueCursor;
+        } else if (consumed === 0) {
+          nextCursors[each] = initialCursor;
+        } else {
+          const advanced =
+            each === 'transaction'
+              ? await ctx.db
+                  .query('transactions')
+                  .withIndex('by_owner_deletedAt', (q) =>
+                    q.eq('ownerId', user._id).gt('deletedAt', 0),
+                  )
+                  .order('desc')
+                  .paginate({ numItems: consumed, cursor: initialCursor })
+              : await ctx.db
+                  .query(TABLE[each] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules')
+                  .withIndex('by_owner_archivedAt', (q) =>
+                    q.eq('ownerId', user._id).gt('archivedAt', 0),
+                  )
+                  .order('desc')
+                  .paginate({ numItems: consumed, cursor: initialCursor });
+          nextCursors[each] = advanced.continueCursor;
+        }
+      }),
+    );
+    const more = pages.some(({ page }) => !page.isDone) || entries.length > items.length;
+    return {
+      items,
+      retentionDays: days,
+      cursor: more ? JSON.stringify(nextCursors) : null,
+    };
+  },
+});
 
 export const setRetention = mutation({
   args: { days: v.number() },

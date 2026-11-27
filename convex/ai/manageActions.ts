@@ -72,18 +72,30 @@ export async function executeManageAction(
       const type = String(current.type);
       if (type !== 'expense' && type !== 'income' && type !== 'transfer')
         throw new Error('UNSUPPORTED_TYPE');
+      const nextType = (text(payload, 'type') as 'expense' | 'income' | undefined) ?? type;
+      const transferAccountId =
+        payload.transferAccountId === null
+          ? undefined
+          : (current.transferAccountId as Id<'accounts'> | undefined);
+      const categoryId =
+        nextType !== type && nextType !== 'transfer'
+          ? (text(payload, 'categoryId') as Id<'categories'> | undefined)
+          : ((text(payload, 'categoryId') ?? (current.categoryId as string | undefined)) as
+              | Id<'categories'>
+              | undefined);
+      if (nextType !== type && nextType !== 'transfer' && !categoryId)
+        throw new Error('CATEGORY_REQUIRED_FOR_TYPE_CHANGE');
       await ctx.runMutation(api.transactions.mutations.update, {
         transactionId: id as Id<'transactions'>,
         accountId: (text(payload, 'accountId') ?? current.accountId) as Id<'accounts'>,
-        type: (text(payload, 'type') as 'expense' | 'income' | undefined) ?? type,
+        type: nextType,
         amountMinor: big(payload, 'amountMinor') ?? asBig(current.amountMinor),
         currency: String(current.currency),
-        categoryId: (text(payload, 'categoryId') ?? (current.categoryId as string | undefined)) as
-          Id<'categories'> | undefined,
+        categoryId,
         title: text(payload, 'title') ?? String(current.title),
         merchant: text(payload, 'merchant') ?? (current.merchant as string | undefined),
         note: text(payload, 'note') ?? (current.note as string | undefined),
-        transferAccountId: current.transferAccountId as Id<'accounts'> | undefined,
+        transferAccountId,
         occurredAt: num(payload, 'occurredAt') ?? Number(current.occurredAt),
         hasTime: current.hasTime as boolean | undefined,
         clientMutationId,
@@ -180,6 +192,7 @@ export async function executeManageAction(
       const id = await ctx.runMutation(api.accounts.mutations.create, {
         name: text(payload, 'name')!,
         type: type ?? 'bank',
+        customType: text(payload, 'customType'),
         currency: text(payload, 'currency')!,
         openingBalanceMinor: big(payload, 'openingBalanceMinor') ?? 0n,
         isIncludedInTotal: true,
@@ -194,6 +207,11 @@ export async function executeManageAction(
         accountId: id as Id<'accounts'>,
         name: text(payload, 'name') ?? String(current.name),
         type: (text(payload, 'type') ?? current.type) as Doc<'accounts'>['type'],
+        customType:
+          text(payload, 'customType') ??
+          ((text(payload, 'type') ?? current.type) === 'other'
+            ? (current.customType as string | undefined)
+            : undefined),
         currency: String(current.currency),
         openingBalanceMinor:
           big(payload, 'openingBalanceMinor') ?? asBig(current.openingBalanceMinor),
@@ -217,7 +235,8 @@ export async function executeManageAction(
     case 'entity.delete': {
       const target = text(payload, 'kind');
       const id = text(payload, 'id')!;
-      await record(ctx, userId, target ?? '', id);
+      const targetDoc = await record(ctx, userId, target ?? '', id);
+      if (target === 'category' && targetDoc.isSystem === true) throw new Error('SYSTEM_CATEGORY');
       if (target === 'goal')
         await ctx.runMutation(api.goals.mutations.archive, {
           goalId: id as Id<'goals'>,
@@ -243,9 +262,15 @@ export async function executeManageAction(
       return id;
     }
     case 'trash.purge': {
+      const kind = text(payload, 'kind')!;
+      const id = text(payload, 'id')!;
+      if (kind === 'category') {
+        const category = await record(ctx, userId, kind, id);
+        if (category.isSystem === true) throw new Error('SYSTEM_CATEGORY');
+      }
       await ctx.runMutation(api.trash.purge, {
-        kind: text(payload, 'kind') as 'transaction',
-        id: text(payload, 'id')!,
+        kind: kind as 'transaction',
+        id,
       });
       return text(payload, 'id');
     }

@@ -3,6 +3,7 @@ import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
 import { defaultNotificationPreferences } from '../../convex/notifications/domain';
+import { manageTools } from '../../convex/ai/manageTools';
 
 const modules = import.meta.glob('../../convex/**/*.ts');
 const DAY = 86_400_000;
@@ -92,6 +93,60 @@ describe('Trash', () => {
     expect(listed.items[0]!.purgeAt).toBe(listed.items[0]!.deletedAt + 30 * DAY);
     await owner.as.mutation(api.trash.restore, { kind: 'transaction', id: String(ids.lunch) });
     expect((await owner.as.query(api.trash.list, {})).items).toHaveLength(0);
+  });
+
+  it('continues list_trash through more than 200 records without losing older items', async () => {
+    const { t, owner, ids } = await setup();
+    const count = 225;
+    const base = Date.UTC(2025, 0, 1);
+    await t.run(async (ctx) => {
+      for (let index = 0; index < count; index++) {
+        await ctx.db.insert('transactions', {
+          ownerId: owner.userId,
+          accountId: ids.accountId,
+          type: 'expense',
+          amountMinor: 100n,
+          currency: 'INR',
+          categoryId: String(ids.categoryId),
+          title: `Trash ${index}`,
+          occurredAt: base + index,
+          status: 'posted',
+          createdAt: base + index,
+          updatedAt: base + index,
+          deletedAt: base + index,
+        });
+      }
+    });
+
+    expect((await owner.as.query(api.trash.list, {})).items).toHaveLength(200);
+    const tool = manageTools.find((candidate) => candidate.name === 'list_trash')!;
+    const ctx = {
+      run: {
+        runQuery: (ref: never, args: never) => owner.as.query(ref, args),
+      } as never,
+      userId: owner.userId,
+      scope: { type: 'assistant' as const, id: 'conversation' },
+      messageId: 'message-1',
+      defaultCurrency: 'INR',
+      timeZone: 'UTC',
+    };
+    const seen = new Set<string>();
+    let cursor: string | undefined;
+    let nextCursor: string | null = 'start';
+    let pages = 0;
+    while (nextCursor && pages < 10) {
+      pages++;
+      const result = await tool.run(ctx, cursor ? { cursor } : {});
+      const data = result.data as {
+        items: { id: string }[];
+        nextCursor: string | null;
+      };
+      for (const item of data.items) seen.add(item.id);
+      nextCursor = data.nextCursor;
+      cursor = nextCursor ?? undefined;
+    }
+    expect(nextCursor).toBeNull();
+    expect(seen).toHaveLength(count);
   });
 
   it('deletes a category with its transactions and restores them together', async () => {
