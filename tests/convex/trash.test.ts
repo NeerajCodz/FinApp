@@ -286,9 +286,12 @@ describe('Trash', () => {
     expect(
       await t.run(async (ctx) => {
         const user = await ctx.db.get(owner.userId);
-        return [user?.defaultExpenseCategoryId, user?.defaultIncomeCategoryId];
+        return {
+          expense: user?.defaultExpenseCategoryId ?? null,
+          income: user?.defaultIncomeCategoryId ?? null,
+        };
       }),
-    ).toEqual([undefined, undefined]);
+    ).toEqual({ expense: null, income: null });
     await t.run((ctx) => ctx.db.patch(owner.userId, { defaultExpenseCategoryId: replacement }));
     await owner.as.mutation(api.trash.restore, {
       kind: 'category',
@@ -297,9 +300,12 @@ describe('Trash', () => {
     expect(
       await t.run(async (ctx) => {
         const user = await ctx.db.get(owner.userId);
-        return [user?.defaultExpenseCategoryId, user?.defaultIncomeCategoryId];
+        return {
+          expense: user?.defaultExpenseCategoryId ?? null,
+          income: user?.defaultIncomeCategoryId ?? null,
+        };
       }),
-    ).toEqual([replacement, ids.categoryId]);
+    ).toEqual({ expense: replacement, income: ids.categoryId });
   });
 
   it('does not restore category companions while their accounts are trashed', async () => {

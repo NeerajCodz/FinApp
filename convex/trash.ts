@@ -134,23 +134,12 @@ function describe(
 
 async function trashedOfKind(ctx: QueryCtx, userId: Id<'users'>, kind: TrashKind, limit: number) {
   if (kind === 'transaction') {
-    const items: Doc<'transactions'>[] = [];
-    let cursor: string | null = null;
-    while (items.length < limit) {
-      const page = await ctx.db
-        .query('transactions')
-        .withIndex('by_owner_deletedAt', (q) => q.eq('ownerId', userId).gt('deletedAt', 0))
-        .order('desc')
-        .paginate({ numItems: limit, cursor });
-      for (const row of page.page) {
-        // Group tombstones stay in the group ledger, not personal Trash.
-        if (row.groupId === undefined) items.push(row);
-        if (items.length === limit) break;
-      }
-      if (page.isDone || items.length === limit) break;
-      cursor = page.continueCursor;
-    }
-    return items;
+    return ctx.db
+      .query('transactions')
+      .withIndex('by_owner_deletedAt', (q) => q.eq('ownerId', userId).gt('deletedAt', 0))
+      .filter((q) => q.eq(q.field('groupId'), undefined))
+      .order('desc')
+      .take(limit);
   }
   const table = TABLE[kind] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules';
   return ctx.db
@@ -334,8 +323,8 @@ async function purgeTransaction(
 type AccountPurgePage = {
   userId: Id<'users'>;
   accountId: Id<'accounts'>;
-  sourceCursor: string | null;
-  transferCursor: string | null;
+  phase: 'source' | 'transfer';
+  cursor: string | null;
   now: number;
 };
 
@@ -343,31 +332,28 @@ async function purgeAccountPage(ctx: MutationCtx, args: AccountPurgePage) {
   const account = await ctx.db.get(args.accountId);
   if (!account || account.ownerId !== args.userId || account.archivedAt === undefined)
     return { purged: 0, done: true };
-  const [sourcePage, transferPage] = await Promise.all([
-    ctx.db
-      .query('transactions')
-      .withIndex('by_account', (q) => q.eq('accountId', args.accountId))
-      .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.sourceCursor }),
-    ctx.db
-      .query('transactions')
-      .withIndex('by_transferAccountId', (q) => q.eq('transferAccountId', String(args.accountId)))
-      .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.transferCursor }),
-  ]);
-  const seen = new Set<string>();
+  const page =
+    args.phase === 'source'
+      ? await ctx.db
+          .query('transactions')
+          .withIndex('by_account', (q) => q.eq('accountId', args.accountId))
+          .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.cursor })
+      : await ctx.db
+          .query('transactions')
+          .withIndex('by_transferAccountId', (q) => q.eq('transferAccountId', String(args.accountId)))
+          .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.cursor });
   let purged = 0;
-  for (const row of [...sourcePage.page, ...transferPage.page]) {
-    const id = String(row._id);
-    if (seen.has(id)) continue;
-    seen.add(id);
+  for (const row of page.page) {
     if (row.ownerId !== args.userId || row.groupId !== undefined) continue;
     await purgeTransaction(ctx, args.userId, row, args.now);
     purged += 1;
   }
-  if (!sourcePage.isDone || !transferPage.isDone) {
+  if (!page.isDone || args.phase === 'source') {
+    const phase = page.isDone ? 'transfer' : args.phase;
     await ctx.scheduler.runAfter(0, internal.trash.continueAccountPurge, {
       ...args,
-      sourceCursor: sourcePage.isDone ? null : sourcePage.continueCursor,
-      transferCursor: transferPage.isDone ? null : transferPage.continueCursor,
+      phase,
+      cursor: page.isDone ? null : page.continueCursor,
     });
     return { purged, done: false };
   }
@@ -388,8 +374,8 @@ export const continueAccountPurge = internalMutation({
   args: {
     userId: v.id('users'),
     accountId: v.id('accounts'),
-    sourceCursor: v.union(v.string(), v.null()),
-    transferCursor: v.union(v.string(), v.null()),
+    phase: v.union(v.literal('source'), v.literal('transfer')),
+    cursor: v.union(v.string(), v.null()),
     now: v.number(),
   },
   handler: async (ctx, args) => purgeAccountPage(ctx, args),
@@ -485,8 +471,8 @@ export async function purgeItem(
     const result = await purgeAccountPage(ctx, {
       userId,
       accountId: doc._id as Id<'accounts'>,
-      sourceCursor: null,
-      transferCursor: null,
+      phase: 'source',
+      cursor: null,
       now,
     });
     return { purged: result.purged + 1, more: !result.done };
