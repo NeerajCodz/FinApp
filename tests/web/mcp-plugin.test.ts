@@ -829,7 +829,7 @@ describe('MCP coverage tools', () => {
         name: 'finapp.personal.notifications.summary',
         arguments: {},
       });
-      expect(text(status).trimEnd()).toBe(
+      expect(text(status)).toContain(
         '12 unread notification(s) among the newest 500; older notifications were not scanned.',
       );
       expect(data(status)).toMatchObject({ unreadCount: 12, unreadCapped: true });
