@@ -42,7 +42,11 @@ export default function NewGroupScreen() {
       setCurrency(value.toUpperCase());
   }, [currency, profile?.defaultCurrency]);
   const query = normalizeHandle(memberInput);
-  const { results: profilePages, status: profileSearchStatus, loadMore } = usePaginatedQuery(
+  const {
+    results: profilePages,
+    status: profileSearchStatus,
+    loadMore,
+  } = usePaginatedQuery(
     api.users.queries.searchGroupProfiles,
     userId && query.length >= 2 ? { query } : 'skip',
     { initialNumItems: 100 },

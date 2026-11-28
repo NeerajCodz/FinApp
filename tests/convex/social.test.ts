@@ -237,16 +237,20 @@ describe('social discovery and relationship summaries', () => {
       Array.from({ length: 20 }, (_, i) => `match_${String(i + 1).padStart(2, '0')}`),
     );
     expect(
-      (await viewer.query(api.users.queries.searchGroupProfiles, {
-        query: 'm',
-        paginationOpts: { numItems: 100, cursor: null },
-      })).page,
+      (
+        await viewer.query(api.users.queries.searchGroupProfiles, {
+          query: 'm',
+          paginationOpts: { numItems: 100, cursor: null },
+        })
+      ).page,
     ).toEqual([]);
     expect(
-      (await t.query(api.users.queries.searchGroupProfiles, {
-        query: 'match',
-        paginationOpts: { numItems: 100, cursor: null },
-      })).page,
+      (
+        await t.query(api.users.queries.searchGroupProfiles, {
+          query: 'match',
+          paginationOpts: { numItems: 100, cursor: null },
+        })
+      ).page,
     ).toEqual([]);
   });
 });

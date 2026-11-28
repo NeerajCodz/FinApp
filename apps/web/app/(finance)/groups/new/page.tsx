@@ -52,7 +52,11 @@ export default function NewGroupPage() {
   }, [currency, profile?.defaultCurrency]);
   const phoneVerified = Boolean(profile?.phone && profile.phoneVerificationTime !== undefined);
   const query = normalizeUsername(usernameInput);
-  const { results: profilePages, status: profileSearchStatus, loadMore } = usePaginatedQuery(
+  const {
+    results: profilePages,
+    status: profileSearchStatus,
+    loadMore,
+  } = usePaginatedQuery(
     api.users.queries.searchGroupProfiles,
     userId && query.length >= 2 ? { query } : 'skip',
     { initialNumItems: 100 },
