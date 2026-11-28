@@ -7,6 +7,7 @@ import {
   formatLowerBound,
   isAnalyticsLinkAvailable,
   isTimestampInRange,
+  matchesHubSearch,
   personStatus,
   unreadBadge,
 } from '../../packages/ui/src/finance/peopleHub';
