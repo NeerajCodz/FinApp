@@ -153,16 +153,19 @@ describe('OAuth token request body limit', () => {
     expect(oauth.mutation).not.toHaveBeenCalled();
   });
 
-  it('preserves invalid_grant errors for bounded forms', async () => {
-    oauth.mutation.mockRejectedValue(new Error('Invalid authorization code'));
-    const stream = streamedRequest([encoder.encode(validForm)]);
+  it.each(['INVALID_GRANT', 'Invalid authorization code'])(
+    'preserves invalid_grant errors for bounded forms: %s',
+    async (error) => {
+      oauth.mutation.mockRejectedValue(new Error(error));
+      const stream = streamedRequest([encoder.encode(validForm)]);
 
-    const response = await POST(stream.request);
+      const response = await POST(stream.request);
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'invalid_grant' });
-    expect(oauth.signAccessToken).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'invalid_grant' });
+      expect(oauth.signAccessToken).not.toHaveBeenCalled();
+    },
+  );
 
   it('reports an unexpected signing failure as a server error, not invalid_grant', async () => {
     oauth.signAccessToken.mockRejectedValue(new Error('Signing unavailable'));

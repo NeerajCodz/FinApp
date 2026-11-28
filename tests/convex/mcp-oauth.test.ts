@@ -301,6 +301,7 @@ describe('MCP OAuth authorization code exchange', () => {
     });
 
     await fixture.owner.mutation(api.mcpOAuth.deleteMyClient, { clientId: client.clientId });
+    await fixture.t.finishAllScheduledFunctions();
     const grants = await fixture.t.run((ctx) =>
       ctx.db
         .query('mcpOAuthGrants')

@@ -24,6 +24,12 @@ import {
 } from '@finapp/ui/finance';
 import { useTheme } from '@finapp/ui/native';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
+import {
+  createScopeUpdateState,
+  queueScopeUpdate,
+  syncScopeUpdateFromServer,
+} from '@finapp/mcp/scopeUpdates';
+import type { ScopeUpdateState } from '@finapp/mcp/scopeUpdates';
 
 const back = () => (router.canGoBack() ? router.back() : router.navigate('/settings/ai' as never));
 const SCOPES: Record<string, string> = {
@@ -49,14 +55,18 @@ export default function McpConnectionsScreen() {
   const stored = useQuery(api.mcpOAuth.getSettings, live ? {} : 'skip');
   const updateSettings = useMutation(api.mcpOAuth.updateSettings);
   const updateScopes = useMutation(api.mcpOAuth.updateGrantScopes);
-  const scopeUpdates = React.useRef(
-    new Map<string, { scopes: string[]; pending: Promise<unknown> }>(),
-  );
+  const scopeUpdates = React.useRef(new Map<string, ScopeUpdateState>());
   const [settings, setSettings] = React.useState(stored);
   const [open, setOpen] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (stored) setSettings(stored);
   }, [stored]);
+  React.useEffect(() => {
+    for (const grant of grants ?? []) {
+      const update = scopeUpdates.current.get(String(grant.id));
+      if (update) syncScopeUpdateFromServer(update, grant.scopes);
+    }
+  }, [grants]);
   const save = async (patch: {
     enabled?: boolean;
     readOnly?: boolean;
@@ -153,23 +163,15 @@ export default function McpConnectionsScreen() {
                             const grantId = String(grant.id);
                             let update = scopeUpdates.current.get(grantId);
                             if (!update) {
-                              update = { scopes: [...grant.scopes], pending: Promise.resolve() };
+                              update = createScopeUpdateState(grant.scopes);
                               scopeUpdates.current.set(grantId, update);
                             }
-                            const scopes = next
-                              ? [...new Set([...update.scopes, scope])]
-                              : update.scopes.filter((item) => item !== scope);
-                            update.scopes = scopes;
-                            const pending = update.pending
-                              .catch(() => undefined)
-                              .then(() =>
-                                updateScopes({
-                                  grantId: grant.id as Id<'mcpOAuthGrants'>,
-                                  scopes,
-                                }),
-                              );
-                            update.pending = pending;
-                            void pending.catch(() => {});
+                            void queueScopeUpdate(update, scope, next, (scopes) =>
+                              updateScopes({
+                                grantId: grant.id as Id<'mcpOAuthGrants'>,
+                                scopes,
+                              }),
+                            ).catch(() => {});
                           }}
                         />
                       )),

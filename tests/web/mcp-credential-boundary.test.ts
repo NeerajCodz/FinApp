@@ -32,6 +32,7 @@ beforeEach(() => {
   vi.stubEnv('MCP_SIGNING_PUBLIC_KEY', publicPem);
   vi.stubEnv('NEXT_PUBLIC_CONVEX_URL', 'https://fixture.convex.cloud');
   vi.stubEnv('CONVEX_SITE_URL', 'https://fixture.convex.site');
+  vi.stubEnv('CONVEX_DEPLOY_KEY', 'test:credential-boundary');
 });
 afterEach(() => {
   vi.unstubAllEnvs();

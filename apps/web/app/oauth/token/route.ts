@@ -118,19 +118,12 @@ export async function POST(request: Request) {
     } else {
       const refreshToken = form.get('refresh_token');
       if (!refreshToken) return Response.json({ error: 'invalid_request' }, { status: 400 });
-      if (credentials.clientAssertion && requestedScopes) {
-        const scopes = await client.query(api.mcpOAuth.refreshTokenScopes, {
-          refreshToken,
-          clientId,
-        });
-        if (requestedScopes.some((scope) => !scopes.includes(scope)))
-          return Response.json({ error: 'invalid_scope' }, { status: 400 });
-      }
       grant = credentials.clientAssertion
         ? await client.action(api.mcpOAuthActions.refreshWithClientAssertion, {
             refreshToken,
             clientId,
             clientAssertion: credentials.clientAssertion,
+            ...(requestedScopes ? { requestedScopes } : {}),
           })
         : await client.mutation(internal.mcpOAuth.refreshAccessGrant, {
             refreshToken,
@@ -140,21 +133,13 @@ export async function POST(request: Request) {
               credentials.via === 'basic' ? 'basic' : credentials.via === 'post' ? 'post' : 'none',
             ...(requestedScopes ? { requestedScopes } : {}),
           });
-      if (credentials.clientAssertion && requestedScopes) {
-        const scopes = await client.mutation(api.mcpOAuth.restrictRefreshGrantScopes, {
-          refreshToken: grant.refreshToken,
-          clientId,
-          requestedScopes,
-        });
-        grant = { ...grant, scopes };
-      }
     }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : '';
     if (message.includes('INVALID_CLIENT')) return invalidClient();
     if (message.includes('INVALID_SCOPE'))
       return Response.json({ error: 'invalid_scope' }, { status: 400 });
-    if (message.includes('INVALID_GRANT'))
+    if (message.includes('INVALID_GRANT') || message === 'Invalid authorization code')
       return Response.json({ error: 'invalid_grant' }, { status: 400 });
     return Response.json({ error: 'server_error' }, { status: 503 });
   }

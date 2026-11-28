@@ -114,6 +114,7 @@ describe('confidential clients', () => {
       authTransport: 'basic',
     });
     await owner.mutation(api.mcpOAuth.deleteMyClient, { clientId: created.clientId });
+    await t.finishAllScheduledFunctions();
     const stored = await t.run((ctx) => ctx.db.get(grant.grantId));
     expect(stored?.revokedAt).toEqual(expect.any(Number));
     expect(await owner.query(api.mcpOAuth.listMyClients, {})).toHaveLength(0);

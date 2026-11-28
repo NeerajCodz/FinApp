@@ -1,4 +1,3 @@
-import { v } from 'convex/values';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
@@ -211,7 +210,7 @@ export const listMyClients = query({
   },
 });
 
-/** Deletes a dashboard client and revokes every connection made through it. */
+/** Starts bounded grant revocation before removing a dashboard client. */
 export const deleteMyClient = mutation({
   args: { clientId: v.string() },
   handler: async (ctx, { clientId }) => {
@@ -219,15 +218,33 @@ export const deleteMyClient = mutation({
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
     const client = isIssuedClientId(clientId) ? await findClient(ctx, clientId) : null;
     if (!client || client.ownerId !== user._id) throw new Error('CLIENT_NOT_FOUND');
-    const grants = await ctx.db
+    await ctx.scheduler.runAfter(0, internal.mcpOAuth.revokeClientGrantBatch, { clientId });
+    return { deleted: true };
+  },
+});
+
+/** Revokes at most 100 grants per transaction, then removes the client. */
+export const revokeClientGrantBatch = internalMutation({
+  args: { clientId: v.string(), cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { clientId, cursor }) => {
+    const client = await findClient(ctx, clientId);
+    if (!client) return;
+    const result = await ctx.db
       .query('mcpOAuthGrants')
       .withIndex('by_client', (index) => index.eq('clientId', clientId))
-      .collect();
+      .paginate({ numItems: 100, cursor: cursor ?? null });
     const now = Date.now();
-    for (const grant of grants)
+    for (const grant of result.page) {
       if (grant.revokedAt === undefined) await ctx.db.patch(grant._id, { revokedAt: now });
-    await ctx.db.delete(client._id);
-    return { deleted: true };
+    }
+    if (result.isDone) {
+      await ctx.db.delete(client._id);
+    } else {
+      await ctx.scheduler.runAfter(0, internal.mcpOAuth.revokeClientGrantBatch, {
+        clientId,
+        cursor: result.continueCursor,
+      });
+    }
   },
 });
 
@@ -521,8 +538,8 @@ export const refreshAccessGrant = internalMutation({
   handler: async (ctx, { clientSecret, authTransport, ...args }) =>
     refreshGrant(ctx, args, { clientSecret, authTransport, assertionVerified: false }),
 });
-/** Looks up the current scope ceiling for a refresh token without rotating it. */
-export const refreshTokenScopes = query({
+/** Looks up refresh scopes only within server-authenticated flows. */
+export const refreshTokenScopes = internalQuery({
   args: { refreshToken: v.string(), clientId: v.string() },
   handler: async (ctx, { refreshToken, clientId }) => {
     if (!refreshToken || refreshToken.length > 256 || !isValidClientId(clientId))
@@ -545,45 +562,14 @@ export const refreshTokenScopes = query({
   },
 });
 
-/** Applies a validated scope subset to a private-key client's live grant after rotation. */
-export const restrictRefreshGrantScopes = mutation({
-  args: {
-    refreshToken: v.string(),
-    clientId: v.string(),
-    requestedScopes: v.array(v.string()),
-  },
-  handler: async (ctx, { refreshToken, clientId, requestedScopes }) => {
-    if (!refreshToken || refreshToken.length > 256 || !isValidClientId(clientId))
-      throw new Error('INVALID_GRANT');
-    const refreshTokenHash = await hash(refreshToken);
-    const grant = await ctx.db
-      .query('mcpOAuthGrants')
-      .withIndex('by_refresh_hash', (index) => index.eq('refreshTokenHash', refreshTokenHash))
-      .unique();
-    if (
-      !grant ||
-      grant.clientId !== clientId ||
-      grant.revokedAt !== undefined ||
-      (grant.refreshExpiresAt ?? 0) <= Date.now()
-    )
-      throw new Error('INVALID_GRANT');
-    const user = await ctx.db.get(grant.userId);
-    if (!user || user.deletedAt !== undefined) throw new Error('INVALID_GRANT');
-    const currentSubset = [...new Set(requestedScopes)].filter((scope) =>
-      grant.scopes.includes(scope),
-    );
-    const scopes = validateRefreshScopes(currentSubset, grant.scopes);
-    await ctx.db.patch(grant._id, { scopes });
-    return scopes;
-  },
-});
-
+/** Refresh, validate/reduce scopes, and rotate in one atomic transaction. */
 export const refreshAccessGrantWithAssertion = internalMutation({
   args: {
     refreshToken: v.string(),
     clientId: v.string(),
     assertionJti: v.string(),
     assertionExpiresAt: v.number(),
+    requestedScopes: refreshScopes,
   },
   handler: async (ctx, { assertionJti, assertionExpiresAt, ...args }) => {
     await useAssertionJti(ctx, args.clientId, assertionJti, assertionExpiresAt);
