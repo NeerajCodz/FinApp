@@ -2,9 +2,11 @@ import { httpRouter } from 'convex/server';
 import { httpAction } from './_generated/server';
 import { BACKEND_INFO, PRODUCT_VERSION } from './shared/version';
 import { auth } from './auth';
+import { registerPublicApi } from './publicApi/gateway';
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
+registerPublicApi(http);
 http.route({
   path: '/version',
   method: 'GET',
