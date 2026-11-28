@@ -274,12 +274,11 @@ export function SuggestedTransfers({
   /** Sends a payment reminder for transfers someone owes you. */
   onRemind?: (transfer: SettleTransfer) => void;
 }) {
-  // Your own transfers (to settle or to remind) come first, so a limit never hides them.
-  const ordered = [
-    ...transfers.filter((t) => t.fromUserId === meId || t.toUserId === meId),
-    ...transfers.filter((t) => t.fromUserId !== meId && t.toUserId !== meId),
-  ];
-  const shown = limit ? ordered.slice(0, limit) : ordered;
+  const ownTransfers = transfers.filter((t) => t.fromUserId === meId || t.toUserId === meId);
+  const otherTransfers = transfers.filter((t) => t.fromUserId !== meId && t.toUserId !== meId);
+  const unrelatedLimit = limit ? Math.max(0, limit - ownTransfers.length) : otherTransfers.length;
+  const shown = [...ownTransfers, ...otherTransfers.slice(0, unrelatedLimit)];
+  const hiddenCount = otherTransfers.length - Math.min(otherTransfers.length, unrelatedLimit);
   return (
     <div className={styles.timeline}>
       {shown.map((transfer) => {
@@ -327,9 +326,7 @@ export function SuggestedTransfers({
           </div>
         );
       })}
-      {limit && transfers.length > limit ? (
-        <p className={styles.muted}>+{transfers.length - limit} more suggested</p>
-      ) : null}
+      {hiddenCount > 0 ? <p className={styles.muted}>+{hiddenCount} more suggested</p> : null}
     </div>
   );
 }

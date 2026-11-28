@@ -543,15 +543,30 @@ export default function AnalyticsPage() {
       const spentMinor = transactionState.records.reduce((sum, record) => {
         const at = Number(record.occurredAt ?? 0);
         if (
+          (record.status !== undefined && record.status !== 'posted') ||
           record.type !== 'expense' ||
           record.deletedAt !== undefined ||
           record.currency !== currency ||
           at < limitMonth.startAt ||
           at >= limitMonth.endAt ||
-          !keys.includes(String(record.categoryId ?? ''))
+          !keys.includes(String(record.categoryId ?? '')) ||
+          accountById.get(String(record.accountId ?? ''))?.includeInAnalytics === false ||
+          (accountFilter !== 'all' &&
+            !(
+              accountById.get(accountFilter)
+                ? idAliases(accountById.get(accountFilter)!)
+                : [accountFilter]
+            ).includes(String(record.accountId ?? '')))
         )
           return sum;
-        return sum + amountAsBigInt(record.amountMinor);
+        return (
+          sum +
+          amountAsBigInt(
+            accountFilter !== 'all' && record.accountAmountMinor !== undefined
+              ? record.accountAmountMinor
+              : record.amountMinor,
+          )
+        );
       }, 0n);
       return {
         category,

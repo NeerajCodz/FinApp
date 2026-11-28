@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { AccountDetailView, AccountsIndexView } from '@finapp/ui/finance';
+import { AccountDetailView, AccountsIndexView, SuggestedTransfers } from '@finapp/ui/finance';
 import { ThemeProvider } from '@finapp/ui/web';
 import { matchesRouteId, routeIdFor } from '../../apps/web/app/(finance)/_personal';
 
@@ -26,6 +26,42 @@ describe('personal account routes', () => {
     expect(routeIdFor('accounts-cloud-id')).toBe('accounts-cloud-id');
     expect(matchesRouteId(account, '4aaf2af9')).toBe(true);
     expect(matchesRouteId(account, account.id)).toBe(true);
+  });
+});
+describe('suggested transfers', () => {
+  it("keeps every signed-in user's transfer visible before limiting unrelated suggestions", () => {
+    const markup = renderWithTheme(
+      React.createElement(SuggestedTransfers, {
+        transfers: [
+          { fromUserId: 'me', toUserId: 'a', amountMinor: 100n },
+          { fromUserId: 'b', toUserId: 'me', amountMinor: 200n },
+          { fromUserId: 'me', toUserId: 'g', amountMinor: 250n },
+          { fromUserId: 'h', toUserId: 'me', amountMinor: 275n },
+          { fromUserId: 'c', toUserId: 'd', amountMinor: 300n },
+          { fromUserId: 'e', toUserId: 'f', amountMinor: 400n },
+        ],
+        currency: 'USD',
+        people: [
+          { id: 'me', name: 'Me' },
+          { id: 'a', name: 'Alex' },
+          { id: 'b', name: 'Blair' },
+          { id: 'c', name: 'Casey' },
+          { id: 'd', name: 'Devon' },
+          { id: 'e', name: 'Emery' },
+          { id: 'f', name: 'Finley' },
+          { id: 'g', name: 'Gale' },
+          { id: 'h', name: 'Harper' },
+        ],
+        meId: 'me',
+        limit: 1,
+      }),
+    );
+
+    expect(markup).toContain('You pay');
+    expect(markup).toContain('Harper pays you');
+    expect(markup).toContain('Blair pays');
+    expect(markup).not.toContain('Casey pays');
+    expect(markup).toContain('+2 more suggested');
   });
 });
 

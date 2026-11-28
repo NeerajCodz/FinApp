@@ -63,6 +63,11 @@ export function useProfileEditor(
     setTouched(new Set());
     setAttempted(false);
   }, []);
+  const commitPartial = React.useCallback((next: ProfileDraft, saved: Partial<ProfileDraft>) => {
+    setBaseline((current) => (current ? { ...current, ...saved } : current));
+    setDraft(next);
+    setAttempted(false);
+  }, []);
 
   return {
     draft,
@@ -76,6 +81,7 @@ export function useProfileEditor(
     touch,
     discard,
     commit,
+    commitPartial,
     attemptSave: () => setAttempted(true),
   };
 }

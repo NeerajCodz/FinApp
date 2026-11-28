@@ -863,7 +863,7 @@ export default function GroupHomePage() {
   };
   if (standaloneChat) return <GroupChatScreen {...chat} />;
   return (
-    <>
+    <div className="finance-page finance-page--narrow">
       <GroupDetailScreen
         group={{
           name: group.name ?? 'Group',
@@ -962,6 +962,6 @@ export default function GroupHomePage() {
         }
       />
       <IncludePastExpensesSheet {...lateJoiners.sheet} />
-    </>
+    </div>
   );
 }

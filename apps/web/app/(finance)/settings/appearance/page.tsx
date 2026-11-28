@@ -92,7 +92,7 @@ export default function AppearanceSettingsPage() {
           />
         }
         title={`${options.find((option) => option.value === appearance)?.label ?? 'System'} theme`}
-        description="Changes apply right away on this device and follow you to your other devices."
+        description="Changes apply right away and are saved on this device."
       />
 
       <SettingsGroup title="Theme">
