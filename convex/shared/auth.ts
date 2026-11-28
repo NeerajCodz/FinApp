@@ -1,5 +1,7 @@
 import type { MutationCtx, QueryCtx } from '../_generated/server';
 import type { Doc } from '../_generated/dataModel';
+import { ConvexError } from 'convex/values';
+import { activeRestriction } from '../admin/restrictions';
 
 type Identity = { subject: string; email?: string; name?: string; image?: string; phone?: string };
 type AuthIdentityContext = { auth: { getUserIdentity: () => Promise<unknown> } };
@@ -44,16 +46,32 @@ async function findUserForIdentity(
   return userId ? db.get(userId) : null;
 }
 
-export async function getOptionalUser(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'> | null> {
+/**
+ * The signed-in user whatever their account state (no ban check). Only for the few places that
+ * must work for suspended accounts, such as the account-status query behind the suspended screen.
+ */
+export async function getIdentityUser(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'> | null> {
   const identity = asIdentity(await ctx.auth.getUserIdentity());
   if (!identity) return null;
   return findUserForIdentity(ctx.db, identity);
 }
 
+/** The signed-in user, or null when signed out or banned/suspended (see convex/admin). */
+export async function getOptionalUser(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'> | null> {
+  const user = await getIdentityUser(ctx);
+  if (!user) return null;
+  return (await activeRestriction(ctx, user._id)) ? null : user;
+}
+
+/** The signed-in user (created on first use). Banned or suspended: ACCOUNT_SUSPENDED. */
 export async function requireUser(ctx: MutationCtx): Promise<Doc<'users'> | null> {
   const identity = await requireIdentity(ctx);
   const existing = await findUserForIdentity(ctx.db, identity);
-  if (existing) return existing;
+  if (existing) {
+    if (await activeRestriction(ctx, existing._id))
+      throw new ConvexError({ code: 'ACCOUNT_SUSPENDED' });
+    return existing;
+  }
   const now = Date.now();
   const userId = await ctx.db.insert('users', {
     identityId: identity.subject,

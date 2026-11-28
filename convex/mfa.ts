@@ -23,6 +23,7 @@ import { decryptSecret, encryptSecret, isVaultConfigured } from './ai/keyVault';
 import { createNotification } from './notifications/mutations';
 import { qrPath } from './qr';
 import { getOptionalUser } from './shared/auth';
+import { recordSecurityEvent } from './admin/guard';
 import {
   groupSecret,
   hashRecoveryCode,
@@ -134,6 +135,7 @@ export const activateTotp = internalMutation({
         ? { recoveryCodes: recoveryHashes.map((hash) => ({ hash })), recoveryCreatedAt: now }
         : {}),
     });
+    await recordSecurityEvent(ctx, { kind: 'mfa.totp_enabled', userId });
     await createNotification(
       ctx,
       userId,
@@ -157,6 +159,7 @@ export const deactivateTotp = internalMutation({
       totpConfirmedAt: undefined,
       totpLastStep: undefined,
     });
+    await recordSecurityEvent(ctx, { kind: 'mfa.totp_disabled', userId });
     await createNotification(
       ctx,
       userId,

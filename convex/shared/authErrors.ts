@@ -71,6 +71,10 @@ export function formatAuthError(cause: unknown, context: AuthFailureContext): st
     return 'Email or username and password do not match.';
   }
 
+  if (/account_suspended/.test(message)) {
+    return 'This account is suspended. Contact support if you think this is a mistake.';
+  }
+
   if (/toomanyfailedattempts|too many|rate.?limit|try again in \d+/.test(message)) {
     return 'Too many attempts. Wait a little, then try again.';
   }

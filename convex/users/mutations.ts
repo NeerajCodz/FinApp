@@ -15,6 +15,7 @@ import type { AvatarGender } from '../avatars/domain';
 import { publishMutationResult, replayMutationResult, recordSyncChange } from '../sync/common';
 import { avatarUrlForUser } from '../avatars/helpers';
 import type { Doc } from '../_generated/dataModel';
+import { recordSecurityEvent } from '../admin/guard';
 
 type UserMutationContext = Parameters<typeof requireUser>[0];
 
@@ -284,6 +285,10 @@ export const setTwoFactorEnabled = mutation({
       .withIndex('by_user', (query) => query.eq('userId', user._id))
       .unique();
     const updatedAt = Date.now();
+    await recordSecurityEvent(ctx, {
+      kind: enabled ? 'mfa.email_enabled' : 'mfa.email_disabled',
+      userId: user._id,
+    });
     if (settings) {
       await ctx.db.patch(settings._id, { twoFactorEnabled: enabled, updatedAt });
     } else {

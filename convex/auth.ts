@@ -71,7 +71,7 @@ export const requestEmailTwoFactor = action({
         id: normalizedParams.email as string,
         secret: password,
       },
-    }).catch((cause) => {
+    }).catch(async (cause) => {
       const message =
         cause instanceof Error
           ? cause.message.toLowerCase()
@@ -79,11 +79,20 @@ export const requestEmailTwoFactor = action({
             ? cause.toLowerCase()
             : '';
       if (/invalidaccountid|invalidsecret|invalid credentials/.test(message)) {
+        await ctx.runMutation(internal.admin.account.recordSignIn, { ok: false, identifier });
         throw new ConvexError({ code: 'INVALID_CREDENTIALS' });
       }
       throw cause;
     });
     const { account, user } = credentials;
+    if (!(await ctx.runQuery(internal.admin.account.signInAllowed, { userId: user._id }))) {
+      await ctx.runMutation(internal.admin.account.recordSignIn, {
+        userId: user._id,
+        ok: false,
+        blocked: true,
+      });
+      throw new ConvexError({ code: 'ACCOUNT_SUSPENDED' });
+    }
     if (!account.emailVerified) {
       return { status: 'verification-required' as const, email: normalizedParams.email as string };
     }
@@ -263,9 +272,47 @@ const usernameAuthorize: PasswordOptions['authorize'] = async (params, ctx) => {
   return authorizeWithPublicErrors(normalizedParams, ctx);
 };
 
+/**
+ * Blocks banned or suspended accounts at sign-in and writes sign-ins (and failures, hashed) to
+ * the admin security log (convex/admin/account.ts).
+ */
+const guardedAuthorize: PasswordOptions['authorize'] = async (params, ctx) => {
+  const signingIn = params.flow === 'signIn' || params.flow === 'twoFactorVerification';
+  let result: Awaited<ReturnType<PasswordOptions['authorize']>>;
+  try {
+    result = await usernameAuthorize(params, ctx);
+  } catch (cause) {
+    const code =
+      cause instanceof ConvexError && cause.data && typeof cause.data === 'object'
+        ? (cause.data as { code?: unknown }).code
+        : undefined;
+    if (params.flow === 'signIn' && code === 'INVALID_CREDENTIALS')
+      await ctx.runMutation(internal.admin.account.recordSignIn, {
+        ok: false,
+        ...(typeof params.email === 'string' ? { identifier: params.email } : {}),
+      });
+    throw cause;
+  }
+  if (!signingIn) return result;
+  if (!result) {
+    await ctx.runMutation(internal.admin.account.recordSignIn, { ok: false });
+    return result;
+  }
+  if (!(await ctx.runQuery(internal.admin.account.signInAllowed, { userId: result.userId }))) {
+    await ctx.runMutation(internal.admin.account.recordSignIn, {
+      userId: result.userId,
+      ok: false,
+      blocked: true,
+    });
+    throw new ConvexError({ code: 'ACCOUNT_SUSPENDED' });
+  }
+  await ctx.runMutation(internal.admin.account.recordSignIn, { userId: result.userId, ok: true });
+  return result;
+};
+
 const usernamePasswordProvider = {
   ...passwordProvider,
-  options: { ...passwordOptions, authorize: usernameAuthorize },
+  options: { ...passwordOptions, authorize: guardedAuthorize },
 };
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
