@@ -346,6 +346,7 @@ export default function PersonalAccountDetailPage() {
   }, 0n);
 
   return (
+    <div className="finance-page finance-page--narrow">
     <AccountDetailView
       account={{
         id: idOf(account),
@@ -383,5 +384,6 @@ export default function PersonalAccountDetailPage() {
       }
       onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
     />
+    </div>
   );
 }

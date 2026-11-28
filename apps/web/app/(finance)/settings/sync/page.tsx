@@ -17,6 +17,13 @@ const syncWindowOptions: { value: LocalSyncWindow; label: string }[] = [
   { value: 365, label: '365 days' },
   { value: 'all', label: 'Everything' },
 ];
+function formatConflictRecord(record: Record<string, unknown>) {
+  return JSON.stringify(
+    record,
+    (_key, value: unknown) => (typeof value === 'bigint' ? value.toString() : value),
+    2,
+  );
+}
 
 export default function SyncSettingsPage() {
   const router = useRouter();
@@ -38,6 +45,7 @@ export default function SyncSettingsPage() {
   const [resolvingConflict, setResolvingConflict] = React.useState<string | null>(null);
 
   async function chooseConflict(conflictId: string, winner: 'local' | 'cloud') {
+    if (isSyncing) return;
     setResolvingConflict(conflictId);
     setError('');
     try {
@@ -157,11 +165,31 @@ export default function SyncSettingsPage() {
                 {conflict.entityType} {conflict.recordId} has a local and cloud version. Choose
                 which to keep.
               </p>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                  gap: 8,
+                }}
+              >
+                <div>
+                  <strong>This device</strong>
+                  <pre style={{ maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+                    {formatConflictRecord(conflict.localRecord)}
+                  </pre>
+                </div>
+                <div>
+                  <strong>Cloud</strong>
+                  <pre style={{ maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+                    {formatConflictRecord(conflict.cloudRecord)}
+                  </pre>
+                </div>
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={resolvingConflict !== null}
+                  disabled={isSyncing || resolvingConflict !== null}
                   onPress={() => void chooseConflict(conflict.id, 'local')}
                 >
                   Keep this device
@@ -169,7 +197,7 @@ export default function SyncSettingsPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={resolvingConflict !== null}
+                  disabled={isSyncing || resolvingConflict !== null}
                   onPress={() => void chooseConflict(conflict.id, 'cloud')}
                 >
                   Keep cloud

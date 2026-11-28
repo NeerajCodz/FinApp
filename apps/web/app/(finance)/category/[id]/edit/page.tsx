@@ -213,6 +213,7 @@ export default function EditCategoryPage() {
       </div>
     );
   return (
+    <div className="finance-page finance-page--narrow">
     <CategoryFormScreen
       mode="edit"
       name={name}
@@ -246,5 +247,6 @@ export default function EditCategoryPage() {
       onSubmit={() => void save()}
       onBack={() => router.push('/categories')}
     />
+    </div>
   );
 }

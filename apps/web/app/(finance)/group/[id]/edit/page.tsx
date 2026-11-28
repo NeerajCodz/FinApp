@@ -500,6 +500,7 @@ export default function GroupSettingsPage() {
     );
 
   return (
+    <div className="finance-page finance-page--narrow">
     <GroupEditScreen
       group={{
         id: currentGroupId,
@@ -598,5 +599,6 @@ export default function GroupSettingsPage() {
       onRevokeInvitation={() => void revokeInvitation()}
       onShareInvitation={() => void shareInvitation()}
     />
+    </div>
   );
 }

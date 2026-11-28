@@ -239,9 +239,7 @@ export function CategoryAnalyticsScreen({
           )
           .reduce((sum, item) => sum + item.amountMinor, 0n),
       }))
-      .filter((item) => item.amount > 0n)
-      .sort((a, b) => (a.amount > b.amount ? -1 : 1))
-      .slice(0, 6);
+      .filter((item) => item.amount > 0n);
     return {
       start: from,
       label: new Intl.DateTimeFormat(undefined, { month: 'short' }).format(from),
@@ -250,10 +248,32 @@ export function CategoryAnalyticsScreen({
     };
   });
   const monthlyCategories = scopedCategories
-    .filter((category) =>
-      monthly.some((bucket) => bucket.values.some((value) => value.category.id === category.id)),
+    .map((category) => ({
+      category,
+      total: monthly.reduce(
+        (sum, bucket) =>
+          sum + (bucket.values.find((item) => item.category.id === category.id)?.amount ?? 0n),
+        0n,
+      ),
+    }))
+    .filter((item) => item.total > 0n)
+    .sort((a, b) =>
+      a.total === b.total
+        ? a.category.name.localeCompare(b.category.name)
+        : a.total > b.total
+          ? -1
+          : 1,
     )
-    .slice(0, 6);
+    .slice(0, 6)
+    .map((item) => item.category);
+  const monthlyOtherValues = monthly.map((bucket) =>
+    bucket.values.reduce(
+      (sum, item) =>
+        sum +
+        (monthlyCategories.some((category) => category.id === item.category.id) ? 0n : item.amount),
+      0n,
+    ),
+  );
   const growing = [...rows]
     .filter((item) => item.change !== null && item.change > 0)
     .sort((a, b) => (b.change ?? 0) - (a.change ?? 0))[0];
@@ -475,20 +495,33 @@ export function CategoryAnalyticsScreen({
               height={200}
               labels={monthly.map((bucket) => bucket.label)}
               titles={monthly.map((bucket) => bucket.label)}
-              series={monthlyCategories.map((category) => ({
-                id: category.id,
-                label: category.name,
-                color: categoryColor(
-                  scopedCategories.findIndex((item) => item.id === category.id),
-                  tokens.primary,
-                ),
-                values: monthly.map((bucket) =>
-                  toMajor(
-                    bucket.values.find((value) => value.category.id === category.id)?.amount ?? 0n,
-                    currency,
+              series={[
+                ...monthlyCategories.map((category) => ({
+                  id: category.id,
+                  label: category.name,
+                  color: categoryColor(
+                    scopedCategories.findIndex((item) => item.id === category.id),
+                    tokens.primary,
                   ),
-                ),
-              }))}
+                  values: monthly.map((bucket) =>
+                    toMajor(
+                      bucket.values.find((value) => value.category.id === category.id)?.amount ??
+                        0n,
+                      currency,
+                    ),
+                  ),
+                })),
+                ...(monthlyOtherValues.some((value) => value > 0n)
+                  ? [
+                      {
+                        id: 'other',
+                        label: 'Other',
+                        color: tokens.foregroundMuted,
+                        values: monthlyOtherValues.map((value) => toMajor(value, currency)),
+                      },
+                    ]
+                  : []),
+              ]}
               format={(value) => fullMoney(value, currency)}
               axisFormat={(value) => compactMoney(value, currency)}
               showLegend

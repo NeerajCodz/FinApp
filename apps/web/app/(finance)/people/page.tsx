@@ -266,7 +266,7 @@ export default function PeoplePage() {
     );
 
   return (
-    <main className="people-page">
+    <main className="people-page finance-page finance-page--narrow">
       <header className="people-heading">
         <div>
           <p className="finance-kicker">YOUR NETWORK</p>

@@ -35,6 +35,8 @@ describe('suggested transfers', () => {
         transfers: [
           { fromUserId: 'me', toUserId: 'a', amountMinor: 100n },
           { fromUserId: 'b', toUserId: 'me', amountMinor: 200n },
+          { fromUserId: 'me', toUserId: 'g', amountMinor: 250n },
+          { fromUserId: 'h', toUserId: 'me', amountMinor: 275n },
           { fromUserId: 'c', toUserId: 'd', amountMinor: 300n },
           { fromUserId: 'e', toUserId: 'f', amountMinor: 400n },
         ],
@@ -47,6 +49,8 @@ describe('suggested transfers', () => {
           { id: 'd', name: 'Devon' },
           { id: 'e', name: 'Emery' },
           { id: 'f', name: 'Finley' },
+          { id: 'g', name: 'Gale' },
+          { id: 'h', name: 'Harper' },
         ],
         meId: 'me',
         limit: 1,
@@ -54,6 +58,7 @@ describe('suggested transfers', () => {
     );
 
     expect(markup).toContain('You pay');
+    expect(markup).toContain('Harper pays you');
     expect(markup).toContain('Blair pays');
     expect(markup).not.toContain('Casey pays');
     expect(markup).toContain('+2 more suggested');

@@ -34,6 +34,8 @@ import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { clearLocalData, commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { signOutAndClearLocalData } from '@/lib/offline/signOut';
+import { toast } from 'sonner';
 
 type Profile = LocalRecord & {
   displayName?: string;
@@ -68,7 +70,7 @@ const privacyLinks = [
 export default function ProfilePage() {
   const { signOut } = useAuthActions();
   const router = useRouter();
-  const { userId, isConnected } = useBrowserSync();
+  const { userId, isConnected, stopSyncBeforeSignOut } = useBrowserSync();
   const { tokens, appearance } = useTheme();
   const live = Boolean(userId && isConnected);
   const finai = useQuery(api.ai.settings.get, live ? {} : 'skip');
@@ -109,15 +111,23 @@ export default function ProfilePage() {
     setMessage('');
     try {
       if (!userId) throw new Error('AUTH_REQUIRED');
-      await clearLocalData(userId);
-      await signOut();
+      const cleanupError = await signOutAndClearLocalData(
+        userId,
+        stopSyncBeforeSignOut,
+        clearLocalData,
+        signOut,
+      );
+      if (cleanupError) {
+        const detail =
+          cleanupError instanceof Error
+            ? cleanupError.message
+            : 'Could not clear this browser’s saved data.';
+        setMessage(detail);
+        toast.error(`Signed out, but local data cleanup failed: ${detail}`);
+      }
       router.replace('/sign-in');
     } catch (cause) {
-      setMessage(
-        cause instanceof Error
-          ? cause.message
-          : 'Could not clear this browser’s saved data and sign out.',
-      );
+      setMessage(cause instanceof Error ? cause.message : 'Could not sign out.');
     }
   }
   const name = profile?.displayName ?? 'Your profile';

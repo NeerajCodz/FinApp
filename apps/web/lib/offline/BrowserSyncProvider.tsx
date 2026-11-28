@@ -39,6 +39,7 @@ import {
   recordGroupRangeCoverage,
 } from './repository';
 import { syncOutbox } from './sync';
+import { legacyBudgetReceipt } from './legacyBudgetReceipt';
 import {
   deleteGroupExpense,
   removeSettlement,
@@ -113,6 +114,7 @@ type BrowserSyncContextValue = {
   retryNow: () => Promise<void>;
   retryEntry: (localId: string) => Promise<void>;
   resolveConflict: (conflictId: string, winner: 'local' | 'cloud') => Promise<void>;
+  stopSyncBeforeSignOut: () => Promise<void>;
   fetchTransactionRange: (startAt: number, endAt: number) => Promise<void>;
   fetchGroupRange: (groupId: string, startAt: number, endAt: number) => Promise<void>;
   read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) => Promise<T[]>;
@@ -391,6 +393,12 @@ async function sendMutation(
         ruleId: await mapId('recurringRule', payload.ruleId),
       } as never);
       return;
+    case 'recurring.remove':
+      await convex.mutation(api.recurring.mutations.remove, {
+        ...payload,
+        ruleId: await mapId('recurringRule', payload.ruleId),
+      } as never);
+      return;
     case 'notification.preferences':
       await convex.mutation(api.notifications.mutations.setPreferences, payload as never);
       return;
@@ -452,6 +460,8 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const running = React.useRef(false);
+  const signingOut = React.useRef(false);
+  const activeSync = React.useRef<Promise<void> | null>(null);
   const syncWindowChangeDuringFlush = React.useRef(false);
   const rangeFetches = React.useRef(new Map<string, Promise<void>>());
   const isConnected = online && connection.isWebSocketConnected;
@@ -512,6 +522,9 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       setLocalIdentityReady(true);
     }
   }, []);
+  React.useEffect(() => {
+    if (!auth.isAuthenticated) signingOut.current = false;
+  }, [auth.isAuthenticated]);
 
   React.useEffect(() => {
     if (!validatedOnline || !authenticatedUserId) return;
@@ -574,7 +587,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
 
   const fetchTransactionRange = React.useCallback(
     (startAt: number, endAt: number): Promise<void> => {
-      if (!userId || !validatedOnline)
+      if (signingOut.current || !userId || !validatedOnline)
         return Promise.reject(new Error('ONLINE_RANGE_SYNC_REQUIRED'));
       if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
         return Promise.reject(new Error('INVALID_DATE_RANGE'));
@@ -608,7 +621,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   );
   const fetchGroupRange = React.useCallback(
     (groupId: string, startAt: number, endAt: number): Promise<void> => {
-      if (!userId || !validatedOnline)
+      if (signingOut.current || !userId || !validatedOnline)
         return Promise.reject(new Error('ONLINE_RANGE_SYNC_REQUIRED'));
       if (!groupId || !Number.isFinite(startAt) || !Number.isFinite(endAt) || startAt >= endAt)
         return Promise.reject(new Error('INVALID_DATE_RANGE'));
@@ -795,7 +808,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     async (targetUserId: string, entry: OutboxEntry): Promise<SyncReceipt> => {
       if (entry.operation.startsWith('budget.')) {
         // Budgets became category limits: an older version's queued budget change is dropped.
-        return { serverId: entry.recordId ?? targetUserId, revision: '1', updatedAt: Date.now() };
+        return legacyBudgetReceipt(targetUserId, entry.recordId ?? '');
       }
       await sendMutation(convex, targetUserId, entry);
       const receipt = await convex.query(api.sync.queries.mutationReceipt, {
@@ -813,30 +826,40 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   );
 
   const flush = React.useCallback(async () => {
-    if (!userId || !validatedOnline || running.current) return;
+    if (signingOut.current || !userId || !validatedOnline) return;
+    if (running.current) return activeSync.current ?? undefined;
     running.current = true;
     setIsSyncing(true);
     setSyncError(null);
-    try {
-      if (!(await hasCompletedBootstrap(userId))) await bootstrap(userId);
-      if (await hasPendingSyncWindowBackfill(userId)) {
-        const days = await getSyncWindow(userId);
-        const { startAt, endAt } = syncWindowRange(days);
-        await fetchTransactionRange(startAt, endAt);
-        await fetchGroupHistoryRange(userId, startAt, endAt);
-        await markSyncWindowBackfillCompleted(userId, days);
+    const task = (async () => {
+      try {
+        if (!(await hasCompletedBootstrap(userId))) await bootstrap(userId);
+        if (await hasPendingSyncWindowBackfill(userId)) {
+          const days = await getSyncWindow(userId);
+          const { startAt, endAt } = syncWindowRange(days);
+          await fetchTransactionRange(startAt, endAt);
+          await fetchGroupHistoryRange(userId, startAt, endAt);
+          await markSyncWindowBackfillCompleted(userId, days);
+        }
+        await pullChanges(userId);
+        await syncOutbox(userId, (entry) => runOutboxEntry(userId, entry));
+        await pullChanges(userId);
+      } catch (error) {
+        setSyncError(error instanceof Error ? error.message : 'SYNC_FAILED');
+      } finally {
+        const shouldRefetchWindow = syncWindowChangeDuringFlush.current;
+        syncWindowChangeDuringFlush.current = false;
+        running.current = false;
+        setIsSyncing(false);
+        if (shouldRefetchWindow && validatedOnline && !signingOut.current)
+          queueMicrotask(() => void flush());
       }
-      await pullChanges(userId);
-      await syncOutbox(userId, (entry) => runOutboxEntry(userId, entry));
-      await pullChanges(userId);
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : 'SYNC_FAILED');
+    })();
+    activeSync.current = task;
+    try {
+      await task;
     } finally {
-      const shouldRefetchWindow = syncWindowChangeDuringFlush.current;
-      syncWindowChangeDuringFlush.current = false;
-      running.current = false;
-      setIsSyncing(false);
-      if (shouldRefetchWindow && validatedOnline) queueMicrotask(() => void flush());
+      if (activeSync.current === task) activeSync.current = null;
     }
   }, [
     bootstrap,
@@ -847,6 +870,11 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     userId,
     validatedOnline,
   ]);
+  const stopSyncBeforeSignOut = React.useCallback(async () => {
+    signingOut.current = true;
+    await activeSync.current;
+    await Promise.allSettled([...rangeFetches.current.values()]);
+  }, []);
 
   React.useEffect(() => {
     if (!userId || !validatedOnline || scopedStatus.pending === 0) return;
@@ -991,6 +1019,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       retryNow,
       retryEntry,
       resolveConflict,
+      stopSyncBeforeSignOut,
       fetchTransactionRange,
       fetchGroupRange,
       read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) =>
@@ -1006,6 +1035,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       retryEntry,
       resolveConflict,
       retryNow,
+      stopSyncBeforeSignOut,
       scopedConflicts,
       scopedFailedEntries,
       scopedStatus,
