@@ -296,7 +296,7 @@ type CategoryTrashPage = {
 
 async function trashCategoryTransactionPage(ctx: MutationCtx, args: CategoryTrashPage) {
   const category = await ctx.db.get(args.categoryId);
-  if (!category || category.ownerId !== args.userId || category.archivedAt === undefined) return;
+  if (!category || category.ownerId !== args.userId || category.trashedAt !== args.now) return;
   const key = args.keys[args.keyIndex];
   if (key === undefined) return;
   const page = await ctx.db
@@ -370,7 +370,7 @@ export const archive = mutation({
       category.restoreDefaultIncome ?? (user.defaultIncomeCategoryId === args.categoryId);
     await ctx.db.patch(args.categoryId, {
       archivedAt: now,
-      trashedAt: category.trashedAt ?? now,
+      trashedAt: now,
       restoreDefaultExpense: restoreDefaultExpense || undefined,
       restoreDefaultIncome: restoreDefaultIncome || undefined,
       updatedAt: now,

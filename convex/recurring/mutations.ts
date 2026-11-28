@@ -141,6 +141,7 @@ export const remove = mutation({
     const now = Date.now();
     const patch = {
       archivedAt: now,
+      trashedAt: now,
       enabled: false,
       enabledBeforeTrash: rule.archivedAt === undefined ? rule.enabled : rule.enabledBeforeTrash,
       updatedAt: now,

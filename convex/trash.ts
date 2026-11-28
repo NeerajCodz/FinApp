@@ -136,8 +136,9 @@ async function trashedOfKind(ctx: QueryCtx, userId: Id<'users'>, kind: TrashKind
   if (kind === 'transaction') {
     return ctx.db
       .query('transactions')
-      .withIndex('by_owner_deletedAt', (q) => q.eq('ownerId', userId).gt('deletedAt', 0))
-      .filter((q) => q.eq(q.field('groupId'), undefined))
+      .withIndex('by_owner_groupId_deletedAt', (q) =>
+        q.eq('ownerId', userId).eq('groupId', undefined).gt('deletedAt', 0),
+      )
       .order('desc')
       .take(limit);
   }
@@ -403,21 +404,28 @@ export async function restoreItem(
     const account = await ctx.db.get(record.accountId as Id<'accounts'>);
     if (!account || account.archivedAt !== undefined) throw new Error('ACCOUNT_IN_TRASH');
   }
+  if (kind === 'account' && record.purgingAt !== undefined)
+    throw new Error('PURGE_IN_PROGRESS');
   const category = kind === 'category' ? (doc as Doc<'categories'>) : null;
+  const accountRecord = kind === 'account' ? (doc as Doc<'accounts'>) : null;
   const user =
-    category && (category.restoreDefaultExpense || category.restoreDefaultIncome)
+    (category && (category.restoreDefaultExpense || category.restoreDefaultIncome)) ||
+    (accountRecord?.restoreDefaultAccount ?? false)
       ? await ctx.db.get(userId)
       : null;
   const restoreDefaultExpense =
     category?.restoreDefaultExpense === true && user?.defaultExpenseCategoryId === undefined;
   const restoreDefaultIncome =
     category?.restoreDefaultIncome === true && user?.defaultIncomeCategoryId === undefined;
+  const restoreDefaultAccount =
+    accountRecord?.restoreDefaultAccount === true && user?.defaultAccountId === undefined;
   const patch: Record<string, unknown> =
     kind === 'transaction'
       ? { deletedAt: undefined, deletedBy: undefined, trashedWith: undefined, updatedAt: now }
       : kind === 'recurring'
         ? {
             archivedAt: undefined,
+            trashedAt: undefined,
             enabled: record.enabledBeforeTrash ?? true,
             enabledBeforeTrash: undefined,
             updatedAt: now,
@@ -430,14 +438,21 @@ export async function restoreItem(
               restoreDefaultIncome: undefined,
               updatedAt: now,
             }
-          : { archivedAt: undefined, updatedAt: now };
+          : {
+              archivedAt: undefined,
+              trashedAt: undefined,
+              purgingAt: undefined,
+              restoreDefaultAccount: undefined,
+              updatedAt: now,
+            };
   await ctx.db.patch(doc._id, patch as never);
   const updated = await ctx.db.get(doc._id);
   await recordSyncChange(ctx, userId, TABLE[kind], String(doc._id), now, updated);
-  if (category && user && (restoreDefaultExpense || restoreDefaultIncome)) {
+  if (user && (restoreDefaultExpense || restoreDefaultIncome || restoreDefaultAccount)) {
     const defaults = {
-      ...(restoreDefaultExpense ? { defaultExpenseCategoryId: category._id } : {}),
-      ...(restoreDefaultIncome ? { defaultIncomeCategoryId: category._id } : {}),
+      ...(restoreDefaultExpense ? { defaultExpenseCategoryId: category!._id } : {}),
+      ...(restoreDefaultIncome ? { defaultIncomeCategoryId: category!._id } : {}),
+      ...(restoreDefaultAccount ? { defaultAccountId: accountRecord!._id } : {}),
       updatedAt: now,
     };
     await ctx.db.patch(user._id, defaults);
@@ -468,9 +483,30 @@ export async function purgeItem(
     return { purged: 1 };
   }
   if (kind === 'account') {
+    if (record.purgingAt !== undefined) return { purged: 0, more: true };
+    const accountId = doc._id as Id<'accounts'>;
+    const [sourceGroup, transferGroup] = await Promise.all([
+      ctx.db
+        .query('transactions')
+        .withIndex('by_account_deletedAt_groupId', (q) =>
+          q.eq('accountId', accountId).eq('deletedAt', undefined).gt('groupId', ''),
+        )
+        .first(),
+      ctx.db
+        .query('transactions')
+        .withIndex('by_transferAccountId_deletedAt_groupId', (q) =>
+          q
+            .eq('transferAccountId', String(accountId))
+            .eq('deletedAt', undefined)
+            .gt('groupId', ''),
+        )
+        .first(),
+    ]);
+    if (sourceGroup || transferGroup) throw new Error('ACCOUNT_IN_USE_BY_GROUP_EXPENSE');
+    await ctx.db.patch(accountId, { purgingAt: now, updatedAt: now });
     const result = await purgeAccountPage(ctx, {
       userId,
-      accountId: doc._id as Id<'accounts'>,
+      accountId,
       phase: 'source',
       cursor: null,
       now,
@@ -583,8 +619,8 @@ export const purgeExpired = internalMutation({
     for (const row of page.page) {
       const doc = row as unknown as Record<string, unknown>;
       if (kind === 'transaction' && doc.groupId !== undefined) continue;
-      // Older archived categories were not moved to Trash and have no retention deadline.
-      if (kind === 'category' && typeof doc.trashedAt !== 'number') continue;
+      // Legacy archives have no Trash marker and remain indefinite.
+      if (kind !== 'transaction' && typeof doc.trashedAt !== 'number') continue;
       const owner = String(doc.ownerId);
       if (!retention.has(owner))
         retention.set(owner, await retentionDays(ctx, doc.ownerId as Id<'users'>));

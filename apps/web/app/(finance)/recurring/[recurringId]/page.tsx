@@ -64,15 +64,19 @@ export default function RecurringDetailPage() {
       await commitLocalWrite(
         userId,
         'recurringRule',
-        'recurring.delete',
+        'recurring.remove',
         {
           ...rule,
           archivedAt: Date.now(),
           enabled: false,
-          enabledBeforeTrash: rule.archivedAt === undefined ? rule.enabled : rule.enabledBeforeTrash,
+          enabledBeforeTrash:
+            rule.archivedAt === undefined ? rule.enabled : rule.enabledBeforeTrash,
         },
         { ruleId: id },
-        { recordId: id, dependencies: rule.cloudId || rule._id ? [] : [`recurringRule:${id}`] },
+        {
+          recordId: id,
+          dependencies: rule.cloudId || rule._id ? [] : [`recurringRule:${id}`],
+        },
       );
       router.push('/recurring');
     } catch (cause) {

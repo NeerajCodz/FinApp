@@ -159,6 +159,9 @@ export default defineSchema({
     openedAt: optionalTime,
     includeInAnalytics: v.optional(v.boolean()),
     archivedAt: optionalTime,
+    trashedAt: optionalTime,
+    purgingAt: optionalTime,
+    restoreDefaultAccount: v.optional(v.boolean()),
     createdAt: timestamp,
     updatedAt: timestamp,
   })
@@ -236,11 +239,18 @@ export default defineSchema({
   })
     .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
     .index('by_owner_deletedAt', ['ownerId', 'deletedAt'])
+    .index('by_owner_groupId_deletedAt', ['ownerId', 'groupId', 'deletedAt'])
     .index('by_deletedAt', ['deletedAt'])
     .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
     .index('by_owner_trashedWith', ['ownerId', 'trashedWith'])
     .index('by_account', ['accountId'])
     .index('by_transferAccountId', ['transferAccountId'])
+    .index('by_account_deletedAt_groupId', ['accountId', 'deletedAt', 'groupId'])
+    .index('by_transferAccountId_deletedAt_groupId', [
+      'transferAccountId',
+      'deletedAt',
+      'groupId',
+    ])
     .index('by_group_occurredAt', ['groupId', 'occurredAt'])
     .index('by_clientId', ['clientId']),
   transactionTags: defineTable({ transactionId: v.id('transactions'), tag: v.string() }).index(
@@ -580,6 +590,7 @@ export default defineSchema({
     startAt: timestamp,
     endAt: timestamp,
     archivedAt: optionalTime,
+    trashedAt: optionalTime,
     /**
      * Budgets were folded into category limits (migrations.foldBudgetsIntoCategoryLimits).
      * Set once a budget has been converted or retired; the app no longer reads this table.
@@ -611,6 +622,7 @@ export default defineSchema({
     ),
     completedAt: optionalTime,
     archivedAt: optionalTime,
+    trashedAt: optionalTime,
     createdAt: timestamp,
     updatedAt: timestamp,
   })
@@ -652,6 +664,7 @@ export default defineSchema({
     enabled: v.boolean(),
     /** In Trash: disabled while there; `enabledBeforeTrash` is restored with it. */
     archivedAt: optionalTime,
+    trashedAt: optionalTime,
     enabledBeforeTrash: v.optional(v.boolean()),
     createdAt: timestamp,
     updatedAt: timestamp,

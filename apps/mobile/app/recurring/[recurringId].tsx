@@ -71,7 +71,7 @@ export default function RecurringDetailScreen() {
           void commitLocalWrite(
             userId,
             'recurringRule',
-            'recurring.delete',
+            'recurring.remove',
             {
               ...rule,
               archivedAt: Date.now(),
@@ -80,7 +80,10 @@ export default function RecurringDetailScreen() {
                 rule.archivedAt === undefined ? rule.enabled : rule.enabledBeforeTrash,
             },
             { ruleId: id },
-            { recordId: id, dependencies: rule.cloudId || rule._id ? [] : [`recurringRule:${id}`] },
+            {
+              recordId: id,
+              dependencies: rule.cloudId || rule._id ? [] : [`recurringRule:${id}`],
+            },
           )
             .then(() => router.push('/recurring'))
             .catch((cause: unknown) =>

@@ -137,6 +137,9 @@ describe('Trash', () => {
     const { t, owner, ids } = await setup();
     await t.run((ctx) => ctx.db.patch(ids.accountId, { archivedAt: Date.now() }));
     await owner.as.mutation(api.trash.purge, { kind: 'account', id: String(ids.accountId) });
+    await expect(
+      owner.as.mutation(api.trash.restore, { kind: 'account', id: String(ids.accountId) }),
+    ).rejects.toThrow('PURGE_IN_PROGRESS');
     await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
     expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(0);
     expect(await t.run((ctx) => ctx.db.get(ids.accountId))).toBeNull();
@@ -265,6 +268,43 @@ describe('Trash', () => {
     expect(restored.every((row) => row.deletedAt === undefined)).toBe(true);
   });
 
+  it('ignores delayed category transaction work from an earlier archive generation', async () => {
+    vi.useFakeTimers();
+    const { t, owner, ids } = await setup();
+    const firstArchiveAt = Date.UTC(2026, 1, 1);
+    vi.setSystemTime(firstArchiveAt);
+    await owner.as.mutation(api.categories.mutations.archive, {
+      categoryId: ids.categoryId,
+      deleteTransactions: true,
+    });
+    await owner.as.mutation(api.trash.restore, {
+      kind: 'category',
+      id: String(ids.categoryId),
+    });
+    vi.setSystemTime(firstArchiveAt + 1_000);
+    await owner.as.mutation(api.categories.mutations.archive, {
+      categoryId: ids.categoryId,
+      deleteTransactions: false,
+    });
+    await t.mutation(internal.categories.mutations.continueTrashTransactions, {
+      userId: owner.userId,
+      categoryId: ids.categoryId,
+      keys: [String(ids.categoryId)],
+      keyIndex: 0,
+      cursor: null,
+      now: firstArchiveAt,
+    });
+    const rows = await t.run((ctx) =>
+      ctx.db
+        .query('transactions')
+        .withIndex('by_owner_category_occurredAt', (q) =>
+          q.eq('ownerId', owner.userId).eq('categoryId', String(ids.categoryId)),
+        )
+        .collect(),
+    );
+    expect(rows.every((row) => row.deletedAt === undefined)).toBe(true);
+  });
+
   it('restores category defaults only when no replacement was chosen', async () => {
     const { t, owner, ids } = await setup();
     const replacement = await t.run((ctx) =>
@@ -308,6 +348,22 @@ describe('Trash', () => {
         };
       }),
     ).toEqual({ expense: replacement, income: ids.categoryId });
+  });
+
+  it('restores the default account when no replacement was chosen', async () => {
+    const { t, owner, ids } = await setup();
+    await t.run((ctx) => ctx.db.patch(owner.userId, { defaultAccountId: ids.accountId }));
+    await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
+    expect(
+      (await t.run((ctx) => ctx.db.get(owner.userId)))?.defaultAccountId,
+    ).toBeUndefined();
+    await owner.as.mutation(api.trash.restore, {
+      kind: 'account',
+      id: String(ids.accountId),
+    });
+    expect(
+      (await t.run((ctx) => ctx.db.get(owner.userId)))?.defaultAccountId,
+    ).toBe(ids.accountId);
   });
 
   it('does not restore category companions while their accounts are trashed', async () => {
@@ -425,16 +481,23 @@ describe('Trash', () => {
     expect(await t.run((ctx) => ctx.db.get(target))).toBeNull();
   });
 
-  it('does not automatically expire legacy category archives', async () => {
+  it('does not automatically expire legacy account or category archives', async () => {
     vi.useFakeTimers();
     const { t, ids } = await setup();
-    await t.run((ctx) =>
-      ctx.db.patch(ids.categoryId, {
-        archivedAt: Date.now() - 31 * DAY,
-        updatedAt: Date.now() - 31 * DAY,
-      }),
-    );
-    await t.mutation(internal.trash.purgeExpired, { kindIndex: 2 });
+    const legacyArchiveAt = Date.now() - 31 * DAY;
+    await t.run(async (ctx) => {
+      await ctx.db.patch(ids.categoryId, {
+        archivedAt: legacyArchiveAt,
+        updatedAt: legacyArchiveAt,
+      });
+      await ctx.db.patch(ids.accountId, {
+        archivedAt: legacyArchiveAt,
+        updatedAt: legacyArchiveAt,
+      });
+    });
+    await t.mutation(internal.trash.purgeExpired, { kindIndex: 1 });
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1_000));
+    expect(await t.run((ctx) => ctx.db.get(ids.accountId))).not.toBeNull();
     expect(await t.run((ctx) => ctx.db.get(ids.categoryId))).not.toBeNull();
   });
 
@@ -577,15 +640,24 @@ describe('Trash', () => {
       });
       return { groupId, expenseId };
     });
+    await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
+    await expect(
+      owner.as.mutation(api.trash.purge, {
+        kind: 'account',
+        id: String(ids.accountId),
+      }),
+    ).rejects.toThrow('ACCOUNT_IN_USE_BY_GROUP_EXPENSE');
+    expect(await t.run((ctx) => ctx.db.get(ids.accountId))).not.toBeNull();
+    expect((await t.run((ctx) => ctx.db.get(expenseId)))?.deletedAt).toBeUndefined();
     await owner.as.mutation(api.groups.mutations.deleteExpense, { transactionId: expenseId });
     await expect(
       owner.as.mutation(api.trash.restore, { kind: 'transaction', id: String(expenseId) }),
     ).rejects.toThrow('NOT_IN_TRASH');
-    await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
     await owner.as.mutation(api.trash.purge, {
       kind: 'account',
       id: String(ids.accountId),
     });
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
     expect((await t.run((ctx) => ctx.db.get(expenseId)))?.deletedAt).toBeDefined();
     expect(
       await t.run((ctx) =>
