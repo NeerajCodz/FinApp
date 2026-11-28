@@ -1,6 +1,14 @@
 import { v } from 'convex/values';
 import type { Doc } from './_generated/dataModel';
-import type { MutationCtx, QueryCtx } from './_generated/server';
+import { internal } from './_generated/api';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from './_generated/server';
 import { getOptionalUser, requireUser } from './shared/auth';
 import { createNotification } from './notifications/mutations';
 import {
@@ -93,7 +101,6 @@ async function findClient(ctx: { db: QueryCtx['db'] }, clientId: string) {
 const clientAuthTransport = v.union(v.literal('none'), v.literal('basic'), v.literal('post'));
 
 const refreshScopes = v.optional(v.array(v.string()));
-
 
 const tokenAuthMethod = v.union(
   v.literal('none'),
