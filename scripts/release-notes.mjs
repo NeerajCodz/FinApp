@@ -41,7 +41,7 @@ export function escapeMentions(markdown) {
       if (/^##\s+/.test(line)) inNewContributors = false;
 
       const credit = inNewContributors
-        ? /^(\s*[*-]\s+)(@[A-Za-z0-9][\w-]*)( made their first contribution in https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+.*)$/.exec(
+        ? /^(\s*[*-]\s+)(@[A-Za-z0-9][\w-]*)( made their first contribution in (?:https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+|#\d+).*)$/.exec(
             line,
           )
         : null;
@@ -50,7 +50,7 @@ export function escapeMentions(markdown) {
       }
 
       const author =
-        /(\s+by )(@[A-Za-z0-9][\w-]*)( in https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+)\s*$/.exec(
+        /(\s+by )(@[A-Za-z0-9][\w-]*)( in (?:https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+|#\d+))\s*$/.exec(
           line,
         );
       if (author) {

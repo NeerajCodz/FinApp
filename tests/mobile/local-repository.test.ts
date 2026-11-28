@@ -830,13 +830,26 @@ describe('local financial repository', () => {
     }));
     await repo.applyCloudChanges(userId, echoes, 'notification-echo-1');
     await repo.applyCloudChanges(userId, echoes, 'notification-echo-2');
-
+    await repo.applyCloudChanges(
+      userId,
+      [
+        {
+          entityType: 'notification',
+          documentId: 'cloud-notification-a',
+          revision: '6',
+          updatedAt: 6,
+          document: { ...notifications[0], readAt: undefined, title: 'Changed elsewhere' },
+        },
+      ],
+      'notification-later-edit',
+    );
     const local = await repo.readLocal<Record<string, unknown>>(userId, 'notification');
     expect(local.find((record) => record.id === 'local-notification-a')).toMatchObject({
       id: 'local-notification-a',
       cloudId: 'cloud-notification-a',
-      readAt: 50,
+      title: 'Changed elsewhere',
     });
+    expect(local.find((record) => record.id === 'local-notification-a')?.readAt).toBeUndefined();
     expect(local.find((record) => record.id === 'local-notification-b')).toMatchObject({
       id: 'local-notification-b',
       cloudId: 'cloud-notification-b',

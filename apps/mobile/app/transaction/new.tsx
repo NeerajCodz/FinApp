@@ -11,7 +11,7 @@ import { commitLocalWrite } from '@/local/commands';
 import { displayAccountName } from '@/lib/ledger';
 import { personalItemsState, type LineItemDraft } from '@finapp/ui/finance/line-items';
 import type { ReceiptReview } from '@finapp/ui/finance';
-import { rescaleReceiptAmount } from '@finapp/ui/ai/receipt-scan';
+import { rescaleReceiptFields } from '@finapp/ui/ai/receipt-scan';
 import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 
 type ProfileRecord = LocalRecord & {
@@ -126,14 +126,9 @@ export default function NewTransactionScreen() {
       setReview(scanReview);
     },
     onCurrencyChange: (fromCurrency, toCurrency) => {
-      setAmount((current) => rescaleReceiptAmount(current, fromCurrency, toCurrency));
-      setItems(
-        (current) =>
-          current?.map((row) => ({
-            ...row,
-            amount: rescaleReceiptAmount(row.amount, fromCurrency, toCurrency),
-          })) ?? current,
-      );
+      const next = rescaleReceiptFields(amount, items ?? [], fromCurrency, toCurrency);
+      setAmount(next.amount);
+      if (items !== null) setItems(next.rows);
     },
   });
   const itemsState = personalItemsState(type === 'transfer' ? null : items, itemCurrency, amount);

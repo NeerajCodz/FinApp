@@ -4,6 +4,7 @@ import {
   minorToInput,
   receiptDraftToForm,
   rescaleReceiptAmount,
+  rescaleReceiptFields,
   receiptFileProblem,
   receiptMimeType,
   receiptScanErrorMessage,
@@ -71,6 +72,19 @@ describe('receipt scan helpers', () => {
     expect(rescaleReceiptAmount('12.345', 'KWD', 'INR')).toBe('12.35');
     expect(rescaleReceiptAmount('12.35', 'INR', 'KWD')).toBe('12.350');
     expect(rescaleReceiptAmount('edited', 'INR', 'KWD')).toBe('edited');
+  });
+  it('rescales edited item rows together when the currency precision decreases', () => {
+    const rows = [
+      { id: 'item-a', title: 'Edited tea', amount: '0.005' },
+      { id: 'item-b', title: 'Edited pastry', amount: '0.005' },
+    ];
+    const result = rescaleReceiptFields('0.010', rows, 'KWD', 'INR');
+
+    expect(result.amount).toBe('0.01');
+    expect(result.rows).toEqual([
+      { ...rows[0], amount: '0.01' },
+      { ...rows[1], amount: '0.00' },
+    ]);
   });
 
   it('checks files before upload', () => {

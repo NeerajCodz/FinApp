@@ -1073,8 +1073,8 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const pendingPushReads = React.useRef<{ id: string; userId?: string }[]>([]);
   const flushPushReadsRef = React.useRef<() => void>(() => {});
   const queuePushRead = React.useCallback((id: string) => {
-    if (pendingPushReads.current.some((read) => read.id === id)) return;
-    pendingPushReads.current.push({ id, userId: pushUserRef.current ?? undefined });
+    if (!pendingPushReads.current.some((read) => read.id === id))
+      pendingPushReads.current.push({ id, userId: pushUserRef.current ?? undefined });
     flushPushReadsRef.current();
   }, []);
   const queuePushReadRef = React.useRef(queuePushRead);
@@ -1130,6 +1130,7 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
             if (!active || pushUserRef.current !== userId) break;
           }
         } while (rerun && active && pushUserRef.current === userId);
+        attempted.clear();
         running = false;
       })();
     };

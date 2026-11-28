@@ -50,6 +50,17 @@ describe('offline financial safety', () => {
     expect(attempts).toHaveLength(3);
     expect(waits).toEqual([500, 1_000]);
 
+    let laterAttempts = 0;
+    await expect(
+      retryPushRead(
+        async () => {
+          laterAttempts++;
+        },
+        () => true,
+        async () => {},
+      ),
+    ).resolves.toBe(true);
+    expect(laterAttempts).toBe(1);
     let active = true;
     let cancelledAttempts = 0;
     const marked = await retryPushRead(

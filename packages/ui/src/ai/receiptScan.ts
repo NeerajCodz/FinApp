@@ -198,6 +198,53 @@ export function rescaleReceiptAmount(
   }
 }
 
+/** Rescales current editor values and rounds item rows together when precision decreases. */
+export function rescaleReceiptFields<T extends { amount: string }>(
+  amount: string,
+  rows: readonly T[],
+  fromCurrency: string,
+  toCurrency: string,
+): { amount: string; rows: T[] } {
+  const fromDigits = minorDigits(fromCurrency) ?? 2;
+  const toDigits = minorDigits(toCurrency) ?? 2;
+  let rowMinors: bigint[];
+  try {
+    rowMinors = rows.map((row) => parseMinor(row.amount, fromCurrency));
+  } catch {
+    return {
+      amount: rescaleReceiptAmount(amount, fromCurrency, toCurrency),
+      rows: rows.map((row) => ({
+        ...row,
+        amount: rescaleReceiptAmount(row.amount, fromCurrency, toCurrency),
+      })),
+    };
+  }
+
+  const scaledRowMinors =
+    toDigits < fromDigits
+      ? rescaleMinor(rowMinors, fromDigits - toDigits)
+      : rowMinors.map((minor) => minor * 10n ** BigInt(toDigits - fromDigits));
+  let scaledAmount = rescaleReceiptAmount(amount, fromCurrency, toCurrency);
+  try {
+    const currentTotal = parseMinor(amount, fromCurrency);
+    if (rowMinors.reduce((total, minor) => total + minor, 0n) === currentTotal)
+      scaledAmount = minorToInput(
+        scaledRowMinors.reduce((total, minor) => total + minor, 0n),
+        toCurrency,
+      );
+  } catch {
+    // Keep the user's incomplete total while still updating valid item rows.
+  }
+
+  return {
+    amount: scaledAmount,
+    rows: rows.map((row, index) => ({
+      ...row,
+      amount: minorToInput(scaledRowMinors[index]!, toCurrency),
+    })),
+  };
+}
+
 export type ReceiptFormFields = {
   title: string;
   merchant: string;

@@ -6,7 +6,7 @@ import { TransactionFormScreen, type TransactionFormType } from '@finapp/ui/fina
 import { parseMinor } from '@convex/shared/money';
 import { personalItemsState, type LineItemDraft } from '@finapp/ui/finance/line-items';
 import type { ReceiptReview } from '@finapp/ui/finance';
-import { rescaleReceiptAmount } from '@finapp/ui/ai/receipt-scan';
+import { rescaleReceiptFields } from '@finapp/ui/ai/receipt-scan';
 import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -292,14 +292,9 @@ export default function NewPersonalTransactionPage() {
       setReview(scanReview);
     },
     onCurrencyChange: (fromCurrency, toCurrency) => {
-      setAmount((current) => rescaleReceiptAmount(current, fromCurrency, toCurrency));
-      setItems(
-        (current) =>
-          current?.map((row) => ({
-            ...row,
-            amount: rescaleReceiptAmount(row.amount, fromCurrency, toCurrency),
-          })) ?? current,
-      );
+      const next = rescaleReceiptFields(amount, items ?? [], fromCurrency, toCurrency);
+      setAmount(next.amount);
+      if (items !== null) setItems(next.rows);
     },
   });
 

@@ -179,7 +179,7 @@ export default function NotificationSettingsScreen() {
   );
   React.useEffect(() => {
     if (permission === 'granted') void register();
-  }, [permission, register]);
+  }, [permission, isConnected, register]);
   React.useEffect(() => {
     void permissionStatus()
       .then(setPermission)

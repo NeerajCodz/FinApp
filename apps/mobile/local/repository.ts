@@ -800,12 +800,15 @@ export async function applyCloudChanges(
       db.runSync(
         `INSERT INTO recordVersions (userId, entityType, recordId, cloudUpdatedAt, clientUpdatedAt, revision)
          VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(userId, entityType, recordId)
-         DO UPDATE SET cloudUpdatedAt = excluded.cloudUpdatedAt, revision = excluded.revision`,
+         DO UPDATE SET cloudUpdatedAt = excluded.cloudUpdatedAt,
+           clientUpdatedAt = CASE WHEN ? = 1 THEN 0 ELSE recordVersions.clientUpdatedAt END,
+           revision = excluded.revision`,
         userId,
         change.entityType,
         localId,
         change.updatedAt,
         String(change.revision),
+        bulkReadEcho ? 1 : 0,
       );
     }
     const current = db.getFirstSync<{ revision: string }>(
