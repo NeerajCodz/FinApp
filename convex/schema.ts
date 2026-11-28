@@ -907,4 +907,162 @@ export default defineSchema({
   })
     .index('by_avatarId', ['avatarId'])
     .index('by_gender_avatarId', ['gender', 'avatarId']),
+  // ---- Public API ----
+  /** Personal access tokens (`fa_pat_…`): only a SHA-256 digest and a short prefix are kept. */
+  personalAccessTokens: defineTable({
+    userId: v.id('users'),
+    name: v.string(),
+    tokenPrefix: v.string(),
+    tokenHash: v.string(),
+    scopes: v.array(v.string()),
+    /** Absent: never expires. */
+    expiresAt: optionalTime,
+    /** Lifetime in days used for `expiresAt`, reapplied when the token is regenerated. */
+    expiryDays: v.optional(v.number()),
+    lastUsedAt: optionalTime,
+    /** Salted hash fingerprint of the last caller IP (never the address). */
+    lastUsedIpHash: optionalText,
+    createdAt: timestamp,
+    regeneratedAt: optionalTime,
+    revokedAt: optionalTime,
+  })
+    .index('by_token_hash', ['tokenHash'])
+    .index('by_user_createdAt', ['userId', 'createdAt']),
+  /** Third-party OAuth apps registered by developers (OAuth 2.1 code + PKCE). */
+  developerApps: defineTable({
+    ownerId: v.id('users'),
+    clientId: v.string(),
+    name: v.string(),
+    description: optionalText,
+    logoUrl: optionalText,
+    homepageUrl: optionalText,
+    redirectUris: v.array(v.string()),
+    /** The most an authorization may grant. */
+    scopes: v.array(v.string()),
+    clientType: v.union(v.literal('confidential'), v.literal('public')),
+    clientSecretHash: optionalText,
+    clientSecretPrefix: optionalText,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+    .index('by_client_id', ['clientId'])
+    .index('by_owner', ['ownerId']),
+  developerAppCodes: defineTable({
+    codeHash: v.string(),
+    appId: v.id('developerApps'),
+    userId: v.id('users'),
+    redirectUri: v.string(),
+    codeChallenge: v.string(),
+    scopes: v.array(v.string()),
+    expiresAt: timestamp,
+    consumedAt: optionalTime,
+    createdAt: timestamp,
+  })
+    .index('by_code_hash', ['codeHash'])
+    .index('by_expiresAt', ['expiresAt']),
+  /** A user's authorization of an app; holds digests of its current access and refresh tokens. */
+  developerAppGrants: defineTable({
+    appId: v.id('developerApps'),
+    userId: v.id('users'),
+    scopes: v.array(v.string()),
+    accessTokenHash: optionalText,
+    accessExpiresAt: optionalTime,
+    refreshTokenHash: optionalText,
+    /** The refresh token rotated out last; presenting it again revokes the grant. */
+    previousRefreshTokenHash: optionalText,
+    refreshExpiresAt: optionalTime,
+    lastUsedAt: optionalTime,
+    lastUsedIpHash: optionalText,
+    createdAt: timestamp,
+    revokedAt: optionalTime,
+  })
+    .index('by_access_hash', ['accessTokenHash'])
+    .index('by_refresh_hash', ['refreshTokenHash'])
+    .index('by_previous_refresh_hash', ['previousRefreshTokenHash'])
+    .index('by_user_createdAt', ['userId', 'createdAt'])
+    .index('by_app', ['appId']),
+  /** Token buckets for API rate limiting, one per credential. */
+  apiRateLimits: defineTable({
+    key: v.string(),
+    tokens: v.number(),
+    updatedAt: timestamp,
+  })
+    .index('by_key', ['key'])
+    .index('by_updatedAt', ['updatedAt']),
+  /** Stored responses for `Idempotency-Key` replays (24 hours). */
+  apiIdempotencyKeys: defineTable({
+    principal: v.string(),
+    key: v.string(),
+    requestHash: v.string(),
+    status: v.number(),
+    body: v.string(),
+    createdAt: timestamp,
+    expiresAt: timestamp,
+  })
+    .index('by_principal_key', ['principal', 'key'])
+    .index('by_expiresAt', ['expiresAt']),
+  webhookEndpoints: defineTable({
+    userId: v.id('users'),
+    /** Set when an OAuth app created the endpoint through the API. */
+    appId: v.optional(v.id('developerApps')),
+    url: v.string(),
+    description: optionalText,
+    events: v.array(v.string()),
+    enabled: v.boolean(),
+    /** The signing secret is derived from this salt and WEBHOOK_SECRET_KEY; it is never stored. */
+    secretSalt: v.string(),
+    secretPrefix: v.string(),
+    previousSecretSalt: optionalText,
+    previousSecretExpiresAt: optionalTime,
+    consecutiveFailures: v.number(),
+    disabledReason: optionalText,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).index('by_user', ['userId']),
+  webhookEvents: defineTable({
+    userId: v.id('users'),
+    type: v.string(),
+    /** JSON body sent to endpoints. */
+    payload: v.string(),
+    createdAt: timestamp,
+  }).index('by_createdAt', ['createdAt']),
+  /** Delivery log: status codes and timings only, never response bodies. */
+  webhookDeliveries: defineTable({
+    endpointId: v.id('webhookEndpoints'),
+    eventId: v.id('webhookEvents'),
+    userId: v.id('users'),
+    eventType: v.string(),
+    attempt: v.number(),
+    status: v.union(
+      v.literal('pending'),
+      v.literal('succeeded'),
+      v.literal('retrying'),
+      v.literal('failed'),
+    ),
+    responseStatus: v.optional(v.number()),
+    durationMs: v.optional(v.number()),
+    errorCode: optionalText,
+    nextAttemptAt: optionalTime,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+    .index('by_endpoint_createdAt', ['endpointId', 'createdAt'])
+    .index('by_createdAt', ['createdAt']),
+  /** Developer audit log: usage metadata for tokens, apps and webhooks (no request data). */
+  developerAuditEvents: defineTable({
+    userId: v.id('users'),
+    kind: v.string(),
+    actorType: v.union(v.literal('user'), v.literal('pat'), v.literal('app')),
+    tokenId: v.optional(v.id('personalAccessTokens')),
+    appId: v.optional(v.id('developerApps')),
+    grantId: v.optional(v.id('developerAppGrants')),
+    label: optionalText,
+    method: optionalText,
+    route: optionalText,
+    status: v.optional(v.number()),
+    ipHash: optionalText,
+    createdAt: timestamp,
+  })
+    .index('by_user_createdAt', ['userId', 'createdAt'])
+    .index('by_createdAt', ['createdAt']),
 });
