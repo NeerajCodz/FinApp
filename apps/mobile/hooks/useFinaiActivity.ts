@@ -20,12 +20,10 @@ export function collectNewReplies(
 ): FinaiLatestReply[] {
   if (userId === undefined) return [];
   if (tracker.userId !== userId) {
-    const identityChanged = tracker.userId !== undefined;
     tracker.userId = userId;
-    tracker.seenReplyIds =
-      !identityChanged && activity
-        ? new Set(activity.replies.map((reply) => String(reply.replyId)))
-        : null;
+    tracker.seenReplyIds = activity
+      ? new Set(activity.replies.map((reply) => String(reply.replyId)))
+      : null;
     return [];
   }
   if (!activity) return [];
