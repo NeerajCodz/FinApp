@@ -18,6 +18,11 @@ import {
 import { router } from 'expo-router';
 import { useConvex } from 'convex/react';
 import { registerForPush } from '@/lib/push';
+import {
+  createPushRegistrationQueue,
+  type PushRegistrationQueue,
+  type PushRegistrationStatus,
+} from '@/local/push-registration-queue';
 import { Button } from '@finapp/ui/native';
 import {
   SettingsGroup,
@@ -148,7 +153,10 @@ export default function NotificationSettingsScreen() {
     null,
   );
   const [saving, setSaving] = React.useState(false);
-  const registrationInFlight = React.useRef(false);
+  const connectedRef = React.useRef(isConnected);
+  connectedRef.current = isConnected;
+  const convexRef = React.useRef(convex);
+  convexRef.current = convex;
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
@@ -156,25 +164,19 @@ export default function NotificationSettingsScreen() {
       setPreferences(normalizeNotificationPreferences(settings.data[0].notificationPreferences));
   }, [settings.data]);
   // OS permission is not the same as this device being registered for server pushes.
-  const [registration, setRegistration] = React.useState<
-    'checking' | 'registered' | 'failed' | 'offline'
-  >('checking');
-  const register = React.useCallback(async () => {
-    if (registrationInFlight.current) return;
-    if (!isConnected) {
-      setRegistration('offline');
-      return;
-    }
-    registrationInFlight.current = true;
-    setRegistration('checking');
-    try {
-      setRegistration((await registerForPush(convex)) === 'registered' ? 'registered' : 'failed');
-    } catch {
-      setRegistration('failed');
-    } finally {
-      registrationInFlight.current = false;
-    }
-  }, [convex, isConnected]);
+  const [registration, setRegistration] = React.useState<PushRegistrationStatus>('checking');
+  const registrationQueue = React.useRef<PushRegistrationQueue | null>(null);
+  if (!registrationQueue.current) {
+    registrationQueue.current = createPushRegistrationQueue({
+      isConnected: () => connectedRef.current,
+      register: () => registerForPush(convexRef.current),
+      setStatus: setRegistration,
+    });
+  }
+  const register = React.useCallback(
+    () => registrationQueue.current?.request() ?? Promise.resolve(),
+    [],
+  );
   React.useEffect(() => {
     if (permission === 'granted') void register();
   }, [permission, register]);

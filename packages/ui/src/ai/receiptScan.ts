@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReceiptDraft, ReceiptField } from '@convex/ai/receiptDomain';
 import { receiptUpload } from '@convex/ai/config';
-import { minorDigits } from '@convex/shared/money';
+import { minorDigits, parseMinor } from '@convex/shared/money';
 import type { LineItemDraft } from '../finance/lineItems';
 import type { ThinkingOrbState } from './orbModel';
 
@@ -179,6 +179,25 @@ export function minorToInput(amount: bigint, currency: string): string {
   const scale = 10n ** BigInt(digits);
   const fraction = digits ? `.${(absolute % scale).toString().padStart(digits, '0')}` : '';
   return `${negative ? '-' : ''}${absolute / scale}${fraction}`;
+}
+
+/** Reformat a current edited amount after the composer currency precision changes. */
+export function rescaleReceiptAmount(
+  value: string,
+  fromCurrency: string,
+  toCurrency: string,
+): string {
+  try {
+    const amount = parseMinor(value, fromCurrency);
+    const delta = (minorDigits(toCurrency) ?? 2) - (minorDigits(fromCurrency) ?? 2);
+    if (delta > 0)
+      return minorToInput(amount * 10n ** BigInt(delta), toCurrency);
+    if (delta < 0)
+      return minorToInput(rescaleMinor([amount], -delta)[0]!, toCurrency);
+    return minorToInput(amount, toCurrency);
+  } catch {
+    return value;
+  }
 }
 
 export type ReceiptFormFields = {

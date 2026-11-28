@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   minorToInput,
   receiptDraftToForm,
+  rescaleReceiptAmount,
   receiptFileProblem,
   receiptMimeType,
   receiptScanErrorMessage,
@@ -64,6 +65,12 @@ describe('receipt scan helpers', () => {
     expect(form.warnings[0]).toMatch(/KWD/);
     expect(form.amount).toBe('1.25');
     expect(receiptDraftToForm({ ...draft, occurredAt: null }, 'INR').occurredAt).toBeNull();
+  });
+
+  it('rescales current edited amounts without restoring OCR values', () => {
+    expect(rescaleReceiptAmount('12.345', 'KWD', 'INR')).toBe('12.35');
+    expect(rescaleReceiptAmount('12.35', 'INR', 'KWD')).toBe('12.350');
+    expect(rescaleReceiptAmount('edited', 'INR', 'KWD')).toBe('edited');
   });
 
   it('checks files before upload', () => {

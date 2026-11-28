@@ -32,8 +32,8 @@ export function useReceiptScanner({
   currency: string;
   disabled?: boolean;
   onFields: (fields: ReceiptFormFields, review: ReceiptReview) => void;
-  /** Updates only monetary values when currency precision changes after scanning. */
-  onCurrencyChange: (fields: Pick<ReceiptFormFields, 'amount' | 'rows'>) => void;
+  /** Rescales current user-edited monetary values when currency precision changes. */
+  onCurrencyChange: (fromCurrency: string, toCurrency: string) => void;
   /** Called with a fresh review when the composer's currency changes after a scan. */
   onReview?: (review: ReceiptReview) => void;
 }) {
@@ -50,12 +50,10 @@ export function useReceiptScanner({
     const last = lastScan.current;
     if (!last || !currency || last.currency === currency) return;
     const digitsChanged = (minorDigits(last.currency) ?? 2) !== (minorDigits(currency) ?? 2);
+    const previousCurrency = last.currency;
     last.currency = currency;
     const review = receiptReviewFor(last.draft, currency);
-    if (digitsChanged) {
-      const fields = receiptDraftToForm(last.draft, currency);
-      onCurrencyChangeRef.current({ amount: fields.amount, rows: fields.rows });
-    }
+    if (digitsChanged) onCurrencyChangeRef.current(previousCurrency, currency);
     onReviewRef.current?.(review);
   }, [currency]);
   const scanner = useReceiptScan({

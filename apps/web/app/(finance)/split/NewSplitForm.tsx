@@ -7,6 +7,7 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { aliases, idOf, useGroupLedger } from '@/lib/groupLedger';
 import type { ReceiptReview } from '@finapp/ui/finance';
+import { rescaleReceiptAmount } from '@finapp/ui/ai/receipt-scan';
 import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 
 const unsynced = (record: LocalRecord) => !record.cloudId && !record._id;
@@ -74,13 +75,13 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
       });
       setReview(scanReview);
     },
-    onCurrencyChange: (fields) => {
-      const amounts = new Map(fields.rows.map((row) => [row.id, row.amount]));
-      composer.set('amount', fields.amount);
+    onCurrencyChange: (fromCurrency, toCurrency) => {
+      composer.set('amount', rescaleReceiptAmount(composer.amount, fromCurrency, toCurrency));
       composer.setItems(
-        composer.items.map((row) =>
-          amounts.has(row.id) ? { ...row, amount: amounts.get(row.id)! } : row,
-        ),
+        composer.items.map((row) => ({
+          ...row,
+          amount: rescaleReceiptAmount(row.amount, fromCurrency, toCurrency),
+        })),
       );
     },
   });

@@ -730,4 +730,125 @@ describe('local financial repository', () => {
     );
     expect(failed?.lastError).toBe('You no longer have permission to make this change.');
   });
+
+  it('applies only bulk-read echoes from their batch and preserves other dirty notification edits', async () => {
+    const userId = 'user-bulk-notification-read';
+    const notifications = [
+      {
+        _id: 'cloud-notification-a',
+        clientId: 'local-notification-a',
+        recipientId: userId,
+        type: 'social',
+        title: 'A',
+        body: 'A',
+        createdAt: 10,
+      },
+      {
+        _id: 'cloud-notification-b',
+        clientId: 'local-notification-b',
+        recipientId: userId,
+        type: 'social',
+        title: 'B',
+        body: 'B',
+        createdAt: 9,
+      },
+      {
+        _id: 'cloud-notification-c',
+        clientId: 'local-notification-c',
+        recipientId: userId,
+        type: 'social',
+        title: 'C',
+        body: 'C',
+        createdAt: 8,
+      },
+    ];
+    await repo.applyCloudChanges(
+      userId,
+      notifications.map((document, index) => ({
+        entityType: 'notification' as const,
+        documentId: document._id,
+        revision: String(index + 1),
+        updatedAt: index + 1,
+        document,
+      })),
+      'notification-seed',
+    );
+    const localNotifications = await repo.readLocal<Record<string, unknown>>(
+      userId,
+      'notification',
+    );
+    const localNotificationA = localNotifications.find(
+      (record) => record.id === 'local-notification-a',
+    )!;
+    const localNotificationB = localNotifications.find(
+      (record) => record.id === 'local-notification-b',
+    )!;
+    const batch = createOutboxEntry(
+      'notification.markAllRead',
+      { before: 10 },
+      'notification-read-batch',
+      { entityType: 'notification', recordId: 'local-notification-a' },
+    );
+    await repo.applyLocalMutationAndEnqueue(
+      userId,
+      'notification',
+      { ...localNotificationA, readAt: 50 },
+      batch,
+      [
+        {
+          entityType: 'notification',
+          record: { ...localNotificationB, readAt: 50 },
+        },
+      ],
+    );
+    const unrelated = createOutboxEntry(
+      'notification.remove',
+      { notificationId: 'cloud-notification-b' },
+      'notification-remove-b',
+      { entityType: 'notification', recordId: 'local-notification-b' },
+    );
+    await repo.applyLocalMutationAndEnqueue(
+      userId,
+      'notification',
+      {
+        ...localNotificationB,
+        id: 'local-notification-b',
+        title: 'Locally edited title',
+        readAt: 50,
+        deletedAt: 60,
+      },
+      unrelated,
+    );
+
+    const echoes = notifications.slice(0, 2).map((document, index) => ({
+      entityType: 'notification' as const,
+      documentId: document._id,
+      revision: String(index + 4),
+      updatedAt: index + 4,
+      clientMutationId: 'notification-read-batch',
+      document: { ...document, readAt: 50 },
+    }));
+    await repo.applyCloudChanges(userId, echoes, 'notification-echo-1');
+    await repo.applyCloudChanges(userId, echoes, 'notification-echo-2');
+
+    const local = await repo.readLocal<Record<string, unknown>>(userId, 'notification');
+    expect(local.find((record) => record.id === 'local-notification-a')).toMatchObject({
+      id: 'local-notification-a',
+      cloudId: 'cloud-notification-a',
+      readAt: 50,
+    });
+    expect(local.find((record) => record.id === 'local-notification-b')).toMatchObject({
+      id: 'local-notification-b',
+      cloudId: 'cloud-notification-b',
+      title: 'Locally edited title',
+      deletedAt: 60,
+    });
+    const untouched = local.find((record) => record.id === 'local-notification-c');
+    expect(untouched).toMatchObject({
+      id: 'local-notification-c',
+      cloudId: 'cloud-notification-c',
+    });
+    expect(untouched?.readAt).toBeUndefined();
+    expect(await repo.readConflicts(userId)).toEqual([]);
+  });
 });

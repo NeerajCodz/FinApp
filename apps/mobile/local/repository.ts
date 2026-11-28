@@ -30,6 +30,7 @@ export type CloudChange = {
   revision: bigint | string;
   updatedAt: number;
   deletedAt?: number;
+  clientMutationId?: string;
   document?: LocalRecord;
 };
 
@@ -676,6 +677,38 @@ export async function applyCloudChanges(
         change.entityType,
         localId,
       );
+      const bulkReadEcho =
+        change.entityType === 'notification' && change.clientMutationId
+          ? db.getFirstSync<{ localId: string }>(
+              `SELECT localId FROM outbox
+               WHERE userId = ? AND clientMutationId = ? AND operation = 'notification.markAllRead'
+               LIMIT 1`,
+              userId,
+              change.clientMutationId,
+            )
+          : null;
+      const separatelyDirty =
+        bulkReadEcho &&
+        db.getFirstSync<{ localId: string }>(
+          `SELECT localId FROM outbox
+           WHERE userId = ? AND entityType = 'notification' AND recordId = ?
+             AND operation <> 'notification.markAllRead'
+             AND status IN ('pending', 'failed', 'syncing', 'conflict')
+           LIMIT 1`,
+          userId,
+          localId,
+        );
+      if (bulkReadEcho && separatelyDirty && row) {
+        db.runSync(
+          `UPDATE recordVersions SET cloudUpdatedAt = MAX(COALESCE(cloudUpdatedAt, 0), ?), revision = ?
+           WHERE userId = ? AND entityType = 'notification' AND recordId = ?`,
+          change.updatedAt,
+          String(change.revision),
+          userId,
+          localId,
+        );
+        continue;
+      }
       if (change.deletedAt !== undefined) {
         db.runSync(
           `INSERT INTO tombstones (userId, entityType, recordId, revision, deletedAt) VALUES (?, ?, ?, ?, ?)
@@ -703,6 +736,7 @@ export async function applyCloudChanges(
           db.runSync(`DELETE FROM ${table} WHERE userId = ? AND id = ?`, userId, row.id);
       } else if (change.document) {
         if (
+          !bulkReadEcho &&
           row &&
           localVersion &&
           (localVersion.clientUpdatedAt > 0 ||

@@ -46,6 +46,7 @@ import {
 } from '@/local/notification-events';
 import { normalizeNotificationPreferences } from '@convex/notifications/domain';
 import { syncOutbox } from '@/local/sync/engine';
+import { retryPushRead } from '@/local/push-read-retry';
 import {
   deleteGroupExpense,
   removeSettlement,
@@ -440,6 +441,14 @@ async function sendMutation(
         ruleId: mapped ?? ruleId,
       } as never);
     }
+    case 'recurring.remove': {
+      const ruleId = String(payload.ruleId);
+      const mapped = await getMappedCloudId(userId, 'recurringRule', ruleId);
+      return convex.mutation(api.recurring.mutations.remove, {
+        ...payload,
+        ruleId: mapped ?? ruleId,
+      } as never);
+    }
     case 'notification.preferences':
       return convex.mutation(api.notifications.mutations.setPreferences, payload as never);
     case 'notification.markRead': {
@@ -622,6 +631,7 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
             revision: change.revision.toString(),
             updatedAt: change.updatedAt,
             deletedAt: change.deletedAt,
+            clientMutationId: change.clientMutationId,
             document: change.document as LocalRecord | undefined,
           };
         });
@@ -1060,18 +1070,77 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const pushConvexRef = React.useRef(convex);
   pushConvexRef.current = convex;
   /** Opened before the identity loaded (cold start): marked read once it is known. */
-  const pendingPushReads = React.useRef<string[]>([]);
+  const pendingPushReads = React.useRef<{ id: string; userId?: string }[]>([]);
+  const flushPushReadsRef = React.useRef<() => void>(() => {});
+  const queuePushRead = React.useCallback((id: string) => {
+    if (pendingPushReads.current.some((read) => read.id === id)) return;
+    pendingPushReads.current.push({ id, userId: pushUserRef.current ?? undefined });
+    flushPushReadsRef.current();
+  }, []);
+  const queuePushReadRef = React.useRef(queuePushRead);
+  queuePushReadRef.current = queuePushRead;
   const markOpenedRef = React.useRef<(id: unknown) => Promise<void>>(async () => {});
   React.useEffect(() => {
-    if (!userId || !pendingPushReads.current.length) return;
-    const queued = pendingPushReads.current.splice(0);
-    for (const id of queued)
-      void markOpenedRef
-        .current(id)
-        .catch((error: unknown) =>
-          console.warn('[local-sync] Could not mark the opened notification read.', error),
-        );
-  }, [userId]);
+    if (!userId || !isConnected) return;
+    let active = true;
+    let running = false;
+    let rerun = false;
+    let cancelWait: (() => void) | null = null;
+    const attempted = new Set<string>();
+    const pause = (ms: number) => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      const timer = setTimeout(() => {
+        cancelWait = null;
+        resolve();
+      }, ms);
+      cancelWait = () => {
+        clearTimeout(timer);
+        cancelWait = null;
+        resolve();
+      };
+      return promise;
+    };
+    const flush = () => {
+      if (running) {
+        rerun = true;
+        return;
+      }
+      running = true;
+      void (async () => {
+        do {
+          rerun = false;
+          for (const read of [...pendingPushReads.current]) {
+            if (attempted.has(read.id) || (read.userId && read.userId !== userId)) continue;
+            attempted.add(read.id);
+            read.userId = userId;
+            let marked = false;
+            try {
+              marked = await retryPushRead(
+                () => markOpenedRef.current(read.id),
+                () => active && pushUserRef.current === userId,
+                pause,
+              );
+            } catch (error) {
+              console.warn('[local-sync] Could not mark the opened notification read.', error);
+            }
+            if (marked && active && pushUserRef.current === userId) {
+              const index = pendingPushReads.current.indexOf(read);
+              if (index !== -1) pendingPushReads.current.splice(index, 1);
+            }
+            if (!active || pushUserRef.current !== userId) break;
+          }
+        } while (rerun && active && pushUserRef.current === userId);
+        running = false;
+      })();
+    };
+    flushPushReadsRef.current = flush;
+    flush();
+    return () => {
+      active = false;
+      flushPushReadsRef.current = () => {};
+      cancelWait?.();
+    };
+  }, [isConnected, userId]);
 
   React.useEffect(() => {
     if (isExpoGo() || Platform.OS === 'web') return;
@@ -1082,10 +1151,11 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
       if (typeof notificationId !== 'string' || !notificationId) return;
       const owner = pushUserRef.current;
       if (!owner) {
-        pendingPushReads.current.push(notificationId);
+        queuePushReadRef.current(notificationId);
         return;
       }
       const records = await readLocal<NotificationRecord>(owner, 'notification');
+      if (pushUserRef.current !== owner) throw new Error('IDENTITY_CHANGED');
       const local = records.find((record) =>
         [record.id, record._id, record.cloudId].includes(notificationId),
       );
@@ -1117,9 +1187,11 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
           const data = response?.notification.request.content.data;
           const path = appPathForNotificationUrl(data?.url);
           if (path) router.push(path as never);
-          void markOpened(data?.notificationId).catch((error: unknown) =>
-            console.warn('[local-sync] Could not mark the opened notification read.', error),
-          );
+          void markOpened(data?.notificationId).catch((error: unknown) => {
+            if (typeof data?.notificationId === 'string')
+              queuePushReadRef.current(data.notificationId);
+            console.warn('[local-sync] Could not mark the opened notification read.', error);
+          });
         };
         subscription = Notifications.addNotificationResponseReceivedListener(follow);
         // A tap that launched the app from a killed state.
