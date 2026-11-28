@@ -44,6 +44,7 @@ import {
   reconcileRecurringNotifications,
   type NotificationRecord,
 } from '@/local/notification-events';
+import { retryPushReadQueue } from '@/local/pushReadQueue';
 import { normalizeNotificationPreferences } from '@convex/notifications/domain';
 import { syncOutbox } from '@/local/sync/engine';
 import {
@@ -436,6 +437,14 @@ async function sendMutation(
       const ruleId = String(payload.ruleId);
       const mapped = await getMappedCloudId(userId, 'recurringRule', ruleId);
       return convex.mutation(api.recurring.mutations.setEnabled, {
+        ...payload,
+        ruleId: mapped ?? ruleId,
+      } as never);
+    }
+    case 'recurring.delete': {
+      const ruleId = String(payload.ruleId);
+      const mapped = await getMappedCloudId(userId, 'recurringRule', ruleId);
+      return convex.mutation(api.recurring.mutations.remove, {
         ...payload,
         ruleId: mapped ?? ruleId,
       } as never);
@@ -1060,18 +1069,31 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
   const pushConvexRef = React.useRef(convex);
   pushConvexRef.current = convex;
   /** Opened before the identity loaded (cold start): marked read once it is known. */
+  const [pendingPushReadVersion, setPendingPushReadVersion] = React.useState(0);
   const pendingPushReads = React.useRef<string[]>([]);
+  const pendingPushReadUser = React.useRef(userId);
   const markOpenedRef = React.useRef<(id: unknown) => Promise<void>>(async () => {});
+  const enqueuePendingPushRead = React.useCallback((id: string) => {
+    if (pendingPushReads.current.includes(id)) return;
+    pendingPushReads.current.push(id);
+    setPendingPushReadVersion((version) => version + 1);
+  }, []);
   React.useEffect(() => {
+    if (pendingPushReadUser.current && pendingPushReadUser.current !== userId)
+      pendingPushReads.current.length = 0;
+    pendingPushReadUser.current = userId;
     if (!userId || !pendingPushReads.current.length) return;
-    const queued = pendingPushReads.current.splice(0);
-    for (const id of queued)
-      void markOpenedRef
-        .current(id)
-        .catch((error: unknown) =>
-          console.warn('[local-sync] Could not mark the opened notification read.', error),
-        );
-  }, [userId]);
+    return retryPushReadQueue(
+      [...pendingPushReads.current],
+      (id) => markOpenedRef.current(id),
+      (id) => {
+        const index = pendingPushReads.current.indexOf(id);
+        if (index !== -1) pendingPushReads.current.splice(index, 1);
+      },
+      (error: unknown) =>
+        console.warn('[local-sync] Could not mark the opened notification read.', error),
+    );
+  }, [userId, isConnected, pendingPushReadVersion]);
 
   React.useEffect(() => {
     if (isExpoGo() || Platform.OS === 'web') return;
@@ -1082,19 +1104,24 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
       if (typeof notificationId !== 'string' || !notificationId) return;
       const owner = pushUserRef.current;
       if (!owner) {
-        pendingPushReads.current.push(notificationId);
+        enqueuePendingPushRead(notificationId);
         return;
       }
-      const records = await readLocal<NotificationRecord>(owner, 'notification');
-      const local = records.find((record) =>
-        [record.id, record._id, record.cloudId].includes(notificationId),
-      );
-      if (local) await markNotificationAsRead(owner, local);
-      else
-        await pushConvexRef.current.mutation(api.notifications.mutations.markRead, {
-          notificationId: notificationId as Id<'notifications'>,
-          clientMutationId: `push-open:${notificationId}`,
-        });
+      try {
+        const records = await readLocal<NotificationRecord>(owner, 'notification');
+        const local = records.find((record) =>
+          [record.id, record._id, record.cloudId].includes(notificationId),
+        );
+        if (local) await markNotificationAsRead(owner, local);
+        else
+          await pushConvexRef.current.mutation(api.notifications.mutations.markRead, {
+            notificationId: notificationId as Id<'notifications'>,
+            clientMutationId: `push-open:${notificationId}`,
+          });
+      } catch (error) {
+        if (pushUserRef.current === owner) enqueuePendingPushRead(notificationId);
+        throw error;
+      }
     };
     markOpenedRef.current = markOpened;
     void import('expo-notifications')
@@ -1136,7 +1163,7 @@ export function LocalSyncProvider({ children }: { children: React.ReactNode }) {
       active = false;
       subscription?.remove();
     };
-  }, []);
+  }, [enqueuePendingPushRead, router]);
 
   const groupWrites = React.useMemo(() => {
     const context = () => {

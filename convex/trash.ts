@@ -133,12 +133,15 @@ function describe(
 }
 
 async function trashedOfKind(ctx: QueryCtx, userId: Id<'users'>, kind: TrashKind, limit: number) {
-  if (kind === 'transaction')
+  if (kind === 'transaction') {
     return ctx.db
       .query('transactions')
-      .withIndex('by_owner_deletedAt', (q) => q.eq('ownerId', userId).gt('deletedAt', 0))
+      .withIndex('by_owner_groupId_deletedAt', (q) =>
+        q.eq('ownerId', userId).eq('groupId', undefined).gt('deletedAt', 0),
+      )
       .order('desc')
       .take(limit);
+  }
   const table = TABLE[kind] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules';
   return ctx.db
     .query(table)
@@ -160,15 +163,16 @@ export const list = query({
       const rows = await trashedOfKind(ctx, user._id, each, LIST_LIMIT);
       for (const row of rows) {
         const doc = row as unknown as Record<string, unknown>;
-        // Group expenses are deleted through the group, not Trash.
-        if (each === 'transaction' && doc.groupId !== undefined) continue;
         const deletedAt = deletedAtOf(each, doc);
         items.push({
           kind: each,
           id: String(row._id),
           ...describe(each, doc),
           deletedAt,
-          purgeAt: days > 0 ? deletedAt + days * DAY : null,
+          purgeAt:
+            days > 0 && (each === 'transaction' || typeof doc.trashedAt === 'number')
+              ? deletedAt + days * DAY
+              : null,
         });
       }
     }
@@ -207,6 +211,172 @@ async function owned(ctx: QueryCtx, userId: Id<'users'>, kind: TrashKind, id: st
   return doc;
 }
 
+const RESTORE_COMPANION_PAGE_SIZE = 50;
+const ACCOUNT_TRANSACTION_PAGE_SIZE = 20;
+const EXPIRY_PAGE_SIZE = 25;
+
+type CompanionKind = 'account' | 'category';
+
+async function restoreCompanionPage(
+  ctx: MutationCtx,
+  userId: Id<'users'>,
+  kind: CompanionKind,
+  parentId: string,
+  cursor: string | null,
+  now: number,
+) {
+  const table = kind === 'category' ? 'categories' : 'accounts';
+  const normalizedId = ctx.db.normalizeId(table, parentId);
+  if (!normalizedId) return 0;
+  const parent = await ctx.db.get(normalizedId);
+  if (!parent || parent.ownerId !== userId || parent.archivedAt !== undefined) return 0;
+  const marker = `${kind}:${parentId}`;
+  const page = await ctx.db
+    .query('transactions')
+    .withIndex('by_owner_trashedWith', (q) => q.eq('ownerId', userId).eq('trashedWith', marker))
+    .paginate({ numItems: RESTORE_COMPANION_PAGE_SIZE, cursor });
+  let restored = 0;
+  for (const row of page.page) {
+    if (row.deletedAt === undefined) continue;
+    const account = await ctx.db.get(row.accountId);
+    if (!account || account.ownerId !== userId || account.archivedAt !== undefined) continue;
+    await ctx.db.patch(row._id, {
+      deletedAt: undefined,
+      trashedWith: undefined,
+      updatedAt: now,
+    });
+    await recordSyncChange(
+      ctx,
+      userId,
+      'transactions',
+      String(row._id),
+      now,
+      await ctx.db.get(row._id),
+    );
+    restored += 1;
+  }
+  if (!page.isDone)
+    await ctx.scheduler.runAfter(0, internal.trash.continueRestoreCompanions, {
+      userId,
+      kind,
+      parentId,
+      cursor: page.continueCursor,
+      now,
+    });
+  return restored;
+}
+
+export const continueRestoreCompanions = internalMutation({
+  args: {
+    userId: v.id('users'),
+    kind: v.union(v.literal('account'), v.literal('category')),
+    parentId: v.string(),
+    cursor: v.union(v.string(), v.null()),
+    now: v.number(),
+  },
+  handler: async (ctx, args) =>
+    restoreCompanionPage(ctx, args.userId, args.kind, args.parentId, args.cursor, args.now),
+});
+
+async function purgeTransaction(
+  ctx: MutationCtx,
+  userId: Id<'users'>,
+  transaction: Doc<'transactions'>,
+  now: number,
+) {
+  const tags = await ctx.db
+    .query('transactionTags')
+    .withIndex('by_transaction', (q) => q.eq('transactionId', transaction._id))
+    .collect();
+  for (const tag of tags) {
+    await recordSyncChange(ctx, userId, 'transactionTags', String(tag._id), now, undefined, now);
+    await ctx.db.delete(tag._id);
+  }
+  const receipts = await ctx.db
+    .query('receipts')
+    .withIndex('by_transaction', (q) => q.eq('transactionId', transaction._id))
+    .collect();
+  for (const receipt of receipts) {
+    await recordSyncChange(
+      ctx,
+      receipt.ownerId,
+      'receipts',
+      String(receipt._id),
+      now,
+      undefined,
+      now,
+    );
+    if (await ctx.db.system.get('_storage', receipt.storageId))
+      await ctx.storage.delete(receipt.storageId);
+    await ctx.db.delete(receipt._id);
+  }
+  await recordSyncChange(ctx, userId, 'transactions', String(transaction._id), now, undefined, now);
+  await ctx.db.delete(transaction._id);
+}
+
+type AccountPurgePage = {
+  userId: Id<'users'>;
+  accountId: Id<'accounts'>;
+  phase: 'source' | 'transfer';
+  cursor: string | null;
+  now: number;
+};
+
+async function purgeAccountPage(ctx: MutationCtx, args: AccountPurgePage) {
+  const account = await ctx.db.get(args.accountId);
+  if (!account || account.ownerId !== args.userId || account.archivedAt === undefined)
+    return { purged: 0, done: true };
+  const page =
+    args.phase === 'source'
+      ? await ctx.db
+          .query('transactions')
+          .withIndex('by_account', (q) => q.eq('accountId', args.accountId))
+          .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.cursor })
+      : await ctx.db
+          .query('transactions')
+          .withIndex('by_transferAccountId', (q) =>
+            q.eq('transferAccountId', String(args.accountId)),
+          )
+          .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.cursor });
+  let purged = 0;
+  for (const row of page.page) {
+    if (row.ownerId !== args.userId || row.groupId !== undefined) continue;
+    await purgeTransaction(ctx, args.userId, row, args.now);
+    purged += 1;
+  }
+  if (!page.isDone || args.phase === 'source') {
+    const phase = page.isDone ? 'transfer' : args.phase;
+    await ctx.scheduler.runAfter(0, internal.trash.continueAccountPurge, {
+      ...args,
+      phase,
+      cursor: page.isDone ? null : page.continueCursor,
+    });
+    return { purged, done: false };
+  }
+  await recordSyncChange(
+    ctx,
+    args.userId,
+    'accounts',
+    String(account._id),
+    args.now,
+    { ...account, purgedAt: args.now },
+    args.now,
+  );
+  await ctx.db.delete(account._id);
+  return { purged, done: true };
+}
+
+export const continueAccountPurge = internalMutation({
+  args: {
+    userId: v.id('users'),
+    accountId: v.id('accounts'),
+    phase: v.union(v.literal('source'), v.literal('transfer')),
+    cursor: v.union(v.string(), v.null()),
+    now: v.number(),
+  },
+  handler: async (ctx, args) => purgeAccountPage(ctx, args),
+});
+
 /** Moves a record out of Trash (and anything trashed together with it). */
 export async function restoreItem(
   ctx: MutationCtx,
@@ -218,6 +388,7 @@ export async function restoreItem(
   if (!doc) throw new Error('NOT_FOUND');
   const record = doc as unknown as Record<string, unknown>;
   if (!deletedAtOf(kind, record)) return { restored: 0 };
+  if (kind === 'transaction' && record.groupId !== undefined) throw new Error('NOT_IN_TRASH');
   if (kind === 'budget') {
     // Budgets were folded into category limits: bring it back as its category's limit.
     await foldBudgets(ctx, userId, [doc as Doc<'budgets'>], { includeTrashed: true });
@@ -228,40 +399,63 @@ export async function restoreItem(
     const account = await ctx.db.get(record.accountId as Id<'accounts'>);
     if (!account || account.archivedAt !== undefined) throw new Error('ACCOUNT_IN_TRASH');
   }
+  if (kind === 'account' && record.purgingAt !== undefined) throw new Error('PURGE_IN_PROGRESS');
+  const category = kind === 'category' ? (doc as Doc<'categories'>) : null;
+  const accountRecord = kind === 'account' ? (doc as Doc<'accounts'>) : null;
+  const user =
+    (category && (category.restoreDefaultExpense || category.restoreDefaultIncome)) ||
+    (accountRecord?.restoreDefaultAccount ?? false)
+      ? await ctx.db.get(userId)
+      : null;
+  const restoreDefaultExpense =
+    category?.restoreDefaultExpense === true && user?.defaultExpenseCategoryId === undefined;
+  const restoreDefaultIncome =
+    category?.restoreDefaultIncome === true && user?.defaultIncomeCategoryId === undefined;
+  const restoreDefaultAccount =
+    accountRecord?.restoreDefaultAccount === true && user?.defaultAccountId === undefined;
   const patch: Record<string, unknown> =
     kind === 'transaction'
       ? { deletedAt: undefined, deletedBy: undefined, trashedWith: undefined, updatedAt: now }
       : kind === 'recurring'
         ? {
             archivedAt: undefined,
+            trashedAt: undefined,
             enabled: record.enabledBeforeTrash ?? true,
             enabledBeforeTrash: undefined,
             updatedAt: now,
           }
-        : { archivedAt: undefined, updatedAt: now };
+        : kind === 'category'
+          ? {
+              archivedAt: undefined,
+              trashedAt: undefined,
+              trashTransactionsPending: undefined,
+              restoreDefaultExpense: undefined,
+              restoreDefaultIncome: undefined,
+              updatedAt: now,
+            }
+          : {
+              archivedAt: undefined,
+              trashedAt: undefined,
+              purgingAt: undefined,
+              restoreDefaultAccount: undefined,
+              updatedAt: now,
+            };
   await ctx.db.patch(doc._id, patch as never);
   const updated = await ctx.db.get(doc._id);
   await recordSyncChange(ctx, userId, TABLE[kind], String(doc._id), now, updated);
+  if (user && (restoreDefaultExpense || restoreDefaultIncome || restoreDefaultAccount)) {
+    const defaults = {
+      ...(restoreDefaultExpense ? { defaultExpenseCategoryId: category!._id } : {}),
+      ...(restoreDefaultIncome ? { defaultIncomeCategoryId: category!._id } : {}),
+      ...(restoreDefaultAccount ? { defaultAccountId: accountRecord!._id } : {}),
+      updatedAt: now,
+    };
+    await ctx.db.patch(user._id, defaults);
+    await recordSyncChange(ctx, userId, 'users', String(user._id), now, { ...user, ...defaults });
+  }
   let restored = 1;
-  // A category or account brings back the transactions that were trashed with it.
   if (kind === 'category' || kind === 'account') {
-    const companions = await ctx.db
-      .query('transactions')
-      .withIndex('by_owner_deletedAt', (q) => q.eq('ownerId', userId).gt('deletedAt', 0))
-      .collect();
-    for (const row of companions) {
-      if (row.trashedWith !== `${kind}:${String(doc._id)}`) continue;
-      await ctx.db.patch(row._id, { deletedAt: undefined, trashedWith: undefined, updatedAt: now });
-      await recordSyncChange(
-        ctx,
-        userId,
-        'transactions',
-        String(row._id),
-        now,
-        await ctx.db.get(row._id),
-      );
-      restored += 1;
-    }
+    restored += await restoreCompanionPage(ctx, userId, kind, String(doc._id), null, now);
   }
   return { restored };
 }
@@ -276,30 +470,42 @@ export async function purgeItem(
   const doc = await owned(ctx, userId, kind, id);
   if (!doc) return { purged: 0 };
   const record = doc as unknown as Record<string, unknown>;
-  if (!deletedAtOf(kind, record)) throw new Error('NOT_IN_TRASH');
+  if (!deletedAtOf(kind, record) || (kind === 'transaction' && record.groupId !== undefined))
+    throw new Error('NOT_IN_TRASH');
   const now = Date.now();
-  let purged = 0;
+  if (kind === 'category' && record.trashTransactionsPending === true)
+    throw new Error('CATEGORY_TRASH_IN_PROGRESS');
+  if (kind === 'transaction') {
+    await purgeTransaction(ctx, userId, doc as Doc<'transactions'>, now);
+    return { purged: 1 };
+  }
   if (kind === 'account') {
-    // An account's transactions can't outlive it.
-    const rows = await ctx.db
-      .query('transactions')
-      .withIndex('by_account', (q) => q.eq('accountId', doc._id as Id<'accounts'>))
-      .collect();
-    for (const row of rows) {
-      if (row.ownerId !== userId) continue;
-      if (row.deletedAt === undefined)
-        await recordSyncChange(
-          ctx,
-          userId,
-          'transactions',
-          String(row._id),
-          now,
-          { ...row, deletedAt: now },
-          now,
-        );
-      await ctx.db.delete(row._id);
-      purged += 1;
-    }
+    if (record.purgingAt !== undefined) return { purged: 0, more: true };
+    const accountId = doc._id as Id<'accounts'>;
+    const [sourceGroup, transferGroup] = await Promise.all([
+      ctx.db
+        .query('transactions')
+        .withIndex('by_account_deletedAt_groupId', (q) =>
+          q.eq('accountId', accountId).eq('deletedAt', undefined).gt('groupId', ''),
+        )
+        .first(),
+      ctx.db
+        .query('transactions')
+        .withIndex('by_transferAccountId_deletedAt_groupId', (q) =>
+          q.eq('transferAccountId', String(accountId)).eq('deletedAt', undefined).gt('groupId', ''),
+        )
+        .first(),
+    ]);
+    if (sourceGroup || transferGroup) throw new Error('ACCOUNT_IN_USE_BY_GROUP_EXPENSE');
+    await ctx.db.patch(accountId, { purgingAt: now, updatedAt: now });
+    const result = await purgeAccountPage(ctx, {
+      userId,
+      accountId,
+      phase: 'source',
+      cursor: null,
+      now,
+    });
+    return { purged: result.purged + 1, more: !result.done };
   }
   if (kind === 'goal') {
     const contributions = await ctx.db
@@ -329,7 +535,7 @@ export async function purgeItem(
     now,
   );
   await ctx.db.delete(doc._id);
-  return { purged: purged + 1 };
+  return { purged: 1 };
 }
 
 export const restore = mutation({
@@ -365,10 +571,12 @@ export const empty = mutation({
           more = true;
           break;
         }
-        const doc = row as unknown as Record<string, unknown>;
-        if (kind === 'transaction' && doc.groupId !== undefined) continue;
-        await purgeItem(ctx, user._id, kind, String(row._id));
-        purged += 1;
+        const result = await purgeItem(ctx, user._id, kind, String(row._id));
+        if (result.purged > 0) purged += 1;
+        if ('more' in result && result.more) {
+          more = true;
+          break;
+        }
       }
       if (more) break;
     }
@@ -376,42 +584,64 @@ export const empty = mutation({
   },
 });
 
-/** Daily: deletes items whose owner's retention has passed. Reschedules itself while busy. */
+/** Daily: deletes items whose owner's retention has passed, paging past retained items. */
 export const purgeExpired = internalMutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    kindIndex: v.optional(v.number()),
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, { kindIndex = 0, cursor = null }) => {
     const now = Date.now();
     const cutoff = now - DAY; // the shortest retention is one day
     const retention = new Map<string, number>();
+    const kind = TRASH_KINDS[kindIndex];
+    if (!kind) return { processed: 0 };
+    const page =
+      kind === 'transaction'
+        ? await ctx.db
+            .query('transactions')
+            .withIndex('by_deletedAt', (q) => q.gt('deletedAt', 0).lt('deletedAt', cutoff))
+            .paginate({ numItems: EXPIRY_PAGE_SIZE, cursor })
+        : await ctx.db
+            .query(
+              TABLE[kind] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules',
+            )
+            .withIndex('by_archivedAt', (q) => q.gt('archivedAt', 0).lt('archivedAt', cutoff))
+            .paginate({ numItems: EXPIRY_PAGE_SIZE, cursor });
     let processed = 0;
-    for (const kind of TRASH_KINDS) {
-      const rows =
-        kind === 'transaction'
-          ? await ctx.db
-              .query('transactions')
-              .withIndex('by_deletedAt', (q) => q.gt('deletedAt', 0).lt('deletedAt', cutoff))
-              .take(100)
-          : await ctx.db
-              .query(
-                TABLE[kind] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules',
-              )
-              .withIndex('by_archivedAt', (q) => q.gt('archivedAt', 0).lt('archivedAt', cutoff))
-              .take(100);
-      for (const row of rows) {
-        const doc = row as unknown as Record<string, unknown>;
-        if (kind === 'transaction' && doc.groupId !== undefined) continue;
-        const owner = String(doc.ownerId);
-        if (!retention.has(owner))
-          retention.set(owner, await retentionDays(ctx, doc.ownerId as Id<'users'>));
-        const days = retention.get(owner)!;
-        if (days <= 0 || deletedAtOf(kind, doc) > now - days * DAY) continue;
+    for (const row of page.page) {
+      const doc = row as unknown as Record<string, unknown>;
+      if (kind === 'transaction' && doc.groupId !== undefined) continue;
+      // Legacy archives have no Trash marker and remain indefinite.
+      if (kind !== 'transaction' && typeof doc.trashedAt !== 'number') continue;
+      const owner = String(doc.ownerId);
+      if (!retention.has(owner))
+        retention.set(owner, await retentionDays(ctx, doc.ownerId as Id<'users'>));
+      const days = retention.get(owner)!;
+      if (days <= 0 || deletedAtOf(kind, doc) > now - days * DAY) continue;
+      try {
         await purgeItem(ctx, doc.ownerId as Id<'users'>, kind, String(row._id));
         processed += 1;
-        if (processed >= 200) break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (
+          message !== 'ACCOUNT_IN_USE_BY_GROUP_EXPENSE' &&
+          message !== 'CATEGORY_TRASH_IN_PROGRESS'
+        )
+          throw error;
       }
-      if (processed >= 200) break;
     }
-    if (processed >= 200) await ctx.scheduler.runAfter(1000, internal.trash.purgeExpired, {});
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(1000, internal.trash.purgeExpired, {
+        kindIndex,
+        cursor: page.continueCursor,
+      });
+    } else if (kindIndex + 1 < TRASH_KINDS.length) {
+      await ctx.scheduler.runAfter(1000, internal.trash.purgeExpired, {
+        kindIndex: kindIndex + 1,
+        cursor: null,
+      });
+    }
     return { processed };
   },
 });

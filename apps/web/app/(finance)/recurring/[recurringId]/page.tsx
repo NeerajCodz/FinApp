@@ -6,6 +6,7 @@ import { RecurringDetailView, type RecurringRuleView } from '@finapp/ui/finance'
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
+import { Button } from '@finapp/ui/web';
 
 type Rule = LocalRecord &
   RecurringRuleView & {
@@ -53,9 +54,45 @@ export default function RecurringDetailPage() {
       setPending(false);
     }
   }
+  async function remove() {
+    if (!userId || !rule || pending) return;
+    if (!window.confirm('Move this recurring schedule to Trash?')) return;
+    const id = idOf(rule);
+    setPending(true);
+    setError(null);
+    try {
+      await commitLocalWrite(
+        userId,
+        'recurringRule',
+        'recurring.delete',
+        {
+          ...rule,
+          archivedAt: Date.now(),
+          enabled: false,
+          enabledBeforeTrash:
+            rule.archivedAt === undefined ? rule.enabled : rule.enabledBeforeTrash,
+        },
+        { ruleId: id },
+        {
+          recordId: id,
+          dependencies: rule.cloudId || rule._id ? [] : [`recurringRule:${id}`],
+        },
+      );
+      router.push('/recurring');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not delete this schedule.');
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className="finance-page finance-page--narrow">
+      {rule && (
+        <Button variant="destructive" disabled={pending} onPress={() => void remove()}>
+          Move to Trash
+        </Button>
+      )}
       <RecurringDetailView
         rule={rule ? { ...rule, id: idOf(rule) } : null}
         accountName={account?.name}

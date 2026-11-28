@@ -299,11 +299,25 @@ export default function CategoryDetailScreen() {
           recordId: categoryLocalId,
           dependencies:
             category && !category._id && !category.cloudId ? [`category:${categoryPayloadId}`] : [],
-          relatedRecords:
-            profile && (defaultExpenseCategoryId || defaultIncomeCategoryId)
+          relatedRecords: [
+            ...(deleteTransactions
+              ? (transactionRecordsState.data ?? [])
+                  .filter(
+                    (transaction) =>
+                      owns(transaction) &&
+                      categoryIdentifiers.has(String(transaction.categoryId ?? '')) &&
+                      transaction.groupId === undefined &&
+                      transaction.deletedAt === undefined,
+                  )
+                  .map((transaction) => ({
+                    entityType: 'transaction' as const,
+                    record: { ...transaction, deletedAt: Date.now() },
+                  }))
+              : []),
+            ...(profile && (defaultExpenseCategoryId || defaultIncomeCategoryId)
               ? [
                   {
-                    entityType: 'profile',
+                    entityType: 'profile' as const,
                     record: {
                       ...profile,
                       ...(defaultExpenseCategoryId ? { defaultExpenseCategoryId: undefined } : {}),
@@ -311,7 +325,8 @@ export default function CategoryDetailScreen() {
                     },
                   },
                 ]
-              : [],
+              : []),
+          ],
         },
       );
       setConfirmingArchive(false);

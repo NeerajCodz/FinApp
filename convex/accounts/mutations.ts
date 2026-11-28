@@ -395,7 +395,13 @@ export const archive = mutation({
     if (!account) throw new Error('AUTH_REQUIRED');
     requireOwner(user._id, account.ownerId);
     const now = Date.now();
-    await ctx.db.patch(args.accountId, { archivedAt: now, updatedAt: now });
+    await ctx.db.patch(args.accountId, {
+      archivedAt: now,
+      trashedAt: now,
+      restoreDefaultAccount:
+        account.restoreDefaultAccount ?? user.defaultAccountId === args.accountId,
+      updatedAt: now,
+    });
     if (user.defaultAccountId === args.accountId) {
       const userUpdated = { ...user, defaultAccountId: undefined, updatedAt: now };
       await ctx.db.patch(user._id, { defaultAccountId: undefined, updatedAt: now });
@@ -410,7 +416,15 @@ export const archive = mutation({
       'accounts',
       String(args.accountId),
       now,
-      { ...account, archivedAt: now, updatedAt: now, _id: args.accountId },
+      {
+        ...account,
+        archivedAt: now,
+        trashedAt: now,
+        restoreDefaultAccount:
+          account.restoreDefaultAccount ?? user.defaultAccountId === args.accountId,
+        updatedAt: now,
+        _id: args.accountId,
+      },
     );
     return args.accountId;
   },

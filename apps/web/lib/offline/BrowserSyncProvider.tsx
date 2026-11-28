@@ -391,6 +391,12 @@ async function sendMutation(
         ruleId: await mapId('recurringRule', payload.ruleId),
       } as never);
       return;
+    case 'recurring.delete':
+      await convex.mutation(api.recurring.mutations.remove, {
+        ...payload,
+        ruleId: await mapId('recurringRule', payload.ruleId),
+      } as never);
+      return;
     case 'notification.preferences':
       await convex.mutation(api.notifications.mutations.setPreferences, payload as never);
       return;
@@ -794,8 +800,13 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   const runOutboxEntry = React.useCallback(
     async (targetUserId: string, entry: OutboxEntry): Promise<SyncReceipt> => {
       if (entry.operation.startsWith('budget.')) {
-        // Budgets became category limits: an older version's queued budget change is dropped.
-        return { serverId: entry.recordId ?? targetUserId, revision: '1', updatedAt: Date.now() };
+        // Dropped legacy writes must not move the local revision cursor backwards.
+        const { revision } = await getSyncState(targetUserId);
+        return {
+          serverId: entry.recordId ?? targetUserId,
+          revision: revision.toString(),
+          updatedAt: Date.now(),
+        };
       }
       await sendMutation(convex, targetUserId, entry);
       const receipt = await convex.query(api.sync.queries.mutationReceipt, {

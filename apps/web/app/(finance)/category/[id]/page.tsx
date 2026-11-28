@@ -274,6 +274,23 @@ export default function PersonalCategoryDetailPage() {
           recordId: idOf(category),
           dependencies: categoryDependency ? [categoryDependency] : [],
           baseUpdatedAt: typeof category.updatedAt === 'number' ? category.updatedAt : undefined,
+          ...(deleteTransactions
+            ? {
+                relatedRecords: transactions
+                  .filter(
+                    (transaction) =>
+                      userId &&
+                      belongsToUser(transaction, userId) &&
+                      categoryIdentifiers.has(String(transaction.categoryId ?? '')) &&
+                      transaction.groupId === undefined &&
+                      transaction.deletedAt === undefined,
+                  )
+                  .map((transaction) => ({
+                    entityType: 'transaction' as const,
+                    record: { ...transaction, deletedAt: Date.now() },
+                  })),
+              }
+            : {}),
         },
       );
       if (profile && clearsExpenseDefault) {

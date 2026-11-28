@@ -245,7 +245,7 @@ export const archive = mutation({
     if (!goal || goal.ownerId !== user._id) throw new Error('INVALID_GOAL');
     const updatedAt = Date.now();
     const archivedAt = goal.archivedAt ?? updatedAt;
-    await ctx.db.patch(args.goalId, { archivedAt, updatedAt });
+    await ctx.db.patch(args.goalId, { archivedAt, trashedAt: updatedAt, updatedAt });
     const updated = await ctx.db.get(args.goalId);
     if (!updated) throw new Error('INVALID_GOAL');
     await publishMutationResult(
