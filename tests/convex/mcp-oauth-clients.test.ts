@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
@@ -13,7 +13,10 @@ import {
 const modules = import.meta.glob('../../convex/**/*.ts');
 const redirectUri = 'https://chatgpt.com/connector_platform_oauth_redirect';
 const verifier = 'v'.repeat(43);
+
 const challenge = createHash('sha256').update(verifier).digest('base64url');
+
+afterEach(() => vi.useRealTimers());
 
 async function setup() {
   const t = convexTest(schema, modules);
@@ -95,6 +98,7 @@ describe('confidential clients', () => {
   });
 
   it('dashboard clients belong to their owner, default to ChatGPT, and delete revokes grants', async () => {
+    vi.useFakeTimers();
     const { t, owner, authorize } = await setup();
     const created = await owner.mutation(api.mcpOAuth.createStaticClient, {
       clientName: 'ChatGPT',
@@ -114,7 +118,7 @@ describe('confidential clients', () => {
       authTransport: 'basic',
     });
     await owner.mutation(api.mcpOAuth.deleteMyClient, { clientId: created.clientId });
-    await t.finishAllScheduledFunctions();
+    await t.finishAllScheduledFunctions(() => vi.runAllTimers());
     const stored = await t.run((ctx) => ctx.db.get(grant.grantId));
     expect(stored?.revokedAt).toEqual(expect.any(Number));
     expect(await owner.query(api.mcpOAuth.listMyClients, {})).toHaveLength(0);

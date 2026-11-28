@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
@@ -15,6 +15,8 @@ function challenge(verifier: string) {
 function differentHex(value: string) {
   return `${value[0] === 'a' ? 'b' : 'a'}${value.slice(1)}`;
 }
+
+afterEach(() => vi.useRealTimers());
 
 async function authorization(
   verifier = defaultVerifier,
@@ -285,6 +287,7 @@ describe('MCP OAuth authorization code exchange', () => {
   });
 
   it('revokes every grant when its dashboard client is deleted', async () => {
+    vi.useFakeTimers();
     const fixture = await authorization();
     const client = await fixture.owner.mutation(api.mcpOAuth.createStaticClient, {
       clientName: 'Delete all grants regression client',
@@ -301,7 +304,7 @@ describe('MCP OAuth authorization code exchange', () => {
     });
 
     await fixture.owner.mutation(api.mcpOAuth.deleteMyClient, { clientId: client.clientId });
-    await fixture.t.finishAllScheduledFunctions();
+    await fixture.t.finishAllScheduledFunctions(() => vi.runAllTimers());
     const grants = await fixture.t.run((ctx) =>
       ctx.db
         .query('mcpOAuthGrants')
