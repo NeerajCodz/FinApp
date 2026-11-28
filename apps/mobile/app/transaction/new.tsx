@@ -41,9 +41,7 @@ export default function NewTransactionScreen() {
     merchant?: string | string[];
   }>();
   const queryType = scalar(params.type);
-  const initialType: TransactionFormType = typeOptions.includes(
-    queryType as TransactionFormType,
-  )
+  const initialType: TransactionFormType = typeOptions.includes(queryType as TransactionFormType)
     ? (queryType as TransactionFormType)
     : 'expense';
   const initialDate = Number(scalar(params.occurredAt));
@@ -98,13 +96,13 @@ export default function NewTransactionScreen() {
   );
   const accountDefault = Boolean(
     account &&
-      profile?.defaultAccountId &&
-      [account.id, account._id, account.cloudId].includes(profile.defaultAccountId),
+    profile?.defaultAccountId &&
+    [account.id, account._id, account.cloudId].includes(profile.defaultAccountId),
   );
   const categoryDefault = Boolean(
     category &&
-      defaultCategoryId &&
-      [category.id, category._id, category.cloudId].includes(defaultCategoryId),
+    defaultCategoryId &&
+    [category.id, category._id, category.cloudId].includes(defaultCategoryId),
   );
   useEffect(() => {
     if (type !== 'transfer' && !categoryId && category) setCategoryId(recordId(category));

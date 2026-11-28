@@ -86,9 +86,9 @@ export default function NewPersonalTransactionPage() {
   );
   const isDefaultCategory = Boolean(
     type !== 'transfer' &&
-      category &&
-      profile?.[defaultCategoryField] &&
-      aliasesOf(category).includes(profile[defaultCategoryField]!),
+    category &&
+    profile?.[defaultCategoryField] &&
+    aliasesOf(category).includes(profile[defaultCategoryField]!),
   );
 
   React.useEffect(() => {
