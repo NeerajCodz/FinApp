@@ -83,6 +83,8 @@ export function notificationRoute(notification: NotificationRoute): string {
   if (notification.entityType === 'mcpConnection') return '/settings/ai/mcp';
   if (notification.entityType === 'recurring') return '/recurring';
   if (notification.entityType === 'sync') return '/settings/sync';
+  if (notification.entityType === 'supportTicket' && notification.entityId)
+    return `/profile/support/${encodeURIComponent(notification.entityId)}`;
   if (
     notification.entityType === 'security' ||
     (notification.type === 'security' &&
