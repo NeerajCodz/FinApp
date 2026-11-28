@@ -26,7 +26,8 @@ export function FinaiLauncher() {
     isAuthenticated,
     isAuthenticated ? (currentUser?._id === undefined ? undefined : String(currentUser._id)) : null,
     (reply) => {
-      const open = () => router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}` as never);
+      const open = () =>
+        router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}` as never);
       const options = {
         description: reply.failed ? reply.title : reply.preview || reply.title,
         action: { label: 'Open', onPress: open },
