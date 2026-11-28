@@ -74,6 +74,7 @@ export default function SignInScreen() {
               .filter((method) => result.methods[method])
               .join(','),
             preferred: result.preferred,
+            emailUnavailable: result.status === 'email-unavailable' ? 'true' : undefined,
             ...(inviteToken ? { nextGroupInviteToken: inviteToken } : {}),
           },
         });

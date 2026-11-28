@@ -142,6 +142,7 @@ export function AppLockProvider({
   React.useEffect(() => {
     if (userId) void reload(userId);
     else {
+      backgroundAt.current = null;
       ++generation.current;
       setState({ userId: null, lock: null, phase: 'unlocked' });
     }
@@ -165,13 +166,13 @@ export function AppLockProvider({
       const previous = activeState.current;
       activeState.current = next;
       if (next === 'background' && previous !== 'background') {
-        // Remember when we left; the lock decides on return (after the timeout).
-        backgroundAt.current = Date.now();
+        // Preserve the start time through iOS's inactive state; evaluate it when active returns.
+        backgroundAt.current = userId ? Date.now() : null;
         if (devicePromptInFlight.current) suppressNextPrompt.current = true;
-      } else if (next === 'active' && previous === 'background' && userId) {
-        const away = backgroundAt.current === null ? Infinity : Date.now() - backgroundAt.current;
+      } else if (next === 'active' && backgroundAt.current !== null) {
+        const away = Date.now() - backgroundAt.current;
         backgroundAt.current = null;
-        if (!lockTimedOut(away, timeoutRef.current)) return;
+        if (!userId || !lockTimedOut(away, timeoutRef.current)) return;
         ++generation.current;
         lastPrompt.current = -1;
         setState((old) => (old.lock ? { ...old, phase: 'locked', error: undefined } : old));

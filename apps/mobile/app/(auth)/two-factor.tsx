@@ -21,8 +21,8 @@ const COPY: Record<Method, { label: string; title: string; description: string }
   },
   email: {
     label: 'Email',
-    title: 'Check your\nemail.',
-    description: 'Enter the six-digit code we sent to your email. It expires in 10 minutes.',
+    title: 'Enter your email code.',
+    description: 'Enter the six-digit code from your email. Request a new one if needed.',
   },
   recovery: {
     label: 'Recovery code',
@@ -37,11 +37,13 @@ export default function TwoFactorScreen() {
     nextGroupInviteToken: rawInviteToken,
     methods: rawMethods,
     preferred,
+    emailUnavailable: rawEmailUnavailable,
   } = useLocalSearchParams<{
     challengeId?: string;
     nextGroupInviteToken?: string;
     methods?: string;
     preferred?: string;
+    emailUnavailable?: string;
   }>();
   const methods = (typeof rawMethods === 'string' ? rawMethods : 'email')
     .split(',')
@@ -49,11 +51,24 @@ export default function TwoFactorScreen() {
       (value): value is Method => value === 'totp' || value === 'email' || value === 'recovery',
     );
   const available: Method[] = methods.length ? methods : ['email'];
-  const [method, setMethod] = useState<Method>(
-    preferred === 'totp' && available.includes('totp') ? 'totp' : 'email',
+  const requestedPreferred =
+    preferred === 'totp' || preferred === 'email' || preferred === 'recovery'
+      ? preferred
+      : undefined;
+  const initialMethod =
+    requestedPreferred && available.includes(requestedPreferred)
+      ? requestedPreferred
+      : available.includes('email')
+        ? 'email'
+        : available[0]!;
+  const emailUnavailable = rawEmailUnavailable === 'true';
+  const [method, setMethod] = useState<Method>(initialMethod);
+  const [emailSent, setEmailSent] = useState(initialMethod === 'email' && !emailUnavailable);
+  const [notice, setNotice] = useState(
+    emailUnavailable
+      ? 'We could not send an email code. Use your authenticator app or a recovery code, or choose Email to retry.'
+      : '',
   );
-  // Without an authenticator app, the email code went out with the password check.
-  const [emailSent, setEmailSent] = useState(method === 'email');
   const sendEmailCode = useAction(api.auth.sendTwoFactorEmailCode);
   const inviteToken = isGroupInvitationToken(rawInviteToken) ? rawInviteToken : undefined;
   const challengeId = typeof rawChallengeId === 'string' ? rawChallengeId : '';
@@ -96,6 +111,7 @@ export default function TwoFactorScreen() {
     try {
       await sendEmailCode({ challengeId });
       setEmailSent(true);
+      setNotice('We sent a code to your email.');
       toast.success('Code sent to your email');
     } catch (cause) {
       setError(formatAuthError(cause, 'verification'));
@@ -143,6 +159,7 @@ export default function TwoFactorScreen() {
                 setMethod(value);
                 setCode('');
                 setError('');
+                setNotice('');
               }}
             >
               {COPY[value].label}
@@ -150,6 +167,7 @@ export default function TwoFactorScreen() {
           ))}
         </View>
       ) : null}
+      {notice ? <Typography variant="small">{notice}</Typography> : null}
       {method === 'email' && !emailSent ? (
         <>
           <Typography variant="small">

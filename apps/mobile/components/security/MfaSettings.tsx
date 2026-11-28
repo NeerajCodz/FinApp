@@ -23,7 +23,7 @@ const errorText = (cause: unknown) => {
 };
 
 function Qr({ qr }: { qr: Setup['qr'] }) {
-  const pad = 2;
+  const pad = 4;
   const box = qr.size + pad * 2;
   // theme-exempt: QR codes must be black on white to scan.
   return (

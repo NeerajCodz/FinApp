@@ -23,7 +23,7 @@ const errorText = (cause: unknown) => {
 };
 
 function Qr({ qr }: { qr: Setup['qr'] }) {
-  const pad = 2;
+  const pad = 4;
   return (
     <svg
       role="img"

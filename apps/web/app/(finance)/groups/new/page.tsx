@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery } from 'convex/react';
+import { usePaginatedQuery } from 'convex/react';
 import { ArrowRight } from 'lucide-react';
 import { api } from '@convex/_generated/api';
 import { GroupCreateScreen } from '@finapp/ui/finance';
@@ -18,13 +18,6 @@ type ContactPicker = {
     properties: string[],
     options?: { multiple?: boolean },
   ) => Promise<Array<{ name?: string[]; tel?: string[] }>>;
-};
-type SearchResult = {
-  id: string;
-  username?: string;
-  displayName?: string;
-  avatarId?: string;
-  avatarUrl?: string;
 };
 const normalizeUsername = (value: string) => value.trim().replace(/^@+/, '').toLowerCase();
 const normalizePhone = (value: string) => value.replace(/[\s().-]/g, '');
@@ -59,10 +52,19 @@ export default function NewGroupPage() {
   }, [currency, profile?.defaultCurrency]);
   const phoneVerified = Boolean(profile?.phone && profile.phoneVerificationTime !== undefined);
   const query = normalizeUsername(usernameInput);
-  const suggestions = useQuery(
+  const {
+    results: profilePages,
+    status: profileSearchStatus,
+    loadMore,
+  } = usePaginatedQuery(
     api.users.queries.searchGroupProfiles,
     userId && query.length >= 2 ? { query } : 'skip',
-  ) as SearchResult[] | undefined;
+    { initialNumItems: 100 },
+  );
+  React.useEffect(() => {
+    if (profileSearchStatus === 'CanLoadMore' && profilePages.length < 20) loadMore(1);
+  }, [loadMore, profilePages.length, profileSearchStatus]);
+  const suggestions = profilePages.slice(0, 20);
   const pickerAvailable =
     typeof navigator !== 'undefined' &&
     'contacts' in navigator &&

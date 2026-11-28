@@ -1,6 +1,9 @@
+import { generateKeyPairSync } from 'node:crypto';
+import { Scrypt } from 'lucia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import schema from '../../convex/schema';
 import {
   base32Decode,
@@ -12,6 +15,7 @@ import {
   totpCode,
   verifyTotp,
 } from '../../convex/mfaDomain';
+import { encryptSecret } from '../../convex/ai/keyVault';
 import { qrPath } from '../../convex/qr';
 
 const modules = import.meta.glob('../../convex/**/*.ts');
@@ -71,6 +75,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 async function fixture() {
@@ -83,6 +88,30 @@ async function fixture() {
     }),
   );
   return { t, userId, me: t.withIdentity({ subject: `${userId}|session` }) };
+}
+
+async function sha256(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function createEmailChallenge(
+  t: ReturnType<typeof convexTest>,
+  userId: Id<'users'>,
+  challengeId: string,
+  code: string,
+  previousSentAt?: number,
+) {
+  const challengeIdHash = await sha256(challengeId);
+  const codeHash = await sha256(`${challengeId}:${code}`);
+  await t.mutation(internal.authEmailChallenges.create, {
+    userId,
+    challengeIdHash,
+    codeHash,
+    now: previousSentAt ?? Date.now(),
+    ...(previousSentAt === undefined ? { emailSent: false } : {}),
+  });
+  return { challengeIdHash, codeHash };
 }
 
 /** The current code for a started or active TOTP secret (decrypted the way the server does). */
@@ -125,6 +154,29 @@ describe('authenticator app enrollment', () => {
 
     const notes = await t.run((ctx) => ctx.db.query('notifications').collect());
     expect(notes.map((row) => row.title)).toContain('Authenticator app turned on');
+    expect(notes.find((row) => row.title === 'Authenticator app turned on')?.body).toContain(
+      '10 recovery codes were created and shown once',
+    );
+  });
+
+  it('cannot activate a replacement enrollment with a previously verified secret', async () => {
+    const { t, userId, me } = await fixture();
+    await me.action(api.mfa.startTotp, {});
+    const stalePendingSecret = (await t.run((ctx) => ctx.db.query('mfaFactors').first()))!
+      .totpPendingSecret!;
+
+    await me.action(api.mfa.startTotp, {});
+    await expect(
+      t.mutation(internal.mfa.activateTotp, {
+        userId,
+        pendingSecret: stalePendingSecret,
+        step: currentStep(),
+      }),
+    ).rejects.toThrow('TOTP_ENROLLMENT_CHANGED');
+
+    await expect(
+      me.action(api.mfa.confirmTotp, { code: await codeFor(t, userId, true) }),
+    ).resolves.toMatchObject({ recoveryCodes: expect.any(Array) });
   });
 
   it('needs a current code (not a replay) or a recovery code to change things, each usable once', async () => {
@@ -145,7 +197,29 @@ describe('authenticator app enrollment', () => {
     await expect(
       me.action(api.mfa.regenerateRecoveryCodes, { code: fresh.recoveryCodes[0]! }),
     ).rejects.toThrow('INVALID_CODE');
-
+    const regeneratedNotes = await t.run((ctx) =>
+      ctx.db
+        .query('notifications')
+        .filter((q) => q.eq(q.field('title'), 'Recovery codes regenerated'))
+        .collect(),
+    );
+    expect(regeneratedNotes).toHaveLength(2);
+    expect(regeneratedNotes.map((row) => row.body)).toEqual([
+      expect.stringContaining('10 new recovery codes'),
+      expect.stringContaining('10 new recovery codes'),
+    ]);
+    expect(
+      regeneratedNotes.every((row) => row.body.includes('previous codes no longer work')),
+    ).toBe(true);
+    expect(regeneratedNotes.every((row) => row.body.includes('shown only once'))).toBe(true);
+    const usedNotes = await t.run((ctx) =>
+      ctx.db
+        .query('notifications')
+        .filter((q) => q.eq(q.field('title'), 'Recovery code used'))
+        .collect(),
+    );
+    // Recovery codes consumed for settings changes aren't sign-in alerts.
+    expect(usedNotes).toHaveLength(0);
     // Turning it off with the next code.
     await me.action(api.mfa.disableTotp, { code: await codeFor(t, userId, false, 1) });
     expect(await me.query(api.mfa.status, {})).toMatchObject({ totp: false });
@@ -191,7 +265,287 @@ describe('sign-in challenges with other factors', () => {
     ).toBeNull();
   });
 
-  it('only sends the email code on request, rate-limited', async () => {
+  it('sends an email fallback for TOTP accounts supported by older email-only clients', async () => {
+    const { t, userId } = await fixture();
+    const password = 'runtime-test-password';
+    const secret = await new Scrypt().hash(password);
+    const now = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.insert('userSettings', {
+        userId,
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        twoFactorEnabled: true,
+        updatedAt: now,
+      });
+      await ctx.db.insert('mfaFactors', {
+        userId,
+        totpSecret: 'encrypted-secret',
+        totpConfirmedAt: now,
+        recoveryCodes: [],
+        updatedAt: now,
+      });
+      await ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: 'olive@example.com',
+        secret,
+        emailVerified: '1',
+      });
+    });
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+    vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+    vi.stubEnv('JWT_PRIVATE_KEY', privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
+    vi.stubEnv('CONVEX_SITE_URL', 'https://unit-test.convex.site');
+    const sendEmail = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', sendEmail);
+
+    const challenge = await t.action(api.auth.requestEmailTwoFactor, {
+      identifier: 'olive@example.com',
+      password,
+    });
+    expect(challenge).toMatchObject({
+      status: 'code-sent',
+      preferred: 'email',
+      methods: { totp: true, email: true, recovery: false },
+    });
+    if (challenge.status !== 'code-sent') throw new Error('Expected an email fallback challenge.');
+
+    const payload = JSON.parse(sendEmail.mock.calls[0]![1]!.body as string);
+    const code = payload.text.match(/\b(\d{6})\b/)?.[1];
+    expect(code).toMatch(/^\d{6}$/);
+    if (!code) throw new Error('The email did not contain a code.');
+    const result = await t.action(api.auth.signIn, {
+      provider: 'password',
+      params: {
+        challengeId: challenge.challengeId,
+        code,
+        flow: 'twoFactorVerification',
+      },
+    });
+    expect(result.tokens).toBeTruthy();
+  });
+  it('keeps recovery-code sign-in available when fallback email delivery fails', async () => {
+    const { t, userId } = await fixture();
+    const password = 'runtime-test-password';
+    const secret = await new Scrypt().hash(password);
+    const recoveryCode = newRecoveryCodes()[0]!;
+    const recoveryHash = await hashRecoveryCode(String(userId), recoveryCode);
+    const now = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.insert('userSettings', {
+        userId,
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        twoFactorEnabled: true,
+        updatedAt: now,
+      });
+      await ctx.db.insert('mfaFactors', {
+        userId,
+        recoveryCodes: [{ hash: recoveryHash }],
+        updatedAt: now,
+      });
+      await ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: 'olive@example.com',
+        secret,
+        emailVerified: '1',
+      });
+    });
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+    vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+    vi.stubEnv('JWT_PRIVATE_KEY', privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
+    vi.stubEnv('CONVEX_SITE_URL', 'https://unit-test.convex.site');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+
+    const challenge = await t.action(api.auth.requestEmailTwoFactor, {
+      identifier: 'olive@example.com',
+      password,
+    });
+    expect(challenge).toMatchObject({
+      status: 'email-unavailable',
+      preferred: 'recovery',
+      methods: { totp: false, email: true, recovery: true },
+    });
+    if (challenge.status !== 'email-unavailable')
+      throw new Error('Expected a recovery-code challenge.');
+    const result = await t.action(api.auth.signIn, {
+      provider: 'password',
+      params: {
+        challengeId: challenge.challengeId,
+        method: 'recovery',
+        code: recoveryCode,
+        flow: 'twoFactorVerification',
+      },
+    });
+    expect(result.tokens).toBeTruthy();
+    const recoveryAlerts = await t.run((ctx) =>
+      ctx.db
+        .query('notifications')
+        .filter((query) => query.eq(query.field('title'), 'Recovery code used'))
+        .collect(),
+    );
+    expect(recoveryAlerts).toHaveLength(1);
+  });
+  it('keeps TOTP sign-in available when fallback email delivery fails', async () => {
+    const { t, userId } = await fixture();
+    const password = 'runtime-test-password';
+    const secret = await new Scrypt().hash(password);
+    const now = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.insert('userSettings', {
+        userId,
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        twoFactorEnabled: true,
+        updatedAt: now,
+      });
+      await ctx.db.insert('mfaFactors', {
+        userId,
+        totpSecret: await encryptSecret(RFC_SECRET, String(userId)),
+        totpConfirmedAt: now,
+        recoveryCodes: [],
+        updatedAt: now,
+      });
+      await ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: 'olive@example.com',
+        secret,
+        emailVerified: '1',
+      });
+    });
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+    vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+    vi.stubEnv('JWT_PRIVATE_KEY', privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
+    vi.stubEnv('CONVEX_SITE_URL', 'https://unit-test.convex.site');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+
+    const challenge = await t.action(api.auth.requestEmailTwoFactor, {
+      identifier: 'olive@example.com',
+      password,
+    });
+    expect(challenge).toMatchObject({
+      status: 'email-unavailable',
+      preferred: 'totp',
+      methods: { totp: true, email: true, recovery: false },
+    });
+    if (challenge.status !== 'email-unavailable') throw new Error('Expected a TOTP challenge.');
+    const result = await t.action(api.auth.signIn, {
+      provider: 'password',
+      params: {
+        challengeId: challenge.challengeId,
+        method: 'totp',
+        code: await totpCode(RFC_SECRET, currentStep()),
+        flow: 'twoFactorVerification',
+      },
+    });
+    expect(result.tokens).toBeTruthy();
+  });
+
+  it('keeps the prior email code usable when resend delivery fails', async () => {
+    const { t, userId } = await fixture();
+    const challengeId = 'a'.repeat(64);
+    const previousSentAt = Date.now() - 31_000;
+    const { challengeIdHash, codeHash } = await createEmailChallenge(
+      t,
+      userId,
+      challengeId,
+      '123456',
+      previousSentAt,
+    );
+    vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+    vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+
+    await expect(t.action(api.auth.sendTwoFactorEmailCode, { challengeId })).rejects.toThrow(
+      'Email delivery failed (503).',
+    );
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query('authEmailChallenges')
+        .withIndex('by_challenge', (query) => query.eq('challengeIdHash', challengeIdHash))
+        .unique(),
+    );
+    expect(row?.codeHash).toBe(codeHash);
+    expect(row?.emailSentAt).toBe(previousSentAt);
+    await expect(
+      t.mutation(internal.authEmailChallenges.consume, {
+        challengeIdHash,
+        codeHash,
+        now: Date.now(),
+      }),
+    ).resolves.toEqual({ userId });
+  });
+
+  it('allows an immediate retry after failed resend delivery', async () => {
+    const { t, userId } = await fixture();
+    const challengeId = 'b'.repeat(64);
+    const originalCode = '123456';
+    const previousSentAt = Date.now() - 31_000;
+    const { challengeIdHash, codeHash: originalCodeHash } = await createEmailChallenge(
+      t,
+      userId,
+      challengeId,
+      originalCode,
+      previousSentAt,
+    );
+    vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+    vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+    const sendEmail = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', sendEmail);
+
+    await expect(t.action(api.auth.sendTwoFactorEmailCode, { challengeId })).rejects.toThrow(
+      'Email delivery failed (503).',
+    );
+    await expect(t.action(api.auth.sendTwoFactorEmailCode, { challengeId })).resolves.toBeNull();
+
+    const payload = JSON.parse(sendEmail.mock.calls[1]![1]!.body as string);
+    const resentCode = payload.text.match(/\b(\d{6})\b/)?.[1];
+    expect(resentCode).toMatch(/^\d{6}$/);
+    if (!resentCode) throw new Error('The email did not contain a code.');
+    await expect(
+      t.mutation(internal.authEmailChallenges.consume, {
+        challengeIdHash,
+        codeHash: originalCodeHash,
+        now: Date.now(),
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      t.mutation(internal.authEmailChallenges.consume, {
+        challengeIdHash,
+        codeHash: await sha256(`${challengeId}:${resentCode}`),
+        now: Date.now(),
+      }),
+    ).resolves.toEqual({ userId });
+  });
+
+  it('reserves and rate-limits an email code resend', async () => {
     const { t, userId } = await fixture();
     const now = Date.now();
     await t.mutation(internal.authEmailChallenges.create, {
@@ -201,17 +555,26 @@ describe('sign-in challenges with other factors', () => {
       now,
       emailSent: false,
     });
+    const reservation = await t.mutation(internal.authEmailChallenges.reserveCodeResend, {
+      challengeIdHash: 'h2',
+      now,
+    });
+    expect(reservation).toEqual({
+      email: 'olive@example.com',
+      reservedAt: now,
+      previousEmailSentAt: null,
+    });
     expect(
-      await t.mutation(internal.authEmailChallenges.rotateCode, {
+      await t.mutation(internal.authEmailChallenges.finishCodeResend, {
         challengeIdHash: 'h2',
         codeHash: 'c1',
+        reservedAt: now,
         now,
       }),
-    ).toEqual({ email: 'olive@example.com' });
+    ).toBe(true);
     await expect(
-      t.mutation(internal.authEmailChallenges.rotateCode, {
+      t.mutation(internal.authEmailChallenges.reserveCodeResend, {
         challengeIdHash: 'h2',
-        codeHash: 'c2',
         now: now + 5_000,
       }),
     ).rejects.toThrow('TWO_FACTOR_RATE_LIMITED');

@@ -52,10 +52,10 @@ type TwoFactorStart =
   | { status: 'verification-required'; email: string }
   | { status: 'two-factor-disabled'; email: string }
   | {
-      status: 'code-sent' | 'code-required';
+      status: 'code-sent' | 'email-unavailable';
       challengeId: string;
       methods: TwoFactorMethods;
-      preferred: 'totp' | 'email';
+      preferred: 'email' | 'totp' | 'recovery';
     };
 
 export const requestEmailTwoFactor = action({
@@ -96,17 +96,6 @@ export const requestEmailTwoFactor = action({
     const methods = { totp: factors.totp, email: true, recovery: factors.recoveryRemaining > 0 };
     const challengeId = randomChallengeId();
     const challengeIdHash = await sha256(challengeId);
-    if (factors.totp) {
-      // Authenticator app first: no email unless the person asks for one.
-      await ctx.runMutation(internal.authEmailChallenges.create, {
-        userId: user._id,
-        challengeIdHash,
-        codeHash: await sha256(`${challengeId}:${randomChallengeId()}`),
-        now: Date.now(),
-        emailSent: false,
-      });
-      return { status: 'code-required' as const, challengeId, methods, preferred: 'totp' as const };
-    }
     const code = generateOtp();
     const codeHash = await sha256(`${challengeId}:${code}`);
     const { email } = await ctx.runMutation(internal.authEmailChallenges.create, {
@@ -115,13 +104,24 @@ export const requestEmailTwoFactor = action({
       codeHash,
       now: Date.now(),
     });
+    let emailSent = true;
     try {
+      // Legacy clients need the email fallback. TOTP/recovery clients can continue without it.
       await sendTwoFactorEmail(email, code);
     } catch (error) {
-      await ctx.runMutation(internal.authEmailChallenges.revoke, { challengeIdHash });
-      throw error;
+      if (!methods.totp && !methods.recovery) {
+        await ctx.runMutation(internal.authEmailChallenges.revoke, { challengeIdHash });
+        throw error;
+      }
+      emailSent = false;
     }
-    return { status: 'code-sent' as const, challengeId, methods, preferred: 'email' as const };
+    const preferred = emailSent ? 'email' : methods.totp ? 'totp' : 'recovery';
+    return {
+      status: emailSent ? 'code-sent' : 'email-unavailable',
+      challengeId,
+      methods,
+      preferred,
+    };
   },
 });
 
@@ -132,13 +132,30 @@ export const sendTwoFactorEmailCode = action({
     if (!/^[0-9a-f]{64}$/.test(challengeId)) throw new ConvexError({ code: 'CHALLENGE_EXPIRED' });
     const code = generateOtp();
     const challengeIdHash = await sha256(challengeId);
-    const target = await ctx.runMutation(internal.authEmailChallenges.rotateCode, {
+    const codeHash = await sha256(`${challengeId}:${code}`);
+    const reservedAt = Date.now();
+    const reservation = await ctx.runMutation(internal.authEmailChallenges.reserveCodeResend, {
       challengeIdHash,
-      codeHash: await sha256(`${challengeId}:${code}`),
+      now: reservedAt,
+    });
+    if (!reservation) throw new ConvexError({ code: 'CHALLENGE_EXPIRED' });
+    try {
+      await sendTwoFactorEmail(reservation.email, code);
+    } catch (error) {
+      await ctx.runMutation(internal.authEmailChallenges.releaseCodeResend, {
+        challengeIdHash,
+        reservedAt: reservation.reservedAt,
+        previousEmailSentAt: reservation.previousEmailSentAt,
+      });
+      throw error;
+    }
+    const finished = await ctx.runMutation(internal.authEmailChallenges.finishCodeResend, {
+      challengeIdHash,
+      codeHash,
+      reservedAt: reservation.reservedAt,
       now: Date.now(),
     });
-    if (!target) throw new ConvexError({ code: 'CHALLENGE_EXPIRED' });
-    await sendTwoFactorEmail(target.email, code);
+    if (!finished) throw new ConvexError({ code: 'CHALLENGE_EXPIRED' });
     return null;
   },
 });

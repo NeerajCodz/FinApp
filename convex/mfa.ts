@@ -118,13 +118,18 @@ export const savePending = internalMutation({
 export const activateTotp = internalMutation({
   args: {
     userId: v.id('users'),
+    pendingSecret: v.string(),
     step: v.number(),
     recoveryHashes: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { userId, step, recoveryHashes }) => {
+  handler: async (ctx, { userId, pendingSecret, step, recoveryHashes }) => {
     const row = await factorsRow(ctx, userId);
-    if (!row?.totpPendingSecret) throw new Error('TOTP_NOT_STARTED');
+    if (!row?.totpPendingSecret || row.totpPendingSecret !== pendingSecret)
+      throw new Error('TOTP_ENROLLMENT_CHANGED');
     const now = Date.now();
+    const recoveryDetail = recoveryHashes
+      ? ` ${recoveryHashes.length} recovery code${recoveryHashes.length === 1 ? '' : 's'} were created and shown once.`
+      : '';
     await upsert(ctx, userId, {
       totpSecret: row.totpPendingSecret,
       totpPendingSecret: undefined,
@@ -142,7 +147,7 @@ export const activateTotp = internalMutation({
       'account',
       String(userId),
       'Authenticator app turned on',
-      'Sign-in now asks for a code from your authenticator app. If this wasn’t you, change your password and turn it off in Settings → Security.',
+      `Sign-in now asks for a code from your authenticator app.${recoveryDetail} If this wasn’t you, change your password and turn it off in Settings → Security.`,
     );
   },
 });
@@ -173,10 +178,22 @@ export const deactivateTotp = internalMutation({
 export const replaceRecoveryCodes = internalMutation({
   args: { userId: v.id('users'), hashes: v.array(v.string()) },
   handler: async (ctx, { userId, hashes }) => {
+    const now = Date.now();
     await upsert(ctx, userId, {
       recoveryCodes: hashes.map((hash) => ({ hash })),
-      recoveryCreatedAt: Date.now(),
+      recoveryCreatedAt: now,
     });
+    const count = hashes.length;
+    await createNotification(
+      ctx,
+      userId,
+      `security:recovery-codes:${now}:${hashes[0] ?? 'empty'}`,
+      'security',
+      'account',
+      String(userId),
+      'Recovery codes regenerated',
+      `${count} new recovery code${count === 1 ? '' : 's'} were created. Your previous codes no longer work; save the new codes now. They are shown only once.`,
+    );
   },
 });
 
@@ -186,8 +203,9 @@ export const recordFactorUse = internalMutation({
     userId: v.id('users'),
     totpStep: v.optional(v.number()),
     recoveryHash: v.optional(v.string()),
+    notifyRecoverySignIn: v.optional(v.boolean()),
   },
-  handler: async (ctx, { userId, totpStep, recoveryHash }) => {
+  handler: async (ctx, { userId, totpStep, recoveryHash, notifyRecoverySignIn }) => {
     const row = await factorsRow(ctx, userId);
     if (!row) return false;
     if (totpStep !== undefined) {
@@ -204,17 +222,19 @@ export const recordFactorUse = internalMutation({
       const now = Date.now();
       const next = codes.map((code, i) => (i === index ? { ...code, usedAt: now } : code));
       await ctx.db.patch(row._id, { recoveryCodes: next, updatedAt: now });
-      const left = next.filter((code) => code.usedAt === undefined).length;
-      await createNotification(
-        ctx,
-        userId,
-        `security:recovery-used:${now}`,
-        'security',
-        'account',
-        String(userId),
-        'Recovery code used to sign in',
-        `${left} recovery code${left === 1 ? '' : 's'} left. Make new ones in Settings → Security if you’re running low.`,
-      );
+      if (notifyRecoverySignIn ?? true) {
+        const left = next.filter((code) => code.usedAt === undefined).length;
+        await createNotification(
+          ctx,
+          userId,
+          `security:recovery-used:${recoveryHash}`,
+          'security',
+          'account',
+          String(userId),
+          'Recovery code used',
+          `${left} recovery code${left === 1 ? '' : 's'} left. Make new ones in Settings → Security if you’re running low.`,
+        );
+      }
       return true;
     }
     return false;
@@ -234,6 +254,7 @@ export async function verifySecondFactor(
   userId: Id<'users'>,
   method: SecondFactor,
   code: string,
+  context: 'sign-in' | 'settings' = 'sign-in',
 ): Promise<boolean> {
   const factors: Factors = await ctx.runQuery(internal.mfa.factorsFor, { userId });
   if (method === 'totp') {
@@ -255,6 +276,7 @@ export async function verifySecondFactor(
   const used: boolean = await ctx.runMutation(internal.mfa.recordFactorUse, {
     userId,
     recoveryHash: hash,
+    notifyRecoverySignIn: context === 'sign-in',
   });
   return used;
 }
@@ -312,6 +334,7 @@ export const confirmTotp = action({
     const fresh = factors.recoveryRemaining === 0 ? await hashedCodes(userId) : null;
     await ctx.runMutation(internal.mfa.activateTotp, {
       userId,
+      pendingSecret: factors.totpPendingSecret,
       step,
       ...(fresh ? { recoveryHashes: fresh.hashes } : {}),
     });
@@ -325,7 +348,8 @@ export const disableTotp = action({
   handler: async (ctx, { code }): Promise<null> => {
     const userId = await signedInUser(ctx);
     const method: SecondFactor = /^\d{6}$/.test(code.trim()) ? 'totp' : 'recovery';
-    if (!(await verifySecondFactor(ctx, userId, method, code))) throw new Error('INVALID_CODE');
+    if (!(await verifySecondFactor(ctx, userId, method, code, 'settings')))
+      throw new Error('INVALID_CODE');
     await ctx.runMutation(internal.mfa.deactivateTotp, { userId });
     return null;
   },
@@ -342,7 +366,7 @@ export const regenerateRecoveryCodes = action({
     const factors: Factors = await ctx.runQuery(internal.mfa.factorsFor, { userId });
     if (factors.totp) {
       const method: SecondFactor = /^\d{6}$/.test((code ?? '').trim()) ? 'totp' : 'recovery';
-      if (!code || !(await verifySecondFactor(ctx, userId, method, code)))
+      if (!code || !(await verifySecondFactor(ctx, userId, method, code, 'settings')))
         throw new Error('INVALID_CODE');
     }
     const { codes, hashes } = await hashedCodes(userId);

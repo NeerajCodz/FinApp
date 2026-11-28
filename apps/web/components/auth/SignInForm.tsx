@@ -70,8 +70,10 @@ export function SignInForm({
         const methods = (['totp', 'email', 'recovery'] as const)
           .filter((method) => result.methods[method])
           .join(',');
+        const emailUnavailable =
+          result.status === 'email-unavailable' ? '&emailUnavailable=true' : '';
         router.replace(
-          `/two-factor?challengeId=${encodeURIComponent(result.challengeId)}&m=${methods}&p=${result.preferred}${next}`,
+          `/two-factor?challengeId=${encodeURIComponent(result.challengeId)}&m=${methods}&p=${result.preferred}${emailUnavailable}${next}`,
         );
       }
     } catch (cause) {

@@ -22,9 +22,8 @@ const COPY: Record<Method, { label: string; title: string; description: string }
   },
   email: {
     label: 'Email code',
-    title: 'Check your email.',
-    description:
-      'Enter the six-digit code we sent to the email on your account. It expires in 10 minutes.',
+    title: 'Enter your email code.',
+    description: 'Enter the six-digit code from your email. Request a new one if needed.',
   },
   recovery: {
     label: 'Recovery code',
@@ -67,12 +66,26 @@ export default function TwoFactorPage() {
         (value): value is Method => value === 'totp' || value === 'email' || value === 'recovery',
       );
     const available: Method[] = listed.length ? listed : ['email'];
-    const preferred = params.get('p') === 'totp' && available.includes('totp') ? 'totp' : 'email';
+    const requestedPreferred = params.get('p');
+    const preferred =
+      (requestedPreferred === 'totp' ||
+        requestedPreferred === 'email' ||
+        requestedPreferred === 'recovery') &&
+      available.includes(requestedPreferred)
+        ? requestedPreferred
+        : available.includes('email')
+          ? 'email'
+          : available[0]!;
+    const emailUnavailable = params.get('emailUnavailable') === 'true';
     setChallengeId(id);
     setMethods(available);
     setMethod(preferred);
-    // Without an authenticator app the email code was sent with the password check.
-    setEmailSent(preferred === 'email');
+    setEmailSent(preferred === 'email' && !emailUnavailable);
+    setNotice(
+      emailUnavailable
+        ? 'We could not send an email code. Use your authenticator app or a recovery code, or choose Email to retry.'
+        : '',
+    );
     const next = params.get('next');
     setNextPath(next?.startsWith('/mcp/') && !next.startsWith('//') ? next : null);
   }, [router]);
