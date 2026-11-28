@@ -7,7 +7,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { ArrowRight } from 'lucide-react';
-import { Empty } from '@finapp/ui/web';
+import { Empty, ListSkeleton } from '@finapp/ui/web';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
@@ -22,7 +22,6 @@ import {
   type InvitationLinkExpiryMs,
   type OutstandingBalance,
 } from '@finapp/ui/finance';
-import { ListSkeleton } from '@finapp/ui/web';
 import { useGroupLedger } from '@/lib/groups/useGroupLedger';
 
 type Group = LocalRecord & {
@@ -501,104 +500,106 @@ export default function GroupSettingsPage() {
 
   return (
     <div className="finance-page finance-page--narrow">
-    <GroupEditScreen
-      group={{
-        id: currentGroupId,
-        name: group.name ?? '',
-        currency: group.currency ?? '',
-        ownerId: group.ownerId,
-        archived: group.archivedAt !== undefined,
-        icon: remoteGroup?.icon ?? group.icon,
-        color: remoteGroup?.color ?? group.color,
-      }}
-      members={memberRows.map((member) => ({
-        id: localId(member),
-        userId: String(member.userId ?? member.memberId ?? ''),
-        memberId: String(member.memberId ?? ''),
-        name: String(member.displayName ?? member.name ?? member.username ?? 'Member'),
-        username: typeof member.username === 'string' ? member.username : undefined,
-        role: String(member.role ?? 'member'),
-        avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
-        avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
-      }))}
-      currentRole={currentRole}
-      canManage={canManage}
-      membersLoading={membersLoading}
-      remoteLoaded={Boolean(remoteGroup)}
-      error={
-        error ||
-        groupsError ||
-        membersError ||
-        (!isConnected
-          ? 'Offline. Reconnect to manage group settings, invitations, and membership.'
-          : undefined)
-      }
-      successMessage={successMessage}
-      saving={saving}
-      cloudGroupId={cloudGroupId}
-      name={name}
-      onNameChange={setName}
-      onSaveName={saveName}
-      icon={iconDraft}
-      onIconChange={(value) => setIconDraft(value ?? 'phosphor:UsersThree')}
-      color={colorDraft}
-      onColorChange={setColorDraft}
-      onSaveAppearance={saveGroupAppearance}
-      retention={retentionDraft}
-      onRetentionChange={setRetentionDraft}
-      onSaveRetention={saveRetention}
-      memberInput={memberInput}
-      onMemberInputChange={setMemberInput}
-      onAddMember={addMember}
-      onChangeRole={(member, role) => void changeRole(member as Member, role)}
-      onMakeOwner={(member) => void makeOwner(member as Member)}
-      onRemoveMember={(member) =>
-        void removeMember(
-          (memberRows.find((record) => localId(record) === member.id) ?? member) as Member,
-        )
-      }
-      meId={userId}
-      balances={ledger.balances}
-      balanceCurrency={groupCurrency}
-      formerMembers={remoteGroup?.formerMembers.map((former) => ({
-        id: former.id,
-        name: former.displayName,
-        avatarId: former.avatarId,
-        leftAt: former.leftAt,
-      }))}
-      canLeave={Boolean(remoteGroup && remoteGroup.ownerId !== userId && cloudGroupId)}
-      onLeave={() => void leaveGroup()}
-      balanceGuard={balanceGuard}
-      onDismissBalanceGuard={() => setBalanceGuard(null)}
-      onSettleFirst={
-        balanceGuard &&
-        (balanceGuard.self || canSettleWith(ledger.balances, userId, balanceGuard.memberId))
-          ? () => {
-              const guard = balanceGuard;
-              setBalanceGuard(null);
-              if (!guard) return;
-              const counterpart = guard.self
-                ? settleFirstCounterpart(ledger.balances, guard.memberId)
-                : guard.memberId;
-              router.push(
-                `/settle/new?groupId=${encodeURIComponent(currentGroupId)}${counterpart ? `&member=${encodeURIComponent(counterpart)}` : ''}`,
-              );
-            }
-          : undefined
-      }
-      onBack={() => router.push(`/group/${encodeURIComponent(currentGroupId)}`)}
-      onOpenAnalytics={() => router.push(`/group/${encodeURIComponent(currentGroupId)}/analytics`)}
-      invitationUrl={canManage ? invitationUrl : undefined}
-      invitationExpiresAt={canManage ? invitationExpiresAt : undefined}
-      invitationExpiryMs={canManage ? invitationExpiryMs : undefined}
-      onInvitationExpiryChange={setInvitationExpiryMs}
-      invitationBusy={invitationBusy}
-      invitationError={invitationError}
-      invitationStatus={invitationStatus}
-      onCreateInvitation={() => void createInvitation()}
-      onRevokeInvitation={() => void revokeInvitation()}
-      onShareInvitation={() => void shareInvitation()}
-    />
+      <GroupEditScreen
+        group={{
+          id: currentGroupId,
+          name: group.name ?? '',
+          currency: group.currency ?? '',
+          ownerId: group.ownerId,
+          archived: group.archivedAt !== undefined,
+          icon: remoteGroup?.icon ?? group.icon,
+          color: remoteGroup?.color ?? group.color,
+        }}
+        members={memberRows.map((member) => ({
+          id: localId(member),
+          userId: String(member.userId ?? member.memberId ?? ''),
+          memberId: String(member.memberId ?? ''),
+          name: String(member.displayName ?? member.name ?? member.username ?? 'Member'),
+          username: typeof member.username === 'string' ? member.username : undefined,
+          role: String(member.role ?? 'member'),
+          avatarUrl: typeof member.avatarUrl === 'string' ? member.avatarUrl : undefined,
+          avatarId: typeof member.avatarId === 'string' ? member.avatarId : undefined,
+        }))}
+        currentRole={currentRole}
+        canManage={canManage}
+        membersLoading={membersLoading}
+        remoteLoaded={Boolean(remoteGroup)}
+        error={
+          error ||
+          groupsError ||
+          membersError ||
+          (!isConnected
+            ? 'Offline. Reconnect to manage group settings, invitations, and membership.'
+            : undefined)
+        }
+        successMessage={successMessage}
+        saving={saving}
+        cloudGroupId={cloudGroupId}
+        name={name}
+        onNameChange={setName}
+        onSaveName={saveName}
+        icon={iconDraft}
+        onIconChange={(value) => setIconDraft(value ?? 'phosphor:UsersThree')}
+        color={colorDraft}
+        onColorChange={setColorDraft}
+        onSaveAppearance={saveGroupAppearance}
+        retention={retentionDraft}
+        onRetentionChange={setRetentionDraft}
+        onSaveRetention={saveRetention}
+        memberInput={memberInput}
+        onMemberInputChange={setMemberInput}
+        onAddMember={addMember}
+        onChangeRole={(member, role) => void changeRole(member as Member, role)}
+        onMakeOwner={(member) => void makeOwner(member as Member)}
+        onRemoveMember={(member) =>
+          void removeMember(
+            (memberRows.find((record) => localId(record) === member.id) ?? member) as Member,
+          )
+        }
+        meId={userId}
+        balances={ledger.balances}
+        balanceCurrency={groupCurrency}
+        formerMembers={remoteGroup?.formerMembers.map((former) => ({
+          id: former.id,
+          name: former.displayName,
+          avatarId: former.avatarId,
+          leftAt: former.leftAt,
+        }))}
+        canLeave={Boolean(remoteGroup && remoteGroup.ownerId !== userId && cloudGroupId)}
+        onLeave={() => void leaveGroup()}
+        balanceGuard={balanceGuard}
+        onDismissBalanceGuard={() => setBalanceGuard(null)}
+        onSettleFirst={
+          balanceGuard &&
+          (balanceGuard.self || canSettleWith(ledger.balances, userId, balanceGuard.memberId))
+            ? () => {
+                const guard = balanceGuard;
+                setBalanceGuard(null);
+                if (!guard) return;
+                const counterpart = guard.self
+                  ? settleFirstCounterpart(ledger.balances, guard.memberId)
+                  : guard.memberId;
+                router.push(
+                  `/settle/new?groupId=${encodeURIComponent(currentGroupId)}${counterpart ? `&member=${encodeURIComponent(counterpart)}` : ''}`,
+                );
+              }
+            : undefined
+        }
+        onBack={() => router.push(`/group/${encodeURIComponent(currentGroupId)}`)}
+        onOpenAnalytics={() =>
+          router.push(`/group/${encodeURIComponent(currentGroupId)}/analytics`)
+        }
+        invitationUrl={canManage ? invitationUrl : undefined}
+        invitationExpiresAt={canManage ? invitationExpiresAt : undefined}
+        invitationExpiryMs={canManage ? invitationExpiryMs : undefined}
+        onInvitationExpiryChange={setInvitationExpiryMs}
+        invitationBusy={invitationBusy}
+        invitationError={invitationError}
+        invitationStatus={invitationStatus}
+        onCreateInvitation={() => void createInvitation()}
+        onRevokeInvitation={() => void revokeInvitation()}
+        onShareInvitation={() => void shareInvitation()}
+      />
     </div>
   );
 }

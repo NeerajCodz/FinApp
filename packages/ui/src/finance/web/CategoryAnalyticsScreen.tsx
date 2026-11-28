@@ -7,8 +7,8 @@ import {
   BarChart3,
   Search,
   Tag,
-  Wallet,
   AlertTriangle,
+  Wallet,
 } from 'lucide-react';
 import { Input, Select, Typography, useTheme } from '@finapp/ui/web';
 import { formatMinor } from '../money';
@@ -285,9 +285,7 @@ export function CategoryAnalyticsScreen({
     bucket.totals.reduce(
       (sum, item) =>
         sum +
-        (monthlyCategories.some((category) => category.id === item.category.id)
-          ? 0n
-          : item.value),
+        (monthlyCategories.some((category) => category.id === item.category.id) ? 0n : item.value),
       0n,
     ),
   );

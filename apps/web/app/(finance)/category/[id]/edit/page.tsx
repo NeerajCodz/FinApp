@@ -1,4 +1,5 @@
 'use client';
+
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { CategoryFormScreen, deriveFormActivity } from '@finapp/ui/finance';
@@ -7,6 +8,7 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { belongsToUser, idOf, localDependency, matchesId, SignInGate } from '../../../_personal';
+
 type Category = LocalRecord & {
   name?: string;
   icon?: string;
@@ -214,39 +216,39 @@ export default function EditCategoryPage() {
     );
   return (
     <div className="finance-page finance-page--narrow">
-    <CategoryFormScreen
-      mode="edit"
-      name={name}
-      icon={icon}
-      kind={kind}
-      color={color}
-      currency={currency}
-      notes={notes}
-      onNotesChange={setNotes}
-      limitValue={limitValue}
-      onLimitChange={setLimitValue}
-      alertValue={alertValue}
-      onAlertChange={setAlertValue}
-      limitAlertPercent={category.limitAlertPercent}
-      isDefault={defaultDraft ?? aliases.includes(profile?.[defaultField] as string)}
-      onDefaultChange={profile ? setDefaultDraft : undefined}
-      spentMinor={spentMinor}
-      monthlyLimitMinor={
-        category.monthlyLimitMinor === undefined ? undefined : BigInt(category.monthlyLimitMinor)
-      }
-      activity={activity}
-      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
-      onViewTransactions={() => router.push(`/category/${encodeURIComponent(routeId)}`)}
-      onOpenAnalytics={() => router.push('/categories/analytics')}
-      pending={pending}
-      error={formError}
-      onNameChange={setName}
-      onIconChange={setIcon}
-      onKindChange={setKind}
-      onColorChange={setColor}
-      onSubmit={() => void save()}
-      onBack={() => router.push('/categories')}
-    />
+      <CategoryFormScreen
+        mode="edit"
+        name={name}
+        icon={icon}
+        kind={kind}
+        color={color}
+        currency={currency}
+        notes={notes}
+        onNotesChange={setNotes}
+        limitValue={limitValue}
+        onLimitChange={setLimitValue}
+        alertValue={alertValue}
+        onAlertChange={setAlertValue}
+        limitAlertPercent={category.limitAlertPercent}
+        isDefault={defaultDraft ?? aliases.includes(profile?.[defaultField] as string)}
+        onDefaultChange={profile ? setDefaultDraft : undefined}
+        spentMinor={spentMinor}
+        monthlyLimitMinor={
+          category.monthlyLimitMinor === undefined ? undefined : BigInt(category.monthlyLimitMinor)
+        }
+        activity={activity}
+        onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+        onViewTransactions={() => router.push(`/category/${encodeURIComponent(routeId)}`)}
+        onOpenAnalytics={() => router.push('/categories/analytics')}
+        pending={pending}
+        error={formError}
+        onNameChange={setName}
+        onIconChange={setIcon}
+        onKindChange={setKind}
+        onColorChange={setColor}
+        onSubmit={() => void save()}
+        onBack={() => router.push('/categories')}
+      />
     </div>
   );
 }

@@ -17,7 +17,10 @@ vi.mock('convex/react', () => ({
   useQuery,
 }));
 
-import { BrowserSyncProvider, useBrowserSync } from '../../apps/web/lib/offline/BrowserSyncProvider';
+import {
+  BrowserSyncProvider,
+  useBrowserSync,
+} from '../../apps/web/lib/offline/BrowserSyncProvider';
 
 describe('BrowserSyncProvider sign-out coordination', () => {
   it('waits for an in-flight transaction range fetch before clearing local data', async () => {
@@ -55,12 +58,10 @@ describe('BrowserSyncProvider sign-out coordination', () => {
 
     const originalUseState = React.useState;
     let stateCalls = 0;
-    const useStateSpy = vi.spyOn(React, 'useState').mockImplementation(
-      ((initial: unknown) => {
-        stateCalls += 1;
-        return originalUseState(stateCalls === 3 ? true : (initial as never));
-      }) as typeof React.useState,
-    );
+    const useStateSpy = vi.spyOn(React, 'useState').mockImplementation(((initial: unknown) => {
+      stateCalls += 1;
+      return originalUseState(stateCalls === 3 ? true : (initial as never));
+    }) as typeof React.useState);
     try {
       renderToStaticMarkup(
         React.createElement(BrowserSyncProvider, null, React.createElement(CaptureSync)),

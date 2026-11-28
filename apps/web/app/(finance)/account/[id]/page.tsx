@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Empty, Typography } from '@finapp/ui/web';
 import { AccountDetailView } from '@finapp/ui/finance';
 import type { AccountActivityEntry } from '@finapp/ui/finance';
@@ -347,43 +347,43 @@ export default function PersonalAccountDetailPage() {
 
   return (
     <div className="finance-page finance-page--narrow">
-    <AccountDetailView
-      account={{
-        id: idOf(account),
-        name: account.name ?? 'Account',
-        type: account.type ?? 'other',
-        customType: account.customType,
-        currency,
-        balanceMinor:
-          asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta,
-        icon: account.icon,
-        color: account.color,
-        isIncludedInTotal: account.isIncludedInTotal === true,
-        createdAt: account.createdAt,
-        archivedAt: account.archivedAt,
-      }}
-      activity={activity}
-      flowActivity={flowActivity}
-      isBusy={pending}
-      error={
-        formError ??
-        (transactionError ? `Saved activity could not be refreshed: ${transactionError}` : null)
-      }
-      rangeNotice={
-        rangeError
-          ? 'Recent activity refresh unavailable. Showing records already saved in this browser.'
-          : null
-      }
-      onEdit={() => router.push(`/account/${encodeURIComponent(routeIdFor(localId))}/edit`)}
-      onRename={updateName}
-      onArchive={archive}
-      onSetIcon={(icon) => void updateIcon(icon)}
-      onSetColor={(color) => void updateColor(color)}
-      onAddTransaction={() =>
-        router.push(`/transaction/new?accountId=${encodeURIComponent(localId)}`)
-      }
-      onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
-    />
+      <AccountDetailView
+        account={{
+          id: idOf(account),
+          name: account.name ?? 'Account',
+          type: account.type ?? 'other',
+          customType: account.customType,
+          currency,
+          balanceMinor:
+            asMinor(account.balanceMinor ?? account.openingBalanceMinor) + optimisticDelta,
+          icon: account.icon,
+          color: account.color,
+          isIncludedInTotal: account.isIncludedInTotal === true,
+          createdAt: account.createdAt,
+          archivedAt: account.archivedAt,
+        }}
+        activity={activity}
+        flowActivity={flowActivity}
+        isBusy={pending}
+        error={
+          formError ??
+          (transactionError ? `Saved activity could not be refreshed: ${transactionError}` : null)
+        }
+        rangeNotice={
+          rangeError
+            ? 'Recent activity refresh unavailable. Showing records already saved in this browser.'
+            : null
+        }
+        onEdit={() => router.push(`/account/${encodeURIComponent(routeIdFor(localId))}/edit`)}
+        onRename={updateName}
+        onArchive={archive}
+        onSetIcon={(icon) => void updateIcon(icon)}
+        onSetColor={(color) => void updateColor(color)}
+        onAddTransaction={() =>
+          router.push(`/transaction/new?accountId=${encodeURIComponent(localId)}`)
+        }
+        onOpenTransaction={(id) => router.push(`/transaction/${encodeURIComponent(id)}`)}
+      />
     </div>
   );
 }

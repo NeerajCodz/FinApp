@@ -57,10 +57,6 @@ export default function EditAccountPage() {
   const { records: categories } = useLocalRecords<LocalRecord>('category');
   const { records: profiles } = useLocalRecords<LocalRecord>('profile');
   const profile = profiles.find((record) => userId && belongsToUser(record, userId));
-  const [primaryDraft, setPrimaryDraft] = React.useState<boolean>();
-  const account = records.find(
-    (record) => userId && belongsToUser(record, userId) && matchesRouteId(record, routeId),
-  );
   const [form, setForm] = React.useState<AccountFormValue>({
     name: '',
     type: 'bank',
@@ -69,6 +65,11 @@ export default function EditAccountPage() {
     openingBalance: '',
     isIncludedInTotal: true,
   });
+
+  const [primaryDraft, setPrimaryDraft] = React.useState<boolean>();
+  const account = records.find(
+    (record) => userId && belongsToUser(record, userId) && matchesRouteId(record, routeId),
+  );
   const [saving, setSaving] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -97,9 +98,12 @@ export default function EditAccountPage() {
     const name = form.name.trim();
     const customType = form.customType.trim();
     if (!name) return setFormError('Enter an account name.');
-    if (form.type === 'other' && !customType) return setFormError('Name your custom account type.');
-    if (!(currencies as readonly string[]).includes(form.currency))
+    if (form.type === 'other' && !customType) {
+      return setFormError('Name your custom account type.');
+    }
+    if (!(currencies as readonly string[]).includes(form.currency)) {
       return setFormError('Choose a supported currency.');
+    }
     if (!form.color) return setFormError('Choose an account color.');
     const accountId = idOf(account);
     if (!accountId) return setFormError('This account has no saved identifier.');
@@ -218,9 +222,7 @@ export default function EditAccountPage() {
           primaryDraft ??
           Boolean(
             profile &&
-              [account.id, account._id, account.cloudId].includes(
-                profile.defaultAccountId as string,
-              ),
+            [account.id, account._id, account.cloudId].includes(profile.defaultAccountId as string),
           )
         }
         onPrimaryChange={profile ? setPrimaryDraft : undefined}
