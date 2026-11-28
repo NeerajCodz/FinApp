@@ -64,6 +64,12 @@ export function useStreamedText(text: string, streaming: boolean): string {
 
   React.useEffect(() => {
     if (!animate.current) return;
+    if (!streaming) {
+      // Completion can trigger the parent’s final scroll before another animation frame runs.
+      // Render the full reply immediately, then sync state for a possible subsequent stream.
+      setShown(target);
+      return;
+    }
     if (shownRef.current >= target) return;
     const rate = revealRate(target - shownRef.current);
     let frame = 0;
@@ -79,8 +85,10 @@ export function useStreamedText(text: string, streaming: boolean): string {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [target]);
+  }, [target, streaming]);
 
-  if (!animate.current || shown >= target) return text;
+  // Completion must render the full reply in this render, before the parent's final auto-scroll.
+  // Keep `shown` in sync afterward in case this mounted renderer is reused for another stream.
+  if (!animate.current || !streaming || shown >= target) return text;
   return balancePartialMarkdown(text.slice(0, shown));
 }

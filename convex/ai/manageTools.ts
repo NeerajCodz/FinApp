@@ -56,25 +56,45 @@ export const manageTools: FinaiTool[] = [
   {
     name: 'list_trash',
     description:
-      'What is in the user’s Trash (deleted transactions, accounts, categories, budgets, goals, recurring), with ids and when each will be deleted for good.',
+      'What is in the user’s Trash (deleted transactions, accounts, categories, budgets, goals, recurring), with ids and when each will be deleted for good. Use the returned cursor to read the next page.',
     parameters: s.object({
       kind: s.enumOf('Only this kind (optional).', [...TRASH_KINDS]),
+      cursor: s.string('Cursor from the previous Trash page.'),
     }),
     progress: { stage: 'searching', label: 'Looking in Trash…' },
     run: async (ctx, args) => {
-      const kind = oneOf(args, 'kind', TRASH_KINDS);
-      const result = await ctx.run.runQuery(api.trash.list, kind ? { kind } : {});
+      const requestedKind = oneOf(args, 'kind', TRASH_KINDS);
+      const cursor = str(args, 'cursor', 20_000);
+      const separator = cursor?.indexOf(':') ?? -1;
+      const cursorPrefix = cursor?.slice(0, separator);
+      const cursorKind =
+        cursor === undefined || cursorPrefix === 'all'
+          ? undefined
+          : oneOf({ kind: cursorPrefix }, 'kind', TRASH_KINDS);
+      const pageCursor = cursor === undefined ? undefined : cursor.slice(separator + 1);
+      if (
+        cursor !== undefined &&
+        (separator < 1 ||
+          (cursorPrefix !== 'all' && cursorKind === undefined) ||
+          pageCursor === '' ||
+          (requestedKind !== undefined && requestedKind !== cursorKind))
+      )
+        throw new ToolArgError('INVALID_CURSOR');
+      const kind = requestedKind ?? cursorKind;
+      const result = await ctx.run.runQuery(api.trash.listPage, { kind, cursor: pageCursor });
+      const items = result.items.map((item) => ({
+        kind: item.kind,
+        id: item.id,
+        title: item.title,
+        detail: item.subtitle,
+        deletedOn: shortDate(item.deletedAt, ctx.timeZone),
+        deletedForGoodOn: item.purgeAt ? shortDate(item.purgeAt, ctx.timeZone) : 'never',
+      }));
       return {
         data: {
           retentionDays: result.retentionDays,
-          items: result.items.slice(0, 40).map((item) => ({
-            kind: item.kind,
-            id: item.id,
-            title: item.title,
-            detail: item.subtitle,
-            deletedOn: shortDate(item.deletedAt, ctx.timeZone),
-            deletedForGoodOn: item.purgeAt ? shortDate(item.purgeAt, ctx.timeZone) : 'never',
-          })),
+          items,
+          nextCursor: result.cursor ? `${kind ?? 'all'}:${result.cursor}` : null,
         },
       };
     },
@@ -106,7 +126,13 @@ export const manageTools: FinaiTool[] = [
         resource: 'recurringRules',
         paginationOpts: { numItems: 50, cursor: null },
       });
-      return { data: { items: page.items } };
+      const items = [];
+      for (const item of page.items) {
+        const doc = await owned(ctx, 'recurring', String(item.id));
+        if (doc.archivedAt !== undefined) continue;
+        items.push({ ...item, amountMinor: doc.amountMinor, currency: doc.currency });
+      }
+      return { data: { items } };
     },
   },
   {
@@ -148,6 +174,13 @@ export const manageTools: FinaiTool[] = [
       if (type) {
         payload.type = type;
         changes.push({ label: 'Kind', value: type });
+        if (type !== doc.type) {
+          const categoryId = str(args, 'categoryId', 64);
+          if (!categoryId) throw new ToolArgError('CATEGORY_REQUIRED_FOR_TYPE_CHANGE');
+          payload.categoryId = categoryId;
+          payload.transferAccountId = null;
+          changes.push({ label: 'Category', value: categoryId });
+        }
       }
       for (const key of ['categoryId', 'accountId', 'merchant', 'note'] as const) {
         const value = str(args, key, key === 'note' ? 500 : 120);
@@ -254,6 +287,8 @@ export const manageTools: FinaiTool[] = [
       if (target === undefined) throw new ToolArgError('MISSING_AMOUNT');
       const monthly = amountMinor(args, 'monthly', currency);
       const targetDate = date(args, 'targetDate');
+      if (targetDate !== undefined && targetDate <= Date.now())
+        throw new ToolArgError('TARGET_DATE_MUST_BE_FUTURE');
       const name = requiredStr(args, 'name', 80);
       return propose(ctx, {
         kind: 'goal.create',
@@ -308,6 +343,8 @@ export const manageTools: FinaiTool[] = [
         lines.push({ label: 'Target', value: formatMinor(target, currency) });
       }
       const targetDate = date(args, 'targetDate');
+      if (targetDate !== undefined && targetDate <= Date.now())
+        throw new ToolArgError('TARGET_DATE_MUST_BE_FUTURE');
       if (targetDate) {
         payload.targetDate = targetDate;
         lines.push({ label: 'By', value: shortDate(targetDate, ctx.timeZone) });
@@ -428,6 +465,7 @@ export const manageTools: FinaiTool[] = [
           'loan',
           'other',
         ]),
+        customType: s.string('Custom type when type is other.'),
         currency: s.string('ISO code. Default: the user’s default currency.'),
         openingBalance: s.amount('Opening balance (optional, default 0).'),
       },
@@ -440,13 +478,26 @@ export const manageTools: FinaiTool[] = [
       const balance = amountMinor(args, 'openingBalance', currency) ?? 0n;
       const type =
         oneOf(args, 'type', ['cash', 'bank', 'card', 'wallet', 'loan', 'other'] as const) ?? 'bank';
+      if (type === 'other' && !str(args, 'customType', 40))
+        throw new ToolArgError('CUSTOM_TYPE_REQUIRED');
       return propose(ctx, {
         kind: 'account.create',
         title: `New account: ${name}`,
-        payload: { name, type, currency, openingBalanceMinor: balance },
+        payload: {
+          name,
+          type,
+          currency,
+          openingBalanceMinor: balance,
+          ...(type === 'other' && str(args, 'customType', 40)
+            ? { customType: str(args, 'customType', 40) }
+            : {}),
+        },
         lines: [
           { label: 'Type', value: type },
           { label: 'Opening balance', value: formatMinor(balance, currency) },
+          ...(type === 'other' && str(args, 'customType', 40)
+            ? [{ label: 'Custom type', value: str(args, 'customType', 40)! }]
+            : []),
         ],
       });
     },
@@ -460,6 +511,7 @@ export const manageTools: FinaiTool[] = [
         accountId: s.string('Account id.'),
         name: s.string('New name.'),
         type: s.enumOf('New type.', ['cash', 'bank', 'card', 'wallet', 'loan', 'other']),
+        customType: s.string('New custom type when type is other.'),
         openingBalance: s.amount('New opening balance.'),
       },
       ['accountId'],
@@ -486,6 +538,15 @@ export const manageTools: FinaiTool[] = [
       if (type) {
         payload.type = type;
         lines.push({ label: 'Type', value: type });
+      }
+      const customType = str(args, 'customType', 40);
+      const effectiveType = type ?? doc.type;
+      if (customType) {
+        if (effectiveType !== 'other') throw new ToolArgError('CUSTOM_TYPE_REQUIRES_OTHER');
+        payload.customType = customType;
+        lines.push({ label: 'Custom type', value: customType });
+      } else if (type === 'other' && doc.type !== 'other') {
+        throw new ToolArgError('CUSTOM_TYPE_REQUIRED');
       }
       const balance = amountMinor(args, 'openingBalance', currency);
       if (balance !== undefined) {
@@ -524,13 +585,18 @@ export const manageTools: FinaiTool[] = [
       if (amount === undefined) throw new ToolArgError('MISSING_AMOUNT');
       const frequency = oneOf(args, 'frequency', ['daily', 'weekly', 'monthly', 'yearly'] as const);
       if (!frequency) throw new ToolArgError('MISSING_FREQUENCY');
-      const nextOccurrence = date(args, 'firstDate') ?? Date.now() + DAY;
+      const firstDate = date(args, 'firstDate');
+      if (firstDate !== undefined && firstDate <= Date.now())
+        throw new ToolArgError('NEXT_DATE_MUST_BE_FUTURE');
+      const nextOccurrence = firstDate ?? Date.now() + DAY;
       const accounts = await ctx.run.runQuery(api.accounts.queries.list, {});
       const preferred = str(args, 'accountId', 64);
-      const account =
-        (preferred && accounts.find((row) => String(row.id) === preferred)) ||
-        accounts.find((row) => row.currency === currency);
-      if (!account) throw new ToolArgError('NO_ACCOUNT_IN_CURRENCY');
+      const account = preferred
+        ? accounts.find((row) => String(row.id) === preferred)
+        : accounts.find((row) => row.currency === currency);
+      if (!account)
+        throw new ToolArgError(preferred ? 'ACCOUNT_NOT_FOUND' : 'NO_ACCOUNT_IN_CURRENCY');
+      if (account.currency !== currency) throw new ToolArgError('ACCOUNT_CURRENCY_MISMATCH');
       return propose(ctx, {
         kind: 'recurring.create',
         title: `New recurring: ${name}`,
@@ -572,6 +638,7 @@ export const manageTools: FinaiTool[] = [
       if (!kind) throw new ToolArgError('MISSING_KIND');
       const id = requiredStr(args, 'id', 64);
       const doc = await owned(ctx, kind, id);
+      if (kind === 'category' && doc.isSystem === true) throw new ToolArgError('SYSTEM_CATEGORY');
       const withTransactions =
         kind === 'category' &&
         (args.deleteTransactions === true || args.deleteTransactions === 'true');
@@ -611,6 +678,7 @@ export const manageTools: FinaiTool[] = [
       if (!kind) throw new ToolArgError('MISSING_KIND');
       const id = requiredStr(args, 'id', 64);
       const doc = await owned(ctx, kind, id);
+      if (kind === 'category' && doc.isSystem === true) throw new ToolArgError('SYSTEM_CATEGORY');
       const inTrash =
         kind === 'transaction' ? doc.deletedAt !== undefined : doc.archivedAt !== undefined;
       if (!inTrash) throw new ToolArgError('NOT_IN_TRASH');

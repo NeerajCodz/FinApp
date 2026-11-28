@@ -1,3 +1,6 @@
+import { manageTools } from '../../convex/ai/manageTools';
+import { assistantSystemPrompt, chatSystemPrompt } from '../../convex/ai/prompts';
+
 import { describe, expect, it } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api } from '../../convex/_generated/api';
@@ -93,6 +96,142 @@ async function setup() {
   return { t, me, userId, ids, confirm };
 }
 
+async function runManageTool(name: string, args: Record<string, unknown>, ctx: unknown) {
+  const tool = manageTools.find((item) => item.name === name);
+  if (!tool) throw new Error(`Missing tool: ${name}`);
+  return tool.run(ctx as never, args);
+}
+
+function resultItems(result: { data: unknown }): unknown[] {
+  if (result.data && typeof result.data === 'object' && 'items' in result.data) {
+    const items = result.data.items;
+    if (Array.isArray(items)) return items;
+  }
+  throw new Error('Expected tool result items');
+}
+
+describe('FinAI management tools', () => {
+  const context = (runQuery: (query: unknown, args: Record<string, unknown>) => Promise<unknown>) =>
+    ({
+      run: { runQuery, runMutation: async () => 'action-id' },
+      userId: 'user-id',
+      scope: { type: 'assistant', id: 'conversation' },
+      messageId: 'message',
+      defaultCurrency: 'INR',
+      timeZone: 'UTC',
+    }) as unknown;
+
+  it('accepts custom-type-only updates for existing other accounts', async () => {
+    const ctx = context(async () => ({
+      _id: 'account',
+      ownerId: 'user-id',
+      name: 'Other',
+      type: 'other',
+      currency: 'INR',
+    }));
+    const result = await runManageTool(
+      'propose_account_update',
+      { accountId: 'account', customType: 'Travel' },
+      ctx,
+    );
+    expect(result.data).toMatchObject({
+      payload: { accountId: 'account', customType: 'Travel' },
+      lines: [{ label: 'Custom type', value: 'Travel' }],
+    });
+  });
+
+  it('paginates Trash results instead of truncating them at 40', async () => {
+    const items = Array.from({ length: 45 }, (_, index) => ({
+      kind: 'transaction' as const,
+      id: `id-${index}`,
+      title: `Item ${index}`,
+      subtitle: 'detail',
+      deletedAt: 1,
+      purgeAt: 2,
+    }));
+    const ctx = context(async (_query, args) =>
+      args.cursor
+        ? { items: items.slice(40), retentionDays: 30, cursor: null }
+        : { items: items.slice(0, 40), retentionDays: 30, cursor: 'cursor-2' },
+    );
+    const first = await runManageTool('list_trash', {}, ctx);
+    expect(resultItems(first)).toHaveLength(40);
+    expect(first.data).toMatchObject({ nextCursor: 'all:cursor-2' });
+    const second = await runManageTool('list_trash', { cursor: 'all:cursor-2' }, ctx);
+    expect(resultItems(second)).toHaveLength(5);
+    expect(second.data).toMatchObject({ nextCursor: null });
+  });
+
+  it('omits archived recurring rules and includes active amounts and currencies', async () => {
+    const ctx = context(async (_query, args) => {
+      if (args.resource === 'recurringRules')
+        return {
+          items: [
+            { id: 'active', name: 'Rent', frequency: 'monthly', nextOccurrence: 1 },
+            { id: 'archived', name: 'Old', frequency: 'monthly', nextOccurrence: 1 },
+          ],
+        };
+      return args.id === 'active'
+        ? { amountMinor: 12_500n, currency: 'INR' }
+        : { amountMinor: 4_000n, currency: 'USD', archivedAt: 1 };
+    });
+    const result = await runManageTool('list_recurring', {}, ctx);
+    expect(resultItems(result)).toMatchObject([
+      { id: 'active', amountMinor: 12_500n, currency: 'INR' },
+    ]);
+  });
+
+  it('rejects a preferred account whose currency conflicts with recurring currency', async () => {
+    const ctx = context(async () => [{ id: 'account', name: 'Dollar account', currency: 'USD' }]);
+    await expect(
+      runManageTool(
+        'propose_recurring',
+        {
+          name: 'Rent',
+          amount: '10',
+          frequency: 'monthly',
+          firstDate: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+          accountId: 'account',
+          currency: 'INR',
+        },
+        ctx,
+      ),
+    ).rejects.toThrow('ACCOUNT_CURRENCY_MISMATCH');
+  });
+
+  it('rejects past goal target dates before creating a confirmation card', async () => {
+    const ctx = context(async () => []);
+    await expect(
+      runManageTool('propose_goal', { name: 'Goal', target: '100', targetDate: '2000-01-01' }, ctx),
+    ).rejects.toThrow('TARGET_DATE_MUST_BE_FUTURE');
+  });
+});
+
+describe('FinAI prompt scope', () => {
+  it('keeps management instructions out of shared chat prompts', () => {
+    const chat = chatSystemPrompt({
+      scope: 'group',
+      title: 'Friends',
+      today: '2026-11-27',
+      requesterName: 'Owner',
+      participants: [],
+      groups: [],
+    });
+    const assistant = assistantSystemPrompt({
+      name: 'Owner',
+      today: '2026-11-27',
+      timezone: 'UTC',
+      defaultCurrency: 'INR',
+      accounts: [],
+      groups: [],
+    });
+    expect(chat).not.toContain('Private management instructions');
+    expect(chat).not.toContain('propose_category_limit');
+    expect(assistant).toContain('Private management instructions');
+    expect(assistant).toContain('propose_category_limit');
+  });
+});
+
 describe('FinAI management actions', () => {
   it('creates and edits a goal, keeping fields that were not mentioned', async () => {
     const { t, confirm } = await setup();
@@ -162,6 +301,105 @@ describe('FinAI management actions', () => {
     const result = await confirm('entity.delete', { kind: 'account', id: String(strangerAccount) });
     expect(result.status).toBe('failed');
     expect((await t.run((ctx) => ctx.db.get(strangerAccount)))?.archivedAt).toBeUndefined();
+  });
+
+  it('refuses deletion of system categories even through a confirmed action', async () => {
+    const { t, userId, confirm } = await setup();
+    const categoryId = await t.run((ctx) =>
+      ctx.db.insert('categories', {
+        ownerId: userId,
+        name: 'System',
+        kind: 'expense',
+        isSystem: true,
+        sortOrder: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    );
+    const result = await confirm('entity.delete', {
+      kind: 'category',
+      id: String(categoryId),
+    });
+    expect(result.status).toBe('failed');
+    expect((await t.run((ctx) => ctx.db.get(categoryId)))?.archivedAt).toBeUndefined();
+  });
+
+  it('persists the custom type for created and retyped other accounts', async () => {
+    const { t, ids, confirm } = await setup();
+    const updated = await confirm('account.update', {
+      accountId: String(ids.accountId),
+      type: 'other',
+      customType: 'Brokerage',
+    });
+    expect(updated.status).toBe('done');
+    expect(await t.run((ctx) => ctx.db.get(ids.accountId))).toMatchObject({
+      type: 'other',
+      customType: 'Brokerage',
+    });
+    const relabeled = await confirm('account.update', {
+      accountId: String(ids.accountId),
+      customType: 'Investment account',
+    });
+    expect(relabeled.status).toBe('done');
+    expect(await t.run((ctx) => ctx.db.get(ids.accountId))).toMatchObject({
+      type: 'other',
+      customType: 'Investment account',
+    });
+    const created = await confirm('account.create', {
+      name: 'Investment',
+      type: 'other',
+      customType: 'Brokerage',
+      currency: 'INR',
+      openingBalanceMinor: 0n,
+    });
+    expect(created.status).toBe('done');
+    expect(await t.run((ctx) => ctx.db.get(created.resultId as never))).toMatchObject({
+      type: 'other',
+      customType: 'Brokerage',
+    });
+  });
+
+  it('clears transfer fields and requires a category when changing transaction type', async () => {
+    const { t, userId, ids, confirm } = await setup();
+    const transferId = await t.run((ctx) =>
+      ctx.db.insert('transactions', {
+        ownerId: userId,
+        accountId: ids.accountId,
+        transferAccountId: String(ids.accountId),
+        type: 'transfer',
+        amountMinor: 500n,
+        currency: 'INR',
+        title: 'Transfer',
+        occurredAt: Date.now(),
+        status: 'posted',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
+    );
+    expect(
+      (
+        await confirm('transaction.update', {
+          transactionId: String(transferId),
+          type: 'expense',
+        })
+      ).status,
+    ).toBe('failed');
+    expect(
+      (
+        await confirm('transaction.update', {
+          transactionId: String(transferId),
+          type: 'expense',
+          categoryId: String(ids.categoryId),
+          transferAccountId: null,
+        })
+      ).status,
+    ).toBe('done');
+    const updated = await t.run((ctx) => ctx.db.get(transferId));
+    expect(updated).toMatchObject({
+      type: 'expense',
+      categoryId: String(ids.categoryId),
+    });
+    expect(updated?.transferAccountId).toBeUndefined();
   });
 
   it('delete and restore tools follow the "prepare changes" setting', () => {

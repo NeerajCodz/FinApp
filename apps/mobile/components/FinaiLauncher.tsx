@@ -19,17 +19,23 @@ export function FinaiLauncher() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const { isAuthenticated } = useConvexAuth();
+  const currentUser = useQuery(api.users.queries.current, isAuthenticated ? {} : 'skip');
   const finaiSettings = useQuery(api.ai.settings.get, isAuthenticated ? {} : 'skip');
   // Replies keep going after the FinAI screen is closed: toast them on any screen.
-  const activity = useFinaiActivity(isAuthenticated, (reply) => {
-    const open = () => router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}` as never);
-    const options = {
-      description: reply.failed ? reply.title : reply.preview || reply.title,
-      action: { label: 'Open', onPress: open },
-    };
-    if (reply.failed) toast.error('FinAI couldn’t finish a reply', options);
-    else toast.info('FinAI replied', options);
-  });
+  const activity = useFinaiActivity(
+    isAuthenticated,
+    isAuthenticated ? (currentUser?._id === undefined ? undefined : String(currentUser._id)) : null,
+    (reply) => {
+      const open = () =>
+        router.push(`/finai?c=${encodeURIComponent(reply.conversationId)}` as never);
+      const options = {
+        description: reply.failed ? reply.title : reply.preview || reply.title,
+        action: { label: 'Open', onPress: open },
+      };
+      if (reply.failed) toast.error('FinAI couldn’t finish a reply', options);
+      else toast.info('FinAI replied', options);
+    },
+  );
   // Only on the tab screens themselves (not nested routes such as profile settings).
   if (!isAuthenticated || segments[0] !== '(tabs)' || segments.length > 2) return null;
   if (finaiSettings && (!finaiSettings.enabled || !finaiSettings.showLauncher)) return null;

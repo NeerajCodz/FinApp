@@ -68,17 +68,26 @@ const REPLY_STALE_MS = 6 * 60_000;
 function isWorking(row: Doc<'finaiConversations'>, now: number) {
   return row.working === true && now - row.updatedAt < REPLY_STALE_MS;
 }
+/** Publishes the stale-work transition so subscribed queries rerun at the cutoff. */
+export const expireAbandoned = internalMutation({
+  args: { conversationId: v.id('finaiConversations'), updatedAt: v.number() },
+  handler: async (ctx, { conversationId, updatedAt }) => {
+    const row = await ctx.db.get(conversationId);
+    if (row?.working === true && row.updatedAt === updatedAt)
+      await ctx.db.patch(conversationId, { working: false });
+  },
+});
 
 /**
  * FinAI activity for the launcher, tabs and sidebar: whether a reply is being written, how many
- * chats have unseen replies, and the newest finished reply (clients toast it when it changes and
- * that chat isn't on screen). Replies keep going after the chat is closed.
+ * chats have unseen replies, and a bounded set of their newest finished replies. Replies keep
+ * going after the chat is closed.
  */
 export const activity = query({
   args: {},
   handler: async (ctx) => {
     const user = await getOptionalUser(ctx);
-    if (!user) return { working: false, unreadCount: 0, latest: null };
+    if (!user) return { working: false, unreadCount: 0, latest: null, replies: [] };
     const rows = await ctx.db
       .query('finaiConversations')
       .withIndex('by_user_updatedAt', (q) => q.eq('userId', user._id))
@@ -86,24 +95,22 @@ export const activity = query({
       .take(50);
     const now = Date.now();
     const unread = rows.filter((row) => row.unreadAt !== undefined);
-    const newest = unread.reduce<Doc<'finaiConversations'> | null>(
-      (best, row) => (!best || row.unreadAt! > best.unreadAt! ? row : best),
-      null,
-    );
+    const replies = unread
+      .filter((row) => row.lastReplyId !== undefined)
+      .sort((a, b) => a.unreadAt! - b.unreadAt!)
+      .map((row) => ({
+        conversationId: row._id,
+        replyId: row.lastReplyId!,
+        title: row.title ?? 'New chat',
+        preview: row.lastReplyFailed ? '' : (row.preview ?? ''),
+        failed: row.lastReplyFailed === true,
+        at: row.unreadAt!,
+      }));
     return {
       working: rows.some((row) => isWorking(row, now)),
       unreadCount: unread.length,
-      latest:
-        newest && newest.lastReplyId
-          ? {
-              conversationId: newest._id,
-              replyId: newest.lastReplyId,
-              title: newest.title ?? 'New chat',
-              preview: newest.lastReplyFailed ? '' : (newest.preview ?? ''),
-              failed: newest.lastReplyFailed === true,
-              at: newest.unreadAt!,
-            }
-          : null,
+      latest: replies.at(-1) ?? null,
+      replies,
     };
   },
 });
@@ -303,6 +310,10 @@ export const begin = internalMutation({
       working: true,
       unreadAt: undefined,
       ...(isNew ? { title } : {}),
+    });
+    await ctx.scheduler.runAt(now + REPLY_STALE_MS, internal.ai.assistant.expireAbandoned, {
+      conversationId,
+      updatedAt: now,
     });
 
     const earlier = await ctx.db

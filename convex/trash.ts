@@ -7,9 +7,11 @@
  */
 import { v } from 'convex/values';
 import {
+  action,
   internalMutation,
   mutation,
   query,
+  type ActionCtx,
   type MutationCtx,
   type QueryCtx,
 } from './_generated/server';
@@ -133,10 +135,13 @@ function describe(
 }
 
 async function trashedOfKind(ctx: QueryCtx, userId: Id<'users'>, kind: TrashKind, limit: number) {
+  // Restrict to transactions without a group before applying limits or pagination.
   if (kind === 'transaction')
     return ctx.db
       .query('transactions')
-      .withIndex('by_owner_deletedAt', (q) => q.eq('ownerId', userId).gt('deletedAt', 0))
+      .withIndex('by_owner_group_deletedAt', (q) =>
+        q.eq('ownerId', userId).eq('groupId', undefined).gt('deletedAt', 0),
+      )
       .order('desc')
       .take(limit);
   const table = TABLE[kind] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules';
@@ -160,8 +165,6 @@ export const list = query({
       const rows = await trashedOfKind(ctx, user._id, each, LIST_LIMIT);
       for (const row of rows) {
         const doc = row as unknown as Record<string, unknown>;
-        // Group expenses are deleted through the group, not Trash.
-        if (each === 'transaction' && doc.groupId !== undefined) continue;
         const deletedAt = deletedAtOf(each, doc);
         items.push({
           kind: each,
@@ -174,6 +177,101 @@ export const list = query({
     }
     items.sort((a, b) => b.deletedAt - a.deletedAt);
     return { items: items.slice(0, LIST_LIMIT), retentionDays: days };
+  },
+});
+/**
+ * Returns one bounded page from one Trash kind. Convex allows only one paginated query in a
+ * query execution, so an all-kinds cursor walks the kinds in order instead of merging sources.
+ */
+export const listPage = query({
+  args: { kind: v.optional(kindValidator), cursor: v.optional(v.string()) },
+  handler: async (ctx, { kind, cursor }) => {
+    const user = await getOptionalUser(ctx);
+    if (!user)
+      return {
+        items: [] as TrashItem[],
+        retentionDays: DEFAULT_TRASH_RETENTION_DAYS,
+        cursor: null,
+      };
+    const days = await retentionDays(ctx, user._id);
+    const kinds = kind ? [kind] : TRASH_KINDS;
+    let kindIndex = 0;
+    let pageCursor: string | null = null;
+    if (cursor) {
+      try {
+        const parsed: unknown = JSON.parse(cursor);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          'kind' in parsed &&
+          parsed.kind === (kind ?? null) &&
+          'kindIndex' in parsed &&
+          typeof parsed.kindIndex === 'number' &&
+          Number.isInteger(parsed.kindIndex) &&
+          parsed.kindIndex >= 0 &&
+          parsed.kindIndex < kinds.length &&
+          'pageCursor' in parsed &&
+          (parsed.pageCursor === null || typeof parsed.pageCursor === 'string')
+        ) {
+          kindIndex = parsed.kindIndex;
+          pageCursor = parsed.pageCursor;
+        } else {
+          throw new Error('INVALID_CURSOR');
+        }
+      } catch {
+        throw new Error('INVALID_CURSOR');
+      }
+    }
+
+    const currentKind = kinds[kindIndex]!;
+    const page =
+      currentKind === 'transaction'
+        ? await ctx.db
+            .query('transactions')
+            .withIndex('by_owner_group_deletedAt', (q) =>
+              q.eq('ownerId', user._id).eq('groupId', undefined).gt('deletedAt', 0),
+            )
+            .order('desc')
+            .paginate({ numItems: 40, cursor: pageCursor })
+        : await ctx.db
+            .query(
+              TABLE[currentKind] as
+                'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules',
+            )
+            .withIndex('by_owner_archivedAt', (q) => q.eq('ownerId', user._id).gt('archivedAt', 0))
+            .order('desc')
+            .paginate({ numItems: 40, cursor: pageCursor });
+    const items: TrashItem[] = [];
+    for (const row of page.page) {
+      const doc = row as unknown as Record<string, unknown>;
+      const deletedAt = deletedAtOf(currentKind, doc);
+      items.push({
+        kind: currentKind,
+        id: String(row._id),
+        ...describe(currentKind, doc),
+        deletedAt,
+        purgeAt: days > 0 ? deletedAt + days * DAY : null,
+      });
+    }
+
+    let nextKindIndex = kindIndex;
+    let nextPageCursor: string | null = page.continueCursor;
+    if (page.isDone) {
+      nextKindIndex++;
+      nextPageCursor = null;
+    }
+    const more = nextKindIndex < kinds.length;
+    return {
+      items,
+      retentionDays: days,
+      cursor: more
+        ? JSON.stringify({
+            kind: kind ?? null,
+            kindIndex: nextKindIndex,
+            pageCursor: nextPageCursor,
+          })
+        : null,
+    };
   },
 });
 

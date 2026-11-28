@@ -180,6 +180,7 @@ describe('FinAI assistant', () => {
       working: false,
       unreadCount: 0,
       latest: null,
+      replies: [],
     });
     // While a reply is being written the conversation is working.
     const conversationId = await owner.mutation(api.ai.assistant.createConversation, {});
@@ -198,6 +199,7 @@ describe('FinAI assistant', () => {
         preview: 'Your spending is steady.',
         failed: false,
       },
+      replies: [{ conversationId: other.conversationId, replyId: other.replyId }],
     });
     const listed = await owner.query(api.ai.assistant.conversations, {});
     expect(listed.find((row) => row.id === other.conversationId)).toMatchObject({
@@ -206,13 +208,22 @@ describe('FinAI assistant', () => {
     });
     expect(listed.find((row) => row.id === conversationId)).toMatchObject({ working: true });
 
+    mockGemini([{ text: 'Here is another update.' }]);
+    const additional = await owner.action(api.ai.assistant.send, { text: 'and another?' });
+    const withBoth = await owner.query(api.ai.assistant.activity, {});
+    expect(withBoth.replies.map((reply) => reply.replyId)).toEqual(
+      expect.arrayContaining([other.replyId, additional.replyId]),
+    );
+
     // Someone else can't clear it; opening the chat does.
     await outsider.mutation(api.ai.assistant.markRead, { conversationId: other.conversationId });
-    expect((await owner.query(api.ai.assistant.activity, {})).unreadCount).toBe(1);
+    expect((await owner.query(api.ai.assistant.activity, {})).unreadCount).toBe(2);
     await owner.mutation(api.ai.assistant.markRead, { conversationId: other.conversationId });
+    await owner.mutation(api.ai.assistant.markRead, { conversationId: additional.conversationId });
     expect(await owner.query(api.ai.assistant.activity, {})).toMatchObject({
       unreadCount: 0,
       latest: null,
+      replies: [],
     });
 
     // A failed reply is unread too, and says so.
