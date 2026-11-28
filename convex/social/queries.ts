@@ -3,7 +3,7 @@ import { query } from '../_generated/server';
 import type { Doc, Id } from '../_generated/dataModel';
 import { getAnalyticsDayRange } from '../analytics/domain';
 import { getOptionalUser } from '../shared/auth';
-import { loadReadPointers, type ChatScope } from '../shared/chat';
+import { loadReadPointer, type ChatScope } from '../shared/chat';
 import { avatarUrlForUser } from '../avatars/helpers';
 
 const safeProfile = (user: Doc<'users'>) => ({
@@ -311,6 +311,11 @@ export const relationship = query({
 /** People shown on the People hub at most (friends and direct-message contacts). */
 const PEOPLE_HUB_LIMIT = 60;
 const PEOPLE_HUB_UNREAD_CAP = 9;
+const PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT = 250;
+const PEOPLE_HUB_CONVERSATION_SCAN_LIMIT = 500;
+const PEOPLE_HUB_UNREAD_TOTAL_CAP = 2000;
+const PEOPLE_HUB_UNREAD_SCAN_LIMIT = 10_000;
+const PEOPLE_HUB_UNREAD_SCOPE_SCAN_LIMIT = 2000;
 
 /**
  * The People hub row: everyone you're friends with or have a direct conversation with, with
@@ -321,50 +326,108 @@ export const peopleHub = query({
   args: {},
   handler: async (ctx) => {
     const actor = await getOptionalUser(ctx);
-    if (!actor || actor.deletedAt !== undefined) return [];
+    if (!actor || actor.deletedAt !== undefined) return { people: [], truncated: false };
+    const sourceLimit = PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT + 1;
+    const conversationLimit = PEOPLE_HUB_CONVERSATION_SCAN_LIMIT + 1;
     const [friendLow, friendHigh, convLow, convHigh] = await Promise.all([
       ctx.db
         .query('friendships')
         .withIndex('by_low', (q) => q.eq('userLowId', actor._id))
-        .collect(),
+        .take(sourceLimit),
       ctx.db
         .query('friendships')
         .withIndex('by_high', (q) => q.eq('userHighId', actor._id))
-        .collect(),
+        .take(sourceLimit),
       ctx.db
         .query('directConversations')
-        .withIndex('by_pair', (q) => q.eq('userLowId', actor._id))
-        .collect(),
+        .withIndex('by_low_updatedAt', (q) => q.eq('userLowId', actor._id))
+        .order('desc')
+        .take(conversationLimit),
       ctx.db
         .query('directConversations')
-        .withIndex('by_high', (q) => q.eq('userHighId', actor._id))
-        .collect(),
+        .withIndex('by_high_updatedAt', (q) => q.eq('userHighId', actor._id))
+        .order('desc')
+        .take(conversationLimit),
     ]);
+    const candidatesTruncated =
+      friendLow.length > PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT ||
+      friendHigh.length > PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT ||
+      convLow.length > PEOPLE_HUB_CONVERSATION_SCAN_LIMIT ||
+      convHigh.length > PEOPLE_HUB_CONVERSATION_SCAN_LIMIT;
     const conversationByPeer = new Map<string, Doc<'directConversations'>>();
-    for (const row of [...convLow, ...convHigh]) {
+    for (const row of [
+      ...convLow.slice(0, PEOPLE_HUB_CONVERSATION_SCAN_LIMIT),
+      ...convHigh.slice(0, PEOPLE_HUB_CONVERSATION_SCAN_LIMIT),
+    ]) {
       const peer = row.userLowId === actor._id ? row.userHighId : row.userLowId;
       conversationByPeer.set(String(peer), row);
     }
     const peerIds = new Set<string>([
-      ...friendLow.map((row) => String(row.userHighId)),
-      ...friendHigh.map((row) => String(row.userLowId)),
+      ...friendLow.slice(0, PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT).map((row) => String(row.userHighId)),
+      ...friendHigh.slice(0, PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT).map((row) => String(row.userLowId)),
       ...conversationByPeer.keys(),
     ]);
-    const candidates = [...peerIds]
-      .sort(
-        (a, b) =>
-          (conversationByPeer.get(b)?.updatedAt ?? 0) -
-            (conversationByPeer.get(a)?.updatedAt ?? 0) ||
-          a.localeCompare(b),
-      )
-      .slice(0, PEOPLE_HUB_LIMIT * 2);
-    const now = Date.now();
-    const rows = await Promise.all(
+    const candidates = [...peerIds];
+    const usersByPeer = new Map<string, Doc<'users'>>();
+    await Promise.all(
       candidates.map(async (rawId) => {
+        const user = await ctx.db.get(rawId as Id<'users'>);
+        if (user && user.deletedAt === undefined) usersByPeer.set(rawId, user);
+      }),
+    );
+    const now = Date.now();
+    const unreadByPeer = new Map<string, { count: number; capped: boolean }>();
+    await Promise.all(
+      candidates.map(async (rawId) => {
+        const conversation = conversationByPeer.get(rawId);
+        if (!conversation || !usersByPeer.has(rawId)) return;
+        const peerId =
+          conversation.userLowId === actor._id ? conversation.userHighId : conversation.userLowId;
+        const lastReadAt = await loadReadPointer(
+          ctx,
+          { type: 'direct', id: conversation._id },
+          actor._id,
+        );
+        const messages = await ctx.db
+          .query('directMessages')
+          .withIndex('by_conversation_sender_createdAt', (q) =>
+            q
+              .eq('conversationId', conversation._id)
+              .eq('senderId', peerId)
+              .gt('createdAt', lastReadAt),
+          )
+          .order('desc')
+          .take(PEOPLE_HUB_UNREAD_CAP + 1);
+        let unreadCount = 0;
+        for (const message of messages) {
+          const expiresAt = 'expiresAt' in message ? message.expiresAt : undefined;
+          if (!(typeof expiresAt === 'number' && expiresAt <= now)) unreadCount += 1;
+        }
+        unreadByPeer.set(rawId, {
+          count: Math.min(unreadCount, PEOPLE_HUB_UNREAD_CAP),
+          capped: messages.length > PEOPLE_HUB_UNREAD_CAP || unreadCount > PEOPLE_HUB_UNREAD_CAP,
+        });
+      }),
+    );
+    const rankedCandidates = candidates
+      .filter((rawId) => usersByPeer.has(rawId))
+      .sort((a, b) => {
+        const conversationA = conversationByPeer.get(a);
+        const conversationB = conversationByPeer.get(b);
+        return (
+          Number((unreadByPeer.get(b)?.count ?? 0) > 0) -
+            Number((unreadByPeer.get(a)?.count ?? 0) > 0) ||
+          (conversationB?.updatedAt ?? 0) - (conversationA?.updatedAt ?? 0)
+        );
+      });
+    const selectedCandidates = rankedCandidates.slice(0, PEOPLE_HUB_LIMIT);
+    const rows = await Promise.all(
+      selectedCandidates.map(async (rawId) => {
         const userId = rawId as Id<'users'>;
         const conversation = conversationByPeer.get(rawId);
-        const [user, settings, presence] = await Promise.all([
-          ctx.db.get(userId),
+        const unread = unreadByPeer.get(rawId);
+        const user = usersByPeer.get(rawId)!;
+        const [settings, presence] = await Promise.all([
           ctx.db
             .query('userSettings')
             .withIndex('by_user', (q) => q.eq('userId', userId))
@@ -374,43 +437,6 @@ export const peopleHub = query({
             .withIndex('by_user', (q) => q.eq('userId', userId))
             .unique(),
         ]);
-        if (!user || user.deletedAt !== undefined) return null;
-        let unreadCount = 0;
-        let unreadCapped = false;
-        if (conversation) {
-          const pointers = await loadReadPointers(
-            ctx,
-            { type: 'direct', id: conversation._id },
-            [actor._id],
-          );
-          const lastReadAt = pointers.get(actor._id) ?? 0;
-          const messageQuery = ctx.db
-            .query('directMessages')
-            .withIndex('by_conversation_createdAt', (q) =>
-              q.eq('conversationId', conversation._id).gt('createdAt', lastReadAt),
-            )
-            .order('desc');
-          let cursor: string | null = null;
-          let done = false;
-          while (!done && !unreadCapped) {
-            const page = await messageQuery.paginate({ numItems: 50, cursor });
-            for (const message of page.page) {
-              const expiresAt = 'expiresAt' in message ? message.expiresAt : undefined;
-              if (
-                message.senderId !== actor._id &&
-                !(typeof expiresAt === 'number' && expiresAt <= now)
-              ) {
-                unreadCount += 1;
-                if (unreadCount > PEOPLE_HUB_UNREAD_CAP) {
-                  unreadCapped = true;
-                  break;
-                }
-              }
-            }
-            cursor = page.continueCursor;
-            done = page.isDone;
-          }
-        }
         const showActive = settings?.showActive ?? true;
         const showLastSeen = settings?.showLastSeen ?? true;
         return {
@@ -418,86 +444,118 @@ export const peopleHub = query({
           avatarUrl: await avatarUrlForUser(ctx, user),
           conversationId: conversation?._id ?? null,
           lastMessageAt: conversation?.updatedAt ?? null,
-          unreadCount: Math.min(unreadCount, PEOPLE_HUB_UNREAD_CAP),
-          unreadCapped,
+          unreadCount: unread?.count ?? 0,
+          unreadCapped: unread?.capped ?? false,
           active: showActive ? (presence?.activeUntil ?? 0) > now : null,
           lastSeenAt: showLastSeen ? (presence?.lastSeenAt ?? null) : null,
         };
       }),
     );
-    return rows
+    const people = rows
       .filter((row): row is NonNullable<typeof row> => row !== null)
       .sort(
         (a, b) =>
           Number(b.unreadCount > 0) - Number(a.unreadCount > 0) ||
           (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0) ||
           a.displayName.localeCompare(b.displayName),
-      )
-      .slice(0, PEOPLE_HUB_LIMIT);
+      );
+    return {
+      people,
+      truncated: candidatesTruncated || candidates.length > PEOPLE_HUB_LIMIT,
+    };
   },
 });
 export const peopleHubUnreadTotal = query({
   args: {},
   handler: async (ctx) => {
     const actor = await getOptionalUser(ctx);
-    if (!actor || actor.deletedAt !== undefined) return 0;
+    if (!actor || actor.deletedAt !== undefined) return { count: 0, capped: false };
+    const sourceLimit = PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT + 1;
     const [convLow, convHigh, memberships] = await Promise.all([
       ctx.db
         .query('directConversations')
-        .withIndex('by_pair', (q) => q.eq('userLowId', actor._id))
-        .collect(),
+        .withIndex('by_low_updatedAt', (q) => q.eq('userLowId', actor._id))
+        .order('desc')
+        .take(sourceLimit),
       ctx.db
         .query('directConversations')
-        .withIndex('by_high', (q) => q.eq('userHighId', actor._id))
-        .collect(),
+        .withIndex('by_high_updatedAt', (q) => q.eq('userHighId', actor._id))
+        .order('desc')
+        .take(sourceLimit),
       ctx.db
         .query('groupMembers')
-        .withIndex('by_user', (q) => q.eq('userId', actor._id))
-        .collect(),
+        .withIndex('by_user_group', (q) => q.eq('userId', actor._id))
+        .take(sourceLimit),
     ]);
+    let capped =
+      convLow.length > PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT ||
+      convHigh.length > PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT ||
+      memberships.length > PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT;
+    const conversations = [
+      ...convLow.slice(0, PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT),
+      ...convHigh.slice(0, PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT),
+    ];
+    const peerUsers = await Promise.all(
+      conversations.map((conversation) =>
+        ctx.db.get(
+          conversation.userLowId === actor._id ? conversation.userHighId : conversation.userLowId,
+        ),
+      ),
+    );
     const scopes: ChatScope[] = [
-      ...[...convLow, ...convHigh].map((conversation) => ({
-        type: 'direct' as const,
-        id: conversation._id,
-      })),
-      ...memberships.map((membership) => ({ type: 'group' as const, id: membership.groupId })),
+      ...conversations.flatMap((conversation, index) =>
+        peerUsers[index] && peerUsers[index]!.deletedAt === undefined
+          ? [{ type: 'direct' as const, id: conversation._id }]
+          : [],
+      ),
+      ...memberships
+        .slice(0, PEOPLE_HUB_CANDIDATE_SOURCE_LIMIT)
+        .map((membership) => ({ type: 'group' as const, id: membership.groupId })),
     ];
     const now = Date.now();
-    const counts = await Promise.all(
-      scopes.map(async (scope) => {
-        const pointers = await loadReadPointers(ctx, scope, [actor._id]);
-        const lastReadAt = pointers.get(actor._id) ?? 0;
-        const messages =
-          scope.type === 'direct'
-            ? await ctx.db
-                .query('directMessages')
-                .withIndex('by_conversation_createdAt', (q) =>
-                  q.eq('conversationId', scope.id).gt('createdAt', lastReadAt),
-                )
-                .collect()
-            : await ctx.db
-                .query('groupMessages')
-                .withIndex('by_group_createdAt', (q) =>
-                  q.eq('groupId', scope.id).gt('createdAt', lastReadAt),
-                )
-                .collect();
-        let unread = 0;
-        for (const message of messages) {
-          if (
-            message.senderId !== actor._id &&
-            !(
-              'expiresAt' in message &&
-              typeof message.expiresAt === 'number' &&
-              message.expiresAt <= now
-            )
-          ) {
-            unread += 1;
-          }
+    let count = 0;
+    let scanned = 0;
+    for (let index = 0; index < scopes.length; index += 1) {
+      if (count >= PEOPLE_HUB_UNREAD_TOTAL_CAP || scanned >= PEOPLE_HUB_UNREAD_SCAN_LIMIT) {
+        capped = true;
+        break;
+      }
+      const scope = scopes[index]!;
+      const lastReadAt = await loadReadPointer(ctx, scope, actor._id);
+      const budget = Math.min(PEOPLE_HUB_UNREAD_SCOPE_SCAN_LIMIT, PEOPLE_HUB_UNREAD_SCAN_LIMIT - scanned);
+      const messages =
+        scope.type === 'direct'
+          ? await ctx.db
+              .query('directMessages')
+              .withIndex('by_conversation_createdAt', (q) =>
+                q.eq('conversationId', scope.id).gt('createdAt', lastReadAt),
+              )
+              .order('desc')
+              .take(budget + 1)
+          : await ctx.db
+              .query('groupMessages')
+              .withIndex('by_group_createdAt', (q) =>
+                q.eq('groupId', scope.id).gt('createdAt', lastReadAt),
+              )
+              .order('desc')
+              .take(budget + 1);
+      scanned += Math.min(messages.length, budget);
+      if (messages.length > budget) capped = true;
+      for (const message of messages.slice(0, budget)) {
+        if (
+          message.senderId !== actor._id &&
+          !(
+            'expiresAt' in message &&
+            typeof message.expiresAt === 'number' &&
+            message.expiresAt <= now
+          )
+        ) {
+          count += 1;
+          if (count >= PEOPLE_HUB_UNREAD_TOTAL_CAP) capped = true;
         }
-        return unread;
-      }),
-    );
-    return counts.reduce((sum, count) => sum + count, 0);
+      }
+    }
+    return { count: Math.min(count, PEOPLE_HUB_UNREAD_TOTAL_CAP), capped };
   },
 });
 
@@ -516,6 +574,7 @@ function activityDayStarts(now: number, timeZone: string | undefined, offsetMinu
     }
     return { starts, endAt: current.endAt };
   }
+  // Offsets are minutes east of UTC (for example, India is +330).
   const offset = offsetMinutes * 60_000;
   const todayStart = Math.floor((now - offset) / DAY_MS) * DAY_MS + offset;
   return {
@@ -549,7 +608,7 @@ export const personAnalytics = query({
     tzOffsetMinutes: v.optional(v.number()),
     timeZone: v.optional(v.string()),
   },
-  handler: async (ctx, { userId, tzOffsetMinutes = 0, timeZone }) => {
+  handler: async (ctx, { userId, tzOffsetMinutes, timeZone }) => {
     const actor = await getOptionalUser(ctx);
     if (!actor || actor.deletedAt !== undefined || actor._id === userId) return null;
     const person = await ctx.db.get(userId);
@@ -595,17 +654,26 @@ export const personAnalytics = query({
 
     const now = Date.now();
     let validZone: string | undefined;
-    for (const candidate of [timeZone, actorSettings?.timezone, actor.timezone]) {
-      if (!candidate) continue;
+    if (timeZone) {
       try {
-        new Intl.DateTimeFormat('en-US', { timeZone: candidate });
-        validZone = candidate;
-        break;
+        new Intl.DateTimeFormat('en-US', { timeZone });
+        validZone = timeZone;
       } catch {
-        continue;
+        validZone = undefined;
+      }
+    } else if (tzOffsetMinutes === undefined) {
+      for (const candidate of [actorSettings?.timezone, actor.timezone]) {
+        if (!candidate) continue;
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: candidate });
+          validZone = candidate;
+          break;
+        } catch {
+          continue;
+        }
       }
     }
-    const { starts, endAt } = activityDayStarts(now, validZone, tzOffsetMinutes);
+    const { starts, endAt } = activityDayStarts(now, validZone, tzOffsetMinutes ?? 0);
     const windowStart = starts[0]!;
     const days = starts.map((dayStart) => ({ dayStart, sent: 0, received: 0 }));
     const mix = { text: 0, image: 0, audio: 0, ai: 0 };

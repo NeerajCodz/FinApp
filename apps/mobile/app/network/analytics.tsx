@@ -6,10 +6,11 @@ const back = () =>
   router.canGoBack() ? router.back() : router.navigate('/(tabs)/network' as never);
 
 export default function PeopleAnalyticsRoute() {
-  const { people, groups } = useHubData();
+  const { people, peopleTruncated, groups } = useHubData();
   return (
     <PeopleAnalyticsScreen
       people={people}
+      peopleTruncated={peopleTruncated}
       groups={groups}
       onBack={back}
       onOpenPerson={(person) =>

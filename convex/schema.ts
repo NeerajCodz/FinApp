@@ -313,7 +313,8 @@ export default defineSchema({
   })
     .index('by_group', ['groupId'])
     .index('by_user', ['userId'])
-    .index('by_group_user', ['groupId', 'userId']),
+    .index('by_group_user', ['groupId', 'userId'])
+    .index('by_user_group', ['userId', 'groupId']),
   // Members who left or were removed; keeps names and join history for the ledger.
   formerGroupMembers: defineTable({
     groupId: v.id('groups'),
@@ -395,6 +396,7 @@ export default defineSchema({
     pinnedBy: v.optional(v.id('users')),
   })
     .index('by_group_createdAt', ['groupId', 'createdAt'])
+    .index('by_group_sender_createdAt', ['groupId', 'senderId', 'createdAt'])
     .index('by_group_pinnedAt', ['groupId', 'pinnedAt'])
     .index('by_storage', ['storageId']),
   friendRequests: defineTable({
@@ -427,7 +429,9 @@ export default defineSchema({
     updatedAt: timestamp,
   })
     .index('by_pair', ['userLowId', 'userHighId'])
-    .index('by_high', ['userHighId']),
+    .index('by_low_updatedAt', ['userLowId', 'updatedAt'])
+    .index('by_high', ['userHighId'])
+    .index('by_high_updatedAt', ['userHighId', 'updatedAt']),
   directMessages: defineTable({
     conversationId: v.id('directConversations'),
     senderId: v.id('users'),
@@ -445,6 +449,7 @@ export default defineSchema({
     pinnedBy: v.optional(v.id('users')),
   })
     .index('by_conversation_createdAt', ['conversationId', 'createdAt'])
+    .index('by_conversation_sender_createdAt', ['conversationId', 'senderId', 'createdAt'])
     .index('by_conversation_pinnedAt', ['conversationId', 'pinnedAt'])
     .index('by_storage', ['storageId']),
   directMessageReactions: defineTable({

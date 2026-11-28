@@ -150,9 +150,9 @@ export async function markAllNotificationsRead(
 }
 
 /** Unread chat messages across DMs and groups (for the People badge). */
-export function useUnreadChatCount(): number {
+export function useUnreadChatCount(): { count: number; capped: boolean } {
   const { userId, isConnected } = useBrowserSync();
   const live = Boolean(userId && isConnected);
   const unread = useQuery(api.social.queries.peopleHubUnreadTotal, live ? {} : 'skip');
-  return unread ?? 0;
+  return unread ?? { count: 0, capped: false };
 }

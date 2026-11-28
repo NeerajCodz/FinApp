@@ -146,12 +146,16 @@ export const socialTools: ToolFactory = (client) => [
       'Your friends and people you message, each with their direct conversationId (null if none yet), last message time, unread count and presence (when they share it). Unread conversations come first. Use this to see who messaged you, then read with finapp.social.direct_messages.list.',
     scope: 'finapp:read',
     input: {},
-    run: async () => ({ items: await client.query(api.social.queries.peopleHub, {}) }),
+    run: async () => {
+      const result = await client.query(api.social.queries.peopleHub, {});
+      return { items: result.people, truncated: result.truncated };
+    },
     summarize: (data) => {
-      const items = (data as { items?: Array<{ unreadCount?: number }> } | null)?.items;
+      const result = data as { items?: Array<{ unreadCount?: number }>; truncated?: boolean } | null;
+      const items = result?.items;
       if (!Array.isArray(items)) return undefined;
       const unread = items.filter((item) => (item.unreadCount ?? 0) > 0).length;
-      return `${items.length} people; ${unread} with unread messages.`;
+      return `${items.length}${result.truncated ? '+' : ''} people; ${unread} with unread messages.`;
     },
   }),
   defineTool({

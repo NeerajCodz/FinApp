@@ -11,7 +11,7 @@ const openPersonAnalytics = (person: HubPerson) =>
 
 /** People tab: the people you talk to and the groups you share. */
 export default function NetworkTab() {
-  const { userId, people, groups } = useHubData();
+  const { userId, people, peopleTruncated, groups } = useHubData();
   const profile = useLocalRecords<LocalRecord>(userId, 'profile').data?.[0];
   const profileName =
     (typeof profile?.displayName === 'string' && profile.displayName.trim()) ||
@@ -20,6 +20,7 @@ export default function NetworkTab() {
   return (
     <PeopleHubScreen
       people={people}
+      peopleTruncated={peopleTruncated}
       groups={groups}
       headerAction={
         <Pressable

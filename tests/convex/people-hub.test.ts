@@ -4,7 +4,9 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import schema from '../../convex/schema';
 import {
-  matchesHubSearch,
+  formatLowerBound,
+  isAnalyticsLinkAvailable,
+  isTimestampInRange,
   personStatus,
   unreadBadge,
 } from '../../packages/ui/src/finance/peopleHub';
@@ -76,7 +78,9 @@ async function seed() {
 describe('people hub', () => {
   it('lists friends and conversation contacts, unread first, honouring presence privacy', async () => {
     const { ids, me } = await seed();
-    const people = await me.query(api.social.queries.peopleHub, {});
+    const result = await me.query(api.social.queries.peopleHub, {});
+    const people = result.people;
+    expect(result.truncated).toBe(false);
     expect(people.map((person) => person.displayName)).toEqual(['Anna', 'Ben']);
     const [anna, ben] = people;
     // Anna: 3 messages, 1 is mine → 2 unread from her.
@@ -95,7 +99,10 @@ describe('people hub', () => {
 
   it('returns nothing signed out', async () => {
     const { t } = await seed();
-    expect(await t.query(api.social.queries.peopleHub, {})).toEqual([]);
+    expect(await t.query(api.social.queries.peopleHub, {})).toMatchObject({
+      people: [],
+      truncated: false,
+    });
   });
 
   it('uses legacy direct-message receipts as read pointers', async () => {
@@ -116,7 +123,7 @@ describe('people hub', () => {
         createdAt: now,
       });
     });
-    const anna = (await me.query(api.social.queries.peopleHub, {})).find(
+    const anna = (await me.query(api.social.queries.peopleHub, {})).people.find(
       (person) => person.id === ids.annaId,
     );
     expect(anna).toMatchObject({ unreadCount: 1, unreadCapped: false });
@@ -126,7 +133,7 @@ describe('people hub', () => {
     const { t, ids, me } = await seed();
     await t.run(async (ctx) => {
       const now = Date.now();
-      for (let index = 0; index < 20; index += 1)
+      for (let index = 0; index < 60; index += 1)
         await ctx.db.insert('directMessages', {
           conversationId: ids.conversationId,
           senderId: ids.meId,
@@ -135,7 +142,7 @@ describe('people hub', () => {
           createdAt: now + index,
         });
     });
-    const anna = (await me.query(api.social.queries.peopleHub, {})).find(
+    const anna = (await me.query(api.social.queries.peopleHub, {})).people.find(
       (person) => person.id === ids.annaId,
     );
     expect(anna).toMatchObject({ unreadCount: 2, unreadCapped: false });
@@ -175,10 +182,67 @@ describe('people hub', () => {
       const latestPeer =
         latest.userLowId === ids.meId ? latest.userHighId : latest.userLowId;
       await ctx.db.patch(latestPeer, { displayName: 'Latest' });
-      await ctx.db.patch(latest._id, { updatedAt: now - 1 });
+      await ctx.db.patch(latest._id, { updatedAt: now + 1 });
+      await ctx.db.insert('directMessages', {
+        conversationId: latest._id,
+        senderId: latestPeer,
+        kind: 'text',
+        text: 'latest unread',
+        createdAt: now + 1,
+      });
+    });
+    const result = await me.query(api.social.queries.peopleHub, {});
+    expect(result.people[0]?.displayName).toBe('Latest');
+    expect(result.people.some((person) => person.id === ids.annaId)).toBe(true);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('finds older unread conversations beyond 250 newer read conversations', async () => {
+    const { t, ids, me } = await seed();
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let index = 0; index < 251; index += 1) {
+        const peerId = await ctx.db.insert('users', {
+          email: `newer${index}@example.com`,
+          displayName: `Newer ${index}`,
+        });
+        const [userLowId, userHighId] = [ids.meId, peerId].sort();
+        await ctx.db.insert('directConversations', {
+          userLowId: userLowId!,
+          userHighId: userHighId!,
+          createdAt: now + index + 1,
+          updatedAt: now + index + 1,
+        });
+      }
+    });
+    const result = await me.query(api.social.queries.peopleHub, {});
+    expect(result.people[0]).toMatchObject({
+      id: ids.annaId,
+      unreadCount: 2,
+    });
+  });
+
+  it('marks bounded People and unread results as lower bounds when source caps are reached', async () => {
+    const { t, ids, me } = await seed();
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let index = 0; index < 251; index += 1) {
+        const peerId = await ctx.db.insert('users', {
+          email: `bounded${index}@example.com`,
+          displayName: `Bounded ${index}`,
+        });
+        await ctx.db.insert('directConversations', {
+          userLowId: ids.meId,
+          userHighId: peerId,
+          createdAt: now - index,
+          updatedAt: now - index,
+        });
+      }
     });
     const people = await me.query(api.social.queries.peopleHub, {});
-    expect(people[0]?.displayName).toBe('Latest');
+    expect(people.people).toHaveLength(60);
+    expect(people.truncated).toBe(true);
+    expect((await me.query(api.social.queries.peopleHubUnreadTotal, {})).capped).toBe(true);
   });
 
   it('returns an uncapped unread aggregate across DMs and groups', async () => {
@@ -220,12 +284,34 @@ describe('people hub', () => {
           text: `group unread ${index}`,
           createdAt: now + index,
         });
+      const deletedId = await ctx.db.insert('users', {
+        email: 'deleted@example.com',
+        displayName: 'Deleted',
+        deletedAt: now,
+      });
+      const [userLowId, userHighId] = [ids.meId, deletedId].sort();
+      const deletedConversationId = await ctx.db.insert('directConversations', {
+        userLowId: userLowId!,
+        userHighId: userHighId!,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert('directMessages', {
+        conversationId: deletedConversationId,
+        senderId: deletedId,
+        kind: 'text',
+        text: 'hidden unread',
+        createdAt: now,
+      });
     });
-    const anna = (await me.query(api.social.queries.peopleHub, {})).find(
+    const anna = (await me.query(api.social.queries.peopleHub, {})).people.find(
       (person) => person.id === ids.annaId,
     );
     expect(anna).toMatchObject({ unreadCount: 9, unreadCapped: true });
-    expect(await me.query(api.social.queries.peopleHubUnreadTotal, {})).toBe(15);
+    expect(await me.query(api.social.queries.peopleHubUnreadTotal, {})).toEqual({
+      count: 15,
+      capped: false,
+    });
   });
 
   it('builds 30-day person analytics only for connected people', async () => {
@@ -273,6 +359,35 @@ describe('people hub', () => {
       expect(duration).toBeLessThanOrEqual(25 * 60 * 60_000);
     }
   });
+  it('uses the caller timezone offset instead of the saved timezone', async () => {
+    const { t, ids, me } = await seed();
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.insert('userSettings', {
+        userId: ids.meId,
+        currency: 'USD',
+        timezone: 'America/Los_Angeles',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: {},
+        updatedAt: now,
+      });
+    });
+    const analytics = await me.query(api.social.queries.personAnalytics, {
+      userId: ids.annaId,
+      tzOffsetMinutes: 330,
+    });
+    const expectedOffset = 330 * 60_000;
+    expect(
+      analytics!.days.every(
+        (day) => ((day.dayStart % 86_400_000) + 86_400_000) % 86_400_000 === expectedOffset,
+      ),
+    ).toBe(true);
+  });
+
 
   it('keeps newest analytics messages and marks capped totals as lower bounds', async () => {
     const { t, ids, me } = await seed();
@@ -311,6 +426,15 @@ describe('people hub model', () => {
     expect(personStatus({ active: null, lastSeenAt: null }, now)).toBe('');
     expect(unreadBadge(0)).toBeNull();
     expect(unreadBadge(3)).toBe('3');
+    expect(formatLowerBound(2000, true)).toBe('2000+');
+    expect(formatLowerBound(8, false)).toBe('8');
+    expect(isAnalyticsLinkAvailable(null, false, 1)).toBe(false);
+    expect(isAnalyticsLinkAvailable({ conversationId: null }, false, 1)).toBe(true);
+    expect(isAnalyticsLinkAvailable({ conversationId: null }, false, 0)).toBe(false);
+    expect(isAnalyticsLinkAvailable(null, true, 0)).toBe(false);
+    expect(isTimestampInRange(90, 100, 200)).toBe(false);
+    expect(isTimestampInRange(100, 100, 200)).toBe(true);
+    expect(isTimestampInRange(200, 100, 200)).toBe(false);
     expect(unreadBadge(9, true)).toBe('9+');
     expect(matchesHubSearch({ displayName: 'Anna', username: 'anna_k' }, '@ANNA_')).toBe(true);
     expect(matchesHubSearch({ name: 'Trip' }, 'rent')).toBe(false);

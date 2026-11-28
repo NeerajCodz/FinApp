@@ -159,24 +159,30 @@ export function FinanceShell({ children }: { children: ReactNode }) {
         navigation={
           <>
             {navigation.map(({ href, label, icon: Icon }) => {
-              const badge =
+              const badgeCount =
                 href === '/notifications'
                   ? unreadNotifications
                   : href === '/network'
-                    ? unreadChats
+                    ? unreadChats.count
                     : 0;
+              const badgeLabel =
+                href === '/network' && unreadChats.capped
+                  ? `${Math.min(99, badgeCount)}+`
+                  : badgeCount > 99
+                    ? '99+'
+                    : String(badgeCount);
               return (
                 <Link
                   key={href}
                   href={href}
                   aria-current={isActive(href) ? 'page' : undefined}
-                  aria-label={badge > 0 ? `${label}, ${badge} unread` : undefined}
+                  aria-label={badgeCount > 0 ? `${label}, ${badgeLabel} unread` : undefined}
                 >
                   <Icon size={22} aria-hidden="true" />
                   <span>{label}</span>
-                  {badge > 0 ? (
+                  {badgeCount > 0 ? (
                     <span className="finance-nav-badge" aria-hidden="true">
-                      {badge > 99 ? '99+' : badge}
+                      {badgeLabel}
                     </span>
                   ) : null}
                 </Link>

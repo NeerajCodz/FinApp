@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, ChatCircle } from '@finapp/ui/icons/native';
 import { Avatar, Text, useTheme } from '@finapp/ui/native';
 import { GroupTile } from './GroupPrimitives';
-import { personStatus, type HubGroup, type HubPerson } from '../peopleHub';
+import { formatLowerBound, personStatus, type HubGroup, type HubPerson } from '../peopleHub';
 
 const initialsOf = (name: string) =>
   name
@@ -182,9 +182,9 @@ function Row({
 
 export type PeopleAnalyticsScreenProps = {
   people: readonly HubPerson[] | undefined;
+  peopleTruncated?: boolean;
   groups: readonly HubGroup[];
   onBack: () => void;
-  onOpenPerson: (person: HubPerson) => void;
   onOpenGroup: (group: HubGroup) => void;
 };
 
@@ -192,6 +192,10 @@ export type PeopleAnalyticsScreenProps = {
 export function PeopleAnalyticsScreen(p: PeopleAnalyticsScreenProps) {
   const { tokens } = useTheme();
   const people = p.people ?? [];
+  const unreadCapped =
+    Boolean(p.peopleTruncated) ||
+    people.some((person) => person.unreadCapped) ||
+    p.groups.some((group) => group.unreadCapped);
   const unread =
     people.reduce((sum, person) => sum + person.unreadCount, 0) +
     p.groups.reduce((sum, group) => sum + (group.unreadCount ?? 0), 0);
@@ -203,11 +207,11 @@ export function PeopleAnalyticsScreen(p: PeopleAnalyticsScreenProps) {
         items={[
           {
             label: 'People',
-            value: String(people.length),
+            value: formatLowerBound(people.length, p.peopleTruncated),
             note: `${people.filter((person) => person.active).length} active now`,
           },
           { label: 'Groups', value: String(p.groups.length) },
-          { label: 'Unread', value: String(unread), note: 'Across chats' },
+          { label: 'Unread', value: formatLowerBound(unread, unreadCapped), note: 'Across chats' },
           {
             label: 'Chatting with',
             value: String(people.filter((person) => person.conversationId).length),
@@ -316,6 +320,7 @@ export type PersonAnalyticsData = {
   lastSeenAt: number | null;
   days: readonly { dayStart: number; sent: number; received: number }[];
   totalMessages: number;
+  totalMessagesCapped?: boolean;
   mix: { text: number; image: number; audio: number; ai: number };
   sharedGroups: readonly { id: string; name: string; icon?: string; color?: string }[];
 };
@@ -418,7 +423,11 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
       </View>
       <Kpis
         items={[
-          { label: 'Messages', value: String(d.totalMessages), note: 'Last 30 days' },
+          {
+            label: 'Messages',
+            value: formatLowerBound(d.totalMessages, d.totalMessagesCapped),
+            note: 'Last 30 days',
+          },
           { label: 'Sent / received', value: `${sent} / ${received}` },
           { label: 'Active days', value: String(activeDays), note: 'of 30' },
           {
@@ -430,7 +439,7 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
       <Panel title="Message activity">
         <View
           accessible
-          accessibilityLabel={`${d.totalMessages} messages in the last 30 days`}
+          accessibilityLabel={`${d.totalMessages}${d.totalMessagesCapped ? ' or more' : ''} messages in the last 30 days`}
           style={{ flexDirection: 'row', alignItems: 'flex-end', height: 140, gap: 2 }}
         >
           {d.days.map((day) => (
@@ -468,7 +477,7 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
         <View style={{ flexDirection: 'row', gap: 14 }}>
           {[
             ['You', tokens.primary],
-            [d.profile.displayName, received_color],
+            ['Messages received', received_color],
           ].map(([label, color]) => (
             <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: color }} />

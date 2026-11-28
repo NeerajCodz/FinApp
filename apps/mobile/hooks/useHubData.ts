@@ -45,6 +45,7 @@ export function useHubData() {
           color: typeof group.color === 'string' ? group.color : undefined,
           memberCount: details?.members?.length ?? localCount,
           unreadCount: unread && cloudId ? unread[cloudId] : undefined,
+          unreadCapped: Boolean(unread && cloudId && unread[cloudId] >= 99),
         };
       }),
     [groupsState.data, groupsState.groupDetails, memberState.data, unread],
@@ -52,7 +53,7 @@ export function useHubData() {
   const hubPeople = useMemo<HubPerson[] | undefined>(
     () =>
       live
-        ? people?.map((person) => ({
+        ? people?.people.map((person) => ({
             ...person,
             id: String(person.id),
             conversationId: person.conversationId ? String(person.conversationId) : null,
@@ -60,5 +61,12 @@ export function useHubData() {
         : [],
     [live, people],
   );
-  return { userId, isConnected, people: hubPeople, groups, loading: groupsState.loading };
+  return {
+    userId,
+    isConnected,
+    people: hubPeople,
+    peopleTruncated: people?.truncated ?? false,
+    groups,
+    loading: groupsState.loading,
+  };
 }

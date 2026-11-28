@@ -32,13 +32,19 @@ export function useHubData() {
           ? 'negative'
           : 'neutral',
     unreadCount: unread && group.cloudId ? unread[group.cloudId] : undefined,
+    unreadCapped: Boolean(unread && group.cloudId && unread[group.cloudId] >= 99),
   }));
   const hubPeople: HubPerson[] | undefined = live
-    ? people?.map((person) => ({
+    ? people?.people.map((person) => ({
         ...person,
         id: String(person.id),
         conversationId: person.conversationId ? String(person.conversationId) : null,
       }))
     : [];
-  return { ...overview, people: hubPeople, hubGroups: groups };
+  return {
+    ...overview,
+    people: hubPeople,
+    peopleTruncated: people?.truncated ?? false,
+    hubGroups: groups,
+  };
 }

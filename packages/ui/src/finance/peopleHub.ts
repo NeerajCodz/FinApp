@@ -26,6 +26,7 @@ export type HubGroup = {
   balanceLabel?: string;
   balanceTone?: 'positive' | 'negative' | 'neutral';
   unreadCount?: number;
+  unreadCapped?: boolean;
 };
 
 /** "Active now" / "Active 5m ago" / "" (privacy hides it). */
@@ -53,7 +54,26 @@ export function matchesHubSearch(
   );
 }
 
+export function formatLowerBound(count: number, capped?: boolean): string {
+  return `${count}${capped ? '+' : ''}`;
+}
+
 export function unreadBadge(count: number | undefined, capped?: boolean): string | null {
   if (!count) return null;
   return capped || count > 9 ? '9+' : String(count);
+}
+
+export function isAnalyticsLinkAvailable(
+  analytics: { conversationId?: string | null } | null | undefined,
+  friends: boolean,
+  sharedGroupCount: number,
+): boolean {
+  return (
+    analytics != null &&
+    (sharedGroupCount > 0 || friends || Boolean(analytics.conversationId))
+  );
+}
+
+export function isTimestampInRange(timestamp: number, startAt: number, endAt: number): boolean {
+  return timestamp >= startAt && timestamp < endAt;
 }
