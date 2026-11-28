@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
@@ -13,7 +13,10 @@ import {
 const modules = import.meta.glob('../../convex/**/*.ts');
 const redirectUri = 'https://chatgpt.com/connector_platform_oauth_redirect';
 const verifier = 'v'.repeat(43);
+
 const challenge = createHash('sha256').update(verifier).digest('base64url');
+
+afterEach(() => vi.useRealTimers());
 
 async function setup() {
   const t = convexTest(schema, modules);
@@ -56,21 +59,46 @@ describe('confidential clients', () => {
       clientId: registration.client_id,
       redirectUri,
       codeVerifier: verifier,
+      authTransport: 'post' as const,
     };
-    await expect(t.mutation(api.mcpOAuth.exchangeAuthorizationCode, exchange)).rejects.toThrow(
+    await expect(t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, exchange)).rejects.toThrow(
       'INVALID_CLIENT',
     );
     await expect(
-      t.mutation(api.mcpOAuth.exchangeAuthorizationCode, { ...exchange, clientSecret: 'wrong' }),
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, { ...exchange, clientSecret: 'wrong' }),
     ).rejects.toThrow('INVALID_CLIENT');
-    const grant = await t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+    await expect(
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
+        code,
+        clientId: registration.client_id,
+        redirectUri,
+        codeVerifier: verifier,
+        clientSecret: registration.client_secret!,
+      }),
+    ).rejects.toThrow('INVALID_CLIENT');
+    const grant = await t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
       ...exchange,
       clientSecret: registration.client_secret!,
     });
+    await expect(
+      t.mutation(internal.mcpOAuth.refreshAccessGrant, {
+        refreshToken: grant.refreshToken,
+        clientId: registration.client_id,
+        clientSecret: registration.client_secret!,
+      }),
+    ).rejects.toThrow('INVALID_CLIENT');
+    const refreshed = await t.mutation(internal.mcpOAuth.refreshAccessGrant, {
+      refreshToken: grant.refreshToken,
+      clientId: registration.client_id,
+      clientSecret: registration.client_secret!,
+      authTransport: 'post',
+    });
+    expect(refreshed.refreshToken).toEqual(expect.any(String));
     expect(grant.refreshToken).toEqual(expect.any(String));
   });
 
   it('dashboard clients belong to their owner, default to ChatGPT, and delete revokes grants', async () => {
+    vi.useFakeTimers();
     const { t, owner, authorize } = await setup();
     const created = await owner.mutation(api.mcpOAuth.createStaticClient, {
       clientName: 'ChatGPT',
@@ -81,14 +109,16 @@ describe('confidential clients', () => {
     });
     expect(await owner.query(api.mcpOAuth.listMyClients, {})).toHaveLength(1);
     const code = await authorize(created.clientId);
-    const grant = await t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+    const grant = await t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
       code,
       clientId: created.clientId,
       redirectUri,
       codeVerifier: verifier,
       clientSecret: created.clientSecret,
+      authTransport: 'basic',
     });
     await owner.mutation(api.mcpOAuth.deleteMyClient, { clientId: created.clientId });
+    await t.finishAllScheduledFunctions(() => vi.runAllTimers());
     const stored = await t.run((ctx) => ctx.db.get(grant.grantId));
     expect(stored?.revokedAt).toEqual(expect.any(Number));
     expect(await owner.query(api.mcpOAuth.listMyClients, {})).toHaveLength(0);
@@ -102,12 +132,13 @@ describe('confidential clients', () => {
     });
     const code = await authorize(registration.client_id);
     await expect(
-      t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
         code,
         clientId: registration.client_id,
         redirectUri,
         codeVerifier: verifier,
         clientSecret: 'x',
+        authTransport: 'none',
       }),
     ).rejects.toThrow('INVALID_CLIENT');
   });
@@ -121,29 +152,33 @@ describe('refresh tokens', () => {
       redirectUris: [redirectUri],
     });
     const code = await authorize(registration.client_id);
-    const first = await t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+    const first = await t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
       code,
       clientId: registration.client_id,
       redirectUri,
       codeVerifier: verifier,
+      authTransport: 'none',
     });
-    const second = await t.mutation(api.mcpOAuth.refreshAccessGrant, {
+    const second = await t.mutation(internal.mcpOAuth.refreshAccessGrant, {
       refreshToken: first.refreshToken,
       clientId: registration.client_id,
+      authTransport: 'none',
     });
     expect(second.grantId).toBe(first.grantId);
     expect(second.refreshToken).not.toBe(first.refreshToken);
     await expect(
-      t.mutation(api.mcpOAuth.refreshAccessGrant, {
+      t.mutation(internal.mcpOAuth.refreshAccessGrant, {
         refreshToken: first.refreshToken,
         clientId: registration.client_id,
+        authTransport: 'none',
       }),
     ).rejects.toThrow('INVALID_GRANT');
     await owner.mutation(api.mcpOAuth.revokeGrant, { grantId: second.grantId });
     await expect(
-      t.mutation(api.mcpOAuth.refreshAccessGrant, {
+      t.mutation(internal.mcpOAuth.refreshAccessGrant, {
         refreshToken: second.refreshToken,
         clientId: registration.client_id,
+        authTransport: 'none',
       }),
     ).rejects.toThrow('INVALID_GRANT');
   });
@@ -218,7 +253,7 @@ describe('client ID metadata documents', () => {
     });
     const code = await authorize(clientId);
     await expect(
-      t.mutation(api.mcpOAuth.exchangeAuthorizationCode, {
+      t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
         code,
         clientId,
         redirectUri,

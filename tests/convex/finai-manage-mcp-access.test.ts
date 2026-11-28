@@ -175,6 +175,15 @@ describe('FinAI management actions', () => {
 describe('MCP access control', () => {
   it('stores settings, edits grant scopes and reports the live policy', async () => {
     const { t, me, userId } = await setup();
+    await t.run((ctx) =>
+      ctx.db.insert('mcpOAuthClients', {
+        clientId: 'a'.repeat(64),
+        clientName: 'Access-control test client',
+        redirectUris: ['https://client.example/callback'],
+        ownerId: userId,
+        createdAt: 1,
+      }),
+    );
     const grantId = await t.run((ctx) =>
       ctx.db.insert('mcpOAuthGrants', {
         clientId: 'a'.repeat(64),

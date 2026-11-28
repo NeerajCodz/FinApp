@@ -690,11 +690,14 @@ export default defineSchema({
     jwksUri: v.optional(v.string()),
     /** Dashboard-created ("your own credentials") clients. */
     ownerId: v.optional(v.id('users')),
+    /** Owner-disabled clients are rejected while their grants are reaped. */
+    disabledAt: optionalTime,
     /** CIMD clients: when the metadata document was last fetched and validated. */
     metadataFetchedAt: optionalTime,
   })
     .index('by_client_id', ['clientId'])
-    .index('by_owner', ['ownerId']),
+    .index('by_owner', ['ownerId'])
+    .index('by_owner_disabledAt', ['ownerId', 'disabledAt']),
   mcpOAuthCodes: defineTable({
     codeHash: v.string(),
     clientId: v.string(),

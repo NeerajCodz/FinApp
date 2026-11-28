@@ -1,7 +1,14 @@
 import { v } from 'convex/values';
-import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import type { Doc } from './_generated/dataModel';
-import type { MutationCtx, QueryCtx } from './_generated/server';
+import { internal } from './_generated/api';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from './_generated/server';
 import { getOptionalUser, requireUser } from './shared/auth';
 import { createNotification } from './notifications/mutations';
 import {
@@ -36,6 +43,17 @@ function base64url(bytes: Uint8Array): string {
 
 function isAllowedScope(scope: string): boolean {
   return Object.hasOwn(allowedScopes, scope);
+}
+function validateRefreshScopes(scopes: string[], grantScopes: string[]): string[] {
+  const uniqueScopes = [...new Set(scopes)];
+  if (
+    uniqueScopes.length < 1 ||
+    uniqueScopes.length > 5 ||
+    !uniqueScopes.includes('finapp:read') ||
+    uniqueScopes.some((scope) => !isAllowedScope(scope) || !grantScopes.includes(scope))
+  )
+    throw new Error('INVALID_SCOPE');
+  return uniqueScopes;
 }
 
 function randomCode(): string {
@@ -73,12 +91,21 @@ function normalizeRedirects(redirectUris: readonly string[]): string[] {
   return redirects;
 }
 
-async function findClient(ctx: { db: QueryCtx['db'] }, clientId: string) {
+async function findClientRecord(ctx: { db: QueryCtx['db'] }, clientId: string) {
   return ctx.db
     .query('mcpOAuthClients')
     .withIndex('by_client_id', (index) => index.eq('clientId', clientId))
     .unique();
 }
+
+async function findClient(ctx: { db: QueryCtx['db'] }, clientId: string) {
+  const client = await findClientRecord(ctx, clientId);
+  return client?.disabledAt === undefined ? client : null;
+}
+// Client transport detected by the OAuth token endpoint.
+const clientAuthTransport = v.union(v.literal('none'), v.literal('basic'), v.literal('post'));
+
+const refreshScopes = v.optional(v.array(v.string()));
 
 const tokenAuthMethod = v.union(
   v.literal('none'),
@@ -146,7 +173,9 @@ export const createStaticClient = mutation({
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
     const owned = await ctx.db
       .query('mcpOAuthClients')
-      .withIndex('by_owner', (index) => index.eq('ownerId', user._id))
+      .withIndex('by_owner_disabledAt', (index) =>
+        index.eq('ownerId', user._id).eq('disabledAt', undefined),
+      )
       .take(21);
     if (owned.length >= 20) throw new Error('TOO_MANY_CLIENTS');
     const name = args.clientName.trim();
@@ -183,7 +212,9 @@ export const listMyClients = query({
     if (!user || user.deletedAt !== undefined) return [];
     const clients = await ctx.db
       .query('mcpOAuthClients')
-      .withIndex('by_owner', (index) => index.eq('ownerId', user._id))
+      .withIndex('by_owner_disabledAt', (index) =>
+        index.eq('ownerId', user._id).eq('disabledAt', undefined),
+      )
       .take(20);
     return clients.map((client) => ({
       clientId: client.clientId,
@@ -195,23 +226,45 @@ export const listMyClients = query({
   },
 });
 
-/** Deletes a dashboard client and revokes every connection made through it. */
+/** Disables a dashboard client immediately, then reaps its grants in bounded batches. */
 export const deleteMyClient = mutation({
   args: { clientId: v.string() },
   handler: async (ctx, { clientId }) => {
     const user = await requireUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
-    const client = isIssuedClientId(clientId) ? await findClient(ctx, clientId) : null;
+    const client = isIssuedClientId(clientId) ? await findClientRecord(ctx, clientId) : null;
     if (!client || client.ownerId !== user._id) throw new Error('CLIENT_NOT_FOUND');
-    const grants = await ctx.db
+    if (client.disabledAt === undefined) {
+      const disabledAt = Date.now();
+      await ctx.db.patch(client._id, { disabledAt });
+      await ctx.scheduler.runAfter(0, internal.mcpOAuth.revokeClientGrantBatch, { clientId });
+    }
+    return { deleted: true };
+  },
+});
+
+/** Revokes at most 100 grants per transaction, then removes the disabled client. */
+export const revokeClientGrantBatch = internalMutation({
+  args: { clientId: v.string(), cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { clientId, cursor }) => {
+    const client = await findClientRecord(ctx, clientId);
+    if (!client || client.disabledAt === undefined) return;
+    const result = await ctx.db
       .query('mcpOAuthGrants')
       .withIndex('by_client', (index) => index.eq('clientId', clientId))
-      .take(500);
+      .paginate({ numItems: 100, cursor: cursor ?? null });
     const now = Date.now();
-    for (const grant of grants)
+    for (const grant of result.page) {
       if (grant.revokedAt === undefined) await ctx.db.patch(grant._id, { revokedAt: now });
-    await ctx.db.delete(client._id);
-    return { deleted: true };
+    }
+    if (result.isDone) {
+      await ctx.db.delete(client._id);
+    } else {
+      await ctx.scheduler.runAfter(0, internal.mcpOAuth.revokeClientGrantBatch, {
+        clientId,
+        cursor: result.continueCursor,
+      });
+    }
   },
 });
 
@@ -337,11 +390,20 @@ export const createAuthorizationCode = mutation({
 async function authenticateClient(
   ctx: MutationCtx,
   clientId: string,
-  credentials: { clientSecret?: string; assertionVerified: boolean },
+  credentials: {
+    clientSecret?: string;
+    assertionVerified: boolean;
+    authTransport?: 'none' | 'basic' | 'post';
+  },
 ) {
   const client = await findClient(ctx, clientId);
   if (!client) throw new Error('INVALID_CLIENT');
   const method = clientMethod(client);
+  const transportMatches =
+    (method === 'none' && credentials.authTransport === 'none') ||
+    (method === 'client_secret_basic' && credentials.authTransport === 'basic') ||
+    (method === 'client_secret_post' && credentials.authTransport === 'post');
+  if (method !== 'private_key_jwt' && !transportMatches) throw new Error('INVALID_CLIENT');
   if (method === 'private_key_jwt') {
     if (!credentials.assertionVerified) throw new Error('INVALID_CLIENT');
   } else if (isConfidentialSecretMethod(method)) {
@@ -374,7 +436,11 @@ const exchangeArgs = {
 async function exchangeCode(
   ctx: MutationCtx,
   args: { code: string; clientId: string; redirectUri: string; codeVerifier: string },
-  credentials: { clientSecret?: string; assertionVerified: boolean },
+  credentials: {
+    clientSecret?: string;
+    assertionVerified: boolean;
+    authTransport?: 'none' | 'basic' | 'post';
+  },
 ) {
   if (
     !/^[a-f\d]{64}$/.test(args.code) ||
@@ -428,11 +494,15 @@ async function exchangeCode(
   return { userId: code.userId, scopes: code.scopes, grantId, refreshToken };
 }
 
-/** Code exchange for public (`none`) and secret (`client_secret_*`) clients. */
-export const exchangeAuthorizationCode = mutation({
-  args: { ...exchangeArgs, clientSecret: v.optional(v.string()) },
-  handler: async (ctx, { clientSecret, ...args }) =>
-    exchangeCode(ctx, args, { clientSecret, assertionVerified: false }),
+/** Code exchange for public and secret clients after token-route authentication. */
+export const exchangeAuthorizationCode = internalMutation({
+  args: {
+    ...exchangeArgs,
+    clientSecret: v.optional(v.string()),
+    authTransport: v.optional(clientAuthTransport),
+  },
+  handler: async (ctx, { clientSecret, authTransport, ...args }) =>
+    exchangeCode(ctx, args, { clientSecret, authTransport, assertionVerified: false }),
 });
 
 /** Code exchange after the action verified a `private_key_jwt` client assertion. */
@@ -446,8 +516,12 @@ export const exchangeAuthorizationCodeWithAssertion = internalMutation({
 
 async function refreshGrant(
   ctx: MutationCtx,
-  args: { refreshToken: string; clientId: string },
-  credentials: { clientSecret?: string; assertionVerified: boolean },
+  args: { refreshToken: string; clientId: string; requestedScopes?: string[] },
+  credentials: {
+    clientSecret?: string;
+    assertionVerified: boolean;
+    authTransport?: 'none' | 'basic' | 'post';
+  },
 ) {
   if (!args.refreshToken || args.refreshToken.length > 256 || !isValidClientId(args.clientId))
     throw new Error('INVALID_GRANT');
@@ -466,23 +540,57 @@ async function refreshGrant(
     throw new Error('INVALID_GRANT');
   const user = await ctx.db.get(grant.userId);
   if (!user || user.deletedAt !== undefined) throw new Error('INVALID_GRANT');
+  const scopes = validateRefreshScopes(args.requestedScopes ?? grant.scopes, grant.scopes);
+  if (args.requestedScopes) await ctx.db.patch(grant._id, { scopes });
   const refreshToken = await issueRefreshToken(ctx, grant._id);
-  return { userId: grant.userId, scopes: grant.scopes, grantId: grant._id, refreshToken };
+  return { userId: grant.userId, scopes, grantId: grant._id, refreshToken };
 }
 
-/** Refresh-token grant (rotating) for public and secret clients. */
-export const refreshAccessGrant = mutation({
-  args: { refreshToken: v.string(), clientId: v.string(), clientSecret: v.optional(v.string()) },
-  handler: async (ctx, { clientSecret, ...args }) =>
-    refreshGrant(ctx, args, { clientSecret, assertionVerified: false }),
+/** Refresh-token grant after token-route authentication. */
+export const refreshAccessGrant = internalMutation({
+  args: {
+    refreshToken: v.string(),
+    clientId: v.string(),
+    clientSecret: v.optional(v.string()),
+    authTransport: v.optional(clientAuthTransport),
+    requestedScopes: refreshScopes,
+  },
+  handler: async (ctx, { clientSecret, authTransport, ...args }) =>
+    refreshGrant(ctx, args, { clientSecret, authTransport, assertionVerified: false }),
+});
+/** Looks up refresh scopes only within server-authenticated flows. */
+export const refreshTokenScopes = internalQuery({
+  args: { refreshToken: v.string(), clientId: v.string() },
+  handler: async (ctx, { refreshToken, clientId }) => {
+    if (!refreshToken || refreshToken.length > 256 || !isValidClientId(clientId))
+      throw new Error('INVALID_GRANT');
+    if (!(await findClient(ctx, clientId))) throw new Error('INVALID_GRANT');
+    const refreshTokenHash = await hash(refreshToken);
+    const grant = await ctx.db
+      .query('mcpOAuthGrants')
+      .withIndex('by_refresh_hash', (index) => index.eq('refreshTokenHash', refreshTokenHash))
+      .unique();
+    if (
+      !grant ||
+      grant.clientId !== clientId ||
+      grant.revokedAt !== undefined ||
+      (grant.refreshExpiresAt ?? 0) <= Date.now()
+    )
+      throw new Error('INVALID_GRANT');
+    const user = await ctx.db.get(grant.userId);
+    if (!user || user.deletedAt !== undefined) throw new Error('INVALID_GRANT');
+    return grant.scopes;
+  },
 });
 
+/** Refresh, validate/reduce scopes, and rotate in one atomic transaction. */
 export const refreshAccessGrantWithAssertion = internalMutation({
   args: {
     refreshToken: v.string(),
     clientId: v.string(),
     assertionJti: v.string(),
     assertionExpiresAt: v.number(),
+    requestedScopes: refreshScopes,
   },
   handler: async (ctx, { assertionJti, assertionExpiresAt, ...args }) => {
     await useAssertionJti(ctx, args.clientId, assertionJti, assertionExpiresAt);
@@ -533,12 +641,13 @@ export const listGrants = query({
           .query('mcpOAuthClients')
           .withIndex('by_client_id', (index) => index.eq('clientId', grant.clientId))
           .unique();
+        const revokedAt = grant.revokedAt ?? client?.disabledAt;
         return {
           id: grant._id,
           clientName: client?.clientName ?? 'Removed MCP client',
           scopes: grant.scopes,
           createdAt: grant.createdAt,
-          revokedAt: grant.revokedAt,
+          revokedAt,
         };
       }),
     );
@@ -551,7 +660,8 @@ export const activeGrant = query({
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) return false;
     const grant = await ctx.db.get(grantId);
-    return Boolean(grant && grant.userId === user._id && grant.revokedAt === undefined);
+    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined) return false;
+    return Boolean(await findClient(ctx, grant.clientId));
   },
 });
 
@@ -737,7 +847,12 @@ export const updateGrantScopes = mutation({
     const user = await requireUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
     const grant = await ctx.db.get(grantId);
-    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined)
+    if (
+      !grant ||
+      grant.userId !== user._id ||
+      grant.revokedAt !== undefined ||
+      !(await findClient(ctx, grant.clientId))
+    )
       throw new Error('GRANT_NOT_FOUND');
     const next = [...new Set(['finapp:read', ...scopes])];
     if (next.some((scope) => !isAllowedScope(scope))) throw new Error('INVALID_SCOPE');
@@ -756,7 +871,13 @@ export const accessPolicy = query({
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) return null;
     const grant = await ctx.db.get(grantId);
-    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined) return null;
+    if (
+      !grant ||
+      grant.userId !== user._id ||
+      grant.revokedAt !== undefined ||
+      !(await findClient(ctx, grant.clientId))
+    )
+      return null;
     return { scopes: grant.scopes, settings: await mcpSettingsFor(ctx, user._id) };
   },
 });

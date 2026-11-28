@@ -1,4 +1,5 @@
 import { ConvexHttpClient } from 'convex/browser';
+import type { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 import { exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT } from 'jose';
 import type { JWTPayload } from 'jose';
 import { MCP_CONVEX_AUDIENCE } from '../../../convex/shared/mcpAuth';
@@ -36,6 +37,26 @@ export function mcpConvexUrl(): string {
 
 export function convexClient(): ConvexHttpClient {
   return new ConvexHttpClient(mcpConvexUrl());
+}
+
+type InternalMutationClient = ConvexHttpClient & {
+  setAdminAuth(token: string): void;
+  mutation<Mutation extends FunctionReference<'mutation', 'internal'>>(
+    mutation: Mutation,
+    args: FunctionArgs<Mutation>,
+  ): Promise<FunctionReturnType<Mutation>>;
+};
+
+/** Admin-authenticated client for trusted server-only operations. */
+export function convexAdminClient(): InternalMutationClient {
+  const deployKey = process.env.CONVEX_DEPLOY_KEY?.trim();
+  if (!deployKey) throw new Error('CONVEX_DEPLOY_KEY is required');
+  const client = new ConvexHttpClient(mcpConvexUrl());
+  const adminClient = client as unknown as InternalMutationClient;
+  if (typeof adminClient.setAdminAuth !== 'function')
+    throw new Error('The Convex SDK does not support admin authentication');
+  adminClient.setAdminAuth(deployKey);
+  return adminClient;
 }
 
 export async function mcpBackendClient(principal: McpPrincipal): Promise<ConvexHttpClient> {

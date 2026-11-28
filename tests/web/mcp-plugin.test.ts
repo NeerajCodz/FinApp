@@ -184,6 +184,32 @@ describe('MCP plugin tools', () => {
       await client.close();
     }
   });
+  it('marks transaction deletion destructive and blocks it when destructive actions are disabled', async () => {
+    backend.scopes = ['finapp:read', 'finapp:write:finance'];
+    backend.access.allowDestructive = true;
+    const client = await connect();
+    try {
+      const tools = (await client.listTools()).tools;
+      const deletion = tools.find((tool) => tool.name === 'finapp.finance.transactions.delete');
+      expect(deletion?.annotations).toMatchObject({
+        destructiveHint: true,
+        readOnlyHint: false,
+      });
+      backend.access.allowDestructive = false;
+      const result = await client.callTool({
+        name: 'finapp.finance.transactions.delete',
+        arguments: {
+          transactionId: 'transaction-1',
+          confirm: true,
+        },
+      });
+      expect(result.isError).toBe(true);
+      expect(backend.calls).toEqual([]);
+    } finally {
+      await client.close();
+    }
+  });
+
 
   it('hides tools the user turned off in access-control settings', async () => {
     backend.scopes = ['finapp:read', 'finapp:write:groups'];
@@ -789,6 +815,29 @@ describe('MCP coverage tools', () => {
       await client.close();
     }
   });
+  it('limits a truncated notification count to the newest 500 without implying more unread items', async () => {
+    backend.queries = {
+      'mcp:notificationState': () => ({
+        unreadCount: 12,
+        unreadCapped: true,
+        preferences: {},
+      }),
+    };
+    const client = await connect();
+    try {
+      const status = await client.callTool({
+        name: 'finapp.personal.notifications.summary',
+        arguments: {},
+      });
+      expect(text(status)).toContain(
+        '12 unread notification(s) among the newest 500; older notifications were not scanned.',
+      );
+      expect(data(status)).toMatchObject({ unreadCount: 12, unreadCapped: true });
+    } finally {
+      await client.close();
+    }
+  });
+
 
   it('reads and partially updates privacy settings through convex/security', async () => {
     backend.scopes = ['finapp:read', 'finapp:write:personal'];

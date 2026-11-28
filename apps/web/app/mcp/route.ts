@@ -99,9 +99,7 @@ export async function POST(request: Request) {
     .query(api.mcpOAuth.accessPolicy, { grantId: principal.grantId as never })
     .catch(() => null);
   if (!policy) return withCors(unauthorized(), request);
-  const scopes = policy.scopes.filter(
-    (scope) => principal.scopes.includes(scope) || scope === 'finapp:read',
-  );
+  const scopes = policy.scopes;
 
   const server = createMcpServer(client, scopes, principal.grantId, policy.settings);
   const transport = new WebStandardStreamableHTTPServerTransport({

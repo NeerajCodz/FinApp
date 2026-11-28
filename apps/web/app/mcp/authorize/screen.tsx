@@ -6,7 +6,7 @@ import { useConvexAuth, useAuthToken } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Button, ThemeProvider } from '@finapp/ui/web';
-import { authorizationDenialUrl, currentIssuer } from '@finapp/mcp/authorizationCallback';
+import { authorizationDenialUrl } from '@finapp/mcp/authorizationCallback';
 
 type AuthorizationRequest = {
   clientId: string;
@@ -106,6 +106,18 @@ export function McpAuthorizeScreen() {
     setPending(true);
     setError('');
     try {
+      const metadataResponse = await fetch('/.well-known/oauth-authorization-server', {
+        cache: 'no-store',
+      });
+      if (!metadataResponse.ok) throw new Error('Could not verify Finapp’s authorization issuer.');
+      const metadata = (await metadataResponse.json()) as { issuer?: unknown };
+      if (typeof metadata.issuer !== 'string') {
+        throw new Error('Could not verify Finapp’s authorization issuer.');
+      }
+      const configuredIssuer = new URL(metadata.issuer);
+      if (configuredIssuer.origin !== metadata.issuer) {
+        throw new Error('Could not verify Finapp’s authorization issuer.');
+      }
       const code = await createCode({
         clientId: request.clientId,
         redirectUri: request.redirectUri,
@@ -115,7 +127,7 @@ export function McpAuthorizeScreen() {
       const callback = new URL(request.redirectUri);
       callback.searchParams.set('code', code);
       callback.searchParams.set('state', request.state);
-      callback.searchParams.set('iss', currentIssuer());
+      callback.searchParams.set('iss', configuredIssuer.origin);
       window.location.assign(callback.toString());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not authorize this connection.');

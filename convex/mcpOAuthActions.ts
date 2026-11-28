@@ -110,7 +110,12 @@ export const exchangeWithClientAssertion = action({
 
 /** Refresh-token grant for `private_key_jwt` clients. */
 export const refreshWithClientAssertion = action({
-  args: { refreshToken: v.string(), clientId: v.string(), clientAssertion: v.string() },
+  args: {
+    refreshToken: v.string(),
+    clientId: v.string(),
+    clientAssertion: v.string(),
+    requestedScopes: v.optional(v.array(v.string())),
+  },
   handler: async (
     ctx,
     { clientAssertion, ...args },
