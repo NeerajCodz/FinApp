@@ -25,39 +25,35 @@ export function useReceiptScanner({
   currency,
   disabled,
   onFields,
+  onCurrencyChange,
   onReview,
 }: {
   /** The composer's currency (account or group); also the parser's fallback currency. */
   currency: string;
   disabled?: boolean;
   onFields: (fields: ReceiptFormFields, review: ReceiptReview) => void;
+  /** Rescales current user-edited monetary values when currency precision changes. */
+  onCurrencyChange: (fromCurrency: string, toCurrency: string) => void;
   /** Called with a fresh review when the composer's currency changes after a scan. */
   onReview?: (review: ReceiptReview) => void;
 }) {
   const generateUploadUrl = useMutation(api.ai.receipts.generateUploadUrl);
   const registerUpload = useMutation(api.ai.receipts.registerUpload);
   const parse = useAction(api.ai.receipts.parse);
+  const onCurrencyChangeRef = React.useRef(onCurrencyChange);
+  onCurrencyChangeRef.current = onCurrencyChange;
   // The last scan, so switching account / group re-checks the bill's currency.
   const lastScan = React.useRef<{ draft: ReceiptDraft; currency: string } | null>(null);
   const onReviewRef = React.useRef(onReview);
   onReviewRef.current = onReview;
-  const onFieldsRef = React.useRef(onFields);
-  onFieldsRef.current = onFields;
   React.useEffect(() => {
     const last = lastScan.current;
     if (!last || !currency || last.currency === currency) return;
     const digitsChanged = (minorDigits(last.currency) ?? 2) !== (minorDigits(currency) ?? 2);
+    const previousCurrency = last.currency;
     last.currency = currency;
-    // Amounts depend on the currency's decimals (e.g. KWD 3 → INR 2): rebuild them, not just
-    // the review, so the rows stay valid for the new account.
-    // Only then are the rows rewritten; otherwise the user's edits are kept.
     const review = receiptReviewFor(last.draft, currency);
-    if (digitsChanged)
-      onFieldsRef.current(receiptDraftToForm(last.draft, currency), {
-        fields: review.fields,
-        itemIds: review.itemIds,
-        warnings: review.warnings,
-      });
+    if (digitsChanged) onCurrencyChangeRef.current(previousCurrency, currency);
     onReviewRef.current?.(review);
   }, [currency]);
   const scanner = useReceiptScan({

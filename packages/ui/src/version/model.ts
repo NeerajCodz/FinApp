@@ -4,7 +4,6 @@
  * values come from `api.system.info`.
  */
 import {
-  BUILD_NUMBERS,
   COMPONENT_VERSIONS,
   PRODUCT_VERSION,
   RELEASE_CHANNEL,
@@ -27,6 +26,8 @@ export function versionRows(input: {
   backend: LiveBackendInfo | null | undefined;
   commit?: string;
   environment?: string;
+  nativeBuildNumber?: string | null;
+  nativePlatform?: 'android' | 'ios';
 }): VersionRow[] {
   const backend = input.backend;
   const rows: VersionRow[] = [
@@ -43,11 +44,14 @@ export function versionRows(input: {
     { label: 'API version', value: backend ? String(backend.apiVersion) : '—' },
     { label: 'Schema version', value: backend ? String(backend.schemaVersion) : '—' },
   ];
-  if (input.platform === 'mobile')
+  if (input.platform === 'mobile') {
+    const platformName =
+      input.nativePlatform === 'ios' ? 'iOS' : input.nativePlatform === 'android' ? 'Android' : '';
     rows.push({
       label: 'Build',
-      value: `${BUILD_NUMBERS.android} (Android) · ${BUILD_NUMBERS.ios} (iOS)`,
+      value: `${input.nativeBuildNumber ?? 'Unavailable'}${platformName ? ` (${platformName})` : ''}`,
     });
+  }
   if (input.commit) rows.push({ label: 'Commit', value: input.commit });
   if (input.environment) rows.push({ label: 'Environment', value: input.environment });
   return rows;

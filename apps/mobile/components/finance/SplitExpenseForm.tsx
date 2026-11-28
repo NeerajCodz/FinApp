@@ -8,6 +8,7 @@ import { displayAccountName, recordId, recordIds } from '@/lib/ledger';
 import { useExpenseLedger } from '@/hooks/useExpenseLedger';
 import { toast } from '@/lib/toast';
 import type { ReceiptReview } from '@finapp/ui/finance';
+import { rescaleReceiptFields } from '@finapp/ui/ai/receipt-scan';
 import { useReceiptScanner } from './useReceiptScanner';
 
 /**
@@ -72,6 +73,11 @@ export function SplitExpenseForm({ fixedGroupId }: { fixedGroupId?: string }) {
         ...(fields.categoryId ? { categoryId: fields.categoryId } : {}),
       });
       setReview(scanReview);
+    },
+    onCurrencyChange: (fromCurrency, toCurrency) => {
+      const next = rescaleReceiptFields(composer.amount, composer.items, fromCurrency, toCurrency);
+      composer.set('amount', next.amount);
+      composer.setItems(next.rows);
     },
   });
 

@@ -296,6 +296,12 @@ export default function ProfileScreen() {
               onPress={() => router.push('/accounts' as never)}
             />
             <ProfileTile
+              icon={ChartLineUp}
+              label="Goals"
+              description="Savings progress"
+              onPress={() => router.push('/goals' as never)}
+            />
+            <ProfileTile
               icon={ReceiptText}
               label="Categories"
               description="Spending structure"

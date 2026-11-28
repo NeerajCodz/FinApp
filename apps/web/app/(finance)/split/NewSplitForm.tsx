@@ -7,6 +7,7 @@ import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { commitLocalWrite, type LocalRecord } from '@/lib/offline/repository';
 import { aliases, idOf, useGroupLedger } from '@/lib/groupLedger';
 import type { ReceiptReview } from '@finapp/ui/finance';
+import { rescaleReceiptFields } from '@finapp/ui/ai/receipt-scan';
 import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 
 const unsynced = (record: LocalRecord) => !record.cloudId && !record._id;
@@ -73,6 +74,11 @@ export function NewSplitForm({ fixedGroupId }: { fixedGroupId?: string }) {
         ...(fields.categoryId ? { categoryId: fields.categoryId } : {}),
       });
       setReview(scanReview);
+    },
+    onCurrencyChange: (fromCurrency, toCurrency) => {
+      const next = rescaleReceiptFields(composer.amount, composer.items, fromCurrency, toCurrency);
+      composer.set('amount', next.amount);
+      composer.setItems(next.rows);
     },
   });
   const saveLock = React.useRef(false);

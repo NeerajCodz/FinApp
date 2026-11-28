@@ -6,6 +6,7 @@ import { TransactionFormScreen, type TransactionFormType } from '@finapp/ui/fina
 import { parseMinor } from '@convex/shared/money';
 import { personalItemsState, type LineItemDraft } from '@finapp/ui/finance/line-items';
 import type { ReceiptReview } from '@finapp/ui/finance';
+import { rescaleReceiptFields } from '@finapp/ui/ai/receipt-scan';
 import { useReceiptScanner } from '@/components/finance/useReceiptScanner';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
 import { useLocalRecords } from '@/lib/offline/hooks';
@@ -95,8 +96,9 @@ export default function NewPersonalTransactionPage() {
     appliedQuery.current = true;
     const query = new URLSearchParams(window.location.search);
     const queryType = query.get('type');
-    if (queryType && transactionTypes.includes(queryType as TransactionFormType))
+    if (queryType && transactionTypes.includes(queryType as TransactionFormType)) {
       setType(queryType as TransactionFormType);
+    }
     const queryAmount = query.get('amount');
     if (queryAmount) setAmount(queryAmount);
     queryOverrides.current.account = query.has('accountId');
@@ -288,6 +290,11 @@ export default function NewPersonalTransactionPage() {
       setItems(fields.rows);
       if (fields.categoryId) setCategoryId(fields.categoryId);
       setReview(scanReview);
+    },
+    onCurrencyChange: (fromCurrency, toCurrency) => {
+      const next = rescaleReceiptFields(amount, items ?? [], fromCurrency, toCurrency);
+      setAmount(next.amount);
+      if (items !== null) setItems(next.rows);
     },
   });
 

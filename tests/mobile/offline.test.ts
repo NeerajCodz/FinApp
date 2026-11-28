@@ -9,6 +9,7 @@ import {
 } from '../../apps/mobile/local/outbox/queue';
 import { deserializeLocalValue } from '../../apps/mobile/local/serialization';
 import { exportCsv } from '../../apps/mobile/lib/export/csv';
+import { retryPushRead } from '../../apps/mobile/local/push-read-retry';
 
 describe('offline financial safety', () => {
   it('round trips arbitrary-precision amounts and numeric-looking text', () => {
@@ -29,6 +30,51 @@ describe('offline financial safety', () => {
     expect([1, 2, 3, 4, 5, 6, 7].map(nextRetryDelay)).toEqual([
       1_000, 2_000, 4_000, 8_000, 15_000, 30_000, 30_000,
     ]);
+  });
+
+  it('bounds push-read retries and stops when its owner is no longer active', async () => {
+    const attempts: number[] = [];
+    const waits: number[] = [];
+    await expect(
+      retryPushRead(
+        async () => {
+          attempts.push(1);
+          throw new Error('offline');
+        },
+        () => true,
+        async (delay) => {
+          waits.push(delay);
+        },
+      ),
+    ).rejects.toThrow('offline');
+    expect(attempts).toHaveLength(3);
+    expect(waits).toEqual([500, 1_000]);
+
+    let laterAttempts = 0;
+    await expect(
+      retryPushRead(
+        async () => {
+          laterAttempts++;
+        },
+        () => true,
+        async () => {},
+      ),
+    ).resolves.toBe(true);
+    expect(laterAttempts).toBe(1);
+    let active = true;
+    let cancelledAttempts = 0;
+    const marked = await retryPushRead(
+      async () => {
+        cancelledAttempts++;
+        throw new Error('offline');
+      },
+      () => active,
+      async () => {
+        active = false;
+      },
+    );
+    expect(marked).toBe(false);
+    expect(cancelledAttempts).toBe(1);
   });
   it('surfaces financial conflicts for review', () => {
     expect(markConflict('amountMinor')).toEqual({

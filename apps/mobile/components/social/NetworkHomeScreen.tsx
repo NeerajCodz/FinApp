@@ -78,8 +78,8 @@ export default function NetworkHomeScreen() {
   const { tokens } = useTheme();
   const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { userId, isConnected, isSyncing, failedEntries, syncError } = useLocalSync();
-  const syncAttention = Boolean(syncError) || failedEntries.length > 0;
+  const { userId, isConnected, isSyncing, failedEntries, conflicts, syncError } = useLocalSync();
+  const syncAttention = Boolean(syncError) || failedEntries.length > 0 || conflicts.length > 0;
   const SyncIcon = !isConnected
     ? CloudOff
     : syncAttention
