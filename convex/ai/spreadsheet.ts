@@ -14,23 +14,93 @@ export const MAX_COLUMNS = 60;
 const MAX_UNZIPPED_BYTES = 60 * 1024 * 1024;
 const MAX_SHEETS = 12;
 
-export type Sheet = { name: string; rows: string[][]; truncated: boolean };
+export type Sheet = { name: string; rows: string[][]; truncated: boolean; omittedSheets?: number };
 
 // ---------- CSV ----------
 
-/** The most likely delimiter in the first lines: comma, semicolon, tab or pipe. */
+const CSV_DELIMITERS = [',', ';', '\t', '|'] as const;
+const MAX_DELIMITER_SAMPLE_CHARS = 64 * 1024;
+const MAX_DELIMITER_SAMPLE_RECORDS = 100;
+
+/** Scores delimiter widths in a bounded sample and ignores separators inside quoted fields. */
 function detectDelimiter(text: string): string {
-  const sample = text.split(/\r?\n/, 5).join('\n');
-  let best = ',';
-  let bestCount = 0;
-  for (const candidate of [',', ';', '\t', '|']) {
-    const count = sample.split(candidate).length - 1;
-    if (count > bestCount) {
-      best = candidate;
-      bestCount = count;
+  const widthCounts = CSV_DELIMITERS.map(() => new Map<number, number>());
+  const separatorsInRow = CSV_DELIMITERS.map(() => 0);
+  let sampledRecords = 0;
+  let insideQuote = false;
+  let canOpenQuote = true;
+
+  const recordSample = () => {
+    for (let index = 0; index < CSV_DELIMITERS.length; index++) {
+      const width = separatorsInRow[index]! + 1;
+      if (width > 1) {
+        const counts = widthCounts[index]!;
+        counts.set(width, (counts.get(width) ?? 0) + 1);
+      }
+      separatorsInRow[index] = 0;
+    }
+    sampledRecords++;
+    canOpenQuote = true;
+  };
+
+  for (
+    let index = 0;
+    index < text.length &&
+    index < MAX_DELIMITER_SAMPLE_CHARS &&
+    sampledRecords < MAX_DELIMITER_SAMPLE_RECORDS;
+    index++
+  ) {
+    const char = text[index]!;
+    if (insideQuote) {
+      if (char !== '"') continue;
+      if (text[index + 1] === '"') {
+        index++;
+        continue;
+      }
+      insideQuote = false;
+      canOpenQuote = false;
+      continue;
+    }
+    if (char === '"' && canOpenQuote) {
+      insideQuote = true;
+      continue;
+    }
+    if (char === '\r' || char === '\n') {
+      recordSample();
+      if (char === '\r' && text[index + 1] === '\n') index++;
+      continue;
+    }
+
+    const delimiterIndex = CSV_DELIMITERS.indexOf(char as (typeof CSV_DELIMITERS)[number]);
+    if (delimiterIndex >= 0) {
+      separatorsInRow[delimiterIndex] = separatorsInRow[delimiterIndex]! + 1;
+      canOpenQuote = true;
+    } else canOpenQuote = false;
+  }
+
+  if (
+    sampledRecords < MAX_DELIMITER_SAMPLE_RECORDS &&
+    text.length <= MAX_DELIMITER_SAMPLE_CHARS &&
+    separatorsInRow.some((count) => count > 0)
+  )
+    recordSample();
+
+  let selectedDelimiter: string = CSV_DELIMITERS[0];
+  let selectedScore = 0;
+  for (let index = 0; index < CSV_DELIMITERS.length; index++) {
+    let mostRepeatedWidth = 0;
+    let rowsWithColumns = 0;
+    for (const count of widthCounts[index]!.values()) {
+      mostRepeatedWidth = Math.max(mostRepeatedWidth, count);
+      rowsWithColumns += count;
+    }
+    const score = mostRepeatedWidth * 100 + rowsWithColumns;
+    if (score > selectedScore) {
+      selectedDelimiter = CSV_DELIMITERS[index]!;
+      selectedScore = score;
     }
   }
-  return best;
+  return selectedDelimiter;
 }
 
 /** RFC 4180 CSV (quoted fields, doubled quotes, newlines in quotes), delimiter auto-detected. */
@@ -142,15 +212,17 @@ function dateStyles(stylesXml: string | undefined): Set<number> {
 }
 
 /** Excel serial day (1900 system) → `YYYY-MM-DD`. */
-export function excelSerialToIso(serial: number): string | null {
-  if (!Number.isFinite(serial) || serial < 1 || serial > 2_958_465) return null;
-  // Excel counts 1900-02-29 (which didn't exist); serial 60 and earlier are off by one.
-  const days = Math.floor(serial) - (serial > 60 ? 25_569 : 25_568);
-  const date = new Date(days * 86_400_000);
-  return date.toISOString().slice(0, 10);
+export function excelSerialToIso(serial: number, date1904 = false): string | null {
+  if (!Number.isFinite(serial) || serial < 0 || serial > 2_958_465) return null;
+  if (date1904)
+    return new Date(Date.UTC(1904, 0, 1) + Math.floor(serial) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  const days = Math.floor(serial) - (serial >= 60 ? 25_569 : 25_568);
+  return new Date(days * 86_400_000).toISOString().slice(0, 10);
 }
 
-function sheetRows(xml: string, shared: string[], dates: Set<number>) {
+function sheetRows(xml: string, shared: string[], dates: Set<number>, date1904: boolean) {
   const rows: string[][] = [];
   let truncated = false;
   for (const rowMatch of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>|<row\b[^>]*\/>/g)) {
@@ -186,7 +258,7 @@ function sheetRows(xml: string, shared: string[], dates: Set<number>) {
       else if (raw !== undefined) {
         const style = Number(attr(tag, 's') ?? '-1');
         const number = Number(raw);
-        value = dates.has(style) ? (excelSerialToIso(number) ?? raw) : raw;
+        value = dates.has(style) ? (excelSerialToIso(number, date1904) ?? raw) : raw;
       }
       while (cells.length < column) cells.push('');
       cells[column] = value.trim();
@@ -220,7 +292,7 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
   const shared = [...(text('xl/sharedStrings.xml') ?? '').matchAll(/<si>([\s\S]*?)<\/si>/g)].map(
     (match) => itemText(match[1]!),
   );
-  const dates = dateStyles(text('xl/styles.xml'));
+  const date1904 = /<workbookPr\b[^>]*\bdate1904="(?:1|true)"/i.test(workbook);
   const rels = new Map<string, string>();
   for (const match of (text('xl/_rels/workbook.xml.rels') ?? '').matchAll(
     /<Relationship\b[^>]*>/g,
@@ -230,16 +302,26 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
     if (id && target) rels.set(id, target.replace(/^\/?(xl\/)?/, 'xl/'));
   }
   const sheets: Sheet[] = [];
+  const dates = dateStyles(text('xl/styles.xml'));
+  let omittedSheets = 0;
   for (const match of workbook.matchAll(/<sheet\b[^>]*>/g)) {
-    if (sheets.length >= MAX_SHEETS) break;
+    if (sheets.length >= MAX_SHEETS) {
+      omittedSheets += 1;
+      continue;
+    }
     const name = decodeXml(attr(match[0], 'name') ?? `Sheet${sheets.length + 1}`);
     const relId = attr(match[0], 'r:id');
     const path = (relId && rels.get(relId)) || `xl/worksheets/sheet${sheets.length + 1}.xml`;
     const xml = text(path);
     if (!xml) continue;
-    const { rows, truncated } = sheetRows(xml, shared, dates);
+    const { rows, truncated } = sheetRows(xml, shared, dates, date1904);
     sheets.push({ name, rows, truncated });
   }
+  if (omittedSheets > 0) {
+    const lastSheet = sheets[MAX_SHEETS - 1];
+    if (lastSheet) lastSheet.omittedSheets = omittedSheets;
+  }
+
   if (!sheets.length) throw new Error('INVALID_SPREADSHEET');
   return sheets;
 }
@@ -251,21 +333,46 @@ function csvCell(value: string): string {
 }
 
 /**
- * A sheet as compact CSV for the model, within `maxChars`: the header and as many rows as fit,
- * then a note with the total so the model knows to use the import tool for the full data.
+ * Renders the header and as many rows as fit, reserving prompt space for an accurate omission note.
  */
 export function sheetForPrompt(sheet: Sheet, maxChars: number): string {
-  const nonEmpty = sheet.rows.filter((row) => row.some((cell) => cell !== ''));
-  const lines: string[] = [];
-  let used = 0;
-  let shown = 0;
-  for (const row of nonEmpty) {
+  const limit = Math.max(0, maxChars);
+  if (!limit) return '';
+
+  let rowCount = 0;
+  for (const row of sheet.rows) if (row.some((cell) => cell !== '')) rowCount++;
+
+  const omissionNote = (included: number) => {
+    const details: string[] = [];
+    const notShown = rowCount - included;
+    if (sheet.truncated) {
+      details.push(
+        `${rowCount} rows parsed; parser limit reached at ${MAX_ROWS} rows (total unknown)`,
+      );
+      if (notShown > 0) details.push(`${notShown} more parsed`);
+    } else if (notShown > 0) {
+      details.push(`${rowCount} rows total; ${notShown} not shown`);
+    }
+    if (sheet.omittedSheets) details.push(`${sheet.omittedSheets} additional sheets not parsed`);
+    return `… ${details.join('; ')}`;
+  };
+
+  let included = 0;
+  let prompt = '';
+  for (const row of sheet.rows) {
+    if (!row.some((cell) => cell !== '')) continue;
     const line = row.map(csvCell).join(',');
-    if (used + line.length + 1 > maxChars && shown > 0) break;
-    lines.push(line);
-    used += line.length + 1;
-    shown++;
+    const candidate = prompt ? `${prompt}\n${line}` : line;
+    const candidateCount = included + 1;
+    const needsNote =
+      candidateCount < rowCount || sheet.truncated === true || (sheet.omittedSheets ?? 0) > 0;
+    const rendered = needsNote ? `${candidate}\n${omissionNote(candidateCount)}` : candidate;
+    if (rendered.length > limit) break;
+    prompt = candidate;
+    included = candidateCount;
   }
-  const more = nonEmpty.length - shown + (sheet.truncated ? 1 : 0);
-  return `${lines.join('\n')}${more > 0 ? `\n… (${nonEmpty.length}${sheet.truncated ? '+' : ''} rows in total; ${more} not shown)` : ''}`;
+
+  if (included === rowCount && !sheet.truncated && !sheet.omittedSheets) return prompt;
+  const suffix = omissionNote(included);
+  return (prompt ? `${prompt}\n${suffix}` : suffix).slice(0, limit);
 }

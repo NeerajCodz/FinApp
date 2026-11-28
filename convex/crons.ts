@@ -14,4 +14,12 @@ crons.hourly(
   {},
 );
 
+// Remove unreferenced storage files only after issued upload URLs have expired.
+crons.daily(
+  'purge unreferenced storage',
+  { hourUTC: 4, minuteUTC: 15 },
+  internal.ai.receipts.purgeOrphanedStorage,
+  {},
+);
+
 export default crons;

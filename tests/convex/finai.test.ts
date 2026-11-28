@@ -358,6 +358,35 @@ describe('FinAI review fixes', () => {
     });
     expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(1);
   });
+  it('keeps failed imports visible and retryable', async () => {
+    const { t, owner, card, conversationId, ids } = await proposeOne();
+    await t.run((ctx) =>
+      ctx.db.patch(card.id, {
+        kind: 'transaction.import',
+        status: 'failed',
+        errorCode: 'TEMPORARY_IMPORT_FAILURE',
+        payload: JSON.stringify({
+          accountId: String(ids.ownerAccountId),
+          currency: 'USD',
+          rows: [[Date.now(), 'e', '500', 'Imported']],
+        }),
+      }),
+    );
+    const messages = await owner.query(api.ai.assistant.messages, {
+      conversationId,
+      paginationOpts: page,
+    });
+    expect(messages.page.flatMap((row) => row.actions)[0]).toMatchObject({
+      status: 'failed',
+      errorCode: 'TEMPORARY_IMPORT_FAILURE',
+      canDecide: true,
+      canCancel: false,
+    });
+    expect(await owner.action(api.ai.actions.confirm, { actionId: card.id })).toMatchObject({
+      status: 'done',
+    });
+    expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(1);
+  });
 
   it('expires cards on schedule and deletes payloads with the conversation', async () => {
     const { t, owner, card, conversationId } = await proposeOne();

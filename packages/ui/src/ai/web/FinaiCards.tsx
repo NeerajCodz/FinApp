@@ -197,7 +197,7 @@ export function ActionCardView({
   const state = actions.get(actionId);
   const status = state?.status ?? 'pending';
   const working = busy.has(actionId) || status === 'running';
-  const decidable = !!state?.canDecide && status === 'pending' && !working;
+  const decidable = !!state?.canDecide && (status === 'pending' || status === 'failed') && !working;
   return (
     <section className={`${styles.card} ${styles.action}`} data-status={status}>
       <header className={styles.actionHeader}>
@@ -235,7 +235,7 @@ export function ActionCardView({
             className={styles.primary}
             onClick={() => (onConfirm ? onConfirm() : onDecide(actionId, 'confirm'))}
           >
-            Confirm
+            {status === 'failed' ? 'Retry' : 'Confirm'}
           </button>
           {state?.canCancel !== false && (
             <button

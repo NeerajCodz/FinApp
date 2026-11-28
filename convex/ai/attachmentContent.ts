@@ -3,6 +3,7 @@
  * bytes, not their names), spreadsheets and text files become compact text. Every attachment is
  * also described with its id so tools (e.g. the bulk import) can read the whole file later.
  */
+import { internal } from '../_generated/api';
 import type { Id } from '../_generated/dataModel';
 import type { ActionCtx } from '../_generated/server';
 import type { AttachmentKind } from './attachments';
@@ -23,13 +24,20 @@ export type ModelAttachment = {
 
 const isPdf = (bytes: Uint8Array) =>
   bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
-const isZip = (bytes: Uint8Array) => bytes[0] === 0x50 && bytes[1] === 0x4b; // PK
+const isZip = (bytes: Uint8Array) =>
+  (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) ||
+  (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x05 && bytes[3] === 0x06) ||
+  (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x07 && bytes[3] === 0x08);
 
-/** Reads a spreadsheet attachment's sheets (xlsx by bytes; otherwise CSV/TSV text). */
+/** Keeps declared CSV/TSV files as text even when their bytes resemble a ZIP workbook. */
 export function readSheets(bytes: Uint8Array, name: string): Sheet[] {
-  if (isZip(bytes)) return readXlsx(bytes);
+  const fileName = name.trim();
+  const extension = /\.([^.]+)$/.exec(fileName)?.[1]?.toLowerCase();
+  const sheetName = fileName.replace(/\.[^.]+$/, '') || 'Sheet1';
+  const isTextFile = extension === 'csv' || extension === 'tsv';
+  if (!isTextFile && isZip(bytes)) return readXlsx(bytes);
   const text = new TextDecoder().decode(bytes);
-  return [parseCsv(text, name.replace(/\.[^.]+$/, '') || 'Sheet1')];
+  return [parseCsv(text, sheetName)];
 }
 
 async function bytesOf(ctx: ActionCtx, storageId: Id<'_storage'>) {
@@ -56,7 +64,7 @@ export async function attachmentParts(
       continue;
     }
     if (attachment.kind === 'image' || attachment.kind === 'pdf') {
-      const mimeType =
+      let mimeType =
         attachment.kind === 'pdf'
           ? isPdf(bytes)
             ? 'application/pdf'
@@ -66,15 +74,31 @@ export async function attachmentParts(
         notes.push(`${label}: not a readable ${attachment.kind === 'pdf' ? 'PDF' : 'image'}.`);
         continue;
       }
-      if (inlineBytes + bytes.length > finaiAttachmentLimits.maxInlineBytes) {
+      let size = bytes.length;
+      let data: string;
+      if (mimeType === 'image/heic' || mimeType === 'image/heif') {
+        try {
+          const converted = await ctx.runAction(internal.ai.heicConversion.toJpeg, {
+            bytes: bytes.buffer as ArrayBuffer,
+            maxOutputBytes: finaiAttachmentLimits.maxInlineBytes - inlineBytes,
+          });
+          mimeType = 'image/jpeg';
+          size = converted.byteSize;
+          data = bytesToBase64(new Uint8Array(converted.data));
+        } catch {
+          notes.push(`${label}: couldn't convert this HEIC/HEIF image; save it as JPEG and try again.`);
+          continue;
+        }
+      } else data = bytesToBase64(bytes);
+      if (inlineBytes + size > finaiAttachmentLimits.maxInlineBytes) {
         notes.push(
           `${label}: too large to view together with the other files; ask the user to send it on its own.`,
         );
         continue;
       }
-      inlineBytes += bytes.length;
+      inlineBytes += size;
       notes.push(`${label}: shown below.`);
-      parts.push({ inlineData: { mimeType, data: bytesToBase64(bytes) } });
+      parts.push({ inlineData: { mimeType, data } });
       continue;
     }
     if (attachment.kind === 'spreadsheet') {

@@ -80,6 +80,14 @@ export const importTools: FinaiTool[] = [
         ? sheets.find((entry) => entry.name.toLowerCase() === wanted.toLowerCase())
         : sheets[0];
       if (!sheet) throw new ToolArgError('SHEET_NOT_FOUND');
+      if (sheet.truncated)
+        return {
+          data: {
+            error: 'SPREADSHEET_TRUNCATED',
+            parsedRows: sheet.rows.length,
+            note: 'This sheet reached a parser limit, so its total row count is unknown. No import was proposed.',
+          },
+        };
 
       const account = await chooseAccount(ctx.run, str(args, 'accountId', 64));
       const mapping: ImportMapping = {

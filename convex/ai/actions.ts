@@ -75,12 +75,9 @@ export type FinaiActionView = {
   title: string;
   status: Doc<'finaiActions'>['status'];
   errorCode?: string;
-  /** Whether the viewer may confirm or cancel (only the requester, only while pending). */
+  /** Whether the viewer may confirm a pending action or retry a failed import. */
   canDecide: boolean;
-  /**
-   * False for an interrupted confirmation: its write may already exist, so it can only be
-   * retried (idempotently), never cancelled.
-   */
+  /** False for an interrupted confirmation or retry whose write may already have happened. */
   canCancel: boolean;
 };
 
@@ -105,7 +102,8 @@ export async function actionViews(
             : row.status === 'pending' && row.expiresAt <= now
               ? 'expired'
               : row.status;
-          const canDecide = status === 'pending' && row.userId === viewerId;
+          const retryableImport = row.kind === 'transaction.import' && row.status === 'failed';
+          const canDecide = (status === 'pending' || retryableImport) && row.userId === viewerId;
           return {
             id: row._id,
             title: row.title,
@@ -144,9 +142,12 @@ export const claim = internalMutation({
     const row = await ctx.db.get(actionId);
     if (!row || row.userId !== user._id) throw new Error('ACTION_NOT_FOUND');
     const now = Date.now();
-    // An interrupted confirmation was already accepted before its deadline: let it retry.
-    if (isStaleRunning(row, now)) {
-      await ctx.db.patch(actionId, { decidedAt: now });
+    // Imports can retry a recorded failure because each row mutation is idempotent.
+    if (
+      isStaleRunning(row, now) ||
+      (row.kind === 'transaction.import' && row.status === 'failed')
+    ) {
+      await ctx.db.patch(actionId, { status: 'running', decidedAt: now });
       return { kind: row.kind, payload: row.payload, userId: row.userId };
     }
     if (row.status !== 'pending') throw new Error('ACTION_ALREADY_DECIDED');
@@ -306,7 +307,11 @@ export const confirm = action({
     } catch (error) {
       const errorCode = toolErrorCode(error);
       console.warn('[ai] FinAI action failed', claimed.kind, errorCode);
-      await ctx.runMutation(internal.ai.actions.finish, { actionId, status: 'failed', errorCode });
+      await ctx.runMutation(internal.ai.actions.finish, {
+        actionId,
+        status: 'failed',
+        errorCode,
+      });
       return { status: 'failed', errorCode };
     }
   },

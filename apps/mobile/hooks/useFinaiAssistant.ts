@@ -44,7 +44,7 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
   const discard = useMutation(api.ai.attachments.discard);
   const composer = useComposerFiles<{ uri: string; mimeType?: string }>({
     upload: async (file: PickedFile<{ uri: string; mimeType?: string }>) => {
-      const { uploadUrl: url } = await uploadUrl({});
+      const { uploadUrl: url, ticket } = await uploadUrl({});
       const blob = await (await fetch(file.source.uri)).blob();
       const response = await fetch(url, {
         method: 'POST',
@@ -55,7 +55,7 @@ export function useFinaiAssistant(enabled: boolean, initialId: string | null = n
       });
       if (!response.ok) return { error: 'UPLOAD_FAILED' };
       const { storageId } = (await response.json()) as { storageId: string };
-      const result = await register({ storageId: storageId as Id<'_storage'>, name: file.name });
+      const result = await register({ ticket, storageId: storageId as Id<'_storage'>, name: file.name });
       return 'attachment' in result && result.attachment
         ? { id: String(result.attachment.id) }
         : { error: 'error' in result ? String(result.error) : 'UPLOAD_FAILED' };
