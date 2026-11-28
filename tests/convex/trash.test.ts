@@ -598,6 +598,7 @@ describe('Trash', () => {
   });
 
   it('keeps group expenses in their ledger deletion path during account purges', async () => {
+    vi.useFakeTimers();
     const { t, owner, ids } = await setup();
     const { groupId, expenseId } = await t.run(async (ctx) => {
       const now = Date.now();
