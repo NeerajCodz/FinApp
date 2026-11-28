@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useQuery } from 'convex/react';
+import type { FunctionReturnType } from 'convex/server';
 import { api } from '@convex/_generated/api';
 import { finaiViewing, shouldToastReply, type FinaiLatestReply } from '@finapp/ui/ai/finai';
 
@@ -8,35 +9,62 @@ import { finaiViewing, shouldToastReply, type FinaiLatestReply } from '@finapp/u
  * reply is being written, `unreadCount` chats with unseen replies, and `onReply` for each newly
  * finished reply whose chat isn't on screen (never for replies that finished before mount).
  */
-export function useFinaiActivity(enabled: boolean, onReply: (reply: FinaiLatestReply) => void) {
+type Activity = FunctionReturnType<typeof api.ai.assistant.activity>;
+type ActivityTracker = { userId: string | null | undefined; seenReplyIds: Set<string> | null };
+
+/** Update the reply baseline and return replies that became visible after it was established. */
+export function collectNewReplies(
+  activity: Activity | undefined,
+  userId: string | null | undefined,
+  tracker: ActivityTracker,
+): FinaiLatestReply[] {
+  if (userId === undefined) return [];
+  if (tracker.userId !== userId) {
+    const identityChanged = tracker.userId !== undefined;
+    tracker.userId = userId;
+    tracker.seenReplyIds =
+      !identityChanged && activity
+        ? new Set(activity.replies.map((reply) => String(reply.replyId)))
+        : null;
+    return [];
+  }
+  if (!activity) return [];
+  if (tracker.seenReplyIds === null) {
+    tracker.seenReplyIds = new Set(activity.replies.map((reply) => String(reply.replyId)));
+    return [];
+  }
+
+  const newlySeen: FinaiLatestReply[] = [];
+  for (const reply of activity.replies) {
+    const replyId = String(reply.replyId);
+    if (tracker.seenReplyIds.has(replyId)) continue;
+    tracker.seenReplyIds.add(replyId);
+    newlySeen.push({
+      ...reply,
+      conversationId: String(reply.conversationId),
+      replyId,
+    });
+  }
+  return newlySeen;
+}
+
+export function useFinaiActivity(
+  enabled: boolean,
+  userId: string | null | undefined,
+  onReply: (reply: FinaiLatestReply) => void,
+) {
   const activity = useQuery(api.ai.assistant.activity, enabled ? {} : 'skip');
-  const seenReplyIds = React.useRef<Set<string> | null>(null);
+  const tracker = React.useRef<ActivityTracker>({ userId: undefined, seenReplyIds: null });
   const onReplyRef = React.useRef(onReply);
   React.useEffect(() => {
     onReplyRef.current = onReply;
   });
 
   React.useEffect(() => {
-    if (!activity) {
-      seenReplyIds.current = null;
-      return;
-    }
-    if (seenReplyIds.current === null) {
-      seenReplyIds.current = new Set(activity.replies.map((reply) => String(reply.replyId)));
-      return;
-    }
-    for (const reply of activity.replies) {
-      const replyId = String(reply.replyId);
-      if (seenReplyIds.current.has(replyId)) continue;
-      seenReplyIds.current.add(replyId);
-      const latest: FinaiLatestReply = {
-        ...reply,
-        conversationId: String(reply.conversationId),
-        replyId,
-      };
+    for (const latest of collectNewReplies(activity, userId, tracker.current)) {
       if (shouldToastReply(latest, -1, finaiViewing())) onReplyRef.current(latest);
     }
-  }, [activity]);
+  }, [activity, userId]);
 
   return {
     working: activity?.working ?? false,

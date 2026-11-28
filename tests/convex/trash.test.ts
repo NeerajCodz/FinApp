@@ -95,12 +95,33 @@ describe('Trash', () => {
     expect((await owner.as.query(api.trash.list, {})).items).toHaveLength(0);
   });
 
-  it('continues list_trash through more than 200 records without losing older items', async () => {
+  it('paginates mixed Trash kinds without duplicates or omissions', async () => {
     const { t, owner, ids } = await setup();
     const count = 225;
     const base = Date.UTC(2025, 0, 1);
-    await t.run(async (ctx) => {
+    const fixtures = await t.run(async (ctx) => {
+      const transactions: string[] = [];
       for (let index = 0; index < count; index++) {
+        transactions.push(
+          String(
+            await ctx.db.insert('transactions', {
+              ownerId: owner.userId,
+              accountId: ids.accountId,
+              type: 'expense',
+              amountMinor: 100n,
+              currency: 'INR',
+              categoryId: String(ids.categoryId),
+              title: `Trash ${index}`,
+              occurredAt: base + index,
+              status: 'posted',
+              createdAt: base + index,
+              updatedAt: base + index,
+              deletedAt: base + index,
+            }),
+          ),
+        );
+      }
+      for (let index = 0; index < 85; index++) {
         await ctx.db.insert('transactions', {
           ownerId: owner.userId,
           accountId: ids.accountId,
@@ -108,14 +129,22 @@ describe('Trash', () => {
           amountMinor: 100n,
           currency: 'INR',
           categoryId: String(ids.categoryId),
-          title: `Trash ${index}`,
-          occurredAt: base + index,
+          title: `Group tombstone ${index}`,
+          groupId: `group-${index}`,
+          occurredAt: base + count + index,
           status: 'posted',
-          createdAt: base + index,
-          updatedAt: base + index,
-          deletedAt: base + index,
+          createdAt: base + count + index,
+          updatedAt: base + count + index,
+          deletedAt: base + count + index,
         });
       }
+      await ctx.db.patch(ids.accountId, { archivedAt: base + 1 });
+      await ctx.db.patch(ids.categoryId, { archivedAt: base + count - 1 });
+      return {
+        transactions,
+        accountId: String(ids.accountId),
+        categoryId: String(ids.categoryId),
+      };
     });
 
     expect((await owner.as.query(api.trash.list, {})).items).toHaveLength(200);
@@ -130,24 +159,49 @@ describe('Trash', () => {
       defaultCurrency: 'INR',
       timeZone: 'UTC',
     };
+    const expected = new Set([
+      ...fixtures.transactions,
+      fixtures.accountId,
+      fixtures.categoryId,
+    ]);
+    const kindOrder: Record<string, number> = {
+      transaction: 0,
+      account: 1,
+      category: 2,
+      budget: 3,
+      goal: 4,
+      recurring: 5,
+    };
     const seen = new Set<string>();
+    let previousKind = -1;
     let cursor: string | undefined;
     let nextCursor: string | null = 'start';
     let pages = 0;
-    while (nextCursor && pages < 10) {
+    while (nextCursor && pages < 20) {
       pages++;
       const result = await tool.run(ctx, cursor ? { cursor } : {});
       const data = result.data as {
-        items: { id: string }[];
+        items: { id: string; kind: string }[];
         nextCursor: string | null;
       };
-      for (const item of data.items) seen.add(item.id);
+      if (pages <= Math.ceil(count / 40)) {
+        expect(data.items).toHaveLength(Math.min(40, count - (pages - 1) * 40));
+      }
+      expect(new Set(data.items.map(({ kind }) => kind)).size).toBeLessThanOrEqual(1);
+      for (const item of data.items) {
+        expect(kindOrder[item.kind]).toBeGreaterThanOrEqual(previousKind);
+        previousKind = kindOrder[item.kind]!;
+        expect(seen.has(item.id)).toBe(false);
+        seen.add(item.id);
+      }
       nextCursor = data.nextCursor;
       cursor = nextCursor ?? undefined;
     }
     expect(nextCursor).toBeNull();
-    expect(seen.size).toBe(count);
+    expect(seen.size).toBe(count + 2);
+    expect(seen).toEqual(expected);
   });
+
 
   it('deletes a category with its transactions and restores them together', async () => {
     const { t, owner, ids } = await setup();

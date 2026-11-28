@@ -231,6 +231,7 @@ export default defineSchema({
   })
     .index('by_owner_occurredAt', ['ownerId', 'occurredAt'])
     .index('by_owner_deletedAt', ['ownerId', 'deletedAt'])
+    .index('by_owner_group_deletedAt', ['ownerId', 'groupId', 'deletedAt'])
     .index('by_deletedAt', ['deletedAt'])
     .index('by_owner_category_occurredAt', ['ownerId', 'categoryId', 'occurredAt'])
     .index('by_account', ['accountId'])
