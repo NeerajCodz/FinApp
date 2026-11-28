@@ -67,18 +67,23 @@ describe('privacy preferences', () => {
   it('applies discoverability to group profile suggestions but allows an exact username', async () => {
     const { alice, bob } = await fixture();
     await bob.mutation(api.security.updatePrivacy, { discoverable: false });
-    expect((await alice().query(api.users.queries.searchGroupProfiles, {
-      query: 'bo',
-      paginationOpts: { numItems: 100, cursor: null },
-    })).page).toEqual([]);
     expect(
-      (await alice().query(api.users.queries.searchGroupProfiles, {
-        query: 'bobby',
-        paginationOpts: { numItems: 100, cursor: null },
-      })).page.map((user) => user.username),
+      (
+        await alice().query(api.users.queries.searchGroupProfiles, {
+          query: 'bo',
+          paginationOpts: { numItems: 100, cursor: null },
+        })
+      ).page,
+    ).toEqual([]);
+    expect(
+      (
+        await alice().query(api.users.queries.searchGroupProfiles, {
+          query: 'bobby',
+          paginationOpts: { numItems: 100, cursor: null },
+        })
+      ).page.map((user) => user.username),
     ).toEqual(['bobby']);
   });
-
 
   it('continues group-profile search beyond 1,000 hidden users', async () => {
     const { t, alice, bob } = await fixture();

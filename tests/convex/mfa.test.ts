@@ -154,9 +154,9 @@ describe('authenticator app enrollment', () => {
 
     const notes = await t.run((ctx) => ctx.db.query('notifications').collect());
     expect(notes.map((row) => row.title)).toContain('Authenticator app turned on');
-    expect(
-      notes.find((row) => row.title === 'Authenticator app turned on')?.body,
-    ).toContain('10 recovery codes were created and shown once');
+    expect(notes.find((row) => row.title === 'Authenticator app turned on')?.body).toContain(
+      '10 recovery codes were created and shown once',
+    );
   });
 
   it('cannot activate a replacement enrollment with a previously verified secret', async () => {
@@ -208,9 +208,9 @@ describe('authenticator app enrollment', () => {
       expect.stringContaining('10 new recovery codes'),
       expect.stringContaining('10 new recovery codes'),
     ]);
-    expect(regeneratedNotes.every((row) => row.body.includes('previous codes no longer work'))).toBe(
-      true,
-    );
+    expect(
+      regeneratedNotes.every((row) => row.body.includes('previous codes no longer work')),
+    ).toBe(true);
     expect(regeneratedNotes.every((row) => row.body.includes('shown only once'))).toBe(true);
     const usedNotes = await t.run((ctx) =>
       ctx.db
@@ -462,7 +462,6 @@ describe('sign-in challenges with other factors', () => {
     expect(result.tokens).toBeTruthy();
   });
 
-
   it('keeps the prior email code usable when resend delivery fails', async () => {
     const { t, userId } = await fixture();
     const challengeId = 'a'.repeat(64);
@@ -476,10 +475,7 @@ describe('sign-in challenges with other factors', () => {
     );
     vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
     vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response(null, { status: 503 })),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
 
     await expect(t.action(api.auth.sendTwoFactorEmailCode, { challengeId })).rejects.toThrow(
       'Email delivery failed (503).',
@@ -524,9 +520,7 @@ describe('sign-in challenges with other factors', () => {
     await expect(t.action(api.auth.sendTwoFactorEmailCode, { challengeId })).rejects.toThrow(
       'Email delivery failed (503).',
     );
-    await expect(
-      t.action(api.auth.sendTwoFactorEmailCode, { challengeId }),
-    ).resolves.toBeNull();
+    await expect(t.action(api.auth.sendTwoFactorEmailCode, { challengeId })).resolves.toBeNull();
 
     const payload = JSON.parse(sendEmail.mock.calls[1]![1]!.body as string);
     const resentCode = payload.text.match(/\b(\d{6})\b/)?.[1];

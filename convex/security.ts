@@ -175,12 +175,7 @@ export const touchSession = mutation({
     const otherActiveSession = await ctx.db
       .query('authSessions')
       .withIndex('userId', (q) => q.eq('userId', user._id))
-      .filter((q) =>
-        q.and(
-          q.neq(q.field('_id'), sessionId),
-          q.gt(q.field('expirationTime'), now),
-        ),
-      )
+      .filter((q) => q.and(q.neq(q.field('_id'), sessionId), q.gt(q.field('expirationTime'), now)))
       .first();
     await ctx.db.insert('sessionDevices', {
       sessionId,
