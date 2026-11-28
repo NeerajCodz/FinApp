@@ -57,7 +57,11 @@ async function setup(subject = 'api-user') {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await response.text();
-    return { status: response.status, headers: response.headers, json: text ? JSON.parse(text) : null };
+    return {
+      status: response.status,
+      headers: response.headers,
+      json: text ? JSON.parse(text) : null,
+    };
   };
   return { t, userId, user, pat, call };
 }

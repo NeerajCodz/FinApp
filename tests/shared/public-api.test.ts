@@ -1,6 +1,11 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { hasScope, normalizeScopes, parseScopes, scopesOutside } from '../../convex/publicApi/scopes';
+import {
+  hasScope,
+  normalizeScopes,
+  parseScopes,
+  scopesOutside,
+} from '../../convex/publicApi/scopes';
 import {
   constantTimeEqual,
   hashIp,
@@ -214,9 +219,9 @@ describe('webhook signing', () => {
     expect(classifyResponse(301)).toBe('retry');
   });
   it('classifies sync changes as events', () => {
-    expect(eventForSyncChange('transactions', { createdAt: 10, updatedAt: 10 }, 10, undefined)).toBe(
-      'transaction.created',
-    );
+    expect(
+      eventForSyncChange('transactions', { createdAt: 10, updatedAt: 10 }, 10, undefined),
+    ).toBe('transaction.created');
     expect(eventForSyncChange('transactions', { createdAt: 10 }, 50_000, undefined)).toBe(
       'transaction.updated',
     );
@@ -268,16 +273,20 @@ describe('routes and OpenAPI', () => {
       expect(operation.security.length > 0).toBe(route.scope !== null);
     }
     const create = doc.paths['/transactions']!.post as {
-      requestBody: { content: { 'application/json': { schema: { properties: Record<string, { type?: string }> } } } };
+      requestBody: {
+        content: {
+          'application/json': { schema: { properties: Record<string, { type?: string }> } };
+        };
+      };
       parameters: { $ref?: string }[];
     };
     expect(create.requestBody.content['application/json'].schema.properties.amountMinor!.type).toBe(
       'string',
     );
     expect(create.parameters).toContainEqual({ $ref: '#/components/parameters/IdempotencyKey' });
-    expect(Object.keys(doc.components.securitySchemes.oauth2.flows.authorizationCode.scopes)).toContain(
-      'webhooks:manage',
-    );
+    expect(
+      Object.keys(doc.components.securitySchemes.oauth2.flows.authorizationCode.scopes),
+    ).toContain('webhooks:manage');
     expect(JSON.parse(JSON.stringify(doc))).toEqual(doc);
   });
 });
