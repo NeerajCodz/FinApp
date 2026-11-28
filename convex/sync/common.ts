@@ -1,5 +1,6 @@
 import type { MutationCtx } from '../_generated/server';
 import type { Id } from '../_generated/dataModel';
+import { emitForSyncChange } from '../publicApi/webhooks';
 
 export type SyncEntity =
   | 'users'
@@ -69,6 +70,7 @@ export async function recordSyncChange(
     document: document === undefined ? undefined : sanitize(document),
     clientMutationId,
   });
+  await emitForSyncChange(ctx, scopeUserId, entityType, documentId, updatedAt, document, deletedAt);
   return revision;
 }
 

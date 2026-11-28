@@ -1,6 +1,7 @@
 import type { MutationCtx } from '../_generated/server';
 import type { Id } from '../_generated/dataModel';
 import { createNotification } from '../notifications/mutations';
+import { emitWebhookEvent } from '../publicApi/webhooks';
 import {
   categorySpending,
   DEFAULT_LIMIT_ALERT_PERCENT,
@@ -59,6 +60,19 @@ export async function notifyCategoryLimit(
     alertPercent,
   );
   if (threshold === null) return null;
+  await emitWebhookEvent(
+    ctx,
+    userId,
+    threshold === 100 ? 'budget.exceeded' : 'budget.threshold_reached',
+    {
+      categoryId: String(category._id),
+      name: category.name,
+      currency,
+      limitMinor: category.monthlyLimitMinor,
+      spentMinor: spent,
+      thresholdPercent: threshold,
+    },
+  );
   await createNotification(
     ctx,
     userId,
