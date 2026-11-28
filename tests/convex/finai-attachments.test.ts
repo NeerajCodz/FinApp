@@ -100,11 +100,7 @@ async function fixture() {
     return { ownerId, outsiderId, accountId, foodId };
   });
   const as = (id: string) => t.withIdentity({ subject: `${id}|session` });
-  const upload = async (
-    body: string | Uint8Array,
-    type: string,
-    actor = as(ids.ownerId),
-  ) => {
+  const upload = async (body: string | Uint8Array, type: string, actor = as(ids.ownerId)) => {
     const { ticket } = await actor.mutation(api.ai.attachments.generateUploadUrl, {});
     const storageId = await t.run((ctx) => ctx.storage.store(new Blob([body], { type })));
     return { ticket, storageId };
@@ -145,42 +141,34 @@ describe('FinAI attachments', () => {
     expect(image).toMatchObject({ kind: 'image', mimeType: 'image/png', available: true });
 
     const exe = await upload('MZ', 'application/octet-stream');
-    expect(
-      await register(owner, exe, 'run.exe'),
-    ).toEqual({
+    expect(await register(owner, exe, 'run.exe')).toEqual({
       error: 'UNSUPPORTED_FILE',
     });
     expect(await t.run((ctx) => ctx.db.system.get('_storage', exe.storageId))).toBeNull();
 
     const big = await upload(new Uint8Array(10 * 1024 * 1024 + 1), 'text/csv');
-    expect(
-      await register(owner, big, 'big.csv'),
-    ).toEqual({
+    expect(await register(owner, big, 'big.csv')).toEqual({
       error: 'FILE_TOO_LARGE',
     });
     // A file can't be registered twice (or claimed from another record).
     const csv = await upload(CSV, 'text/csv');
     await registered(owner, csv, 'bank.csv');
-    expect(
-      await codeOf(
-        register(owner, csv, 'again.csv'),
-      ),
-    ).toBe('INVALID_UPLOAD');
+    expect(await codeOf(register(owner, csv, 'again.csv'))).toBe('INVALID_UPLOAD');
   });
 
   it('starts the registration grace period when an uploaded object reaches storage', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     const { t, owner } = await fixture();
-    const { ticket: uploadTicket } = await owner.mutation(
-      api.ai.attachments.generateUploadUrl,
-      {},
-    );
+    const { ticket: uploadTicket } = await owner.mutation(api.ai.attachments.generateUploadUrl, {});
 
-    await vi.advanceTimersByTimeAsync(16 * 60 * 1000);
-    const storedId = await t.run((ctx) =>
-      ctx.storage.store(new Blob([CSV], { type: 'text/csv' })),
-    );
+    const storedId = await t.run((ctx) => ctx.storage.store(new Blob([CSV], { type: 'text/csv' })));
+    await t.run(async (ctx) => {
+      const upload = await ctx.db
+        .query('finaiAttachmentUploads')
+        .withIndex('by_ticket', (q) => q.eq('ticket', uploadTicket))
+        .unique();
+      if (!upload) throw new Error('upload ticket not found');
+      await ctx.db.patch(upload._id, { createdAt: Date.now() - 16 * 60 * 1000 });
+    });
     const registered = await owner.mutation(api.ai.attachments.register, {
       ticket: uploadTicket,
       storageId: storedId,
@@ -239,10 +227,9 @@ describe('FinAI attachments', () => {
     // Fixture: libheif tests/data/rainbow-451x461.heic (MIT; see adjacent COPYING).
     const heic = Uint8Array.from(
       Buffer.from(
-        (await readFile(
-          new URL('../fixtures/finai-heic.heif.base64', import.meta.url),
-          'utf8',
-        )).trim(),
+        (
+          await readFile(new URL('../fixtures/finai-heic.heif.base64', import.meta.url), 'utf8')
+        ).trim(),
         'base64',
       ),
     );
@@ -258,10 +245,7 @@ describe('FinAI attachments', () => {
           return bytes ? new Blob([bytes]) : null;
         },
       },
-      runAction: async (
-        _action: unknown,
-        args: { bytes: ArrayBuffer; maxOutputBytes: number },
-      ) => {
+      runAction: async (_action: unknown, args: { bytes: ArrayBuffer; maxOutputBytes: number }) => {
         converted = await t.action(internal.ai.heicConversion.toJpeg, args);
         return converted;
       },
@@ -402,7 +386,12 @@ describe('FinAI attachments', () => {
       {
         call: {
           name: 'propose_import_transactions',
-          args: { attachmentId: sheet.id, date: 'Date', description: 'Description', amount: 'Amount' },
+          args: {
+            attachmentId: sheet.id,
+            date: 'Date',
+            description: 'Description',
+            amount: 'Amount',
+          },
         },
       },
       { text: 'Confirm to import.' },
@@ -411,7 +400,10 @@ describe('FinAI attachments', () => {
       text: 'import',
       attachmentIds: [sheet.id],
     });
-    const messages = await owner.query(api.ai.assistant.messages, { conversationId, paginationOpts: page });
+    const messages = await owner.query(api.ai.assistant.messages, {
+      conversationId,
+      paginationOpts: page,
+    });
     const card = messages.page.find((row) => row.id === replyId)!.actions[0]!;
     const originalPayload = await t.run(async (ctx) => {
       const actionRow = await ctx.db.get(card.id as Id<'finaiActions'>);
@@ -420,14 +412,16 @@ describe('FinAI attachments', () => {
       await ctx.db.patch(card.id as Id<'finaiActions'>, { payload: JSON.stringify(payload) });
       return actionRow!.payload;
     });
-    const failedResult = await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> });
+    const failedResult = await owner.action(api.ai.actions.confirm, {
+      actionId: card.id as Id<'finaiActions'>,
+    });
     expect(failedResult).toMatchObject({
       status: 'failed',
       errorCode: 'INVALID_ACTION_PAYLOAD',
     });
-    expect(await t.run(async (ctx) => (await ctx.db.get(card.id as Id<'finaiActions'>))?.status)).toBe(
-      'failed',
-    );
+    expect(
+      await t.run(async (ctx) => (await ctx.db.get(card.id as Id<'finaiActions'>))?.status),
+    ).toBe('failed');
     const failedMessages = await owner.query(api.ai.assistant.messages, {
       conversationId,
       paginationOpts: page,
@@ -443,7 +437,9 @@ describe('FinAI attachments', () => {
       payload.rows[1]![2] = '200';
       await ctx.db.patch(card.id as Id<'finaiActions'>, { payload: JSON.stringify(payload) });
     });
-    expect(await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> })).toMatchObject({
+    expect(
+      await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> }),
+    ).toMatchObject({
       status: 'done',
     });
     expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(2);

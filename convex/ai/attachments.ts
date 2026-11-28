@@ -25,6 +25,9 @@ import { loadFinaiSettings } from './settings';
 export type AttachmentKind = Doc<'finaiAttachments'>['kind'];
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const UPLOAD_URL_TTL_MS = 60 * 60 * 1000;
+const UPLOAD_POST_TIMEOUT_MS = 2 * 60 * 1000;
+const UPLOAD_URL_TICKET_MARGIN_MS = 60_000;
 
 const BY_EXTENSION: Record<string, { kind: AttachmentKind; mimeType: string }> = {
   jpg: { kind: 'image', mimeType: 'image/jpeg' },
@@ -102,7 +105,11 @@ export const generateUploadUrl = mutation({
       createdAt: now,
     });
     await ctx.scheduler.runAt(
-      now + finaiAttachmentLimits.registerWindowMs + 60_000,
+      now +
+        UPLOAD_URL_TTL_MS +
+        UPLOAD_POST_TIMEOUT_MS +
+        finaiAttachmentLimits.registerWindowMs +
+        UPLOAD_URL_TICKET_MARGIN_MS,
       internal.ai.attachments.expireUpload,
       { uploadId },
     );
@@ -132,9 +139,14 @@ export const register = mutation({
       !upload ||
       upload.userId !== user._id ||
       upload.storageId !== undefined ||
-      now - upload.createdAt > finaiAttachmentLimits.registerWindowMs ||
       !file ||
       file._creationTime < upload.createdAt - 1000 ||
+      file._creationTime >
+        upload.createdAt +
+        UPLOAD_URL_TTL_MS +
+        UPLOAD_POST_TIMEOUT_MS +
+        UPLOAD_URL_TICKET_MARGIN_MS ||
+      now - file._creationTime > finaiAttachmentLimits.registerWindowMs ||
       (await storageInUse(ctx, storageId))
     )
       throw new Error('INVALID_UPLOAD');
