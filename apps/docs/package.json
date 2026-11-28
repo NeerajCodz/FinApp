@@ -1,0 +1,30 @@
+{
+  "name": "@finapp/docs",
+  "version": "1.11.0",
+  "private": true,
+  "description": "FinApp documentation site: product guide, MCP guide, developer docs and the public API reference.",
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "typecheck": "tsc --noEmit",
+    "lint": "bunx eslint . --max-warnings=0"
+  },
+  "dependencies": {
+    "@finapp/ui": "workspace:*",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^1.2.0",
+    "marked": "^16.0.0",
+    "next": "^16.3.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "shiki": "^3.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.4",
+    "@types/react-dom": "~19.2.4",
+    "typescript": "~6.0.3"
+  }
+}

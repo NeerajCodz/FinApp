@@ -6,6 +6,7 @@
   "workspaces": [
     "apps/mobile",
     "apps/web",
+    "apps/docs",
     "packages/ui",
     "packages/widgets",
     "packages/mcp"
@@ -14,6 +15,8 @@
     "dev": "bun run compose:up",
     "dev:web": "bun run --cwd apps/web dev",
     "build:web": "bun run --cwd apps/web build",
+    "dev:docs": "bun run --cwd apps/docs dev",
+    "build:docs": "bun run --cwd apps/docs build",
     "widgets:preview": "bun run --cwd packages/widgets preview",
     "dev:mobile": "docker compose up mobileexpo",
     "dev:convex": "docker compose up convex convex-dashboard",
@@ -23,10 +26,10 @@
     "typecheck:mobile": "bun run --cwd apps/mobile typecheck",
     "typecheck:web": "bun run --cwd apps/web typecheck",
     "typecheck:widgets": "bun run --cwd packages/widgets typecheck",
-    "typecheck": "bun run typecheck:mobile && bun run typecheck:web && bun run typecheck:widgets && bun run typecheck:mcp",
+    "typecheck": "bun run typecheck:mobile && bun run typecheck:web && bun run typecheck:widgets && bun run typecheck:mcp && bun run typecheck:docs",
     "test": "bun run --cwd apps/mobile test && bun run test:web",
     "test:web": "bun run --cwd apps/web test",
-    "lint": "bun run --cwd apps/mobile lint && bun run --cwd apps/web lint && bunx eslint packages/ui/src packages/widgets packages/mcp --max-warnings=0",
+    "lint": "bun run --cwd apps/mobile lint && bun run --cwd apps/web lint && bun run --cwd apps/docs lint && bunx eslint packages/ui/src packages/widgets packages/mcp --max-warnings=0",
     "format:check": "bunx prettier --check .",
     "expo:doctor": "bun run --cwd apps/mobile expo:doctor",
     "validate": "bun run version:check && bun run typecheck && bun run test && bun run lint && bun run format:check && bun run expo:doctor",
@@ -40,7 +43,8 @@
     "version:tags": "node scripts/version.mjs tags",
     "version:release": "changeset version && node scripts/version.mjs adopt",
     "changeset": "changeset",
-    "typecheck:mcp": "bun run --cwd packages/mcp typecheck"
+    "typecheck:mcp": "bun run --cwd packages/mcp typecheck",
+    "typecheck:docs": "bun run --cwd apps/docs typecheck"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",

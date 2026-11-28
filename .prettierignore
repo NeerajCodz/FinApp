@@ -7,5 +7,7 @@ apps/mobile/android/
 apps/web/.next/
 .next/
 apps/web/next-env.d.ts
+apps/docs/.next/
+apps/docs/next-env.d.ts
 FINAPP_MOBILE_UX_AND_ANALYTICS_PLAN.md
 local-plan.md
