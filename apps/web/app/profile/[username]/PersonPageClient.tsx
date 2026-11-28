@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Avatar, Empty } from '@finapp/ui/web';
 import {
+  Money,
   FinanceEmptyState,
   formatTransactionDate,
   isAnalyticsLinkAvailable,
@@ -99,7 +100,9 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
   );
   const analytics = useQuery(
     api.social.queries.personAnalytics,
-    live && otherId ? { userId: otherId, tzOffsetMinutes: -new Date().getTimezoneOffset() } : 'skip',
+    live && otherId
+      ? { userId: otherId, tzOffsetMinutes: -new Date().getTimezoneOffset() }
+      : 'skip',
   );
   const sendRequest = useMutation(api.social.mutations.sendRequest);
   const respondToRequest = useMutation(api.social.mutations.respondToRequest);
@@ -292,11 +295,11 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
     rangeState === 'error' ||
     Boolean(
       groupsError ||
-        membersError ||
-        transactionsError ||
-        payersError ||
-        participantsError ||
-        settlementsError,
+      membersError ||
+      transactionsError ||
+      payersError ||
+      participantsError ||
+      settlementsError,
     );
   const balanceLabel = !balanceAvailable
     ? balanceError
@@ -531,11 +534,11 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
               </div>
               <div className="profile-stat">
                 <span>Messages</span>
-                  <strong>
-                    {analytics
-                      ? `${analytics.totalMessages}${analytics.totalMessagesCapped ? '+' : ''}`
-                      : '—'}
-                  </strong>
+                <strong>
+                  {analytics
+                    ? `${analytics.totalMessages}${analytics.totalMessagesCapped ? '+' : ''}`
+                    : '—'}
+                </strong>
                 <small>Last 30 days</small>
               </div>
               <div className="profile-stat">

@@ -151,11 +151,14 @@ export const socialTools: ToolFactory = (client) => [
       return { items: result.people, truncated: result.truncated };
     },
     summarize: (data) => {
-      const result = data as { items?: Array<{ unreadCount?: number }>; truncated?: boolean } | null;
+      const result = data as {
+        items?: Array<{ unreadCount?: number }>;
+        truncated?: boolean;
+      } | null;
       const items = result?.items;
       if (!Array.isArray(items)) return undefined;
       const unread = items.filter((item) => (item.unreadCount ?? 0) > 0).length;
-      return `${items.length}${result.truncated ? '+' : ''} people; ${unread} with unread messages.`;
+      return `${items.length}${result?.truncated ? '+' : ''} people; ${unread} with unread messages.`;
     },
   }),
   defineTool({
