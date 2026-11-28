@@ -13,7 +13,8 @@ describe('push registration queue', () => {
   it('reruns a failed in-flight registration after connectivity returns', async () => {
     const connection = { isConnected: true };
     const firstAttempt = deferred<unknown>();
-    const register = vi.fn()
+    const register = vi
+      .fn()
       .mockReturnValueOnce(firstAttempt.promise)
       .mockResolvedValueOnce('registered');
     const statuses: PushRegistrationStatus[] = [];

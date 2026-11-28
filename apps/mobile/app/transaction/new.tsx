@@ -41,7 +41,9 @@ export default function NewTransactionScreen() {
     merchant?: string | string[];
   }>();
   const queryType = scalar(params.type);
-  const initialType: TransactionFormType = typeOptions.includes(queryType as TransactionFormType)
+  const initialType: TransactionFormType = typeOptions.includes(
+    queryType as TransactionFormType,
+  )
     ? (queryType as TransactionFormType)
     : 'expense';
   const initialDate = Number(scalar(params.occurredAt));

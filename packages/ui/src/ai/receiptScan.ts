@@ -190,8 +190,7 @@ export function rescaleReceiptAmount(
   try {
     const amount = parseMinor(value, fromCurrency);
     const delta = (minorDigits(toCurrency) ?? 2) - (minorDigits(fromCurrency) ?? 2);
-    if (delta > 0)
-      return minorToInput(amount * 10n ** BigInt(delta), toCurrency);
+    if (delta > 0) return minorToInput(amount * 10n ** BigInt(delta), toCurrency);
     if (delta < 0)
       return minorToInput(rescaleMinor([amount], -delta)[0]!, toCurrency);
     return minorToInput(amount, toCurrency);

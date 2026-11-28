@@ -96,8 +96,9 @@ export default function NewPersonalTransactionPage() {
     appliedQuery.current = true;
     const query = new URLSearchParams(window.location.search);
     const queryType = query.get('type');
-    if (queryType && transactionTypes.includes(queryType as TransactionFormType))
+    if (queryType && transactionTypes.includes(queryType as TransactionFormType)) {
       setType(queryType as TransactionFormType);
+    }
     const queryAmount = query.get('amount');
     if (queryAmount) setAmount(queryAmount);
     queryOverrides.current.account = query.has('accountId');
