@@ -185,6 +185,7 @@ export type PeopleAnalyticsScreenProps = {
   peopleTruncated?: boolean;
   groups: readonly HubGroup[];
   onBack: () => void;
+  onOpenPerson: (person: HubPerson) => void;
   onOpenGroup: (group: HubGroup) => void;
 };
 

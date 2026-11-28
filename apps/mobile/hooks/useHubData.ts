@@ -45,7 +45,7 @@ export function useHubData() {
           color: typeof group.color === 'string' ? group.color : undefined,
           memberCount: details?.members?.length ?? localCount,
           unreadCount: unread && cloudId ? unread[cloudId] : undefined,
-          unreadCapped: Boolean(unread && cloudId && unread[cloudId] >= 99),
+          unreadCapped: Boolean(unread && cloudId && (unread[cloudId] ?? 0) >= 99),
         };
       }),
     [groupsState.data, groupsState.groupDetails, memberState.data, unread],
