@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { router } from 'expo-router';
-import { useQuery } from 'convex/react';
+import { usePaginatedQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { currencies } from '@convex/shared/validators';
 import { useLocalSync } from '@/providers/LocalSyncProvider';
@@ -42,10 +42,15 @@ export default function NewGroupScreen() {
       setCurrency(value.toUpperCase());
   }, [currency, profile?.defaultCurrency]);
   const query = normalizeHandle(memberInput);
-  const suggestions = useQuery(
+  const { results: profilePages, status: profileSearchStatus, loadMore } = usePaginatedQuery(
     api.users.queries.searchGroupProfiles,
     userId && query.length >= 2 ? { query } : 'skip',
+    { initialNumItems: 100 },
   );
+  React.useEffect(() => {
+    if (profileSearchStatus === 'CanLoadMore' && profilePages.length < 20) loadMore(1);
+  }, [loadMore, profilePages.length, profileSearchStatus]);
+  const suggestions = profilePages.slice(0, 20);
 
   function addMember(value = memberInput) {
     const handle = normalizeHandle(value);

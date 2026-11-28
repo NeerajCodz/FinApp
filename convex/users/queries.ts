@@ -1,3 +1,4 @@
+import { paginationOptsValidator } from 'convex/server';
 import { hasTotp } from '../mfa';
 import { privacyFor } from '../security';
 import { internalQuery, query } from '../_generated/server';
@@ -134,15 +135,22 @@ export const search = query({
   },
 });
 
-const GROUP_PROFILE_SEARCH_MAX_CANDIDATES = 1_000;
+const GROUP_PROFILE_SEARCH_PAGE_SIZE = 100;
 
 export const searchGroupProfiles = query({
-  args: { query: v.string() },
+  args: { query: v.string(), paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
     const current = await getOptionalUser(ctx);
-    if (!current) return [];
+    if (!current) return { page: [], isDone: true, continueCursor: '' };
     const searchTerm = normalizeUsername(args.query);
-    if (!/^[a-z0-9_]{2,32}$/.test(searchTerm)) return [];
+    if (!/^[a-z0-9_]{2,32}$/.test(searchTerm))
+      return { page: [], isDone: true, continueCursor: '' };
+    if (
+      !Number.isInteger(args.paginationOpts.numItems) ||
+      args.paginationOpts.numItems < 1 ||
+      args.paginationOpts.numItems > GROUP_PROFILE_SEARCH_PAGE_SIZE
+    )
+      throw new Error('INVALID_PAGINATION');
     const candidates = await ctx.db
       .query('users')
       .withIndex('by_username', (q) =>
@@ -151,23 +159,26 @@ export const searchGroupProfiles = query({
       .filter((q) =>
         q.and(q.neq(q.field('_id'), current._id), q.eq(q.field('deletedAt'), undefined)),
       )
-      .take(GROUP_PROFILE_SEARCH_MAX_CANDIDATES);
+      .paginate(args.paginationOpts);
     const visible: Doc<'users'>[] = [];
-    for (const user of candidates) {
+    for (const user of candidates.page) {
       if (user.username === searchTerm || (await privacyFor(ctx, user._id)).discoverable)
         visible.push(user);
       if (visible.length === 20) break;
     }
-    return Promise.all(
-      visible.map(async (user) => ({
-        id: user._id,
-        displayName: user.displayName ?? user.name ?? 'Finapp user',
-        username: user.username,
-        gender: user.gender,
-        avatarId: user.avatarId,
-        avatarUrl: (await avatarUrlForUser(ctx, user)) ?? undefined,
-      })),
-    );
+    return {
+      ...candidates,
+      page: await Promise.all(
+        visible.map(async (user) => ({
+          id: user._id,
+          displayName: user.displayName ?? user.name ?? 'Finapp user',
+          username: user.username,
+          gender: user.gender,
+          avatarId: user.avatarId,
+          avatarUrl: (await avatarUrlForUser(ctx, user)) ?? undefined,
+        })),
+      ),
+    };
   },
 });
 export const publicProfile = query({

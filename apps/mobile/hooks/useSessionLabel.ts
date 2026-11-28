@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 
@@ -11,14 +11,28 @@ export function deviceLabel(): string {
   return `Finapp on ${model || 'Android'}`;
 }
 
-/** Labels this app's session for Settings → Security → Devices. */
+const SESSION_HEARTBEAT_MS = 6 * 60_000;
+
+/** Labels this app's session and refreshes activity while it is in use. */
 export function useSessionLabel(signedIn: boolean) {
   const touch = useMutation(api.security.touchSession);
   React.useEffect(() => {
     if (!signedIn) return;
-    touch({
-      platform: Platform.OS === 'ios' ? 'ios' : 'android',
-      label: deviceLabel(),
-    }).catch(() => undefined);
+    const heartbeat = () => {
+      if (AppState.currentState !== 'active') return;
+      void touch({
+        platform: Platform.OS === 'ios' ? 'ios' : 'android',
+        label: deviceLabel(),
+      }).catch(() => undefined);
+    };
+    heartbeat();
+    const interval = setInterval(heartbeat, SESSION_HEARTBEAT_MS);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') heartbeat();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
   }, [signedIn, touch]);
 }

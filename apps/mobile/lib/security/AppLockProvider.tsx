@@ -168,14 +168,10 @@ export function AppLockProvider({
         // Preserve the start time through iOS's inactive state; evaluate it when active returns.
         backgroundAt.current = Date.now();
         if (devicePromptInFlight.current) suppressNextPrompt.current = true;
-      } else if (
-        next === 'active' &&
-        userId &&
-        backgroundAt.current !== null
-      ) {
+      } else if (next === 'active' && backgroundAt.current !== null) {
         const away = Date.now() - backgroundAt.current;
         backgroundAt.current = null;
-        if (!lockTimedOut(away, timeoutRef.current)) return;
+        if (!userId || !lockTimedOut(away, timeoutRef.current)) return;
         ++generation.current;
         lastPrompt.current = -1;
         setState((old) => (old.lock ? { ...old, phase: 'locked', error: undefined } : old));

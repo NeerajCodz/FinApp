@@ -203,8 +203,9 @@ export const recordFactorUse = internalMutation({
     userId: v.id('users'),
     totpStep: v.optional(v.number()),
     recoveryHash: v.optional(v.string()),
+    notifyRecoverySignIn: v.optional(v.boolean()),
   },
-  handler: async (ctx, { userId, totpStep, recoveryHash }) => {
+  handler: async (ctx, { userId, totpStep, recoveryHash, notifyRecoverySignIn }) => {
     const row = await factorsRow(ctx, userId);
     if (!row) return false;
     if (totpStep !== undefined) {
@@ -221,17 +222,19 @@ export const recordFactorUse = internalMutation({
       const now = Date.now();
       const next = codes.map((code, i) => (i === index ? { ...code, usedAt: now } : code));
       await ctx.db.patch(row._id, { recoveryCodes: next, updatedAt: now });
-      const left = next.filter((code) => code.usedAt === undefined).length;
-      await createNotification(
-        ctx,
-        userId,
-        `security:recovery-used:${recoveryHash}`,
-        'security',
-        'account',
-        String(userId),
-        'Recovery code used',
-        `${left} recovery code${left === 1 ? '' : 's'} left. Make new ones in Settings → Security if you’re running low.`,
-      );
+      if (notifyRecoverySignIn ?? true) {
+        const left = next.filter((code) => code.usedAt === undefined).length;
+        await createNotification(
+          ctx,
+          userId,
+          `security:recovery-used:${recoveryHash}`,
+          'security',
+          'account',
+          String(userId),
+          'Recovery code used',
+          `${left} recovery code${left === 1 ? '' : 's'} left. Make new ones in Settings → Security if you’re running low.`,
+        );
+      }
       return true;
     }
     return false;
@@ -251,6 +254,7 @@ export async function verifySecondFactor(
   userId: Id<'users'>,
   method: SecondFactor,
   code: string,
+  context: 'sign-in' | 'settings' = 'sign-in',
 ): Promise<boolean> {
   const factors: Factors = await ctx.runQuery(internal.mfa.factorsFor, { userId });
   if (method === 'totp') {
@@ -272,6 +276,7 @@ export async function verifySecondFactor(
   const used: boolean = await ctx.runMutation(internal.mfa.recordFactorUse, {
     userId,
     recoveryHash: hash,
+    notifyRecoverySignIn: context === 'sign-in',
   });
   return used;
 }
@@ -343,7 +348,8 @@ export const disableTotp = action({
   handler: async (ctx, { code }): Promise<null> => {
     const userId = await signedInUser(ctx);
     const method: SecondFactor = /^\d{6}$/.test(code.trim()) ? 'totp' : 'recovery';
-    if (!(await verifySecondFactor(ctx, userId, method, code))) throw new Error('INVALID_CODE');
+    if (!(await verifySecondFactor(ctx, userId, method, code, 'settings')))
+      throw new Error('INVALID_CODE');
     await ctx.runMutation(internal.mfa.deactivateTotp, { userId });
     return null;
   },
@@ -360,7 +366,7 @@ export const regenerateRecoveryCodes = action({
     const factors: Factors = await ctx.runQuery(internal.mfa.factorsFor, { userId });
     if (factors.totp) {
       const method: SecondFactor = /^\d{6}$/.test((code ?? '').trim()) ? 'totp' : 'recovery';
-      if (!code || !(await verifySecondFactor(ctx, userId, method, code)))
+      if (!code || !(await verifySecondFactor(ctx, userId, method, code, 'settings')))
         throw new Error('INVALID_CODE');
     }
     const { codes, hashes } = await hashedCodes(userId);

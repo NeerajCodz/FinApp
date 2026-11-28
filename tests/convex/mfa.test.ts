@@ -15,6 +15,7 @@ import {
   totpCode,
   verifyTotp,
 } from '../../convex/mfaDomain';
+import { encryptSecret } from '../../convex/ai/keyVault';
 import { qrPath } from '../../convex/qr';
 
 const modules = import.meta.glob('../../convex/**/*.ts');
@@ -217,8 +218,8 @@ describe('authenticator app enrollment', () => {
         .filter((q) => q.eq(q.field('title'), 'Recovery code used'))
         .collect(),
     );
-    expect(usedNotes).toHaveLength(2);
-    expect(usedNotes.every((row) => row.body.includes('9 recovery codes left'))).toBe(true);
+    // Recovery codes consumed for settings changes aren't sign-in alerts.
+    expect(usedNotes).toHaveLength(0);
     // Turning it off with the next code.
     await me.action(api.mfa.disableTotp, { code: await codeFor(t, userId, false, 1) });
     expect(await me.query(api.mfa.status, {})).toMatchObject({ totp: false });
@@ -331,6 +332,136 @@ describe('sign-in challenges with other factors', () => {
     });
     expect(result.tokens).toBeTruthy();
   });
+  it('keeps recovery-code sign-in available when fallback email delivery fails', async () => {
+    const { t, userId } = await fixture();
+    const password = 'runtime-test-password';
+    const secret = await new Scrypt().hash(password);
+    const recoveryCode = newRecoveryCodes()[0]!;
+    const recoveryHash = await hashRecoveryCode(String(userId), recoveryCode);
+    const now = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.insert('userSettings', {
+        userId,
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        twoFactorEnabled: true,
+        updatedAt: now,
+      });
+      await ctx.db.insert('mfaFactors', {
+        userId,
+        recoveryCodes: [{ hash: recoveryHash }],
+        updatedAt: now,
+      });
+      await ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: 'olive@example.com',
+        secret,
+        emailVerified: '1',
+      });
+    });
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+    vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+    vi.stubEnv('JWT_PRIVATE_KEY', privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
+    vi.stubEnv('CONVEX_SITE_URL', 'https://unit-test.convex.site');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+
+    const challenge = await t.action(api.auth.requestEmailTwoFactor, {
+      identifier: 'olive@example.com',
+      password,
+    });
+    expect(challenge).toMatchObject({
+      status: 'code-sent',
+      methods: { totp: false, email: true, recovery: true },
+    });
+    if (challenge.status !== 'code-sent') throw new Error('Expected a recovery-code challenge.');
+    const result = await t.action(api.auth.signIn, {
+      provider: 'password',
+      params: {
+        challengeId: challenge.challengeId,
+        method: 'recovery',
+        code: recoveryCode,
+        flow: 'twoFactorVerification',
+      },
+    });
+    expect(result.tokens).toBeTruthy();
+    const recoveryAlerts = await t.run((ctx) =>
+      ctx.db
+        .query('notifications')
+        .filter((query) => query.eq(query.field('title'), 'Recovery code used'))
+        .collect(),
+    );
+    expect(recoveryAlerts).toHaveLength(1);
+  });
+  it('keeps TOTP sign-in available when fallback email delivery fails', async () => {
+    const { t, userId } = await fixture();
+    const password = 'runtime-test-password';
+    const secret = await new Scrypt().hash(password);
+    const now = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.insert('userSettings', {
+        userId,
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        firstDayOfWeek: 1,
+        financialMonthStart: 1,
+        language: 'en',
+        appearance: 'system',
+        notificationPreferences: {},
+        appLockPreferences: { enabled: false, fallback: 'device-pin' },
+        twoFactorEnabled: true,
+        updatedAt: now,
+      });
+      await ctx.db.insert('mfaFactors', {
+        userId,
+        totpSecret: await encryptSecret(RFC_SECRET, String(userId)),
+        totpConfirmedAt: now,
+        recoveryCodes: [],
+        updatedAt: now,
+      });
+      await ctx.db.insert('authAccounts', {
+        userId,
+        provider: 'password',
+        providerAccountId: 'olive@example.com',
+        secret,
+        emailVerified: '1',
+      });
+    });
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    vi.stubEnv('AUTH_RESEND_KEY', 're_test_key');
+    vi.stubEnv('AUTH_EMAIL_FROM', 'Finapp <mail@example.com>');
+    vi.stubEnv('JWT_PRIVATE_KEY', privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
+    vi.stubEnv('CONVEX_SITE_URL', 'https://unit-test.convex.site');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+
+    const challenge = await t.action(api.auth.requestEmailTwoFactor, {
+      identifier: 'olive@example.com',
+      password,
+    });
+    expect(challenge).toMatchObject({
+      status: 'code-sent',
+      methods: { totp: true, email: true, recovery: false },
+    });
+    if (challenge.status !== 'code-sent') throw new Error('Expected a TOTP challenge.');
+    const result = await t.action(api.auth.signIn, {
+      provider: 'password',
+      params: {
+        challengeId: challenge.challengeId,
+        method: 'totp',
+        code: await totpCode(RFC_SECRET, currentStep()),
+        flow: 'twoFactorVerification',
+      },
+    });
+    expect(result.tokens).toBeTruthy();
+  });
+
 
   it('keeps the prior email code usable when resend delivery fails', async () => {
     const { t, userId } = await fixture();

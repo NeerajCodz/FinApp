@@ -172,6 +172,16 @@ export const touchSession = mutation({
         await ctx.db.patch(existing._id, { lastSeenAt: now, label: clean, platform });
       return null;
     }
+    const otherActiveSession = await ctx.db
+      .query('authSessions')
+      .withIndex('userId', (q) => q.eq('userId', user._id))
+      .filter((q) =>
+        q.and(
+          q.neq(q.field('_id'), sessionId),
+          q.gt(q.field('expirationTime'), now),
+        ),
+      )
+      .first();
     await ctx.db.insert('sessionDevices', {
       sessionId,
       userId: user._id,
@@ -181,13 +191,14 @@ export const touchSession = mutation({
       lastSeenAt: now,
     });
     // A prior device record distinguishes a returning account from its first-ever sign-in,
-    // even when its session is no longer live.
+    // even when its session is no longer live. An active session also signals prior use when
+    // its client has not yet created a device record.
     const priorDevice = await ctx.db
       .query('sessionDevices')
       .withIndex('by_user', (q) => q.eq('userId', user._id))
       .filter((q) => q.neq(q.field('sessionId'), sessionId))
       .first();
-    if (priorDevice && (await privacyFor(ctx, user._id)).signInAlerts)
+    if ((priorDevice || otherActiveSession) && (await privacyFor(ctx, user._id)).signInAlerts)
       await createNotification(
         ctx,
         user._id,

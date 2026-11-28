@@ -229,13 +229,24 @@ describe('social discovery and relationship summaries', () => {
     const viewer = t.withIdentity({ subject: `${viewerId}|session` });
     const results = await viewer.query(api.users.queries.searchGroupProfiles, {
       query: ' @MATCH_',
+      paginationOpts: { numItems: 100, cursor: null },
     });
 
-    expect(results).toHaveLength(20);
-    expect(results.map((person) => person.username)).toEqual(
+    expect(results.page).toHaveLength(20);
+    expect(results.page.map((person) => person.username)).toEqual(
       Array.from({ length: 20 }, (_, i) => `match_${String(i + 1).padStart(2, '0')}`),
     );
-    expect(await viewer.query(api.users.queries.searchGroupProfiles, { query: 'm' })).toEqual([]);
-    expect(await t.query(api.users.queries.searchGroupProfiles, { query: 'match' })).toEqual([]);
+    expect(
+      (await viewer.query(api.users.queries.searchGroupProfiles, {
+        query: 'm',
+        paginationOpts: { numItems: 100, cursor: null },
+      })).page,
+    ).toEqual([]);
+    expect(
+      (await t.query(api.users.queries.searchGroupProfiles, {
+        query: 'match',
+        paginationOpts: { numItems: 100, cursor: null },
+      })).page,
+    ).toEqual([]);
   });
 });

@@ -105,12 +105,14 @@ export const requestEmailTwoFactor = action({
       now: Date.now(),
     });
     try {
-      // Send an email fallback even when TOTP is enabled, for still-supported clients that only
-      // know the original email-code flow. Current clients can still choose the authenticator app.
+      // Legacy clients need the email fallback. Current TOTP/recovery clients remain able to
+      // complete sign-in if email delivery is unavailable.
       await sendTwoFactorEmail(email, code);
     } catch (error) {
-      await ctx.runMutation(internal.authEmailChallenges.revoke, { challengeIdHash });
-      throw error;
+      if (!methods.totp && !methods.recovery) {
+        await ctx.runMutation(internal.authEmailChallenges.revoke, { challengeIdHash });
+        throw error;
+      }
     }
     return { status: 'code-sent' as const, challengeId, methods, preferred: 'email' as const };
   },
