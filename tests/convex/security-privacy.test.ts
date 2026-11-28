@@ -213,6 +213,17 @@ describe('devices', () => {
 
   it('lists active sessions with labels, marks this one, and alerts on a new device', async () => {
     const { t, ids, alice } = await fixture();
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.insert('sessionDevices', {
+        sessionId: ids.laptop,
+        userId: ids.aliceId,
+        platform: 'web',
+        label: 'Chrome on Windows',
+        createdAt: now,
+        lastSeenAt: now,
+      });
+    });
     await alice(ids.laptop).mutation(api.security.touchSession, {
       platform: 'web',
       label: 'Chrome on Windows',
