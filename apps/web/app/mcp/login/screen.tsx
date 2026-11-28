@@ -9,7 +9,11 @@ export function McpLoginScreen() {
   const [nextPath, setNextPath] = useState('/mcp/dashboard');
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('next');
-    if (requested?.startsWith('/mcp/') && !requested.startsWith('//')) setNextPath(requested);
+    if (
+      (requested?.startsWith('/mcp/') || requested?.startsWith('/oauth/consent?')) &&
+      !requested.startsWith('//')
+    )
+      setNextPath(requested);
   }, []);
   return (
     <ThemeProvider forcedMode="dark">

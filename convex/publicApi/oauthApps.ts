@@ -13,16 +13,19 @@ import { createNotification } from '../notifications/mutations';
 import { recordAudit } from './audit';
 import { isActiveUser, MAX_APPS_PER_USER } from './principal';
 import { parseScopes, scopesOutside, type ApiScope } from './scopes';
-import { base64url, constantTimeEqual, hashToken, randomToken, tokenPrefix } from './tokens';
+import {
+  APP_CLIENT_ID_PREFIX,
+  base64url,
+  constantTimeEqual,
+  hashToken,
+  isAppClientId,
+  randomToken,
+  tokenPrefix,
+} from './tokens';
 
-export const APP_CLIENT_ID_PREFIX = 'fa_app_';
 export const ACCESS_TOKEN_TTL_SECONDS = 3600;
 export const REFRESH_TOKEN_TTL_MS = 90 * 86_400_000;
 const CODE_TTL_MS = 5 * 60_000;
-
-export function isAppClientId(value: string): boolean {
-  return /^fa_app_[a-f0-9]{24}$/.test(value);
-}
 
 function newClientId() {
   const bytes = crypto.getRandomValues(new Uint8Array(12));

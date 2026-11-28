@@ -1,6 +1,7 @@
 import { api } from '@convex/_generated/api';
 import { authorizationRedirect } from '@finapp/mcp/metadata';
 import { convexClient, mcpResourceUrl } from '@finapp/mcp/oauth';
+import { developerAuthorize, isAppClientId } from '@/lib/developerOAuth';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +13,8 @@ export async function GET(request: Request) {
   const redirectUri = params.get('redirect_uri');
   const state = params.get('state');
   if (!clientId || !redirectUri) return invalid('invalid_request');
+  // Public API developer apps share this endpoint; MCP clients continue below.
+  if (isAppClientId(clientId)) return developerAuthorize(request, params);
 
   // Resolve the client first: issued ids are looked up, HTTPS ids are Client ID Metadata
   // Documents that the backend fetches and validates.

@@ -11,6 +11,12 @@ export const TOKEN_PREFIXES = {
 } as const;
 export type TokenKind = keyof typeof TOKEN_PREFIXES;
 
+/** OAuth app client ids: `fa_app_` + 24 hex characters. */
+export const APP_CLIENT_ID_PREFIX = 'fa_app_';
+export function isAppClientId(value: string): boolean {
+  return /^fa_app_[a-f0-9]{24}$/.test(value);
+}
+
 const BODY = /^[A-Za-z0-9_-]{43}$/;
 
 export function base64url(bytes: Uint8Array): string {

@@ -2,6 +2,7 @@ import { api } from '@convex/_generated/api';
 import { decodeJwt } from 'jose';
 import { readClientCredentials } from '@convex/shared/mcpClients';
 import { convexClient, mcpResourceUrl, prepareMcpAccessTokenSigner } from '@finapp/mcp/oauth';
+import { developerToken, isAppClientId } from '@/lib/developerOAuth';
 
 export const runtime = 'nodejs';
 
@@ -66,6 +67,8 @@ export async function POST(request: Request) {
     }
   }
   if (!clientId) return Response.json({ error: 'invalid_request' }, { status: 400 });
+  // Public API developer apps issue opaque API tokens; MCP clients continue below.
+  if (isAppClientId(clientId)) return developerToken(form, { ...credentials, clientId });
   if (grantType !== 'authorization_code' && grantType !== 'refresh_token')
     return Response.json({ error: 'unsupported_grant_type' }, { status: 400 });
   const resource = form.get('resource');
