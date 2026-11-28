@@ -69,8 +69,7 @@ export function isAnalyticsLinkAvailable(
   sharedGroupCount: number,
 ): boolean {
   return (
-    analytics != null &&
-    (sharedGroupCount > 0 || friends || Boolean(analytics.conversationId))
+    analytics != null && (sharedGroupCount > 0 || friends || Boolean(analytics.conversationId))
   );
 }
 

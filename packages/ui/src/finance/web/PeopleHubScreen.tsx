@@ -115,7 +115,9 @@ export function PeopleHubScreen(p: PeopleHubScreenProps) {
           </p>
         )}
         {p.peopleTruncated ? (
-          <p className={styles.empty}>Showing a limited set of people; some contacts may be omitted.</p>
+          <p className={styles.empty}>
+            Showing a limited set of people; some contacts may be omitted.
+          </p>
         ) : null}
       </section>
 

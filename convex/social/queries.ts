@@ -522,7 +522,10 @@ export const peopleHubUnreadTotal = query({
       }
       const scope = scopes[index]!;
       const lastReadAt = await loadReadPointer(ctx, scope, actor._id);
-      const budget = Math.min(PEOPLE_HUB_UNREAD_SCOPE_SCAN_LIMIT, PEOPLE_HUB_UNREAD_SCAN_LIMIT - scanned);
+      const budget = Math.min(
+        PEOPLE_HUB_UNREAD_SCOPE_SCAN_LIMIT,
+        PEOPLE_HUB_UNREAD_SCAN_LIMIT - scanned,
+      );
       const messages =
         scope.type === 'direct'
           ? await ctx.db
@@ -683,7 +686,10 @@ export const personAnalytics = query({
       const recent = await ctx.db
         .query('directMessages')
         .withIndex('by_conversation_createdAt', (q) =>
-          q.eq('conversationId', conversation._id).gte('createdAt', windowStart).lt('createdAt', endAt),
+          q
+            .eq('conversationId', conversation._id)
+            .gte('createdAt', windowStart)
+            .lt('createdAt', endAt),
         )
         .order('desc')
         .take(ACTIVITY_MESSAGE_LIMIT + 1);

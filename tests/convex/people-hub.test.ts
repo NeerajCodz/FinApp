@@ -180,8 +180,7 @@ describe('people hub', () => {
       for (const conversation of ordered)
         await ctx.db.patch(conversation._id, { updatedAt: now - 100_000 });
       const latest = ordered.at(-1)!;
-      const latestPeer =
-        latest.userLowId === ids.meId ? latest.userHighId : latest.userLowId;
+      const latestPeer = latest.userLowId === ids.meId ? latest.userHighId : latest.userLowId;
       await ctx.db.patch(latestPeer, { displayName: 'Latest' });
       await ctx.db.patch(latest._id, { updatedAt: now + 1 });
       await ctx.db.insert('directMessages', {
@@ -388,7 +387,6 @@ describe('people hub', () => {
       ),
     ).toBe(true);
   });
-
 
   it('keeps newest analytics messages and marks capped totals as lower bounds', async () => {
     const { t, ids, me } = await seed();

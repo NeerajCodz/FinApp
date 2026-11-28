@@ -213,7 +213,9 @@ export default function PublicProfileScreen() {
   );
   const analytics = useQuery(
     api.social.queries.personAnalytics,
-    live && otherId ? { userId: otherId, tzOffsetMinutes: -new Date().getTimezoneOffset() } : 'skip',
+    live && otherId
+      ? { userId: otherId, tzOffsetMinutes: -new Date().getTimezoneOffset() }
+      : 'skip',
   );
   const sendRequest = useMutation(api.social.mutations.sendRequest);
   const respondToRequest = useMutation(api.social.mutations.respondToRequest);
@@ -530,7 +532,9 @@ export default function PublicProfileScreen() {
           )}
           {stat(
             'Messages',
-            analytics ? formatLowerBound(analytics.totalMessages, analytics.totalMessagesCapped) : '—',
+            analytics
+              ? formatLowerBound(analytics.totalMessages, analytics.totalMessagesCapped)
+              : '—',
             'Last 30 days',
           )}
           {stat(
