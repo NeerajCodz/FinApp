@@ -75,11 +75,9 @@ export type FinaiActionView = {
   title: string;
   status: Doc<'finaiActions'>['status'];
   errorCode?: string;
-  /** Whether the requester may confirm a pending action or retry a failed import. */
-  /**
-   * False for an interrupted confirmation: its write may already exist, so it can only be
-   * retried (idempotently), never cancelled.
-   */
+  /** Whether the viewer may confirm a pending action or retry a failed import. */
+  canDecide: boolean;
+  /** False for an interrupted confirmation: its write may already exist, so it can only be retried, never cancelled. */
   canCancel: boolean;
 };
 
