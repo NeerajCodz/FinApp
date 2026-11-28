@@ -14,4 +14,7 @@ crons.hourly(
   {},
 );
 
+// Public API housekeeping: idempotency keys, OAuth codes, rate buckets, audit and webhook logs.
+crons.hourly('public API cleanup', { minuteUTC: 23 }, internal.publicApi.maintenance.cleanup, {});
+
 export default crons;
