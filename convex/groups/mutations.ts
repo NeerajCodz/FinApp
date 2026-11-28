@@ -1334,6 +1334,22 @@ export const deleteExpiredMessage = internalMutation({
   handler: async (ctx, { messageId }) => {
     const message = await ctx.db.get(messageId);
     if (!message || message.expiresAt === undefined) return;
+    const group = await ctx.db.get(message.groupId);
+    const currentExpiresAt = !group
+      ? message.expiresAt
+      : group.messageRetentionMs == null
+        ? undefined
+        : message.createdAt + group.messageRetentionMs;
+    if (currentExpiresAt !== message.expiresAt) {
+      await ctx.db.patch(messageId, { expiresAt: currentExpiresAt });
+      if (currentExpiresAt !== undefined)
+        await ctx.scheduler.runAt(
+          Math.max(Date.now(), currentExpiresAt),
+          internal.groups.mutations.deleteExpiredMessage,
+          { messageId },
+        );
+      return;
+    }
     if (message.expiresAt > Date.now()) {
       await ctx.scheduler.runAt(message.expiresAt, internal.groups.mutations.deleteExpiredMessage, {
         messageId,

@@ -27,7 +27,7 @@ export const BACKEND_INFO = {
   apiVersion: 1,
   schemaVersion: 9,
   minimumMobileVersion: '1.11.0',
-  minimumWebVersion: '1.3.0',
+  minimumWebVersion: '1.11.0',
 } as const;
 
 /** Display string kept for existing callers ("v1.4.0"). */

@@ -622,7 +622,7 @@ function AiBody({ message }: { message: ChatMessage }) {
   const steps = ai.steps?.length ? <FinaiSteps steps={ai.steps} busy={busy} /> : null;
   if (!message.text && busy)
     return (
-      <span className={styles.aiThinking}>
+      <div className={styles.aiThinking}>
         {steps}
         {ai.steps?.some((step) => step.status === 'running') ? null : (
           <ThinkingOrb
@@ -632,13 +632,13 @@ function AiBody({ message }: { message: ChatMessage }) {
             caption={ai.stageLabel ?? 'Thinking…'}
           />
         )}
-      </span>
+      </div>
     );
   return (
-    <>
+    <div>
       {steps}
       <FinaiMarkdown text={message.text ?? ''} streaming={ai.status === 'streaming'} />
-    </>
+    </div>
   );
 }
 
@@ -650,7 +650,7 @@ function Composer(c: ChatComposerProps) {
   const [highlight, setHighlight] = React.useState(0);
   const [dismissed, setDismissed] = React.useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
-  const recorder = useVoiceRecorder();
+  const recorder = useVoiceRecorder(c.onSendVoice);
   const recording = recorder.state === 'recording';
   // With nothing typed the action button records a voice message instead of sending.
   const showMic = !!c.onSendVoice && !c.draft.trim() && !recording;
@@ -671,6 +671,7 @@ function Composer(c: ChatComposerProps) {
     focusAt(next.caret);
   };
   const insertEmoji = (emoji: string) => {
+    if (c.draft.length + emoji.length > CHAT_TEXT_LIMIT) return;
     const next = insertAtCaret(c.draft, emoji, caret);
     c.onDraftChange(next.draft);
     setCaret(next.caret);

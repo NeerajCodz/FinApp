@@ -862,7 +862,15 @@ function Composer(c: ChatComposerProps) {
   const active = c.mentions?.length ? activeMention(c.draft, caret) : null;
   const options = active ? mentionMatches(c.mentions!, active.query) : [];
   const insertEmoji = (emoji: string) => {
-    const next = insertAtCaret(c.draft, emoji, caret);
+    let remaining = CHAT_TEXT_LIMIT - c.draft.length;
+    let boundedEmoji = '';
+    for (const character of emoji) {
+      if (character.length > remaining) break;
+      boundedEmoji += character;
+      remaining -= character.length;
+    }
+    if (!boundedEmoji) return;
+    const next = insertAtCaret(c.draft, boundedEmoji, caret);
     c.onDraftChange(next.draft);
     setSelection({ start: next.caret, end: next.caret });
   };

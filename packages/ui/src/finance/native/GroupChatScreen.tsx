@@ -30,6 +30,7 @@ import {
   type ChatReactionEmoji,
 } from '../../chat/model';
 import type { NativeVoiceClip } from '../../chat/native/voice';
+import { VoiceBubble } from '../../chat/native/voice';
 
 export type GroupChatItem = {
   id: string;
@@ -352,6 +353,13 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                           {item.text}
                         </Typography>
                       )}
+                      {item.audioUrl !== undefined && (
+                        <VoiceBubble
+                          src={item.audioUrl}
+                          durationMs={item.durationMs}
+                          mine={item.ownMessage}
+                        />
+                      )}
                       {!!item.attachmentUrl && (
                         <Image
                           source={{ uri: item.attachmentUrl }}
@@ -360,7 +368,7 @@ export function GroupChatScreen(p: GroupChatScreenProps) {
                           style={{ width: 210, maxWidth: '100%', height: 170, borderRadius: 6 }}
                         />
                       )}
-                      {!item.text && !item.attachmentUrl && (
+                      {!item.text && !item.attachmentUrl && item.audioUrl === undefined && (
                         <Typography variant="caption">
                           Bill image is no longer available.
                         </Typography>
