@@ -15,3 +15,6 @@ apps/web/node_modules/
 
 # Local agent skills (skills-lock.json stays tracked)
 .agents/
+
+apps/admin/.next/
+apps/admin/node_modules/

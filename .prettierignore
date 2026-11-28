@@ -9,3 +9,5 @@ apps/web/.next/
 apps/web/next-env.d.ts
 FINAPP_MOBILE_UX_AND_ANALYTICS_PLAN.md
 local-plan.md
+apps/admin/.next/
+apps/admin/next-env.d.ts
