@@ -907,4 +907,211 @@ export default defineSchema({
   })
     .index('by_avatarId', ['avatarId'])
     .index('by_gender_avatarId', ['gender', 'avatarId']),
+  // ---- Admin console ----
+  // Staff roles, moderation, usage counters, support tickets and reports. Nothing here holds
+  // finance content: usage rows carry event kinds and counts only, and free text people write
+  // to staff (tickets, report descriptions, staff notes) is AES-GCM encrypted
+  // (convex/admin/crypto.ts).
+  /** Discord-style staff roles. Higher `position` ranks higher; `system: 'owner'` tops all. */
+  adminRoles: defineTable({
+    name: v.string(),
+    color: v.string(),
+    /** Badge: an emoji or an icon key shown next to the name. */
+    icon: optionalText,
+    position: v.number(),
+    permissions: v.array(v.string()),
+    /** Shown as a staff badge on public profiles. */
+    hoist: v.boolean(),
+    mentionable: v.boolean(),
+    system: v.optional(v.literal('owner')),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).index('by_position', ['position']),
+  adminMembers: defineTable({
+    userId: v.id('users'),
+    roleIds: v.array(v.id('adminRoles')),
+    addedBy: v.optional(v.id('users')),
+    addedAt: timestamp,
+  }).index('by_user', ['userId']),
+  /** Every admin action (who did what to which target); `detail` never holds user content. */
+  adminAuditLog: defineTable({
+    actorId: v.id('users'),
+    action: v.string(),
+    targetType: v.string(),
+    targetId: optionalText,
+    detail: optionalText,
+    createdAt: timestamp,
+  })
+    .index('by_createdAt', ['createdAt'])
+    .index('by_actor_createdAt', ['actorId', 'createdAt'])
+    .index('by_target', ['targetType', 'targetId']),
+  /** Bans and temporary suspensions. Active while `liftedAt` is unset and `expiresAt` is ahead. */
+  accountRestrictions: defineTable({
+    userId: v.id('users'),
+    kind: v.union(v.literal('ban'), v.literal('suspension')),
+    /** Encrypted reason (shown to the user and staff). */
+    reason: v.string(),
+    expiresAt: optionalTime,
+    createdBy: v.id('users'),
+    createdAt: timestamp,
+    liftedAt: optionalTime,
+    liftedBy: v.optional(v.id('users')),
+  })
+    .index('by_user_createdAt', ['userId', 'createdAt'])
+    .index('by_createdAt', ['createdAt']),
+  /** Staff-only notes about a user (encrypted). */
+  adminNotes: defineTable({
+    userId: v.id('users'),
+    authorId: v.id('users'),
+    body: v.string(),
+    createdAt: timestamp,
+  }).index('by_user_createdAt', ['userId', 'createdAt']),
+  /** Daily event counts per whitelisted metric, sharded to spread writes (sum over shards). */
+  usageDaily: defineTable({
+    day: timestamp,
+    metric: v.string(),
+    shard: v.number(),
+    count: v.number(),
+    updatedAt: timestamp,
+  })
+    .index('by_metric_day_shard', ['metric', 'day', 'shard'])
+    .index('by_day', ['day']),
+  /** Per-user daily counts per metric (event kinds only). Pruned after 120 days. */
+  userUsageDaily: defineTable({
+    userId: v.id('users'),
+    day: timestamp,
+    metric: v.string(),
+    count: v.number(),
+  })
+    .index('by_user_metric_day', ['userId', 'metric', 'day'])
+    .index('by_user_day', ['userId', 'day'])
+    .index('by_day', ['day']),
+  /** Last activity and platform per user (for DAU/WAU/MAU and the users table). */
+  userActivity: defineTable({
+    userId: v.id('users'),
+    firstSeenAt: timestamp,
+    lastActiveAt: timestamp,
+    lastActiveDay: timestamp,
+    lastPlatform: optionalText,
+  })
+    .index('by_user', ['userId'])
+    .index('by_lastActiveAt', ['lastActiveAt']),
+  /** Daily activity counts per group (messages and ledger events; never their content). */
+  groupActivityDaily: defineTable({
+    groupId: v.id('groups'),
+    day: timestamp,
+    count: v.number(),
+  })
+    .index('by_group_day', ['groupId', 'day'])
+    .index('by_day', ['day']),
+  /** Sign-ins, failed sign-ins, MFA changes, bans and admin access. Identifiers are hashed. */
+  securityEvents: defineTable({
+    kind: v.string(),
+    userId: v.optional(v.id('users')),
+    actorId: v.optional(v.id('users')),
+    identifierHash: optionalText,
+    platform: optionalText,
+    createdAt: timestamp,
+  })
+    .index('by_createdAt', ['createdAt'])
+    .index('by_kind_createdAt', ['kind', 'createdAt'])
+    .index('by_user_createdAt', ['userId', 'createdAt']),
+  supportTickets: defineTable({
+    number: v.number(),
+    userId: v.id('users'),
+    category: v.string(),
+    /** Encrypted. */
+    subject: v.string(),
+    status: v.union(
+      v.literal('open'),
+      v.literal('pending'),
+      v.literal('resolved'),
+      v.literal('closed'),
+    ),
+    priority: v.union(
+      v.literal('low'),
+      v.literal('normal'),
+      v.literal('high'),
+      v.literal('urgent'),
+    ),
+    assigneeId: v.optional(v.id('users')),
+    /** AI triage (the summary is encrypted). */
+    aiCategory: optionalText,
+    aiPriority: optionalText,
+    aiSummary: optionalText,
+    aiTriagedAt: optionalTime,
+    duplicateOf: v.optional(v.id('supportTickets')),
+    messageCount: v.number(),
+    lastMessageAt: timestamp,
+    lastAuthor: v.union(v.literal('user'), v.literal('staff')),
+    /** Staff replied since the user last opened the ticket. */
+    userUnread: v.boolean(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    closedAt: optionalTime,
+  })
+    .index('by_user_updatedAt', ['userId', 'updatedAt'])
+    .index('by_status_updatedAt', ['status', 'updatedAt'])
+    .index('by_assignee_updatedAt', ['assigneeId', 'updatedAt'])
+    .index('by_updatedAt', ['updatedAt'])
+    .index('by_number', ['number']),
+  /** Ticket thread. `internal` notes are staff-only. Bodies are encrypted. */
+  supportMessages: defineTable({
+    ticketId: v.id('supportTickets'),
+    authorId: v.id('users'),
+    author: v.union(v.literal('user'), v.literal('staff'), v.literal('system')),
+    internal: v.boolean(),
+    body: v.string(),
+    createdAt: timestamp,
+  }).index('by_ticket_createdAt', ['ticketId', 'createdAt']),
+  /** Staff reply templates. */
+  cannedReplies: defineTable({
+    title: v.string(),
+    body: v.string(),
+    createdBy: v.id('users'),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).index('by_updatedAt', ['updatedAt']),
+  /** User reports. The description is encrypted; reported messages are referenced, not copied. */
+  reports: defineTable({
+    reporterId: v.id('users'),
+    targetType: v.union(
+      v.literal('user'),
+      v.literal('group'),
+      v.literal('message'),
+      v.literal('bug'),
+    ),
+    targetUserId: v.optional(v.id('users')),
+    targetGroupId: v.optional(v.id('groups')),
+    targetMessageId: optionalText,
+    reason: v.string(),
+    description: v.string(),
+    status: v.union(v.literal('open'), v.literal('dismissed'), v.literal('actioned')),
+    resolution: optionalText,
+    handledBy: v.optional(v.id('users')),
+    handledAt: optionalTime,
+    createdAt: timestamp,
+  })
+    .index('by_status_createdAt', ['status', 'createdAt'])
+    .index('by_reporter_createdAt', ['reporterId', 'createdAt'])
+    .index('by_targetUser', ['targetUserId']),
+  /** System notices shown to every user while active. */
+  announcements: defineTable({
+    title: v.string(),
+    body: v.string(),
+    severity: v.union(v.literal('info'), v.literal('warning'), v.literal('critical')),
+    active: v.boolean(),
+    startsAt: timestamp,
+    endsAt: optionalTime,
+    createdBy: v.id('users'),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).index('by_active_startsAt', ['active', 'startsAt']),
+  /** Console settings and counters (key/value). */
+  adminSettings: defineTable({
+    key: v.string(),
+    value: v.any(),
+    updatedAt: timestamp,
+    updatedBy: v.optional(v.id('users')),
+  }).index('by_key', ['key']),
 });
