@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 import { readSheets } from '../../convex/ai/attachmentContent';
-import {
-  excelSerialToIso,
-  parseCsv,
-  readXlsx,
-  sheetForPrompt,
-} from '../../convex/ai/spreadsheet';
+import { excelSerialToIso, parseCsv, readXlsx, sheetForPrompt } from '../../convex/ai/spreadsheet';
 import {
   detectDateFormat,
   mapImportRows,
@@ -95,6 +90,10 @@ describe('spreadsheet readers', () => {
     expect(parseCsv('"a,;|";b;c\n"x,y;|";2;3\nlast;4\n').rows[0]).toEqual(['a,;|', 'b', 'c']);
     expect(parseCsv('a;b;c\n1;2;3\n4;5\n').rows[0]).toEqual(['a', 'b', 'c']);
   });
+  it('bounds delimiter sampling on newline-heavy CSV input', () => {
+    const text = `${'x\n'.repeat(5_000_000)}header;value\n1;2`;
+    expect(parseCsv(text).rows[0]).toEqual(['x']);
+  });
 
   it('handles serial zero and the workbook 1904 date epoch', () => {
     expect(excelSerialToIso(0)).toBe('1899-12-31');
@@ -111,7 +110,15 @@ describe('spreadsheet readers', () => {
   });
   it('prioritizes the header and first data row and states the parser truncation limit', () => {
     const rendered = sheetForPrompt(
-      { name: 'limited', rows: [['Date', 'Amount'], ['2026-01-01', '10'], ['other', '20']], truncated: true },
+      {
+        name: 'limited',
+        rows: [
+          ['Date', 'Amount'],
+          ['2026-01-01', '10'],
+          ['other', '20'],
+        ],
+        truncated: true,
+      },
       110,
     );
     expect(rendered).toContain('Date,Amount\n2026-01-01,10');
@@ -120,8 +127,12 @@ describe('spreadsheet readers', () => {
   });
   it('converts date-styled serial zero with the workbook date1904 epoch', () => {
     const bytes = zipSync({
-      'xl/workbook.xml': strToU8('<workbook><workbookPr date1904="1"/><sheets><sheet name="S" sheetId="1"/></sheets></workbook>'),
-      'xl/worksheets/sheet1.xml': strToU8('<worksheet><sheetData><row r="1"><c r="A1" s="0"><v>0</v></c></row></sheetData></worksheet>'),
+      'xl/workbook.xml': strToU8(
+        '<workbook><workbookPr date1904="1"/><sheets><sheet name="S" sheetId="1"/></sheets></workbook>',
+      ),
+      'xl/worksheets/sheet1.xml': strToU8(
+        '<worksheet><sheetData><row r="1"><c r="A1" s="0"><v>0</v></c></row></sheetData></worksheet>',
+      ),
       'xl/styles.xml': strToU8('<styleSheet><cellXfs><xf numFmtId="14"/></cellXfs></styleSheet>'),
     });
     expect(readXlsx(bytes)[0]!.rows).toEqual([['1904-01-01']]);

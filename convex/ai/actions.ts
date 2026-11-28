@@ -77,7 +77,7 @@ export type FinaiActionView = {
   errorCode?: string;
   /** Whether the viewer may confirm a pending action or retry a failed import. */
   canDecide: boolean;
-  /** False for an interrupted confirmation: its write may already exist, so it can only be retried, never cancelled. */
+  /** False for an interrupted confirmation or retry whose write may already have happened. */
   canCancel: boolean;
 };
 
@@ -97,14 +97,13 @@ export async function actionViews(
       return [
         messageId,
         rows.map((row): FinaiActionView => {
-          const retryableImportFailure = row.kind === 'transaction.import' && row.status === 'failed';
           const status = isStaleRunning(row, now)
             ? 'pending'
             : row.status === 'pending' && row.expiresAt <= now
               ? 'expired'
               : row.status;
-          const canDecide =
-            (status === 'pending' || retryableImportFailure) && row.userId === viewerId;
+          const retryableImport = row.kind === 'transaction.import' && row.status === 'failed';
+          const canDecide = (status === 'pending' || retryableImport) && row.userId === viewerId;
           return {
             id: row._id,
             title: row.title,
@@ -143,9 +142,11 @@ export const claim = internalMutation({
     const row = await ctx.db.get(actionId);
     if (!row || row.userId !== user._id) throw new Error('ACTION_NOT_FOUND');
     const now = Date.now();
-    // Interrupted confirms retry after stale-running; failed imports retry immediately because
-    // their per-row mutation ids make replay safe after a partial commit.
-    if (isStaleRunning(row, now) || (row.kind === 'transaction.import' && row.status === 'failed')) {
+    // Imports can retry a recorded failure because each row mutation is idempotent.
+    if (
+      isStaleRunning(row, now) ||
+      (row.kind === 'transaction.import' && row.status === 'failed')
+    ) {
       await ctx.db.patch(actionId, { status: 'running', decidedAt: now });
       return { kind: row.kind, payload: row.payload, userId: row.userId };
     }
