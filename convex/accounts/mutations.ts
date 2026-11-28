@@ -399,7 +399,7 @@ export const archive = mutation({
       archivedAt: now,
       trashedAt: now,
       restoreDefaultAccount:
-        account.restoreDefaultAccount ?? (user.defaultAccountId === args.accountId),
+        account.restoreDefaultAccount ?? user.defaultAccountId === args.accountId,
       updatedAt: now,
     });
     if (user.defaultAccountId === args.accountId) {
@@ -421,7 +421,7 @@ export const archive = mutation({
         archivedAt: now,
         trashedAt: now,
         restoreDefaultAccount:
-          account.restoreDefaultAccount ?? (user.defaultAccountId === args.accountId),
+          account.restoreDefaultAccount ?? user.defaultAccountId === args.accountId,
         updatedAt: now,
         _id: args.accountId,
       },
