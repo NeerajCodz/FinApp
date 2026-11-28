@@ -102,7 +102,8 @@ function ActionCard({
   const { tokens } = useTheme();
   const status = state?.status ?? 'pending';
   const working = busy || status === 'running';
-  const decidable = !!state?.canDecide && status === 'pending' && !working && !!onDecide;
+  const decidable =
+    !!state?.canDecide && (status === 'pending' || status === 'failed') && !working && !!onDecide;
   const Icon =
     status === 'done'
       ? CheckCircle
@@ -174,7 +175,7 @@ function ActionCard({
       ) : decidable ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Button size="sm" style={{ flex: 1 }} onPress={() => onDecide?.(FINAI_EVENTS.confirm)}>
-            Confirm
+            {status === 'failed' ? 'Retry' : 'Confirm'}
           </Button>
           {state?.canCancel !== false ? (
             <Button

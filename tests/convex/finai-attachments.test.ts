@@ -1,8 +1,12 @@
+import { readFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import schema from '../../convex/schema';
+import type { ActionCtx } from '../../convex/_generated/server';
+import { attachmentParts } from '../../convex/ai/attachmentContent';
+import { finaiAttachmentLimits } from '../../convex/ai/config';
 import { aiErrorCode } from '../../convex/ai/errors';
 import { providerChat } from '../../convex/ai/providers';
 
@@ -164,6 +168,30 @@ describe('FinAI attachments', () => {
     ).toBe('INVALID_UPLOAD');
   });
 
+  it('starts the registration grace period when an uploaded object reaches storage', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const { t, owner } = await fixture();
+    const { ticket: uploadTicket } = await owner.mutation(
+      api.ai.attachments.generateUploadUrl,
+      {},
+    );
+
+    await vi.advanceTimersByTimeAsync(16 * 60 * 1000);
+    const storedId = await t.run((ctx) =>
+      ctx.storage.store(new Blob([CSV], { type: 'text/csv' })),
+    );
+    const registered = await owner.mutation(api.ai.attachments.register, {
+      ticket: uploadTicket,
+      storageId: storedId,
+      name: 'delayed.csv',
+    });
+
+    expect(registered).toMatchObject({
+      attachment: { kind: 'spreadsheet', name: 'delayed.csv' },
+    });
+  });
+
   it('sends images inline and spreadsheets as text, and shows them on the message', async () => {
     const { owner, upload } = await fixture();
     const image = await registered(owner, await upload(PNG, 'image/png'), 'receipt.png');
@@ -207,27 +235,91 @@ describe('FinAI attachments', () => {
     expect(history).not.toContain('inlineData');
   });
 
-  it.each(['image/heic', 'image/heif'])(
-    'rejects %s before sending it to Anthropic',
-    async (mimeType) => {
-      const fetchMock = vi.fn();
-      vi.stubGlobal('fetch', fetchMock);
-      const chat = providerChat({
-        provider: 'anthropic',
-        apiKey: 'test-key',
-        model: 'claude-test',
-      });
+  it('converts a real HEIF fixture for Anthropic and budgets the converted bytes', async () => {
+    // Fixture: libheif tests/data/rainbow-451x461.heic (MIT; see adjacent COPYING).
+    const heic = Uint8Array.from(
+      Buffer.from(
+        (await readFile(
+          new URL('../fixtures/finai-heic.heif.base64', import.meta.url),
+          'utf8',
+        )).trim(),
+        'base64',
+      ),
+    );
+    const heicId = 'heic-fixture' as Id<'_storage'>;
+    const pngId = 'budget-png' as Id<'_storage'>;
+    const stored = new Map<string, Uint8Array>([[heicId, heic]]);
+    const t = convexTest(schema, modules);
+    let converted: { data: ArrayBuffer; byteSize: number } | undefined;
+    const ctx = {
+      storage: {
+        get: async (storageId: Id<'_storage'>) => {
+          const bytes = stored.get(storageId);
+          return bytes ? new Blob([bytes]) : null;
+        },
+      },
+      runAction: async (
+        _action: unknown,
+        args: { bytes: ArrayBuffer; maxOutputBytes: number },
+      ) => {
+        converted = await t.action(internal.ai.heicConversion.toJpeg, args);
+        return converted;
+      },
+    } as unknown as ActionCtx;
+    const heicAttachment = {
+      id: 'heic',
+      name: 'fixture.heif',
+      kind: 'image' as const,
+      mimeType: 'image/heif',
+      size: heic.length,
+      storageId: heicId,
+    };
 
-      await expect(
-        chat({
-          role: 'chat',
-          parts: [],
-          contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: 'aGVpYw==' } }] }],
-        }),
-      ).rejects.toThrow('Anthropic does not support HEIC/HEIF');
-      expect(fetchMock).not.toHaveBeenCalled();
-    },
-  );
+    const parts = await attachmentParts(ctx, [heicAttachment]);
+    const inline = parts.find((part) => part.inlineData)?.inlineData;
+    expect(inline?.mimeType).toBe('image/jpeg');
+    expect(converted?.byteSize).toBeGreaterThan(heic.length);
+
+    let requestBody = '';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+        requestBody = String(init?.body);
+        return new Response(
+          [
+            `data: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: 1 } } })}`,
+            `data: ${JSON.stringify({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })}`,
+            `data: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } })}`,
+            `data: ${JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } })}`,
+          ].join('\n\n'),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        );
+      }),
+    );
+    await providerChat({
+      provider: 'anthropic',
+      apiKey: 'test-key',
+      model: 'claude-test',
+    })({
+      role: 'chat',
+      parts: [],
+      contents: [{ role: 'user', parts: [{ inlineData: inline! }] }],
+    });
+    const anthropicBody = JSON.parse(requestBody) as {
+      messages: Array<{ content: Array<{ source?: { media_type: string } }> }>;
+    };
+    expect(anthropicBody.messages[0]!.content[0]!.source?.media_type).toBe('image/jpeg');
+
+    const almostFull = new Uint8Array(finaiAttachmentLimits.maxInlineBytes - heic.length);
+    almostFull.set(PNG.subarray(0, 8));
+    stored.set(pngId, almostFull);
+    const capped = await attachmentParts(ctx, [
+      { ...heicAttachment, id: 'png', name: 'large.png', storageId: pngId },
+      heicAttachment,
+    ]);
+    expect(capped.some((part) => part.inlineData?.mimeType === 'image/jpeg')).toBe(false);
+    expect(capped[0]?.text).toContain('too large to view together');
+  });
 
   it("refuses someone else's or already-sent attachments", async () => {
     const { owner, outsider, upload } = await fixture();
@@ -302,7 +394,7 @@ describe('FinAI attachments', () => {
       ['Salary', 'income', 250_000n, null, ids.accountId],
     ]);
   });
-  it('retries a partially committed import after stale-running without duplicating its first row', async () => {
+  it('retries a failed partial import immediately without duplicating committed rows', async () => {
     const { t, owner, upload } = await fixture();
     const csv = 'Date,Description,Amount\n2026-01-05,First,-4.50\n2026-01-06,Second,-2.00\n';
     const sheet = await registered(owner, await upload(csv, 'text/csv'), 'retry.csv');
@@ -328,17 +420,28 @@ describe('FinAI attachments', () => {
       await ctx.db.patch(card.id as Id<'finaiActions'>, { payload: JSON.stringify(payload) });
       return actionRow!.payload;
     });
-    expect(await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> })).toMatchObject({
+    const failedResult = await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> });
+    expect(failedResult).toMatchObject({
       status: 'failed',
+      errorCode: 'INVALID_ACTION_PAYLOAD',
     });
-    expect(await t.run((ctx) => ctx.db.query('transactions').collect())).toHaveLength(1);
+    expect(await t.run(async (ctx) => (await ctx.db.get(card.id as Id<'finaiActions'>))?.status)).toBe(
+      'failed',
+    );
+    const failedMessages = await owner.query(api.ai.assistant.messages, {
+      conversationId,
+      paginationOpts: page,
+    });
+    expect(failedMessages.page.find((row) => row.id === replyId)!.actions[0]).toMatchObject({
+      status: 'failed',
+      errorCode: failedResult.errorCode,
+      canDecide: true,
+      canCancel: false,
+    });
     await t.run(async (ctx) => {
       const payload = JSON.parse(originalPayload) as { rows: unknown[][] };
       payload.rows[1]![2] = '200';
-      await ctx.db.patch(card.id as Id<'finaiActions'>, {
-        payload: JSON.stringify(payload),
-        decidedAt: Date.now() - 3 * 60 * 1000,
-      });
+      await ctx.db.patch(card.id as Id<'finaiActions'>, { payload: JSON.stringify(payload) });
     });
     expect(await owner.action(api.ai.actions.confirm, { actionId: card.id as Id<'finaiActions'> })).toMatchObject({
       status: 'done',

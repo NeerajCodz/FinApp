@@ -18,44 +18,89 @@ export type Sheet = { name: string; rows: string[][]; truncated: boolean; omitte
 
 // ---------- CSV ----------
 
-/** The most likely delimiter in the first lines: comma, semicolon, tab or pipe. */
+const CSV_DELIMITERS = [',', ';', '\t', '|'] as const;
+const MAX_DELIMITER_SAMPLE_CHARS = 64 * 1024;
+const MAX_DELIMITER_SAMPLE_RECORDS = 100;
+
+/** Scores delimiter widths in a bounded sample and ignores separators inside quoted fields. */
 function detectDelimiter(text: string): string {
-  const candidates = [',', ';', '\t', '|'];
-  const records = new Map(candidates.map((delimiter) => [delimiter, [] as number[]]));
-  const counts = new Map(candidates.map((delimiter) => [delimiter, 0]));
-  let quoted = false;
-  let fieldStart = true;
-  for (let index = 0; index < text.length; index++) {
-    const char = text[index]!;
-    if (quoted) {
-      if (char === '"') {
-        if (text[index + 1] === '"') index++;
-        else quoted = false;
+  const widthCounts = CSV_DELIMITERS.map(() => new Map<number, number>());
+  const separatorsInRow = CSV_DELIMITERS.map(() => 0);
+  let sampledRecords = 0;
+  let insideQuote = false;
+  let canOpenQuote = true;
+
+  const recordSample = () => {
+    for (let index = 0; index < CSV_DELIMITERS.length; index++) {
+      const width = separatorsInRow[index]! + 1;
+      if (width > 1) {
+        const counts = widthCounts[index]!;
+        counts.set(width, (counts.get(width) ?? 0) + 1);
       }
-    } else if (char === '"' && fieldStart) quoted = true;
-    else if (char === '\n' || char === '\r') {
-      for (const delimiter of candidates) records.get(delimiter)!.push(counts.get(delimiter)! + 1);
-      for (const delimiter of candidates) counts.set(delimiter, 0);
-      fieldStart = true;
-      if (char === '\r' && text[index + 1] === '\n') index++;
-    } else if (counts.has(char)) {
-      counts.set(char, counts.get(char)! + 1);
-      fieldStart = true;
-    } else fieldStart = false;
-  }
-  if (candidates.some((delimiter) => counts.get(delimiter)! > 0))
-    for (const delimiter of candidates) records.get(delimiter)!.push(counts.get(delimiter)! + 1);
-  let best = ',';
-  let bestScore = 0;
-  for (const delimiter of candidates) {
-    const frequencies = new Map<number, number>();
-    for (const width of records.get(delimiter)!) {
-      if (width > 1) frequencies.set(width, (frequencies.get(width) ?? 0) + 1);
+      separatorsInRow[index] = 0;
     }
-    const score = Math.max(0, ...frequencies.values()) * 100 + [...frequencies.values()].reduce((a, b) => a + b, 0);
-    if (score > bestScore) { best = delimiter; bestScore = score; }
+    sampledRecords++;
+    canOpenQuote = true;
+  };
+
+  for (
+    let index = 0;
+    index < text.length &&
+    index < MAX_DELIMITER_SAMPLE_CHARS &&
+    sampledRecords < MAX_DELIMITER_SAMPLE_RECORDS;
+    index++
+  ) {
+    const char = text[index]!;
+    if (insideQuote) {
+      if (char !== '"') continue;
+      if (text[index + 1] === '"') {
+        index++;
+        continue;
+      }
+      insideQuote = false;
+      canOpenQuote = false;
+      continue;
+    }
+    if (char === '"' && canOpenQuote) {
+      insideQuote = true;
+      continue;
+    }
+    if (char === '\r' || char === '\n') {
+      recordSample();
+      if (char === '\r' && text[index + 1] === '\n') index++;
+      continue;
+    }
+
+    const delimiterIndex = CSV_DELIMITERS.indexOf(char as (typeof CSV_DELIMITERS)[number]);
+    if (delimiterIndex >= 0) {
+      separatorsInRow[delimiterIndex] = separatorsInRow[delimiterIndex]! + 1;
+      canOpenQuote = true;
+    } else canOpenQuote = false;
   }
-  return best;
+
+  if (
+    sampledRecords < MAX_DELIMITER_SAMPLE_RECORDS &&
+    text.length <= MAX_DELIMITER_SAMPLE_CHARS &&
+    separatorsInRow.some((count) => count > 0)
+  )
+    recordSample();
+
+  let selectedDelimiter: string = CSV_DELIMITERS[0];
+  let selectedScore = 0;
+  for (let index = 0; index < CSV_DELIMITERS.length; index++) {
+    let mostRepeatedWidth = 0;
+    let rowsWithColumns = 0;
+    for (const count of widthCounts[index]!.values()) {
+      mostRepeatedWidth = Math.max(mostRepeatedWidth, count);
+      rowsWithColumns += count;
+    }
+    const score = mostRepeatedWidth * 100 + rowsWithColumns;
+    if (score > selectedScore) {
+      selectedDelimiter = CSV_DELIMITERS[index]!;
+      selectedScore = score;
+    }
+  }
+  return selectedDelimiter;
 }
 
 /** RFC 4180 CSV (quoted fields, doubled quotes, newlines in quotes), delimiter auto-detected. */
@@ -288,29 +333,46 @@ function csvCell(value: string): string {
 }
 
 /**
- * A sheet as compact CSV for the model, within `maxChars`: the header and as many rows as fit,
- * then a note with the total so the model knows to use the import tool for the full data.
+ * Renders the header and as many rows as fit, reserving prompt space for an accurate omission note.
  */
 export function sheetForPrompt(sheet: Sheet, maxChars: number): string {
-  const budget = Math.max(0, maxChars);
-  if (!budget) return '';
-  const rows = sheet.rows.filter((row) => row.some((cell) => cell !== ''));
-  const lines = rows.map((row) => row.map(csvCell).join(','));
-  const disclosure = sheet.truncated
-    ? '… parser limit reached; additional data may be missing'
-    : sheet.omittedSheets
-      ? `… ${sheet.omittedSheets} additional sheets not parsed`
-      : '… rows omitted; use import tool for complete data';
-  let output = '';
-  let shown = 0;
-  for (const line of lines) {
-    const next = output ? `${output}\n${line}` : line;
-    if (next.length + (shown + 1 < lines.length || sheet.truncated || sheet.omittedSheets ? disclosure.length : 0) > budget)
-      break;
-    output = next;
-    shown++;
+  const limit = Math.max(0, maxChars);
+  if (!limit) return '';
+
+  let rowCount = 0;
+  for (const row of sheet.rows) if (row.some((cell) => cell !== '')) rowCount++;
+
+  const omissionNote = (included: number) => {
+    const details: string[] = [];
+    const notShown = rowCount - included;
+    if (sheet.truncated) {
+      details.push(
+        `${rowCount} rows parsed; parser limit reached at ${MAX_ROWS} rows (total unknown)`,
+      );
+      if (notShown > 0) details.push(`${notShown} more parsed`);
+    } else if (notShown > 0) {
+      details.push(`${rowCount} rows total; ${notShown} not shown`);
+    }
+    if (sheet.omittedSheets) details.push(`${sheet.omittedSheets} additional sheets not parsed`);
+    return `… ${details.join('; ')}`;
+  };
+
+  let included = 0;
+  let prompt = '';
+  for (const row of sheet.rows) {
+    if (!row.some((cell) => cell !== '')) continue;
+    const line = row.map(csvCell).join(',');
+    const candidate = prompt ? `${prompt}\n${line}` : line;
+    const candidateCount = included + 1;
+    const needsNote =
+      candidateCount < rowCount || sheet.truncated === true || (sheet.omittedSheets ?? 0) > 0;
+    const rendered = needsNote ? `${candidate}\n${omissionNote(candidateCount)}` : candidate;
+    if (rendered.length > limit) break;
+    prompt = candidate;
+    included = candidateCount;
   }
-  if (shown === lines.length && !sheet.truncated && !sheet.omittedSheets) return output;
-  if (!output) return disclosure.slice(0, budget);
-  return `${output.slice(0, Math.max(0, budget - disclosure.length))}${disclosure}`.slice(0, budget);
+
+  if (included === rowCount && !sheet.truncated && !sheet.omittedSheets) return prompt;
+  const suffix = omissionNote(included);
+  return (prompt ? `${prompt}\n${suffix}` : suffix).slice(0, limit);
 }

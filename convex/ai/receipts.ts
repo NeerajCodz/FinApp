@@ -51,7 +51,7 @@ export function sniffImageType(bytes: Uint8Array): string | null {
   if (ascii(4, 8) === 'ftyp') {
     const brand = ascii(8, 12);
     if (['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis'].includes(brand)) return 'image/heic';
-    if (['mif1', 'msf1', 'heif'].includes(brand)) return 'image/heif';
+    if (['mif1', 'mif2', 'mif3', 'mif4', 'msf1', 'heif'].includes(brand)) return 'image/heif';
   }
   return null;
 }

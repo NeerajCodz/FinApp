@@ -27,6 +27,7 @@ import type * as ai_config from "../ai/config.js";
 import type * as ai_decisions from "../ai/decisions.js";
 import type * as ai_errors from "../ai/errors.js";
 import type * as ai_gemini from "../ai/gemini.js";
+import type * as ai_heicConversion from "../ai/heicConversion.js";
 import type * as ai_geminiChat from "../ai/geminiChat.js";
 import type * as ai_importDomain from "../ai/importDomain.js";
 import type * as ai_importTools from "../ai/importTools.js";
@@ -154,6 +155,7 @@ declare const fullApi: ApiFromModules<{
   "ai/decisions": typeof ai_decisions;
   "ai/errors": typeof ai_errors;
   "ai/gemini": typeof ai_gemini;
+  "ai/heicConversion": typeof ai_heicConversion;
   "ai/geminiChat": typeof ai_geminiChat;
   "ai/importDomain": typeof ai_importDomain;
   "ai/importTools": typeof ai_importTools;

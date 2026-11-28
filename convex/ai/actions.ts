@@ -75,8 +75,7 @@ export type FinaiActionView = {
   title: string;
   status: Doc<'finaiActions'>['status'];
   errorCode?: string;
-  /** Whether the viewer may confirm or cancel (only the requester, only while pending). */
-  canDecide: boolean;
+  /** Whether the requester may confirm a pending action or retry a failed import. */
   /**
    * False for an interrupted confirmation: its write may already exist, so it can only be
    * retried (idempotently), never cancelled.
@@ -100,12 +99,14 @@ export async function actionViews(
       return [
         messageId,
         rows.map((row): FinaiActionView => {
+          const retryableImportFailure = row.kind === 'transaction.import' && row.status === 'failed';
           const status = isStaleRunning(row, now)
             ? 'pending'
             : row.status === 'pending' && row.expiresAt <= now
               ? 'expired'
               : row.status;
-          const canDecide = status === 'pending' && row.userId === viewerId;
+          const canDecide =
+            (status === 'pending' || retryableImportFailure) && row.userId === viewerId;
           return {
             id: row._id,
             title: row.title,
@@ -144,9 +145,10 @@ export const claim = internalMutation({
     const row = await ctx.db.get(actionId);
     if (!row || row.userId !== user._id) throw new Error('ACTION_NOT_FOUND');
     const now = Date.now();
-    // An interrupted confirmation was already accepted before its deadline: let it retry.
-    if (isStaleRunning(row, now)) {
-      await ctx.db.patch(actionId, { decidedAt: now });
+    // Interrupted confirms retry after stale-running; failed imports retry immediately because
+    // their per-row mutation ids make replay safe after a partial commit.
+    if (isStaleRunning(row, now) || (row.kind === 'transaction.import' && row.status === 'failed')) {
+      await ctx.db.patch(actionId, { status: 'running', decidedAt: now });
       return { kind: row.kind, payload: row.payload, userId: row.userId };
     }
     if (row.status !== 'pending') throw new Error('ACTION_ALREADY_DECIDED');
@@ -308,7 +310,7 @@ export const confirm = action({
       console.warn('[ai] FinAI action failed', claimed.kind, errorCode);
       await ctx.runMutation(internal.ai.actions.finish, {
         actionId,
-        status: claimed.kind === 'transaction.import' ? 'running' : 'failed',
+        status: 'failed',
         errorCode,
       });
       return { status: 'failed', errorCode };

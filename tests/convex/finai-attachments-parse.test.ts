@@ -68,6 +68,17 @@ describe('spreadsheet readers', () => {
       ['PK\u0005\u0006', 'date'],
     ]);
   });
+  it('dispatches XLSX only when bytes have a ZIP signature', () => {
+    expect(readSheets(workbook(), 'bank.xlsx')[0]!.rows[0]).toEqual([
+      'Date',
+      'Description',
+      'Amount',
+    ]);
+    expect(readSheets(strToU8('PK,Amount\nCoffee,-4'), 'bank.xlsx')[0]!.rows).toEqual([
+      ['PK', 'Amount'],
+      ['Coffee', '-4'],
+    ]);
+  });
 
   it('parses CSV with quotes, embedded newlines, BOM and a detected delimiter', () => {
     expect(parseCsv('﻿a,b\n"x, y","say ""hi"""\n"multi\nline",2\n').rows).toEqual([
@@ -98,6 +109,15 @@ describe('spreadsheet readers', () => {
     expect(rendered.length).toBeLessThanOrEqual(24);
     expect(rendered).toContain('…');
   });
+  it('prioritizes the header and first data row and states the parser truncation limit', () => {
+    const rendered = sheetForPrompt(
+      { name: 'limited', rows: [['Date', 'Amount'], ['2026-01-01', '10'], ['other', '20']], truncated: true },
+      110,
+    );
+    expect(rendered).toContain('Date,Amount\n2026-01-01,10');
+    expect(rendered).toContain('parser limit reached at 5000 rows (total unknown)');
+    expect(rendered.length).toBeLessThanOrEqual(110);
+  });
   it('converts date-styled serial zero with the workbook date1904 epoch', () => {
     const bytes = zipSync({
       'xl/workbook.xml': strToU8('<workbook><workbookPr date1904="1"/><sheets><sheet name="S" sheetId="1"/></sheets></workbook>'),
@@ -120,7 +140,7 @@ describe('spreadsheet readers', () => {
     );
     const text = sheetForPrompt(sheet, 60);
     expect(text.startsWith('h1,h2\nrow0,0')).toBe(true);
-    expect(text).toMatch(/51 rows in total; \d+ not shown/);
+    expect(text).toMatch(/51 rows total; \d+ not shown/);
     expect(sheetForPrompt(parseCsv('a,b\n1,2'), 1000)).toBe('a,b\n1,2');
   });
 });
