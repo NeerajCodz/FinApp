@@ -1,6 +1,7 @@
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
 import { calculateNetBalances, serializeBalances, type BalanceMap } from '../splits/domain';
+import { trackGroupActivity } from '../admin/usage';
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -94,6 +95,7 @@ export async function recordLedgerEvent(
   },
 ): Promise<Id<'ledgerEvents'>> {
   const { balanceDeltas, ...rest } = event;
+  await trackGroupActivity(ctx, rest.groupId);
   return ctx.db.insert('ledgerEvents', {
     ...rest,
     ...(balanceDeltas && Object.keys(balanceDeltas).length

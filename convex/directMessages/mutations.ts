@@ -7,6 +7,7 @@ import { validateVoiceMetadata, validVoiceDuration } from '../shared/voice';
 import { validateBillImageMetadata } from '../groups/domain';
 import { advanceReadPointer, CHAT_PIN_LIMIT, chatReactionEmoji, clearTyping } from '../shared/chat';
 import { maybeScheduleFinaiReply } from '../ai/mentions';
+import { trackUpload, trackUsage } from '../admin/usage';
 
 async function getConversationForParticipant(
   ctx: MutationCtx,
@@ -29,6 +30,7 @@ async function afterSend(
   const scope = { type: 'direct' as const, id: conversationId };
   await clearTyping(ctx, scope, userId);
   await advanceReadPointer(ctx, scope, userId, createdAt);
+  await trackUsage(ctx, userId, 'chat.direct_message');
 }
 
 export const startConversation = mutation({
@@ -158,6 +160,7 @@ export const sendImage = mutation({
       createdAt,
     });
     await ctx.db.patch(upload._id, { usedAt: createdAt });
+    await trackUpload(ctx, actor._id, metadata.size);
     await ctx.db.patch(conversation._id, { updatedAt: createdAt });
     await afterSend(ctx, conversationId, actor._id, createdAt);
     return messageId;
@@ -215,6 +218,7 @@ export const sendVoice = mutation({
       createdAt,
     });
     await ctx.db.patch(upload._id, { usedAt: createdAt });
+    await trackUpload(ctx, actor._id, metadata.size);
     await ctx.db.patch(conversation._id, { updatedAt: createdAt });
     await afterSend(ctx, conversationId, actor._id, createdAt);
     return messageId;

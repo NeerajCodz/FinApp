@@ -21,6 +21,7 @@ import { finaiAttachmentLimits } from './config';
 import { aiError } from './errors';
 import { storageInUse } from './receipts';
 import { loadFinaiSettings } from './settings';
+import { trackUpload } from '../admin/usage';
 
 export type AttachmentKind = Doc<'finaiAttachments'>['kind'];
 
@@ -135,6 +136,7 @@ export const register = mutation({
       await ctx.storage.delete(storageId);
       return { error: error ?? 'UNSUPPORTED_FILE' } as const;
     }
+    await trackUpload(ctx, user._id, file.size);
     const id = await ctx.db.insert('finaiAttachments', {
       userId: user._id,
       storageId,

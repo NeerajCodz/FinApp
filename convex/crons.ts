@@ -14,4 +14,12 @@ crons.hourly(
   {},
 );
 
+// Admin console: prunes usage counters past retention and snapshots storage and user totals.
+crons.daily(
+  'admin usage rollup',
+  { hourUTC: 2, minuteUTC: 40 },
+  internal.admin.usage.dailyRollup,
+  {},
+);
+
 export default crons;

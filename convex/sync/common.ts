@@ -1,5 +1,6 @@
 import type { MutationCtx } from '../_generated/server';
 import type { Id } from '../_generated/dataModel';
+import { trackOperation } from '../admin/usage';
 
 export type SyncEntity =
   | 'users'
@@ -114,6 +115,7 @@ export async function storeMutationReceipt(
     revision,
     createdAt: Date.now(),
   });
+  await trackOperation(ctx, actorId, operation);
 }
 
 export async function replayMutationResult(
@@ -165,6 +167,6 @@ export async function publishMutationResult(
       actorRevision,
       updatedAt,
     );
-  }
+  } else await trackOperation(ctx, actorId, operation);
   return actorRevision;
 }

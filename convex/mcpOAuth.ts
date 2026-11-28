@@ -4,6 +4,7 @@ import type { Doc } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { getOptionalUser, requireUser } from './shared/auth';
 import { createNotification } from './notifications/mutations';
+import { trackUsage } from './admin/usage';
 import {
   isConfidentialSecretMethod,
   isIssuedClientId,
@@ -593,6 +594,7 @@ export const recordToolInvocation = mutation({
       succeeded: args.succeeded,
       createdAt: Date.now(),
     });
+    await trackUsage(ctx, user._id, 'mcp.tool_call');
     const recent = await ctx.db
       .query('mcpOAuthActivity')
       .withIndex('by_user_createdAt', (index) => index.eq('userId', user._id))

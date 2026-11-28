@@ -7,6 +7,7 @@ import type { Id } from '../_generated/dataModel';
 import { internalMutation, type MutationCtx } from '../_generated/server';
 import { aiLimits, type AiUsageKind } from './config';
 import { aiError } from './errors';
+import { trackAmount, trackUsage } from '../admin/usage';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -34,6 +35,7 @@ export async function consumeAiQuota(
     throw aiError('AI_RATE_LIMITED', undefined, { retryAfterMs: windowStart + DAY_MS - now });
   if (row) await ctx.db.patch(row._id, { count: used + 1, updatedAt: now });
   else await ctx.db.insert('aiUsage', { userId, kind, windowStart, count: 1, updatedAt: now });
+  await trackUsage(ctx, userId, `ai.${kind}`);
   return { used: used + 1, limit };
 }
 
@@ -62,6 +64,8 @@ export const recordTokens = internalMutation({
       )
       .unique();
     if (!row) return;
+    await trackAmount(ctx, 'ai.tokens.prompt', promptTokens, String(userId));
+    await trackAmount(ctx, 'ai.tokens.output', outputTokens, String(userId));
     await ctx.db.patch(row._id, {
       promptTokens: (row.promptTokens ?? 0) + promptTokens,
       outputTokens: (row.outputTokens ?? 0) + outputTokens,

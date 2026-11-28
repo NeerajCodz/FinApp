@@ -3,6 +3,7 @@ import type { Id } from '../_generated/dataModel';
 import { v } from 'convex/values';
 import { requireUser } from '../shared/auth';
 import { advanceReadPointer, type ChatScope } from '../shared/chat';
+import { trackActive } from '../admin/usage';
 
 const ACTIVE_WINDOW_MS = 90_000;
 // Clients refresh at most every 2.5s while typing; indicators lapse 5s after the last refresh.
@@ -21,6 +22,7 @@ export const heartbeat = mutation({
     const update = { activeUntil: now + ACTIVE_WINDOW_MS, lastSeenAt: now, updatedAt: now };
     if (existing) await ctx.db.patch(existing._id, update);
     else await ctx.db.insert('presence', { userId: user._id, ...update });
+    await trackActive(ctx, user._id);
     return null;
   },
 });

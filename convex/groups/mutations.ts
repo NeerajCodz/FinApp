@@ -33,6 +33,7 @@ import { assertCurrency } from '../shared/validators';
 import { assertClientId, assertClientIdAvailable } from '../shared/clientId';
 import { advanceReadPointer, CHAT_PIN_LIMIT, chatReactionEmoji, clearTyping } from '../shared/chat';
 import { maybeScheduleFinaiReply } from '../ai/mentions';
+import { trackGroupActivity, trackUpload, trackUsage } from '../admin/usage';
 
 const participantMethodValidator = v.union(
   v.literal('equal'),
@@ -1042,6 +1043,8 @@ async function afterChatSend(
   const scope = { type: 'group' as const, id: groupId };
   await clearTyping(ctx, scope, userId);
   await advanceReadPointer(ctx, scope, userId, createdAt);
+  await trackUsage(ctx, userId, 'chat.group_message');
+  await trackGroupActivity(ctx, groupId);
 }
 
 async function liveChatMessageForMember(
@@ -1227,6 +1230,7 @@ export const sendBillAttachment = mutation({
       createdAt: now,
       expiresAt,
     });
+    await trackUpload(ctx, user._id, metadata.size);
     if (expiresAt !== undefined)
       await ctx.scheduler.runAt(expiresAt, internal.groups.mutations.deleteExpiredMessage, {
         messageId,
@@ -1281,6 +1285,7 @@ export const sendVoiceMessage = mutation({
       createdAt: now,
       expiresAt,
     });
+    await trackUpload(ctx, user._id, metadata.size);
     if (expiresAt !== undefined)
       await ctx.scheduler.runAt(expiresAt, internal.groups.mutations.deleteExpiredMessage, {
         messageId,

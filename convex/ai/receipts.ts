@@ -28,6 +28,7 @@ import {
   type ReceiptDraft,
 } from './receiptDomain';
 import { consumeAiQuota } from './usage';
+import { trackUpload } from '../admin/usage';
 
 /**
  * Upload metadata check: size within limits and, when the upload declared a type, an accepted
@@ -192,6 +193,7 @@ export const beginParse = internalMutation({
     )
       throw aiError('INVALID_UPLOAD_TICKET');
     await ctx.db.patch(upload._id, { usedAt: now, storageId });
+    await trackUpload(ctx, user._id, file.size);
     if (!validateReceiptImage({ contentType: file.contentType, size: file.size })) {
       await ctx.storage.delete(storageId);
       return { ok: false, code: 'INVALID_IMAGE' };

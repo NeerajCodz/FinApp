@@ -9,6 +9,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { getOptionalUser, requireUser } from './shared/auth';
 import { createNotification } from './notifications/mutations';
+import { trackActive } from './admin/usage';
 
 export type PrivacyPreferences = {
   showActive: boolean;
@@ -163,6 +164,7 @@ export const touchSession = mutation({
     if (!user || !sessionId) return null;
     const now = Date.now();
     const clean = label.replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX) || 'Unknown device';
+    await trackActive(ctx, user._id, platform);
     const existing = await ctx.db
       .query('sessionDevices')
       .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
