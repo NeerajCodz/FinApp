@@ -115,6 +115,7 @@ type BrowserSyncContextValue = {
   retryEntry: (localId: string) => Promise<void>;
   resolveConflict: (conflictId: string, winner: 'local' | 'cloud') => Promise<void>;
   stopSyncBeforeSignOut: () => Promise<void>;
+  resumeSyncAfterSignOutFailure: () => void;
   fetchTransactionRange: (startAt: number, endAt: number) => Promise<void>;
   fetchGroupRange: (groupId: string, startAt: number, endAt: number) => Promise<void>;
   read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) => Promise<T[]>;
@@ -875,6 +876,10 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
     await activeSync.current;
     await Promise.allSettled([...rangeFetches.current.values()]);
   }, []);
+  const resumeSyncAfterSignOutFailure = React.useCallback(() => {
+    signingOut.current = false;
+    void flush();
+  }, [flush]);
 
   React.useEffect(() => {
     if (!userId || !validatedOnline || scopedStatus.pending === 0) return;
@@ -965,7 +970,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
   );
   const resolveConflict = React.useCallback(
     async (conflictId: string, winner: 'local' | 'cloud') => {
-      if (!userId) return;
+      if (!userId || signingOut.current || running.current) return;
       await resolveLocalConflict(userId, conflictId, winner);
       if (validatedOnline) await flush();
     },
@@ -1020,6 +1025,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       retryEntry,
       resolveConflict,
       stopSyncBeforeSignOut,
+      resumeSyncAfterSignOutFailure,
       fetchTransactionRange,
       fetchGroupRange,
       read: <T extends LocalRecord = LocalRecord>(entityType: LocalEntity) =>
@@ -1035,6 +1041,7 @@ export function BrowserSyncProvider({ children }: { children: React.ReactNode })
       retryEntry,
       resolveConflict,
       retryNow,
+      resumeSyncAfterSignOutFailure,
       stopSyncBeforeSignOut,
       scopedConflicts,
       scopedFailedEntries,

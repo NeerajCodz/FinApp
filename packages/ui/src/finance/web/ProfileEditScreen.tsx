@@ -35,7 +35,11 @@ import {
 } from '../profileForm';
 import { useProfileEditor } from '../useProfileEditor';
 
-export type ProfileSaveResult = { message: string; tone?: 'success' | 'warning' };
+export type ProfileSaveResult = {
+  message: string;
+  tone?: 'success' | 'warning';
+  savedDraft?: Partial<ProfileDraft>;
+};
 
 export type ProfileEditScreenProps = {
   /** Saved profile as a draft; `undefined` while it loads. */
@@ -290,7 +294,8 @@ export function ProfileEditScreen({
     setSaveError('');
     try {
       const result = await onSave(draft, editor.changes);
-      if (result.tone !== 'warning') editor.commit(draft);
+      if (result.tone === 'warning') editor.commitPartial(draft, result.savedDraft ?? {});
+      else editor.commit(draft);
       setToast(result);
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : 'Could not save your profile.');

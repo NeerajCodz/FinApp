@@ -3,6 +3,7 @@ export async function signOutAndClearLocalData(
   stopSync: () => Promise<void>,
   clearLocalData: (userId: string) => Promise<void>,
   signOut: () => Promise<void>,
+  resumeSync?: () => void,
 ): Promise<unknown | null> {
   let cleanupError: unknown | null = null;
   try {
@@ -11,6 +12,11 @@ export async function signOutAndClearLocalData(
   } catch (cause) {
     cleanupError = cause;
   }
-  await signOut();
+  try {
+    await signOut();
+  } catch (cause) {
+    resumeSync?.();
+    throw cause;
+  }
   return cleanupError;
 }

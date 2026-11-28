@@ -15,7 +15,7 @@ import {
   timezoneList,
   type ProfileChanges,
   type ProfileSaveResult,
-  type UsernameStatus,
+  type ProfileDraft,
 } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
@@ -104,10 +104,11 @@ export default function EditProfilePage() {
     );
   const signedInUserId = userId;
 
-  async function save(changes: ProfileChanges): Promise<ProfileSaveResult> {
+  async function save(changes: ProfileChanges, draft: ProfileDraft): Promise<ProfileSaveResult> {
     if (!profile) throw new Error('Your profile is not available yet.');
     const recordId = String(profile.id ?? profile._id ?? signedInUserId);
     const warnings: string[] = [];
+    const savedDraft: Partial<ProfileDraft> = {};
     const identity = { ...changes.identity };
     if (changes.avatar?.kind === 'preset') {
       identity.avatarId = changes.avatar.avatarId;
@@ -134,6 +135,8 @@ export default function EditProfilePage() {
             }
           : {}),
       });
+      for (const field of ['displayName', 'bio', 'phone', 'timezone'] as const)
+        if (identity[field] !== undefined) savedDraft[field] = draft[field];
     }
 
     if (needsServer && !isConnected) {
@@ -143,6 +146,7 @@ export default function EditProfilePage() {
         try {
           const saved = await updateUser({ username: changes.username });
           await upsertCloudPage(signedInUserId, 'profile', [saved as unknown as LocalRecord]);
+          savedDraft.username = draft.username;
         } catch (cause) {
           warnings.push(`Username not changed: ${profileSaveErrorText(cause)}`);
         }
@@ -173,12 +177,13 @@ export default function EditProfilePage() {
         }
         if (saved)
           await upsertCloudPage(signedInUserId, 'profile', [saved as unknown as LocalRecord]);
+        if (changes.avatar) savedDraft.avatar = draft.avatar;
       } catch (cause) {
         warnings.push(`Photo not updated: ${profileSaveErrorText(cause)}`);
       }
     }
 
-    if (warnings.length > 0) return { message: warnings.join(' '), tone: 'warning' };
+    if (warnings.length > 0) return { message: warnings.join(' '), tone: 'warning', savedDraft };
     return {
       message: isConnected
         ? 'Profile saved.'
@@ -205,7 +210,7 @@ export default function EditProfilePage() {
       usernameStatus={username.status}
       onUsernameChange={username.onChange}
       timezones={timezones}
-      onSave={(_draft, changes) => save(changes)}
+      onSave={(draft, changes) => save(changes, draft)}
       onBack={() => (window.history.length > 1 ? router.back() : router.push('/profile'))}
       onOpenCurrency={() => router.push('/settings/currency')}
     />

@@ -46,4 +46,23 @@ describe('sign-out local data cleanup', () => {
     expect(cleanupError).toBe(failure);
     expect(signOut).toHaveBeenCalledOnce();
   });
+
+  it('resumes sync when authentication sign-out fails', async () => {
+    const resumeSync = vi.fn();
+    const failure = new Error('Authentication sign-out failed');
+
+    await expect(
+      signOutAndClearLocalData(
+        'user-a',
+        async () => undefined,
+        async () => undefined,
+        async () => {
+          throw failure;
+        },
+        resumeSync,
+      ),
+    ).rejects.toBe(failure);
+
+    expect(resumeSync).toHaveBeenCalledOnce();
+  });
 });

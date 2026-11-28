@@ -70,7 +70,8 @@ const privacyLinks = [
 export default function ProfilePage() {
   const { signOut } = useAuthActions();
   const router = useRouter();
-  const { userId, isConnected, stopSyncBeforeSignOut } = useBrowserSync();
+  const { userId, isConnected, stopSyncBeforeSignOut, resumeSyncAfterSignOutFailure } =
+    useBrowserSync();
   const { tokens, appearance } = useTheme();
   const live = Boolean(userId && isConnected);
   const finai = useQuery(api.ai.settings.get, live ? {} : 'skip');
@@ -116,6 +117,7 @@ export default function ProfilePage() {
         stopSyncBeforeSignOut,
         clearLocalData,
         signOut,
+        resumeSyncAfterSignOutFailure,
       );
       if (cleanupError) {
         const detail =
