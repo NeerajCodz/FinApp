@@ -234,10 +234,11 @@ export const listPage = query({
             .order('desc')
             .paginate({ numItems: 40, cursor: pageCursor })
         : await ctx.db
-            .query(TABLE[currentKind] as 'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules')
-            .withIndex('by_owner_archivedAt', (q) =>
-              q.eq('ownerId', user._id).gt('archivedAt', 0),
+            .query(
+              TABLE[currentKind] as
+                'accounts' | 'categories' | 'budgets' | 'goals' | 'recurringRules',
             )
+            .withIndex('by_owner_archivedAt', (q) => q.eq('ownerId', user._id).gt('archivedAt', 0))
             .order('desc')
             .paginate({ numItems: 40, cursor: pageCursor });
     const items: TrashItem[] = [];

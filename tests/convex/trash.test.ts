@@ -159,11 +159,7 @@ describe('Trash', () => {
       defaultCurrency: 'INR',
       timeZone: 'UTC',
     };
-    const expected = new Set([
-      ...fixtures.transactions,
-      fixtures.accountId,
-      fixtures.categoryId,
-    ]);
+    const expected = new Set([...fixtures.transactions, fixtures.accountId, fixtures.categoryId]);
     const kindOrder: Record<string, number> = {
       transaction: 0,
       account: 1,
@@ -201,7 +197,6 @@ describe('Trash', () => {
     expect(seen.size).toBe(count + 2);
     expect(seen).toEqual(expected);
   });
-
 
   it('deletes a category with its transactions and restores them together', async () => {
     const { t, owner, ids } = await setup();

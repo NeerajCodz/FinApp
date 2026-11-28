@@ -81,8 +81,7 @@ export async function executeManageAction(
         nextType !== type && nextType !== 'transfer'
           ? (text(payload, 'categoryId') as Id<'categories'> | undefined)
           : ((text(payload, 'categoryId') ?? (current.categoryId as string | undefined)) as
-              | Id<'categories'>
-              | undefined);
+              Id<'categories'> | undefined);
       if (nextType !== type && nextType !== 'transfer' && !categoryId)
         throw new Error('CATEGORY_REQUIRED_FOR_TYPE_CHANGE');
       await ctx.runMutation(api.transactions.mutations.update, {

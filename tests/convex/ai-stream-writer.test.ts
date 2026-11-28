@@ -116,8 +116,10 @@ describe('FinAI stale activity', () => {
     await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(6 * 60_000));
 
     expect((await owner.query(api.ai.assistant.activity, {})).working).toBe(false);
-    expect((await owner.query(api.ai.assistant.conversations, {})).find((row) => row.id === conversationId))
-      .toMatchObject({ working: false });
+    expect(
+      (await owner.query(api.ai.assistant.conversations, {})).find(
+        (row) => row.id === conversationId,
+      ),
+    ).toMatchObject({ working: false });
   });
 });
-

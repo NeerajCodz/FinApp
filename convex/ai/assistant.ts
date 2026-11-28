@@ -67,7 +67,6 @@ const REPLY_STALE_MS = 6 * 60_000;
 
 function isWorking(row: Doc<'finaiConversations'>, now: number) {
   return row.working === true && now - row.updatedAt < REPLY_STALE_MS;
-
 }
 /** Publishes the stale-work transition so subscribed queries rerun at the cutoff. */
 export const expireAbandoned = internalMutation({

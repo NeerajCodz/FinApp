@@ -183,11 +183,7 @@ describe('FinAI management tools', () => {
   it('rejects past goal target dates before creating a confirmation card', async () => {
     const ctx = context(async () => []);
     await expect(
-      runManageTool(
-        'propose_goal',
-        { name: 'Goal', target: '100', targetDate: '2000-01-01' },
-        ctx,
-      ),
+      runManageTool('propose_goal', { name: 'Goal', target: '100', targetDate: '2000-01-01' }, ctx),
     ).rejects.toThrow('TARGET_DATE_MUST_BE_FUTURE');
   });
 });

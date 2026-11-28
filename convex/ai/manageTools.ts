@@ -594,7 +594,8 @@ export const manageTools: FinaiTool[] = [
       const account = preferred
         ? accounts.find((row) => String(row.id) === preferred)
         : accounts.find((row) => row.currency === currency);
-      if (!account) throw new ToolArgError(preferred ? 'ACCOUNT_NOT_FOUND' : 'NO_ACCOUNT_IN_CURRENCY');
+      if (!account)
+        throw new ToolArgError(preferred ? 'ACCOUNT_NOT_FOUND' : 'NO_ACCOUNT_IN_CURRENCY');
       if (account.currency !== currency) throw new ToolArgError('ACCOUNT_CURRENCY_MISMATCH');
       return propose(ctx, {
         kind: 'recurring.create',
@@ -637,8 +638,7 @@ export const manageTools: FinaiTool[] = [
       if (!kind) throw new ToolArgError('MISSING_KIND');
       const id = requiredStr(args, 'id', 64);
       const doc = await owned(ctx, kind, id);
-      if (kind === 'category' && doc.isSystem === true)
-        throw new ToolArgError('SYSTEM_CATEGORY');
+      if (kind === 'category' && doc.isSystem === true) throw new ToolArgError('SYSTEM_CATEGORY');
       const withTransactions =
         kind === 'category' &&
         (args.deleteTransactions === true || args.deleteTransactions === 'true');
@@ -678,8 +678,7 @@ export const manageTools: FinaiTool[] = [
       if (!kind) throw new ToolArgError('MISSING_KIND');
       const id = requiredStr(args, 'id', 64);
       const doc = await owned(ctx, kind, id);
-      if (kind === 'category' && doc.isSystem === true)
-        throw new ToolArgError('SYSTEM_CATEGORY');
+      if (kind === 'category' && doc.isSystem === true) throw new ToolArgError('SYSTEM_CATEGORY');
       const inTrash =
         kind === 'transaction' ? doc.deletedAt !== undefined : doc.archivedAt !== undefined;
       if (!inTrash) throw new ToolArgError('NOT_IN_TRASH');
