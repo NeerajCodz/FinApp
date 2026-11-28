@@ -16,6 +16,7 @@ import {
   type ProfileChanges,
   type ProfileSaveResult,
   type ProfileDraft,
+  type UsernameStatus,
 } from '@finapp/ui/finance';
 import { FinanceSignedOut } from '@/components/finance/FinanceSignedOut';
 import { useBrowserSync } from '@/lib/offline/BrowserSyncProvider';
