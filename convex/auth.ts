@@ -52,10 +52,10 @@ type TwoFactorStart =
   | { status: 'verification-required'; email: string }
   | { status: 'two-factor-disabled'; email: string }
   | {
-      status: 'code-sent';
+      status: 'code-sent' | 'email-unavailable';
       challengeId: string;
       methods: TwoFactorMethods;
-      preferred: 'email';
+      preferred: 'email' | 'totp' | 'recovery';
     };
 
 export const requestEmailTwoFactor = action({
@@ -104,17 +104,24 @@ export const requestEmailTwoFactor = action({
       codeHash,
       now: Date.now(),
     });
+    let emailSent = true;
     try {
-      // Legacy clients need the email fallback. Current TOTP/recovery clients remain able to
-      // complete sign-in if email delivery is unavailable.
+      // Legacy clients need the email fallback. TOTP/recovery clients can continue without it.
       await sendTwoFactorEmail(email, code);
     } catch (error) {
       if (!methods.totp && !methods.recovery) {
         await ctx.runMutation(internal.authEmailChallenges.revoke, { challengeIdHash });
         throw error;
       }
+      emailSent = false;
     }
-    return { status: 'code-sent' as const, challengeId, methods, preferred: 'email' as const };
+    const preferred = emailSent ? 'email' : methods.totp ? 'totp' : 'recovery';
+    return {
+      status: emailSent ? 'code-sent' : 'email-unavailable',
+      challengeId,
+      methods,
+      preferred,
+    };
   },
 });
 

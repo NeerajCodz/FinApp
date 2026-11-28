@@ -378,10 +378,12 @@ describe('sign-in challenges with other factors', () => {
       password,
     });
     expect(challenge).toMatchObject({
-      status: 'code-sent',
+      status: 'email-unavailable',
+      preferred: 'recovery',
       methods: { totp: false, email: true, recovery: true },
     });
-    if (challenge.status !== 'code-sent') throw new Error('Expected a recovery-code challenge.');
+    if (challenge.status !== 'email-unavailable')
+      throw new Error('Expected a recovery-code challenge.');
     const result = await t.action(api.auth.signIn, {
       provider: 'password',
       params: {
@@ -446,10 +448,11 @@ describe('sign-in challenges with other factors', () => {
       password,
     });
     expect(challenge).toMatchObject({
-      status: 'code-sent',
+      status: 'email-unavailable',
+      preferred: 'totp',
       methods: { totp: true, email: true, recovery: false },
     });
-    if (challenge.status !== 'code-sent') throw new Error('Expected a TOTP challenge.');
+    if (challenge.status !== 'email-unavailable') throw new Error('Expected a TOTP challenge.');
     const result = await t.action(api.auth.signIn, {
       provider: 'password',
       params: {
