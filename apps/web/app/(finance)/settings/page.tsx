@@ -16,6 +16,7 @@ import {
   PlugZap,
   RefreshCw,
   ShieldCheck,
+  Terminal,
   Trash2,
 } from 'lucide-react';
 import { useTheme } from '@finapp/ui/web';
@@ -100,6 +101,16 @@ export default function SettingsPage() {
           title="MCP dashboard"
           description="Server URL, tools, widgets, activity and OAuth setup"
           onPress={() => router.push('/mcp/dashboard')}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Developer">
+        <SettingsLink
+          icon={<Terminal size={19} />}
+          tone="positive"
+          title="API & developer"
+          description="Access tokens, OAuth apps, connected apps, webhooks and API activity"
+          onPress={() => router.push('/settings/developer')}
         />
       </SettingsGroup>
 
