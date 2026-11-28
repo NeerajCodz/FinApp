@@ -97,7 +97,6 @@ export default function RecurringDetailScreen() {
     ]);
   }
 
-
   return (
     <>
       {rule && (

@@ -230,9 +230,7 @@ async function restoreCompanionPage(
   const marker = `${kind}:${parentId}`;
   const page = await ctx.db
     .query('transactions')
-    .withIndex('by_owner_trashedWith', (q) =>
-      q.eq('ownerId', userId).eq('trashedWith', marker),
-    )
+    .withIndex('by_owner_trashedWith', (q) => q.eq('ownerId', userId).eq('trashedWith', marker))
     .paginate({ numItems: RESTORE_COMPANION_PAGE_SIZE, cursor });
   let restored = 0;
   for (const row of page.page) {
@@ -309,15 +307,7 @@ async function purgeTransaction(
       await ctx.storage.delete(receipt.storageId);
     await ctx.db.delete(receipt._id);
   }
-  await recordSyncChange(
-    ctx,
-    userId,
-    'transactions',
-    String(transaction._id),
-    now,
-    undefined,
-    now,
-  );
+  await recordSyncChange(ctx, userId, 'transactions', String(transaction._id), now, undefined, now);
   await ctx.db.delete(transaction._id);
 }
 
@@ -341,7 +331,9 @@ async function purgeAccountPage(ctx: MutationCtx, args: AccountPurgePage) {
           .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.cursor })
       : await ctx.db
           .query('transactions')
-          .withIndex('by_transferAccountId', (q) => q.eq('transferAccountId', String(args.accountId)))
+          .withIndex('by_transferAccountId', (q) =>
+            q.eq('transferAccountId', String(args.accountId)),
+          )
           .paginate({ numItems: ACCOUNT_TRANSACTION_PAGE_SIZE, cursor: args.cursor });
   let purged = 0;
   for (const row of page.page) {
@@ -404,8 +396,7 @@ export async function restoreItem(
     const account = await ctx.db.get(record.accountId as Id<'accounts'>);
     if (!account || account.archivedAt !== undefined) throw new Error('ACCOUNT_IN_TRASH');
   }
-  if (kind === 'account' && record.purgingAt !== undefined)
-    throw new Error('PURGE_IN_PROGRESS');
+  if (kind === 'account' && record.purgingAt !== undefined) throw new Error('PURGE_IN_PROGRESS');
   const category = kind === 'category' ? (doc as Doc<'categories'>) : null;
   const accountRecord = kind === 'account' ? (doc as Doc<'accounts'>) : null;
   const user =
@@ -495,10 +486,7 @@ export async function purgeItem(
       ctx.db
         .query('transactions')
         .withIndex('by_transferAccountId_deletedAt_groupId', (q) =>
-          q
-            .eq('transferAccountId', String(accountId))
-            .eq('deletedAt', undefined)
-            .gt('groupId', ''),
+          q.eq('transferAccountId', String(accountId)).eq('deletedAt', undefined).gt('groupId', ''),
         )
         .first(),
     ]);

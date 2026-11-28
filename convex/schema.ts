@@ -246,11 +246,7 @@ export default defineSchema({
     .index('by_account', ['accountId'])
     .index('by_transferAccountId', ['transferAccountId'])
     .index('by_account_deletedAt_groupId', ['accountId', 'deletedAt', 'groupId'])
-    .index('by_transferAccountId_deletedAt_groupId', [
-      'transferAccountId',
-      'deletedAt',
-      'groupId',
-    ])
+    .index('by_transferAccountId_deletedAt_groupId', ['transferAccountId', 'deletedAt', 'groupId'])
     .index('by_group_occurredAt', ['groupId', 'occurredAt'])
     .index('by_clientId', ['clientId']),
   transactionTags: defineTable({ transactionId: v.id('transactions'), tag: v.string() }).index(

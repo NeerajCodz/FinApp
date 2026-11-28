@@ -365,9 +365,9 @@ export const archive = mutation({
     if (!category || category.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
     const now = Date.now();
     const restoreDefaultExpense =
-      category.restoreDefaultExpense ?? (user.defaultExpenseCategoryId === args.categoryId);
+      category.restoreDefaultExpense ?? user.defaultExpenseCategoryId === args.categoryId;
     const restoreDefaultIncome =
-      category.restoreDefaultIncome ?? (user.defaultIncomeCategoryId === args.categoryId);
+      category.restoreDefaultIncome ?? user.defaultIncomeCategoryId === args.categoryId;
     await ctx.db.patch(args.categoryId, {
       archivedAt: now,
       trashedAt: now,

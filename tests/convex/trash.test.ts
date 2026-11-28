@@ -354,16 +354,12 @@ describe('Trash', () => {
     const { t, owner, ids } = await setup();
     await t.run((ctx) => ctx.db.patch(owner.userId, { defaultAccountId: ids.accountId }));
     await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
-    expect(
-      (await t.run((ctx) => ctx.db.get(owner.userId)))?.defaultAccountId,
-    ).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(owner.userId)))?.defaultAccountId).toBeUndefined();
     await owner.as.mutation(api.trash.restore, {
       kind: 'account',
       id: String(ids.accountId),
     });
-    expect(
-      (await t.run((ctx) => ctx.db.get(owner.userId)))?.defaultAccountId,
-    ).toBe(ids.accountId);
+    expect((await t.run((ctx) => ctx.db.get(owner.userId)))?.defaultAccountId).toBe(ids.accountId);
   });
 
   it('does not restore category companions while their accounts are trashed', async () => {
@@ -424,9 +420,7 @@ describe('Trash', () => {
       });
     });
     const items = (await owner.as.query(api.trash.list, { kind: 'transaction' })).items;
-    expect(items).toEqual([
-      expect.objectContaining({ id: String(personalId), title: 'Personal' }),
-    ]);
+    expect(items).toEqual([expect.objectContaining({ id: String(personalId), title: 'Personal' })]);
   });
 
   it('continues expiry past a page of never-expiring transactions', async () => {
@@ -534,11 +528,13 @@ describe('Trash', () => {
     expect(await t.run((ctx) => ctx.db.system.get('_storage', storageId))).toBeNull();
     const changes = await t.run((ctx) => ctx.db.query('syncChanges').collect());
     expect(
-      changes.filter(
-        (change) =>
-          ['transactions', 'transactionTags', 'receipts'].includes(change.entityType) &&
-          change.deletedAt !== undefined,
-      ).map((change) => change.entityType),
+      changes
+        .filter(
+          (change) =>
+            ['transactions', 'transactionTags', 'receipts'].includes(change.entityType) &&
+            change.deletedAt !== undefined,
+        )
+        .map((change) => change.entityType),
     ).toEqual(expect.arrayContaining(['transactions', 'transactionTags', 'receipts']));
   });
 
