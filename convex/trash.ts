@@ -169,7 +169,10 @@ export const list = query({
           id: String(row._id),
           ...describe(each, doc),
           deletedAt,
-          purgeAt: days > 0 ? deletedAt + days * DAY : null,
+          purgeAt:
+            days > 0 && (each === 'transaction' || typeof doc.trashedAt === 'number')
+              ? deletedAt + days * DAY
+              : null,
         });
       }
     }
@@ -425,6 +428,7 @@ export async function restoreItem(
           ? {
               archivedAt: undefined,
               trashedAt: undefined,
+              trashTransactionsPending: undefined,
               restoreDefaultExpense: undefined,
               restoreDefaultIncome: undefined,
               updatedAt: now,
@@ -469,6 +473,8 @@ export async function purgeItem(
   if (!deletedAtOf(kind, record) || (kind === 'transaction' && record.groupId !== undefined))
     throw new Error('NOT_IN_TRASH');
   const now = Date.now();
+  if (kind === 'category' && record.trashTransactionsPending === true)
+    throw new Error('CATEGORY_TRASH_IN_PROGRESS');
   if (kind === 'transaction') {
     await purgeTransaction(ctx, userId, doc as Doc<'transactions'>, now);
     return { purged: 1 };
@@ -565,9 +571,8 @@ export const empty = mutation({
           more = true;
           break;
         }
-        const doc = row as unknown as Record<string, unknown>;
         const result = await purgeItem(ctx, user._id, kind, String(row._id));
-        purged += 1;
+        if (result.purged > 0) purged += 1;
         if ('more' in result && result.more) {
           more = true;
           break;
@@ -614,8 +619,17 @@ export const purgeExpired = internalMutation({
         retention.set(owner, await retentionDays(ctx, doc.ownerId as Id<'users'>));
       const days = retention.get(owner)!;
       if (days <= 0 || deletedAtOf(kind, doc) > now - days * DAY) continue;
-      await purgeItem(ctx, doc.ownerId as Id<'users'>, kind, String(row._id));
-      processed += 1;
+      try {
+        await purgeItem(ctx, doc.ownerId as Id<'users'>, kind, String(row._id));
+        processed += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (
+          message !== 'ACCOUNT_IN_USE_BY_GROUP_EXPENSE' &&
+          message !== 'CATEGORY_TRASH_IN_PROGRESS'
+        )
+          throw error;
+      }
     }
     if (!page.isDone) {
       await ctx.scheduler.runAfter(1000, internal.trash.purgeExpired, {

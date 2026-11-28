@@ -71,7 +71,7 @@ export default function RecurringDetailScreen() {
           void commitLocalWrite(
             userId,
             'recurringRule',
-            'recurring.remove',
+            'recurring.delete',
             {
               ...rule,
               archivedAt: Date.now(),

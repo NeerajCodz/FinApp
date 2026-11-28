@@ -281,7 +281,6 @@ describe('Trash', () => {
       kind: 'category',
       id: String(ids.categoryId),
     });
-    vi.setSystemTime(firstArchiveAt + 1_000);
     await owner.as.mutation(api.categories.mutations.archive, {
       categoryId: ids.categoryId,
       deleteTransactions: false,
@@ -293,6 +292,7 @@ describe('Trash', () => {
       keyIndex: 0,
       cursor: null,
       now: firstArchiveAt,
+      generation: 1,
     });
     const rows = await t.run((ctx) =>
       ctx.db
@@ -303,6 +303,52 @@ describe('Trash', () => {
         .collect(),
     );
     expect(rows.every((row) => row.deletedAt === undefined)).toBe(true);
+  });
+  it('blocks category purge until all transaction archive pages finish', async () => {
+    vi.useFakeTimers();
+    const { t, owner, ids } = await setup();
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let index = 0; index < 55; index++)
+        await ctx.db.insert('transactions', {
+          ownerId: owner.userId,
+          accountId: ids.accountId,
+          type: 'expense',
+          amountMinor: 100n,
+          currency: 'INR',
+          categoryId: String(ids.categoryId),
+          title: `Pending ${index}`,
+          occurredAt: now + index,
+          status: 'posted',
+          createdAt: now,
+          updatedAt: now,
+        });
+    });
+    await owner.as.mutation(api.categories.mutations.archive, {
+      categoryId: ids.categoryId,
+      deleteTransactions: true,
+    });
+    await expect(
+      owner.as.mutation(api.trash.purge, {
+        kind: 'category',
+        id: String(ids.categoryId),
+      }),
+    ).rejects.toThrow('CATEGORY_TRASH_IN_PROGRESS');
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
+    const rows = await t.run((ctx) =>
+      ctx.db
+        .query('transactions')
+        .withIndex('by_owner_category_occurredAt', (q) =>
+          q.eq('ownerId', owner.userId).eq('categoryId', String(ids.categoryId)),
+        )
+        .collect(),
+    );
+    expect(rows.every((row) => row.deletedAt !== undefined)).toBe(true);
+    await owner.as.mutation(api.trash.purge, {
+      kind: 'category',
+      id: String(ids.categoryId),
+    });
+    expect(await t.run((ctx) => ctx.db.get(ids.categoryId))).toBeNull();
   });
 
   it('restores category defaults only when no replacement was chosen', async () => {
@@ -475,9 +521,37 @@ describe('Trash', () => {
     expect(await t.run((ctx) => ctx.db.get(target))).toBeNull();
   });
 
+  it('continues expiry after an account is blocked by a live group expense', async () => {
+    vi.useFakeTimers();
+    const { t, owner, ids } = await setup();
+    const archivedAt = Date.now() - 31 * DAY;
+    const categoryId = ids.categoryId;
+    await t.run(async (ctx) => {
+      await ctx.db.patch(ids.accountId, { archivedAt, trashedAt: archivedAt });
+      await ctx.db.patch(categoryId, { archivedAt, trashedAt: archivedAt });
+      await ctx.db.insert('transactions', {
+        ownerId: owner.userId,
+        accountId: ids.accountId,
+        type: 'expense',
+        amountMinor: 100n,
+        currency: 'INR',
+        title: 'Live group expense',
+        groupId: 'active-group',
+        occurredAt: archivedAt,
+        status: 'posted',
+        createdAt: archivedAt,
+        updatedAt: archivedAt,
+      });
+    });
+    await t.mutation(internal.trash.purgeExpired, { kindIndex: 1 });
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1_000));
+    expect(await t.run((ctx) => ctx.db.get(ids.accountId))).not.toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(categoryId))).toBeNull();
+  });
+
   it('does not automatically expire legacy account or category archives', async () => {
     vi.useFakeTimers();
-    const { t, ids } = await setup();
+    const { t, owner, ids } = await setup();
     const legacyArchiveAt = Date.now() - 31 * DAY;
     await t.run(async (ctx) => {
       await ctx.db.patch(ids.categoryId, {
@@ -493,6 +567,13 @@ describe('Trash', () => {
     await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1_000));
     expect(await t.run((ctx) => ctx.db.get(ids.accountId))).not.toBeNull();
     expect(await t.run((ctx) => ctx.db.get(ids.categoryId))).not.toBeNull();
+    const listed = await owner.as.query(api.trash.list, {});
+    expect(listed.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: String(ids.accountId), purgeAt: null }),
+        expect.objectContaining({ id: String(ids.categoryId), purgeAt: null }),
+      ]),
+    );
   });
 
   it('purges transaction tags, receipt metadata and storage with sync tombstones', async () => {
@@ -591,6 +672,64 @@ describe('Trash', () => {
       ),
     );
     expect(deletionChanges).toHaveLength(2);
+  });
+
+  it('blocks account restore during purge and empties past the active purge', async () => {
+    vi.useFakeTimers();
+    const { t, owner, ids } = await setup();
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let index = 0; index < 25; index++)
+        await ctx.db.insert('transactions', {
+          ownerId: owner.userId,
+          accountId: ids.accountId,
+          type: 'expense',
+          amountMinor: 1n,
+          currency: 'INR',
+          title: `Purge ${index}`,
+          occurredAt: now + index,
+          status: 'posted',
+          createdAt: now,
+          updatedAt: now,
+        });
+      await ctx.db.insert('transactions', {
+        ownerId: owner.userId,
+        accountId: ids.accountId,
+        type: 'expense',
+        amountMinor: 1n,
+        currency: 'INR',
+        title: 'Also trashed',
+        occurredAt: now,
+        status: 'posted',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      });
+    });
+    await owner.as.mutation(api.accounts.mutations.archive, { accountId: ids.accountId });
+    await owner.as.mutation(api.trash.purge, {
+      kind: 'account',
+      id: String(ids.accountId),
+    });
+    await expect(
+      owner.as.mutation(api.trash.restore, {
+        kind: 'account',
+        id: String(ids.accountId),
+      }),
+    ).rejects.toThrow('PURGE_IN_PROGRESS');
+    const emptied = await owner.as.mutation(api.trash.empty, {});
+    expect(emptied.more).toBe(true);
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query('transactions')
+          .withIndex('by_owner_deletedAt', (q) => q.eq('ownerId', owner.userId).gt('deletedAt', 0))
+          .collect(),
+      ),
+    ).toHaveLength(0);
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1));
+    expect(await t.run((ctx) => ctx.db.get(ids.accountId))).toBeNull();
+    expect(await owner.as.mutation(api.trash.empty, {})).toMatchObject({ more: false });
   });
 
   it('keeps group expenses in their ledger deletion path during account purges', async () => {

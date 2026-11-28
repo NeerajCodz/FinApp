@@ -186,7 +186,10 @@ export default defineSchema({
     archivedAt: optionalTime,
     /** Set only for categories explicitly moved to Trash; older archives are legacy. */
     trashedAt: optionalTime,
-    /** Defaults cleared by archive and restored only if the user has not chosen another. */
+    /** Monotonically fences delayed transaction cleanup between archive generations. */
+    trashGeneration: v.optional(v.number()),
+    /** Category archive has scheduled transaction pages not yet moved to Trash. */
+    trashTransactionsPending: v.optional(v.boolean()),
     restoreDefaultExpense: v.optional(v.boolean()),
     restoreDefaultIncome: v.optional(v.boolean()),
     monthlyLimitMinor: v.optional(v.int64()),

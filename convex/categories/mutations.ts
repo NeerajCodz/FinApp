@@ -292,11 +292,18 @@ type CategoryTrashPage = {
   keyIndex: number;
   cursor: string | null;
   now: number;
+  generation: number;
 };
 
 async function trashCategoryTransactionPage(ctx: MutationCtx, args: CategoryTrashPage) {
   const category = await ctx.db.get(args.categoryId);
-  if (!category || category.ownerId !== args.userId || category.trashedAt !== args.now) return;
+  if (
+    !category ||
+    category.ownerId !== args.userId ||
+    category.trashedAt !== args.now ||
+    category.trashGeneration !== args.generation
+  )
+    return;
   const key = args.keys[args.keyIndex];
   if (key === undefined) return;
   const page = await ctx.db
@@ -329,6 +336,8 @@ async function trashCategoryTransactionPage(ctx: MutationCtx, args: CategoryTras
       keyIndex,
       cursor,
     });
+  } else {
+    await ctx.db.patch(args.categoryId, { trashTransactionsPending: undefined });
   }
 }
 
@@ -340,6 +349,7 @@ export const continueTrashTransactions = internalMutation({
     keyIndex: v.number(),
     cursor: v.union(v.string(), v.null()),
     now: v.number(),
+    generation: v.number(),
   },
   handler: async (ctx, args) => trashCategoryTransactionPage(ctx, args),
 });
@@ -364,6 +374,7 @@ export const archive = mutation({
     const category = await ctx.db.get(args.categoryId);
     if (!category || category.ownerId !== user._id) throw new Error('INSUFFICIENT_PERMISSION');
     const now = Date.now();
+    const generation = (category.trashGeneration ?? 0) + 1;
     const restoreDefaultExpense =
       category.restoreDefaultExpense ?? user.defaultExpenseCategoryId === args.categoryId;
     const restoreDefaultIncome =
@@ -371,6 +382,8 @@ export const archive = mutation({
     await ctx.db.patch(args.categoryId, {
       archivedAt: now,
       trashedAt: now,
+      trashGeneration: generation,
+      trashTransactionsPending: args.deleteTransactions ? true : undefined,
       restoreDefaultExpense: restoreDefaultExpense || undefined,
       restoreDefaultIncome: restoreDefaultIncome || undefined,
       updatedAt: now,
@@ -390,6 +403,7 @@ export const archive = mutation({
         keyIndex: 0,
         cursor: null,
         now,
+        generation,
       });
     }
     const updated = await ctx.db.get(args.categoryId);

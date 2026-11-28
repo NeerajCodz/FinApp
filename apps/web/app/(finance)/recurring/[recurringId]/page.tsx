@@ -64,7 +64,7 @@ export default function RecurringDetailPage() {
       await commitLocalWrite(
         userId,
         'recurringRule',
-        'recurring.remove',
+        'recurring.delete',
         {
           ...rule,
           archivedAt: Date.now(),
