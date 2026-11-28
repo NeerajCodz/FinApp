@@ -121,6 +121,25 @@ describe('FinAI management tools', () => {
       timeZone: 'UTC',
     }) as unknown;
 
+  it('accepts custom-type-only updates for existing other accounts', async () => {
+    const ctx = context(async () => ({
+      _id: 'account',
+      ownerId: 'user-id',
+      name: 'Other',
+      type: 'other',
+      currency: 'INR',
+    }));
+    const result = await runManageTool(
+      'propose_account_update',
+      { accountId: 'account', customType: 'Travel' },
+      ctx,
+    );
+    expect(result.data).toMatchObject({
+      payload: { accountId: 'account', customType: 'Travel' },
+      lines: [{ label: 'Custom type', value: 'Travel' }],
+    });
+  });
+
   it('paginates Trash results instead of truncating them at 40', async () => {
     const items = Array.from({ length: 45 }, (_, index) => ({
       kind: 'transaction' as const,
@@ -171,7 +190,7 @@ describe('FinAI management tools', () => {
           name: 'Rent',
           amount: '10',
           frequency: 'monthly',
-          firstDate: '2030-01-01',
+          firstDate: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
           accountId: 'account',
           currency: 'INR',
         },
