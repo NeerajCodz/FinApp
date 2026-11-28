@@ -210,30 +210,29 @@ describe('MCP OAuth authorization code exchange', () => {
       wrongTransport: 'basic' as const,
       correctTransport: 'post' as const,
     },
-  ])('requires the registered $method credential transport', async ({
-    method,
-    wrongTransport,
-    correctTransport,
-  }) => {
-    const fixture = await authorization(defaultVerifier, method);
-    const clientSecret = fixture.registration.client_secret;
-    if (!clientSecret) throw new Error('Expected a registered client secret');
+  ])(
+    'requires the registered $method credential transport',
+    async ({ method, wrongTransport, correctTransport }) => {
+      const fixture = await authorization(defaultVerifier, method);
+      const clientSecret = fixture.registration.client_secret;
+      if (!clientSecret) throw new Error('Expected a registered client secret');
 
-    await expect(
-      fixture.t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
-        ...fixture.exchange,
-        clientSecret,
-        authTransport: wrongTransport,
-      }),
-    ).rejects.toThrow('INVALID_CLIENT');
-    await expect(
-      fixture.t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
-        ...fixture.exchange,
-        clientSecret,
-        authTransport: correctTransport,
-      }),
-    ).resolves.toMatchObject({ userId: fixture.userId });
-  });
+      await expect(
+        fixture.t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
+          ...fixture.exchange,
+          clientSecret,
+          authTransport: wrongTransport,
+        }),
+      ).rejects.toThrow('INVALID_CLIENT');
+      await expect(
+        fixture.t.mutation(internal.mcpOAuth.exchangeAuthorizationCode, {
+          ...fixture.exchange,
+          clientSecret,
+          authTransport: correctTransport,
+        }),
+      ).resolves.toMatchObject({ userId: fixture.userId });
+    },
+  );
 
   it('narrows the live grant to a requested refresh scope subset', async () => {
     const fixture = await authorization(defaultVerifier, 'none', [
@@ -286,24 +285,63 @@ describe('MCP OAuth authorization code exchange', () => {
     ).resolves.toMatchObject({ scopes: ['finapp:read', 'finapp:write:finance'] });
   });
 
-  it('revokes every grant when its dashboard client is deleted', async () => {
+  it('disables a dashboard client before bounded grant cleanup', async () => {
     vi.useFakeTimers();
     const fixture = await authorization();
     const client = await fixture.owner.mutation(api.mcpOAuth.createStaticClient, {
       clientName: 'Delete all grants regression client',
     });
-    await fixture.t.run(async (ctx) => {
-      for (let index = 0; index < 501; index += 1) {
-        await ctx.db.insert('mcpOAuthGrants', {
-          clientId: client.clientId,
-          userId: fixture.userId,
-          scopes: ['finapp:read'],
-          createdAt: Date.now(),
-        });
+    const refreshToken = 'disabled-client-refresh-token';
+    const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
+    const targetGrantId = await fixture.t.run(async (ctx) => {
+      const grant = {
+        clientId: client.clientId,
+        userId: fixture.userId,
+        scopes: ['finapp:read'],
+        createdAt: Date.now(),
+      };
+      const first = await ctx.db.insert('mcpOAuthGrants', {
+        ...grant,
+        refreshTokenHash,
+        refreshExpiresAt: Date.now() + 60_000,
+      });
+      for (let index = 1; index < 501; index += 1) {
+        await ctx.db.insert('mcpOAuthGrants', grant);
       }
+      return first;
     });
 
     await fixture.owner.mutation(api.mcpOAuth.deleteMyClient, { clientId: client.clientId });
+    expect(
+      await fixture.owner.query(api.mcpOAuth.client, { clientId: client.clientId }),
+    ).toBeNull();
+    expect(await fixture.owner.query(api.mcpOAuth.listMyClients, {})).toEqual([]);
+    expect(await fixture.owner.query(api.mcpOAuth.activeGrant, { grantId: targetGrantId })).toBe(
+      false,
+    );
+    await expect(
+      fixture.t.query(internal.mcpOAuth.refreshTokenScopes, {
+        refreshToken,
+        clientId: client.clientId,
+      }),
+    ).rejects.toThrow('INVALID_GRANT');
+    await expect(
+      fixture.owner.query(api.mcpOAuth.accessPolicy, { grantId: targetGrantId }),
+    ).resolves.toBeNull();
+    await expect(
+      fixture.owner.mutation(api.mcpOAuth.createAuthorizationCode, {
+        clientId: client.clientId,
+        redirectUri: client.redirectUris[0]!,
+        codeChallenge: challenge(defaultVerifier),
+        scopes: ['finapp:read'],
+      }),
+    ).rejects.toThrow('INVALID_CLIENT');
+
+    const replacement = await fixture.owner.mutation(api.mcpOAuth.createStaticClient, {
+      clientName: 'Replacement MCP client',
+    });
+    expect(replacement.clientId).toBeTruthy();
+
     await fixture.t.finishAllScheduledFunctions(() => vi.runAllTimers());
     const grants = await fixture.t.run((ctx) =>
       ctx.db

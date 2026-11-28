@@ -12,10 +12,7 @@ export const createScopeUpdateState = (scopes: readonly string[]): ScopeUpdateSt
   pendingCount: 0,
 });
 
-export const syncScopeUpdateFromServer = (
-  update: ScopeUpdateState,
-  scopes: readonly string[],
-) => {
+export const syncScopeUpdateFromServer = (update: ScopeUpdateState, scopes: readonly string[]) => {
   update.serverScopes = [...scopes];
   if (update.pendingCount === 0) update.scopes = [...update.serverScopes];
 };
@@ -35,14 +32,22 @@ export const queueScopeUpdate = (
         ? [...new Set([...update.scopes, scope])]
         : update.scopes.filter((item) => item !== scope);
       update.scopes = scopes;
-      return mutate(scopes).then((result) => {
-        update.serverScopes = [...scopes];
-        return result;
-      });
+      const serverScopes = update.serverScopes;
+      return mutate(scopes).then(
+        (result) => {
+          if (update.serverScopes === serverScopes) update.serverScopes = [...scopes];
+          update.scopes = [...update.serverScopes];
+          return result;
+        },
+        (error: unknown) => {
+          update.scopes = [...update.serverScopes];
+          throw error;
+        },
+      );
     });
   update.pending = pending;
   return pending.finally(() => {
     update.pendingCount -= 1;
-    update.scopes = [...update.serverScopes];
+    if (update.pendingCount === 0) update.scopes = [...update.serverScopes];
   });
 };

@@ -91,11 +91,16 @@ function normalizeRedirects(redirectUris: readonly string[]): string[] {
   return redirects;
 }
 
-async function findClient(ctx: { db: QueryCtx['db'] }, clientId: string) {
+async function findClientRecord(ctx: { db: QueryCtx['db'] }, clientId: string) {
   return ctx.db
     .query('mcpOAuthClients')
     .withIndex('by_client_id', (index) => index.eq('clientId', clientId))
     .unique();
+}
+
+async function findClient(ctx: { db: QueryCtx['db'] }, clientId: string) {
+  const client = await findClientRecord(ctx, clientId);
+  return client?.disabledAt === undefined ? client : null;
 }
 // Client transport detected by the OAuth token endpoint.
 const clientAuthTransport = v.union(v.literal('none'), v.literal('basic'), v.literal('post'));
@@ -168,7 +173,9 @@ export const createStaticClient = mutation({
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
     const owned = await ctx.db
       .query('mcpOAuthClients')
-      .withIndex('by_owner', (index) => index.eq('ownerId', user._id))
+      .withIndex('by_owner_disabledAt', (index) =>
+        index.eq('ownerId', user._id).eq('disabledAt', undefined),
+      )
       .take(21);
     if (owned.length >= 20) throw new Error('TOO_MANY_CLIENTS');
     const name = args.clientName.trim();
@@ -205,7 +212,9 @@ export const listMyClients = query({
     if (!user || user.deletedAt !== undefined) return [];
     const clients = await ctx.db
       .query('mcpOAuthClients')
-      .withIndex('by_owner', (index) => index.eq('ownerId', user._id))
+      .withIndex('by_owner_disabledAt', (index) =>
+        index.eq('ownerId', user._id).eq('disabledAt', undefined),
+      )
       .take(20);
     return clients.map((client) => ({
       clientId: client.clientId,
@@ -217,25 +226,29 @@ export const listMyClients = query({
   },
 });
 
-/** Starts bounded grant revocation before removing a dashboard client. */
+/** Disables a dashboard client immediately, then reaps its grants in bounded batches. */
 export const deleteMyClient = mutation({
   args: { clientId: v.string() },
   handler: async (ctx, { clientId }) => {
     const user = await requireUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
-    const client = isIssuedClientId(clientId) ? await findClient(ctx, clientId) : null;
+    const client = isIssuedClientId(clientId) ? await findClientRecord(ctx, clientId) : null;
     if (!client || client.ownerId !== user._id) throw new Error('CLIENT_NOT_FOUND');
-    await ctx.scheduler.runAfter(0, internal.mcpOAuth.revokeClientGrantBatch, { clientId });
+    if (client.disabledAt === undefined) {
+      const disabledAt = Date.now();
+      await ctx.db.patch(client._id, { disabledAt });
+      await ctx.scheduler.runAfter(0, internal.mcpOAuth.revokeClientGrantBatch, { clientId });
+    }
     return { deleted: true };
   },
 });
 
-/** Revokes at most 100 grants per transaction, then removes the client. */
+/** Revokes at most 100 grants per transaction, then removes the disabled client. */
 export const revokeClientGrantBatch = internalMutation({
   args: { clientId: v.string(), cursor: v.optional(v.union(v.string(), v.null())) },
   handler: async (ctx, { clientId, cursor }) => {
-    const client = await findClient(ctx, clientId);
-    if (!client) return;
+    const client = await findClientRecord(ctx, clientId);
+    if (!client || client.disabledAt === undefined) return;
     const result = await ctx.db
       .query('mcpOAuthGrants')
       .withIndex('by_client', (index) => index.eq('clientId', clientId))
@@ -551,6 +564,7 @@ export const refreshTokenScopes = internalQuery({
   handler: async (ctx, { refreshToken, clientId }) => {
     if (!refreshToken || refreshToken.length > 256 || !isValidClientId(clientId))
       throw new Error('INVALID_GRANT');
+    if (!(await findClient(ctx, clientId))) throw new Error('INVALID_GRANT');
     const refreshTokenHash = await hash(refreshToken);
     const grant = await ctx.db
       .query('mcpOAuthGrants')
@@ -627,12 +641,13 @@ export const listGrants = query({
           .query('mcpOAuthClients')
           .withIndex('by_client_id', (index) => index.eq('clientId', grant.clientId))
           .unique();
+        const revokedAt = grant.revokedAt ?? client?.disabledAt;
         return {
           id: grant._id,
           clientName: client?.clientName ?? 'Removed MCP client',
           scopes: grant.scopes,
           createdAt: grant.createdAt,
-          revokedAt: grant.revokedAt,
+          revokedAt,
         };
       }),
     );
@@ -645,7 +660,8 @@ export const activeGrant = query({
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) return false;
     const grant = await ctx.db.get(grantId);
-    return Boolean(grant && grant.userId === user._id && grant.revokedAt === undefined);
+    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined) return false;
+    return Boolean(await findClient(ctx, grant.clientId));
   },
 });
 
@@ -831,7 +847,12 @@ export const updateGrantScopes = mutation({
     const user = await requireUser(ctx);
     if (!user || user.deletedAt !== undefined) throw new Error('AUTH_REQUIRED');
     const grant = await ctx.db.get(grantId);
-    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined)
+    if (
+      !grant ||
+      grant.userId !== user._id ||
+      grant.revokedAt !== undefined ||
+      !(await findClient(ctx, grant.clientId))
+    )
       throw new Error('GRANT_NOT_FOUND');
     const next = [...new Set(['finapp:read', ...scopes])];
     if (next.some((scope) => !isAllowedScope(scope))) throw new Error('INVALID_SCOPE');
@@ -850,7 +871,13 @@ export const accessPolicy = query({
     const user = await getOptionalUser(ctx);
     if (!user || user.deletedAt !== undefined) return null;
     const grant = await ctx.db.get(grantId);
-    if (!grant || grant.userId !== user._id || grant.revokedAt !== undefined) return null;
+    if (
+      !grant ||
+      grant.userId !== user._id ||
+      grant.revokedAt !== undefined ||
+      !(await findClient(ctx, grant.clientId))
+    )
+      return null;
     return { scopes: grant.scopes, settings: await mcpSettingsFor(ctx, user._id) };
   },
 });
