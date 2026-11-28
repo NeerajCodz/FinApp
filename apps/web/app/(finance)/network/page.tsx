@@ -10,10 +10,11 @@ const personAnalyticsHref = (person: Pick<HubPerson, 'id'>) =>
 /** People hub: the people you talk to and the groups you share, in one place. */
 export default function NetworkPage() {
   const router = useRouter();
-  const { people, hubGroups } = useHubData();
+  const { people, peopleTruncated, hubGroups } = useHubData();
   return (
     <PeopleHubScreen
       people={people}
+      peopleTruncated={peopleTruncated}
       groups={hubGroups}
       onOpenAnalytics={() => router.push('/network/analytics')}
       onOpenPeople={() => router.push('/people')}

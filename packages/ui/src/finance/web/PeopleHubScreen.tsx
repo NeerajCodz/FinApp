@@ -15,6 +15,7 @@ import styles from './PeopleHub.module.css';
 
 export type PeopleHubScreenProps = {
   people: readonly HubPerson[] | undefined;
+  peopleTruncated?: boolean;
   groups: readonly HubGroup[] | undefined;
   onOpenAnalytics: () => void;
   onOpenPeople: () => void;
@@ -113,6 +114,11 @@ export function PeopleHubScreen(p: PeopleHubScreenProps) {
             {query ? 'No people match your search.' : 'Add friends to see them here.'}
           </p>
         )}
+        {p.peopleTruncated ? (
+          <p className={styles.empty}>
+            Showing a limited set of people; some contacts may be omitted.
+          </p>
+        ) : null}
       </section>
 
       <section aria-labelledby="hub-groups">
@@ -129,7 +135,7 @@ export function PeopleHubScreen(p: PeopleHubScreenProps) {
         ) : groups.length ? (
           <div className={styles.groups} role="list">
             {groups.map((group) => {
-              const badge = unreadBadge(group.unreadCount);
+              const badge = unreadBadge(group.unreadCount, group.unreadCapped);
               return (
                 <div key={group.id} role="listitem" className={styles.groupCard}>
                   <button

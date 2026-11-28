@@ -17,9 +17,11 @@ import {
 } from 'lucide-react';
 import { Avatar, Empty } from '@finapp/ui/web';
 import {
+  Money,
   FinanceEmptyState,
   formatTransactionDate,
-  Money,
+  isAnalyticsLinkAvailable,
+  isTimestampInRange,
   personStatus,
   TransactionRow,
 } from '@finapp/ui/finance';
@@ -82,12 +84,13 @@ const aliases = (record: LocalRecord) =>
     (value): value is string => typeof value === 'string',
   );
 const idOf = (record: LocalRecord) => String(record.id ?? record._id ?? '');
-const endAt = Date.now() + 1;
-const startAt = endAt - 90 * 24 * 60 * 60 * 1000;
+const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 
 export default function PersonPage({ handle, profile, profileUnavailable }: PersonPageProps) {
   const router = useRouter();
   const { userId, isConnected, fetchGroupRange } = useBrowserSync();
+  const endAt = Date.now() + 1;
+  const startAt = endAt - NINETY_DAYS_MS;
   const person = profile?.username.toLowerCase() === handle ? profile : null;
   const otherId = person?.id && person.id !== userId ? (person.id as Id<'users'>) : null;
   const live = Boolean(userId && isConnected && otherId);
@@ -97,7 +100,9 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
   );
   const analytics = useQuery(
     api.social.queries.personAnalytics,
-    live && otherId ? { userId: otherId, tzOffsetMinutes: new Date().getTimezoneOffset() } : 'skip',
+    live && otherId
+      ? { userId: otherId, tzOffsetMinutes: -new Date().getTimezoneOffset() }
+      : 'skip',
   );
   const sendRequest = useMutation(api.social.mutations.sendRequest);
   const respondToRequest = useMutation(api.social.mutations.respondToRequest);
@@ -238,7 +243,8 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
               groupIdAliases.has(item.groupId) &&
               item.type === 'expense' &&
               item.status === 'posted' &&
-              item.deletedAt === undefined,
+              item.deletedAt === undefined &&
+              isTimestampInRange(Number(item.occurredAt ?? 0), startAt, endAt),
           )
           .sort((left, right) => Number(right.occurredAt ?? 0) - Number(left.occurredAt ?? 0))
       : [];
@@ -285,10 +291,22 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
     sharedGroups.length === 1
       ? `/split/new?groupId=${encodeURIComponent(idOf(sharedGroups[0]!))}`
       : '/split/new';
+  const balanceError =
+    rangeState === 'error' ||
+    Boolean(
+      groupsError ||
+      membersError ||
+      transactionsError ||
+      payersError ||
+      participantsError ||
+      settlementsError,
+    );
   const balanceLabel = !balanceAvailable
-    ? sharedGroups.length
-      ? 'Loading balance…'
-      : 'No shared groups'
+    ? balanceError
+      ? 'Balance unavailable'
+      : sharedGroups.length
+        ? 'Loading balance…'
+        : 'No shared groups'
     : bilateralBalance === 0n
       ? 'You’re even'
       : bilateralBalance > 0n
@@ -444,7 +462,8 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
                         </Link>
                       </>
                     ) : null}
-                    {person.id ? (
+                    {person.id &&
+                    isAnalyticsLinkAvailable(analytics, status === 'friends', groupCount) ? (
                       <Link
                         className="profile-icon-button"
                         href={`/network/person/${encodeURIComponent(person.id)}`}
@@ -515,7 +534,11 @@ export default function PersonPage({ handle, profile, profileUnavailable }: Pers
               </div>
               <div className="profile-stat">
                 <span>Messages</span>
-                <strong>{analytics ? analytics.totalMessages : '—'}</strong>
+                <strong>
+                  {analytics
+                    ? `${analytics.totalMessages}${analytics.totalMessagesCapped ? '+' : ''}`
+                    : '—'}
+                </strong>
                 <small>Last 30 days</small>
               </div>
               <div className="profile-stat">

@@ -3,7 +3,7 @@
 import React from 'react';
 import { ArrowLeft, ChatCircle, UsersThree } from '@phosphor-icons/react';
 import { PersonAvatar, Tile } from './GroupUI';
-import { personStatus, type HubGroup, type HubPerson } from '../peopleHub';
+import { formatLowerBound, personStatus, type HubGroup, type HubPerson } from '../peopleHub';
 import styles from './PeopleAnalytics.module.css';
 
 type Kpi = { label: string; value: string; note?: string };
@@ -74,9 +74,11 @@ function ShareBars({ rows, empty }: { rows: readonly BarRow[]; empty: string }) 
 
 export type PeopleAnalyticsScreenProps = {
   people: readonly HubPerson[] | undefined;
+  peopleTruncated?: boolean;
   groups: readonly HubGroup[];
   owed: string;
   owing: string;
+  balancesLoading?: boolean;
   onBack: () => void;
   onOpenPerson: (person: HubPerson) => void;
   onOpenGroup: (group: HubGroup) => void;
@@ -86,6 +88,10 @@ export type PeopleAnalyticsScreenProps = {
 export function PeopleAnalyticsScreen(p: PeopleAnalyticsScreenProps) {
   const people = p.people ?? [];
   const activeNow = people.filter((person) => person.active).length;
+  const unreadCapped =
+    Boolean(p.peopleTruncated) ||
+    people.some((person) => person.unreadCapped) ||
+    p.groups.some((group) => group.unreadCapped);
   const unread =
     people.reduce((sum, person) => sum + person.unreadCount, 0) +
     p.groups.reduce((sum, group) => sum + (group.unreadCount ?? 0), 0);
@@ -100,9 +106,13 @@ export function PeopleAnalyticsScreen(p: PeopleAnalyticsScreenProps) {
       />
       <KpiRow
         items={[
-          { label: 'People', value: String(people.length), note: `${activeNow} active now` },
+          {
+            label: 'People',
+            value: formatLowerBound(people.length, p.peopleTruncated),
+            note: `${activeNow} active now`,
+          },
           { label: 'Groups', value: String(p.groups.length), note: 'You belong to' },
-          { label: 'Unread', value: String(unread), note: 'Across chats' },
+          { label: 'Unread', value: formatLowerBound(unread, unreadCapped), note: 'Across chats' },
           { label: 'You are owed', value: p.owed, note: `${owedGroups.length} groups` },
           { label: 'You owe', value: p.owing, note: `${owingGroups.length} groups` },
         ]}
@@ -126,7 +136,9 @@ export function PeopleAnalyticsScreen(p: PeopleAnalyticsScreenProps) {
             ))}
           </ul>
           {!owedGroups.length && !owingGroups.length ? (
-            <p className={styles.muted}>You&apos;re settled up everywhere.</p>
+            <p className={styles.muted}>
+              {p.balancesLoading ? 'Balances are still loading…' : "You're settled up everywhere."}
+            </p>
           ) : null}
         </section>
         <section className={styles.panel}>
@@ -193,6 +205,7 @@ export type PersonAnalyticsData = {
   lastSeenAt: number | null;
   days: readonly { dayStart: number; sent: number; received: number }[];
   totalMessages: number;
+  totalMessagesCapped?: boolean;
   mix: { text: number; image: number; audio: number; ai: number };
   sharedGroups: readonly { id: string; name: string; icon?: string; color?: string }[];
 };
@@ -242,7 +255,7 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
       ['text', 'Text', d.mix.text],
       ['image', 'Photos', d.mix.image],
       ['audio', 'Voice', d.mix.audio],
-      ['ai', 'FinAI', d.mix.ai],
+      ['ai', 'FinAI replies', d.mix.ai],
     ] as const
   )
     .filter(([, , value]) => value > 0)
@@ -284,7 +297,11 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
       </div>
       <KpiRow
         items={[
-          { label: 'Messages', value: String(d.totalMessages), note: 'Last 30 days' },
+          {
+            label: 'Messages',
+            value: formatLowerBound(d.totalMessages, d.totalMessagesCapped),
+            note: 'Last 30 days',
+          },
           { label: 'Sent / received', value: `${sent} / ${received}` },
           { label: 'Active days', value: String(activeDays), note: 'of 30' },
           {
@@ -302,13 +319,13 @@ export function PersonAnalyticsScreen(p: PersonAnalyticsScreenProps) {
         <div className={styles.panelHead}>
           <h2>Message activity</h2>
           <span className={styles.legend}>
-            <i data-series="sent" /> You <i data-series="received" /> {d.profile.displayName}
+            <i data-series="sent" /> You <i data-series="received" /> Messages received
           </span>
         </div>
         <div
           className={styles.columns}
           role="img"
-          aria-label={`${d.totalMessages} messages in the last 30 days`}
+          aria-label={`${d.totalMessages}${d.totalMessagesCapped ? ' or more' : ''} messages in the last 30 days`}
         >
           {d.days.map((day) => (
             <span

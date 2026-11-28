@@ -14,7 +14,7 @@ export default function PersonAnalyticsPage() {
   const data = useQuery(
     api.social.queries.personAnalytics,
     userId && isConnected
-      ? { userId: id as Id<'users'>, tzOffsetMinutes: new Date().getTimezoneOffset() }
+      ? { userId: id as Id<'users'>, tzOffsetMinutes: -new Date().getTimezoneOffset() }
       : 'skip',
   );
   const username = data?.profile.username;

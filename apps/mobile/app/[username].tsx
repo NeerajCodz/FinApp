@@ -14,7 +14,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FinanceEmptyState,
+  formatLowerBound,
   formatTransactionDate,
+  isAnalyticsLinkAvailable,
   Money,
   personStatus,
   TransactionRow,
@@ -211,7 +213,9 @@ export default function PublicProfileScreen() {
   );
   const analytics = useQuery(
     api.social.queries.personAnalytics,
-    live && otherId ? { userId: otherId, tzOffsetMinutes: new Date().getTimezoneOffset() } : 'skip',
+    live && otherId
+      ? { userId: otherId, tzOffsetMinutes: -new Date().getTimezoneOffset() }
+      : 'skip',
   );
   const sendRequest = useMutation(api.social.mutations.sendRequest);
   const respondToRequest = useMutation(api.social.mutations.respondToRequest);
@@ -235,6 +239,11 @@ export default function PublicProfileScreen() {
       : undefined;
   const mutualFriends = relationship?.mutualFriends ?? [];
   const serverGroups = relationship?.sharedGroups ?? [];
+  const canOpenAnalytics = isAnalyticsLinkAvailable(
+    analytics,
+    status === 'friends',
+    serverGroups.length,
+  );
   const presence = analytics ? personStatus(analytics) : '';
   const since = analytics?.friendsSince ?? analytics?.conversationSince;
   const card = {
@@ -360,7 +369,7 @@ export default function PublicProfileScreen() {
           <ArrowLeft size={21} color={tokens.foreground} />
         </IconButton>
         <Text style={{ flex: 1, color: tokens.foregroundMuted, fontSize: 15 }}>Profile</Text>
-        {otherId && userId ? (
+        {otherId && userId && canOpenAnalytics ? (
           <IconButton
             label="Analytics"
             variant="ghost"
@@ -521,7 +530,13 @@ export default function PublicProfileScreen() {
                 ? tokens.expense
                 : undefined,
           )}
-          {stat('Messages', analytics ? String(analytics.totalMessages) : '—', 'Last 30 days')}
+          {stat(
+            'Messages',
+            analytics
+              ? formatLowerBound(analytics.totalMessages, analytics.totalMessagesCapped)
+              : '—',
+            'Last 30 days',
+          )}
           {stat(
             analytics?.friends ? 'Friends since' : 'Connected since',
             since

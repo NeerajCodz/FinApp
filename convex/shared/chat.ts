@@ -45,6 +45,21 @@ export async function loadReadPointers(
   );
   return pointers;
 }
+/** A single reader pointer without loading every participant pointer for the thread. */
+export async function loadReadPointer(
+  ctx: QueryCtx,
+  scope: ChatScope,
+  userId: Id<'users'>,
+): Promise<number> {
+  const pointer = await ctx.db
+    .query('chatReadPointers')
+    .withIndex('by_scope_user', (q) =>
+      q.eq('scopeType', scope.type).eq('scopeId', scope.id).eq('userId', userId),
+    )
+    .unique();
+  if (pointer) return pointer.lastReadAt;
+  return (await legacyReadAt(ctx, scope, userId)) ?? 0;
+}
 
 async function legacyReadAt(
   ctx: QueryCtx,

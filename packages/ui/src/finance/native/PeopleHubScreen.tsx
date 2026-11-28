@@ -16,6 +16,7 @@ import {
 export type PeopleHubScreenProps = {
   people: readonly HubPerson[] | undefined;
   groups: readonly HubGroup[] | undefined;
+  peopleTruncated?: boolean;
   /** Rendered at the top right next to the analytics button (e.g. the profile avatar). */
   headerAction?: React.ReactNode;
   onOpenAnalytics: () => void;
@@ -276,6 +277,11 @@ export function PeopleHubScreen(p: PeopleHubScreenProps) {
             {query ? 'No people match your search.' : 'Add friends to see them here.'}
           </Text>
         )}
+        {p.peopleTruncated ? (
+          <Text style={{ color: tokens.foregroundMuted, fontSize: 12 }}>
+            Showing a limited set of people; some contacts may be omitted.
+          </Text>
+        ) : null}
       </View>
 
       <View>
@@ -285,7 +291,7 @@ export function PeopleHubScreen(p: PeopleHubScreenProps) {
         ) : groups.length ? (
           <View style={{ gap: 10 }}>
             {groups.map((group) => {
-              const badge = unreadBadge(group.unreadCount);
+              const badge = unreadBadge(group.unreadCount, group.unreadCapped);
               return (
                 <View key={group.id} style={[card, { flexDirection: 'row', alignItems: 'center' }]}>
                   <Pressable

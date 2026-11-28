@@ -755,10 +755,13 @@ describe('MCP coverage tools', () => {
 
   it('reads the inbox, person analytics and notification status', async () => {
     backend.queries = {
-      'social/queries:peopleHub': () => [
-        { id: 'user-two', displayName: 'Sam', conversationId: 'c-1', unreadCount: 2 },
-        { id: 'user-three', displayName: 'Ana', conversationId: null, unreadCount: 0 },
-      ],
+      'social/queries:peopleHub': () => ({
+        people: [
+          { id: 'user-two', displayName: 'Sam', conversationId: 'c-1', unreadCount: 2 },
+          { id: 'user-three', displayName: 'Ana', conversationId: null, unreadCount: 0 },
+        ],
+        truncated: false,
+      }),
       'social/queries:personAnalytics': () => ({ messagesPerDay: [] }),
       'mcp:notificationState': () => ({
         unreadCount: 4,
